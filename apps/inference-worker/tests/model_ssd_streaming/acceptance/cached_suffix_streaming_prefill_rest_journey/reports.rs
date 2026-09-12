@@ -352,6 +352,37 @@ pub(super) fn print_comparison_summary(
     );
 }
 
+/// Later chunks of the same prefill must serve already-admitted complete layers from RAM.
+///
+/// On a hybrid-resident cell the leftover budget may be zero for *new* layers, so the
+/// streamed tail still rereads. That fail-closed path is not this assertion. The proof
+/// is the avoided-complete-layer counter: pinned layers are visited every chunk without
+/// another source read.
+pub(super) fn assert_admitted_complete_layers_are_reused_across_prefill_chunks(
+    reports: &InteractionReports,
+) {
+    let append_attribution = &reports.attribution_reports[1];
+    let prefill_chunk_count = attribution_counter(append_attribution, "prefill_chunk_count");
+    assert!(
+        prefill_chunk_count >= 2,
+        "reuse across chunks is only observable on a multi-chunk cached suffix: chunks={prefill_chunk_count}"
+    );
+    let avoided_complete_layer_bytes = attribution_counter(
+        append_attribution,
+        "avoided_complete_layer_expert_source_payload_bytes",
+    );
+    let same_request_reread_bytes = prefill_same_request_reread_bytes(append_attribution);
+    eprintln!(
+        "{LOG_MARKER} request=reuse-across-chunks avoided_complete_layer_gb={:.3} same_request_reread_gb={:.3} prefill_chunks={prefill_chunk_count}",
+        avoided_complete_layer_bytes as f64 / 1_000_000_000.0,
+        same_request_reread_bytes as f64 / 1_000_000_000.0,
+    );
+    assert!(
+        avoided_complete_layer_bytes > 0,
+        "later chunks must serve admitted complete layers from RAM: avoided_complete_layer_expert_source_payload_bytes=0"
+    );
+}
+
 pub(super) struct InteractionReports {
     pub(super) performance_records: Vec<Value>,
     pub(super) attribution_reports: Vec<Value>,

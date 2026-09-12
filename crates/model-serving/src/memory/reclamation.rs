@@ -210,6 +210,42 @@ impl ExpertReclamationPlan {
     }
 }
 
+/// One decision in the paged-expert reclaim loop that admits a forward.
+///
+/// A single reclaim pass can leave peak still over when MLX active bytes fall
+/// by less than the retired payload. Decode must keep yielding leftover experts
+/// until the same forward fits, or until a pass releases nothing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PagedExpertReclamationStep {
+    Admit,
+    Reclaim { target_bytes: usize },
+    Reject,
+}
+
+/// Chooses the next paged-expert reclaim action for one forward admission.
+///
+/// `previous_pass_released_pages` is `None` before the first pass. A pass that
+/// released no pages must stop: repeating it cannot change the projection.
+#[must_use]
+pub const fn next_paged_expert_reclamation_step(
+    fits_stable_and_peak_limits: bool,
+    reclamation_plan: ExpertReclamationPlan,
+    previous_pass_released_pages: Option<bool>,
+) -> PagedExpertReclamationStep {
+    if fits_stable_and_peak_limits {
+        return PagedExpertReclamationStep::Admit;
+    }
+    if matches!(previous_pass_released_pages, Some(false))
+        || !reclamation_plan.can_satisfy_every_memory_boundary()
+        || reclamation_plan.reclamation_target_bytes() == 0
+    {
+        return PagedExpertReclamationStep::Reject;
+    }
+    PagedExpertReclamationStep::Reclaim {
+        target_bytes: reclamation_plan.reclamation_target_bytes(),
+    }
+}
+
 const fn minimum(left: usize, right: usize) -> usize {
     if left < right { left } else { right }
 }
