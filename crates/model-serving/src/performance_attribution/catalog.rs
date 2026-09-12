@@ -136,10 +136,11 @@ pub enum PerformanceOperation {
     EmbeddingsTokenization,
     EmbeddingsForwardSpan,
     CustomKernelCapabilityProbe,
+    RouteObservationFinalization,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::CustomKernelCapabilityProbe as usize + 1;
+    pub(super) const COUNT: usize = Self::RouteObservationFinalization as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -269,6 +270,7 @@ impl PerformanceOperation {
         Self::EmbeddingsTokenization,
         Self::EmbeddingsForwardSpan,
         Self::CustomKernelCapabilityProbe,
+        Self::RouteObservationFinalization,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -484,6 +486,7 @@ impl PerformanceOperation {
             Self::EmbeddingsTokenization => "embeddings_tokenization",
             Self::EmbeddingsForwardSpan => "embeddings_forward_span",
             Self::CustomKernelCapabilityProbe => "custom_kernel_capability_probe",
+            Self::RouteObservationFinalization => "route_observation_finalization",
         }
     }
 

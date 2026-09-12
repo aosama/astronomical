@@ -134,12 +134,18 @@ pub enum PerformanceCounter {
     /// would otherwise hide.
     MemoryCeilingUtilizationOwnerOverrunBytes,
     MtpOperationalFallbackCount,
+    /// Decode tokens whose true route was stored in the observation history (#536).
+    RouteObservationStoredRecordCount,
+    /// Observations evicted from the history by its capacity bound (#536).
+    RouteObservationEvictedRecordCount,
+    /// Sparse layers whose route was captured for one finalized token (#536).
+    RouteObservationCapturedLayerCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
-    pub(super) const COUNT: usize = Self::MtpOperationalFallbackCount as usize + 1;
+    pub(super) const COUNT: usize = Self::RouteObservationCapturedLayerCount as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
@@ -244,6 +250,9 @@ impl PerformanceCounter {
         Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes,
         Self::MemoryCeilingUtilizationOwnerOverrunBytes,
         Self::MtpOperationalFallbackCount,
+        Self::RouteObservationStoredRecordCount,
+        Self::RouteObservationEvictedRecordCount,
+        Self::RouteObservationCapturedLayerCount,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -463,6 +472,9 @@ impl PerformanceCounter {
                 "memory_ceiling_utilization_owner_overrun_bytes"
             }
             Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",
+            Self::RouteObservationStoredRecordCount => "route_observation_stored_record_count",
+            Self::RouteObservationEvictedRecordCount => "route_observation_evicted_record_count",
+            Self::RouteObservationCapturedLayerCount => "route_observation_captured_layer_count",
         }
     }
 }

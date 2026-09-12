@@ -13,6 +13,8 @@ mod report;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::qwen3_5_moe::expert_paging::route_observation::ObservedExpertRoute;
+
 #[cfg(feature = "direct-mlx")]
 use std::sync::Arc;
 
@@ -39,6 +41,10 @@ pub(super) struct EnabledPerformanceAttribution {
         [PerformanceOperationMeasurement; PerformanceOperation::COUNT],
     pub(super) counter_values: [u64; PerformanceCounter::COUNT],
     pub(super) previous_token_selected_expert_ids_by_layer: Vec<Option<Vec<usize>>>,
+    /// The immediately preceding observed decode token's compact route for the
+    /// current request. Request-owned so a new request starts its prediction
+    /// chain without cross-request state (issue #536).
+    pub(super) route_observation_previous_route: Option<ObservedExpertRoute>,
     pub(super) previous_token_expert_route_reuse_by_layer:
         Vec<PreviousTokenExpertRouteReuseMeasurement>,
     pub(super) expert_streaming_source_summaries:
@@ -85,6 +91,7 @@ impl PerformanceAttribution {
                 counter_values: [0; PerformanceCounter::COUNT],
                 previous_token_selected_expert_ids_by_layer: Vec::new(),
                 previous_token_expert_route_reuse_by_layer: Vec::new(),
+                route_observation_previous_route: None,
                 expert_streaming_source_summaries: Vec::new(),
                 #[cfg(feature = "direct-mlx")]
                 positional_file_read_metrics: Arc::new(
@@ -307,6 +314,23 @@ impl PerformanceAttribution {
                 .counter_values[performance_counter as usize]
                 .saturating_add(counter_increment);
         }
+    }
+
+    /// Returns the previous observed decode token's route and stores this
+    /// token's route as the new chain head. The chain lives on the
+    /// request-owned attribution, so a new request starts fresh without any
+    /// explicit reset (issue #536).
+    pub fn advance_route_observation_chain(
+        &mut self,
+        token_route: ObservedExpertRoute,
+    ) -> Option<ObservedExpertRoute> {
+        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
+            return None;
+        };
+        std::mem::replace(
+            &mut enabled_attribution.route_observation_previous_route,
+            Some(token_route),
+        )
     }
 
     /// Returns one accumulated counter, or zero when attribution is disabled.

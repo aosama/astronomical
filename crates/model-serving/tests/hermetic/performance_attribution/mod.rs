@@ -12,6 +12,7 @@ mod expert_streaming_source;
 mod log;
 mod measurement;
 mod report_metadata;
+mod route_observation;
 mod support;
 
 use support::{
