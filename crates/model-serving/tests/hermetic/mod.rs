@@ -22,6 +22,7 @@ mod previous_token_prefetch;
 mod quantized_expert_page_manifest;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_execution_error;
+mod qwen4_exp_configuration;
 mod qwen4_exp_contracts;
 #[cfg(feature = "direct-mlx")]
 mod qwen_prompt_processing_chunk_sizer;
