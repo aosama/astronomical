@@ -456,6 +456,7 @@ impl Qwen3_5Model {
             route_observation: RefCell::new(
                 crate::qwen3_5_moe::model::route_observation::RouteObservationCollector::new(),
             ),
+            expert_route_predictor: RefCell::new(None),
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),

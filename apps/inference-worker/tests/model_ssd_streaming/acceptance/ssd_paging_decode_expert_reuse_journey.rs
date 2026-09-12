@@ -258,6 +258,22 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         isolated_worker_home.path(),
         "previous_token_prefetch_capacity_drop_count",
     );
+    let expert_route_predictor_train_step_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "expert_route_predictor_train_step_count",
+    );
+    let expert_route_predictor_top_k_hit_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "expert_route_predictor_top_k_hit_count",
+    );
+    let expert_route_predictor_evaluated_expert_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "expert_route_predictor_evaluated_expert_count",
+    );
+    let expert_route_predictor_train_slice_nanoseconds = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "expert_route_predictor_train_slice_nanoseconds",
+    );
 
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =
@@ -394,6 +410,10 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          previous_token_prefetch_misses={previous_token_prefetch_miss_count} \
          previous_token_prefetch_bytes={previous_token_prefetch_byte_count} \
          previous_token_prefetch_drops={previous_token_prefetch_capacity_drop_count} \
+         predictor_train_steps={expert_route_predictor_train_step_count} \
+         predictor_top_k_hits={expert_route_predictor_top_k_hit_count} \
+         predictor_evaluated_experts={expert_route_predictor_evaluated_expert_count} \
+         predictor_slice_ns={expert_route_predictor_train_slice_nanoseconds} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \

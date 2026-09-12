@@ -9,6 +9,7 @@ mod e2e_test_model_names;
 mod engine_backed_worker;
 mod expert_memory_admission;
 mod expert_residency_policy;
+mod expert_route_predictor;
 mod kernel_capability;
 mod memory_policy;
 mod mlx_ram_budget;
