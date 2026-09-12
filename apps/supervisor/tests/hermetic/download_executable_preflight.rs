@@ -59,6 +59,43 @@ async fn should_reject_an_unknown_model_type_before_transferring_any_payload() {
 }
 
 #[tokio::test]
+async fn should_reject_a_recognized_but_unexecutable_qwen4_exp_artifact_before_payload() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            qwen_tree_response(),
+            json_response(serde_json::json!({
+                "model_type": "qwen4_exp",
+                "text_config": {
+                    "num_hidden_layers": 48,
+                    "max_position_embeddings": 262144,
+                    "num_experts": 288
+                }
+            })),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey
+            .start_download_and_await_failure()
+            .await
+            .expect_public_error(DownloadJobPublicErrorCode::ModelNotExecutable);
+
+        assert_eq!(
+            transport.metadata_request_count(),
+            3,
+            "preflight must stop after classifying the recognized family"
+        );
+        assert_eq!(
+            transport.payload_request_count(),
+            0,
+            "no payload byte may be requested for a recognized but unexecutable artifact"
+        );
+    })
+    .await
+    .expect("qwen4_exp preflight journey should remain bounded");
+}
+
+#[tokio::test]
 async fn should_reject_a_shard_index_requiring_an_unselected_shard() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let transport = Arc::new(MetadataCountingTransport::new([

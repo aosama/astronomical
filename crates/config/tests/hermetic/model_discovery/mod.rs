@@ -8,6 +8,7 @@ mod k2_horizon_mova;
 mod laguna;
 mod modernbert;
 mod qwen3_5;
+mod qwen4_exp;
 mod traversal;
 
 /// Writes the smallest config document needed to exercise family discovery.
