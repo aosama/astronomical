@@ -1,8 +1,8 @@
 use astronomical_model_serving::{
-    ExpertMemoryAdmissionError, ExpertReclamationPlan,
+    ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure,
+    fixed_forward_workspace_after_allocation_failure, next_paged_expert_reclamation_step,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation,
@@ -105,4 +105,31 @@ fn should_report_unresolved_reclamation_shortfall() {
     assert_eq!(plan.reclamation_target_bytes(), 20);
     assert_eq!(plan.unresolved_shortfall_bytes(), 20);
     assert!(!plan.can_satisfy_every_memory_boundary());
+}
+
+#[test]
+fn should_keep_reclaiming_paged_experts_while_peak_still_misses_and_payload_remains() {
+    let remaining_deficit = ExpertReclamationPlan::for_projected_memory(90, 130, 130, 100, 120, 50);
+    assert_eq!(
+        next_paged_expert_reclamation_step(false, remaining_deficit, Some(true)),
+        PagedExpertReclamationStep::Reclaim { target_bytes: 10 },
+    );
+}
+
+#[test]
+fn should_stop_paged_expert_reclamation_when_a_pass_releases_nothing() {
+    let remaining_deficit = ExpertReclamationPlan::for_projected_memory(90, 130, 130, 100, 120, 50);
+    assert_eq!(
+        next_paged_expert_reclamation_step(false, remaining_deficit, Some(false)),
+        PagedExpertReclamationStep::Reject,
+    );
+}
+
+#[test]
+fn should_admit_once_stable_and_peak_fit_after_paged_expert_reclamation() {
+    let fitting = ExpertReclamationPlan::for_projected_memory(90, 110, 110, 100, 120, 50);
+    assert_eq!(
+        next_paged_expert_reclamation_step(true, fitting, Some(true)),
+        PagedExpertReclamationStep::Admit,
+    );
 }
