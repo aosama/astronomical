@@ -12,6 +12,10 @@ mod engine;
 mod image_encoding;
 mod inventory;
 mod memory_admission;
+// Image-lane utilization compose is called from the MLX component owner.
+// Without `direct-mlx` that owner is absent, so keep this module off the
+// default lib graph instead of leaving three dead-code warnings (issue #576).
+#[cfg(any(test, feature = "direct-mlx"))]
 mod memory_utilization;
 mod official_profile;
 mod scheduler;
