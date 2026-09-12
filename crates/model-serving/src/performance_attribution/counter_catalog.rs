@@ -150,12 +150,20 @@ pub enum PerformanceCounter {
     PreviousTokenPrefetchByteCount,
     /// Previous-token experts dropped because leftover slots were full (#537).
     PreviousTokenPrefetchCapacityDropCount,
+    /// Records the background predictor trained on (#538).
+    ExpertRoutePredictorTrainStepCount,
+    /// True routed experts that appeared in the predictor's top-k (#538).
+    ExpertRoutePredictorTopKHitCount,
+    /// Routed experts scored against the predictor before each train step (#538).
+    ExpertRoutePredictorEvaluatedExpertCount,
+    /// Wall time of the most recent predictor training slice, nanoseconds (#538).
+    ExpertRoutePredictorTrainSliceNanoseconds,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
-    pub(super) const COUNT: usize = Self::PreviousTokenPrefetchCapacityDropCount as usize + 1;
+    pub(super) const COUNT: usize = Self::ExpertRoutePredictorTrainSliceNanoseconds as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
@@ -268,6 +276,10 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchMissCount,
         Self::PreviousTokenPrefetchByteCount,
         Self::PreviousTokenPrefetchCapacityDropCount,
+        Self::ExpertRoutePredictorTrainStepCount,
+        Self::ExpertRoutePredictorTopKHitCount,
+        Self::ExpertRoutePredictorEvaluatedExpertCount,
+        Self::ExpertRoutePredictorTrainSliceNanoseconds,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -496,6 +508,14 @@ impl PerformanceCounter {
             Self::PreviousTokenPrefetchByteCount => "previous_token_prefetch_byte_count",
             Self::PreviousTokenPrefetchCapacityDropCount => {
                 "previous_token_prefetch_capacity_drop_count"
+            }
+            Self::ExpertRoutePredictorTrainStepCount => "expert_route_predictor_train_step_count",
+            Self::ExpertRoutePredictorTopKHitCount => "expert_route_predictor_top_k_hit_count",
+            Self::ExpertRoutePredictorEvaluatedExpertCount => {
+                "expert_route_predictor_evaluated_expert_count"
+            }
+            Self::ExpertRoutePredictorTrainSliceNanoseconds => {
+                "expert_route_predictor_train_slice_nanoseconds"
             }
         }
     }

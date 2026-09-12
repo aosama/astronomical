@@ -73,6 +73,10 @@ pub struct Qwen3_5Model {
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation:
         RefCell<crate::qwen3_5_moe::model::route_observation::RouteObservationCollector>,
+    /// Background CPU trainer for the expert-route predictor. `None` until the
+    /// first attributed decode token, so disabled attribution allocates nothing.
+    pub(crate) expert_route_predictor:
+        RefCell<Option<crate::qwen3_5_moe::expert_paging::predictor::ExpertRoutePredictorOwner>>,
 }
 
 impl Qwen3_5Model {
