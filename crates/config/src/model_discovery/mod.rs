@@ -20,6 +20,7 @@ mod laguna;
 mod model_family;
 mod modernbert;
 mod qwen3_5;
+mod qwen4_exp;
 
 pub(crate) use artifact_discovery::{try_discover_model, try_discover_model_with_id};
 pub use classified_artifacts::{
@@ -39,6 +40,7 @@ pub use model_family::{
 pub use qwen3_5::{
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, context_window_tokens, required_shard_file_names,
 };
+pub use qwen4_exp::{Qwen4ExpConfigurationSummary, describe_configuration};
 
 /// Capability contract for one discovered executable model.
 #[derive(Clone, Debug, Eq, PartialEq)]
