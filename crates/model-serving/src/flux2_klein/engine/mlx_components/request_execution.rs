@@ -273,12 +273,18 @@ impl Flux2KleinMlxComponents {
             runtime.memory_snapshot().ok()
         };
         self.post_cleanup_memory_telemetry = memory_snapshot.as_ref().map(|snapshot| {
-            MlxMemoryTelemetry::new(
+            let mut telemetry = MlxMemoryTelemetry::new(
                 snapshot.active_memory_bytes() as u64,
                 snapshot.allocator_cache_memory_bytes() as u64,
                 snapshot.peak_memory_bytes() as u64,
                 crate::MlxActiveMemoryBreakdown::default(),
-            )
+            );
+            if let Some(memory_ceiling_utilization) =
+                self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
+            {
+                telemetry = telemetry.with_memory_ceiling_utilization(memory_ceiling_utilization);
+            }
+            telemetry
         });
         let start_memory = request_start_memory.map_or((None, None, None), |snapshot| {
             (Some(snapshot.0), Some(snapshot.1), Some(snapshot.2))

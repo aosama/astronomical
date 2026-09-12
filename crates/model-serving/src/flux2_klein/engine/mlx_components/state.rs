@@ -46,6 +46,7 @@ impl Flux2KleinMlxComponents {
             vae_decoder: None,
             vae_decode_state: None,
             decoded_rgb: None,
+            memory_geometry: None,
             post_cleanup_memory_telemetry: None,
         }
     }

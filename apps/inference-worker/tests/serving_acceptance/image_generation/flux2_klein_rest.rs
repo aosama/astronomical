@@ -18,8 +18,9 @@ use tokio::{
 };
 
 use super::flux2_klein_rest_support::{
-    FluxRestServer, assert_image_attribution, get_status, launch_flux_rest_server, post_image,
-    response_json, wait_for_image_attribution_count,
+    FluxRestServer, assert_image_attribution, assert_immutable_revision, assert_worker_reuse_state,
+    get_status, launch_flux_rest_server, post_image, response_json,
+    wait_for_image_attribution_count,
 };
 use crate::serving_acceptance::chat::openai_rest::{
     assert_successful_streaming_chat_response, post_chat_completion,
@@ -496,71 +497,6 @@ fn assert_native_repetition(first_pixels: &[u8], repeated_pixels: &[u8]) {
     eprintln!(
         "[flux-acceptance] phase=native-repetition max_channel_difference={maximum_difference}"
     );
-}
-
-fn assert_worker_reuse_state(
-    status: &Value,
-    canonical_flux_model_id: &str,
-    configuration_generation: &str,
-) {
-    assert_eq!(status["ready_model_id"], canonical_flux_model_id);
-    assert_eq!(
-        status["worker_runtime_feature_configuration"]["configuration_generation"].as_str(),
-        Some(configuration_generation)
-    );
-    let loaded_model = &status["worker_runtime_feature_configuration"]["loaded_model"];
-    assert_eq!(loaded_model["kind"], "flux2_klein");
-    assert_eq!(
-        loaded_model["configuration"]["model_id"],
-        canonical_flux_model_id
-    );
-    assert_immutable_revision(
-        loaded_model["configuration"]["artifact_revision"]
-            .as_str()
-            .expect("loaded Klein status should name the artifact revision"),
-    );
-    let memory_snapshot = &status["mlx_memory_snapshot"];
-    let memory_snapshot_source = memory_snapshot["source"].as_str();
-    assert!(
-        matches!(memory_snapshot_source, Some("finalized" | "idle_poll")),
-        "status should retain finalized cleanup or a newer idle sample: {memory_snapshot}"
-    );
-    assert_eq!(
-        required_u64(memory_snapshot, "allocator_cache_memory_bytes"),
-        0
-    );
-    assert_eq!(required_u64(memory_snapshot, "expert_payload_bytes"), 0);
-    assert_eq!(
-        required_u64(memory_snapshot, "context_state_payload_bytes"),
-        0
-    );
-    assert_eq!(
-        required_u64(memory_snapshot, "speculative_prefill_draft_memory_bytes"),
-        0
-    );
-    let active_memory_bytes = required_u64(memory_snapshot, "active_memory_bytes");
-    let peak_memory_bytes = required_u64(memory_snapshot, "peak_memory_bytes");
-    let mlx_memory_ceiling_bytes = required_u64(status, "mlx_memory_ceiling_bytes");
-    assert!(active_memory_bytes <= peak_memory_bytes);
-    assert!(active_memory_bytes <= mlx_memory_ceiling_bytes);
-}
-
-fn assert_immutable_revision(revision: &str) {
-    assert_eq!(
-        revision.len(),
-        40,
-        "artifact revision must be an immutable 40-character hex digest"
-    );
-    assert!(
-        revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
-        "artifact revision must be hexadecimal: {revision}"
-    );
-}
-
-fn required_u64(document: &Value, field_name: &str) -> u64 {
-    document[field_name]
-        .as_u64()
-        .unwrap_or_else(|| panic!("{field_name} must contain numeric memory telemetry: {document}"))
 }
 
 async fn send_chat_litmus(rest_server: &FluxRestServer, model_id: &str, phase: &str) {

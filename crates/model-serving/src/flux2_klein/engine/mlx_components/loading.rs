@@ -87,6 +87,7 @@ impl Flux2KleinMlxComponents {
                 residency_plan,
                 transformer_geometry,
                 minimum_ceiling_bytes,
+                geometry,
             ))
         })();
         let memory_snapshot = runtime
@@ -126,12 +127,18 @@ impl Flux2KleinMlxComponents {
                 .record(&report)
                 .map_err(|error| error.to_string())?;
         }
-        let (validated_artifact, residency_plan, transformer_geometry, minimum_ceiling_bytes) =
-            load_result?;
+        let (
+            validated_artifact,
+            residency_plan,
+            transformer_geometry,
+            minimum_ceiling_bytes,
+            memory_geometry,
+        ) = load_result?;
         self.runtime = runtime;
         self.validated_artifact = Some(validated_artifact);
         self.residency_plan = Some(residency_plan);
         self.transformer_geometry = Some(transformer_geometry);
+        self.memory_geometry = Some(memory_geometry);
         self.performance_attribution_log = Some(attribution_log);
         Ok(Flux2KleinComponentLoad::new(
             self.serving_model_id.clone(),
