@@ -22,9 +22,10 @@
 use std::{fs, path::Path};
 
 use super::ssd_paging_decode_expert_reuse_journey::support::{
-    decode_streamed_layer_indices, generation_attribution_counter,
-    generation_attribution_report_count, generation_expert_source_read_bytes, log_status_progress,
-    preserve_memory_utilization_evidence, record_expert_payload_increase,
+    assert_predictor_status_reconciles, decode_streamed_layer_indices,
+    generation_attribution_counter, generation_attribution_report_count,
+    generation_expert_source_read_bytes, log_status_progress, preserve_memory_utilization_evidence,
+    record_expert_payload_increase,
 };
 
 mod support;
@@ -254,8 +255,14 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         count("expert_route_predictor_train_slice_nanoseconds");
     let predictor_retention_hint_requested_count =
         count("predictor_retention_hint_requested_count");
-    let predictor_retention_hint_accepted_count =
-        count("predictor_retention_hint_accepted_count");
+    let predictor_retention_hint_accepted_count = count("predictor_retention_hint_accepted_count");
+    assert_predictor_status_reconciles(
+        &memory_evidence.final_status,
+        expert_route_predictor_top_k_hit_count,
+        expert_route_predictor_evaluated_expert_count,
+        previous_token_prefetch_hit_count,
+        previous_token_prefetch_hit_count + previous_token_prefetch_miss_count,
+    );
 
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =

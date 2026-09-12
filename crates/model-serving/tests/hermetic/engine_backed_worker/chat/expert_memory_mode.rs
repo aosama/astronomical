@@ -213,6 +213,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
                 memory_ceiling_utilization: None,
             }),
             expert_residency: None,
+            predictor_program: None,
         }
     );
     assert_eq!(
@@ -304,6 +305,7 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
                 memory_ceiling_utilization: None,
             }),
             expert_residency: None,
+            predictor_program: None,
         }
     );
     assert!(matches!(

@@ -138,6 +138,7 @@ where
                 expert_memory_mode,
                 mlx_memory_snapshot,
                 expert_residency,
+                predictor_program: generation_finalization.predictor_program(),
             })
             .await?;
         active_generation.last_reported_expert_memory_mode = expert_memory_mode;
