@@ -4,7 +4,7 @@ Agent orientation map for non-obvious repository facts; this is not user-facing 
 
 ## Maintenance mandate
 
-Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old. Last verified: 2026-09-12 (product identity is local model runner, not local model server; catalog schema 2; native embeddings; MLX pin v0.32.2; K2 Horizon MoVA family executable; converted per-expert streaming revisions load and serve as their own model identities; issue creation is free-form).
+Read this guide before substantive work and spot-check 2-3 key facts. Update it when paths, entry points, conventions, or expensive gotchas change. Treat it as suspect when Last verified is more than 90 days old. This file is exempt from the skill's 200-line budget: preserve each verified gotcha instead of trimming to a line count. Last verified: 2026-09-12 (product identity is local model runner, not local model server; catalog schema 2; native embeddings; MLX pin v0.32.2; K2 Horizon MoVA family executable; converted per-expert streaming revisions load and serve as their own model identities; issue creation is free-form).
 
 ## Project overview
 

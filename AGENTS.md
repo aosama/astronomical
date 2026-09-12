@@ -35,6 +35,11 @@
 - Code files should remain around the 500 lines marker not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
 
+## Repo Discovery Guide Line Budget
+
+- `repo-discovery-guide-for-agents.md` is exempt from the 200-line budget in the repo-discovery-guide skill. Let it run longer than 200 lines when verified evidence needs the room.
+- Do not delete, merge, or compress a recorded gotcha to satisfy a line count. A missing retired-path or measured-regression warning costs more in rediscovery than the lines it occupies, so keep prose lean and omit lower-value detail while preserving each fact that has been verified against the running system.
+
 ## There is No Backward Compatibility Requirements for the REST API surface
 
 - There is no requirement for Backward compatibility for the REST API surface. There are no downstream consumers of these surfaces so RESTAPI backward compatibility is not a constraint.
