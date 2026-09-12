@@ -365,6 +365,12 @@ pub(in crate::qwen3_5) fn forward_initial_target_token_with_prediction_state(
     active_request.advance_position(1)?;
     let first_generated_token =
         active_request.build_generated_token(model, target_forward_output.final_logits())?;
+    // Issue #536: first decode token's route history, after sampling already
+    // evaluated the logits that force the retained router arrays.
+    model.finalize_route_observation_record(
+        final_prompt_token_id,
+        active_request.performance_attribution_mut(),
+    );
     if let Some(prediction_request) = active_request.optional_prediction_session_mut() {
         prediction_request.set_target_hidden_states(Some(
             target_forward_output.into_pre_final_normalization_hidden_states(),
@@ -377,6 +383,7 @@ pub(in crate::qwen3_5) fn forward_next_target_token_with_prediction_state(
     model: &Qwen3_5Model,
     active_request: &mut Qwen3_5EngineRequest,
     current_generated_token: &MlxArray,
+    current_generated_token_id: u32,
 ) -> Result<Option<MlxArray>, InferenceEngineError> {
     if !active_request.has_optional_prediction_session() {
         return Ok(None);
@@ -395,6 +402,12 @@ pub(in crate::qwen3_5) fn forward_next_target_token_with_prediction_state(
     active_request.advance_position(1)?;
     let next_generated_token =
         active_request.build_generated_token(model, target_forward_output.final_logits())?;
+    // Issue #536: this decode token's route history, after sampling already
+    // evaluated the logits that force the retained router arrays.
+    model.finalize_route_observation_record(
+        current_generated_token_id,
+        active_request.performance_attribution_mut(),
+    );
     if let Some(prediction_request) = active_request.optional_prediction_session_mut() {
         prediction_request.set_target_hidden_states(Some(
             target_forward_output.into_pre_final_normalization_hidden_states(),

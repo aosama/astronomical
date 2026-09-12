@@ -337,6 +337,9 @@ impl Qwen3_5Model {
         // Each forward owns one deferred missing-route collection. Clear any
         // leftover roots from a cancelled or failed previous attempt.
         self.clear_paged_forward_missing_route_roots();
+        self.route_observation
+            .borrow_mut()
+            .discard_pending_layer_route_arrays();
         let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "starting position exceeds the MLX int32 range",

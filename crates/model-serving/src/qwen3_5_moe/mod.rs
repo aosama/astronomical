@@ -12,6 +12,10 @@ pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_paging::RetainedExpertCache;
 pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
+pub use expert_paging::route_observation::{
+    LayerRoutedExpertIds, ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
+    sorted_unique_layer_routed_expert_ids,
+};
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]

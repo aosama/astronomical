@@ -34,6 +34,8 @@ mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod route_observation;
+#[cfg(feature = "direct-mlx")]
 mod routing;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;

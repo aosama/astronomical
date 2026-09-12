@@ -14,6 +14,7 @@ mod paged_expert_weights;
 pub mod quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
 mod retained_expert_cache;
+pub mod route_observation;
 
 #[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};

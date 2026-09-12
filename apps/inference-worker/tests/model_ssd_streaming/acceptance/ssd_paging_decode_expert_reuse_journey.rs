@@ -215,6 +215,28 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "mixed serving must serve the majority of routed assignments from retained RAM; retained={hot_expert_route_retained_assignment_count} missing={hot_expert_route_missing_assignment_count}"
     );
 
+    // --- Measured assertion 4d: true-route observation history (issue #536) ---
+    let route_observation_stored_record_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "route_observation_stored_record_count",
+    );
+    let route_observation_captured_layer_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "route_observation_captured_layer_count",
+    );
+    let route_observation_evicted_record_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "route_observation_evicted_record_count",
+    );
+    assert!(
+        route_observation_stored_record_count > 0,
+        "paged decode with attribution enabled must capture at least one true route observation; stored={route_observation_stored_record_count}"
+    );
+    assert!(
+        route_observation_captured_layer_count > 0,
+        "captured observations must include at least one sparse layer route; captured_layers={route_observation_captured_layer_count}"
+    );
+
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =
         memory_evidence.final_status["serving_session"]["average_generation_tok_per_second"]
@@ -342,6 +364,9 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          hot_expert_route_retained_assignments={hot_expert_route_retained_assignment_count} \
          hot_expert_route_missing_assignments={hot_expert_route_missing_assignment_count} \
          hot_expert_mixed_routes={hot_expert_mixed_route_count} \
+         route_observation_stored={route_observation_stored_record_count} \
+         route_observation_captured_layers={route_observation_captured_layer_count} \
+         route_observation_evicted={route_observation_evicted_record_count} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \

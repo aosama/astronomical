@@ -69,6 +69,10 @@ pub struct Qwen3_5Model {
     /// growth guard's headroom so warming only claims memory the guard can
     /// spare (issue #372).
     pub(crate) hot_expert_warm_slot_count: std::cell::Cell<usize>,
+    /// Decode route capture for the expert-predictor program: lazy pending
+    /// route arrays plus the bounded observation history (issue #536).
+    pub(crate) route_observation:
+        RefCell<crate::qwen3_5_moe::model::route_observation::RouteObservationCollector>,
 }
 
 impl Qwen3_5Model {

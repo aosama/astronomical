@@ -357,6 +357,10 @@ pub use qwen3_5_moe::{
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 pub use qwen3_5_moe::{
+    LayerRoutedExpertIds, ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
+    sorted_unique_layer_routed_expert_ids,
+};
+pub use qwen3_5_moe::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     build_quantized_expert_layer_plan,
 };

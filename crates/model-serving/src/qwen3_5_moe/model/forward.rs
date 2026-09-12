@@ -102,6 +102,20 @@ impl Qwen3_5Model {
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
                 | Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
         );
+        // Issue #536: retain this decode token's route lazily for the
+        // observation history. The array stays lazy and is evaluated once per
+        // token at record finalization, after the logits already forced the
+        // same computation. The trunk-layer bound excludes the MTP draft
+        // layer, which routes through this forward with the next layer index.
+        if should_use_loaded_model_mode
+            && token_count == 1
+            && layer_index < self.config.layer_count() as usize
+            && performance_attribution.is_enabled()
+        {
+            self.route_observation
+                .borrow_mut()
+                .retain_layer_route(layer_index, &selected_indices);
+        }
         if should_use_loaded_model_mode
             && let Some(resident_expert_layer_weights) = self
                 .resident_expert_weights
