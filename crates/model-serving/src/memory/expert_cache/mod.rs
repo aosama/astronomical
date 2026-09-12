@@ -5,4 +5,7 @@
 
 pub mod decode;
 
-pub use decode::{DecodeExpertCache, ResidentExpertWeight};
+pub use decode::{
+    DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
+    PreviousTokenPrefetchPlan, ResidentExpertWeight, plan_previous_token_prefetch,
+};

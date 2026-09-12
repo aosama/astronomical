@@ -140,12 +140,22 @@ pub enum PerformanceCounter {
     RouteObservationEvictedRecordCount,
     /// Sparse layers whose route was captured for one finalized token (#536).
     RouteObservationCapturedLayerCount,
+    /// Previous-token experts written into leftover slots (#537).
+    PreviousTokenPrefetchIssueCount,
+    /// Next-token demands served from a previous-token prefetch slot (#537).
+    PreviousTokenPrefetchHitCount,
+    /// Prefetched experts that the next token did not demand (#537).
+    PreviousTokenPrefetchMissCount,
+    /// Payload bytes written by previous-token prefetch inserts (#537).
+    PreviousTokenPrefetchByteCount,
+    /// Previous-token experts dropped because leftover slots were full (#537).
+    PreviousTokenPrefetchCapacityDropCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
-    pub(super) const COUNT: usize = Self::RouteObservationCapturedLayerCount as usize + 1;
+    pub(super) const COUNT: usize = Self::PreviousTokenPrefetchCapacityDropCount as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
@@ -253,6 +263,11 @@ impl PerformanceCounter {
         Self::RouteObservationStoredRecordCount,
         Self::RouteObservationEvictedRecordCount,
         Self::RouteObservationCapturedLayerCount,
+        Self::PreviousTokenPrefetchIssueCount,
+        Self::PreviousTokenPrefetchHitCount,
+        Self::PreviousTokenPrefetchMissCount,
+        Self::PreviousTokenPrefetchByteCount,
+        Self::PreviousTokenPrefetchCapacityDropCount,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -475,6 +490,13 @@ impl PerformanceCounter {
             Self::RouteObservationStoredRecordCount => "route_observation_stored_record_count",
             Self::RouteObservationEvictedRecordCount => "route_observation_evicted_record_count",
             Self::RouteObservationCapturedLayerCount => "route_observation_captured_layer_count",
+            Self::PreviousTokenPrefetchIssueCount => "previous_token_prefetch_issue_count",
+            Self::PreviousTokenPrefetchHitCount => "previous_token_prefetch_hit_count",
+            Self::PreviousTokenPrefetchMissCount => "previous_token_prefetch_miss_count",
+            Self::PreviousTokenPrefetchByteCount => "previous_token_prefetch_byte_count",
+            Self::PreviousTokenPrefetchCapacityDropCount => {
+                "previous_token_prefetch_capacity_drop_count"
+            }
         }
     }
 }

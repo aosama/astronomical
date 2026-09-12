@@ -119,7 +119,7 @@ fn pad_array_to_warm_capacity(
 /// `[slot, 0.., 0..]` to `[slot+1, end, end]`. `slice_update` donates the
 /// destination buffer when it is row-contiguous and uniquely held, so only the
 /// one expert row is written — no whole-tensor copy.
-pub(super) fn write_expert_into_slot(
+pub(crate) fn write_expert_into_slot(
     runtime: &MlxRuntime,
     table_weights: &mut Qwen3_5PagedExpertWeights,
     streamed_weights: &Qwen3_5PagedExpertWeights,
