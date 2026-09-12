@@ -35,6 +35,7 @@ pub(super) fn completion_request(model_id: &str, messages: Value) -> Value {
         "stream": true,
         "stream_options": {"include_usage": true},
         "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
+        "temperature": 1,
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
     })
 }

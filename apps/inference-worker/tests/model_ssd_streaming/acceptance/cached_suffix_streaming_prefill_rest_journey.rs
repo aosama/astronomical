@@ -23,8 +23,8 @@ use observe::{
     assert_completed_request, completion_request, execute_observed_request, print_request_records,
 };
 use reports::{
-    assert_reported_interaction, persist_prefill_throughput_summary, print_comparison_summary,
-    read_interaction_reports,
+    assert_admitted_complete_layers_are_reused_across_prefill_chunks, assert_reported_interaction,
+    persist_prefill_throughput_summary, print_comparison_summary, read_interaction_reports,
 };
 use support::{
     artifact_directory_regular_file_bytes, interaction_instance_paths, persist_acceptance_evidence,
@@ -253,6 +253,9 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
             &append_outcome,
             allocated_mlx_memory_bytes,
         );
+        if matches!(journey_kind, StreamingPrefillJourneyKind::HalfModelReread) {
+            assert_admitted_complete_layers_are_reused_across_prefill_chunks(&reports);
+        }
         if matches!(
             journey_kind,
             StreamingPrefillJourneyKind::HighRamResponsiveSuffix
