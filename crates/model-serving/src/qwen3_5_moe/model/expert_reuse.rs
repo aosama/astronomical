@@ -59,9 +59,25 @@ impl Qwen3_5Model {
                 missing_expert_ids: routed_expert_ids.to_vec(),
             },
             |retained_experts| {
-                retained_experts
+                let route_coverage = retained_experts
                     .borrow()
-                    .routed_expert_coverage(layer_index, routed_expert_ids)
+                    .routed_expert_coverage(layer_index, routed_expert_ids);
+                let (prefetch_hit_count, prefetch_miss_count) = retained_experts
+                    .borrow_mut()
+                    .consume_prefetch_coverage(layer_index, &route_coverage);
+                if prefetch_hit_count > 0 {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::PreviousTokenPrefetchHitCount,
+                        prefetch_hit_count,
+                    );
+                }
+                if prefetch_miss_count > 0 {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::PreviousTokenPrefetchMissCount,
+                        prefetch_miss_count,
+                    );
+                }
+                route_coverage
             },
         );
         if route_coverage.missing_expert_ids.is_empty() {
@@ -203,25 +219,36 @@ impl Qwen3_5Model {
                 streamed_manifest.source_manifests.len(),
             );
             let warm_slot_count = self.hot_expert_warm_slot_count();
-            if warm_slot_count > 0
-                && !retained_experts
-                    .borrow()
-                    .has_complete_layer(layer_index, expert_capacity)
-                && should_commit_mandatory_routed_page(
+            let layer_has_complete_table = retained_experts
+                .borrow()
+                .has_complete_layer(layer_index, expert_capacity);
+            if warm_slot_count > 0 && !layer_has_complete_table {
+                if should_commit_mandatory_routed_page(
                     route_token_count,
                     production_default_paging,
                     self.expert_residency_target(layer_index),
                     false,
-                )
-            {
-                retained_experts
-                    .borrow_mut()
-                    .queue_pending_routed_expert_insert(
-                        layer_index,
-                        routed_expert_ids,
-                        &streamed_weights,
-                        warm_slot_count.min(expert_capacity),
-                    )?;
+                ) {
+                    retained_experts
+                        .borrow_mut()
+                        .queue_pending_routed_expert_insert(
+                            layer_index,
+                            routed_expert_ids,
+                            &streamed_weights,
+                            warm_slot_count.min(expert_capacity),
+                        )?;
+                } else if performance_attribution.is_enabled() {
+                    // Issue #537: keep this token's streamed route in leftover
+                    // slots when the residency plan would have dropped it.
+                    retained_experts
+                        .borrow_mut()
+                        .queue_pending_prefetch_insert(
+                            layer_index,
+                            routed_expert_ids,
+                            &streamed_weights,
+                            routed_expert_ids.len().min(expert_capacity),
+                        )?;
+                }
             }
         }
         Ok((streamed_weights, streamed_manifest))

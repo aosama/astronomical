@@ -79,11 +79,50 @@ impl Qwen3_5Model {
         Ok(PagedRouteValidationOutcome::CompleteHit)
     }
 
-    /// Writes queued miss experts into the slot table after GPU evaluation so
-    /// `slice_update` can donate instead of copying a live gather buffer, and
-    /// returns how many experts were newly written.
-    pub(crate) fn flush_pending_expert_slot_inserts(&self) -> Result<u64, Qwen3_5ExecutionError> {
-        self.flush_pending_expert_slot_inserts_internal()
+    /// Drains queued slot inserts and records the warm-insert and prefetch
+    /// evidence. The engine calls this once per token after the forward's
+    /// arrays are evaluated, so this stays the single attribution seam for
+    /// both hot-expert warming and the leftover-only #537 prefetch.
+    pub(crate) fn record_warm_insert_and_prefetch_statistics(
+        &self,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        let written_expert_count = self.flush_pending_expert_slot_inserts_internal()?;
+        if written_expert_count > 0 {
+            performance_attribution.record_counter(
+                PerformanceCounter::HotExpertWarmInsertCount,
+                written_expert_count,
+            );
+        }
+        let (prefetch_issue_count, prefetch_capacity_drop_count, prefetch_payload_bytes) =
+            self.take_previous_token_prefetch_statistics();
+        if prefetch_issue_count > 0 {
+            performance_attribution.record_counter(
+                PerformanceCounter::PreviousTokenPrefetchIssueCount,
+                prefetch_issue_count,
+            );
+            performance_attribution.record_counter(
+                PerformanceCounter::PreviousTokenPrefetchByteCount,
+                prefetch_payload_bytes,
+            );
+        }
+        if prefetch_capacity_drop_count > 0 {
+            performance_attribution.record_counter(
+                PerformanceCounter::PreviousTokenPrefetchCapacityDropCount,
+                prefetch_capacity_drop_count,
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn take_previous_token_prefetch_statistics(&self) -> (u64, u64, u64) {
+        self.retained_experts
+            .as_ref()
+            .map_or((0, 0, 0), |retained_experts| {
+                retained_experts
+                    .borrow_mut()
+                    .take_prefetch_flush_statistics()
+            })
     }
 
     /// Counted variant of the post-evaluation warm insert flush.

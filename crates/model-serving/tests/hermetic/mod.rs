@@ -16,6 +16,7 @@ mod mlx_ram_budget;
 mod paged_route_materialization;
 mod performance_attribution;
 mod phase_aware_expert_residency;
+mod previous_token_prefetch;
 mod quantized_expert_page_manifest;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_execution_error;

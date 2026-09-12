@@ -237,6 +237,28 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "captured observations must include at least one sparse layer route; captured_layers={route_observation_captured_layer_count}"
     );
 
+    // --- Measured assertion 4e: previous-token leftover prefetch (issue #537) ---
+    let previous_token_prefetch_issue_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "previous_token_prefetch_issue_count",
+    );
+    let previous_token_prefetch_hit_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "previous_token_prefetch_hit_count",
+    );
+    let previous_token_prefetch_miss_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "previous_token_prefetch_miss_count",
+    );
+    let previous_token_prefetch_byte_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "previous_token_prefetch_byte_count",
+    );
+    let previous_token_prefetch_capacity_drop_count = generation_attribution_counter(
+        isolated_worker_home.path(),
+        "previous_token_prefetch_capacity_drop_count",
+    );
+
     // --- Measured assertion 5: throughput remains portable evidence ---
     let average_generation_tokens_per_second =
         memory_evidence.final_status["serving_session"]["average_generation_tok_per_second"]
@@ -367,6 +389,11 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          route_observation_stored={route_observation_stored_record_count} \
          route_observation_captured_layers={route_observation_captured_layer_count} \
          route_observation_evicted={route_observation_evicted_record_count} \
+         previous_token_prefetch_issues={previous_token_prefetch_issue_count} \
+         previous_token_prefetch_hits={previous_token_prefetch_hit_count} \
+         previous_token_prefetch_misses={previous_token_prefetch_miss_count} \
+         previous_token_prefetch_bytes={previous_token_prefetch_byte_count} \
+         previous_token_prefetch_drops={previous_token_prefetch_capacity_drop_count} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \

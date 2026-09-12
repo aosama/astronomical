@@ -91,7 +91,10 @@ pub use budget::{
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
-pub use expert_cache::{DecodeExpertCache, ResidentExpertWeight};
+pub use expert_cache::{
+    DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
+    PreviousTokenPrefetchPlan, ResidentExpertWeight, plan_previous_token_prefetch,
+};
 pub use phase::MemoryPhase;
 pub use reclamation::{
     ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
