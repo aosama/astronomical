@@ -77,4 +77,28 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
     XCTAssertEqual(diagnostic.configuredRootNumbers, [4])
     XCTAssertFalse(diagnostic.message.contains("private-root-marker"))
   }
+
+  func test_should_omit_predictor_title_when_the_status_document_has_no_predictor() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(#"{"status":"ready","activity":"idle"}"#.utf8)
+    )
+    XCTAssertNil(statusDocument.predictor)
+    XCTAssertNil(statusDocument.predictorProgramTitle)
+  }
+
+  func test_should_present_predictor_accuracy_and_pages_avoided_from_status() throws {
+    let statusDocument = try JSONDecoder().decode(
+      SupervisorStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"idle","predictor":{"runtime":"cpu","training_active":false,"top_k_accuracy_percent":24.7,"pages_avoided_percent":0.0}}"#
+          .utf8)
+    )
+    let predictor = try XCTUnwrap(statusDocument.predictor)
+    XCTAssertEqual(predictor.runtime, "cpu")
+    XCTAssertEqual(predictor.topKAccuracyPercent, 24.7, accuracy: 0.01)
+    XCTAssertEqual(
+      statusDocument.predictorProgramTitle,
+      "24.7% accuracy · 0.0% pages avoided · CPU · idle")
+  }
 }

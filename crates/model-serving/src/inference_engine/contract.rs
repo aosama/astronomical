@@ -2,8 +2,9 @@ use std::future::Future;
 
 use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 use astronomical_ipc_protocol::{
-    ExpertMemoryMode, RequestId, WorkerEvent, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    ExpertMemoryMode, PredictorProgramStatus, RequestId, WorkerEvent,
+    WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptProcessingPhase,
+    WorkerPromptWorkReuse,
 };
 
 use super::EngineLoadResult;
@@ -264,6 +265,7 @@ pub struct GenerationFinalization {
     expert_memory_mode: Option<ExpertMemoryMode>,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
+    predictor_program: Option<PredictorProgramStatus>,
 }
 
 impl GenerationFinalization {
@@ -277,7 +279,17 @@ impl GenerationFinalization {
             expert_memory_mode,
             mlx_memory_telemetry,
             expert_residency_telemetry,
+            predictor_program: None,
         }
+    }
+
+    #[must_use]
+    pub const fn with_predictor_program(
+        mut self,
+        predictor_program: Option<PredictorProgramStatus>,
+    ) -> Self {
+        self.predictor_program = predictor_program;
+        self
     }
 
     #[must_use]
@@ -296,10 +308,16 @@ impl GenerationFinalization {
     }
 
     #[must_use]
+    pub const fn predictor_program(self) -> Option<PredictorProgramStatus> {
+        self.predictor_program
+    }
+
+    #[must_use]
     pub const fn has_reportable_state(self) -> bool {
         self.expert_memory_mode.is_some()
             || self.mlx_memory_telemetry.is_some()
             || self.expert_residency_telemetry.is_some()
+            || self.predictor_program.is_some()
     }
 }
 

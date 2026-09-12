@@ -5,8 +5,9 @@
 //! The trainer thread owns the weights, so they never enter MLX accounting.
 //! Spawn failure, poison, and disconnect all degrade to no prediction.
 
+use astronomical_ipc_protocol::PredictorProgramStatus;
 use std::fmt::{Debug, Formatter};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex, TryLockError};
 use std::thread::{self, JoinHandle};
@@ -34,6 +35,7 @@ pub struct ExpertRoutePredictorOwner {
     top_k_hit_count: Arc<AtomicU64>,
     evaluated_expert_count: Arc<AtomicU64>,
     last_slice_nanoseconds: Arc<AtomicU64>,
+    training_active: Arc<AtomicBool>,
 }
 
 impl Debug for ExpertRoutePredictorOwner {
@@ -84,10 +86,12 @@ impl ExpertRoutePredictorOwner {
         let top_k_hit_count = Arc::new(AtomicU64::new(0));
         let evaluated_expert_count = Arc::new(AtomicU64::new(0));
         let last_slice_nanoseconds = Arc::new(AtomicU64::new(0));
+        let training_active = Arc::new(AtomicBool::new(false));
         let trained_record_count_for_thread = Arc::clone(&trained_record_count);
         let top_k_hit_count_for_thread = Arc::clone(&top_k_hit_count);
         let evaluated_expert_count_for_thread = Arc::clone(&evaluated_expert_count);
         let last_slice_nanoseconds_for_thread = Arc::clone(&last_slice_nanoseconds);
+        let training_active_for_thread = Arc::clone(&training_active);
         let top_k = experts_per_token.max(1);
         let predictor = Arc::new(Mutex::new(ExpertRoutePredictor::new(config)));
         let predictor_for_thread = Arc::clone(&predictor);
@@ -95,6 +99,7 @@ impl ExpertRoutePredictorOwner {
             .name("expert-route-predictor".to_owned())
             .spawn(move || {
                 while let Ok(first_record) = observation_receiver.recv() {
+                    training_active_for_thread.store(true, Ordering::Relaxed);
                     let slice_started_at = Instant::now();
                     let mut record = first_record;
                     loop {
@@ -120,6 +125,7 @@ impl ExpertRoutePredictorOwner {
                         u64::try_from(slice_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
                         Ordering::Relaxed,
                     );
+                    training_active_for_thread.store(false, Ordering::Relaxed);
                 }
             })
             .ok()?;
@@ -131,6 +137,7 @@ impl ExpertRoutePredictorOwner {
             top_k_hit_count,
             evaluated_expert_count,
             last_slice_nanoseconds,
+            training_active,
         })
     }
 
@@ -162,6 +169,18 @@ impl ExpertRoutePredictorOwner {
     #[must_use]
     pub fn last_slice_nanoseconds(&self) -> u64 {
         self.last_slice_nanoseconds.load(Ordering::Relaxed)
+    }
+
+    /// Snapshot for `/v1/status`. Pages avoided stay 0 until extra SSD prefetch exists.
+    #[must_use]
+    pub fn program_status(&self) -> PredictorProgramStatus {
+        PredictorProgramStatus::from_cpu_counts(
+            self.training_active.load(Ordering::Relaxed),
+            self.top_k_hit_count(),
+            self.evaluated_expert_count(),
+            0,
+            0,
+        )
     }
 
     /// Ranks leftover experts the next token is predicted to need.

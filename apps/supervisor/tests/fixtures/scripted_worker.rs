@@ -369,6 +369,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 request_id,
                                 expert_memory_mode: Some(ExpertMemoryMode::Resident),
                                 expert_residency: None,
+                                predictor_program: None,
                                 mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                                     source: MlxMemorySnapshotSource::Finalized,
                                     active_memory_bytes: 24_000,

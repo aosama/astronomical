@@ -8,7 +8,7 @@ use crate::chat_generation_executor::try_send_stream_event;
 use crate::worker_health::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
     publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
-    publish_persistent_prompt_cache_stats,
+    publish_persistent_prompt_cache_stats, publish_predictor_program,
 };
 use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
@@ -287,6 +287,7 @@ async fn cancel_worker_request(
                     expert_memory_mode,
                     mlx_memory_snapshot,
                     expert_residency,
+                    predictor_program,
                     ..
                 } => {
                     if let Some(expert_memory_mode) = expert_memory_mode {
@@ -302,6 +303,9 @@ async fn cancel_worker_request(
                             health_snapshot,
                             expert_residency,
                         );
+                    }
+                    if let Some(predictor_program) = predictor_program {
+                        publish_predictor_program(health_snapshot, predictor_program);
                     }
                 }
                 WorkerEvent::PersistentPromptCacheStats { .. } => {
