@@ -345,6 +345,11 @@ pub use qwen3_5::{
     qwen3_5_target_verification_quantized_linear, safe_minimum_mlx_memory_ceiling_bytes,
     target_verification_quantized_linear_kernel,
 };
+pub use qwen3_5_moe::expert_paging::predictor::{
+    ExpertRoutePredictor, ExpertRoutePredictorConfig, ExpertRoutePredictorOwner,
+    PredictorLayerAccuracy, TrainerSliceOutcome, evaluate_predictor_accuracy, evaluate_then_train,
+    train_predictor_slice,
+};
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes;

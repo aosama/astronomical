@@ -1,0 +1,169 @@
+//! Fail-open background trainer for the expert-route predictor.
+//!
+//! Generation never waits on training: observations are offered through a
+//! bounded try-send, and a full or disconnected queue drops the example.
+//! The trainer thread owns the weights, so they never enter MLX accounting.
+//! Spawn failure, poison, and disconnect all degrade to no prediction.
+
+use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use super::network::{ExpertRoutePredictor, ExpertRoutePredictorConfig};
+use super::trainer::evaluate_then_train;
+use crate::qwen3_5_moe::expert_paging::route_observation::RouteObservationRecord;
+
+const PREDICTOR_TRAINING_QUEUE_CAPACITY: usize = 64;
+const PREDICTOR_SLICE_BUDGET: Duration = Duration::from_millis(4);
+const PREDICTOR_EMBEDDING_DIM: usize = 32;
+const PREDICTOR_HIDDEN_DIM: usize = 64;
+const PREDICTOR_LEARNING_RATE: f32 = 0.05;
+const PREDICTOR_SEED: u64 = 1;
+
+/// Background owner: a bounded queue into one trainer thread plus counters
+/// the decode path snapshots into attribution.
+pub struct ExpertRoutePredictorOwner {
+    observation_sender: Option<SyncSender<RouteObservationRecord>>,
+    trainer_thread: Option<JoinHandle<()>>,
+    trained_record_count: Arc<AtomicU64>,
+    top_k_hit_count: Arc<AtomicU64>,
+    evaluated_expert_count: Arc<AtomicU64>,
+    last_slice_nanoseconds: Arc<AtomicU64>,
+}
+
+impl Debug for ExpertRoutePredictorOwner {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExpertRoutePredictorOwner")
+            .field(
+                "trained_record_count",
+                &self.trained_record_count.load(Ordering::Relaxed),
+            )
+            .field(
+                "top_k_hit_count",
+                &self.top_k_hit_count.load(Ordering::Relaxed),
+            )
+            .field(
+                "evaluated_expert_count",
+                &self.evaluated_expert_count.load(Ordering::Relaxed),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl ExpertRoutePredictorOwner {
+    /// Starts the trainer for a sparse model. Dense models and spawn failures
+    /// return `None` so serving continues without a predictor.
+    #[must_use]
+    pub fn try_start(
+        layer_count: usize,
+        expert_count: usize,
+        vocabulary_size: u32,
+        experts_per_token: usize,
+    ) -> Option<Self> {
+        if layer_count == 0 || expert_count == 0 || vocabulary_size == 0 {
+            return None;
+        }
+        let config = ExpertRoutePredictorConfig {
+            layer_count,
+            expert_count,
+            vocabulary_size,
+            embedding_dim: PREDICTOR_EMBEDDING_DIM,
+            hidden_dim: PREDICTOR_HIDDEN_DIM,
+            learning_rate: PREDICTOR_LEARNING_RATE,
+            seed: PREDICTOR_SEED,
+        };
+        let (observation_sender, observation_receiver) =
+            sync_channel(PREDICTOR_TRAINING_QUEUE_CAPACITY);
+        let trained_record_count = Arc::new(AtomicU64::new(0));
+        let top_k_hit_count = Arc::new(AtomicU64::new(0));
+        let evaluated_expert_count = Arc::new(AtomicU64::new(0));
+        let last_slice_nanoseconds = Arc::new(AtomicU64::new(0));
+        let trained_record_count_for_thread = Arc::clone(&trained_record_count);
+        let top_k_hit_count_for_thread = Arc::clone(&top_k_hit_count);
+        let evaluated_expert_count_for_thread = Arc::clone(&evaluated_expert_count);
+        let last_slice_nanoseconds_for_thread = Arc::clone(&last_slice_nanoseconds);
+        let top_k = experts_per_token.max(1);
+        let trainer_thread = thread::Builder::new()
+            .name("expert-route-predictor".to_owned())
+            .spawn(move || {
+                let mut predictor = ExpertRoutePredictor::new(config);
+                while let Ok(first_record) = observation_receiver.recv() {
+                    let slice_started_at = Instant::now();
+                    let mut record = first_record;
+                    loop {
+                        let (hit_count, evaluated_count) =
+                            evaluate_then_train(&mut predictor, &record, top_k);
+                        top_k_hit_count_for_thread.fetch_add(hit_count, Ordering::Relaxed);
+                        evaluated_expert_count_for_thread
+                            .fetch_add(evaluated_count, Ordering::Relaxed);
+                        trained_record_count_for_thread.fetch_add(1, Ordering::Relaxed);
+                        if slice_started_at.elapsed() >= PREDICTOR_SLICE_BUDGET {
+                            break;
+                        }
+                        match observation_receiver.try_recv() {
+                            Ok(next_record) => record = next_record,
+                            Err(_) => break,
+                        }
+                    }
+                    last_slice_nanoseconds_for_thread.store(
+                        u64::try_from(slice_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                        Ordering::Relaxed,
+                    );
+                }
+            })
+            .ok()?;
+        Some(Self {
+            observation_sender: Some(observation_sender),
+            trainer_thread: Some(trainer_thread),
+            trained_record_count,
+            top_k_hit_count,
+            evaluated_expert_count,
+            last_slice_nanoseconds,
+        })
+    }
+
+    /// Offers one observation. A full queue drops it rather than blocking decode.
+    pub fn try_submit(&self, observation: RouteObservationRecord) {
+        let Some(observation_sender) = self.observation_sender.as_ref() else {
+            return;
+        };
+        match observation_sender.try_send(observation) {
+            Ok(()) | Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}
+        }
+    }
+
+    #[must_use]
+    pub fn trained_record_count(&self) -> u64 {
+        self.trained_record_count.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn top_k_hit_count(&self) -> u64 {
+        self.top_k_hit_count.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn evaluated_expert_count(&self) -> u64 {
+        self.evaluated_expert_count.load(Ordering::Relaxed)
+    }
+
+    #[must_use]
+    pub fn last_slice_nanoseconds(&self) -> u64 {
+        self.last_slice_nanoseconds.load(Ordering::Relaxed)
+    }
+}
+
+impl Drop for ExpertRoutePredictorOwner {
+    fn drop(&mut self) {
+        // Drop the sender first so the trainer's recv returns and the thread
+        // can exit; joining while the sender still lives would deadlock.
+        self.observation_sender.take();
+        if let Some(trainer_thread) = self.trainer_thread.take() {
+            let _ = trainer_thread.join();
+        }
+    }
+}

@@ -132,8 +132,11 @@ impl Qwen3_5Model {
         };
         let evicted_oldest = {
             let mut collector = self.route_observation.borrow_mut();
-            collector.observation_ring().record_observation(observation)
+            collector
+                .observation_ring()
+                .record_observation(observation.clone())
         };
+        self.offer_observation_to_predictor(&observation, performance_attribution);
         performance_attribution
             .record_counter(PerformanceCounter::RouteObservationStoredRecordCount, 1);
         if evicted_oldest {
@@ -171,5 +174,45 @@ impl Qwen3_5Model {
             observed_route.push(layer_route);
         }
         Ok(Some(observed_route))
+    }
+
+    fn offer_observation_to_predictor(
+        &self,
+        observation: &RouteObservationRecord,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        if !performance_attribution.is_enabled() || self.config.expert_count() == 0 {
+            return;
+        }
+        let mut predictor_owner = self.expert_route_predictor.borrow_mut();
+        if predictor_owner.is_none() {
+            *predictor_owner =
+                crate::qwen3_5_moe::expert_paging::predictor::ExpertRoutePredictorOwner::try_start(
+                    usize::try_from(self.config.layer_count()).unwrap_or(0),
+                    usize::try_from(self.config.expert_count()).unwrap_or(0),
+                    self.config.vocabulary_size(),
+                    usize::try_from(self.config.experts_per_token()).unwrap_or(1),
+                );
+        }
+        let Some(predictor_owner) = predictor_owner.as_ref() else {
+            return;
+        };
+        predictor_owner.try_submit(observation.clone());
+        performance_attribution.record_snapshot_counter(
+            PerformanceCounter::ExpertRoutePredictorTrainStepCount,
+            predictor_owner.trained_record_count(),
+        );
+        performance_attribution.record_snapshot_counter(
+            PerformanceCounter::ExpertRoutePredictorTopKHitCount,
+            predictor_owner.top_k_hit_count(),
+        );
+        performance_attribution.record_snapshot_counter(
+            PerformanceCounter::ExpertRoutePredictorEvaluatedExpertCount,
+            predictor_owner.evaluated_expert_count(),
+        );
+        performance_attribution.record_snapshot_counter(
+            PerformanceCounter::ExpertRoutePredictorTrainSliceNanoseconds,
+            predictor_owner.last_slice_nanoseconds(),
+        );
     }
 }

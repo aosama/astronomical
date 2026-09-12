@@ -100,6 +100,13 @@ impl RouteObservationRing {
         self.observations.iter()
     }
 
+    /// Removes and returns the oldest retained observation, if any. The
+    /// predictor trainer consumes history this way so a training slice always
+    /// spends its budget on the oldest examples first.
+    pub fn pop_oldest_observation(&mut self) -> Option<RouteObservationRecord> {
+        self.observations.pop_front()
+    }
+
     /// Observations currently retained.
     pub fn observation_count(&self) -> usize {
         self.observations.len()
