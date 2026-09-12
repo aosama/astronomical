@@ -77,10 +77,6 @@ async fn run_mlx_memory_progress_rest_journey() {
     )
     .await;
     let server_address = real_model_rest_server.server_address;
-    crate::support::memory_utilization_parity::wait_for_status_memory_ceiling_utilization(
-        server_address,
-    )
-    .await;
     let openai_client = Client::with_config(
         OpenAIConfig::new()
             .with_api_base(format!("http://{server_address}/v1"))

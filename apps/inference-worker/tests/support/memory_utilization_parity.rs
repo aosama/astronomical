@@ -120,9 +120,20 @@ pub(crate) async fn wait_for_status_memory_ceiling_utilization(
     server_address: SocketAddr,
 ) -> Value {
     let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last_poll_log_at = Instant::now() - Duration::from_secs(1);
     loop {
         let status_document = get_json_endpoint(server_address, "/v1/status").await;
-        if status_document["mlx_memory_snapshot"]["memory_ceiling_utilization"].is_object() {
+        let observed_snapshot = &status_document["mlx_memory_snapshot"];
+        if last_poll_log_at.elapsed() >= Duration::from_secs(1) {
+            eprintln!(
+                "[memory-utilization-parity] poll snapshot_source={:?} active_bytes={:?} has_split={}",
+                observed_snapshot["source"].as_str(),
+                observed_snapshot["active_memory_bytes"].as_u64(),
+                observed_snapshot["memory_ceiling_utilization"].is_object(),
+            );
+            last_poll_log_at = Instant::now();
+        }
+        if observed_snapshot["memory_ceiling_utilization"].is_object() {
             assert_status_memory_ceiling_utilization_closes(&status_document);
             return status_document;
         }

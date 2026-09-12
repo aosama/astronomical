@@ -529,7 +529,7 @@ impl InferenceEngine for ScriptedChatEngine {
                 .min(requested_mlx_memory_ceiling_bytes),
             1,
             ExpertMemoryMode::Resident,
-            None,
+            self.idle_mlx_memory_telemetry.clone(),
         )
         .with_expert_residency_telemetry(ExpertResidencyTelemetry {
             total_layer_count: 2,

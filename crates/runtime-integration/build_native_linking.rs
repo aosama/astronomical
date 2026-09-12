@@ -4,8 +4,9 @@
 //! while retaining one explicit inventory of Apple frameworks and archives.
 
 use std::{
+    env,
     error::Error,
-    fs::File,
+    fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
     process::Command,
@@ -39,6 +40,7 @@ pub fn configure_rust_linking(
     require_file(&metallib_path, "MLX AOT metallib")?;
     let metallib_size_bytes = metallib_path.metadata()?.len();
     let metallib_sha256_hex = sha256_file_hex(&metallib_path)?;
+    publish_metallib_beside_cargo_target(&metallib_path)?;
 
     println!(
         "cargo:rustc-link-search=native={}",
@@ -120,4 +122,45 @@ fn sha256_file_hex(file_path: &Path) -> Result<String, Box<dyn Error>> {
         .iter()
         .map(|digest_byte| format!("{digest_byte:02x}"))
         .collect())
+}
+
+/// Publishes the build-produced metallib beside the cargo target directory.
+///
+/// An unpackaged worker resolves its bundled metallib at `../Resources` relative
+/// to its own directory, and a cargo-built worker lives under
+/// `<target>/<profile>/`, so `OUT_DIR` (`<target>/<profile>/build/<pkg>-<hash>`)
+/// up two directories is the profile directory that owns the executable. The
+/// user cache directory that stores the compile-time fallback is routinely
+/// purged by third-party cleanup tools (issue #521); the cargo target directory
+/// is workspace-local and survives those purges, so the packaged-app resolution
+/// chain keeps working for unpackaged cargo runs without an environment
+/// override.
+fn publish_metallib_beside_cargo_target(metallib_path: &Path) -> Result<(), Box<dyn Error>> {
+    let Some(out_directory) = env::var_os("OUT_DIR").map(PathBuf::from) else {
+        return Err("cargo did not report OUT_DIR for the native build".into());
+    };
+    let Some(profile_directory) = out_directory
+        .parent()
+        .and_then(|package_build_directory| package_build_directory.parent())
+        .and_then(|build_directory| build_directory.parent())
+    else {
+        return Err(format!(
+            "OUT_DIR is not inside a cargo profile directory: {}",
+            out_directory.display()
+        )
+        .into());
+    };
+    let published_metallib_path = profile_directory
+        .join("../Resources/share/mlx/mlx.metallib")
+        .components()
+        .collect::<PathBuf>();
+    if let Some(published_parent_directory) = published_metallib_path.parent() {
+        fs::create_dir_all(published_parent_directory)?;
+    }
+    // Write-then-rename keeps concurrent cargo invocations from observing a
+    // partially written metallib.
+    let staged_metallib_path = published_metallib_path.with_extension("metallib.staged");
+    fs::copy(metallib_path, &staged_metallib_path)?;
+    fs::rename(&staged_metallib_path, &published_metallib_path)?;
+    Ok(())
 }
