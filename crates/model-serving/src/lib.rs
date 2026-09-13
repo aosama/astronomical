@@ -393,6 +393,7 @@ pub use qwen4_exp::ple::{
     NgramRowIdentity, NgramVocabLayout, PLE_LAYER_PRIME, SPLITMIX_GAMMA, SPLITMIX_MULTIPLIER_1,
     SPLITMIX_MULTIPLIER_2, head_count_for, is_prime_u64, nth_prime_after, splitmix64,
 };
+pub use qwen4_exp::qsa::{Qwen4ExpSelectionPlan, select_keys, sparse_attention};
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{

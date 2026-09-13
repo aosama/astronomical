@@ -170,12 +170,13 @@ pub enum PerformanceCounter {
     PredictorPrefetchIssueCount,
     /// Payload bytes of predictor-driven leftover prefetch (#540).
     PredictorPrefetchByteCount,
+    Qwen4ExpIndexerSelectedKeyCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
-    pub(super) const COUNT: usize = Self::PredictorPrefetchByteCount as usize + 1;
+    pub(super) const COUNT: usize = Self::Qwen4ExpIndexerSelectedKeyCount as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
@@ -298,6 +299,7 @@ impl PerformanceCounter {
         Self::ExpertRoutePredictorAnePredictNanoseconds,
         Self::PredictorPrefetchIssueCount,
         Self::PredictorPrefetchByteCount,
+        Self::Qwen4ExpIndexerSelectedKeyCount,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -542,6 +544,7 @@ impl PerformanceCounter {
                 "expert_route_predictor_ane_predict_nanoseconds"
             }
             Self::PredictorPrefetchIssueCount => "predictor_prefetch_issue_count",
+            Self::Qwen4ExpIndexerSelectedKeyCount => "qwen4_exp_indexer_selected_key_count",
             Self::PredictorPrefetchByteCount => "predictor_prefetch_byte_count",
             Self::PredictorRetentionHintRequestedCount => {
                 "predictor_retention_hint_requested_count"
