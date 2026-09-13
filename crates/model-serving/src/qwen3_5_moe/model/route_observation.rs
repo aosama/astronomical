@@ -257,5 +257,16 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .set_predicted_retention_experts(&predicted_experts_by_layer);
         }
+        self.prefetch_predicted_experts(&predicted_experts_by_layer, performance_attribution);
+        if let Some(predictor_owner) = self.expert_route_predictor.borrow().as_ref() {
+            performance_attribution.record_snapshot_counter(
+                PerformanceCounter::ExpertRoutePredictorCpuPredictNanoseconds,
+                predictor_owner.last_cpu_predict_nanoseconds(),
+            );
+            performance_attribution.record_snapshot_counter(
+                PerformanceCounter::ExpertRoutePredictorAnePredictNanoseconds,
+                predictor_owner.last_ane_predict_nanoseconds(),
+            );
+        }
     }
 }

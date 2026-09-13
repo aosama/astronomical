@@ -413,6 +413,13 @@ impl RetainedExpertCache {
     }
 
     #[must_use]
+    pub fn is_expert_warm(&self, layer_index: usize, expert_id: usize) -> bool {
+        self.tables_by_layer
+            .get(layer_index)
+            .and_then(|table| table.as_ref())
+            .is_some_and(|table| table.slot_by_expert_id.contains_key(&expert_id))
+    }
+
     pub fn take_retention_hint_statistics(&mut self) -> (u64, u64) {
         (
             std::mem::take(&mut self.retention_hint_requested_count),
