@@ -385,14 +385,15 @@ pub use qwen4_exp::decoder::{
     Qwen4ExpDecoderLayerCacheDtypes, Qwen4ExpStateGeometry, qwen4_exp_decoder_cache_layout,
 };
 pub use qwen4_exp::hyper_connection::{
-    GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
-    average_mix, gated_combine, gated_mix, grouped_rms_norm,
+    GatedMixOutput, GatedResidualWeights, HyperConnectionExecutor, StreamAlgebraError,
+    StreamMixingPlan, average_combine, average_mix, gated_combine, gated_mix, grouped_rms_norm,
 };
 pub use qwen4_exp::ple::{
     DEFAULT_NGRAM_SEED, NgramIdentityConfiguration, NgramIdentityError, NgramPlanError,
     NgramRowIdentity, NgramVocabLayout, PLE_LAYER_PRIME, SPLITMIX_GAMMA, SPLITMIX_MULTIPLIER_1,
     SPLITMIX_MULTIPLIER_2, head_count_for, is_prime_u64, nth_prime_after, splitmix64,
 };
+pub use qwen4_exp::qsa::{Qwen4ExpSelectionPlan, select_keys, sparse_attention};
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
