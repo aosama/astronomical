@@ -385,8 +385,8 @@ pub use qwen4_exp::decoder::{
     Qwen4ExpDecoderLayerCacheDtypes, Qwen4ExpStateGeometry, qwen4_exp_decoder_cache_layout,
 };
 pub use qwen4_exp::hyper_connection::{
-    GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
-    average_mix, gated_combine, gated_mix, grouped_rms_norm,
+    GatedMixOutput, GatedResidualWeights, HyperConnectionExecutor, StreamAlgebraError,
+    StreamMixingPlan, average_combine, average_mix, gated_combine, gated_mix, grouped_rms_norm,
 };
 pub use qwen4_exp::ple::{
     DEFAULT_NGRAM_SEED, NgramIdentityConfiguration, NgramIdentityError, NgramPlanError,

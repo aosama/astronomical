@@ -138,10 +138,13 @@ pub enum PerformanceOperation {
     CustomKernelCapabilityProbe,
     RouteObservationFinalization,
     PreviousTokenPrefetch,
+    Qwen4ExpHyperConnectionNormalization,
+    Qwen4ExpHyperConnectionMixing,
+    Qwen4ExpHyperConnectionInjection,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::PreviousTokenPrefetch as usize + 1;
+    pub(super) const COUNT: usize = Self::Qwen4ExpHyperConnectionInjection as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -273,6 +276,9 @@ impl PerformanceOperation {
         Self::CustomKernelCapabilityProbe,
         Self::RouteObservationFinalization,
         Self::PreviousTokenPrefetch,
+        Self::Qwen4ExpHyperConnectionNormalization,
+        Self::Qwen4ExpHyperConnectionMixing,
+        Self::Qwen4ExpHyperConnectionInjection,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -489,6 +495,11 @@ impl PerformanceOperation {
             Self::EmbeddingsForwardSpan => "embeddings_forward_span",
             Self::CustomKernelCapabilityProbe => "custom_kernel_capability_probe",
             Self::RouteObservationFinalization => "route_observation_finalization",
+            Self::Qwen4ExpHyperConnectionNormalization => {
+                "qwen4_exp_hyper_connection_normalization"
+            }
+            Self::Qwen4ExpHyperConnectionMixing => "qwen4_exp_hyper_connection_mixing",
+            Self::Qwen4ExpHyperConnectionInjection => "qwen4_exp_hyper_connection_injection",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
         }
     }
