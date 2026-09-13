@@ -170,6 +170,28 @@ impl ExpertRoutePredictor {
             .collect()
     }
 
+    /// Layer-major `[layer][head_input_dim]` activations for a Core ML snapshot.
+    #[must_use]
+    pub fn packed_head_inputs(
+        &self,
+        token_id: u32,
+        previous_token_route: Option<&[Option<Vec<u16>>]>,
+    ) -> Vec<f32> {
+        let embedding_row = self.embedding_row(token_id);
+        let mut packed_head_inputs =
+            Vec::with_capacity(self.config.layer_count * self.config.head_input_dim());
+        for layer_index in 0..self.config.layer_count {
+            packed_head_inputs.extend(head_input_vector(
+                &self.config,
+                embedding_row,
+                previous_token_route
+                    .and_then(|route| route.get(layer_index))
+                    .and_then(|maybe_layer_route| maybe_layer_route.as_ref()),
+            ));
+        }
+        packed_head_inputs
+    }
+
     /// One labeled example: forward, backward, and one SGD step. Returns the
     /// summed loss over the layers that had labels. Unlabeled layers
     /// (`None` routes) contribute no gradient, so an unobserved layer never

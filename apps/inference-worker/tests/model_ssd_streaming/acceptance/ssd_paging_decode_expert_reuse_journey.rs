@@ -256,6 +256,12 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     let predictor_retention_hint_requested_count =
         count("predictor_retention_hint_requested_count");
     let predictor_retention_hint_accepted_count = count("predictor_retention_hint_accepted_count");
+    let expert_route_predictor_cpu_predict_nanoseconds =
+        count("expert_route_predictor_cpu_predict_nanoseconds");
+    let expert_route_predictor_ane_predict_nanoseconds =
+        count("expert_route_predictor_ane_predict_nanoseconds");
+    let predictor_prefetch_issue_count = count("predictor_prefetch_issue_count");
+    let predictor_prefetch_byte_count = count("predictor_prefetch_byte_count");
     assert_predictor_status_reconciles(
         &memory_evidence.final_status,
         expert_route_predictor_top_k_hit_count,
@@ -405,6 +411,10 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          predictor_slice_ns={expert_route_predictor_train_slice_nanoseconds} \
          predictor_retention_requested={predictor_retention_hint_requested_count} \
          predictor_retention_accepted={predictor_retention_hint_accepted_count} \
+         predictor_cpu_predict_ns={expert_route_predictor_cpu_predict_nanoseconds} \
+         predictor_ane_predict_ns={expert_route_predictor_ane_predict_nanoseconds} \
+         predictor_prefetch_issues={predictor_prefetch_issue_count} \
+         predictor_prefetch_bytes={predictor_prefetch_byte_count} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \

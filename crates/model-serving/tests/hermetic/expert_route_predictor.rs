@@ -321,3 +321,13 @@ fn background_owner_trains_without_blocking_the_caller() {
     assert_eq!(predictor_program_status.pages_avoided_tenths, 0);
     assert!(predictor_program_status.top_k_accuracy_tenths <= 1_000);
 }
+
+#[test]
+fn packed_head_inputs_are_layer_major() {
+    let predictor = ExpertRoutePredictor::new(test_config());
+    let packed_head_inputs = predictor.packed_head_inputs(3, None);
+    assert_eq!(
+        packed_head_inputs.len(),
+        test_config().layer_count * test_config().head_input_dim()
+    );
+}

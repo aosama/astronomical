@@ -162,12 +162,20 @@ pub enum PerformanceCounter {
     ExpertRoutePredictorEvaluatedExpertCount,
     /// Wall time of the most recent predictor training slice, nanoseconds (#538).
     ExpertRoutePredictorTrainSliceNanoseconds,
+    /// Wall time of one CPU predictor forward, nanoseconds (#540).
+    ExpertRoutePredictorCpuPredictNanoseconds,
+    /// Wall time of one Neural Engine predictor forward, nanoseconds (#540).
+    ExpertRoutePredictorAnePredictNanoseconds,
+    /// Predicted experts streamed into leftover slots ahead of the native route (#540).
+    PredictorPrefetchIssueCount,
+    /// Payload bytes of predictor-driven leftover prefetch (#540).
+    PredictorPrefetchByteCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
-    pub(super) const COUNT: usize = Self::ExpertRoutePredictorTrainSliceNanoseconds as usize + 1;
+    pub(super) const COUNT: usize = Self::PredictorPrefetchByteCount as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
@@ -286,6 +294,10 @@ impl PerformanceCounter {
         Self::ExpertRoutePredictorTopKHitCount,
         Self::ExpertRoutePredictorEvaluatedExpertCount,
         Self::ExpertRoutePredictorTrainSliceNanoseconds,
+        Self::ExpertRoutePredictorCpuPredictNanoseconds,
+        Self::ExpertRoutePredictorAnePredictNanoseconds,
+        Self::PredictorPrefetchIssueCount,
+        Self::PredictorPrefetchByteCount,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -523,6 +535,14 @@ impl PerformanceCounter {
             Self::ExpertRoutePredictorTrainSliceNanoseconds => {
                 "expert_route_predictor_train_slice_nanoseconds"
             }
+            Self::ExpertRoutePredictorCpuPredictNanoseconds => {
+                "expert_route_predictor_cpu_predict_nanoseconds"
+            }
+            Self::ExpertRoutePredictorAnePredictNanoseconds => {
+                "expert_route_predictor_ane_predict_nanoseconds"
+            }
+            Self::PredictorPrefetchIssueCount => "predictor_prefetch_issue_count",
+            Self::PredictorPrefetchByteCount => "predictor_prefetch_byte_count",
             Self::PredictorRetentionHintRequestedCount => {
                 "predictor_retention_hint_requested_count"
             }
