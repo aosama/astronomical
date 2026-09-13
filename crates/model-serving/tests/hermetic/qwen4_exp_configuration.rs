@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 
 use astronomical_model_serving::{
     Qwen4ExpConfig, Qwen4ExpConfigError, Qwen4ExpLayerKind, Qwen4ExpQuantizationMode,
-    Qwen4ExpQuantizationProfile,
 };
 
 /// Splices a JSON fragment before the final root brace, so tests extend the
@@ -107,7 +106,7 @@ fn should_validate_a_compliant_family_document() {
 
 #[test]
 fn should_read_the_default_profile_and_per_tensor_overrides() {
-    let mut document = family_document_json();
+    let document = family_document_json();
     // Replace the closing brace of the root object with the quantization
     // document, mirroring how the published artifacts carry it.
     let document = with_quantization(
@@ -141,7 +140,7 @@ fn should_read_the_default_profile_and_per_tensor_overrides() {
 
 #[test]
 fn should_read_an_mxfp4_mode_without_downgrading_it_to_affine() {
-    let mut document = family_document_json();
+    let document = family_document_json();
     let document = with_quantization(
         &document,
         r#"{"bits": 4, "group_size": 32, "mode": "mxfp4"}"#,
@@ -154,7 +153,7 @@ fn should_read_an_mxfp4_mode_without_downgrading_it_to_affine() {
 
 #[test]
 fn should_reject_an_unknown_quantization_mode_instead_of_assuming_affine() {
-    let mut document = family_document_json();
+    let document = family_document_json();
     let document = with_quantization(
         &document,
         r#"{"bits": 4, "group_size": 32, "mode": "surprise"}"#,
@@ -176,7 +175,7 @@ fn should_validate_every_published_variation_axis() {
     assert!(pruned.contains("qwen4_exp"));
     // 2-bit and 3-bit affine profiles parse.
     for (bits, expected_columns) in [("2", 160), ("3", 240), ("4", 320)] {
-        let mut document = family_document_json();
+        let document = family_document_json();
         let document = with_quantization(
             &document,
             &format!(r#"{{"bits": {bits}, "group_size": 32, "mode": "affine"}}"#),
