@@ -141,10 +141,12 @@ pub enum PerformanceOperation {
     Qwen4ExpHyperConnectionNormalization,
     Qwen4ExpHyperConnectionMixing,
     Qwen4ExpHyperConnectionInjection,
+    Qwen4ExpIndexerSelection,
+    Qwen4ExpSparseAttention,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::Qwen4ExpHyperConnectionInjection as usize + 1;
+    pub(super) const COUNT: usize = Self::Qwen4ExpSparseAttention as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -279,6 +281,8 @@ impl PerformanceOperation {
         Self::Qwen4ExpHyperConnectionNormalization,
         Self::Qwen4ExpHyperConnectionMixing,
         Self::Qwen4ExpHyperConnectionInjection,
+        Self::Qwen4ExpIndexerSelection,
+        Self::Qwen4ExpSparseAttention,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -500,6 +504,8 @@ impl PerformanceOperation {
             }
             Self::Qwen4ExpHyperConnectionMixing => "qwen4_exp_hyper_connection_mixing",
             Self::Qwen4ExpHyperConnectionInjection => "qwen4_exp_hyper_connection_injection",
+            Self::Qwen4ExpIndexerSelection => "qwen4_exp_indexer_selection",
+            Self::Qwen4ExpSparseAttention => "qwen4_exp_sparse_attention",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
         }
     }

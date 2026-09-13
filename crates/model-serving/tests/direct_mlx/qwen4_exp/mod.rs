@@ -24,6 +24,7 @@ pub(crate) mod hyper_connection_executor;
 pub(crate) mod hyper_connection_reference;
 pub(crate) mod indexer_reference;
 pub(crate) mod ple_row_reference;
+pub(crate) mod qsa_parity;
 
 pub(crate) fn oracle_test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
