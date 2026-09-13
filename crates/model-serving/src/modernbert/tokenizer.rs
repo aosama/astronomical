@@ -20,12 +20,14 @@ pub fn encode_embedding_input(
     configuration: &ModernBertConfiguration,
     input_text: &str,
 ) -> Result<EncodedEmbeddingInput, EmbeddingsFailureReason> {
-    // GPU evidence: enabling the tokenizer post-processor (CLS/SEP) collapsed
-    // short-text discrimination on this 8-bit artifact (Romeo lines vs finance).
-    // First slice encodes content tokens only; a later oracle slice can match
-    // HuggingFace special-token behavior with a reference vector.
+    // The artifact's tokenizer.json declares a TemplateProcessing post-processor
+    // ([CLS] content [SEP]) and its config.json publishes the matching
+    // cls_token_id/sep_token_id; the upstream published reference cosines assume
+    // that declared input construction. Encoding with the post-processor keeps
+    // the encoder input identical to the upstream pipeline. The pooled mean
+    // excludes the specials so they cannot dominate the average.
     let encoding = tokenizer
-        .encode(input_text, false)
+        .encode(input_text, true)
         .map_err(|tokenizer_error| EmbeddingsFailureReason::InvalidRequest {
             reason: format!("embedding input failed tokenization: {tokenizer_error}")
                 .chars()

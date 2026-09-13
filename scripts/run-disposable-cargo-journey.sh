@@ -23,6 +23,7 @@ print_journeys() {
         accept-client-thinking-budget \
         accept-structured-output \
         accept-embeddings \
+        accept-modernbert-reference-similarity \
         accept-kernel-fallback-qwen \
         accept-kernel-fallback-k2 \
         accept-speculative-prefill \
@@ -109,6 +110,10 @@ main() {
         accept-embeddings)
             lane_name="embeddings-rest"
             set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_embed_romeo_and_juliet_lines_through_public_rest -- --ignored --nocapture
+            ;;
+        accept-modernbert-reference-similarity)
+            lane_name="modernbert-reference-similarity"
+            set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_reproduce_upstream_similarity_gap_on_modernbert -- --ignored --nocapture
             ;;
         accept-kernel-fallback-qwen)
             lane_name="kernel-fallback-qwen-serving"

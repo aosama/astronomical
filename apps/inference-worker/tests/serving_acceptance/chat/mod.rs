@@ -1,6 +1,7 @@
 mod client_thinking_budget_field_rest;
 mod embeddings_rest;
 mod hard_thinking_budget_rest;
+mod modernbert_reference_similarity;
 pub(crate) mod openai_rest;
 mod public_chat_rest;
 mod structured_output_rest;

@@ -119,14 +119,6 @@ impl ModernBertConfiguration {
     pub const fn head_dimension(&self) -> u32 {
         self.hidden_size / self.attention_head_count
     }
-
-    /// Specials participate in attention; they must not dominate the pooled mean.
-    #[must_use]
-    pub const fn is_excluded_from_pooled_mean(self, token_id: u32) -> bool {
-        token_id == self.pad_token_id
-            || token_id == self.cls_token_id
-            || token_id == self.sep_token_id
-    }
 }
 
 fn token_id_field(
