@@ -125,6 +125,34 @@ impl ExpertRoutePredictor {
         &self.config
     }
 
+    /// Frozen 1x1-convolution copy of every layer head for Core ML export.
+    #[cfg(target_os = "macos")]
+    #[must_use]
+    pub fn convolution_snapshot(
+        &self,
+    ) -> astronomical_runtime_integration::PredictorAneConvolutionSnapshot {
+        let mut conv1_weights = Vec::new();
+        let mut conv1_bias = Vec::new();
+        let mut conv2_weights = Vec::new();
+        let mut conv2_bias = Vec::new();
+        for layer_head in &self.layer_heads {
+            conv1_weights.extend_from_slice(&layer_head.input_weights);
+            conv1_bias.extend_from_slice(&layer_head.input_bias);
+            conv2_weights.extend_from_slice(&layer_head.output_weights);
+            conv2_bias.extend_from_slice(&layer_head.output_bias);
+        }
+        astronomical_runtime_integration::PredictorAneConvolutionSnapshot {
+            layer_count: self.config.layer_count,
+            expert_count: self.config.expert_count,
+            input_dim: self.config.head_input_dim(),
+            hidden_dim: self.config.hidden_dim,
+            conv1_weights,
+            conv1_bias,
+            conv2_weights,
+            conv2_bias,
+        }
+    }
+
     /// Total trainable parameters, for memory reporting.
     #[must_use]
     pub fn parameter_count(&self) -> u64 {
