@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::{deepseek_v4, flux2_klein, k2_horizon_mova, laguna, modernbert, qwen3_5};
+use super::{deepseek_v4, flux2_klein, k2_horizon_mova, laguna, modernbert, qwen3_5, qwen4_exp};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -13,6 +13,7 @@ const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModelFamily {
     Qwen3_5,
+    Qwen4Exp,
     Laguna,
     DeepSeekV4,
     K2HorizonMoVA,
@@ -26,6 +27,8 @@ impl ModelFamily {
     pub fn from_model_type(model_type: Option<&str>) -> Option<Self> {
         if qwen3_5::recognizes_model_type(model_type) {
             Some(Self::Qwen3_5)
+        } else if qwen4_exp::recognizes_model_type(model_type) {
+            Some(Self::Qwen4Exp)
         } else if laguna::recognizes_model_type(model_type) {
             Some(Self::Laguna)
         } else if deepseek_v4::recognizes_model_type(model_type) {

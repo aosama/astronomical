@@ -283,6 +283,9 @@ impl
             (Some(ModelFamily::DeepSeekV4), WorkerModelConfiguration::Autoregressive(_)) => {
                 Err(deepseek_v4_unavailable_reason().to_owned())
             }
+            (Some(ModelFamily::Qwen4Exp), WorkerModelConfiguration::Autoregressive(_)) => {
+                Err("Qwen 3.8 Flash model execution is not implemented in this build".to_owned())
+            }
             (
                 Some(ModelFamily::ModernBert),
                 WorkerModelConfiguration::Embeddings(model_configuration),

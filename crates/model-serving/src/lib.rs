@@ -376,6 +376,14 @@ pub use qwen3_5_moe::{
 pub use qwen3_5_moe::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
+pub use qwen4_exp::configuration::{
+    Qwen4ExpConfig, Qwen4ExpConfigError, Qwen4ExpHyperConnectionConfig, Qwen4ExpLayerKind,
+    Qwen4ExpLinearAttentionConfig, Qwen4ExpNgramConfig, Qwen4ExpQuantizationMode,
+    Qwen4ExpQuantizationProfile, Qwen4ExpSparseAttentionConfig,
+};
+pub use qwen4_exp::decoder::{
+    Qwen4ExpDecoderLayerCacheDtypes, Qwen4ExpStateGeometry, qwen4_exp_decoder_cache_layout,
+};
 pub use qwen4_exp::hyper_connection::{
     GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
     average_mix, gated_combine, gated_mix, grouped_rms_norm,
