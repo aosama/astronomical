@@ -9,7 +9,6 @@
 //! These tests run at the direct-MLX boundary and are serial.
 
 use astronomical_model_serving::{HyperConnectionExecutor, StreamMixingPlan};
-use astronomical_runtime_integration::MlxRuntime;
 
 use crate::direct_mlx::qwen4_exp::{
     DeterministicValues, assert_f32_close, f32_array, oracle_test_runtime,
