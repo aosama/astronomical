@@ -547,7 +547,11 @@ impl Qwen3_5Model {
             performance_attribution,
             false,
         )?;
-        self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)?;
+        self.evaluate_forward_state_with_performance_attribution(
+            target_forward_output.final_logits(),
+            request_decoder_state,
+            performance_attribution,
+        )?;
         self.runtime
             .evaluate_arrays(&[target_forward_output.pre_final_normalization_hidden_states()])?;
         Ok(target_forward_output)

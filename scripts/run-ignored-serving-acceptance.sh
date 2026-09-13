@@ -46,12 +46,15 @@ acceptance_skip_reason() {
 
 # Per-test execution boundary. Visual SpecPrefill journeys load the large sparse
 # MoE target once per leg and prefill visual prompts above the eligibility floor,
-# which legitimately exceeds the repository's 120-second default; every other
-# acceptance test keeps the default boundary.
+# which legitimately exceeds the repository's 120-second default. The drafter
+# cache journey is the same class of work: it streams the large sparse MoE target
+# and then populates drafter state for an 8192-token prompt, whose own progress
+# line estimates 115 seconds for that single phase before the follow-up turn runs.
+# Every other acceptance test keeps the default boundary.
 acceptance_test_timeout_seconds() {
     acceptance_test_name="$1"
     case "$acceptance_test_name" in
-        *speculative_prefill::visual_tool::*)
+        *speculative_prefill::visual_tool::* | *speculative_prefill::persistent_cache::*)
             printf '%s\n' "300"
             ;;
         *)
