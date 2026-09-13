@@ -167,7 +167,8 @@ fn convolution_layer(
     append_varint_field(&mut convolution, 30, 1);
     append_bytes(&mut convolution, 50, &[]);
     append_varint_field(&mut convolution, 70, 1);
-    append_bytes(&mut convolution, 90, &weight_blob(weights));
+    let (int8_weights, _weight_scale) = int8_weight_blob(weights);
+    append_bytes(&mut convolution, 90, &int8_weights);
     append_bytes(&mut convolution, 91, &weight_blob(bias));
 
     let mut layer = Vec::new();
@@ -199,6 +200,33 @@ fn weight_blob(values: &[f32]) -> Vec<u8> {
     let mut blob = Vec::new();
     append_bytes(&mut blob, 1, &packed_floats);
     blob
+}
+
+/// INT8 per-tensor weight blob: `q = round(w / scale)` clamped to [-127, 127].
+/// Per-tensor keeps convs on the Neural Engine; per-block silently falls to CPU.
+fn int8_weight_blob(values: &[f32]) -> (Vec<u8>, f32) {
+    let maximum_magnitude = values
+        .iter()
+        .fold(0.0_f32, |largest, value| largest.max(value.abs()));
+    let scale = if maximum_magnitude > 0.0 {
+        maximum_magnitude / 127.0
+    } else {
+        1.0
+    };
+    let mut packed_int8 = Vec::with_capacity(values.len());
+    for value in values {
+        let quantized = (value / scale).round().clamp(-127.0, 127.0) as i8;
+        packed_int8.push(quantized as u8);
+    }
+    let mut linear_quantization = Vec::new();
+    append_f32_field(&mut linear_quantization, 1, scale);
+    let mut quantization = Vec::new();
+    append_varint_field(&mut quantization, 1, 8);
+    append_bytes(&mut quantization, 101, &linear_quantization);
+    let mut blob = Vec::new();
+    append_bytes(&mut blob, 30, &packed_int8);
+    append_bytes(&mut blob, 40, &quantization);
+    (blob, scale)
 }
 
 fn append_varint(buffer: &mut Vec<u8>, mut value: u64) {
