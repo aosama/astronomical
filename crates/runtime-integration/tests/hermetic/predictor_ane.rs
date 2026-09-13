@@ -35,3 +35,30 @@ fn rust_written_grouped_convolution_model_predicts() {
         .expect("grouped 1x1 convolution predict must return logits");
     assert_eq!(logits.len(), 16);
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn overlapped_begin_then_harvest_returns_logits() {
+    let snapshot = astronomical_runtime_integration::PredictorAneConvolutionSnapshot {
+        layer_count: 2,
+        expert_count: 8,
+        input_dim: 12,
+        hidden_dim: 5,
+        conv1_weights: vec![0.01; 2 * 5 * 12],
+        conv1_bias: vec![0.0; 2 * 5],
+        conv2_weights: vec![0.02; 2 * 8 * 5],
+        conv2_bias: vec![0.0; 2 * 8],
+    };
+    let engine =
+        astronomical_runtime_integration::PredictorAneEngine::try_from_convolution_snapshot(
+            &snapshot,
+        )
+        .expect("snapshot should load");
+    let head_inputs = vec![0.0_f32; 2 * 12];
+    assert!(engine.begin_predict(&head_inputs, 2, 12, 8));
+    let (logits, elapsed_nanoseconds) = engine
+        .harvest_predict(2, 8, 2_000_000_000)
+        .expect("overlapped harvest should finish");
+    assert_eq!(logits.len(), 16);
+    assert!(elapsed_nanoseconds > 0);
+}

@@ -33,6 +33,20 @@ unsafe extern "C" {
         expert_count: c_int,
     ) -> c_int;
     fn astronomical_predictor_ane_free(handle: *mut AstronomicalPredictorAne);
+    fn astronomical_predictor_ane_begin(
+        handle: *mut AstronomicalPredictorAne,
+        head_inputs: *const c_float,
+        layer_count: c_int,
+        input_dim: c_int,
+        expert_count: c_int,
+    ) -> c_int;
+    fn astronomical_predictor_ane_harvest(
+        handle: *mut AstronomicalPredictorAne,
+        logits_out: *mut c_float,
+        logit_count: c_int,
+        timeout_nanoseconds: u64,
+        elapsed_nanoseconds: *mut u64,
+    ) -> c_int;
 }
 
 /// Loaded Core ML predictor. Compute units were CPU_AND_NE at load.
@@ -132,6 +146,64 @@ impl PredictorAneEngine {
             return None;
         }
         Some(logits)
+    }
+
+    /// Starts a Core ML predict without waiting. Fail-open if one is in flight.
+    pub fn begin_predict(
+        &self,
+        head_inputs: &[f32],
+        layer_count: usize,
+        input_dim: usize,
+        expert_count: usize,
+    ) -> bool {
+        let expected_input = layer_count.saturating_mul(input_dim);
+        if head_inputs.len() != expected_input {
+            return false;
+        }
+        let Ok(layer_count) = c_int::try_from(layer_count) else {
+            return false;
+        };
+        let Ok(input_dim) = c_int::try_from(input_dim) else {
+            return false;
+        };
+        let Ok(expert_count) = c_int::try_from(expert_count) else {
+            return false;
+        };
+        unsafe {
+            astronomical_predictor_ane_begin(
+                self.handle.as_ptr(),
+                head_inputs.as_ptr(),
+                layer_count,
+                input_dim,
+                expert_count,
+            ) == 0
+        }
+    }
+
+    /// Waits up to `timeout_nanoseconds` for `begin_predict`. Returns logits and
+    /// engine-side elapsed nanoseconds.
+    pub fn harvest_predict(
+        &self,
+        layer_count: usize,
+        expert_count: usize,
+        timeout_nanoseconds: u64,
+    ) -> Option<(Vec<f32>, u64)> {
+        let logit_count = layer_count.checked_mul(expert_count)?;
+        let mut logits = vec![0.0_f32; logit_count];
+        let mut elapsed_nanoseconds = 0_u64;
+        let status = unsafe {
+            astronomical_predictor_ane_harvest(
+                self.handle.as_ptr(),
+                logits.as_mut_ptr(),
+                c_int::try_from(logit_count).ok()?,
+                timeout_nanoseconds,
+                &mut elapsed_nanoseconds,
+            )
+        };
+        if status != 0 {
+            return None;
+        }
+        Some((logits, elapsed_nanoseconds))
     }
 }
 

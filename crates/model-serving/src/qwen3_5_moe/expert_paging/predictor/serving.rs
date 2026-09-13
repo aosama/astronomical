@@ -40,6 +40,12 @@ pub struct ExpertRoutePredictorOwner {
     last_ane_predict_nanoseconds: AtomicU64,
     #[cfg(target_os = "macos")]
     ane_engine: Option<astronomical_runtime_integration::PredictorAneEngine>,
+    #[cfg(target_os = "macos")]
+    ane_overlap_layer_count: AtomicU64,
+    #[cfg(target_os = "macos")]
+    ane_overlap_expert_count: AtomicU64,
+    #[cfg(target_os = "macos")]
+    ane_overlap_top_k: AtomicU64,
 }
 
 impl Debug for ExpertRoutePredictorOwner {
@@ -156,6 +162,12 @@ impl ExpertRoutePredictorOwner {
             last_ane_predict_nanoseconds: AtomicU64::new(0),
             #[cfg(target_os = "macos")]
             ane_engine,
+            #[cfg(target_os = "macos")]
+            ane_overlap_layer_count: AtomicU64::new(0),
+            #[cfg(target_os = "macos")]
+            ane_overlap_expert_count: AtomicU64::new(0),
+            #[cfg(target_os = "macos")]
+            ane_overlap_top_k: AtomicU64::new(0),
         })
     }
 
@@ -273,6 +285,63 @@ impl ExpertRoutePredictorOwner {
                 .map(|layer_logits| select_top_expert_ids_from_logits(layer_logits, top_k))
                 .collect(),
         )
+    }
+
+    /// Kicks Neural Engine predict without waiting. Decode must harvest later.
+    #[cfg(target_os = "macos")]
+    pub fn try_begin_overlapped_ane_predict(
+        &self,
+        token_id: u32,
+        previous_token_route: Option<&[Option<Vec<u16>>]>,
+        top_k: usize,
+    ) -> bool {
+        let Some(ane_engine) = self.ane_engine.as_ref() else {
+            return false;
+        };
+        let (packed_head_inputs, layer_count, input_dim, expert_count) = {
+            let Ok(predictor) = self.predictor.try_lock() else {
+                return false;
+            };
+            let config = predictor.config();
+            (
+                predictor.packed_head_inputs(token_id, previous_token_route),
+                config.layer_count,
+                config.head_input_dim(),
+                config.expert_count,
+            )
+        };
+        if !ane_engine.begin_predict(&packed_head_inputs, layer_count, input_dim, expert_count) {
+            return false;
+        }
+        self.ane_overlap_layer_count
+            .store(layer_count as u64, Ordering::Relaxed);
+        self.ane_overlap_expert_count
+            .store(expert_count as u64, Ordering::Relaxed);
+        self.ane_overlap_top_k
+            .store(top_k as u64, Ordering::Relaxed);
+        true
+    }
+
+    /// Collects an overlapped Neural Engine predict. Timeout is fail-open.
+    #[cfg(target_os = "macos")]
+    pub fn harvest_overlapped_ane_predict(&self) -> Option<Vec<Vec<usize>>> {
+        let ane_engine = self.ane_engine.as_ref()?;
+        let layer_count = self.ane_overlap_layer_count.load(Ordering::Relaxed) as usize;
+        let expert_count = self.ane_overlap_expert_count.load(Ordering::Relaxed) as usize;
+        let top_k = self.ane_overlap_top_k.load(Ordering::Relaxed) as usize;
+        if layer_count == 0 || expert_count == 0 {
+            return None;
+        }
+        let (flat_logits, elapsed_nanoseconds) =
+            ane_engine.harvest_predict(layer_count, expert_count, 2_000_000)?;
+        self.last_ane_predict_nanoseconds
+            .store(elapsed_nanoseconds, Ordering::Relaxed);
+        Some(flat_logits_to_top_k(
+            &flat_logits,
+            layer_count,
+            expert_count,
+            top_k.max(1),
+        ))
     }
 }
 
