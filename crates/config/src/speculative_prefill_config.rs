@@ -26,6 +26,7 @@ impl SpeculativePrefillConfig {
         draft_model_id: &str,
         minimum_prompt_tokens: Option<u32>,
         keep_percentage: Option<u32>,
+        mandatory_trailing_token_count: Option<u32>,
     ) -> Self {
         Self {
             target_model_id: target_model_id.to_owned(),
@@ -34,7 +35,8 @@ impl SpeculativePrefillConfig {
                 .unwrap_or(Self::DEFAULT_MINIMUM_PROMPT_TOKENS),
             keep_percentage: keep_percentage.unwrap_or(Self::DEFAULT_KEEP_PERCENTAGE),
             selection_chunk_token_count: Self::DEFAULT_SELECTION_CHUNK_TOKEN_COUNT,
-            mandatory_trailing_token_count: Self::DEFAULT_MANDATORY_TRAILING_TOKEN_COUNT,
+            mandatory_trailing_token_count: mandatory_trailing_token_count
+                .unwrap_or(Self::DEFAULT_MANDATORY_TRAILING_TOKEN_COUNT),
             lookahead_token_count: Self::DEFAULT_LOOKAHEAD_TOKEN_COUNT,
             importance_pooling_kernel_token_count:
                 Self::DEFAULT_IMPORTANCE_POOLING_KERNEL_TOKEN_COUNT,

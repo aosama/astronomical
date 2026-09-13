@@ -286,6 +286,68 @@ fn should_reject_control_characters_in_model_relationship_identities() {
 }
 
 #[test]
+fn should_apply_the_mandatory_trailing_token_count_default_when_speculative_prefill_omits_it() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192}}}}}"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("config without a trailing window should load");
+
+    assert_eq!(
+        astronomical_config
+            .resolved_model_config("organization/target", 65_536)
+            .expect("model policy should resolve")
+            .speculative_prefill()
+            .expect("speculative prefill should be configured")
+            .mandatory_trailing_token_count(),
+        512
+    );
+}
+
+#[test]
+fn should_apply_an_explicit_mandatory_trailing_token_count_to_the_target_policy() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":100,"minimum_prompt_tokens":10000,"mandatory_trailing_token_count":1024}}}}}"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("config with an explicit trailing window should load");
+
+    assert_eq!(
+        astronomical_config
+            .resolved_model_config("organization/target", 65_536)
+            .expect("model policy should resolve")
+            .speculative_prefill()
+            .expect("speculative prefill should be configured")
+            .mandatory_trailing_token_count(),
+        1_024
+    );
+}
+
+#[test]
+fn should_reject_a_zero_mandatory_trailing_token_count_with_a_typed_error() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","mandatory_trailing_token_count":0}}}}}"#,
+    );
+
+    let load_result = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path());
+
+    assert!(matches!(
+        load_result,
+        Err(AstronomicalConfigError::SpeculativePrefillMandatoryTrailingTokenCountMustBePositive)
+    ));
+}
+
+#[test]
 fn should_reject_duplicate_keys_at_every_object_depth() {
     for duplicate_document in [
         r#"{"schema_version":1,"schema_version":1,"runtime":{"model_directories":[]}}"#,
