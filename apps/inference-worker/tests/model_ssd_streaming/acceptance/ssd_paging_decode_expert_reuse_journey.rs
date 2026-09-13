@@ -22,8 +22,8 @@
 use std::{fs, path::Path};
 
 use super::ssd_paging_decode_expert_reuse_journey::support::{
-    assert_predictor_status_reconciles, decode_streamed_layer_indices,
-    generation_attribution_counter, generation_attribution_report_count,
+    assert_predictor_surface_absent, decode_streamed_layer_indices, generation_attribution_counter,
+    generation_attribution_counter_identifiers, generation_attribution_report_count,
     generation_expert_source_read_bytes, log_status_progress, preserve_memory_utilization_evidence,
     record_expert_payload_increase,
 };
@@ -238,7 +238,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "captured observations must include at least one sparse layer route; captured_layers={route_observation_captured_layer_count}"
     );
 
-    // --- Measured assertion 4e: leftover prefetch and predictor hints (#537, #539) ---
+    // --- Measured assertion 4e: previous-token prefetch survives; predictor surface is retired (#537, #594) ---
     let attribution_home = isolated_worker_home.path();
     let count = |name: &'static str| generation_attribution_counter(attribution_home, name);
     let previous_token_prefetch_issue_count = count("previous_token_prefetch_issue_count");
@@ -247,25 +247,9 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     let previous_token_prefetch_byte_count = count("previous_token_prefetch_byte_count");
     let previous_token_prefetch_capacity_drop_count =
         count("previous_token_prefetch_capacity_drop_count");
-    let expert_route_predictor_train_step_count = count("expert_route_predictor_train_step_count");
-    let expert_route_predictor_top_k_hit_count = count("expert_route_predictor_top_k_hit_count");
-    let expert_route_predictor_evaluated_expert_count =
-        count("expert_route_predictor_evaluated_expert_count");
-    let expert_route_predictor_train_slice_nanoseconds =
-        count("expert_route_predictor_train_slice_nanoseconds");
-    let predictor_retention_hint_requested_count =
-        count("predictor_retention_hint_requested_count");
-    let predictor_retention_hint_accepted_count = count("predictor_retention_hint_accepted_count");
-    let expert_route_predictor_cpu_predict_nanoseconds =
-        count("expert_route_predictor_cpu_predict_nanoseconds");
-    let predictor_prefetch_issue_count = count("predictor_prefetch_issue_count");
-    let predictor_prefetch_byte_count = count("predictor_prefetch_byte_count");
-    assert_predictor_status_reconciles(
+    assert_predictor_surface_absent(
         &memory_evidence.final_status,
-        expert_route_predictor_top_k_hit_count,
-        expert_route_predictor_evaluated_expert_count,
-        previous_token_prefetch_hit_count,
-        previous_token_prefetch_hit_count + previous_token_prefetch_miss_count,
+        &generation_attribution_counter_identifiers(attribution_home),
     );
 
     // --- Measured assertion 5: throughput remains portable evidence ---
@@ -403,15 +387,6 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          previous_token_prefetch_misses={previous_token_prefetch_miss_count} \
          previous_token_prefetch_bytes={previous_token_prefetch_byte_count} \
          previous_token_prefetch_drops={previous_token_prefetch_capacity_drop_count} \
-         predictor_train_steps={expert_route_predictor_train_step_count} \
-         predictor_top_k_hits={expert_route_predictor_top_k_hit_count} \
-         predictor_evaluated_experts={expert_route_predictor_evaluated_expert_count} \
-         predictor_slice_ns={expert_route_predictor_train_slice_nanoseconds} \
-         predictor_retention_requested={predictor_retention_hint_requested_count} \
-         predictor_retention_accepted={predictor_retention_hint_accepted_count} \
-         predictor_cpu_predict_ns={expert_route_predictor_cpu_predict_nanoseconds} \
-         predictor_prefetch_issues={predictor_prefetch_issue_count} \
-         predictor_prefetch_bytes={predictor_prefetch_byte_count} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \

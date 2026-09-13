@@ -111,9 +111,6 @@ struct OrbitalTelemetryPopover: View {
       )
       maximumMlxMemoryControl(statusDocument)
       metricRow("Session", statusDocument.sessionTitle)
-      if let predictorProgramTitle = statusDocument.predictorProgramTitle {
-        metricRow("Predictor", predictorProgramTitle)
-      }
       PromptReuseBar(
         reusedFraction: statusDocument.sessionPromptReuseFraction,
         percentageTitle: statusDocument.sessionPromptReusePercentageTitle,

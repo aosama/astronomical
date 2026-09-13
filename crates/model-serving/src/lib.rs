@@ -229,17 +229,16 @@ pub use memory::{
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, hot_expert_warm_slot_count,
-    measured_non_expert_forward_growth_bytes, merge_predicted_experts_into_protected_set,
-    next_paged_expert_reclamation_step, persistent_context_restore_workspace_bytes,
-    plan_expert_residency, plan_previous_token_prefetch,
-    projected_active_memory_after_complete_expert_replacement,
+    measured_non_expert_forward_growth_bytes, next_paged_expert_reclamation_step,
+    persistent_context_restore_workspace_bytes, plan_expert_residency,
+    plan_previous_token_prefetch, projected_active_memory_after_complete_expert_replacement,
     publish_request_stable_residency_plan, request_context_temporary_workspace_bytes,
     required_complete_residency_activation_headroom_bytes,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_expert_payload_capacity_bytes, rotating_committed_token_count,
     rotating_prefill_transient_token_count, safe_minimum_active_memory_ceiling_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,
-    seated_complete_expert_request_temporary_workspace_bytes, select_top_expert_ids_from_logits,
+    seated_complete_expert_request_temporary_workspace_bytes,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
     should_enact_planned_expert_release, should_retry_fixed_forward_after_expert_reclamation,
 };
@@ -349,11 +348,6 @@ pub use qwen3_5::{
     qwen3_5_selected_speculative_prefill_positions_for_range,
     qwen3_5_target_verification_quantized_linear, safe_minimum_mlx_memory_ceiling_bytes,
     target_verification_quantized_linear_kernel,
-};
-pub use qwen3_5_moe::expert_paging::predictor::{
-    ExpertRoutePredictor, ExpertRoutePredictorConfig, ExpertRoutePredictorOwner,
-    PredictorLayerAccuracy, TrainerSliceOutcome, evaluate_predictor_accuracy, evaluate_then_train,
-    train_predictor_slice,
 };
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]

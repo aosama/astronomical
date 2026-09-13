@@ -150,24 +150,6 @@ pub enum PerformanceCounter {
     PreviousTokenPrefetchByteCount,
     /// Previous-token experts dropped because leftover slots were full (#537).
     PreviousTokenPrefetchCapacityDropCount,
-    /// Predicted experts asked the warm table not to evict (#539).
-    PredictorRetentionHintRequestedCount,
-    /// Predicted experts still resident after the warm-table insert (#539).
-    PredictorRetentionHintAcceptedCount,
-    /// Records the background predictor trained on (#538).
-    ExpertRoutePredictorTrainStepCount,
-    /// True routed experts that appeared in the predictor's top-k (#538).
-    ExpertRoutePredictorTopKHitCount,
-    /// Routed experts scored against the predictor before each train step (#538).
-    ExpertRoutePredictorEvaluatedExpertCount,
-    /// Wall time of the most recent predictor training slice, nanoseconds (#538).
-    ExpertRoutePredictorTrainSliceNanoseconds,
-    /// Wall time of one CPU predictor forward, nanoseconds (#540).
-    ExpertRoutePredictorCpuPredictNanoseconds,
-    /// Predicted experts streamed into leftover slots ahead of the native route (#540).
-    PredictorPrefetchIssueCount,
-    /// Payload bytes of predictor-driven leftover prefetch (#540).
-    PredictorPrefetchByteCount,
     Qwen4ExpIndexerSelectedKeyCount,
 }
 
@@ -287,15 +269,6 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchMissCount,
         Self::PreviousTokenPrefetchByteCount,
         Self::PreviousTokenPrefetchCapacityDropCount,
-        Self::PredictorRetentionHintRequestedCount,
-        Self::PredictorRetentionHintAcceptedCount,
-        Self::ExpertRoutePredictorTrainStepCount,
-        Self::ExpertRoutePredictorTopKHitCount,
-        Self::ExpertRoutePredictorEvaluatedExpertCount,
-        Self::ExpertRoutePredictorTrainSliceNanoseconds,
-        Self::ExpertRoutePredictorCpuPredictNanoseconds,
-        Self::PredictorPrefetchIssueCount,
-        Self::PredictorPrefetchByteCount,
         Self::Qwen4ExpIndexerSelectedKeyCount,
     ];
 
@@ -526,24 +499,7 @@ impl PerformanceCounter {
             Self::PreviousTokenPrefetchCapacityDropCount => {
                 "previous_token_prefetch_capacity_drop_count"
             }
-            Self::ExpertRoutePredictorTrainStepCount => "expert_route_predictor_train_step_count",
-            Self::ExpertRoutePredictorTopKHitCount => "expert_route_predictor_top_k_hit_count",
-            Self::ExpertRoutePredictorEvaluatedExpertCount => {
-                "expert_route_predictor_evaluated_expert_count"
-            }
-            Self::ExpertRoutePredictorTrainSliceNanoseconds => {
-                "expert_route_predictor_train_slice_nanoseconds"
-            }
-            Self::ExpertRoutePredictorCpuPredictNanoseconds => {
-                "expert_route_predictor_cpu_predict_nanoseconds"
-            }
-            Self::PredictorPrefetchIssueCount => "predictor_prefetch_issue_count",
             Self::Qwen4ExpIndexerSelectedKeyCount => "qwen4_exp_indexer_selected_key_count",
-            Self::PredictorPrefetchByteCount => "predictor_prefetch_byte_count",
-            Self::PredictorRetentionHintRequestedCount => {
-                "predictor_retention_hint_requested_count"
-            }
-            Self::PredictorRetentionHintAcceptedCount => "predictor_retention_hint_accepted_count",
         }
     }
 }

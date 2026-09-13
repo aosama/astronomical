@@ -23,8 +23,7 @@ use crate::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
         publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
         publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
-        publish_persistent_prompt_cache_stats, publish_predictor_program,
-        publish_worker_expert_residency,
+        publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
     },
     worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
     worker_prefill_progress::handle_worker_prefill_progress,
@@ -185,7 +184,6 @@ pub(super) fn handle_worker_event(
             expert_memory_mode,
             mlx_memory_snapshot,
             expert_residency,
-            predictor_program,
         } => {
             let chat_request = active_chat_request_mut(active_request)?;
             if request_id != chat_request.request_id {
@@ -218,9 +216,6 @@ pub(super) fn handle_worker_event(
                     health_snapshot,
                     expert_residency,
                 );
-            }
-            if let Some(predictor_program) = predictor_program {
-                publish_predictor_program(health_snapshot, predictor_program);
             }
         }
         worker_output_event @ WorkerEvent::Output { .. } => {

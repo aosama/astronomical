@@ -144,7 +144,6 @@ impl Qwen3_5Model {
                 .observation_ring()
                 .record_observation(observation.clone())
         };
-        self.offer_observation_to_predictor(&observation, performance_attribution);
         performance_attribution
             .record_counter(PerformanceCounter::RouteObservationStoredRecordCount, 1);
         if evicted_oldest {
@@ -183,86 +182,5 @@ impl Qwen3_5Model {
             observed_route.push(layer_route);
         }
         Ok(Some(observed_route))
-    }
-
-    fn offer_observation_to_predictor(
-        &self,
-        observation: &RouteObservationRecord,
-        performance_attribution: &mut PerformanceAttribution,
-    ) {
-        if !performance_attribution.is_enabled() || self.config.expert_count() == 0 {
-            return;
-        }
-        let mut predictor_owner = self.expert_route_predictor.borrow_mut();
-        if predictor_owner.is_none() {
-            *predictor_owner =
-                crate::qwen3_5_moe::expert_paging::predictor::ExpertRoutePredictorOwner::try_start(
-                    usize::try_from(self.config.layer_count()).unwrap_or(0),
-                    usize::try_from(self.config.expert_count()).unwrap_or(0),
-                    self.config.vocabulary_size(),
-                    usize::try_from(self.config.experts_per_token()).unwrap_or(1),
-                );
-        }
-        let Some(predictor_owner) = predictor_owner.as_ref() else {
-            return;
-        };
-        predictor_owner.try_submit(observation.clone());
-        performance_attribution.record_snapshot_counter(
-            PerformanceCounter::ExpertRoutePredictorTrainStepCount,
-            predictor_owner.trained_record_count(),
-        );
-        performance_attribution.record_snapshot_counter(
-            PerformanceCounter::ExpertRoutePredictorTopKHitCount,
-            predictor_owner.top_k_hit_count(),
-        );
-        performance_attribution.record_snapshot_counter(
-            PerformanceCounter::ExpertRoutePredictorEvaluatedExpertCount,
-            predictor_owner.evaluated_expert_count(),
-        );
-        performance_attribution.record_snapshot_counter(
-            PerformanceCounter::ExpertRoutePredictorTrainSliceNanoseconds,
-            predictor_owner.last_slice_nanoseconds(),
-        );
-    }
-
-    /// Ranks leftover experts the next forward is predicted to need and asks
-    /// the warm table not to evict them. Fail-open: lock contention or a missing
-    /// trainer leaves the existing eviction order unchanged.
-    pub(crate) fn refresh_predictor_retention_hints(
-        &self,
-        next_token_id: u32,
-        performance_attribution: &mut PerformanceAttribution,
-    ) {
-        if !performance_attribution.is_enabled() {
-            return;
-        }
-        let predicted_experts_by_layer = {
-            let predictor_owner_slot = self.expert_route_predictor.borrow();
-            let Some(predictor_owner) = predictor_owner_slot.as_ref() else {
-                return;
-            };
-            let previous_route = performance_attribution.previous_observed_expert_route();
-            let top_k = usize::try_from(self.config.experts_per_token()).unwrap_or(1);
-            predictor_owner.try_predict_top_experts_per_layer(
-                next_token_id,
-                previous_route.map(Vec::as_slice),
-                top_k,
-            )
-        };
-        let Some(predicted_experts_by_layer) = predicted_experts_by_layer else {
-            return;
-        };
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts
-                .borrow_mut()
-                .set_predicted_retention_experts(&predicted_experts_by_layer);
-        }
-        self.prefetch_predicted_experts(&predicted_experts_by_layer, performance_attribution);
-        if let Some(predictor_owner) = self.expert_route_predictor.borrow().as_ref() {
-            performance_attribution.record_snapshot_counter(
-                PerformanceCounter::ExpertRoutePredictorCpuPredictNanoseconds,
-                predictor_owner.last_cpu_predict_nanoseconds(),
-            );
-        }
     }
 }

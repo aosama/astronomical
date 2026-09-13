@@ -11,7 +11,6 @@ pub mod expert_pager;
 mod expert_pager_construction;
 #[cfg(feature = "direct-mlx")]
 mod paged_expert_weights;
-pub mod predictor;
 pub mod quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
 mod retained_expert_cache;

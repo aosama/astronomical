@@ -14,7 +14,6 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use super::slot_writes::{RetainedReferenceOk, create_warm_table_weights, write_expert_into_slot};
 use super::{ExpertSlotTable, RetainedExpertCache};
 use crate::expert_paging::ExpertWeightPage;
-use crate::memory::merge_predicted_experts_into_protected_set;
 use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
 impl RetainedExpertCache {
@@ -37,12 +36,6 @@ impl RetainedExpertCache {
         if expert_ids.is_empty() {
             return Ok(0);
         }
-        let predicted_retention_expert_ids = self.predicted_retention_experts(layer_index).to_vec();
-        let protected_expert_ids = merge_predicted_experts_into_protected_set(
-            protected_expert_ids,
-            &predicted_retention_expert_ids,
-        );
-        let protected_expert_ids = protected_expert_ids.as_slice();
         if self
             .tables_by_layer
             .get(layer_index)
@@ -124,7 +117,6 @@ impl RetainedExpertCache {
                     .warm_expert_insert_count
                     .saturating_add(u64::try_from(expert_ids.len()).unwrap_or(u64::MAX));
             }
-            self.record_retention_hint_acceptances(layer_index);
             return Ok(expert_ids.len());
         }
         let table = self
@@ -150,7 +142,6 @@ impl RetainedExpertCache {
             .collect();
         let new_expert_count = new_expert_rows.len();
         if new_expert_count == 0 {
-            self.record_retention_hint_acceptances(layer_index);
             return Ok(0);
         }
         let free_slots: Vec<usize> = (0..table.slot_count())
@@ -167,7 +158,6 @@ impl RetainedExpertCache {
             })
             .collect();
         if new_expert_count > free_slots.len() + evictable_slots.len() {
-            self.record_retention_hint_acceptances(layer_index);
             return Ok(0);
         }
         let mut planned_slots: Vec<usize> =
@@ -237,7 +227,6 @@ impl RetainedExpertCache {
                 .warm_expert_insert_count
                 .saturating_add(u64::try_from(written_expert_count).unwrap_or(u64::MAX));
         }
-        self.record_retention_hint_acceptances(layer_index);
         Ok(written_expert_count)
     }
 }

@@ -26,8 +26,6 @@ mod paged_route_resolution;
 #[cfg(feature = "direct-mlx")]
 mod phase_aware_expert_residency;
 #[cfg(feature = "direct-mlx")]
-mod predictor_prefetch;
-#[cfg(feature = "direct-mlx")]
 mod prefill_execution_mode;
 #[cfg(feature = "direct-mlx")]
 mod read_through_residency;

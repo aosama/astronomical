@@ -3,8 +3,8 @@
 use std::sync::{Arc, RwLock};
 
 use astronomical_ipc_protocol::{
-    ExpertMemoryMode, PredictorProgramStatus, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerPromptWorkReuse,
+    ExpertMemoryMode, WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot,
+    WorkerPromptWorkReuse,
 };
 
 use super::{
@@ -51,15 +51,6 @@ pub(crate) fn publish_expert_memory_mode(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.expert_memory_mode = Some(expert_memory_mode);
-    }
-}
-
-pub(crate) fn publish_predictor_program(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    predictor_program: PredictorProgramStatus,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.predictor_program = Some(predictor_program);
     }
 }
 

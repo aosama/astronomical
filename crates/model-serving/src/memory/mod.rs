@@ -93,8 +93,7 @@ pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
 pub use expert_cache::{
     DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
-    PreviousTokenPrefetchPlan, ResidentExpertWeight, merge_predicted_experts_into_protected_set,
-    plan_previous_token_prefetch, select_top_expert_ids_from_logits,
+    PreviousTokenPrefetchPlan, ResidentExpertWeight, plan_previous_token_prefetch,
 };
 pub use phase::MemoryPhase;
 pub use reclamation::{
