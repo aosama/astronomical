@@ -18,7 +18,6 @@ mod build_bindings;
 mod build_legacy_native_output;
 mod build_native_linking;
 mod build_native_store;
-mod build_predictor_ane;
 
 use build_bindings::generate_bindings;
 use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
@@ -44,7 +43,6 @@ const NATIVE_ARCHIVE_VARIABLES: [&str; 5] = [
 
 fn main() -> Result<(), Box<dyn Error>> {
     emit_environment_rerun_contracts();
-    build_predictor_ane::compile_macos_predictor_ane()?;
     if env::var_os(MLX_FEATURE_VARIABLE).is_none() {
         return Ok(());
     }

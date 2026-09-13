@@ -37,9 +37,6 @@ pub struct ExpertRoutePredictorOwner {
     last_slice_nanoseconds: Arc<AtomicU64>,
     training_active: Arc<AtomicBool>,
     last_cpu_predict_nanoseconds: AtomicU64,
-    last_ane_predict_nanoseconds: AtomicU64,
-    #[cfg(target_os = "macos")]
-    ane_engine: Option<astronomical_runtime_integration::PredictorAneEngine>,
 }
 
 impl Debug for ExpertRoutePredictorOwner {
@@ -143,15 +140,6 @@ impl ExpertRoutePredictorOwner {
             last_slice_nanoseconds,
             training_active,
             last_cpu_predict_nanoseconds: AtomicU64::new(0),
-            last_ane_predict_nanoseconds: AtomicU64::new(0),
-            #[cfg(target_os = "macos")]
-            ane_engine: std::env::var_os("ASTRONOMICAL_EXPERT_ROUTE_PREDICTOR_COREML").and_then(
-                |model_path| {
-                    astronomical_runtime_integration::PredictorAneEngine::try_load(
-                        std::path::Path::new(&model_path),
-                    )
-                },
-            ),
         })
     }
 
@@ -190,11 +178,6 @@ impl ExpertRoutePredictorOwner {
         self.last_cpu_predict_nanoseconds.load(Ordering::Relaxed)
     }
 
-    #[must_use]
-    pub fn last_ane_predict_nanoseconds(&self) -> u64 {
-        self.last_ane_predict_nanoseconds.load(Ordering::Relaxed)
-    }
-
     /// Snapshot for `/v1/status`. Pages avoided stay 0 until extra SSD prefetch exists.
     #[must_use]
     pub fn program_status(&self) -> PredictorProgramStatus {
@@ -218,45 +201,16 @@ impl ExpertRoutePredictorOwner {
         previous_token_route: Option<&[Option<Vec<u16>>]>,
         top_k: usize,
     ) -> Option<Vec<Vec<usize>>> {
-        let (cpu_logits, packed_head_inputs, layer_count, input_dim, expert_count) = {
-            let predictor = match self.predictor.try_lock() {
-                Ok(predictor) => predictor,
-                Err(TryLockError::WouldBlock | TryLockError::Poisoned(_)) => return None,
-            };
-            let cpu_started_at = Instant::now();
-            let cpu_logits = predictor.forward_logits(token_id, previous_token_route);
-            self.last_cpu_predict_nanoseconds.store(
-                u64::try_from(cpu_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
-                Ordering::Relaxed,
-            );
-            let config = predictor.config();
-            (
-                cpu_logits,
-                predictor.packed_head_inputs(token_id, previous_token_route),
-                config.layer_count,
-                config.head_input_dim(),
-                config.expert_count,
-            )
+        let predictor = match self.predictor.try_lock() {
+            Ok(predictor) => predictor,
+            Err(TryLockError::WouldBlock | TryLockError::Poisoned(_)) => return None,
         };
-        #[cfg(target_os = "macos")]
-        if let Some(ane_engine) = self.ane_engine.as_ref() {
-            let ane_started_at = Instant::now();
-            if let Some(flat_logits) =
-                ane_engine.predict(&packed_head_inputs, layer_count, input_dim, expert_count)
-            {
-                self.last_ane_predict_nanoseconds.store(
-                    u64::try_from(ane_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
-                    Ordering::Relaxed,
-                );
-                return Some(flat_logits_to_top_k(
-                    &flat_logits,
-                    layer_count,
-                    expert_count,
-                    top_k,
-                ));
-            }
-        }
-        let _ = (packed_head_inputs, layer_count, input_dim, expert_count);
+        let cpu_started_at = Instant::now();
+        let cpu_logits = predictor.forward_logits(token_id, previous_token_route);
+        self.last_cpu_predict_nanoseconds.store(
+            u64::try_from(cpu_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
         Some(
             cpu_logits
                 .iter()
@@ -264,21 +218,6 @@ impl ExpertRoutePredictorOwner {
                 .collect(),
         )
     }
-}
-
-fn flat_logits_to_top_k(
-    flat_logits: &[f32],
-    layer_count: usize,
-    expert_count: usize,
-    top_k: usize,
-) -> Vec<Vec<usize>> {
-    (0..layer_count)
-        .map(|layer_index| {
-            let start = layer_index * expert_count;
-            let layer_logits = &flat_logits[start..start + expert_count];
-            select_top_expert_ids_from_logits(layer_logits, top_k)
-        })
-        .collect()
 }
 
 impl Drop for ExpertRoutePredictorOwner {

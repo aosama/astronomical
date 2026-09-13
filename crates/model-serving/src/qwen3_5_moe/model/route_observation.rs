@@ -263,10 +263,6 @@ impl Qwen3_5Model {
                 PerformanceCounter::ExpertRoutePredictorCpuPredictNanoseconds,
                 predictor_owner.last_cpu_predict_nanoseconds(),
             );
-            performance_attribution.record_snapshot_counter(
-                PerformanceCounter::ExpertRoutePredictorAnePredictNanoseconds,
-                predictor_owner.last_ane_predict_nanoseconds(),
-            );
         }
     }
 }
