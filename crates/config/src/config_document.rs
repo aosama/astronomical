@@ -285,6 +285,8 @@ pub(crate) struct SpeculativePrefillConfigFile {
     pub(crate) keep_percentage: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) minimum_prompt_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) mandatory_trailing_token_count: Option<u32>,
 }
 
 impl SpeculativePrefillConfigFile {
@@ -305,6 +307,11 @@ impl SpeculativePrefillConfigFile {
         if self.minimum_prompt_tokens == Some(0) {
             return Err(
                 AstronomicalConfigError::SpeculativePrefillMinimumPromptTokensMustBePositive,
+            );
+        }
+        if self.mandatory_trailing_token_count == Some(0) {
+            return Err(
+                AstronomicalConfigError::SpeculativePrefillMandatoryTrailingTokenCountMustBePositive,
             );
         }
         Ok(())
