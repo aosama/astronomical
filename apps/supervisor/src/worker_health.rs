@@ -1,9 +1,8 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, PredictorProgramStatus,
-    SpeculativePrefillRuntimeState, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
-    WorkerRuntimeFeatureConfiguration,
+    ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, SpeculativePrefillRuntimeState, WorkerEvent,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
+    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -15,8 +14,8 @@ pub(crate) use publisher::{
     publish_expert_residency, publish_health, publish_latest_mlx_memory_snapshot,
     publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
     publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
-    publish_persistent_prompt_cache_stats, publish_predictor_program,
-    publish_worker_expert_residency, record_prompt_work_reuse, record_serving_session,
+    publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
+    record_prompt_work_reuse, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the supervisor readiness endpoint.
@@ -254,8 +253,6 @@ pub struct WorkerHealthSnapshot {
     pub mlx_memory_limit_error: Option<String>,
     pub mlx_memory_ceiling_bytes: u64,
     pub serving_session: ServingSessionSnapshot,
-    /// Latest predictor snapshot. Absent when the predictor did not run.
-    pub predictor_program: Option<PredictorProgramStatus>,
 }
 
 impl WorkerHealthSnapshot {
@@ -293,7 +290,6 @@ impl WorkerHealthSnapshot {
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
-            predictor_program: None,
         }
     }
 
@@ -371,7 +367,6 @@ impl WorkerHealthSnapshot {
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes,
             serving_session: ServingSessionSnapshot::empty(),
-            predictor_program: None,
         }
     }
 
@@ -404,7 +399,6 @@ impl WorkerHealthSnapshot {
             mlx_memory_limit_error: None,
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
-            predictor_program: None,
         }
     }
 

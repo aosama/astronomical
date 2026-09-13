@@ -306,9 +306,6 @@ pub enum WorkerEvent {
         /// Present when post-cleanup MLX memory could be observed.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
         expert_residency: Option<WorkerExpertResidencySnapshot>,
-        /// Present only when the predictor ran for this request.
-        #[serde(default)]
-        predictor_program: Option<crate::PredictorProgramStatus>,
     },
     /// Reports image-generation phase and denoising-step progress.
     ImageGenerationProgress {

@@ -89,10 +89,6 @@ pub struct RetainedExpertCache {
     prefetch_issue_count: u64,
     prefetch_capacity_drop_count: u64,
     prefetch_payload_bytes: u64,
-    /// Per-layer experts the predictor asked the warm table not to evict.
-    predicted_retention_expert_ids_by_layer: Vec<Vec<usize>>,
-    retention_hint_requested_count: u64,
-    retention_hint_accepted_count: u64,
 }
 
 impl RetainedExpertCache {
@@ -114,9 +110,6 @@ impl RetainedExpertCache {
             prefetch_issue_count: 0,
             prefetch_capacity_drop_count: 0,
             prefetch_payload_bytes: 0,
-            predicted_retention_expert_ids_by_layer: (0..layer_count).map(|_| Vec::new()).collect(),
-            retention_hint_requested_count: 0,
-            retention_hint_accepted_count: 0,
         }
     }
 
@@ -368,62 +361,5 @@ impl RetainedExpertCache {
         // residency planning.
         self.request_pressure_maximum_resident_payload_bytes = None;
         self.reclaim_to_effective_ceiling()
-    }
-
-    /// Replaces the predictor's leftover-retention hints for the next insert.
-    pub fn set_predicted_retention_experts(&mut self, experts_by_layer: &[Vec<usize>]) {
-        let mut requested_count = 0_u64;
-        for (layer_index, predicted_expert_ids) in experts_by_layer.iter().enumerate() {
-            requested_count = requested_count
-                .saturating_add(u64::try_from(predicted_expert_ids.len()).unwrap_or(u64::MAX));
-            if let Some(layer_hints) = self
-                .predicted_retention_expert_ids_by_layer
-                .get_mut(layer_index)
-            {
-                layer_hints.clone_from(predicted_expert_ids);
-            }
-        }
-        self.retention_hint_requested_count = self
-            .retention_hint_requested_count
-            .saturating_add(requested_count);
-    }
-
-    fn predicted_retention_experts(&self, layer_index: usize) -> &[usize] {
-        self.predicted_retention_expert_ids_by_layer
-            .get(layer_index)
-            .map_or(&[], Vec::as_slice)
-    }
-
-    fn record_retention_hint_acceptances(&mut self, layer_index: usize) {
-        let predicted_expert_ids: Vec<usize> =
-            self.predicted_retention_experts(layer_index).to_vec();
-        if predicted_expert_ids.is_empty() {
-            return;
-        }
-        let Some(Some(table)) = self.tables_by_layer.get(layer_index) else {
-            return;
-        };
-        let accepted_count = predicted_expert_ids
-            .iter()
-            .filter(|expert_id| table.slot_by_expert_id.contains_key(expert_id))
-            .count();
-        self.retention_hint_accepted_count = self
-            .retention_hint_accepted_count
-            .saturating_add(u64::try_from(accepted_count).unwrap_or(u64::MAX));
-    }
-
-    #[must_use]
-    pub fn is_expert_warm(&self, layer_index: usize, expert_id: usize) -> bool {
-        self.tables_by_layer
-            .get(layer_index)
-            .and_then(|table| table.as_ref())
-            .is_some_and(|table| table.slot_by_expert_id.contains_key(&expert_id))
-    }
-
-    pub fn take_retention_hint_statistics(&mut self) -> (u64, u64) {
-        (
-            std::mem::take(&mut self.retention_hint_requested_count),
-            std::mem::take(&mut self.retention_hint_accepted_count),
-        )
     }
 }

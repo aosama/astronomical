@@ -6,7 +6,6 @@
 //! streaming. Final telemetry then reports that restored ownership.
 
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
-use crate::qwen3_5_moe::expert_paging::predictor::ExpertRoutePredictorOwner;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
@@ -258,17 +257,11 @@ impl Qwen3_5EngineState {
             }
         };
         let (mlx_memory_telemetry, expert_residency_telemetry) = mlx_memory_telemetry;
-        let predictor_program = model
-            .expert_route_predictor
-            .borrow()
-            .as_ref()
-            .map(ExpertRoutePredictorOwner::program_status);
         GenerationFinalization::new(
             expert_memory_mode,
             mlx_memory_telemetry,
             expert_residency_telemetry,
         )
-        .with_predictor_program(predictor_program)
     }
 
     pub(super) fn record_generation_performance_attribution(

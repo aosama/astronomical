@@ -73,19 +73,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
           MlxMemoryCeilingUtilization.self, forKey: .memoryCeilingUtilization)
     }
   }
-  struct PredictorProgramStatus: Codable, Equatable {
-    let runtime: String
-    let trainingActive: Bool
-    let topKAccuracyPercent: Double
-    let pagesAvoidedPercent: Double
-
-    enum CodingKeys: String, CodingKey {
-      case runtime
-      case trainingActive = "training_active"
-      case topKAccuracyPercent = "top_k_accuracy_percent"
-      case pagesAvoidedPercent = "pages_avoided_percent"
-    }
-  }
   struct ServingSession: Codable, Equatable {
     let completedRequestCount: UInt64
     let totalPromptTokenCount: UInt64
@@ -192,7 +179,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let pendingMlxMemoryCeilingBytes: UInt64?
   let mlxMemoryLimitError: String?
   let servingSession: ServingSession
-  let predictor: PredictorProgramStatus?
 
   enum CodingKeys: String, CodingKey {
     case application, status, activity, progress, configuration
@@ -222,7 +208,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case pendingMlxMemoryCeilingBytes = "pending_mlx_memory_ceiling_bytes"
     case mlxMemoryLimitError = "mlx_memory_limit_error"
     case servingSession = "serving_session"
-    case predictor
   }
 
   init(from decoder: Decoder) throws {
@@ -271,7 +256,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mlxMemoryLimitError = try container.decodeIfPresent(String.self, forKey: .mlxMemoryLimitError)
     servingSession =
       try container.decodeIfPresent(ServingSession.self, forKey: .servingSession) ?? .empty
-    predictor = try container.decodeIfPresent(PredictorProgramStatus.self, forKey: .predictor)
   }
 
   init(
@@ -305,8 +289,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     configuredMaximumMlxMemoryGigabytes: UInt64? = nil,
     pendingMlxMemoryCeilingBytes: UInt64? = nil,
     mlxMemoryLimitError: String? = nil,
-    servingSession: ServingSession,
-    predictor: PredictorProgramStatus? = nil
+    servingSession: ServingSession
   ) {
     self.application = application
     self.status = status
@@ -339,7 +322,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.pendingMlxMemoryCeilingBytes = pendingMlxMemoryCeilingBytes
     self.mlxMemoryLimitError = mlxMemoryLimitError
     self.servingSession = servingSession
-    self.predictor = predictor
   }
 
   static let unavailable = SupervisorStatusDocument(
