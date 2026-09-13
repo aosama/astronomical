@@ -4,3 +4,4 @@ mod macos_process_io;
 mod metallib_path;
 mod native_build;
 mod native_build_store;
+mod predictor_ane;

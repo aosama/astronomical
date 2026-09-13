@@ -1,6 +1,8 @@
 //! Narrow unsafe ownership boundary around the official MLX C API.
 
 mod macos_process_io;
+#[cfg(target_os = "macos")]
+mod predictor_ane;
 
 #[cfg(feature = "experimental-aligned-expert-packs")]
 mod experimental;
@@ -110,3 +112,5 @@ pub use mlx_safetensors_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWrite
 pub use positional_file_read_metrics::{
     PositionalFileReadMetrics, PositionalFileReadMetricsSnapshot,
 };
+#[cfg(target_os = "macos")]
+pub use predictor_ane::PredictorAneEngine;
