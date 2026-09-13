@@ -24,6 +24,7 @@ mod quantized_expert_page_manifest;
 mod qwen3_5_execution_error;
 mod qwen4_exp_configuration;
 mod qwen4_exp_contracts;
+mod qwen4_exp_state_geometry;
 #[cfg(feature = "direct-mlx")]
 mod qwen_prompt_processing_chunk_sizer;
 mod raw_safetensors_inventory;
