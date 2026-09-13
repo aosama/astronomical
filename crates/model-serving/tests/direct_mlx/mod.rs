@@ -23,6 +23,7 @@ mod persistent_speculative_prefill_selection;
 mod persistent_speculative_prefill_target_state;
 mod qwen3_5;
 mod qwen3_5_moe;
+mod qwen4_exp;
 mod sparse_expert_projection;
 mod sparse_expert_projection_sorted_stride;
 mod sparse_experts;
