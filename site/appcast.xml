@@ -4,43 +4,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.37</title>
-            <pubDate>Sun, 13 Sep 2026 10:12:34 -0400</pubDate>
-            <sparkle:version>543</sparkle:version>
-            <sparkle:shortVersionString>0.2.37</sparkle:shortVersionString>
+            <title>0.2.38</title>
+            <pubDate>Sun, 13 Sep 2026 19:38:53 -0400</pubDate>
+            <sparkle:version>551</sparkle:version>
+            <sparkle:shortVersionString>0.2.38</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new in 0.2.37
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.38
 
-### Fixed
+## Thinking budgets from OpenAI clients
 
-- **ModernBERT embeddings now reproduce the upstream reference quality.** `/v1/embeddings` for the ModernBERT embedding family had three serving defects: the model's declared `[CLS]`/`[SEP]` tokens never reached the encoder, pooling used the wrong token population, and the MLP applied its activation to the wrong projection half. Together they compressed the similarity band so far that unrelated documents outranked relevant ones. Served vectors now match the upstream model card's published worked example within 0.002, and retrieval ordering is restored. The 8-bit quantized artifact itself is proven essentially lossless; no model re-download is needed.
+Chat clients that declare a thinking level through the standard OpenAI `reasoning_effort` field now get exactly that behavior. `minimal`, `low`, `medium`, and `high` map to enforced thinking-token budgets, so agents and apps that send effort levels instead of numeric budgets no longer have their request silently ignored. Explicit numeric budget spellings still take precedence, unknown labels are rejected with a clear error, and `off` or `none` disables the budget.
 
-- **Real-model acceptance journeys start on fresh clones.** Running a GPU acceptance journey in a fresh clone or worktree no longer fails with a false stale-lock error.
+## Configurable SpecPrefill trailing window
 
-### Added
+The draft-assisted prompt-processing trailing window — the number of recent prompt tokens the target model always processes densely regardless of importance ranking — is now settable per model through `acceleration.speculative_prefill.mandatory_trailing_token_count`. The default of 512 is unchanged, so existing configurations behave exactly as before, and legacy configurations that already carried a different value now migrate cleanly instead of being refused.
 
-- Qwen 3.6 35B A3B OptiQ 4-bit is available in the Library catalog.
+## Crash fix in speculative prefill
 
-### Improved
+Fixed a deterministic crash that could stop a request when speculative prefill retained decode route arrays that were never evaluated. Affected forwards now evaluate with the attribution they build with, and finalization evaluates before copying, so a straggler costs one bounded wait instead of the process.
 
-- Under memory pressure, paged expert decoding keeps reclaiming experts until the forward fits instead of rejecting the request after one attempt.
+## Lighter serving core
 
-### Developer
+The learned expert-route predictor serving surface is retired, removing dead serving weight. Route observation capture, previous-token prefetch, and hot-expert warming all remain in place.
 
-- qwen4_exp (Qwen 3.8 Flash) groundwork: architecture documentation, contract tests, configuration validation, and GPU execution kernels. The family is not yet advertised or loadable.
-- Expert-route predictor consolidation: route capture, CPU-side online training, and warm-table retention hints ship attribution-gated; the experimental Neural Engine bridge was removed after its measured bake-off. Default serving throughput is measured unchanged from 0.2.36.
+## Dependency refresh
 
-### Compatibility
+reqwest updated to 0.13.5, unifying its base64 usage with the rest of the workspace.
 
-- Requires macOS 14.0 or later on Apple Silicon, unchanged from 0.2.36.
-- Existing configuration, model directories, prompt cache, and Library state are preserved.
-- This is a signed and notarized Developer ID build distributed through GitHub Releases and the Sparkle update feed.
+Your models, prompt caches, and preferences carry over unchanged.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.37/Astronomical-0.2.37-macOS-arm64.dmg" length="16341354" type="application/octet-stream" sparkle:edSignature="SLnlcapurZyEx5smJAi1mYMgIfufFveIouyzkPWEEEi1+1mA4lD2gpEkJZS0n6IKzK0ibbbwWURzJtVxGpBbCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.38/Astronomical-0.2.38-macOS-arm64.dmg" length="16285333" type="application/octet-stream" sparkle:edSignature="eQdU+9xauHRS1pOmv+ABVmivLlFVU+It/7yyeegRojE0BB1q4ghM4pz+qHiqSwjIseurRYMfxQ5vPjOfVRk4DA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: czq+qaxYOadq3Safp7uk5i/PEMWxoa8ljux8Fy/By2QqZcAx7aSLdTd3t8ZMSgzGsvZhCOCwGftbEuSfQxQXAw==
-length: 3112
+edSignature: ISpz0sFnjY1adamKejZBxhH44mYaHteucTvn2EhIwVXy0J0gyXZmKKOGaqehmFOF+0Tndta4AUY1ZaN+y48fBw==
+length: 3013
 -->
