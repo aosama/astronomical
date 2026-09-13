@@ -32,6 +32,14 @@ repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 # only when that pid is provably dead.
 acquire_invocation_lock() {
     lock_directory="${repository_root}/target/bounded-cargo-test.lock"
+    # A fresh clone or worktree has no target/ directory yet. Create the parent
+    # first so the atomic lock mkdir below fails only on genuine contention; a
+    # missing parent would otherwise masquerade as a stale lock and take the
+    # steal path with no owner pid to inspect.
+    if ! mkdir -p "${repository_root}/target"; then
+        print_error "cannot create the Cargo target root for the invocation lock: ${repository_root}/target"
+        exit 2
+    fi
     if mkdir "$lock_directory" 2>/dev/null; then
         printf '%s\n' "$$" > "${lock_directory}/owner-pid"
         invocation_lock_directory="$lock_directory"
