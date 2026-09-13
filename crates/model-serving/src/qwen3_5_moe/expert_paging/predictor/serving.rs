@@ -361,9 +361,11 @@ fn flat_logits_to_top_k(
 }
 
 fn predictor_ane_requested() -> bool {
+    // CPU won the measured bake-off (0.32 ms vs 0.4 ms dispatch toll on a
+    // 1.4M-FLOP head), so the Neural Engine is explicit opt-in only.
     match std::env::var("ASTRONOMICAL_EXPERT_ROUTE_PREDICTOR_ANE") {
-        Ok(value) if value == "0" || value.eq_ignore_ascii_case("cpu") => false,
-        _ => true,
+        Ok(value) if value == "1" || value.eq_ignore_ascii_case("ane") => true,
+        _ => false,
     }
 }
 
