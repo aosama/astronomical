@@ -55,7 +55,15 @@ impl PredictorAneEngine {
             process_id, snapshot.layer_count, snapshot.expert_count
         ));
         write_predictor_mlmodel(snapshot, &mlmodel_path).ok()?;
-        Self::try_load(&mlmodel_path).ok()
+        let engine = Self::try_load(&mlmodel_path).ok()?;
+        let warmup_inputs = vec![0.0_f32; snapshot.grouped_input_channels()];
+        let _ = engine.predict(
+            &warmup_inputs,
+            snapshot.layer_count,
+            snapshot.input_dim,
+            snapshot.expert_count,
+        );
+        Some(engine)
     }
 
     /// Loads a `.mlmodel` (compiled first) or a `.mlmodelc` bundle.

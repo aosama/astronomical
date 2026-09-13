@@ -11,7 +11,14 @@
 
 typedef struct AstronomicalPredictorAne {
   MLModel *model;
+  MLMultiArray *input_array;
+  MLMultiArray *output_array;
+  NSString *input_name;
+  NSString *output_name;
   int convolutions_on_neural_engine;
+  int layer_count;
+  int input_dim;
+  int expert_count;
 } AstronomicalPredictorAne;
 
 static void copy_c_error(char *error_message, unsigned error_message_capacity, NSString *message) {
@@ -23,24 +30,38 @@ static void copy_c_error(char *error_message, unsigned error_message_capacity, N
   error_message[error_message_capacity - 1] = '\0';
 }
 
+static int preferred_device_is_neural_engine(id preferred_device) {
+  if (preferred_device == nil) {
+    return 0;
+  }
+  if (@available(macOS 14.0, *)) {
+    return [preferred_device isKindOfClass:[MLNeuralEngineComputeDevice class]] ? 1 : 0;
+  }
+  return 0;
+}
+
 static int plan_reports_neural_engine(NSURL *model_url, MLModelConfiguration *configuration) {
   if (@available(macOS 14.4, *)) {
     dispatch_semaphore_t completion = dispatch_semaphore_create(0);
-    __block int saw_neural_engine = 0;
+    __block int convolution_on_neural_engine = 0;
     [MLComputePlan loadContentsOfURL:model_url
                        configuration:configuration
                    completionHandler:^(MLComputePlan *_Nullable plan, NSError *_Nullable error) {
                      (void)error;
-                     if (plan != nil) {
-                       // A loaded plan with CPU_AND_NE is the requested placement.
-                       // Detailed per-op device maps vary by OS; the bake-off
-                       // still records this request-vs-CPU wall time.
-                       saw_neural_engine = 1;
+                     MLModelStructureNeuralNetwork *neural_network =
+                         plan.modelStructure.neuralNetwork;
+                     for (MLModelStructureNeuralNetworkLayer *layer in neural_network.layers) {
+                       MLComputePlanDeviceUsage *usage =
+                           [plan computeDeviceUsageForNeuralNetworkLayer:layer];
+                       if (preferred_device_is_neural_engine(usage.preferredComputeDevice)) {
+                         convolution_on_neural_engine = 1;
+                         break;
+                       }
                      }
                      dispatch_semaphore_signal(completion);
                    }];
-    dispatch_semaphore_wait(completion, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
-    return saw_neural_engine;
+    dispatch_semaphore_wait(completion, dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC));
+    return convolution_on_neural_engine;
   }
   return 0;
 }
@@ -70,6 +91,8 @@ AstronomicalPredictorAne *astronomical_predictor_ane_load(const char *model_path
       return NULL;
     }
     handle->model = model;
+    handle->input_name = model.modelDescription.inputDescriptionsByName.allKeys.firstObject;
+    handle->output_name = model.modelDescription.outputDescriptionsByName.allKeys.firstObject;
     handle->convolutions_on_neural_engine = plan_reports_neural_engine(model_url, configuration);
     return handle;
   }
@@ -95,29 +118,46 @@ int astronomical_predictor_ane_predict(AstronomicalPredictorAne *handle,
     }
     NSError *error = nil;
     const NSInteger input_channels = (NSInteger)layer_count * (NSInteger)input_dim;
-    NSArray<NSNumber *> *shape = @[ @1, @(input_channels), @1, @1 ];
-    MLMultiArray *input_array = [[MLMultiArray alloc] initWithShape:shape
-                                                           dataType:MLMultiArrayDataTypeFloat32
-                                                              error:&error];
-    if (input_array == nil) {
-      return -1;
+    if (handle->input_array == nil || handle->layer_count != layer_count
+        || handle->input_dim != input_dim) {
+      NSArray<NSNumber *> *shape = @[ @1, @(input_channels), @1, @1 ];
+      handle->input_array = [[MLMultiArray alloc] initWithShape:shape
+                                                       dataType:MLMultiArrayDataTypeFloat32
+                                                          error:&error];
+      if (handle->input_array == nil) {
+        return -1;
+      }
+      handle->layer_count = layer_count;
+      handle->input_dim = input_dim;
+      handle->expert_count = expert_count;
+      const NSInteger output_channels = (NSInteger)layer_count * (NSInteger)expert_count;
+      handle->output_array = [[MLMultiArray alloc]
+          initWithShape:@[ @1, @(output_channels), @1, @1 ]
+               dataType:MLMultiArrayDataTypeFloat32
+                  error:&error];
     }
-    memcpy(input_array.dataPointer, head_inputs, (size_t)input_channels * sizeof(float));
-    NSString *input_name = handle->model.modelDescription.inputDescriptionsByName.allKeys.firstObject;
-    NSString *output_name = handle->model.modelDescription.outputDescriptionsByName.allKeys.firstObject;
-    if (input_name == nil || output_name == nil) {
+    memcpy(handle->input_array.dataPointer, head_inputs, (size_t)input_channels * sizeof(float));
+    if (handle->input_name == nil || handle->output_name == nil) {
       return -1;
     }
     MLDictionaryFeatureProvider *provider =
-        [[MLDictionaryFeatureProvider alloc] initWithDictionary:@{input_name : input_array} error:&error];
+        [[MLDictionaryFeatureProvider alloc] initWithDictionary:@{
+          handle->input_name : handle->input_array
+        }
+                                                         error:&error];
     if (provider == nil) {
       return -1;
     }
-    id<MLFeatureProvider> prediction = [handle->model predictionFromFeatures:provider error:&error];
+    MLPredictionOptions *prediction_options = [[MLPredictionOptions alloc] init];
+    if (handle->output_array != nil && handle->output_name != nil) {
+      prediction_options.outputBackings = @{handle->output_name : handle->output_array};
+    }
+    id<MLFeatureProvider> prediction =
+        [handle->model predictionFromFeatures:provider options:prediction_options error:&error];
     if (prediction == nil) {
       return -1;
     }
-    MLMultiArray *logits = [prediction featureValueForName:output_name].multiArrayValue;
+    MLMultiArray *logits = [prediction featureValueForName:handle->output_name].multiArrayValue;
     if (logits == nil) {
       return -1;
     }
@@ -135,5 +175,9 @@ void astronomical_predictor_ane_free(AstronomicalPredictorAne *handle) {
     return;
   }
   handle->model = nil;
+  handle->input_array = nil;
+  handle->output_array = nil;
+  handle->input_name = nil;
+  handle->output_name = nil;
   free(handle);
 }

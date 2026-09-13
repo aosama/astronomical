@@ -134,11 +134,15 @@ impl ExpertRoutePredictorOwner {
             })
             .ok()?;
         #[cfg(target_os = "macos")]
-        let ane_engine = predictor.lock().ok().and_then(|guard| {
-            astronomical_runtime_integration::PredictorAneEngine::try_from_convolution_snapshot(
-                &guard.convolution_snapshot(),
-            )
-        });
+        let ane_engine = if predictor_ane_requested() {
+            predictor.lock().ok().and_then(|guard| {
+                astronomical_runtime_integration::PredictorAneEngine::try_from_convolution_snapshot(
+                    &guard.convolution_snapshot(),
+                )
+            })
+        } else {
+            None
+        };
         Some(Self {
             observation_sender: Some(observation_sender),
             trainer_thread: Some(trainer_thread),
@@ -285,6 +289,13 @@ fn flat_logits_to_top_k(
             select_top_expert_ids_from_logits(layer_logits, top_k)
         })
         .collect()
+}
+
+fn predictor_ane_requested() -> bool {
+    match std::env::var("ASTRONOMICAL_EXPERT_ROUTE_PREDICTOR_ANE") {
+        Ok(value) if value == "0" || value.eq_ignore_ascii_case("cpu") => false,
+        _ => true,
+    }
 }
 
 impl Drop for ExpertRoutePredictorOwner {
