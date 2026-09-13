@@ -164,8 +164,6 @@ pub enum PerformanceCounter {
     ExpertRoutePredictorTrainSliceNanoseconds,
     /// Wall time of one CPU predictor forward, nanoseconds (#540).
     ExpertRoutePredictorCpuPredictNanoseconds,
-    /// Wall time of one Neural Engine predictor forward, nanoseconds (#540).
-    ExpertRoutePredictorAnePredictNanoseconds,
     /// Predicted experts streamed into leftover slots ahead of the native route (#540).
     PredictorPrefetchIssueCount,
     /// Payload bytes of predictor-driven leftover prefetch (#540).
@@ -296,7 +294,6 @@ impl PerformanceCounter {
         Self::ExpertRoutePredictorEvaluatedExpertCount,
         Self::ExpertRoutePredictorTrainSliceNanoseconds,
         Self::ExpertRoutePredictorCpuPredictNanoseconds,
-        Self::ExpertRoutePredictorAnePredictNanoseconds,
         Self::PredictorPrefetchIssueCount,
         Self::PredictorPrefetchByteCount,
         Self::Qwen4ExpIndexerSelectedKeyCount,
@@ -539,9 +536,6 @@ impl PerformanceCounter {
             }
             Self::ExpertRoutePredictorCpuPredictNanoseconds => {
                 "expert_route_predictor_cpu_predict_nanoseconds"
-            }
-            Self::ExpertRoutePredictorAnePredictNanoseconds => {
-                "expert_route_predictor_ane_predict_nanoseconds"
             }
             Self::PredictorPrefetchIssueCount => "predictor_prefetch_issue_count",
             Self::Qwen4ExpIndexerSelectedKeyCount => "qwen4_exp_indexer_selected_key_count",
