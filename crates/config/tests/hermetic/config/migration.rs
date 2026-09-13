@@ -121,6 +121,38 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
 }
 
 #[test]
+fn should_migrate_a_legacy_non_default_mandatory_trailing_token_count_through_to_v1() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    let legacy_config_json = serde_json::json!({
+        "model_directories": [],
+        "speculative_prefill": {
+            "enabled": true,
+            "target_model_id": "target",
+            "draft_model_id": "draft",
+            "keep_percentage": 25,
+            "minimum_prompt_tokens": 4096,
+            "mandatory_trailing_token_count": 256
+        }
+    })
+    .to_string();
+    write_config(temporary_home_directory.path(), &legacy_config_json);
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("legacy trailing window should migrate instead of being rejected");
+
+    assert_eq!(
+        astronomical_config
+            .resolved_model_config("target", 65_536)
+            .expect("migrated model policy should resolve")
+            .speculative_prefill()
+            .expect("legacy speculative prefill should migrate")
+            .mandatory_trailing_token_count(),
+        256
+    );
+}
+
+#[test]
 fn should_preserve_original_bytes_when_legacy_migration_cannot_preserve_behavior() {
     for legacy_config in [
         r#"{"model_directories":[],"max_output_tokens":4096}"#,
@@ -128,7 +160,6 @@ fn should_preserve_original_bytes_when_legacy_migration_cannot_preserve_behavior
         r#"{"model_directories":[],"mtp_enabled":false}"#,
         r#"{"model_directories":[],"supervisor":{"bind_address":"127.0.0.1:12345"}}"#,
         r#"{"model_directories":[],"speculative_prefill":{"selection_chunck_token_count":64}}"#,
-        r#"{"model_directories":[],"speculative_prefill":{"mandatory_trailing_token_count":256}}"#,
         r#"{"model_directories":[],"speculative_prefill":{"lookahead_token_count":4}}"#,
         r#"{"model_directories":[],"speculative_prefill":{"importance_pooling_kernel_token_count":7}}"#,
     ] {

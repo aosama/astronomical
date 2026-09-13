@@ -288,6 +288,12 @@
           "minimum": 1,
           "default": 8192,
           "description": "Minimum prompt length eligible for speculative prefill."
+        },
+        "mandatory_trailing_token_count": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 512,
+          "description": "Prompt-token count at the trailing end of the prompt that the target always processes densely regardless of importance ranking."
         }
       },
       "x-astronomical-apply-mode": "model-reload"

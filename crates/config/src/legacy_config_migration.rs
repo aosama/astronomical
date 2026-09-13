@@ -260,6 +260,7 @@ fn migrate_speculative_prefill(
         draft_model_id: draft_model_id.trim().to_owned(),
         keep_percentage: legacy_speculative_prefill.keep_percentage,
         minimum_prompt_tokens: legacy_speculative_prefill.minimum_prompt_tokens,
+        mandatory_trailing_token_count: legacy_speculative_prefill.mandatory_trailing_token_count,
     });
 }
 
@@ -340,11 +341,6 @@ fn validate_legacy_speculative_prefill(
             speculative_prefill.selection_chunck_token_count,
             "selection_chunck_token_count",
             SpeculativePrefillConfig::DEFAULT_SELECTION_CHUNK_TOKEN_COUNT,
-        ),
-        (
-            speculative_prefill.mandatory_trailing_token_count,
-            "mandatory_trailing_token_count",
-            SpeculativePrefillConfig::DEFAULT_MANDATORY_TRAILING_TOKEN_COUNT,
         ),
         (
             speculative_prefill.lookahead_token_count,

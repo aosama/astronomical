@@ -72,6 +72,7 @@ impl ResolvedModelConfig {
                     &configured.draft_model_id,
                     configured.minimum_prompt_tokens,
                     configured.keep_percentage,
+                    configured.mandatory_trailing_token_count,
                 )
             });
         Ok(Self {
