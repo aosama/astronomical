@@ -78,6 +78,7 @@ create_fake_repository_scripts() {
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
         test-cargo-artifact-lifecycle-contract.sh \
+        test-bounded-cargo-test-lock-contract.sh \
         test-cargo-artifact-cleanup-signal-contract.sh \
         test-retired-cargo-native-output-cleanup.sh \
         test-verify-before-commit-contract.sh \
@@ -237,7 +238,7 @@ main() {
         print_error "the direct-MLX lane did not retain its separate compile-class timeout"
         exit 1
     }
-    [ "$(grep -c '^120s|' "$timeout_log")" -eq 17 ] || {
+    [ "$(grep -c '^120s|' "$timeout_log")" -eq 18 ] || {
         print_error "verification did not bound every non-compilation step to 120 seconds"
         exit 1
     }
@@ -253,6 +254,7 @@ main() {
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
         test-cargo-artifact-lifecycle-contract.sh \
+        test-bounded-cargo-test-lock-contract.sh \
         test-cargo-artifact-cleanup-signal-contract.sh \
         test-retired-cargo-native-output-cleanup.sh \
         test-verify-before-commit-contract.sh \

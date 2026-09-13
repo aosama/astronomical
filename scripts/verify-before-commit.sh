@@ -10,7 +10,7 @@ readonly TEST_TIMEOUT_SECONDS=120
 # The direct-MLX lane compiles its feature world in an owned Cargo target before
 # its own bounded run, so it needs the compilation timeout class.
 readonly DIRECT_MLX_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=18
+readonly TOTAL_STEP_COUNT=19
 
 COMPLETED_STEP_COUNT=0
 
@@ -106,6 +106,7 @@ main() {
     run_step commit-release-isolation "$TEST_TIMEOUT_SECONDS" scripts/test-commit-release-isolation.sh
     run_step ci-native-cache-contract "$TEST_TIMEOUT_SECONDS" scripts/test-ci-native-cache-coordination.sh
     run_step cargo-artifact-lifecycle-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-lifecycle-contract.sh
+    run_step bounded-cargo-test-lock-contract "$TEST_TIMEOUT_SECONDS" scripts/test-bounded-cargo-test-lock-contract.sh
     run_step cargo-artifact-cleanup-signal-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-cleanup-signal-contract.sh
     run_step legacy-native-output-cleanup-contract "$TEST_TIMEOUT_SECONDS" scripts/test-retired-cargo-native-output-cleanup.sh
     run_step commit-verification-contract "$TEST_TIMEOUT_SECONDS" scripts/test-verify-before-commit-contract.sh
