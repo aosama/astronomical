@@ -7,7 +7,6 @@ mod embeddings;
 mod image_generation;
 mod message_codec;
 mod persistent_prompt_cache_diagnostics;
-mod predictor_program_status;
 mod protocol_error;
 mod protocol_message;
 mod protocol_reader;
@@ -41,7 +40,6 @@ pub use persistent_prompt_cache_diagnostics::{
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
-pub use predictor_program_status::{PredictorProgramStatus, PredictorRuntime};
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpDepthResolutionReason,

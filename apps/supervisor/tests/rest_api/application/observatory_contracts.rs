@@ -72,7 +72,7 @@ async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_a
     assert!(status_document["persistent_prompt_cache"].is_object());
     assert!(
         status_document.get("predictor").is_none(),
-        "disabled predictor must omit the status object rather than publish zeros"
+        "the retired predictor surface must never publish a status object (#594)"
     );
 }
 

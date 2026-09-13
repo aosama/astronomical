@@ -123,29 +123,7 @@ impl Qwen3_5Model {
                 prefetch_capacity_drop_count,
             );
         }
-        let (retention_hint_requested_count, retention_hint_accepted_count) =
-            self.take_retention_hint_statistics();
-        if retention_hint_requested_count > 0 {
-            performance_attribution.record_counter(
-                PerformanceCounter::PredictorRetentionHintRequestedCount,
-                retention_hint_requested_count,
-            );
-            performance_attribution.record_counter(
-                PerformanceCounter::PredictorRetentionHintAcceptedCount,
-                retention_hint_accepted_count,
-            );
-        }
         Ok(())
-    }
-
-    fn take_retention_hint_statistics(&self) -> (u64, u64) {
-        self.retained_experts
-            .as_ref()
-            .map_or((0, 0), |retained_experts| {
-                retained_experts
-                    .borrow_mut()
-                    .take_retention_hint_statistics()
-            })
     }
 
     pub(crate) fn take_previous_token_prefetch_statistics(&self) -> (u64, u64, u64) {

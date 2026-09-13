@@ -1,5 +1,4 @@
 use crate::{ActiveRequestProgress, ApplicationBuildIdentity, application::ApplicationState};
-use astronomical_ipc_protocol::PredictorRuntime;
 use axum::{
     Json,
     extract::State,
@@ -235,17 +234,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "average_prefill_tok_per_second": worker_health_snapshot.serving_session.average_prefill_tok_per_second,
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
     });
-    if let Some(predictor_program) = worker_health_snapshot.predictor_program {
-        status_json["predictor"] = serde_json::json!({
-            "runtime": match predictor_program.runtime {
-                PredictorRuntime::Cpu => "cpu",
-                PredictorRuntime::NeuralEngine => "neural_engine",
-            },
-            "training_active": predictor_program.training_active,
-            "top_k_accuracy_percent": predictor_program.top_k_accuracy_percent(),
-            "pages_avoided_percent": predictor_program.pages_avoided_percent(),
-        });
-    }
     let persistent_prompt_cache_summary = crate::PersistentPromptCacheSummary::from_worker_event(
         worker_health_snapshot
             .persistent_prompt_cache_stats

@@ -178,45 +178,56 @@ pub(super) fn log_status_progress(status_document: &Value) {
     );
 }
 
-pub(super) fn assert_predictor_status_reconciles(
+pub(super) fn generation_attribution_counter_identifiers(
+    isolated_worker_home: &Path,
+) -> std::collections::BTreeSet<String> {
+    let attribution_log_path = isolated_worker_home
+        .join(".astronomical-dev")
+        .join("logs")
+        .join("performance-attribution.jsonl");
+    fs::read_to_string(attribution_log_path)
+        .expect("the completed request should flush performance attribution")
+        .lines()
+        .filter_map(|json_line| serde_json::from_str::<Value>(json_line).ok())
+        .filter(|attribution_report| attribution_report["report_kind"] == "generation")
+        .flat_map(|attribution_report| {
+            attribution_report["counters"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .filter_map(|counter_report| counter_report["counter"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The predictor serving surface is retired (#594): no counter it produced may
+/// appear in generation attribution, and worker status must not carry a
+/// predictor object. Route-observation capture (#536) and the previous-token
+/// prefetch baseline (#537) remain the surviving evidence paths.
+pub(super) fn assert_predictor_surface_absent(
     final_status: &Value,
-    top_k_hit_count: u64,
-    evaluated_expert_count: u64,
-    pages_avoided_hit_count: u64,
-    pages_avoided_opportunity_count: u64,
+    attribution_counter_identifiers: &std::collections::BTreeSet<String>,
 ) {
-    let predictor = final_status
-        .get("predictor")
-        .expect("attributed paged decode must publish predictor status");
-    assert!(predictor.is_object(), "predictor status must be an object");
-    let expected_accuracy = if evaluated_expert_count == 0 {
-        0.0
-    } else {
-        (top_k_hit_count as f64 / evaluated_expert_count as f64 * 1_000.0).round() / 10.0
-    };
-    let expected_pages = if pages_avoided_opportunity_count == 0 {
-        0.0
-    } else {
-        (pages_avoided_hit_count as f64 / pages_avoided_opportunity_count as f64 * 1_000.0).round()
-            / 10.0
-    };
-    assert_eq!(
-        predictor["runtime"], "cpu",
-        "the first predictor path is CPU"
-    );
+    let retired_counter_identifiers = [
+        "expert_route_predictor_train_step_count",
+        "expert_route_predictor_top_k_hit_count",
+        "expert_route_predictor_evaluated_expert_count",
+        "expert_route_predictor_train_slice_nanoseconds",
+        "expert_route_predictor_cpu_predict_nanoseconds",
+        "predictor_retention_hint_requested_count",
+        "predictor_retention_hint_accepted_count",
+        "predictor_prefetch_issue_count",
+        "predictor_prefetch_byte_count",
+    ];
+    for retired_counter_identifier in retired_counter_identifiers {
+        assert!(
+            !attribution_counter_identifiers.contains(retired_counter_identifier),
+            "retired predictor counter {retired_counter_identifier} must not be recorded after issue #594"
+        );
+    }
     assert!(
-        predictor["training_active"].is_boolean(),
-        "training_active must be a boolean"
-    );
-    assert_eq!(
-        predictor["top_k_accuracy_percent"].as_f64(),
-        Some(expected_accuracy),
-        "published accuracy must match top-k counters hits={top_k_hit_count} evaluated={evaluated_expert_count}"
-    );
-    assert_eq!(
-        predictor["pages_avoided_percent"].as_f64(),
-        Some(expected_pages),
-        "published pages-avoided must match prefetch counters hits={pages_avoided_hit_count} opportunities={pages_avoided_opportunity_count}"
+        final_status.get("predictor").is_none(),
+        "the retired predictor surface must not publish a status object (#594)"
     );
 }
 
