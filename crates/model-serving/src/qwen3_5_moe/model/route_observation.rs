@@ -243,29 +243,11 @@ impl Qwen3_5Model {
             };
             let previous_route = performance_attribution.previous_observed_expert_route();
             let top_k = usize::try_from(self.config.experts_per_token()).unwrap_or(1);
-            #[cfg(target_os = "macos")]
-            let harvested = predictor_owner.harvest_overlapped_ane_predict();
-            #[cfg(not(target_os = "macos"))]
-            let harvested = None;
-            #[cfg(target_os = "macos")]
-            let kicked = predictor_owner.try_begin_overlapped_ane_predict(
+            predictor_owner.try_predict_top_experts_per_layer(
                 next_token_id,
                 previous_route.map(Vec::as_slice),
                 top_k,
-            );
-            #[cfg(not(target_os = "macos"))]
-            let kicked = false;
-            if kicked {
-                harvested
-            } else {
-                harvested.or_else(|| {
-                    predictor_owner.try_predict_top_experts_per_layer(
-                        next_token_id,
-                        previous_route.map(Vec::as_slice),
-                        top_k,
-                    )
-                })
-            }
+            )
         };
         let Some(predicted_experts_by_layer) = predicted_experts_by_layer else {
             return;
@@ -280,10 +262,6 @@ impl Qwen3_5Model {
             performance_attribution.record_snapshot_counter(
                 PerformanceCounter::ExpertRoutePredictorCpuPredictNanoseconds,
                 predictor_owner.last_cpu_predict_nanoseconds(),
-            );
-            performance_attribution.record_snapshot_counter(
-                PerformanceCounter::ExpertRoutePredictorAnePredictNanoseconds,
-                predictor_owner.last_ane_predict_nanoseconds(),
             );
         }
     }
