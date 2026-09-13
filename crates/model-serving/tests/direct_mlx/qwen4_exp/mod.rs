@@ -20,6 +20,7 @@ use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
 
+pub(crate) mod hyper_connection_executor;
 pub(crate) mod hyper_connection_reference;
 pub(crate) mod indexer_reference;
 pub(crate) mod ple_row_reference;
