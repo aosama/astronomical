@@ -3,6 +3,8 @@
 mod macos_process_io;
 #[cfg(target_os = "macos")]
 mod predictor_ane;
+#[cfg(target_os = "macos")]
+mod predictor_ane_export;
 
 #[cfg(feature = "experimental-aligned-expert-packs")]
 mod experimental;
@@ -114,3 +116,5 @@ pub use positional_file_read_metrics::{
 };
 #[cfg(target_os = "macos")]
 pub use predictor_ane::PredictorAneEngine;
+#[cfg(target_os = "macos")]
+pub use predictor_ane_export::{PredictorAneConvolutionSnapshot, write_predictor_mlmodel};
