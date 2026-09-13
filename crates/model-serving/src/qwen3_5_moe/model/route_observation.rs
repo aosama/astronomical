@@ -172,12 +172,16 @@ impl Qwen3_5Model {
             Vec::with_capacity(pending_layer_route_arrays.len());
         for pending_route_array in pending_layer_route_arrays {
             let layer_route = pending_route_array.as_ref().and_then(|route_array| {
-                route_array
-                    .copy_evaluated_u32_values()
-                    .ok()
-                    .and_then(|raw_expert_ids| {
-                        sorted_unique_layer_routed_expert_ids(&raw_expert_ids)
-                    })
+                // `to_vec_u32` evaluates before copying. On the healthy decode
+                // path the arrays already joined the shared logits wait, so the
+                // evaluation is a free no-op and the #542 single-wait design
+                // holds. A retained array from a forward that never reached an
+                // evaluation would otherwise leave MLX holding a null buffer,
+                // and copying it crashed the whole process (#612) instead of
+                // failing open like every other capture error.
+                route_array.to_vec_u32().ok().and_then(|raw_expert_ids| {
+                    sorted_unique_layer_routed_expert_ids(&raw_expert_ids)
+                })
             });
             observed_route.push(layer_route);
         }

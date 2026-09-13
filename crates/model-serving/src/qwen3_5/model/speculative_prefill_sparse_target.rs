@@ -110,7 +110,11 @@ impl Qwen3_5Model {
                 false,
                 true,
             )?;
-        self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)?;
+        self.evaluate_forward_state_with_performance_attribution(
+            target_forward_output.final_logits(),
+            request_decoder_state,
+            performance_attribution,
+        )?;
         Ok(consumed_visual_embedding_count)
     }
 }
