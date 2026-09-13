@@ -168,6 +168,11 @@ impl OpenAiChatCompletionRequest {
     /// coding-agent aliases, mirroring the output-token budget rule: several
     /// spellings are fine while they agree, and disagreement is a caller bug
     /// that must fail loudly instead of silently picking one.
+    ///
+    /// When no numeric spelling appears, the OpenAI `reasoning_effort` level
+    /// name maps to the token budget coding agents display for that level
+    /// (Pi's defaults). An explicit numeric budget wins over the level name
+    /// because it is the more precise statement of the same intent.
     fn thinking_budget_resolution(
         &self,
     ) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
@@ -191,6 +196,11 @@ impl OpenAiChatCompletionRequest {
                 }
                 (Some(_), None) => {}
             }
+        }
+        if resolved_budget.is_none()
+            && let Some(reasoning_effort) = self.reasoning_effort.as_deref()
+        {
+            resolved_budget = reasoning_effort_token_budget(reasoning_effort)?;
         }
         Ok(resolved_budget)
     }
@@ -354,6 +364,30 @@ pub struct OpenAiChatCompletionRequestParts {
     pub enforced_structured_generation: Option<EnforcedStructuredGeneration>,
 }
 
+/// Maps an OpenAI `reasoning_effort` level name to the thinking-token budget
+/// coding agents display for that level. The values mirror Pi's default
+/// thinking budgets so the number an agent shows its user is the number this
+/// server enforces. `xhigh` clamps to `high`, matching the agents' own
+/// clamping. `off` and `none` carry no enforceable budget today: thinking
+/// cannot be disabled through the budget alone, so they resolve to the
+/// model-default behavior instead of a silent lie.
+fn reasoning_effort_token_budget(
+    reasoning_effort: &str,
+) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
+    match reasoning_effort {
+        "minimal" => Ok(Some(1024)),
+        "low" => Ok(Some(2048)),
+        "medium" => Ok(Some(8192)),
+        "high" | "xhigh" => Ok(Some(16384)),
+        "off" | "none" => Ok(None),
+        other => Err(
+            OpenAiChatCompletionValidationError::UnknownReasoningEffort {
+                reasoning_effort: other.to_owned(),
+            },
+        ),
+    }
+}
+
 /// A request rejected before worker admission by the public OpenAI contract.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum OpenAiChatCompletionValidationError {
@@ -433,6 +467,14 @@ pub enum OpenAiChatCompletionValidationError {
         thinking_token_budget: Option<u32>,
         thinking_budget_tokens: Option<u32>,
     },
+    /// A reasoning-effort level name this server does not enforce. Coding
+    /// agents send `reasoning_effort` as their only thinking signal, so an
+    /// unrecognized label must fail loudly rather than silently changing how
+    /// much the model thinks.
+    #[error(
+        "reasoning_effort '{reasoning_effort}' is not a recognized thinking level; expected minimal, low, medium, high, xhigh, off, or none"
+    )]
+    UnknownReasoningEffort { reasoning_effort: String },
     /// The output token budget was zero or too large for the worker representation.
     #[error(
         "output token count is {actual_output_tokens}, outside the 1..={maximum_output_tokens} token range"

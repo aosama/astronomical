@@ -171,7 +171,7 @@ fn should_accept_a_single_text_message_larger_than_the_old_public_message_byte_l
 }
 
 #[test]
-fn should_accept_large_ignored_reasoning_effort_without_a_public_field_byte_cap() {
+fn should_reject_an_unknown_oversized_reasoning_effort_label_instead_of_ignoring_it() {
     let oversized_reasoning_effort = "x".repeat(8 * 1024);
     let request_json = format!(
         r#"{{
@@ -186,7 +186,14 @@ fn should_accept_large_ignored_reasoning_effort_without_a_public_field_byte_cap(
         serde_json::from_str::<OpenAiChatCompletionRequest>(&request_json)
             .expect("reasoning_effort should decode before bounded validation");
 
-    chat_completion_request
+    let validation_error = chat_completion_request
         .validate()
-        .expect("request body bytes should bound ignored labels, not a field cap");
+        .expect_err("an unrecognized effort label must fail loudly, not get ignored by size");
+
+    assert_eq!(
+        validation_error,
+        OpenAiChatCompletionValidationError::UnknownReasoningEffort {
+            reasoning_effort: oversized_reasoning_effort,
+        }
+    );
 }

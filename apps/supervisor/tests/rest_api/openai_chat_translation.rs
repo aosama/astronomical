@@ -68,7 +68,7 @@ fn should_escape_chronological_system_update_wrapper_delimiters() {
 }
 
 #[test]
-fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
+fn should_translate_captured_opencode_reasoning_effort_into_the_thinking_budget() {
     let request_json = r#"
     {
         "model": "astronomical/fake-mixture-of-experts",
@@ -87,7 +87,7 @@ fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
         .expect("the captured OpenCode title request should deserialize");
 
     let chat_command = translate_openai_chat_completion_request(RequestId::new(901), request)
-        .expect("reasoning_effort should be accepted as an ignored REST-only option");
+        .expect("the captured OpenCode effort level should translate into a budget");
 
     assert_eq!(
         chat_command,
@@ -110,7 +110,7 @@ fn should_ignore_captured_opencode_reasoning_effort_when_translating_to_ipc() {
                 temperature_thousandths: Some(500),
                 top_p_thousandths: None,
                 seed: None,
-                thinking_budget: None,
+                thinking_budget: Some(2048),
             },
             qwen_thinking_channel_seed: None,
             structured_generation: None,
