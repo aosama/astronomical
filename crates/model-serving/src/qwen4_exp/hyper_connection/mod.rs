@@ -4,8 +4,10 @@
 //! routes, kernel probes, and state handoff arrive with the forward work and
 //! must enact this algebra rather than re-derive it.
 
+pub mod execution;
 pub mod stream_algebra;
 
+pub use execution::HyperConnectionExecutor;
 pub use stream_algebra::{
     GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
     average_mix, gated_combine, gated_mix, grouped_rms_norm,
