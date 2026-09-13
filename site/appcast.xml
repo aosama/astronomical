@@ -4,39 +4,43 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.36</title>
-            <pubDate>Fri, 11 Sep 2026 21:08:24 -0400</pubDate>
-            <sparkle:version>515</sparkle:version>
-            <sparkle:shortVersionString>0.2.36</sparkle:shortVersionString>
+            <title>0.2.37</title>
+            <pubDate>Sun, 13 Sep 2026 10:12:34 -0400</pubDate>
+            <sparkle:version>543</sparkle:version>
+            <sparkle:shortVersionString>0.2.37</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.36
+            <description sparkle:format="markdown"><![CDATA[## What's new in 0.2.37
 
-Stable macOS release for Apple Silicon.
+### Fixed
 
-## Changes
+- **ModernBERT embeddings now reproduce the upstream reference quality.** `/v1/embeddings` for the ModernBERT embedding family had three serving defects: the model's declared `[CLS]`/`[SEP]` tokens never reached the encoder, pooling used the wrong token population, and the MLP applied its activation to the wrong projection half. Together they compressed the similarity band so far that unrelated documents outranked relevant ones. Served vectors now match the upstream model card's published worked example within 0.002, and retrieval ordering is restored. The 8-bit quantized artifact itself is proven essentially lossless; no model re-download is needed.
 
-- The memory popover names unused MLX headroom by owner instead of leaving it unexplained.
-- Chat, image generation, and embeddings each publish that split from the owners they actually hold.
-- A queued memory-ceiling raise now applies before the next chat starts.
-- Decode can serve a token from mixed retained complete expert layers and streamed experts.
-- Complete expert layers streamed during prefill stay seated for decode instead of being read again.
-- Resident promotion adopts already-retained complete expert layers.
-- Decode warming is sized from decode-phase evidence and capped by leftover entitlement.
-- The worker applies its runtime acknowledgement before the first model swap, so the first request after startup can proceed.
-- `astronomical launch opencode` starts OpenCode against the local Astronomical instance.
-- The Library catalog offers K2 Horizon MoVA 36B A4B 4-bit.
+- **Real-model acceptance journeys start on fresh clones.** Running a GPU acceptance journey in a fresh clone or worktree no longer fails with a false stale-lock error.
 
-## Compatibility
+### Added
 
-Existing configuration, Library downloads, and prompt-cache files remain in place. macOS 14.0 or later on Apple Silicon is required.
+- Qwen 3.6 35B A3B OptiQ 4-bit is available in the Library catalog.
 
-This build is Developer ID signed and notarized. Sparkle verifies the update feed and the disk image before installation.
+### Improved
+
+- Under memory pressure, paged expert decoding keeps reclaiming experts until the forward fits instead of rejecting the request after one attempt.
+
+### Developer
+
+- qwen4_exp (Qwen 3.8 Flash) groundwork: architecture documentation, contract tests, configuration validation, and GPU execution kernels. The family is not yet advertised or loadable.
+- Expert-route predictor consolidation: route capture, CPU-side online training, and warm-table retention hints ship attribution-gated; the experimental Neural Engine bridge was removed after its measured bake-off. Default serving throughput is measured unchanged from 0.2.36.
+
+### Compatibility
+
+- Requires macOS 14.0 or later on Apple Silicon, unchanged from 0.2.36.
+- Existing configuration, model directories, prompt cache, and Library state are preserved.
+- This is a signed and notarized Developer ID build distributed through GitHub Releases and the Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.36/Astronomical-0.2.36-macOS-arm64.dmg" length="16280041" type="application/octet-stream" sparkle:edSignature="JUwf+bII3hrTFMeJ5Dn2dzXIg7/ejkhbBX00TAvejLtCZ2SpmaejFPhVW5B9A4Pd5YZxlPYTZl7T6Jdv2WbyAw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.37/Astronomical-0.2.37-macOS-arm64.dmg" length="16341354" type="application/octet-stream" sparkle:edSignature="SLnlcapurZyEx5smJAi1mYMgIfufFveIouyzkPWEEEi1+1mA4lD2gpEkJZS0n6IKzK0ibbbwWURzJtVxGpBbCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: MwWFjrcucEZGMQo2dqnrU73qYL3z5ag1cvdbtp+o9M73uoaKZ1g/jjWyrXvHWOQJ6ISHmHErm7aulok/RE/BAg==
-length: 2470
+edSignature: czq+qaxYOadq3Safp7uk5i/PEMWxoa8ljux8Fy/By2QqZcAx7aSLdTd3t8ZMSgzGsvZhCOCwGftbEuSfQxQXAw==
+length: 3112
 -->
