@@ -94,17 +94,15 @@ int astronomical_predictor_ane_predict(AstronomicalPredictorAne *handle,
       return -1;
     }
     NSError *error = nil;
-    NSArray<NSNumber *> *shape = @[ @(layer_count), @(input_dim), @1, @1 ];
+    const NSInteger input_channels = (NSInteger)layer_count * (NSInteger)input_dim;
+    NSArray<NSNumber *> *shape = @[ @1, @(input_channels), @1, @1 ];
     MLMultiArray *input_array = [[MLMultiArray alloc] initWithShape:shape
                                                            dataType:MLMultiArrayDataTypeFloat32
                                                               error:&error];
     if (input_array == nil) {
       return -1;
     }
-    const NSInteger element_count = (NSInteger)layer_count * (NSInteger)input_dim;
-    for (NSInteger element_index = 0; element_index < element_count; element_index++) {
-      input_array[element_index] = @(head_inputs[element_index]);
-    }
+    memcpy(input_array.dataPointer, head_inputs, (size_t)input_channels * sizeof(float));
     NSString *input_name = handle->model.modelDescription.inputDescriptionsByName.allKeys.firstObject;
     NSString *output_name = handle->model.modelDescription.outputDescriptionsByName.allKeys.firstObject;
     if (input_name == nil || output_name == nil) {
@@ -124,12 +122,10 @@ int astronomical_predictor_ane_predict(AstronomicalPredictorAne *handle,
       return -1;
     }
     const NSInteger logit_count = (NSInteger)layer_count * (NSInteger)expert_count;
-    if (logits.count < logit_count) {
+    if (logits.count < logit_count || logits.dataPointer == NULL) {
       return -1;
     }
-    for (NSInteger logit_index = 0; logit_index < logit_count; logit_index++) {
-      logits_out[logit_index] = logits[logit_index].floatValue;
-    }
+    memcpy(logits_out, logits.dataPointer, (size_t)logit_count * sizeof(float));
     return 0;
   }
 }

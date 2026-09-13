@@ -3,9 +3,12 @@
 //! Weights and compiled programs stay off the MLX budget. Load or predict
 //! failures return `None` so decode keeps the CPU predictor.
 
-use std::ffi::{CString, c_char, c_float, c_int, c_uint};
-use std::path::Path;
+use std::ffi::{CStr, CString, c_char, c_float, c_int, c_uint};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::ptr::NonNull;
+
+use super::predictor_ane_export::{PredictorAneConvolutionSnapshot, write_predictor_mlmodel};
 
 #[repr(C)]
 struct AstronomicalPredictorAne {
@@ -41,10 +44,30 @@ pub struct PredictorAneEngine {
 unsafe impl Send for PredictorAneEngine {}
 
 impl PredictorAneEngine {
-    /// Loads a `.mlpackage` or compiled model. `None` on any failure.
+    /// Writes a NeuralNetwork snapshot and loads it with CPU_AND_NE.
     #[must_use]
-    pub fn try_load(model_path: &Path) -> Option<Self> {
-        let model_path = CString::new(model_path.to_string_lossy().as_ref()).ok()?;
+    pub fn try_from_convolution_snapshot(
+        snapshot: &PredictorAneConvolutionSnapshot,
+    ) -> Option<Self> {
+        let process_id = std::process::id();
+        let mlmodel_path = std::env::temp_dir().join(format!(
+            "astronomical-predictor-{}-{}x{}.mlmodel",
+            process_id, snapshot.layer_count, snapshot.expert_count
+        ));
+        write_predictor_mlmodel(snapshot, &mlmodel_path).ok()?;
+        Self::try_load(&mlmodel_path).ok()
+    }
+
+    /// Loads a `.mlmodel` (compiled first) or a `.mlmodelc` bundle.
+    pub fn try_load(model_path: &Path) -> Result<Self, String> {
+        let compiled_path =
+            if model_path.extension().and_then(|ext| ext.to_str()) == Some("mlmodel") {
+                compile_mlmodel(model_path)?
+            } else {
+                model_path.to_path_buf()
+            };
+        let model_path = CString::new(compiled_path.to_string_lossy().as_ref())
+            .map_err(|_| "predictor Core ML path is not a C string".to_owned())?;
         let mut error_message = [0_i8; 256];
         let handle = unsafe {
             astronomical_predictor_ane_load(
@@ -53,11 +76,16 @@ impl PredictorAneEngine {
                 error_message.len() as c_uint,
             )
         };
-        let handle = NonNull::new(handle)?;
+        let Some(handle) = NonNull::new(handle) else {
+            let message = unsafe { CStr::from_ptr(error_message.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            return Err(message);
+        };
         let convolutions_on_neural_engine = unsafe {
             astronomical_predictor_ane_convolutions_on_neural_engine(handle.as_ptr()) != 0
         };
-        Some(Self {
+        Ok(Self {
             handle,
             convolutions_on_neural_engine,
         })
@@ -103,4 +131,29 @@ impl Drop for PredictorAneEngine {
     fn drop(&mut self) {
         unsafe { astronomical_predictor_ane_free(self.handle.as_ptr()) }
     }
+}
+
+fn compile_mlmodel(mlmodel_path: &Path) -> Result<PathBuf, String> {
+    let parent_directory = mlmodel_path
+        .parent()
+        .ok_or_else(|| "predictor mlmodel path has no parent".to_owned())?;
+    let compiled_path = parent_directory.join(format!(
+        "{}.mlmodelc",
+        mlmodel_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .ok_or_else(|| "predictor mlmodel stem is missing".to_owned())?
+    ));
+    let compile_status = Command::new("xcrun")
+        .args(["coremlcompiler", "compile"])
+        .arg(mlmodel_path)
+        .arg(parent_directory)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|error| format!("coremlcompiler failed to start: {error}"))?;
+    if !compile_status.success() || !compiled_path.exists() {
+        return Err("coremlcompiler did not produce a compiled predictor".to_owned());
+    }
+    Ok(compiled_path)
 }

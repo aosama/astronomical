@@ -133,6 +133,12 @@ impl ExpertRoutePredictorOwner {
                 }
             })
             .ok()?;
+        #[cfg(target_os = "macos")]
+        let ane_engine = predictor.lock().ok().and_then(|guard| {
+            astronomical_runtime_integration::PredictorAneEngine::try_from_convolution_snapshot(
+                &guard.convolution_snapshot(),
+            )
+        });
         Some(Self {
             observation_sender: Some(observation_sender),
             trainer_thread: Some(trainer_thread),
@@ -145,13 +151,7 @@ impl ExpertRoutePredictorOwner {
             last_cpu_predict_nanoseconds: AtomicU64::new(0),
             last_ane_predict_nanoseconds: AtomicU64::new(0),
             #[cfg(target_os = "macos")]
-            ane_engine: std::env::var_os("ASTRONOMICAL_EXPERT_ROUTE_PREDICTOR_COREML").and_then(
-                |model_path| {
-                    astronomical_runtime_integration::PredictorAneEngine::try_load(
-                        std::path::Path::new(&model_path),
-                    )
-                },
-            ),
+            ane_engine,
         })
     }
 
@@ -218,20 +218,13 @@ impl ExpertRoutePredictorOwner {
         previous_token_route: Option<&[Option<Vec<u16>>]>,
         top_k: usize,
     ) -> Option<Vec<Vec<usize>>> {
-        let (cpu_logits, packed_head_inputs, layer_count, input_dim, expert_count) = {
+        let (packed_head_inputs, layer_count, input_dim, expert_count) = {
             let predictor = match self.predictor.try_lock() {
                 Ok(predictor) => predictor,
                 Err(TryLockError::WouldBlock | TryLockError::Poisoned(_)) => return None,
             };
-            let cpu_started_at = Instant::now();
-            let cpu_logits = predictor.forward_logits(token_id, previous_token_route);
-            self.last_cpu_predict_nanoseconds.store(
-                u64::try_from(cpu_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
-                Ordering::Relaxed,
-            );
             let config = predictor.config();
             (
-                cpu_logits,
                 predictor.packed_head_inputs(token_id, previous_token_route),
                 config.layer_count,
                 config.head_input_dim(),
@@ -256,6 +249,19 @@ impl ExpertRoutePredictorOwner {
                 ));
             }
         }
+        let cpu_logits = {
+            let predictor = match self.predictor.try_lock() {
+                Ok(predictor) => predictor,
+                Err(TryLockError::WouldBlock | TryLockError::Poisoned(_)) => return None,
+            };
+            let cpu_started_at = Instant::now();
+            let cpu_logits = predictor.forward_logits(token_id, previous_token_route);
+            self.last_cpu_predict_nanoseconds.store(
+                u64::try_from(cpu_started_at.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                Ordering::Relaxed,
+            );
+            cpu_logits
+        };
         let _ = (packed_head_inputs, layer_count, input_dim, expert_count);
         Some(
             cpu_logits
