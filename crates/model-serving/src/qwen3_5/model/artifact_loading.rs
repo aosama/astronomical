@@ -62,6 +62,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let config = validated_artifact.config().clone();
+        let config_layer_count = config.layer_count();
         let vision_config = validated_artifact.vision_config().cloned();
         let has_separate_vision_sidecar =
             should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
@@ -457,6 +458,14 @@ impl Qwen3_5Model {
                 crate::qwen3_5_moe::model::route_observation::RouteObservationCollector::new(),
             ),
             expert_route_predictor: RefCell::new(None),
+            speculative_page_warmer: RefCell::new(None),
+            speculative_route_predictions_by_layer: RefCell::new(vec![
+                None;
+                usize::try_from(
+                    config_layer_count
+                )
+                .unwrap_or(0)
+            ]),
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),

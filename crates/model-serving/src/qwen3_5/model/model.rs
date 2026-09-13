@@ -77,6 +77,15 @@ pub struct Qwen3_5Model {
     /// first attributed decode token, so disabled attribution allocates nothing.
     pub(crate) expert_route_predictor:
         RefCell<Option<crate::qwen3_5_moe::expert_paging::predictor::ExpertRoutePredictorOwner>>,
+    /// Background file-cache warmer for cross-layer speculative routes (#593).
+    /// `None` until the first paged decode token spawns it.
+    pub(crate) speculative_page_warmer: RefCell<
+        Option<crate::qwen3_5_moe::expert_paging::speculative_page_warmer::SpeculativePageWarmer>,
+    >,
+    /// Per-layer speculative predictions dispatched this token, indexed by the
+    /// target layer. The target layer's route materialization scores the true
+    /// route against its entry and clears it.
+    pub(crate) speculative_route_predictions_by_layer: RefCell<Vec<Option<Vec<usize>>>>,
 }
 
 impl Qwen3_5Model {

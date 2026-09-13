@@ -15,7 +15,11 @@ pub mod predictor;
 pub mod quantized_expert_layer_plan;
 #[cfg(feature = "direct-mlx")]
 mod retained_expert_cache;
+// The warmer serves the decode forward path, which exists only against the
+// runtime integration.
 pub mod route_observation;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod speculative_page_warmer;
 
 #[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};

@@ -41,6 +41,7 @@ pub(crate) mod route_observation;
 mod routing;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
+mod speculative_gate;
 
 #[cfg(feature = "direct-mlx")]
 pub use cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;

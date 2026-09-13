@@ -112,6 +112,17 @@ impl Qwen3_5ExpertPager {
         self.streaming_expert_pack_sources.is_some()
     }
 
+    /// Per-expert pack file paths for one layer, when the layer streams from
+    /// converted packs. Speculative warming plans reads against the same
+    /// sources the real page load uses.
+    pub(crate) fn streaming_expert_file_paths(&self, layer_index: usize) -> Option<&[PathBuf]> {
+        let streaming_sources = self.streaming_expert_pack_sources.as_ref()?;
+        if layer_index >= streaming_sources.decoder_layer_count() {
+            return None;
+        }
+        Some(streaming_sources.expert_file_paths(layer_index))
+    }
+
     pub(crate) fn complete_expert_payload_byte_count(&self) -> Result<u64, ExpertPagingError> {
         self.layer_plans
             .iter()

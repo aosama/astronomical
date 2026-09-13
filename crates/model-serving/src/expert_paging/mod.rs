@@ -8,7 +8,7 @@ pub mod quantized_expert_validation;
 mod retained_expert_page_cache;
 pub mod safetensors_header;
 mod source_manifests;
-mod streaming_expert_pack_pages;
+pub(crate) mod streaming_expert_pack_pages;
 #[cfg(feature = "direct-mlx")]
 mod streaming_expert_pack_plans;
 pub mod streaming_expert_packs;

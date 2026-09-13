@@ -96,6 +96,16 @@ impl Qwen3_5Model {
                 .map_err(Qwen3_5ExecutionError::from)
             },
         )?;
+        // Issue #593: layer N's router input is a close approximation of
+        // layer N+1's, so the successor layer's own gate runs on it as extra
+        // lazy graph nodes. The array joins the route-copy evaluation below,
+        // so the prediction costs no additional synchronization wait.
+        let speculative_next_layer_logits = self.build_speculative_next_layer_router_logits(
+            hidden_states,
+            layer_index,
+            token_count,
+            paged_prefill_execution_mode,
+        )?;
 
         let should_use_loaded_model_mode = matches!(
             paged_prefill_execution_mode,
@@ -180,10 +190,16 @@ impl Qwen3_5Model {
             }
         }
 
-        let selected_expert_ids = if should_use_loaded_model_mode {
-            Some(self.copy_selected_expert_ids(&selected_indices)?)
+        let (selected_expert_ids, speculative_candidates) = if should_use_loaded_model_mode {
+            let (selected_expert_ids, speculative_candidates) = self
+                .copy_selected_expert_ids_with_speculative_route(
+                    &selected_indices,
+                    layer_index + 1,
+                    speculative_next_layer_logits.as_ref(),
+                )?;
+            (Some(selected_expert_ids), speculative_candidates)
         } else {
-            None
+            (None, None)
         };
         let sorted_unique_expert_ids = selected_expert_ids.as_ref().map(|selected_expert_ids| {
             let mut routed_expert_ids = selected_expert_ids.clone();
@@ -191,6 +207,22 @@ impl Qwen3_5Model {
             routed_expert_ids.dedup();
             routed_expert_ids
         });
+        if let Some(routed_expert_ids) = sorted_unique_expert_ids.as_ref() {
+            // Score this layer's prediction — made by the previous layer's
+            // speculative gate — against the true route, then clear the slot.
+            self.record_speculative_route_outcome(
+                layer_index,
+                routed_expert_ids,
+                performance_attribution,
+            );
+        }
+        if let Some(speculative_candidates) = speculative_candidates.as_ref() {
+            self.dispatch_speculative_page_warming(
+                speculative_candidates,
+                expert_pager,
+                performance_attribution,
+            );
+        }
         if should_use_loaded_model_mode
             && let Some(selected_expert_ids) = selected_expert_ids.as_ref()
             && let Some(routed_expert_ids) = sorted_unique_expert_ids.as_ref()

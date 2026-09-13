@@ -168,6 +168,20 @@ pub enum PerformanceCounter {
     PredictorPrefetchIssueCount,
     /// Payload bytes of predictor-driven leftover prefetch (#540).
     PredictorPrefetchByteCount,
+    /// Candidate experts the cross-layer speculative gate dispatched for warming (#593).
+    ExpertRouteSpeculativeCandidateCount,
+    /// Candidates skipped because the expert was already warm (#593).
+    ExpertRouteSpeculativeWarmSkipCount,
+    /// Payload bytes queued for background speculative warming (#593).
+    ExpertRouteSpeculativeWarmedByteCount,
+    /// Background warming requests dropped because the queue was full (#593).
+    ExpertRouteSpeculativeWarmerDropCount,
+    /// Background warming requests fully read since the last snapshot (#593).
+    ExpertRouteSpeculativeWarmerCompletedCount,
+    /// True routed experts covered by the layer's speculative prediction (#593).
+    ExpertRouteSpeculativeHitCount,
+    /// True routed experts scored against the speculative prediction (#593).
+    ExpertRouteSpeculativeEvaluatedExpertCount,
     Qwen4ExpIndexerSelectedKeyCount,
 }
 
@@ -296,6 +310,13 @@ impl PerformanceCounter {
         Self::ExpertRoutePredictorCpuPredictNanoseconds,
         Self::PredictorPrefetchIssueCount,
         Self::PredictorPrefetchByteCount,
+        Self::ExpertRouteSpeculativeCandidateCount,
+        Self::ExpertRouteSpeculativeWarmSkipCount,
+        Self::ExpertRouteSpeculativeWarmedByteCount,
+        Self::ExpertRouteSpeculativeWarmerDropCount,
+        Self::ExpertRouteSpeculativeWarmerCompletedCount,
+        Self::ExpertRouteSpeculativeHitCount,
+        Self::ExpertRouteSpeculativeEvaluatedExpertCount,
         Self::Qwen4ExpIndexerSelectedKeyCount,
     ];
 
@@ -538,6 +559,23 @@ impl PerformanceCounter {
                 "expert_route_predictor_cpu_predict_nanoseconds"
             }
             Self::PredictorPrefetchIssueCount => "predictor_prefetch_issue_count",
+            Self::ExpertRouteSpeculativeCandidateCount => {
+                "expert_route_speculative_candidate_count"
+            }
+            Self::ExpertRouteSpeculativeWarmSkipCount => "expert_route_speculative_warm_skip_count",
+            Self::ExpertRouteSpeculativeWarmedByteCount => {
+                "expert_route_speculative_warmed_byte_count"
+            }
+            Self::ExpertRouteSpeculativeWarmerDropCount => {
+                "expert_route_speculative_warmer_drop_count"
+            }
+            Self::ExpertRouteSpeculativeWarmerCompletedCount => {
+                "expert_route_speculative_warmer_completed_count"
+            }
+            Self::ExpertRouteSpeculativeHitCount => "expert_route_speculative_hit_count",
+            Self::ExpertRouteSpeculativeEvaluatedExpertCount => {
+                "expert_route_speculative_evaluated_expert_count"
+            }
             Self::Qwen4ExpIndexerSelectedKeyCount => "qwen4_exp_indexer_selected_key_count",
             Self::PredictorPrefetchByteCount => "predictor_prefetch_byte_count",
             Self::PredictorRetentionHintRequestedCount => {

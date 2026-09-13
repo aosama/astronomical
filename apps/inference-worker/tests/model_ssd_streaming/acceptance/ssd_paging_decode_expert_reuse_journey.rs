@@ -21,22 +21,24 @@
 
 use std::{fs, path::Path};
 
+use super::ssd_paging_decode_expert_reuse_journey::observation::{
+    consume_completed_stream, observe_ssd_paging_decode_expert_reuse,
+};
 use super::ssd_paging_decode_expert_reuse_journey::support::{
     assert_predictor_status_reconciles, decode_streamed_layer_indices,
     generation_attribution_counter, generation_attribution_report_count,
-    generation_expert_source_read_bytes, log_status_progress, preserve_memory_utilization_evidence,
-    record_expert_payload_increase,
+    generation_expert_source_read_bytes, preserve_memory_utilization_evidence,
 };
 
+mod observation;
 mod support;
 
 use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
-use futures_util::StreamExt;
 use serde_json::{Value, json};
-use tokio::time::{Duration, Instant, sleep, timeout};
+use tokio::time::{Duration, timeout};
 
 use crate::support::serving_rest::{
-    JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
+    JOURNEY_TIMEOUT, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 
 fn model_id() -> &'static str {
@@ -260,6 +262,14 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         count("expert_route_predictor_cpu_predict_nanoseconds");
     let predictor_prefetch_issue_count = count("predictor_prefetch_issue_count");
     let predictor_prefetch_byte_count = count("predictor_prefetch_byte_count");
+    let speculative_candidate_count = count("expert_route_speculative_candidate_count");
+    let speculative_hit_count = count("expert_route_speculative_hit_count");
+    let speculative_evaluated_expert_count =
+        count("expert_route_speculative_evaluated_expert_count");
+    let speculative_warmed_byte_count = count("expert_route_speculative_warmed_byte_count");
+    let speculative_warmer_drop_count = count("expert_route_speculative_warmer_drop_count");
+    let speculative_warmer_completed_count =
+        count("expert_route_speculative_warmer_completed_count");
     assert_predictor_status_reconciles(
         &memory_evidence.final_status,
         expert_route_predictor_top_k_hit_count,
@@ -412,6 +422,12 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          predictor_cpu_predict_ns={expert_route_predictor_cpu_predict_nanoseconds} \
          predictor_prefetch_issues={predictor_prefetch_issue_count} \
          predictor_prefetch_bytes={predictor_prefetch_byte_count} \
+         speculative_candidates={speculative_candidate_count} \
+         speculative_hits={speculative_hit_count} \
+         speculative_evaluated={speculative_evaluated_expert_count} \
+         speculative_warmed_bytes={speculative_warmed_byte_count} \
+         speculative_warmer_drops={speculative_warmer_drop_count} \
+         speculative_warmer_completed={speculative_warmer_completed_count} \
          mem_ceiling_gb={:.2} \
          mem_active_gb={:.2} \
          mem_unused_gb={:.2} \
@@ -488,79 +504,6 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
             ),
         ],
     );
-}
-
-/// Writes the utilization decomposition and attribution counters into evidence
-/// that survives the run (issue #510), so runs can be compared later instead of
-/// the numbers living only in this test's stdout.
-struct ProgressiveExpertMemoryEvidence {
-    retained_expert_payload_bytes: Vec<u64>,
-    generation_expert_payload_bytes: Vec<u64>,
-    final_status: Value,
-}
-
-async fn observe_ssd_paging_decode_expert_reuse(
-    server_address: std::net::SocketAddr,
-) -> ProgressiveExpertMemoryEvidence {
-    let deadline = Instant::now() + JOURNEY_TIMEOUT;
-    let mut observed_prompt_processing = false;
-    let mut retained_expert_payload_bytes = Vec::new();
-    let mut generation_expert_payload_bytes = Vec::new();
-    let mut last_status_log_at = Instant::now() - STATUS_LOG_INTERVAL;
-    loop {
-        let status_document = get_json_endpoint(server_address, "/v1/status").await;
-        if last_status_log_at.elapsed() >= STATUS_LOG_INTERVAL {
-            log_status_progress(&status_document);
-            last_status_log_at = Instant::now();
-        }
-        if status_document["activity"] == "prompt_processing" {
-            observed_prompt_processing = true;
-            record_expert_payload_increase(&status_document, &mut retained_expert_payload_bytes);
-        }
-        if observed_prompt_processing && status_document["activity"] == "generating" {
-            record_expert_payload_increase(&status_document, &mut generation_expert_payload_bytes);
-        }
-        let snapshot_source = status_document["mlx_memory_snapshot"]["source"].as_str();
-        if observed_prompt_processing
-            && status_document["activity"] == "idle"
-            && matches!(snapshot_source, Some("finalized" | "idle_poll"))
-        {
-            return ProgressiveExpertMemoryEvidence {
-                retained_expert_payload_bytes,
-                generation_expert_payload_bytes,
-                final_status: status_document,
-            };
-        }
-        assert!(Instant::now() < deadline);
-        sleep(Duration::from_millis(100)).await;
-    }
-}
-
-struct CompletedStream {
-    model_text: String,
-    finish_reason: Option<String>,
-}
-
-async fn consume_completed_stream(
-    mut streamed_completion: StreamResponse<Value>,
-) -> CompletedStream {
-    let mut streamed_model_text = String::new();
-    let mut finish_reason = None;
-    while let Some(stream_item) = streamed_completion.next().await {
-        let stream_chunk = stream_item.expect("the public REST stream should remain healthy");
-        for choice in stream_chunk["choices"].as_array().into_iter().flatten() {
-            if let Some(content_fragment) = choice["delta"]["content"].as_str() {
-                streamed_model_text.push_str(content_fragment);
-            }
-            if let Some(reason) = choice["finish_reason"].as_str() {
-                finish_reason = Some(reason.to_owned());
-            }
-        }
-    }
-    CompletedStream {
-        model_text: streamed_model_text.trim().to_owned(),
-        finish_reason,
-    }
 }
 
 fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) {
