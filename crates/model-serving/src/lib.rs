@@ -381,6 +381,9 @@ pub use qwen4_exp::configuration::{
     Qwen4ExpLinearAttentionConfig, Qwen4ExpNgramConfig, Qwen4ExpQuantizationMode,
     Qwen4ExpQuantizationProfile, Qwen4ExpSparseAttentionConfig,
 };
+pub use qwen4_exp::decoder::{
+    Qwen4ExpDecoderLayerCacheDtypes, Qwen4ExpStateGeometry, qwen4_exp_decoder_cache_layout,
+};
 pub use qwen4_exp::hyper_connection::{
     GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
     average_mix, gated_combine, gated_mix, grouped_rms_norm,
