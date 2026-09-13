@@ -51,7 +51,7 @@ pub(super) fn embed_token_ids(
         &final_states,
         configuration,
     )?;
-    let pooled = mean_pool(runtime, configuration, &normalized_states, token_ids)?;
+    let pooled = mean_pool(runtime, &normalized_states, token_ids)?;
     let normalized = l2_normalize(runtime, &pooled)?;
     let width_limited = match requested_dimensions {
         Some(requested_width) if requested_width < configuration.hidden_size => {
@@ -307,16 +307,19 @@ fn encode_mlp(
         configuration,
     )?;
     let intermediate_width = fused_wi.shape().last().copied().unwrap_or(0) / 2;
-    let input_states = slice_tail(runtime, &fused_wi, 0, intermediate_width)?;
+    // HuggingFace ModernBERT applies the activation to the FIRST Wi chunk and
+    // multiplies it by the SECOND chunk (act(input) * gate); GELU is not
+    // symmetric, so the chunk order changes every MLP output.
+    let activated_input = slice_tail(runtime, &fused_wi, 0, intermediate_width)?;
     let gate_states = slice_tail(
         runtime,
         &fused_wi,
         intermediate_width,
         intermediate_width * 2,
     )?;
-    let activated_gate = runtime.gelu(&gate_states).map_err(runtime_failure)?;
+    let activated = runtime.gelu(&activated_input).map_err(runtime_failure)?;
     let gated_input = runtime
-        .multiply(&activated_gate, &input_states)
+        .multiply(&activated, &gate_states)
         .map_err(runtime_failure)?;
     quantized_matmul(
         runtime,
@@ -407,41 +410,26 @@ fn layer_norm(
 
 fn mean_pool(
     runtime: &MlxRuntime,
-    configuration: &ModernBertConfiguration,
     final_states: &MlxArray,
     token_ids: &[u32],
 ) -> Result<MlxArray, EmbeddingsFailureReason> {
-    // CLS/SEP/PAD stay in the encoder so attention can use them, but averaging
-    // them into the returned vector collapsed short-text discrimination on GPU
-    // (Romeo lines vs finance). Pool only content tokens.
-    let content_mask: Vec<f32> = token_ids
-        .iter()
-        .map(|token_id| {
-            if configuration.is_excluded_from_pooled_mean(*token_id) {
-                0.0
-            } else {
-                1.0
-            }
-        })
-        .collect();
-    let content_token_count: f32 = content_mask.iter().sum();
-    if content_token_count < 1.0 {
+    // The upstream pipeline mean-pools over the full attention mask, which
+    // includes the declared [CLS]/[SEP] specials. Reproducing the published
+    // reference cosines requires the same pooling population; measured against
+    // the upstream worked example, excluding the specials from the mean pushed
+    // the unrelated pair's cosine higher and inverted the ordering further.
+    let token_count = token_ids.len();
+    if token_count == 0 {
         return Err(EmbeddingsFailureReason::InvalidRequest {
             reason: "embedding input encoded to zero content tokens".to_owned(),
         });
     }
-    let sequence_length_i32 = i32::try_from(token_ids.len()).unwrap_or(i32::MAX);
-    let mask_array = runtime
-        .array_from_f32(&content_mask, &[1, sequence_length_i32, 1])
-        .map_err(runtime_failure)?;
-    let masked_states = runtime
-        .multiply(final_states, &mask_array)
-        .map_err(runtime_failure)?;
+    let token_count_f32 = token_count as f32;
     let token_sum = runtime
-        .sum_axis(&masked_states, 1, true)
+        .sum_axis(final_states, 1, true)
         .map_err(runtime_failure)?;
     runtime
-        .multiply_scalar(&token_sum, 1.0 / content_token_count)
+        .multiply_scalar(&token_sum, 1.0 / token_count_f32)
         .map_err(runtime_failure)
 }
 

@@ -255,7 +255,10 @@ pub use model_generation_processor::{
     ModelGenerationProcessor, PreparedModelGeneration,
 };
 #[cfg(feature = "direct-mlx")]
-pub use modernbert::ModernBertEmbeddingEngine;
+pub use modernbert::{
+    EncodedEmbeddingInput, ModernBertConfiguration, ModernBertEmbeddingEngine,
+    encode_embedding_input,
+};
 pub use performance_attribution::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,

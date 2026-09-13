@@ -485,6 +485,7 @@ expected_journeys = {
     "accept-client-thinking-budget",
     "accept-structured-output",
     "accept-embeddings",
+    "accept-modernbert-reference-similarity",
     "accept-kernel-fallback-qwen",
     "accept-kernel-fallback-k2",
     "accept-speculative-prefill",

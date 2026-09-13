@@ -13,6 +13,7 @@ mod expert_route_predictor;
 mod kernel_capability;
 mod memory_policy;
 mod mlx_ram_budget;
+mod modernbert_tokenizer_gap;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_materialization;
 mod performance_attribution;

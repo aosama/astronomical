@@ -134,8 +134,12 @@ async fn run_embeddings_gpu_journey() {
         assert_embeddings_list(&similarity_response, 3, NATIVE_VECTOR_WIDTH, false);
     let play_similarity = cosine_similarity(&similarity_document, 0, 1);
     let finance_similarity = cosine_similarity(&similarity_document, 0, 2);
+    // The 0.05 margin predates the issue #596 fixes and was inflated by the
+    // reversed MLP gate order. The validated upstream-semantics reference
+    // measures +0.019 for these strings, so the durable contract is the
+    // ordering plus a margin above the measured noise floor.
     assert!(
-        play_similarity > finance_similarity + 0.05,
+        play_similarity > finance_similarity + 0.01,
         "both Romeo and Juliet lines must embed closer to each other than to an unrelated finance line: play={play_similarity} finance={finance_similarity}"
     );
     eprintln!(

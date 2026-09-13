@@ -12,4 +12,6 @@ mod forward;
 mod memory_utilization;
 mod tokenizer;
 
+pub use configuration::ModernBertConfiguration;
 pub use engine::ModernBertEmbeddingEngine;
+pub use tokenizer::{EncodedEmbeddingInput, encode_embedding_input};
