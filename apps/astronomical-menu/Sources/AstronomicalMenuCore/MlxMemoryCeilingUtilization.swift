@@ -80,8 +80,36 @@ struct MlxHeadroomSplit: Equatable {
       reservedModelCoreSlackByteCount: allocated[3],
       unexplainedHeadroomByteCount: allocated[4],
       remainderByteCount: availableByteCount.saturatingSubtracting(allocatedSum),
-      ownerOverrunByteCount: utilization.ownerOverrunBytes,
+      ownerOverrunByteCount: scaledOwnerOverrun(
+        rawOwnerOverrunBytes: utilization.ownerOverrunBytes,
+        rawOwnerWeightSum: weights.reduce(0, +),
+        availableByteCount: availableByteCount
+      ),
       enginePublishedTheSplit: true
+    )
+  }
+
+  /// Scales the owner overrun by the same proportion the named owners are
+  /// scaled onto the available-capacity width, so every legend row shares one
+  /// unit scale (issue #643). The raw engine value is a deficit — headroom
+  /// owners promised beyond what physically exists — and can exceed the whole
+  /// ceiling; passing it through raw next to scaled rows produced impossible
+  /// legend values. The scaled value stays within the available width because
+  /// the raw overrun can never exceed the owner weight sum it is scaled by.
+  /// It stays a legend-only row: when an overrun exists the owners' claims
+  /// already fill the painted width, and a deficit is not capacity to paint.
+  private static func scaledOwnerOverrun(
+    rawOwnerOverrunBytes: UInt64,
+    rawOwnerWeightSum: UInt64,
+    availableByteCount: UInt64
+  ) -> UInt64 {
+    guard rawOwnerWeightSum > 0 else { return 0 }
+    // Same expression form as allocateProportions so the overrun lands on
+    // exactly the unit scale the other legend rows use, not an approximation
+    // of it.
+    return UInt64(
+      (Double(rawOwnerOverrunBytes) / Double(rawOwnerWeightSum))
+        * Double(availableByteCount)
     )
   }
 
