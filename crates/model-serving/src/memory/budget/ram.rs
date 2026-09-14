@@ -56,61 +56,9 @@ const CONTEXT_TOKEN_BUCKET_WIDTH: u64 = 1_024;
 /// Extra safety margin applied on top of measured context-window need.
 const CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES: u64 = 64_000_000;
 
-/// Immutable inputs known once a model is loaded against one ceiling.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MlxRamBudgetModelGeometry {
-    /// Non-expert resident model payload (language core, optional vision/MTP).
-    pub model_core_payload_bytes: u64,
-    /// Bytes required if every sparse expert is fully resident.
-    pub complete_expert_payload_bytes: u64,
-    /// One complete sparse layer; reserved as the streaming workspace.
-    pub largest_complete_expert_layer_bytes: u64,
-    /// Largest exact top-K page used by one-token decode.
-    pub largest_routed_expert_page_bytes: u64,
-    /// Persistent decoder-state bytes added by one more prompt token.
-    pub sequence_state_bytes_per_token: u64,
-}
-
-/// One composed RAM split for a planned operation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MlxRamBudgetSnapshot {
-    /// Total MLX active-memory ceiling for this plan.
-    pub mlx_active_memory_ceiling_bytes: u64,
-    /// Non-expert model core already charged against the ceiling.
-    pub model_core_payload_bytes: u64,
-    /// Reserved bytes for context-window growth at the planned token count.
-    pub context_window_reserve_bytes: u64,
-    /// Reserved bytes for temporary activations / transient workspace.
-    pub activation_headroom_bytes: u64,
-    /// Reserved bytes for one complete-layer stream workspace.
-    pub complete_layer_stream_slot_bytes: u64,
-    /// Any additional fixed non-expert owners (draft model, publication workspace, …).
-    pub other_fixed_bytes: u64,
-    /// Leftover budget that may pin retained expert layers in MLX.
-    pub retained_expert_budget_bytes: u64,
-}
-
-/// Live measurement that refines context-window reserve and activation headroom.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MlxRamBudgetMeasurement {
-    /// Execution class whose activation high-water this sample may raise.
-    pub phase: MemoryPhase,
-    /// Context size used to choose a monotonic coarse learning bucket.
-    pub context_token_count: u64,
-    /// Measured request-owned persistent and transient bytes above model core.
-    pub measured_context_and_activation_bytes: u64,
-    /// Transient-only high-water independently learned by forward admission.
-    pub observed_activation_headroom_bytes: u64,
-    /// Explicit operation workspace already reserved by forward admission.
-    pub exact_temporary_workspace_bytes: u64,
-}
-
-/// Invalid configuration for the RAM budget owner.
-#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum MlxRamBudgetError {
-    #[error("MLX RAM budget requires a positive active-memory ceiling")]
-    InvalidCeiling,
-}
+use crate::memory::budget::ram_values::{
+    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
+};
 
 /// Single-source owner for MLX RAM policy across streaming and expert retention.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -123,8 +71,11 @@ pub struct MlxRamBudget {
     bootstrap_context_window_reserve_bytes: u64,
     /// High-water request workspace keyed by 1,024-token context buckets.
     measured_context_window_high_water_by_token_bucket: BTreeMap<u64, u64>,
-    /// Phase-specific activation evidence; these values can grow but never shrink.
-    prefill_activation_headroom_bytes: u64,
+    /// Phase-specific activation evidence. Decode keeps one scalar high-water;
+    /// prefill evidence is keyed by 1,024-token context buckets so one large
+    /// request's workspace does not size every later promise (issue #623
+    /// follow-up). Values can grow but never shrink.
+    prefill_activation_high_water_by_token_bucket: BTreeMap<u64, u64>,
     decode_activation_headroom_bytes: u64,
     /// Distinguishes an unobserved prefill phase from a valid zero-byte sample.
     has_prefill_activation_measurement: bool,
@@ -160,7 +111,7 @@ impl MlxRamBudget {
             model_geometry,
             bootstrap_context_window_reserve_bytes,
             measured_context_window_high_water_by_token_bucket: BTreeMap::new(),
-            prefill_activation_headroom_bytes: 0,
+            prefill_activation_high_water_by_token_bucket: BTreeMap::new(),
             decode_activation_headroom_bytes: 0,
             has_prefill_activation_measurement: false,
             has_decode_activation_measurement: false,
@@ -262,8 +213,16 @@ impl MlxRamBudget {
         measured_or_bootstrap_reserve_bytes.max(projected_sequence_state_bytes)
     }
 
+    /// Activation headroom for one planned operation.
+    ///
+    /// Prefill resolves the learned evidence for the planned context (highest
+    /// at-or-below bucket, proportionally projected beyond the highest measured
+    /// bucket) so one large request's workspace does not size every later
+    /// promise (issue #623 follow-up). The static three-layer floor still bounds
+    /// every prefill promise. Decode evidence stays a scalar high-water: one-
+    /// token writes are activation-cheap and phase-independent.
     #[must_use]
-    pub fn activation_headroom_bytes(&self, phase: MemoryPhase) -> u64 {
+    pub fn activation_headroom_bytes(&self, phase: MemoryPhase, context_token_count: u64) -> u64 {
         match phase {
             MemoryPhase::Prefill => {
                 // One complete layer is enough to stream a single page. A
@@ -275,7 +234,7 @@ impl MlxRamBudget {
                     self.model_geometry
                         .largest_complete_expert_layer_bytes
                         .saturating_mul(3),
-                    self.prefill_activation_headroom_bytes,
+                    self.learned_prefill_activation_headroom_bytes(context_token_count),
                 )
             }
             // GenerationPreparation budgets like decode (see the mapping
@@ -286,7 +245,7 @@ impl MlxRamBudget {
                 } else if self.has_prefill_activation_measurement {
                     required_complete_residency_activation_headroom_bytes(
                         self.model_geometry.largest_complete_expert_layer_bytes,
-                        self.prefill_activation_headroom_bytes,
+                        self.prefill_activation_global_high_water_bytes(),
                     )
                 } else {
                     // Decode follows prefill in the user journey. Until one
@@ -301,6 +260,61 @@ impl MlxRamBudget {
             }
             MemoryPhase::Idle => 0,
         }
+    }
+
+    /// Learned prefill activation evidence resolved for the planned context.
+    ///
+    /// Within the measured span the highest at-or-bucket observation wins
+    /// (activation grows with the attended context, so a smaller observation
+    /// must not override a larger known lower bucket). Beyond the highest
+    /// measured token count the highest evidence scales proportionally by
+    /// token count, mirroring the context-window reserve's projection rule.
+    fn learned_prefill_activation_headroom_bytes(&self, context_token_count: u64) -> u64 {
+        let Some(&highest_bucket_high_water_bytes) = self
+            .prefill_activation_high_water_by_token_bucket
+            .values()
+            .last()
+        else {
+            return 0;
+        };
+        let highest_measured_bucket = *self
+            .prefill_activation_high_water_by_token_bucket
+            .keys()
+            .next_back()
+            .expect("the map is nonempty above");
+        let highest_measured_token_count =
+            highest_measured_bucket.saturating_add(1) * CONTEXT_TOKEN_BUCKET_WIDTH;
+        if context_token_count > highest_measured_token_count {
+            // Proportional projection beyond measured evidence; the ceiling
+            // division keeps the projection conservative.
+            let scaled_high_water_bytes = scale_bytes_proportionally_to_token_count(
+                highest_bucket_high_water_bytes,
+                highest_measured_token_count,
+                context_token_count,
+            );
+            let at_or_below_high_water_bytes = self
+                .prefill_activation_high_water_by_token_bucket
+                .range(..=context_token_bucket(context_token_count))
+                .map(|(_, measured_bytes)| *measured_bytes)
+                .max()
+                .unwrap_or(0);
+            return at_or_below_high_water_bytes.max(scaled_high_water_bytes);
+        }
+        self.prefill_activation_high_water_by_token_bucket
+            .range(..=context_token_bucket(context_token_count))
+            .map(|(_, measured_bytes)| *measured_bytes)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// The largest prefill activation observation across every context bucket.
+    /// Protects the first decode before decode has its own evidence.
+    fn prefill_activation_global_high_water_bytes(&self) -> u64 {
+        self.prefill_activation_high_water_by_token_bucket
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
     }
 
     /// Records one live observation and never lowers prior high-water evidence.
@@ -331,9 +345,14 @@ impl MlxRamBudget {
         match measurement.phase {
             MemoryPhase::Prefill => {
                 self.has_prefill_activation_measurement = true;
-                self.prefill_activation_headroom_bytes = self
-                    .prefill_activation_headroom_bytes
-                    .max(measurement.observed_activation_headroom_bytes);
+                let token_bucket = context_token_bucket(measurement.context_token_count);
+                self.prefill_activation_high_water_by_token_bucket
+                    .entry(token_bucket)
+                    .and_modify(|existing_high_water_bytes| {
+                        *existing_high_water_bytes = (*existing_high_water_bytes)
+                            .max(measurement.observed_activation_headroom_bytes);
+                    })
+                    .or_insert(measurement.observed_activation_headroom_bytes);
             }
             // GenerationPreparation evidence belongs to the decode window: it
             // observes the same activation shape that generation will repeat
@@ -367,7 +386,7 @@ impl MlxRamBudget {
                 self.context_window_reserve_bytes(context_token_count)
             }
         };
-        let activation_headroom_bytes = self.activation_headroom_bytes(phase);
+        let activation_headroom_bytes = self.activation_headroom_bytes(phase, context_token_count);
         let complete_layer_stream_slot_bytes = match phase {
             MemoryPhase::Prefill => self.model_geometry.largest_complete_expert_layer_bytes,
             // GenerationPreparation budgets like decode (see phase.rs): token
@@ -445,6 +464,24 @@ impl MlxRamBudget {
 /// Shared coarse bucket keeps context-growth evidence comparable across memory policies.
 pub(crate) const fn context_token_bucket(context_token_count: u64) -> u64 {
     context_token_count / CONTEXT_TOKEN_BUCKET_WIDTH
+}
+
+/// Scales one learned byte quantity proportionally between token counts with
+/// ceiling division, so projections beyond measured evidence stay conservative.
+#[must_use]
+fn scale_bytes_proportionally_to_token_count(
+    learned_bytes: u64,
+    learned_token_count: u64,
+    target_token_count: u64,
+) -> u64 {
+    if learned_token_count == 0 || target_token_count == 0 {
+        return 0;
+    }
+    let learned_bytes_u128 = u128::from(learned_bytes);
+    let scaled_bytes =
+        (learned_bytes_u128 * u128::from(target_token_count) + u128::from(learned_token_count) - 1)
+            / u128::from(learned_token_count);
+    u64::try_from(scaled_bytes).unwrap_or(u64::MAX)
 }
 
 /// Separates request workspace from expert ownership acquired during a forward.
