@@ -27,7 +27,7 @@ fn should_accept_an_explicit_output_budget_larger_than_a_request_default_when_co
 }
 
 #[test]
-fn should_reject_prompt_plus_requested_output_context_overflow_without_truncation() {
+fn should_serve_requests_exceeding_the_configured_limit_when_the_artifact_context_fits() {
     let text_descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
     let baseline_processor =
         LagunaGenerationProcessor::new(SYNTHETIC_LAGUNA_MODEL_ID, text_descriptor.clone())
@@ -38,29 +38,49 @@ fn should_reject_prompt_plus_requested_output_context_overflow_without_truncatio
         .expect("the fixture prompt should fit its artifact context")
         .prompt_token_ids()
         .len();
-    let maximum_context_tokens = u32::try_from(prompt_token_count + 100)
+    let advertised_context_tokens = u32::try_from(prompt_token_count + 100)
         .expect("the synthetic fixture prompt should fit u32");
     let processor = LagunaGenerationProcessor::new_with_performance_attribution(
         SYNTHETIC_LAGUNA_MODEL_ID,
         text_descriptor,
-        maximum_context_tokens,
-        maximum_context_tokens - 1,
+        advertised_context_tokens,
+        advertised_context_tokens - 1,
         false,
     )
     .expect("the context-bounded processor should construct");
     let mut overflowing_command = baseline_command;
     overflowing_command.settings.max_output_tokens = 101;
 
-    let preparation_error = processor
+    let prepared = processor
         .prepare_chat(&overflowing_command)
-        .expect_err("the requested output must not be truncated to make total context fit");
+        .expect(
+            "a request past the configured limit must still be served because the artifact context fits",
+        );
+
+    assert_eq!(
+        prepared.prompt_token_ids().len(),
+        prompt_token_count,
+        "the prompt must be processed in full without truncation or clipping"
+    );
+}
+
+#[test]
+fn should_hard_reject_requests_exceeding_the_artifact_context_window() {
+    let text_descriptor = SyntheticLagunaTextArtifact::extra_small_inline().normalize();
+    let processor = LagunaGenerationProcessor::new(SYNTHETIC_LAGUNA_MODEL_ID, text_descriptor)
+        .expect("the baseline processor should construct");
+    let mut oversized_command = romeo_and_juliet_command(9_820, None);
+    oversized_command.settings.max_output_tokens = 32_000;
+
+    let preparation_error = processor.prepare_chat(&oversized_command).expect_err(
+        "a request past the model artifact context window must be hard-rejected without truncation",
+    );
 
     assert!(matches!(
         preparation_error,
         LagunaPreparationError::ContextLengthExceeded {
-            actual_context_tokens,
-            maximum_context_tokens: rejected_maximum_context_tokens,
-        } if actual_context_tokens == prompt_token_count + 101
-            && rejected_maximum_context_tokens == maximum_context_tokens
+            maximum_context_tokens: 32_768,
+            ..
+        }
     ));
 }

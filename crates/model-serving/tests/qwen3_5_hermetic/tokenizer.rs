@@ -82,12 +82,22 @@ fn should_reject_a_tokenizer_missing_a_required_special_token() {
 
 #[test]
 fn should_accept_an_opencode_context_above_the_retired_32k_input_limit() {
-    assert!(validate_context_token_count(40_665, 4_096, 262_144).is_ok());
+    assert!(validate_context_token_count(40_665, 4_096, 262_144, 262_144).is_ok());
 }
 
 #[test]
 fn should_reject_a_context_above_the_frozen_ornith_1_0_position_limit() {
-    assert!(validate_context_token_count(258_049, 4_096, 262_144).is_err());
+    assert!(validate_context_token_count(258_049, 4_096, 262_144, 262_144).is_err());
+}
+
+#[test]
+fn should_serve_a_context_above_the_configured_limit_when_the_artifact_window_fits() {
+    assert!(validate_context_token_count(150_500, 4_096, 262_144, 150_000).is_ok());
+}
+
+#[test]
+fn should_reject_a_context_above_the_artifact_window_even_below_no_configured_limit() {
+    assert!(validate_context_token_count(258_049, 4_096, 262_144, 150_000).is_err());
 }
 
 #[test]
