@@ -14,7 +14,7 @@
 
 - Keep full workspace verification and formatting verification only before committing and pushing when the user asks you to commit. This codebase is slow to format check and do a full workspace/test runs.
 
-- Before every requested commit run scripts/verify-before-commit.sh; never substitute cargo test --workspace --all-targets because it runs broad integration binaries serially.
+- Before every requested commit run scripts/verify-before-commit.sh; never substitute cargo test --workspace --all-targets because it runs broad integration binaries serially. Exceptions are for changes that you are confident does not relate to code or functionality, for example documentation or a version bump for our artifacts or a static site change or github CI build related and so on.
 
 - Run cargo fmt or similar commands only before committing, i.e. when the user asks you to commit then you do the cargo fmt
 
