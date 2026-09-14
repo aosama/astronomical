@@ -4,40 +4,38 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.38</title>
-            <pubDate>Sun, 13 Sep 2026 19:38:53 -0400</pubDate>
-            <sparkle:version>551</sparkle:version>
-            <sparkle:shortVersionString>0.2.38</sparkle:shortVersionString>
+            <title>0.2.39</title>
+            <pubDate>Mon, 14 Sep 2026 00:24:05 -0400</pubDate>
+            <sparkle:version>558</sparkle:version>
+            <sparkle:shortVersionString>0.2.39</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.38
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.39
 
-## Thinking budgets from OpenAI clients
+## Memory serving fixes
 
-Chat clients that declare a thinking level through the standard OpenAI `reasoning_effort` field now get exactly that behavior. `minimal`, `low`, `medium`, and `high` map to enforced thinking-token budgets, so agents and apps that send effort levels instead of numeric budgets no longer have their request silently ignored. Explicit numeric budget spellings still take precedence, unknown labels are rejected with a clear error, and `off` or `none` disables the budget.
+- Streaming under memory pressure keeps its activation promise per request shape. The forward transient reserve is resolved by the planned execution shape — exact context first, then token-proportional, then the global maximum — instead of a session-wide global maximum. Sparse MoE models under tight ceilings keep streaming from SSD instead of being silently promoted to resident mid-request.
+- The prefill activation promise is now scoped by planned context. Activation evidence is recorded per 1,024-token context bucket with proportional projection beyond measured contexts, so one large request no longer shrinks expert retention for every later request. Decode keeps its scalar high-water evidence and the first decode stays protected by the largest prefill observation.
 
-## Configurable SpecPrefill trailing window
+## Menu-bar app
 
-The draft-assisted prompt-processing trailing window — the number of recent prompt tokens the target model always processes densely regardless of importance ranking — is now settable per model through `acceleration.speculative_prefill.mandatory_trailing_token_count`. The default of 512 is unchanged, so existing configurations behave exactly as before, and legacy configurations that already carried a different value now migrate cleanly instead of being refused.
+- The menu-bar app shows a first-run welcome window once per versioned moment. It introduces the daemon, the model library, and the privacy posture to new users, and stays quiet on ordinary updates.
 
-## Crash fix in speculative prefill
+## Maintenance
 
-Fixed a deterministic crash that could stop a request when speculative prefill retained decode route arrays that were never evaluated. Affected forwards now evaluate with the attribution they build with, and finalization evaluates before copying, so a straggler costs one bounded wait instead of the process.
+- Memory budget, residency planning, and engine execution sources were split at cohesive module boundaries with no behavior change, keeping the source-size guard budget intact.
+- Dependency update: async-openai 0.42.0.
 
-## Lighter serving core
+## Compatibility
 
-The learned expert-route predictor serving surface is retired, removing dead serving weight. Route observation capture, previous-token prefetch, and hot-expert warming all remain in place.
-
-## Dependency refresh
-
-reqwest updated to 0.13.5, unifying its base64 usage with the rest of the workspace.
-
-Your models, prompt caches, and preferences carry over unchanged.
+- No REST API compatibility constraints apply.
+- Configuration, model library, and prompt cache state are preserved across the update.
+- Distributed as a signed and notarized DMG with a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.38/Astronomical-0.2.38-macOS-arm64.dmg" length="16285333" type="application/octet-stream" sparkle:edSignature="eQdU+9xauHRS1pOmv+ABVmivLlFVU+It/7yyeegRojE0BB1q4ghM4pz+qHiqSwjIseurRYMfxQ5vPjOfVRk4DA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.39/Astronomical-0.2.39-macOS-arm64.dmg" length="16314567" type="application/octet-stream" sparkle:edSignature="X+7zeElAxrCuneDRJSB2QEqaE4CWiy5xNWP0EMxtUPDYPjK/h/Hgv9Ee8o4h7tTe6jLaIifjSmHRWQm7pnd1CQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: ISpz0sFnjY1adamKejZBxhH44mYaHteucTvn2EhIwVXy0J0gyXZmKKOGaqehmFOF+0Tndta4AUY1ZaN+y48fBw==
-length: 3013
+edSignature: U4ihrmL0o0oGzbFBZ19VwWyNQdb5rY7pHvDMTTG0vimyAK/aPNP4dyn3vHjJik3bRqNJ8IGiDCUBIuxjr2IBBg==
+length: 2742
 -->
