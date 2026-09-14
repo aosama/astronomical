@@ -26,6 +26,7 @@ struct OrbitalTelemetryPopover: View {
   @Binding var selectedUpdateChannel: ApplicationUpdateChannel
   let updatesSupported: Bool
   let revealConfiguration: () -> Void
+  let showWelcome: () -> Void
   let quitApplication: () -> Void
 
   var body: some View {
@@ -176,6 +177,7 @@ struct OrbitalTelemetryPopover: View {
             }
             Divider()
           }
+          Button("Welcome…", action: showWelcome)
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)
         } label: {
