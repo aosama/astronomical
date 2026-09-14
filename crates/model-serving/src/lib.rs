@@ -209,7 +209,8 @@ pub use laguna::{
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthProjection, AllocationAdmissionDecision, AllocationAdmissionObservation,
+    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
+    AllocationAdmissionDecision, AllocationAdmissionObservation,
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, CompleteResidencyDecision,
     CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements, ContextAdmissionRequirements,
     CurrentExpertLayerResidency, DecodeExpertCache, ExpertLayerGeometry,
