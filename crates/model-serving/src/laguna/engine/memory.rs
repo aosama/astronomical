@@ -339,10 +339,14 @@ impl LagunaInferenceExecution {
 }
 
 /// Composes Laguna geometry through the shared model-core, context, activation, and page budget.
+///
+/// Laguna forwards one operation per call and its callers pass the operation's
+/// own token count, so the operation and context scopes coincide here (issue
+/// #644 keeps them distinct in the signature).
 pub(super) fn laguna_ram_budget_snapshot(
     mlx_ram_budget: &MlxRamBudget,
     phase: MemoryPhase,
     context_token_count: u64,
 ) -> MlxRamBudgetSnapshot {
-    mlx_ram_budget.plan(phase, context_token_count, 0)
+    mlx_ram_budget.plan(phase, context_token_count, context_token_count, 0)
 }

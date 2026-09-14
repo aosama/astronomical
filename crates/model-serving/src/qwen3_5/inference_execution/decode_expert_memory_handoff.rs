@@ -87,6 +87,7 @@ impl Qwen3_5EngineState {
                     model.refresh_phase_aware_expert_residency_plan(
                         MemoryPhase::GenerationPreparation,
                         context_token_count,
+                        1,
                         performance_attribution,
                     )
                 },

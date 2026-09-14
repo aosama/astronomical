@@ -285,12 +285,26 @@ fn republish_prefill_residency_plan_after_demotion(
 ) -> Result<(), InferenceEngineError> {
     let context_token_count =
         u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+    // The activation reserve is operation-scoped (issue #644): the retried
+    // chunk's workspace bound, not the whole prompt's imagined workspace.
+    let operation_token_count = u64::try_from(
+        engine_state
+            .prompt_processing_chunk_sizer
+            .maximum_prompt_processing_chunk_size_tokens()
+            .min(
+                active_request
+                    .maximum_successful_prefill_chunk_tokens()
+                    .unwrap_or(usize::MAX),
+            ),
+    )
+    .unwrap_or(u64::MAX);
     engine_state
         .model
         .as_ref()
         .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
         .republish_prefill_residency_plan_after_demotion(
             context_token_count,
+            operation_token_count,
             &mut active_request.performance_attribution,
         )
         .map_err(InferenceEngineError::from)

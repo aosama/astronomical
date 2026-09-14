@@ -186,8 +186,11 @@ fn record_composed_ram_budget_measurement(
     // Publish the composed expert budget so retained-layer ownership stays inside
     // the single-source split. Execution policy—not this numeric owner—decides
     // whether a mandatory page remains operation-local or transfers to retention.
+    // The forward token count is this chunk's own operation size, so the
+    // activation reserve resolves at the operation scope (issue #644).
     let retained_expert_budget = model.mlx_ram_budget().plan(
         mlx_ram_budget_phase,
+        u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
         u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
         0,
     );

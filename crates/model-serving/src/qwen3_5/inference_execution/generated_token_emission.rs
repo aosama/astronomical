@@ -98,6 +98,7 @@ impl Qwen3_5EngineState {
                                     usize::from(active_request.generated_token_count),
                                 ))
                                 .unwrap_or(u64::MAX),
+                                1,
                                 mlx_active_memory_bytes,
                                 active_memory_breakdown,
                             ),
