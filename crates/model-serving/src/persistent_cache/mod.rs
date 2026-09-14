@@ -86,6 +86,8 @@ pub use model_contract_error::PersistentPromptCacheModelContractError;
 pub use prefill_boundary::{
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    sparse_anchored_dense_boundary_clamped_prefill_chunk_end,
+    sparse_anchored_dense_boundary_completed_prefill_chunk_tokens,
 };
 pub use prefix_lookup::{
     PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,

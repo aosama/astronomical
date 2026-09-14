@@ -147,3 +147,84 @@ fn synthetic_model_contract(
     )
     .expect("the synthetic storage contract should resolve")
 }
+
+#[test]
+fn should_chain_sparse_anchored_roots_under_the_resolved_storage_contract() {
+    let persistent_prompt_cache_model_contract = synthetic_model_contract("model", "revision", 8);
+    let anchored_block_tokens = vec![30_u32; 8];
+    let sparse_target_state_identity = [7_u8; 32];
+    let anchored_root_block_key =
+        PersistentPromptCacheBlockKey::for_sparse_anchored_root_block_with_causal_input(
+            &persistent_prompt_cache_model_contract,
+            &sparse_target_state_identity,
+            &anchored_block_tokens,
+            &PersistentPromptCacheBlockCausalInput::empty(),
+        )
+        .expect("the anchored root block should hash");
+    let anchored_child_block_key = anchored_root_block_key
+        .for_child_block(&[40_u32; 8])
+        .expect("the anchored child block should hash");
+
+    assert_eq!(anchored_root_block_key.block_index(), 0);
+    assert_eq!(anchored_child_block_key.block_index(), 1);
+    assert_ne!(
+        anchored_root_block_key.block_hash(),
+        anchored_child_block_key.block_hash()
+    );
+}
+
+#[test]
+fn should_isolate_sparse_anchored_roots_from_ordinary_roots_and_other_selections() {
+    let persistent_prompt_cache_model_contract = synthetic_model_contract("model", "revision", 8);
+    let anchored_block_tokens = vec![30_u32; 8];
+    let first_sparse_target_state_identity = [7_u8; 32];
+    let second_sparse_target_state_identity = [8_u8; 32];
+
+    let ordinary_root_block_key = PersistentPromptCacheBlockKey::for_root_block(
+        &persistent_prompt_cache_model_contract,
+        &anchored_block_tokens,
+    )
+    .expect("the ordinary root block should hash");
+    let first_anchored_root_block_key =
+        PersistentPromptCacheBlockKey::for_sparse_anchored_root_block_with_causal_input(
+            &persistent_prompt_cache_model_contract,
+            &first_sparse_target_state_identity,
+            &anchored_block_tokens,
+            &PersistentPromptCacheBlockCausalInput::empty(),
+        )
+        .expect("the first anchored root block should hash");
+    let second_anchored_root_block_key =
+        PersistentPromptCacheBlockKey::for_sparse_anchored_root_block_with_causal_input(
+            &persistent_prompt_cache_model_contract,
+            &second_sparse_target_state_identity,
+            &anchored_block_tokens,
+            &PersistentPromptCacheBlockCausalInput::empty(),
+        )
+        .expect("the second anchored root block should hash");
+
+    // The same tail tokens must produce three distinct identities: the ordinary chain,
+    // and one anchored chain per sparse selection that could have produced them.
+    assert_ne!(
+        ordinary_root_block_key.block_hash(),
+        first_anchored_root_block_key.block_hash()
+    );
+    assert_ne!(
+        first_anchored_root_block_key.block_hash(),
+        second_anchored_root_block_key.block_hash()
+    );
+}
+
+#[test]
+fn should_reject_sparse_anchored_tokens_above_the_contract_derived_block_size() {
+    let persistent_prompt_cache_model_contract = synthetic_model_contract("model", "revision", 4);
+
+    let oversized_block =
+        PersistentPromptCacheBlockKey::for_sparse_anchored_root_block_with_causal_input(
+            &persistent_prompt_cache_model_contract,
+            &[7_u8; 32],
+            &[1_u32; 5],
+            &PersistentPromptCacheBlockCausalInput::empty(),
+        );
+
+    assert!(oversized_block.is_err());
+}

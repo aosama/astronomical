@@ -139,6 +139,98 @@ impl RequestDecoderStateStack {
         materialize_restored_full_attention_tensors(self, runtime)
     }
 
+    /// Grows a restored full-attention destination to a longer final token count.
+    ///
+    /// A SpecPrefill sparse restore leaves a compact slab whose capacity equals the
+    /// selected row count, but the sparse-anchored dense tail that follows it must be
+    /// written at row offsets beyond that count (issue #659). Extending the slab once,
+    /// before any tail block is absorbed, keeps every tail block a single `slice_update`
+    /// into a destination that already has its final geometry.
+    pub fn grow_persistent_prompt_cache_kv_restore_destination(
+        &mut self,
+        runtime: &MlxRuntime,
+        final_restored_token_count: usize,
+    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
+        let final_restored_token_count_i32 =
+            i32::try_from(final_restored_token_count).map_err(|_| {
+                PersistentPromptCacheStateBridgeError::InvalidRestoredSequenceTokenCount {
+                    restored_token_count: final_restored_token_count,
+                }
+            })?;
+        for layer_index in 0..self.layer_count() {
+            match self.layer_mut(layer_index) {
+                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                    let Some((existing_keys, existing_values)) = attention.take_key_value_storage()
+                    else {
+                        return Err(PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                            layer_index,
+                            tensor_role: "keys",
+                        });
+                    };
+                    let existing_token_count = existing_keys.shape()[FULL_ATTENTION_TOKEN_AXIS];
+                    if existing_token_count >= final_restored_token_count_i32 {
+                        attention
+                            .restore_from_blocks(existing_keys, existing_values)
+                            .map_err(|source| {
+                                PersistentPromptCacheStateBridgeError::RestoreFullAttentionState {
+                                    layer_index,
+                                    source,
+                                }
+                            })?;
+                        continue;
+                    }
+                    let extended_keys = zeros_restore_destination(
+                        runtime,
+                        layer_index,
+                        "keys",
+                        &existing_keys,
+                        final_restored_token_count_i32,
+                    )?;
+                    let extended_values = zeros_restore_destination(
+                        runtime,
+                        layer_index,
+                        "values",
+                        &existing_values,
+                        final_restored_token_count_i32,
+                    )?;
+                    let grown_keys = write_block_into_restore_destination(
+                        runtime,
+                        layer_index,
+                        "keys",
+                        &extended_keys,
+                        &existing_keys,
+                        0,
+                    )?;
+                    let grown_values = write_block_into_restore_destination(
+                        runtime,
+                        layer_index,
+                        "values",
+                        &extended_values,
+                        &existing_values,
+                        0,
+                    )?;
+                    drop(existing_keys);
+                    drop(existing_values);
+                    attention
+                        .restore_from_blocks(grown_keys, grown_values)
+                        .map_err(|source| {
+                            PersistentPromptCacheStateBridgeError::RestoreFullAttentionState {
+                                layer_index,
+                                source,
+                            }
+                        })?;
+                }
+                Some(DecoderCacheState::Composite { .. }) => {}
+                None => {
+                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
+                        layer_index,
+                    });
+                }
+            }
+        }
+        materialize_restored_full_attention_tensors(self, runtime)
+    }
+
     fn allocate_persistent_prompt_cache_kv_restore_destination(
         &mut self,
         runtime: &MlxRuntime,

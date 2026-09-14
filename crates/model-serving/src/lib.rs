@@ -281,6 +281,8 @@ pub use persistent_cache::{
     longest_reusable_speculative_prefill_target_prefix,
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    sparse_anchored_dense_boundary_clamped_prefill_chunk_end,
+    sparse_anchored_dense_boundary_completed_prefill_chunk_tokens,
 };
 #[cfg(feature = "direct-mlx")]
 pub use persistent_cache::{

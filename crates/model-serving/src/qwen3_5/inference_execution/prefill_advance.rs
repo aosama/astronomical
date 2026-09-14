@@ -24,6 +24,8 @@ use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    sparse_anchored_dense_boundary_clamped_prefill_chunk_end,
+    sparse_anchored_dense_boundary_completed_prefill_chunk_tokens,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
@@ -36,7 +38,6 @@ use super::{
     qwen3_5_speculative_prefill_sparse_target_is_active,
     speculative_prefill::SpeculativePrefillSelectionPreparation,
 };
-
 impl Qwen3_5EngineState {
     pub(super) fn advance_prompt_prefill_if_pending(
         &mut self,
@@ -172,25 +173,47 @@ impl Qwen3_5EngineState {
                 })
                 .unwrap_or(0);
             let crossed_cache_boundary_count =
-                persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
-                    prefill_start,
-                    requested_prefill_chunk_end,
-                    persistent_prompt_cache_block_token_count,
-                )
-                .len();
+                match active_request.sparse_anchored_dense_capture.as_ref() {
+                    // An anchored tail publishes on anchor-relative boundaries, so the
+                    // ordinary absolute-multiple boundary count would always be zero here.
+                    Some(sparse_anchored_dense_capture) => {
+                        sparse_anchored_dense_boundary_completed_prefill_chunk_tokens(
+                            prefill_start,
+                            requested_prefill_chunk_end,
+                            sparse_anchored_dense_capture.anchor_prompt_token_count,
+                            persistent_prompt_cache_block_token_count,
+                        )
+                        .len()
+                    }
+                    None => persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                        prefill_start,
+                        requested_prefill_chunk_end,
+                        persistent_prompt_cache_block_token_count,
+                    )
+                    .len(),
+                };
             if crossed_cache_boundary_count <= 1 {
                 requested_prefill_chunk_end
             } else {
-                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
-                    prefill_start,
-                    requested_prefill_chunk_end,
-                    persistent_prompt_cache_block_token_count,
-                )
+                match active_request.sparse_anchored_dense_capture.as_ref() {
+                    Some(sparse_anchored_dense_capture) => {
+                        sparse_anchored_dense_boundary_clamped_prefill_chunk_end(
+                            prefill_start,
+                            requested_prefill_chunk_end,
+                            sparse_anchored_dense_capture.anchor_prompt_token_count,
+                            persistent_prompt_cache_block_token_count,
+                        )
+                    }
+                    None => persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+                        prefill_start,
+                        requested_prefill_chunk_end,
+                        persistent_prompt_cache_block_token_count,
+                    ),
+                }
             }
         } else {
             requested_prefill_chunk_end
         };
-        // The token count becomes immutable for each attempt. Runtime capacity
         // recovery restores the checkpoint before retrying or halving this size.
         let forward_chunk_started_at = Instant::now();
         let requested_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;

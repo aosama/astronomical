@@ -29,6 +29,8 @@ mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
 mod request_memory_release;
 mod resident_memory_pressure;
+mod sparse_anchored_dense_capture;
+mod sparse_anchored_dense_restore;
 mod speculative_prefill;
 mod start_generation;
 mod terminal_prefill_seed;
