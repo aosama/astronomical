@@ -28,6 +28,10 @@ pub struct K2HorizonMoVAGenerationProcessor {
     tokenizer: K2HorizonMoVATokenizer,
     prompt_renderer: K2HorizonMoVAPromptRenderer,
     maximum_context_tokens: u32,
+    /// Model artifact's native position range: the only hard rejection
+    /// boundary. The configured `maximum_context_tokens` above is advisory
+    /// and advertised unchanged.
+    hard_maximum_context_tokens: u32,
     maximum_output_tokens: u32,
 }
 
@@ -51,6 +55,7 @@ impl K2HorizonMoVAGenerationProcessor {
             tokenizer,
             prompt_renderer: K2HorizonMoVAPromptRenderer::new(),
             maximum_context_tokens: context_window,
+            hard_maximum_context_tokens: config.max_position_embeddings(),
             maximum_output_tokens,
         })
     }
@@ -111,11 +116,18 @@ impl ModelGenerationProcessor for K2HorizonMoVAGenerationProcessor {
         let total_tokens = prompt_token_ids
             .len()
             .saturating_add(requested_output_tokens as usize);
-        if total_tokens as u32 > self.maximum_context_tokens {
+        if total_tokens as u32 > self.hard_maximum_context_tokens {
             return Err(ChatGenerationFailureReason::ContextLengthExceeded {
                 actual_total_context_tokens: total_tokens as u32,
-                maximum_context_tokens: self.maximum_context_tokens,
+                maximum_context_tokens: self.hard_maximum_context_tokens,
             });
+        }
+        if total_tokens as u32 > self.maximum_context_tokens {
+            tracing::warn!(
+                total_context_tokens = total_tokens as u32,
+                advertised_context_tokens = self.maximum_context_tokens,
+                "request exceeds the configured context limit; serving anyway because it fits the model artifact context window"
+            );
         }
         let temperature_thousandths = chat_generation_command
             .settings
