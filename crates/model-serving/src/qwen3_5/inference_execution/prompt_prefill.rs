@@ -73,11 +73,15 @@ impl Qwen3_5EngineState {
         if admission_outcome.demoted_complete_resident_expert_owner {
             let input_token_count =
                 u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+            // The activation reserve is operation-scoped (issue #644): this
+            // chunk's own token count is the operation about to run.
+            let operation_token_count = u64::try_from(plan.prefill_token_count).unwrap_or(u64::MAX);
             self.model
                 .as_ref()
                 .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
                 .republish_prefill_residency_plan_after_demotion(
                     input_token_count,
+                    operation_token_count,
                     &mut active_request.performance_attribution,
                 )
                 .map_err(qwen3_5_runtime_error)?;

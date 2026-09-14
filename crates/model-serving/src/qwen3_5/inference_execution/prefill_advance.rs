@@ -102,6 +102,19 @@ impl Qwen3_5EngineState {
             .refresh_phase_aware_expert_residency_plan(
                 MemoryPhase::Prefill,
                 u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
+                // The activation reserve is operation-scoped (issue #644): the
+                // residency plan must survive the largest chunk this request can
+                // still attempt, not the whole prompt's imagined workspace.
+                u64::try_from(
+                    self.prompt_processing_chunk_sizer
+                        .maximum_prompt_processing_chunk_size_tokens()
+                        .min(
+                            active_request
+                                .maximum_successful_prefill_chunk_tokens()
+                                .unwrap_or(usize::MAX),
+                        ),
+                )
+                .unwrap_or(u64::MAX),
                 &mut active_request.performance_attribution,
             )
             .map_err(qwen3_5_runtime_error)?;
@@ -462,10 +475,13 @@ impl Qwen3_5EngineState {
                     // Issue #510: the prefill progress sample carries the same
                     // utilization split, planned against the full prompt so the
                     // context reserve reflects the request the user submitted.
+                    // The activation reserve is operation-scoped (issue #644):
+                    // it plans this chunk's own workspace, not the prompt.
                     .with_memory_ceiling_utilization(
                         model.memory_ceiling_utilization_for_breakdown(
                             crate::MemoryPhase::Prefill,
                             u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
+                            u64::try_from(prefill_token_count).unwrap_or(u64::MAX),
                             active_memory_bytes,
                             active_memory_breakdown,
                         ),
