@@ -1,4 +1,5 @@
 mod fail_closed;
+mod large_prompt_activation_overrun;
 mod memory_admission;
 mod persistent_cache;
 pub(crate) mod support;
