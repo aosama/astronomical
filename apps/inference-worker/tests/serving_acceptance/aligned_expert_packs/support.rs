@@ -7,10 +7,10 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::serving_acceptance::chat::openai_rest::{
-    get_endpoint, launch_serving_rest_server_for_model,
-    launch_serving_rest_server_for_model_with_memory_limit, stop_serving_rest_server,
+    get_endpoint, launch_serving_rest_server_for_model, stop_serving_rest_server,
 };
 use crate::support::serving_rest::ServingRestServer;
+use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
 
 pub(super) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const MAXIMUM_COMPACT_SOURCE_CHARACTERS: usize = 800;

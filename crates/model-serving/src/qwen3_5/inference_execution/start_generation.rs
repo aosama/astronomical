@@ -516,8 +516,14 @@ impl Qwen3_5EngineState {
                 .then_some(astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target);
             // A fresh eligible request already at the sparse boundary announces
             // Drafter on its first advance instead; all other paths begin in Target.
+            // The reported cached count must cover every prompt token whose state was
+            // restored, dense and sparse alike (issue #657). Reporting only the dense
+            // restore made a ~97%-reuse SpecPrefill request look like ~2% reuse to
+            // OpenAI usage consumers and the performance log. The sparse target prefix
+            // advances the same prefill cursor, so it is part of the same honest total;
+            // the dense/sparse split remains available through PromptWorkReuse.
             Ok(EngineGenerationStart::with_expert_memory_mode(
-                persistent_prompt_cache_token_count,
+                restored_prompt_prefix_token_count,
                 self.model
                     .as_ref()
                     .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
