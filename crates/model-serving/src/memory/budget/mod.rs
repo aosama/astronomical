@@ -13,6 +13,7 @@ mod adaptive_growth_projection;
 mod live_allocation;
 mod ram;
 mod ram_geometry;
+mod ram_values;
 
 pub use adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
@@ -25,11 +26,12 @@ pub use live_allocation::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use ram::context_token_bucket;
 pub use ram::{
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, MlxRamBudgetError,
-    MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    measured_non_expert_forward_growth_bytes,
+    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, measured_non_expert_forward_growth_bytes,
 };
 pub use ram_geometry::{
     MeasuredExpertLayerPayload, RamBudgetGeometryError,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
+};
+pub use ram_values::{
+    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
 };

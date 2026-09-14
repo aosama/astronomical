@@ -13,7 +13,7 @@ use crate::worker_health::{
 use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
     ChatGenerationStreamErrorCode, ChatGenerationStreamEvent, WorkerActivity, WorkerControlError,
-    WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
+    WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
 
 pub(super) async fn cancel_active_generation(
@@ -419,5 +419,32 @@ pub(super) async fn close_worker_if_running(worker_process: &mut WorkerProcess) 
         && let Err(shutdown_error) = worker_process.close().await
     {
         tracing::error!(error = %shutdown_error, "failed to close worker");
+    }
+}
+
+/// Publishes the shutdown health transition, fails any active generation,
+/// and closes the worker process, returning the termination outcome for the
+/// shutdown reply.
+pub(super) async fn shutdown_worker(
+    worker_process: &mut WorkerProcess,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    active_request: &mut Option<ActiveWorkerRequest>,
+) -> Result<WorkerTerminationOutcome, WorkerControlError> {
+    publish_health(
+        health_snapshot,
+        WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+    );
+    fail_active_generation(
+        active_request,
+        ChatGenerationStreamErrorCode::WorkerUnavailable,
+    );
+    publish_activity(health_snapshot, WorkerActivity::Idle);
+    clear_active_request_progress(health_snapshot);
+    if worker_process.process_id().is_some() {
+        worker_process.close().await
+    } else {
+        Ok(WorkerTerminationOutcome::Graceful {
+            process_exit_successful: true,
+        })
     }
 }
