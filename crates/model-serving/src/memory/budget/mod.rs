@@ -8,6 +8,7 @@
 //! `live_allocation.rs` is the runtime-backed per-allocation admission owner.
 
 mod adaptive_growth;
+mod adaptive_growth_projection;
 #[cfg(feature = "direct-mlx")]
 mod live_allocation;
 mod ram;
@@ -15,7 +16,9 @@ mod ram_geometry;
 
 pub use adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthProjection,
+};
+pub use adaptive_growth_projection::{
+    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
 };
 #[cfg(feature = "direct-mlx")]
 pub use live_allocation::{MlxAllocationAdmission, MlxAllocationAdmissionError};
