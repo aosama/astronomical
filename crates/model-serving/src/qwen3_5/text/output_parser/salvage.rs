@@ -4,10 +4,10 @@
 //! output drops a usable function name the coding client could reject or retry.
 
 use super::super::output_parser_error::Qwen3_5OutputParserError;
+use super::state::{Qwen3_5OutputParserState, ToolCallEntryKind};
 use super::{
     BARE_FUNCTION_START_MARKER, FUNCTION_END_MARKER, INVOKE_END_MARKER, INVOKE_START_MARKER,
-    Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserState, TOOL_CALL_END_MARKER,
-    ToolCallEntryKind,
+    Qwen3_5OutputEvent, Qwen3_5OutputParser, TOOL_CALL_END_MARKER,
 };
 
 impl Qwen3_5OutputParser {

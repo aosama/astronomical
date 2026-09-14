@@ -19,6 +19,19 @@ fn unmeasured_prefill_activation_headroom_bytes(geometry: MlxRamBudgetModelGeome
         .saturating_mul(3)
 }
 
+/// A geometry whose three-layer static floor is small enough that learned
+/// activation evidence dominates the promise, making context-bucket resolution
+/// observable (issue #623 follow-up).
+fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
+    MlxRamBudgetModelGeometry {
+        model_core_payload_bytes: 2_360_000_000,
+        complete_expert_payload_bytes: 36_238_786_560,
+        largest_complete_expert_layer_bytes: 10_000_000,
+        largest_routed_expert_page_bytes: 28_311_552,
+        sequence_state_bytes_per_token: 0,
+    }
+}
+
 #[test]
 fn should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements() {
     let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
@@ -35,7 +48,7 @@ fn should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements()
     );
     assert!(!mlx_ram_budget.has_context_window_measurement());
     assert_eq!(
-        mlx_ram_budget.activation_headroom_bytes(MemoryPhase::Prefill),
+        mlx_ram_budget.activation_headroom_bytes(MemoryPhase::Prefill, 4_096),
         unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()),
     );
 }
@@ -261,4 +274,84 @@ fn should_exclude_newly_retained_experts_from_context_and_activation_learning() 
         measured_non_expert_forward_growth_bytes(3_000, 4_500, 2_000, 2_000),
         1_500,
     );
+}
+
+// Issue #623 follow-up: the prefill activation promise was one grow-only
+// session high-water pooled across every context size, so one large-context
+// request's workspace sized the promise shown to users and the retention
+// ceiling offered to paged experts for every later request. The promise is
+// now resolved per planned context: highest evidence at or below the planned
+// bucket within the measured span, proportionally projected beyond it, with
+// the static three-layer floor still bounding everything.
+
+#[test]
+fn should_resolve_the_prefill_activation_promise_from_the_planned_context_bucket() {
+    let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
+        .expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 2_048,
+        measured_context_and_activation_bytes: 1_500_000_000,
+        observed_activation_headroom_bytes: 400_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 4_096,
+        measured_context_and_activation_bytes: 2_200_000_000,
+        observed_activation_headroom_bytes: 700_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    let plan_for_2048 = mlx_ram_budget.plan(MemoryPhase::Prefill, 2_048, 0);
+    let plan_for_4096 = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 0);
+
+    assert_eq!(plan_for_2048.activation_headroom_bytes, 400_000_000);
+    assert_eq!(plan_for_4096.activation_headroom_bytes, 700_000_000);
+}
+
+#[test]
+fn should_project_the_prefill_activation_promise_beyond_the_highest_measured_context() {
+    let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
+        .expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 4_096,
+        measured_context_and_activation_bytes: 2_200_000_000,
+        observed_activation_headroom_bytes: 700_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    // Beyond the highest measured token count (5,120 for bucket 4) the highest
+    // evidence scales proportionally: 700 MB × 8,192 / 5,120 = 1,120 MB.
+    let plan_for_8192 = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 0);
+
+    assert_eq!(plan_for_8192.activation_headroom_bytes, 1_120_000_000);
+}
+
+#[test]
+fn should_keep_the_first_decode_protected_by_the_largest_prefill_evidence() {
+    let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
+        .expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 2_048,
+        measured_context_and_activation_bytes: 1_500_000_000,
+        observed_activation_headroom_bytes: 400_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 4_096,
+        measured_context_and_activation_bytes: 2_200_000_000,
+        observed_activation_headroom_bytes: 700_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    // Before decode has its own evidence, the largest prefill observation —
+    // not the smaller bucket the next request happens to plan — protects the
+    // first decode from warm fill occupying transient space.
+    let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 2_048, 0);
+
+    assert_eq!(first_decode_plan.activation_headroom_bytes, 700_000_000);
 }

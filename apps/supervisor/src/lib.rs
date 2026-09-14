@@ -63,6 +63,7 @@ mod worker_handle;
 mod worker_handle_chat;
 mod worker_handle_image;
 mod worker_health;
+mod worker_idle_drain;
 mod worker_image_event;
 mod worker_image_request;
 mod worker_loop_types;

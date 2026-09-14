@@ -100,13 +100,15 @@ impl Qwen3_5EngineState {
                 (0, 0, true)
             } else {
                 let ram_budget = model.mlx_ram_budget();
-                let prefill_activation_workspace_bytes =
-                    usize::try_from(ram_budget.activation_headroom_bytes(MemoryPhase::Prefill))
-                        .map_err(|_| {
-                            invalid_request_error(
-                                "prefill activation workspace exceeds the platform range",
-                            )
-                        })?;
+                let prefill_activation_workspace_bytes = usize::try_from(
+                    ram_budget.activation_headroom_bytes(
+                        MemoryPhase::Prefill,
+                        u64::try_from(total_context_tokens).unwrap_or(u64::MAX),
+                    ),
+                )
+                .map_err(|_| {
+                    invalid_request_error("prefill activation workspace exceeds the platform range")
+                })?;
                 let complete_layer_scratch_bytes = usize::try_from(
                     ram_budget
                         .model_geometry()
