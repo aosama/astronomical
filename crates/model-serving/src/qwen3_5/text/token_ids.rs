@@ -77,6 +77,8 @@ const THINK_END_TOKEN_CONTENT: &str = "</think>";
 /// The Qwen3.5 family shares the same special token strings, but the numeric IDs
 /// can differ between model snapshots. This function maps the known content strings
 /// to their current IDs and returns them as a typed struct.
+use super::tokenizer_error::Qwen3_5TokenizerError;
+
 pub fn discover_token_ids(
     tokenizer: &Tokenizer,
 ) -> Result<Qwen3_5TokenIds, Qwen3_5TokenDiscoveryError> {
@@ -149,4 +151,22 @@ pub enum Qwen3_5TokenDiscoveryError {
         discovered_token_id: u32,
         round_trip_content: String,
     },
+}
+
+pub(super) fn validate_token_identity(
+    tokenizer: &Tokenizer,
+    token_content: &'static str,
+    expected_token_id: u32,
+) -> Result<(), Qwen3_5TokenizerError> {
+    let actual_token_id = tokenizer.token_to_id(token_content);
+    if actual_token_id != Some(expected_token_id)
+        || tokenizer.id_to_token(expected_token_id).as_deref() != Some(token_content)
+    {
+        return Err(Qwen3_5TokenizerError::SpecialTokenMismatch {
+            token_content,
+            expected_token_id,
+            actual_token_id,
+        });
+    }
+    Ok(())
 }
