@@ -1,19 +1,16 @@
 use std::sync::Arc;
 
 use astronomical_config::resolve_model_id;
-use astronomical_ipc_protocol::{ChatGenerationCommand, ChatMessage};
+use astronomical_ipc_protocol::ChatGenerationCommand;
 use sha2::{Digest, Sha256};
 use tokenizers::Tokenizer;
 
 use crate::{PerformanceAttribution, PerformanceOperation, Qwen3_5InferenceRequest};
 
-use super::{
-    Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5PromptRenderer, ValidatedQwen3_5Artifact,
-};
+use super::{Qwen3_5ImageProcessor, Qwen3_5PromptRenderer, ValidatedQwen3_5Artifact};
 
 use super::context_token_validation::validate_context_token_count;
 use super::sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
-use super::thinking_budget::minimum_bounded_output_token_count;
 use super::token_decoder::Qwen3_5TokenDecoder;
 use super::token_ids::{Qwen3_5TokenIds, discover_token_ids};
 use super::tokenizer_error::Qwen3_5TokenizerError;
@@ -100,7 +97,11 @@ impl Qwen3_5Tokenizer {
                 }
             })?;
         for (token_content, expected_token_id) in token_ids.validation_pairs() {
-            validate_token_identity(&tokenizer, token_content, expected_token_id)?;
+            super::token_ids::validate_token_identity(
+                &tokenizer,
+                token_content,
+                expected_token_id,
+            )?;
         }
         let mut forced_thinking_transition_token_ids = tokenizer
             .encode(THINKING_BUDGET_TRANSITION_TEXT, false)
@@ -341,29 +342,51 @@ impl Qwen3_5Tokenizer {
                 actual_model_id: chat_generation_command.model.clone(),
             });
         }
-        if let Some(thinking_budget) = chat_generation_command.settings.thinking_budget
-            && enable_thinking
-            && thinking_budget > 0
-        {
-            let minimum_bounded_output_tokens = minimum_bounded_output_token_count(
-                thinking_budget,
+        let effective_thinking_allowance =
+            super::thinking_allowance::resolve_effective_thinking_allowance(
+                chat_generation_command.settings.thinking_budget,
+                enable_thinking,
+                chat_generation_command.settings.max_output_tokens,
                 self.forced_thinking_transition_token_ids.len(),
-            )
-            .unwrap_or(usize::MAX);
+            );
+        if let Some(effective_allowance) = effective_thinking_allowance
+            && chat_generation_command
+                .settings
+                .thinking_budget
+                .is_some_and(|budget| enable_thinking && budget > 0)
+        {
+            let minimum_bounded_output_tokens =
+                super::thinking_allowance::effective_thinking_reservation_token_count(
+                    effective_thinking_allowance,
+                    self.forced_thinking_transition_token_ids.len(),
+                )
+                .unwrap_or(usize::MAX);
             if usize::from(chat_generation_command.settings.max_output_tokens)
                 < minimum_bounded_output_tokens
             {
                 return Err(Qwen3_5TokenizerError::ThinkingBudgetOutputReservation {
                     max_output_tokens: chat_generation_command.settings.max_output_tokens,
-                    thinking_budget,
+                    thinking_budget: effective_allowance,
                     transition_token_count: self.forced_thinking_transition_token_ids.len(),
                 });
+            }
+            if Some(effective_allowance) != chat_generation_command.settings.thinking_budget {
+                tracing::warn!(
+                    request_id = chat_generation_command.request_id.value(),
+                    requested_thinking_budget = chat_generation_command
+                        .settings
+                        .thinking_budget
+                        .unwrap_or(0),
+                    effective_thinking_budget = effective_allowance,
+                    max_output_tokens = chat_generation_command.settings.max_output_tokens,
+                    "clamped the thinking allowance to fit the requested output budget"
+                );
             }
         }
         let prepared_chat_images = performance_attribution.measure_operation(
             PerformanceOperation::ImagePreprocessing,
             |_performance_attribution| {
-                prepare_chat_images(
+                super::chat_images::prepare_chat_images(
                     &chat_generation_command.messages,
                     self.image_processor.as_ref(),
                 )
@@ -423,7 +446,7 @@ impl Qwen3_5Tokenizer {
         .with_image_pad_token_id(self.image_pad_token_id())
         .with_thinking_configuration(
             enable_thinking,
-            chat_generation_command.settings.thinking_budget,
+            effective_thinking_allowance,
             self.forced_thinking_transition_token_ids.clone(),
             self.natural_reasoning_end_token_ids.clone(),
         );
@@ -460,82 +483,9 @@ impl Qwen3_5Tokenizer {
             .tokenizer
             .encode(rendered_prompt.as_str(), false)
             .map_err(|source| Qwen3_5TokenizerError::EncodePrompt { source })?;
-        let ordinary_target_prefill_control_span_byte_count =
-            rendered_prompt.ordinary_target_prefill_control_span_byte_count();
-        let mut ordinary_target_prefill_control_span_token_count = 0usize;
-        for (token_start_byte_offset, token_end_byte_offset) in encoding.get_offsets() {
-            if *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
-                && *token_end_byte_offset > ordinary_target_prefill_control_span_byte_count
-            {
-                return Err(Qwen3_5TokenizerError::ControlSpanTokenBoundaryUnavailable);
-            }
-            if *token_end_byte_offset <= ordinary_target_prefill_control_span_byte_count
-                && *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
-            {
-                ordinary_target_prefill_control_span_token_count =
-                    ordinary_target_prefill_control_span_token_count.saturating_add(1);
-            }
-        }
-        Ok((
-            encoding.get_ids().to_vec(),
-            ordinary_target_prefill_control_span_token_count,
-        ))
+        super::prompt::ordinary_target_prefill_control_span_token_count(
+            &encoding,
+            rendered_prompt.ordinary_target_prefill_control_span_byte_count(),
+        )
     }
-}
-
-/// Extracts one token-count vector per user message from the conversation history.
-///
-/// Each user message may carry zero or more decoded images. For every image,
-/// the Qwen3VL image processor computes the number of `<|image_pad|>` tokens
-/// after spatial merge. Text-only user messages produce an empty vector.
-struct PreparedChatImages {
-    image_token_counts_per_user_message: Vec<Vec<usize>>,
-    processed_visual_images: Vec<Qwen3_5ProcessedImage>,
-}
-
-fn prepare_chat_images(
-    messages: &[ChatMessage],
-    image_processor: Option<&Qwen3_5ImageProcessor>,
-) -> Result<PreparedChatImages, Qwen3_5TokenizerError> {
-    let mut image_token_counts_per_user_message = Vec::new();
-    let mut processed_visual_images = Vec::new();
-    for message in messages {
-        if let ChatMessage::User { images, .. } = message {
-            let mut per_image_token_counts = Vec::with_capacity(images.len());
-            for image_input in images {
-                let image_processor =
-                    image_processor.ok_or(Qwen3_5TokenizerError::ImageInputUnsupported)?;
-                let processed_image = image_processor
-                    .process_image_bytes(&image_input.decoded_bytes)
-                    .map_err(Qwen3_5TokenizerError::ImageProcessing)?;
-                let image_token_count_after_spatial_merge =
-                    processed_image.image_token_count_after_spatial_merge;
-                per_image_token_counts.push(image_token_count_after_spatial_merge);
-                processed_visual_images.push(processed_image);
-            }
-            image_token_counts_per_user_message.push(per_image_token_counts);
-        }
-    }
-    Ok(PreparedChatImages {
-        image_token_counts_per_user_message,
-        processed_visual_images,
-    })
-}
-
-fn validate_token_identity(
-    tokenizer: &Tokenizer,
-    token_content: &'static str,
-    expected_token_id: u32,
-) -> Result<(), Qwen3_5TokenizerError> {
-    let actual_token_id = tokenizer.token_to_id(token_content);
-    if actual_token_id != Some(expected_token_id)
-        || tokenizer.id_to_token(expected_token_id).as_deref() != Some(token_content)
-    {
-        return Err(Qwen3_5TokenizerError::SpecialTokenMismatch {
-            token_content,
-            expected_token_id,
-            actual_token_id,
-        });
-    }
-    Ok(())
 }

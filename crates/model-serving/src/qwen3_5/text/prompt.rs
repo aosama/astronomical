@@ -458,3 +458,32 @@ pub enum Qwen3_5PromptError {
     #[error("tool argument could not serialize")]
     SerializeToolArgument(#[source] serde_json::Error),
 }
+
+/// Counts the tokens that belong to the system-and-tool control span and
+/// rejects an encoding whose token straddles the byte boundary, which would
+/// make the span boundary unrepresentable in token positions.
+pub(super) fn ordinary_target_prefill_control_span_token_count(
+    encoding: &tokenizers::Encoding,
+    ordinary_target_prefill_control_span_byte_count: usize,
+) -> Result<(Vec<u32>, usize), super::tokenizer_error::Qwen3_5TokenizerError> {
+    let mut ordinary_target_prefill_control_span_token_count = 0usize;
+    for (token_start_byte_offset, token_end_byte_offset) in encoding.get_offsets() {
+        if *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
+            && *token_end_byte_offset > ordinary_target_prefill_control_span_byte_count
+        {
+            return Err(
+                super::tokenizer_error::Qwen3_5TokenizerError::ControlSpanTokenBoundaryUnavailable,
+            );
+        }
+        if *token_end_byte_offset <= ordinary_target_prefill_control_span_byte_count
+            && *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
+        {
+            ordinary_target_prefill_control_span_token_count =
+                ordinary_target_prefill_control_span_token_count.saturating_add(1);
+        }
+    }
+    Ok((
+        encoding.get_ids().to_vec(),
+        ordinary_target_prefill_control_span_token_count,
+    ))
+}
