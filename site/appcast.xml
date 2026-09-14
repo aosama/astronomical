@@ -4,38 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.39</title>
-            <pubDate>Mon, 14 Sep 2026 00:24:05 -0400</pubDate>
-            <sparkle:version>558</sparkle:version>
-            <sparkle:shortVersionString>0.2.39</sparkle:shortVersionString>
+            <title>0.2.40</title>
+            <pubDate>Mon, 14 Sep 2026 01:29:25 -0400</pubDate>
+            <sparkle:version>563</sparkle:version>
+            <sparkle:shortVersionString>0.2.40</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.39
+            <description sparkle:format="markdown"><![CDATA[## Highlights
 
-## Memory serving fixes
-
-- Streaming under memory pressure keeps its activation promise per request shape. The forward transient reserve is resolved by the planned execution shape — exact context first, then token-proportional, then the global maximum — instead of a session-wide global maximum. Sparse MoE models under tight ceilings keep streaming from SSD instead of being silently promoted to resident mid-request.
-- The prefill activation promise is now scoped by planned context. Activation evidence is recorded per 1,024-token context bucket with proportional projection beyond measured contexts, so one large request no longer shrinks expert retention for every later request. Decode keeps its scalar high-water evidence and the first decode stays protected by the largest prefill observation.
-
-## Menu-bar app
-
-- The menu-bar app shows a first-run welcome window once per versioned moment. It introduces the daemon, the model library, and the privacy posture to new users, and stays quiet on ordinary updates.
-
-## Maintenance
-
-- Memory budget, residency planning, and engine execution sources were split at cohesive module boundaries with no behavior change, keeping the source-size guard budget intact.
-- Dependency update: async-openai 0.42.0.
+- Overshooting the configured context limit no longer rejects a request. The configured per-model context limit is now advisory: requests beyond it are served in full with no truncation or clipping, and a server-side warning records the exceedance. The model artifact's native context window remains the only hard rejection boundary, and model discovery metadata is unchanged.
+- The native bindings toolchain moves to bindgen 0.73.2 together with the matching syn-3 prettyplease pin, keeping the pinned MLX-C binding surface intact.
 
 ## Compatibility
 
-- No REST API compatibility constraints apply.
-- Configuration, model library, and prompt cache state are preserved across the update.
-- Distributed as a signed and notarized DMG with a signed Sparkle update feed.
+- No REST API or model-discovery contract changes. Callers that previously received a context-length rejection slightly above the configured limit now receive successful generations; the hard artifact window behaves exactly as before.
+- No configuration changes are needed; existing context-limit values keep their meaning as the advertised advisory limit.
+
+## Distribution
+
+- Signed with Developer ID, notarized by Apple, and stapled. The Sparkle update feed is signed and activated on the public appcast.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.39/Astronomical-0.2.39-macOS-arm64.dmg" length="16314567" type="application/octet-stream" sparkle:edSignature="X+7zeElAxrCuneDRJSB2QEqaE4CWiy5xNWP0EMxtUPDYPjK/h/Hgv9Ee8o4h7tTe6jLaIifjSmHRWQm7pnd1CQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.40/Astronomical-0.2.40-macOS-arm64.dmg" length="16329294" type="application/octet-stream" sparkle:edSignature="yjt6TnpDGVGS7z5yQmrp+9bni6W6WYjOIKN5eN8BNhhO1Ru2RF0bhZb0v6mc7VzSIKcZnzMs/Gl10jgkx9EVCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: U4ihrmL0o0oGzbFBZ19VwWyNQdb5rY7pHvDMTTG0vimyAK/aPNP4dyn3vHjJik3bRqNJ8IGiDCUBIuxjr2IBBg==
-length: 2742
+edSignature: GlPQKOkXNCSBDxLpv/xANl0WQ2ShinieVX+/FPcfALqh0KMLRTBDlfZjK6IacKi3kI7uBfv8eJLjpaIKb4QVCw==
+length: 2301
 -->
