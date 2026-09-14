@@ -229,6 +229,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             ));
         }
         let maximum_position_count = maximum_context_tokens as usize;
+        let hard_maximum_position_count = artifact_maximum_position_count as usize;
         let vocabulary_size = validated_artifact.config().vocabulary_size();
         let context_memory_reservation_bytes_per_token = validated_artifact
             .config()
@@ -271,6 +272,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             model_loading_performance_attribution: Some(model_loading_performance_attribution),
             performance_attribution_log,
             maximum_position_count,
+            hard_maximum_position_count,
             model: None,
             speculative_prefill_draft_model: None,
             speculative_prefill_selection_store: RefCell::new(HashMap::new()),
@@ -330,6 +332,10 @@ pub struct Qwen3_5InferenceExecution {
     model_loading_performance_attribution: Option<PerformanceAttribution>,
     performance_attribution_log: PerformanceAttributionLog,
     maximum_position_count: usize,
+    /// Model artifact's native position range: the only hard rejection
+    /// boundary for request context. The configured `maximum_position_count`
+    /// above is advisory and advertised unchanged.
+    hard_maximum_position_count: usize,
     pub(super) model: Option<Qwen3_5Model>,
     /// Request-scoped draft model, present only while scoring an eligible prompt.
     pub(super) speculative_prefill_draft_model: Option<Qwen3_5Model>,

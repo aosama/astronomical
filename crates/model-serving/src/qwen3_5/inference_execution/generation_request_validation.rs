@@ -81,10 +81,17 @@ impl Qwen3_5EngineState {
         let total_context_tokens = prompt_token_count
             .checked_add(maximum_output_token_count)
             .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
-        if total_context_tokens > self.maximum_position_count {
+        if total_context_tokens > self.hard_maximum_position_count {
             return Err(invalid_request_error(
                 "generation context exceeds the model maximum position count",
             ));
+        }
+        if total_context_tokens > self.maximum_position_count {
+            tracing::warn!(
+                total_context_token_count = total_context_tokens,
+                advertised_context_tokens = self.maximum_position_count,
+                "request exceeds the configured context limit; serving anyway because it fits the model artifact context window"
+            );
         }
         tracing::info!(
             prompt_token_count,

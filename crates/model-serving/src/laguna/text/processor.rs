@@ -22,6 +22,10 @@ pub struct LagunaGenerationProcessor {
     descriptor: LagunaTextArtifactDescriptor,
     tokenizer: LagunaTokenizer,
     maximum_context_tokens: u32,
+    /// Model artifact's native context: the only hard rejection boundary. The
+    /// configured `maximum_context_tokens` above is advisory and advertised
+    /// unchanged.
+    hard_maximum_context_tokens: u32,
     maximum_output_tokens: u32,
     performance_attribution_enabled: bool,
 }
@@ -58,6 +62,7 @@ impl LagunaGenerationProcessor {
         let tokenizer = LagunaTokenizer::from_descriptor(&descriptor)?;
         Ok(Self {
             model_id: model_id.into(),
+            hard_maximum_context_tokens: descriptor.maximum_context_tokens(),
             descriptor,
             tokenizer,
             maximum_context_tokens,
@@ -126,6 +131,7 @@ impl LagunaGenerationProcessor {
         validate_context_length(
             prompt_token_ids.len(),
             chat_command.settings.max_output_tokens,
+            self.hard_maximum_context_tokens,
             self.maximum_context_tokens,
         )?;
         let sampler_config = self.descriptor.sampler_config().with_request_overrides(
@@ -328,16 +334,27 @@ fn resolve_thinking_enabled(
 fn validate_context_length(
     prompt_token_count: usize,
     maximum_output_tokens: u16,
-    maximum_context_tokens: u32,
+    hard_maximum_context_tokens: u32,
+    advertised_context_tokens: u32,
 ) -> Result<(), LagunaPreparationError> {
     let actual_context_tokens = prompt_token_count
         .checked_add(usize::from(maximum_output_tokens))
         .unwrap_or(usize::MAX);
-    let maximum_context_token_count = usize::try_from(maximum_context_tokens).unwrap_or(usize::MAX);
-    if actual_context_tokens > maximum_context_token_count {
+    let hard_maximum_context_token_count =
+        usize::try_from(hard_maximum_context_tokens).unwrap_or(usize::MAX);
+    let advertised_context_token_count =
+        usize::try_from(advertised_context_tokens).unwrap_or(usize::MAX);
+    if actual_context_tokens > advertised_context_token_count {
+        tracing::warn!(
+            actual_context_tokens,
+            advertised_context_tokens,
+            "request exceeds the configured context limit; serving anyway because it fits the model artifact context window"
+        );
+    }
+    if actual_context_tokens > hard_maximum_context_token_count {
         return Err(LagunaPreparationError::ContextLengthExceeded {
             actual_context_tokens,
-            maximum_context_tokens,
+            maximum_context_tokens: hard_maximum_context_tokens,
         });
     }
     Ok(())

@@ -80,10 +80,17 @@ impl Qwen3_5EngineState {
             .checked_add(input_token_ids.len())
             .and_then(|context_tokens| context_tokens.checked_add(remaining_output_tokens))
             .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
-        if projected_context_tokens > self.maximum_position_count {
+        if projected_context_tokens > self.hard_maximum_position_count {
             return Err(invalid_request_error(
                 "generation context exceeds the model maximum position count",
             ));
+        }
+        if projected_context_tokens > self.maximum_position_count {
+            tracing::warn!(
+                projected_context_tokens,
+                advertised_context_tokens = self.maximum_position_count,
+                "continuation exceeds the configured context limit; serving anyway because it fits the model artifact context window"
+            );
         }
 
         // Injection extends the same live context as ordinary request admission.

@@ -27,6 +27,7 @@ pub struct Qwen3_5Tokenizer {
     tokenizer_vocabulary_size: u32,
     model_vocabulary_size: u32,
     maximum_position_count: u32,
+    advertised_context_window: u32,
     model_sampler_config: Qwen3_5SamplerConfig,
     token_ids: Qwen3_5TokenIds,
     model_id: String,
@@ -75,6 +76,7 @@ impl Qwen3_5Tokenizer {
             model_id,
             model_vocabulary_size,
             maximum_position_count,
+            maximum_position_count,
             Some(image_processor),
         )
     }
@@ -84,6 +86,7 @@ impl Qwen3_5Tokenizer {
         model_id: &str,
         model_vocabulary_size: u32,
         maximum_position_count: u32,
+        advertised_context_window: u32,
         image_processor: Option<Qwen3_5ImageProcessor>,
     ) -> Result<Self, Qwen3_5TokenizerError> {
         let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
@@ -114,6 +117,7 @@ impl Qwen3_5Tokenizer {
             tokenizer_vocabulary_size,
             model_vocabulary_size,
             maximum_position_count,
+            advertised_context_window,
             model_sampler_config: discover_sampler_config(None),
             token_ids,
             model_id: model_id.to_owned(),
@@ -133,6 +137,10 @@ impl Qwen3_5Tokenizer {
         )
     }
 
+    /// `maximum_context_tokens` is the operator-configured, advertised context
+    /// window; the hard rejection boundary always stays at the artifact's
+    /// native maximum position count so configured softness never exceeds the
+    /// model's real capability.
     pub(crate) fn from_validated_artifact_with_maximum_context_tokens(
         validated_artifact: &ValidatedQwen3_5Artifact,
         maximum_context_tokens: u32,
@@ -147,6 +155,7 @@ impl Qwen3_5Tokenizer {
             tokenizer_bytes,
             validated_artifact.model_id(),
             validated_artifact.config().vocabulary_size(),
+            validated_artifact.config().maximum_position_count(),
             maximum_context_tokens,
             image_processor,
         )?;
@@ -387,6 +396,7 @@ impl Qwen3_5Tokenizer {
             input_token_ids.len(),
             usize::from(chat_generation_command.settings.max_output_tokens),
             self.maximum_position_count as usize,
+            self.advertised_context_window as usize,
         )?;
         let model_top_k = match u16::try_from(self.model_sampler_config.model_top_k) {
             Ok(model_top_k) if model_top_k > 0 => model_top_k,
