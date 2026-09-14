@@ -96,6 +96,7 @@ impl Qwen3_5EngineState {
                 model.memory_ceiling_utilization_for_breakdown(
                     crate::MemoryPhase::Decode,
                     0,
+                    1,
                     active_memory_bytes,
                     active_memory_breakdown,
                 ),

@@ -344,6 +344,7 @@ impl Qwen3_5EngineState {
                 model.record_memory_ceiling_utilization(
                     crate::MemoryPhase::Decode,
                     decode_context_token_count,
+                    1,
                     &active_request.request_decoder_state,
                     active_request.additional_context_state_payload_bytes(),
                     decode_active_memory_bytes,

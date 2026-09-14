@@ -68,6 +68,7 @@ impl Qwen3_5Model {
         &self,
         phase: MemoryPhase,
         context_token_count: u64,
+        operation_token_count: u64,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let Some(expert_pager) = self.expert_pager.as_ref() else {
@@ -102,10 +103,12 @@ impl Qwen3_5Model {
             MemoryPhase::GenerationPreparation | MemoryPhase::Decode => MemoryPhase::Decode,
             MemoryPhase::Idle => MemoryPhase::Idle,
         };
-        let budget_snapshot =
-            self.mlx_ram_budget
-                .borrow()
-                .plan(budget_phase, context_token_count, 0);
+        let budget_snapshot = self.mlx_ram_budget.borrow().plan(
+            budget_phase,
+            context_token_count,
+            operation_token_count,
+            0,
+        );
         let retained_expert_ceiling_bytes = budget_snapshot.retained_expert_budget_bytes;
         tracing::info!(
             ?phase,
@@ -334,11 +337,13 @@ impl Qwen3_5Model {
     pub(crate) fn republish_prefill_residency_plan_after_demotion(
         &self,
         context_token_count: u64,
+        operation_token_count: u64,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         self.refresh_phase_aware_expert_residency_plan(
             MemoryPhase::Prefill,
             context_token_count,
+            operation_token_count,
             performance_attribution,
         )
     }
