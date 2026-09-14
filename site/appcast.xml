@@ -4,30 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.42</title>
-            <pubDate>Mon, 14 Sep 2026 12:17:16 -0400</pubDate>
-            <sparkle:version>571</sparkle:version>
-            <sparkle:shortVersionString>0.2.42</sparkle:shortVersionString>
+            <title>0.2.43</title>
+            <pubDate>Mon, 14 Sep 2026 18:00:23 -0400</pubDate>
+            <sparkle:version>575</sparkle:version>
+            <sparkle:shortVersionString>0.2.43</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.42
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.43
 
-### Fixed
+## Fixed
 
-- A chat request whose thinking allowance exceeds the caller's own output cap is now served with a shrunken thinking allowance instead of being rejected. The thinking budget is a ceiling on reasoning, so shrinking the discretionary allowance honors the caller's "at most N output tokens" contract (#653). The true floor is preserved: requests whose output budget cannot hold the forced transition plus one visible answer token are still rejected, now reporting the effective allowance.
+- **Honest cache-reuse reporting**: `prompt_tokens_details.cached_tokens` now reports every restored prompt token — dense and SpecPrefill sparse alike. A session reusing ~97% of its prompt previously reported ~0% to usage consumers.
+- **Dense prompt-cache capture after SpecPrefill restore**: conversation tails processed after a sparse restore are now published to the SSD cache and restored by later requests. Previously the restored prefix stayed frozen while every request re-prefilled the entire growing tail; time-to-first-token climbed with each message. Now each request pays only its new tokens and stays in the low single-digit seconds.
 
-### Compatibility
+## Preserved
 
-- No REST, IPC, or configuration schema changes. Existing configurations, Library state, and prompt caches are preserved.
+- Existing SSD prompt-cache state remains valid; new anchored chains build on top of previously captured prefixes.
+- Image (visual) requests keep their previous prompt-cache behavior.
+- No configuration or model-artifact changes are required.
 
-### Distribution
+## Distribution
 
-- Signed and notarized macOS arm64 disk image, stapled and Sparkle-signed, with a signed update feed. Existing Stable installations receive this release through the ordinary Sparkle update journey.
+- macOS arm64 DMG, Developer ID–signed with Hardened Runtime, notarized and stapled.
+- Sparkle update feed Ed25519-signed; in-app updates verify signatures before installing.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.42/Astronomical-0.2.42-macOS-arm64.dmg" length="16313936" type="application/octet-stream" sparkle:edSignature="TfepZeFPe7KWnmJUN1DTP3t9gNjIsuCRrgSi9WeycpXud0MiR5BTHeL11YRcwJimWdbLkn4lvNev426qhxXWDA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.43/Astronomical-0.2.43-macOS-arm64.dmg" length="16308765" type="application/octet-stream" sparkle:edSignature="W+VHV6CTHPjFb5JR7SD1d3GaXU362V9ZGfLfmiCv7eiCzRqun5w1/hr2H2e8JsPfvL5xPWHXcHPRUPWIHxjjCw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: i5OZtXPtHQkW6o5FDEBE9XgZKjiCT3bWqpv7A4QaWL9o4f3QcJefdiRywaRBaC7FC+b+ccwWd7XVypxSFpEsAg==
-length: 2107
+edSignature: uRSB+q8s7bgImo50W9OFFJLYbvT3tpxkw32SLJnFtX8oTn7jZBWkCDPa01Vh3jq/W4rZaEy6EtZe5Y55w0fTBA==
+length: 2362
 -->
