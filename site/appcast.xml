@@ -4,30 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.40</title>
-            <pubDate>Mon, 14 Sep 2026 01:29:25 -0400</pubDate>
-            <sparkle:version>563</sparkle:version>
-            <sparkle:shortVersionString>0.2.40</sparkle:shortVersionString>
+            <title>0.2.41</title>
+            <pubDate>Mon, 14 Sep 2026 11:00:17 -0400</pubDate>
+            <sparkle:version>568</sparkle:version>
+            <sparkle:shortVersionString>0.2.41</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Highlights
 
-- Overshooting the configured context limit no longer rejects a request. The configured per-model context limit is now advisory: requests beyond it are served in full with no truncation or clipping, and a server-side warning records the exceedance. The model artifact's native context window remains the only hard rejection boundary, and model discovery metadata is unchanged.
-- The native bindings toolchain moves to bindgen 0.73.2 together with the matching syn-3 prettyplease pin, keeping the pinned MLX-C binding surface intact.
+- Large-prompt serving keeps the model resident instead of evicting experts to SSD mid-request. The planned activation reserve was projected from the full prompt length against per-chunk measurements, promising up to twice the memory ceiling and forcing premature expert demotion during large prefills; the reserve is now resolved at the operation scope, matching the measured workspace. On the large sparse MoE with the drafter engaged at a 50,400-token prompt, the reserve dropped from 40-43 GB to under 3 GB and the mid-prefill demotion no longer occurs.
+- The menu's MLX memory legend no longer reports impossible values: the Owner overrun row is now expressed in the same scale as the other rows, so it can never exceed the ceiling.
 
 ## Compatibility
 
-- No REST API or model-discovery contract changes. Callers that previously received a context-length rejection slightly above the configured limit now receive successful generations; the hard artifact window behaves exactly as before.
-- No configuration changes are needed; existing context-limit values keep their meaning as the advertised advisory limit.
+- No REST API, model-discovery, or configuration changes. Requests that previously completed (with avoidable SSD reads) complete the same way, with more expert retention.
 
 ## Distribution
 
 - Signed with Developer ID, notarized by Apple, and stapled. The Sparkle update feed is signed and activated on the public appcast.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.40/Astronomical-0.2.40-macOS-arm64.dmg" length="16329294" type="application/octet-stream" sparkle:edSignature="yjt6TnpDGVGS7z5yQmrp+9bni6W6WYjOIKN5eN8BNhhO1Ru2RF0bhZb0v6mc7VzSIKcZnzMs/Gl10jgkx9EVCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.41/Astronomical-0.2.41-macOS-arm64.dmg" length="16323517" type="application/octet-stream" sparkle:edSignature="SGcgQNXkZ1lH7ichk+1poPCdqdl38zkd6mvDqrOVSrLS7KRf7zoWkDFyphsVUv0kcWOSKafsVuphs1dfZbD0Cg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: GlPQKOkXNCSBDxLpv/xANl0WQ2ShinieVX+/FPcfALqh0KMLRTBDlfZjK6IacKi3kI7uBfv8eJLjpaIKb4QVCw==
-length: 2301
+edSignature: qPZGjwKcKH5tXMEH7MMiEIEeNROt4rMhsy8xspnpwT7xlkdGc18lkN3P+SUwnikMEx6QVYth960UT5CO53y5Bg==
+length: 2320
 -->
