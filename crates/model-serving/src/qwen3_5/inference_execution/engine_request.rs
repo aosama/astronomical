@@ -8,6 +8,8 @@ use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
 
+use super::sparse_anchored_dense_capture::SparseAnchoredDenseCaptureContext;
+
 /// Deterministic failure points used by isolated SpecPrefill acceptance.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[doc(hidden)]
@@ -99,6 +101,9 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) speculative_prefill_selected_token_positions: Option<Vec<usize>>,
     /// Complete exact target prefix processed before sparse conversation positions.
     pub(super) speculative_prefill_dense_target_prefix_token_count: usize,
+    /// Dense tail capture/restore state for requests that restored a SpecPrefill sparse prefix.
+    /// A compact sparse slab is not token-aligned, so its tail needs an anchored block chain.
+    pub(super) sparse_anchored_dense_capture: Option<SparseAnchoredDenseCaptureContext>,
     /// Full prompt token indices retained on the MLX device for sparse gathers.
     pub(super) speculative_prefill_prompt_token_indices: Option<MlxArray>,
     /// CPU-processed source images retained only while visual draft scoring needs them.

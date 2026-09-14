@@ -7,6 +7,7 @@
 
 use crate::{
     AdaptiveRamGrowthContext, persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    sparse_anchored_dense_boundary_completed_prefill_chunk_tokens,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
@@ -128,11 +129,23 @@ impl Qwen3_5EngineState {
                     .model_contract_ref()
                     .block_token_count();
                 (
-                    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
-                        prefill_start,
-                        prefill_end,
-                        persistent_prompt_cache_block_token_count,
-                    ),
+                    match active_request.sparse_anchored_dense_capture.as_ref() {
+                        // A restored sparse prefix is compact, so its dense tail can only be
+                        // published in an anchor-relative chain (issue #659).
+                        Some(sparse_anchored_dense_capture) => {
+                            sparse_anchored_dense_boundary_completed_prefill_chunk_tokens(
+                                prefill_start,
+                                prefill_end,
+                                sparse_anchored_dense_capture.anchor_prompt_token_count,
+                                persistent_prompt_cache_block_token_count,
+                            )
+                        }
+                        None => persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                            prefill_start,
+                            prefill_end,
+                            persistent_prompt_cache_block_token_count,
+                        ),
+                    },
                     Some(persistent_prompt_cache_block_token_count),
                 )
             } else {

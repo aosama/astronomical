@@ -95,9 +95,19 @@ impl Qwen3_5EngineState {
                     "prompt-cache boundary position overflowed",
                 ));
             };
-            if !absolute_boundary.is_multiple_of(persistent_prompt_cache_block_token_count)
-                || absolute_boundary > successful_prefill_end
-            {
+            // An anchored boundary is aligned to the restored sparse prefix, not to prompt
+            // position zero, because the compact slab it was read from is selection-bound.
+            let boundary_is_aligned = match active_request.sparse_anchored_dense_capture.as_ref() {
+                Some(sparse_anchored_dense_capture) => absolute_boundary
+                    .checked_sub(sparse_anchored_dense_capture.anchor_prompt_token_count)
+                    .is_some_and(|anchor_relative_boundary| {
+                        anchor_relative_boundary != 0
+                            && anchor_relative_boundary
+                                .is_multiple_of(persistent_prompt_cache_block_token_count)
+                    }),
+                None => absolute_boundary.is_multiple_of(persistent_prompt_cache_block_token_count),
+            };
+            if !boundary_is_aligned || absolute_boundary > successful_prefill_end {
                 return Err(required_prompt_state_persistence_failure(
                     prompt_state_persistence_owner,
                     active_request,
@@ -138,29 +148,98 @@ impl Qwen3_5EngineState {
                 };
                 block_causal_input
             };
-            // Each block binds only new causal inputs; descendants inherit them through ancestry.
-            let persistent_prompt_cache_block_key = match active_request
-                .last_restored_persistent_prompt_cache_block_key
-                .as_ref()
-            {
-                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
-                    &persistent_prompt_cache.model_contract,
-                    block_tokens,
-                    block_causal_input,
-                ),
-                Some(parent_persistent_prompt_cache_block_key) => {
-                    parent_persistent_prompt_cache_block_key
-                        .for_child_block_with_causal_input(block_tokens, block_causal_input)
-                }
-            };
-            let Ok(persistent_prompt_cache_block_key) = persistent_prompt_cache_block_key else {
-                return Err(required_prompt_state_persistence_failure(
-                    prompt_state_persistence_owner,
-                    active_request,
-                    "required persistent prompt-state capture",
-                    "prompt-cache block identity construction failed",
-                ));
-            };
+            // A restored SpecPrefill sparse prefix is compact, so its dense tail publishes on
+            // an anchor-relative chain whose root binds that exact sparse state identity.
+            // Nothing spans a dense/sparse boundary: the chunk planner only reports anchored
+            // boundaries for chunks that are wholly dense.
+            let (persistent_prompt_cache_block_key, kv_block_start, kv_block_end) =
+                match active_request.sparse_anchored_dense_capture.as_mut() {
+                    Some(sparse_anchored_dense_capture) => {
+                        // Anchored blocks never carry image causal input: the visual causal-input
+                        // plan is indexed from prompt position zero and the anchored chain is not.
+                        if !active_request
+                            .persistent_prompt_cache_block_causal_inputs
+                            .is_empty()
+                        {
+                            return Err(required_prompt_state_persistence_failure(
+                                prompt_state_persistence_owner,
+                                active_request,
+                                "required persistent prompt-state capture",
+                                "sparse-anchored dense capture does not support visual causal input",
+                            ));
+                        }
+                        let Some(anchored_block_start_row) = sparse_anchored_dense_capture
+                            .compact_row_offset_for_prompt_position(block_start)
+                        else {
+                            return Err(required_prompt_state_persistence_failure(
+                                prompt_state_persistence_owner,
+                                active_request,
+                                "required persistent prompt-state capture",
+                                "sparse-anchored dense block starts before the restored anchor",
+                            ));
+                        };
+                        let anchored_block_end_row = match anchored_block_start_row
+                            .checked_add(persistent_prompt_cache_block_token_count)
+                        {
+                            Some(anchored_block_end_row) => anchored_block_end_row,
+                            None => {
+                                return Err(required_prompt_state_persistence_failure(
+                                    prompt_state_persistence_owner,
+                                    active_request,
+                                    "required persistent prompt-state capture",
+                                    "sparse-anchored dense block row range overflowed",
+                                ));
+                            }
+                        };
+                        let key = match sparse_anchored_dense_capture.next_block_key(
+                            persistent_prompt_cache.model_contract_ref(),
+                            block_tokens,
+                            block_causal_input,
+                        ) {
+                            Ok(key) => key,
+                            Err(_) => {
+                                return Err(required_prompt_state_persistence_failure(
+                                    prompt_state_persistence_owner,
+                                    active_request,
+                                    "required persistent prompt-state capture",
+                                    "prompt-cache block identity construction failed",
+                                ));
+                            }
+                        };
+                        (key, anchored_block_start_row, anchored_block_end_row)
+                    }
+                    None => {
+                        // Each block binds only new causal inputs; descendants inherit them through ancestry.
+                        let key = match active_request
+                            .last_restored_persistent_prompt_cache_block_key
+                            .as_ref()
+                        {
+                            None => {
+                                PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
+                                    &persistent_prompt_cache.model_contract,
+                                    block_tokens,
+                                    block_causal_input,
+                                )
+                            }
+                            Some(parent_persistent_prompt_cache_block_key) => {
+                                parent_persistent_prompt_cache_block_key
+                                    .for_child_block_with_causal_input(
+                                        block_tokens,
+                                        block_causal_input,
+                                    )
+                            }
+                        };
+                        let Ok(key) = key else {
+                            return Err(required_prompt_state_persistence_failure(
+                                prompt_state_persistence_owner,
+                                active_request,
+                                "required persistent prompt-state capture",
+                                "prompt-cache block identity construction failed",
+                            ));
+                        };
+                        (key, block_start, block_end)
+                    }
+                };
             // Extraction returns MLX arrays referencing exact decoder state. Keep
             // these same arrays alive through a possible retry; recapturing after
             // reclamation could observe mutated request state or duplicate work.
@@ -171,15 +250,15 @@ impl Qwen3_5EngineState {
                         .request_decoder_state
                         .extract_persistent_prompt_cache_kv_block_tensors(
                             model.runtime(),
-                            block_start,
-                            block_end,
+                            kv_block_start,
+                            kv_block_end,
                             persistent_prompt_cache_block_token_count,
                         )
                 },
             ) {
                 Ok(kv_block_tensors) => kv_block_tensors,
                 Err(error) => {
-                    tracing::warn!(block_start, block_end, %error, "prompt-cache KV extraction failed");
+                    tracing::warn!(block_start, block_end, kv_block_start, kv_block_end, %error, "prompt-cache KV extraction failed");
                     return Err(required_prompt_state_persistence_failure(
                         prompt_state_persistence_owner,
                         active_request,
@@ -228,6 +307,16 @@ impl Qwen3_5EngineState {
             // The disk-store API needs mutable attribution while the request also
             // remains mutably borrowed. Move the owner out temporarily and put it
             // back on every return path before interpreting publication outcome.
+            // A durable parent must come from the same chain this block extends: the anchored
+            // chain for a sparse-restored request, the ordinary chain otherwise.
+            let parent_block_key = match active_request.sparse_anchored_dense_capture.as_ref() {
+                Some(sparse_anchored_dense_capture) => sparse_anchored_dense_capture
+                    .last_published_block_key
+                    .clone(),
+                None => active_request
+                    .last_restored_persistent_prompt_cache_block_key
+                    .clone(),
+            };
             let mut request_performance_attribution = std::mem::replace(
                 &mut active_request.performance_attribution,
                 PerformanceAttribution::disabled(),
@@ -235,9 +324,7 @@ impl Qwen3_5EngineState {
             let save_outcome = persistent_prompt_cache.publish_block_with_performance_attribution(
                 model.runtime(),
                 &persistent_prompt_cache_block_key,
-                active_request
-                    .last_restored_persistent_prompt_cache_block_key
-                    .as_ref(),
+                parent_block_key.as_ref(),
                 &kv_block_tensors,
                 &boundary_checkpoint.recurrent_snapshot_tensors,
                 &mut request_performance_attribution,
@@ -289,9 +376,7 @@ impl Qwen3_5EngineState {
                         .publish_block_with_performance_attribution(
                             model.runtime(),
                             &persistent_prompt_cache_block_key,
-                            active_request
-                                .last_restored_persistent_prompt_cache_block_key
-                                .as_ref(),
+                            parent_block_key.as_ref(),
                             &kv_block_tensors,
                             &boundary_checkpoint.recurrent_snapshot_tensors,
                             &mut retry_performance_attribution,
@@ -312,8 +397,16 @@ impl Qwen3_5EngineState {
                     // Both successful outcomes prove durable availability, so the
                     // next block may safely use this key as its parent. Diagnostics
                     // count physical publications only, not idempotent reuse.
-                    active_request.last_restored_persistent_prompt_cache_block_key =
-                        Some(persistent_prompt_cache_block_key);
+                    match active_request.sparse_anchored_dense_capture.as_mut() {
+                        Some(sparse_anchored_dense_capture) => {
+                            sparse_anchored_dense_capture.last_published_block_key =
+                                Some(persistent_prompt_cache_block_key);
+                        }
+                        None => {
+                            active_request.last_restored_persistent_prompt_cache_block_key =
+                                Some(persistent_prompt_cache_block_key);
+                        }
+                    }
                 }
                 Err(error) => {
                     tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");

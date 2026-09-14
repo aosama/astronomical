@@ -8,6 +8,15 @@ use super::model_contract::PersistentPromptCacheModelContract;
 const PERSISTENT_PROMPT_CACHE_ROOT_SEED: &[u8] = b"astronomical-decoder-cache-root";
 const PERSISTENT_PROMPT_CACHE_BLOCK_CAUSAL_INPUT_DOMAIN: &[u8] =
     b"astronomical-decoder-cache-block-causal-input";
+// Dense blocks published after a SpecPrefill sparse restore form their own chain: their
+// decoder state continues from a compact, selection-bound prefix instead of the ordinary
+// token-aligned one. The distinct seed keeps the two root namespaces from ever colliding,
+// and the sparse state identity below binds each anchored chain to exactly one restored
+// selection so an identical token span from a different sparse prefix cannot be restored.
+const PERSISTENT_PROMPT_CACHE_SPARSE_ANCHORED_ROOT_SEED: &[u8] =
+    b"astronomical-decoder-cache-sparse-anchored-root";
+const PERSISTENT_PROMPT_CACHE_SPARSE_ANCHORED_STATE_IDENTITY_DOMAIN: &[u8] =
+    b"astronomical-decoder-cache-sparse-anchored-state-identity";
 
 /// One immutable, content-addressed block identity inside a model-state chain.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,6 +62,44 @@ impl PersistentPromptCacheBlockKey {
         );
         Ok(Self {
             block_hash,
+            block_index: 0,
+            token_count: u32::try_from(block_tokens.len())
+                .map_err(|_| PersistentPromptCacheBlockKeyError::BlockTokenCountOverflow)?,
+            block_token_count,
+            storage_contract_fingerprint,
+        })
+    }
+
+    /// Hashes the first dense block published on top of one restored SpecPrefill sparse prefix.
+    ///
+    /// Sparse target state is compact: unselected prompt rows are absent, so a dense tail
+    /// block's decoder state depends on the exact selection that produced it. Binding the
+    /// sparse state identity keeps two requests that share tail tokens but restored different
+    /// selections from ever reusing each other's state.
+    pub fn for_sparse_anchored_root_block_with_causal_input(
+        persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+        sparse_target_state_identity: &[u8; 32],
+        block_tokens: &[u32],
+        block_causal_input: &PersistentPromptCacheBlockCausalInput,
+    ) -> Result<Self, PersistentPromptCacheBlockKeyError> {
+        let block_token_count = persistent_prompt_cache_model_contract.block_token_count();
+        validate_block_tokens(block_tokens, block_token_count)?;
+        let storage_contract_fingerprint =
+            persistent_prompt_cache_model_contract.storage_contract_fingerprint();
+        let mut block_digest = Sha256::new();
+        block_digest.update(PERSISTENT_PROMPT_CACHE_SPARSE_ANCHORED_ROOT_SEED);
+        block_digest.update(storage_contract_fingerprint);
+        block_digest.update(PERSISTENT_PROMPT_CACHE_SPARSE_ANCHORED_STATE_IDENTITY_DOMAIN);
+        block_digest.update(sparse_target_state_identity);
+        if let Some(block_causal_input_digest) = block_causal_input.canonical_digest() {
+            block_digest.update(PERSISTENT_PROMPT_CACHE_BLOCK_CAUSAL_INPUT_DOMAIN);
+            block_digest.update(block_causal_input_digest);
+        }
+        for block_token in block_tokens {
+            block_digest.update(block_token.to_be_bytes());
+        }
+        Ok(Self {
+            block_hash: block_digest.finalize().into(),
             block_index: 0,
             token_count: u32::try_from(block_tokens.len())
                 .map_err(|_| PersistentPromptCacheBlockKeyError::BlockTokenCountOverflow)?,
