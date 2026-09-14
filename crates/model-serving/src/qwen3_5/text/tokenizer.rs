@@ -11,6 +11,7 @@ use super::{
     Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5PromptRenderer, ValidatedQwen3_5Artifact,
 };
 
+use super::context_token_validation::validate_context_token_count;
 use super::sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
 use super::thinking_budget::minimum_bounded_output_token_count;
 use super::token_decoder::Qwen3_5TokenDecoder;
@@ -470,27 +471,6 @@ impl Qwen3_5Tokenizer {
             ordinary_target_prefill_control_span_token_count,
         ))
     }
-}
-
-/// Validates combined input and output tokens against model-native positions.
-pub fn validate_context_token_count(
-    input_token_count: usize,
-    maximum_output_tokens: usize,
-    maximum_context_tokens: usize,
-) -> Result<(), Qwen3_5TokenizerError> {
-    let total_context_tokens = input_token_count.checked_add(maximum_output_tokens).ok_or(
-        Qwen3_5TokenizerError::TotalContextTooLarge {
-            actual_total_context_tokens: usize::MAX,
-            maximum_total_context_tokens: maximum_context_tokens,
-        },
-    )?;
-    if total_context_tokens > maximum_context_tokens {
-        return Err(Qwen3_5TokenizerError::TotalContextTooLarge {
-            actual_total_context_tokens: total_context_tokens,
-            maximum_total_context_tokens: maximum_context_tokens,
-        });
-    }
-    Ok(())
 }
 
 /// Extracts one token-count vector per user message from the conversation history.

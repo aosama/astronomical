@@ -17,6 +17,12 @@ use super::tool_schema::{DeclaredTool, parse_tool_parameters};
 
 mod foreign_syntax;
 mod salvage;
+mod state;
+
+use state::{
+    Qwen3_5OutputParserState, ToolCallEntry, ToolCallEntryKind, earliest_marker,
+    longest_suffix_prefix_for_markers, split_qwen_function_envelope, strip_qwen_function_open,
+};
 
 const MAX_OUTPUT_FRAGMENT_BYTES: usize = 16 * 1024;
 const MAX_MARKER_SCAN_PENDING_OUTPUT_BYTES: usize = 128 * 1024;
@@ -493,107 +499,4 @@ impl Qwen3_5OutputParser {
             Qwen3_5OutputParserState::Text
         };
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Qwen3_5OutputParserState {
-    Text,
-    Reasoning,
-    ToolCall(ToolCallEntry),
-    SuppressedLateReasoning,
-}
-
-/// One entered tool-call attempt: its dialect kind, the exact opener marker to
-/// restore when the attempt turns out to be quoted prose, and the channel the
-/// opener appeared in.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ToolCallEntry {
-    kind: ToolCallEntryKind,
-    opener: &'static str,
-    opened_in_reasoning: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ToolCallEntryKind {
-    Envelope,
-    BareFunction,
-    InvokeTag,
-}
-
-impl Qwen3_5OutputParserState {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Text => "text",
-            Self::Reasoning => "reasoning",
-            Self::ToolCall(_) => "tool_call",
-            Self::SuppressedLateReasoning => "suppressed_late_reasoning",
-        }
-    }
-
-    fn requires_marker_scan_pending_output_cap(self) -> bool {
-        matches!(
-            self,
-            Self::Text | Self::Reasoning | Self::SuppressedLateReasoning
-        )
-    }
-}
-
-fn split_qwen_function_envelope(
-    tool_call_body: &str,
-) -> Result<(String, String), Qwen3_5OutputParserError> {
-    // Closed envelopes still reach the harness when the model drops `<` or the function close tag.
-    let after_function_open = strip_qwen_function_open(tool_call_body)
-        .ok_or(Qwen3_5OutputParserError::ToolCallMissingFunction)?;
-    let function_name_end = after_function_open
-        .find(|character: char| character == '>' || character == '<' || character.is_whitespace())
-        .unwrap_or(after_function_open.len());
-    let function_name = after_function_open[..function_name_end].trim();
-    if function_name.is_empty() {
-        return Err(Qwen3_5OutputParserError::ToolCallMissingFunction);
-    }
-    let after_function_name = after_function_open[function_name_end..]
-        .trim_start_matches('>')
-        .trim();
-    let parameter_content = after_function_name
-        .strip_suffix(FUNCTION_END_MARKER)
-        .unwrap_or(after_function_name)
-        .trim()
-        .to_owned();
-    Ok((function_name.to_owned(), parameter_content))
-}
-
-fn strip_qwen_function_open(tool_call_body: &str) -> Option<&str> {
-    tool_call_body
-        .strip_prefix(BARE_FUNCTION_START_MARKER)
-        .or_else(|| tool_call_body.strip_prefix("function="))
-}
-
-fn earliest_marker<'a>(text: &str, markers: &'a [&'a str]) -> Option<(usize, &'a str)> {
-    markers
-        .iter()
-        .filter_map(|marker| {
-            text.find(marker)
-                .map(|marker_index| (marker_index, *marker))
-        })
-        .min_by_key(|(marker_index, _)| *marker_index)
-}
-
-fn longest_suffix_prefix_for_markers(text: &str, markers: &[&str]) -> usize {
-    let maximum_prefix_bytes = markers
-        .iter()
-        .map(|marker| marker.len().saturating_sub(1))
-        .max()
-        .unwrap_or(0)
-        .min(text.len());
-    for suffix_bytes in (1..=maximum_prefix_bytes).rev() {
-        let suffix_start = text.len() - suffix_bytes;
-        if !text.is_char_boundary(suffix_start) {
-            continue;
-        }
-        let suffix = &text[suffix_start..];
-        if markers.iter().any(|marker| marker.starts_with(suffix)) {
-            return suffix_bytes;
-        }
-    }
-    0
 }

@@ -15,6 +15,7 @@ mod error;
 mod evaluation;
 #[cfg(feature = "direct-mlx")]
 mod forward_attribution;
+mod forward_attribution_generation;
 #[cfg(feature = "direct-mlx")]
 mod forward_contract;
 #[cfg(feature = "direct-mlx")]

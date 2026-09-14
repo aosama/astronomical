@@ -8,6 +8,7 @@ mod request_output;
 pub(crate) mod sampler;
 mod sampler_config;
 
+mod context_token_validation;
 mod template_safe_content;
 mod thinking_budget;
 mod thinking_channel_seed;
@@ -18,6 +19,7 @@ mod tokenizer_error;
 mod tool_schema;
 
 pub use crate::sampling_seed::resolve_sampling_seed;
+pub use context_token_validation::validate_context_token_count;
 pub use inference_request::{Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy};
 pub use output_parser::{Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5ToolCall};
 pub use output_parser_error::Qwen3_5OutputParserError;
@@ -35,7 +37,7 @@ pub(in crate::qwen3_5) use thinking_budget::minimum_bounded_output_token_count;
 pub use thinking_budget::{Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState};
 pub use token_decoder::Qwen3_5TokenDecoder;
 pub use token_ids::{Qwen3_5TokenIds, discover_token_ids};
-pub use tokenizer::{Qwen3_5Tokenizer, validate_context_token_count};
+pub use tokenizer::Qwen3_5Tokenizer;
 pub use tokenizer_error::Qwen3_5TokenizerError;
 
 pub(crate) use super::artifacts::ValidatedQwen3_5Artifact;
