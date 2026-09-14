@@ -13,13 +13,13 @@ pub use request_execution::{
 use std::path::PathBuf;
 use std::time::Instant;
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
+use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
 
 use crate::{
-    MemoryCeilingUtilization, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
-    PerformanceAttributionOutcome, PerformanceOperation, ValidatedWeightsFile,
+    MemoryCeilingUtilization, MlxMemoryTelemetry, ModelLoadingPerformanceAttributionMetadata,
+    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
+    PerformanceOperation, ValidatedWeightsFile,
 };
 
 use super::super::memory_utilization::{

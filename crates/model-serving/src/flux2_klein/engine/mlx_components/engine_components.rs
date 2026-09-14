@@ -4,6 +4,10 @@
 //! stays inside the source-size budget; as a child module it can reach the
 //! component set's private fields and the parent's imports directly.
 
+use astronomical_ipc_protocol::ExpertMemoryMode;
+
+use crate::MlxMemoryLimitAdjustment;
+
 use super::*;
 
 impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
@@ -237,4 +241,53 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                 telemetry
             })
     }
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, String> {
+        if self.request_id.is_some() {
+            return Err("memory limits cannot change during image generation".to_owned());
+        }
+        let requested_ceiling = usize::try_from(requested_mlx_memory_ceiling_bytes)
+            .map_err(|_| "the requested MLX memory ceiling exceeds this platform".to_owned())?;
+        self.replenish_validated_descriptors()?;
+        let geometry = memory_geometry(
+            self.validated_artifact
+                .as_ref()
+                .ok_or_else(|| "the validated FLUX.2 Klein artifact is unavailable".to_owned())?,
+        )?;
+        let residency_plan =
+            Flux2KleinMemoryAdmission::plan(requested_mlx_memory_ceiling_bytes, &geometry)
+                .map_err(|error| error.to_string())?;
+        let allocator_cache_memory_limit_bytes = allocator_cache_limit_for_ceiling(
+            self.original_allocator_cache_memory_limit_bytes,
+            requested_ceiling,
+        );
+        let memory_limits =
+            MlxMemoryLimits::new(requested_ceiling, allocator_cache_memory_limit_bytes)
+                .map_err(|error| error.to_string())?;
+        self.runtime
+            .as_mut()
+            .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?
+            .update_memory_limits(memory_limits)
+            .map_err(|error| error.to_string())?;
+        self.effective_mlx_memory_ceiling_bytes = requested_ceiling;
+        self.allocator_cache_memory_limit_bytes = allocator_cache_memory_limit_bytes;
+        let minimum_mlx_memory_ceiling_bytes = residency_plan.minimum_mlx_memory_ceiling_bytes();
+        self.residency_plan = Some(residency_plan);
+        Ok(MlxMemoryLimitAdjustment::new(
+            requested_mlx_memory_ceiling_bytes,
+            allocator_cache_memory_limit_bytes as u64,
+            minimum_mlx_memory_ceiling_bytes,
+            ExpertMemoryMode::Resident,
+            self.collect_mlx_memory_telemetry(),
+        ))
+    }
+}
+
+fn allocator_cache_limit_for_ceiling(
+    original_allocator_cache_memory_limit_bytes: usize,
+    requested_mlx_memory_ceiling_bytes: usize,
+) -> usize {
+    original_allocator_cache_memory_limit_bytes.min(requested_mlx_memory_ceiling_bytes)
 }

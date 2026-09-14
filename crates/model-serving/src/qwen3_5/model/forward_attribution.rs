@@ -1,11 +1,11 @@
 //! Request-owned performance-attribution forwarding for Qwen3.5 MLX graphs.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
+use astronomical_runtime_integration::MlxArray;
 
 use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::forward_contract::{validate_forward_input, validate_generated_token_forward};
+use super::forward_contract::validate_forward_input;
 use super::model::Qwen3_5Model;
 use super::visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};

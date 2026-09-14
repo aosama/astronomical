@@ -21,7 +21,7 @@ mod state;
 
 use state::{
     Qwen3_5OutputParserState, ToolCallEntry, ToolCallEntryKind, earliest_marker,
-    longest_suffix_prefix_for_markers, split_qwen_function_envelope, strip_qwen_function_open,
+    longest_suffix_prefix_for_markers, split_qwen_function_envelope,
 };
 
 const MAX_OUTPUT_FRAGMENT_BYTES: usize = 16 * 1024;

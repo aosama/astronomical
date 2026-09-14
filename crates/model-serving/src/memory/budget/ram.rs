@@ -40,8 +40,6 @@
 
 use std::collections::BTreeMap;
 
-use thiserror::Error;
-
 use crate::memory::{
     MemoryPhase, expert_reclamation_bytes_to_fit_fixed_forward,
     required_complete_residency_activation_headroom_bytes,

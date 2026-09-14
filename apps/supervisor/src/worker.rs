@@ -13,31 +13,27 @@ use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::{Instant, MissedTickBehavior, interval};
 
-use crate::worker_cache_clear::{
-    apply_pending_prompt_cache_clear_if_idle, handle_prompt_cache_clear_command,
-};
+use crate::worker_cache_clear::handle_prompt_cache_clear_command;
 use crate::worker_embeddings_request::handle_generate_embeddings_command;
 use crate::worker_generate::handle_generate_command;
 use crate::worker_image_request::handle_generate_image_command;
 use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate, apply_mlx_memory_limit,
-    apply_pending_mlx_memory_limit_if_idle, contain_mlx_memory_limit_failure,
     take_generation_start_after_pending_memory_limit,
 };
 use crate::{
-    ChatGenerationStreamErrorCode, CompletionAttributionLog, GenerationPerformanceLog,
-    GenerationStartError, ImageGenerationExecutionError, ImageGenerationTimeouts,
-    RuntimeModelPolicy, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
-    WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
+    CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationTimeouts, RuntimeModelPolicy, WorkerControlError,
+    WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
     chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
     worker_containment::{
-        cancel_active_generation, close_worker_if_running, contain_worker_failure,
-        fail_active_generation,
+        cancel_active_generation, close_worker_if_running, contain_worker_failure, shutdown_worker,
     },
     worker_event_handler::handle_worker_event,
-    worker_health::{
-        clear_active_request_progress, publish_activity, publish_health,
-        publish_pending_mlx_memory_ceiling,
+    worker_health::{publish_health, publish_pending_mlx_memory_ceiling},
+    worker_idle_drain::{
+        drain_pending_idle_work, wait_for_embeddings_execution_deadline,
+        wait_for_image_execution_deadline,
     },
     worker_loop_types::{ActiveWorkerRequest, WorkerLoopCommand},
     worker_replacement::WorkerReplacement,
@@ -71,30 +67,8 @@ pub(crate) async fn run_worker(
     let mut pending_prompt_cache_clear: Option<crate::PendingPromptCacheClear> = None;
 
     loop {
-        if active_generation.is_none()
-            && let Err(memory_limit_error) = apply_pending_mlx_memory_limit_if_idle(
-                &mut pending_mlx_memory_limit_update,
-                &mut worker_process,
-                model_load_timeout,
-                &health_snapshot,
-                &mut is_ready,
-                &mut model_load_deadline,
-                &mut active_generation,
-                &mut performance_log,
-                &mut completion_log,
-            )
-            .await
-        {
-            contain_mlx_memory_limit_failure(
-                &mut worker_process,
-                &health_snapshot,
-                &mut active_generation,
-                &mut is_ready,
-                memory_limit_error,
-            )
-            .await;
-        }
-        apply_pending_prompt_cache_clear_if_idle(
+        drain_pending_idle_work(
+            &mut pending_mlx_memory_limit_update,
             &mut pending_prompt_cache_clear,
             &mut worker_process,
             &health_snapshot,
@@ -105,6 +79,7 @@ pub(crate) async fn run_worker(
             &mut completion_log,
             &active_generation_permits,
             &generation_queue_permits,
+            model_load_timeout,
         )
         .await;
         let stream_event_sender = active_generation
@@ -308,23 +283,9 @@ pub(crate) async fn run_worker(
                         }
                     }
                     WorkerLoopCommand::Shutdown { shutdown_sender } => {
-                        publish_health(
-                            &health_snapshot,
-                            WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-                        );
-                        fail_active_generation(
-                            &mut active_generation,
-                            ChatGenerationStreamErrorCode::WorkerUnavailable,
-                        );
-                        publish_activity(&health_snapshot, WorkerActivity::Idle);
-                        clear_active_request_progress(&health_snapshot);
-                        let shutdown_outcome = if worker_process.process_id().is_some() {
-                            worker_process.close().await
-                        } else {
-                            Ok(WorkerTerminationOutcome::Graceful {
-                                process_exit_successful: true,
-                            })
-                        };
+                        let shutdown_outcome =
+                            shutdown_worker(&mut worker_process, &health_snapshot, &mut active_generation)
+                                .await;
                         let _send_outcome = shutdown_sender.send(shutdown_outcome);
                         return;
                     }
@@ -569,23 +530,4 @@ pub(crate) async fn run_worker(
             }
         }
     }
-}
-
-async fn wait_for_image_execution_deadline(active_request: &Option<ActiveWorkerRequest>) {
-    let Some(ActiveWorkerRequest::Image(active_image)) = active_request else {
-        std::future::pending::<()>().await;
-        return;
-    };
-    let next_deadline = active_image
-        .execution_deadline
-        .min(active_image.progress_stall_deadline);
-    tokio::time::sleep_until(next_deadline).await;
-}
-
-async fn wait_for_embeddings_execution_deadline(active_request: &Option<ActiveWorkerRequest>) {
-    let Some(ActiveWorkerRequest::Embeddings(active_embeddings)) = active_request else {
-        std::future::pending::<()>().await;
-        return;
-    };
-    tokio::time::sleep_until(active_embeddings.execution_deadline).await;
 }
