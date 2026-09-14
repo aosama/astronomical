@@ -1,5 +1,12 @@
 # Performance Optimization Lessons
 
+## Memory reserve attribution (issue #644)
+
+- Activation workspace and context state grow on different curves, and a memory reserve that conflates their scopes produces promises several times the ceiling. Measured on a 50K-token chunked prefill of the 35B sparse MoE: active MLX memory stayed flat at ~27.5 GB across all 24 chunks (activation is a function of the 2,048-token chunk, because Metal kernels tile attention), while the plan projected a per-chunk ~1 GB observation proportionally to the full prompt length into a 40-43 GB reserve — nearly twice the 39 GB ceiling — purely from feeding the prompt token count into an operation-scoped lookup.
+- The falsifier was already in the telemetry: flat active memory across a long chunked prefill proves activation does not scale with prompt length. When a reserve and the measured footprint disagree by an order of magnitude, one of them is describing a different quantity, and the split telemetry (owner overrun) is what surfaces it.
+- Cost of the wrong scope was not display-only: the inflated activation reserve sat inside the expert retention budget, forcing a complete-resident demotion to SSD streaming mid-prefill (27.8 GB to 4.7 GB active) that the corrected ~2 GB reserve eliminates entirely. Wrong reserve arithmetic converts directly into avoidable SSD reads.
+- Keep per-token linear projection only where the underlying quantity truly scales per token (context/KV state: measured 2.0 GB at 45K matches the per-token arithmetic exactly). For quantities owned by one operation, resolve evidence at the operation's own token count and let a static geometric floor bound unmeasured shapes.
+
 ## First principles
 
 - Rust and C++ are not automatically faster than Python. Python only submits graphs to Apple’s MLX array framework; graph shape and selected Metal kernels dominate.

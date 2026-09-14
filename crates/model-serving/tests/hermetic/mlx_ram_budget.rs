@@ -58,7 +58,7 @@ fn should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners() {
     let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
 
-    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 0);
+    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 4_096, 0);
 
     // retained_expert_budget =
     //   mlx_active_memory_ceiling
@@ -111,7 +111,7 @@ fn should_raise_context_window_reserve_from_measurements_and_never_under_shoot()
     assert!(context_window_reserve_for_4096 >= context_window_reserve_for_2048);
     assert!(context_window_reserve_for_4096 >= 1_500_000_000);
 
-    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 0);
+    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 4_096, 0);
     assert_eq!(
         planned_budget.activation_headroom_bytes,
         unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(700_000_000)
@@ -141,7 +141,7 @@ fn should_not_charge_transient_workspace_as_both_context_and_activation() {
         exact_temporary_workspace_bytes: 100_000_000,
     });
 
-    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 7_000, 0);
+    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 7_000, 7_000, 0);
 
     assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
     assert_eq!(
@@ -180,7 +180,7 @@ fn should_protect_the_first_decode_with_prefill_activation_evidence() {
         exact_temporary_workspace_bytes: 0,
     });
 
-    let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 7_000, 0);
+    let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 7_000, 1, 0);
 
     // Before decode has its own evidence, retaining experts into prefill-proven
     // transient space would force immediate reclamation on the first token.
@@ -206,7 +206,7 @@ fn should_use_decode_activation_evidence_after_decode_is_observed() {
         exact_temporary_workspace_bytes: 0,
     });
 
-    let learned_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 7_000, 0);
+    let learned_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 7_000, 1, 0);
 
     assert_eq!(learned_decode_plan.activation_headroom_bytes, 400_000_000);
 }
@@ -280,12 +280,14 @@ fn should_exclude_newly_retained_experts_from_context_and_activation_learning() 
 // session high-water pooled across every context size, so one large-context
 // request's workspace sized the promise shown to users and the retention
 // ceiling offered to paged experts for every later request. The promise is
-// now resolved per planned context: highest evidence at or below the planned
-// bucket within the measured span, proportionally projected beyond it, with
-// the static three-layer floor still bounding everything.
+// now resolved per planned operation (issue #644 sharpened the scope: the
+// planned token count is the operation's own size, never the prompt length):
+// highest evidence at or below the operation bucket within the measured span,
+// proportionally projected beyond it, with the static three-layer floor still
+// bounding everything.
 
 #[test]
-fn should_resolve_the_prefill_activation_promise_from_the_planned_context_bucket() {
+fn should_resolve_the_prefill_activation_promise_from_the_planned_operation_bucket() {
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -303,15 +305,15 @@ fn should_resolve_the_prefill_activation_promise_from_the_planned_context_bucket
         exact_temporary_workspace_bytes: 0,
     });
 
-    let plan_for_2048 = mlx_ram_budget.plan(MemoryPhase::Prefill, 2_048, 0);
-    let plan_for_4096 = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 0);
+    let plan_for_2048 = mlx_ram_budget.plan(MemoryPhase::Prefill, 2_048, 2_048, 0);
+    let plan_for_4096 = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 4_096, 0);
 
     assert_eq!(plan_for_2048.activation_headroom_bytes, 400_000_000);
     assert_eq!(plan_for_4096.activation_headroom_bytes, 700_000_000);
 }
 
 #[test]
-fn should_project_the_prefill_activation_promise_beyond_the_highest_measured_context() {
+fn should_project_the_prefill_activation_promise_beyond_the_highest_measured_operation() {
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -322,11 +324,47 @@ fn should_project_the_prefill_activation_promise_beyond_the_highest_measured_con
         exact_temporary_workspace_bytes: 0,
     });
 
-    // Beyond the highest measured token count (5,120 for bucket 4) the highest
-    // evidence scales proportionally: 700 MB × 8,192 / 5,120 = 1,120 MB.
-    let plan_for_8192 = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 0);
+    // Beyond the highest measured operation token count (5,120 for bucket 4)
+    // the highest evidence scales proportionally: 700 MB × 8,192 / 5,120 =
+    // 1,120 MB. This is the honest linear prior for operations larger than
+    // anything measured; chunked prefill never reaches it because every chunk
+    // is bounded by the configured chunk size.
+    let plan_for_8192 = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
 
     assert_eq!(plan_for_8192.activation_headroom_bytes, 1_120_000_000);
+}
+
+#[test]
+fn should_keep_the_prefill_activation_promise_independent_of_the_prompt_context() {
+    // Issue #644 regression: the activation reserve is operation-scoped. The
+    // production failure planned a 50,400-token prompt's activation from a
+    // per-chunk observation, multiplying it ~49x into a reserve several times
+    // the ceiling. The prompt length must size the context reserve only; the
+    // activation reserve must not move with it. The geometry carries real
+    // per-token state bytes so the context reserve can actually grow.
+    let mut geometry = small_layer_geometry();
+    geometry.sequence_state_bytes_per_token = 24_000;
+    let mut mlx_ram_budget =
+        MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 2_048,
+        measured_context_and_activation_bytes: 1_500_000_000,
+        observed_activation_headroom_bytes: 400_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    let plan_for_chunk = mlx_ram_budget.plan(MemoryPhase::Prefill, 50_400, 2_048, 0);
+    let plan_for_small = mlx_ram_budget.plan(MemoryPhase::Prefill, 2_048, 2_048, 0);
+
+    assert_eq!(
+        plan_for_chunk.activation_headroom_bytes, plan_for_small.activation_headroom_bytes,
+        "the activation reserve must not scale with the prompt context"
+    );
+    assert!(
+        plan_for_chunk.context_window_reserve_bytes > plan_for_small.context_window_reserve_bytes,
+        "the context reserve must still grow with the prompt context"
+    );
 }
 
 #[test]
@@ -351,7 +389,7 @@ fn should_keep_the_first_decode_protected_by_the_largest_prefill_evidence() {
     // Before decode has its own evidence, the largest prefill observation —
     // not the smaller bucket the next request happens to plan — protects the
     // first decode from warm fill occupying transient space.
-    let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 2_048, 0);
+    let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 2_048, 1, 0);
 
     assert_eq!(first_decode_plan.activation_headroom_bytes, 700_000_000);
 }

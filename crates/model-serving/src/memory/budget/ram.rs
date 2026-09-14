@@ -368,11 +368,22 @@ impl MlxRamBudget {
     }
 
     /// Composes the full budget for one planned operation.
+    ///
+    /// The two token counts describe different scopes and must not be
+    /// conflated (issue #644): `context_token_count` sizes the context-window
+    /// reserve, which genuinely grows with the request's prompt, while
+    /// `operation_token_count` sizes the activation reserve, which belongs to
+    /// the single forward being planned. A chunked prefill's activation
+    /// workspace is a function of the chunk size — measured active memory
+    /// stays flat across a 50K-token chunked prefill — so planning activation
+    /// against the prompt length multiplied a per-chunk observation into a
+    /// reserve several times the ceiling.
     #[must_use]
     pub fn plan(
         &self,
         phase: MemoryPhase,
         context_token_count: u64,
+        operation_token_count: u64,
         other_fixed_bytes: u64,
     ) -> MlxRamBudgetSnapshot {
         // Idle refill happens after request arrays are released, so it needs no
@@ -384,7 +395,8 @@ impl MlxRamBudget {
                 self.context_window_reserve_bytes(context_token_count)
             }
         };
-        let activation_headroom_bytes = self.activation_headroom_bytes(phase, context_token_count);
+        let activation_headroom_bytes =
+            self.activation_headroom_bytes(phase, operation_token_count);
         let complete_layer_stream_slot_bytes = match phase {
             MemoryPhase::Prefill => self.model_geometry.largest_complete_expert_layer_bytes,
             // GenerationPreparation budgets like decode (see phase.rs): token

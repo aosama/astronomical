@@ -97,13 +97,14 @@ impl Qwen3_5Model {
         &self,
         phase: crate::MemoryPhase,
         context_token_count: u64,
+        operation_token_count: u64,
         mlx_active_memory_bytes: u64,
         active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
             self.mlx_ram_budget
                 .borrow()
-                .plan(phase, context_token_count, 0),
+                .plan(phase, context_token_count, operation_token_count, 0),
             mlx_active_memory_bytes,
             active_breakdown,
         )
@@ -120,6 +121,7 @@ impl Qwen3_5Model {
         &self,
         phase: crate::MemoryPhase,
         context_token_count: u64,
+        operation_token_count: u64,
         request_decoder_state: &RequestDecoderStateStack,
         additional_context_state_payload_bytes: u64,
         mlx_active_memory_bytes: u64,
@@ -134,6 +136,7 @@ impl Qwen3_5Model {
         let utilization = self.memory_ceiling_utilization_for_breakdown(
             phase,
             context_token_count,
+            operation_token_count,
             mlx_active_memory_bytes,
             active_breakdown,
         );

@@ -55,6 +55,18 @@ impl Qwen3_5PromptProcessingChunkSizer {
         )
     }
 
+    /// The largest token count any single prompt-processing forward can span.
+    ///
+    /// Paged experts stream with their own chunk size, so the operation bound
+    /// for memory planning is the larger of the two configured sizes (issue
+    /// #644: activation reserves are operation-scoped and need the operation
+    /// bound, not the prompt length).
+    #[must_use]
+    pub fn maximum_prompt_processing_chunk_size_tokens(&self) -> usize {
+        self.fixed_prompt_processing_chunk_size_tokens
+            .max(self.ssd_streaming_prompt_processing_chunk_size_tokens)
+    }
+
     #[must_use]
     pub fn next_prompt_processing_chunk_end_for_expert_residency(
         &self,
