@@ -15,6 +15,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       applicationChannel: applicationIdentity.channel)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
+  private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
@@ -64,6 +65,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         ),
         updatesSupported: applicationUpdateController.supportsUserUpdateControls,
         revealConfiguration: revealConfiguration,
+        showWelcome: { [weak self] in self?.showWelcomeWindow() },
         quitApplication: { NSApp.terminate(nil) }
       )
     )
@@ -89,7 +91,14 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         telemetryStore: telemetryStore)
     }
     telemetryStore.startPolling()
-    DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+    // The welcome decision runs before daemon maintenance so a brand-new
+    // install is judged on its empty state directory, not on files the just
+    // started daemon creates during this same launch.
+    if shouldShowFirstRunWelcome() {
+      showWelcomeWindow()
+    } else {
+      DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+    }
   }
 
   public func applicationWillTerminate(_ notification: Notification) {
@@ -138,6 +147,31 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       }
       telemetryStore.refreshNow()
     }
+  }
+
+  private func shouldShowFirstRunWelcome() -> Bool {
+    FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
+      .welcomeDecision() == .showWelcome
+  }
+
+  private func showWelcomeWindow() {
+    firstRunWelcomeWindowController.showWelcomeWindow(
+      telemetryStore: telemetryStore,
+      applicationIdentity: applicationIdentity,
+      openObservatory: { [weak self] in self?.openObservatory() },
+      openLibrary: { [weak self] in self?.openLibrary() },
+      restartServer: { [weak self] in self?.restartServer() },
+      handleClose: { [weak self] in self?.welcomeWindowDidClose() }
+    )
+  }
+
+  // Closing the welcome by any path — primary action, skip link, or the close
+  // button — is the acknowledgment, and the application returns to its normal
+  // accessory (no Dock icon) posture only after the window is gone.
+  private func welcomeWindowDidClose() {
+    FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
+      .acknowledgeWelcome()
+    NSApp.setActivationPolicy(.accessory)
   }
 
   private func openObservatory() {
