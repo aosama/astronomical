@@ -3,13 +3,16 @@
 //! The guard answers a narrower question than `MlxRamBudget`: can one concrete
 //! forward grow from the *current* MLX state without crossing stable or expected
 //! peak limits? It uses exact persistent growth supplied by decoder-state owners,
-//! one routed expert-page reservation, explicit temporary workspace, and the
-//! largest transient high-water observed from completed forwards.
+//! one routed expert-page reservation, explicit temporary workspace, and a
+//! transient reserve resolved from completed forwards at the highest specificity
+//! available: the exact execution context first, then a token-proportional
+//! estimate from the same phase, then the global maximum for a phase with no
+//! evidence at all (issue #623).
 //!
 //! Three projections are retained for diagnostics:
 //!
 //! - `stable`: current active + persistent growth + routed page;
-//! - `peak`: stable + explicit workspace + learned transient high-water;
+//! - `peak`: stable + explicit workspace + the resolved transient reserve;
 //! - `recovery`: peak + one equal transient window.
 //!
 //! Stable and peak are admission boundaries. Recovery is deliberately diagnostic.
@@ -22,7 +25,11 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use crate::memory::{ExpertReclamationPlan, MemoryPhase};
+use crate::memory::MemoryPhase;
+use crate::memory::budget::adaptive_growth_projection::{
+    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
+    scale_transient_to_token_count,
+};
 
 /// Exact recurrent execution shape whose temporary allocation evidence may recur.
 ///
@@ -108,151 +115,6 @@ pub struct AdaptiveRamGrowthGuard {
     observed_transient_high_water_bytes_by_context: BTreeMap<AdaptiveRamGrowthContext, usize>,
 }
 
-/// Checked projection evidence for one adaptive growth operation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AdaptiveRamGrowthProjection {
-    /// MLX active bytes sampled immediately before this admission decision.
-    current_active_memory_bytes: usize,
-    /// Exact key/value, recurrent, and caller-declared persistent growth.
-    exact_persistent_growth_bytes: usize,
-    /// Maximum bounded expert page that may coexist with this forward.
-    routed_expert_page_reservation_bytes: usize,
-    /// Known one-operation workspace not represented by learned history.
-    exact_temporary_workspace_bytes: usize,
-    /// Conservative reusable transient evidence from prior completed forwards.
-    observed_transient_high_water_bytes: usize,
-    stable_projected_bytes: usize,
-    peak_projected_bytes: usize,
-    recovery_projected_bytes: usize,
-    active_memory_ceiling_bytes: usize,
-    allowed_active_memory_bytes: usize,
-}
-
-impl AdaptiveRamGrowthProjection {
-    #[must_use]
-    pub const fn current_active_memory_bytes(&self) -> usize {
-        self.current_active_memory_bytes
-    }
-
-    #[must_use]
-    pub const fn exact_persistent_growth_bytes(&self) -> usize {
-        self.exact_persistent_growth_bytes
-    }
-
-    #[must_use]
-    pub const fn routed_expert_page_reservation_bytes(&self) -> usize {
-        self.routed_expert_page_reservation_bytes
-    }
-
-    #[must_use]
-    pub const fn exact_temporary_workspace_bytes(&self) -> usize {
-        self.exact_temporary_workspace_bytes
-    }
-
-    #[must_use]
-    pub const fn observed_transient_high_water_bytes(&self) -> usize {
-        self.observed_transient_high_water_bytes
-    }
-
-    /// Returns stable bytes after persistent state growth and before temporary work.
-    #[must_use]
-    pub const fn stable_projected_bytes(&self) -> usize {
-        self.stable_projected_bytes
-    }
-
-    /// Returns stable bytes plus the exact-context transient high-water window.
-    #[must_use]
-    pub const fn peak_projected_bytes(&self) -> usize {
-        self.peak_projected_bytes
-    }
-
-    /// Returns peak bytes plus one equal diagnostic recovery window.
-    #[must_use]
-    pub const fn recovery_projected_bytes(&self) -> usize {
-        self.recovery_projected_bytes
-    }
-
-    /// Returns the complete non-expert reserve that expert residency must leave
-    /// available for this admitted forward through its expected peak.
-    ///
-    /// Recovery-only shortfall is diagnostic and handled by typed allocation-
-    /// failure rollback, exact reclamation, and retry. Passing the expected-peak
-    /// difference into the residency planner keeps both policy owners on the same
-    /// initial-admission equation.
-    #[must_use]
-    pub const fn forward_reserve_bytes(&self) -> usize {
-        self.peak_projected_bytes
-            .saturating_sub(self.current_active_memory_bytes)
-    }
-
-    #[must_use]
-    pub const fn active_memory_ceiling_bytes(&self) -> usize {
-        self.active_memory_ceiling_bytes
-    }
-
-    /// Returns the configured ceiling plus its approved one-percent transient allowance.
-    #[must_use]
-    pub const fn allowed_active_memory_bytes(&self) -> usize {
-        self.allowed_active_memory_bytes
-    }
-
-    /// Returns the exact retained-expert reclamation needed by stable and peak work.
-    #[must_use]
-    pub const fn operation_reclamation_required_bytes(&self) -> usize {
-        let stable_deficit_bytes = self
-            .stable_projected_bytes
-            .saturating_sub(self.active_memory_ceiling_bytes);
-        let peak_deficit_bytes = self
-            .peak_projected_bytes
-            .saturating_sub(self.allowed_active_memory_bytes);
-        if stable_deficit_bytes > peak_deficit_bytes {
-            stable_deficit_bytes
-        } else {
-            peak_deficit_bytes
-        }
-    }
-
-    /// Returns the diagnostic recovery-reserve shortfall against the transient ceiling.
-    #[must_use]
-    pub const fn recovery_reserve_shortfall_bytes(&self) -> usize {
-        self.recovery_projected_bytes
-            .saturating_sub(self.allowed_active_memory_bytes)
-    }
-
-    /// Plans preemptive reclamation for stable and expected-peak deficits.
-    ///
-    /// Recovery remains diagnostic. A recovery-only shortfall is handled by the
-    /// typed allocation-failure checkpoint, exact reclamation, and retry path.
-    #[must_use]
-    pub const fn expert_retention_reclamation_plan(
-        &self,
-        retained_expert_payload_bytes: usize,
-    ) -> ExpertReclamationPlan {
-        // Pass peak twice on purpose. `ExpertReclamationPlan` is a pure
-        // three-boundary formula also used by stricter callers; replacing recovery
-        // with peak here excludes recovery-only deficits from preemptive eviction
-        // while preserving one shared checked-arithmetic implementation.
-        ExpertReclamationPlan::for_projected_memory(
-            self.stable_projected_bytes,
-            self.peak_projected_bytes,
-            self.peak_projected_bytes,
-            self.active_memory_ceiling_bytes,
-            self.allowed_active_memory_bytes,
-            retained_expert_payload_bytes,
-        )
-    }
-
-    #[must_use]
-    pub const fn fits_stable_and_peak_limits(&self) -> bool {
-        self.operation_reclamation_required_bytes() == 0
-    }
-
-    #[must_use]
-    pub const fn has_full_recovery_reserve(&self) -> bool {
-        self.recovery_reserve_shortfall_bytes() == 0
-    }
-}
-
 impl AdaptiveRamGrowthGuard {
     /// Creates a guard for one machine-derived MLX active-memory limit.
     pub fn new(active_memory_ceiling_bytes: usize) -> Result<Self, AdaptiveRamGrowthGuardError> {
@@ -315,11 +177,9 @@ impl AdaptiveRamGrowthGuard {
     }
 
     /// Returns the largest transient window observed across all completed
-    /// forward phases. Admission uses this conservative value because a future
-    /// request may begin in a different phase than the request that supplied
-    /// the only reusable observation. For example, a short prompt may not be
-    /// retained as prefill evidence, while its decode forwards still establish
-    /// the transient workspace required by the same model and memory owner.
+    /// forward phases. Callers without a concrete forward context use this
+    /// conservative value; forward admission resolves a shape-fitted reserve
+    /// through [`Self::admission_transient_reserve_for_context`] instead.
     #[must_use]
     pub fn admission_transient_high_water_bytes(&self) -> usize {
         self.observed_transient_high_water_bytes_by_context
@@ -327,6 +187,72 @@ impl AdaptiveRamGrowthGuard {
             .copied()
             .max()
             .unwrap_or(0)
+    }
+
+    /// Resolves the transient reserve for one concrete forward context.
+    ///
+    /// The ladder widens one dimension class at a time, and each level has a
+    /// distinct evidence basis:
+    ///
+    /// 1. **Exact context** — the same phase, token count, position bucket,
+    ///    and ownership mode completed a forward before; its high-water is the
+    ///    tightest known bound for this operation.
+    /// 2. **Phase-scaled** — no exact observation, but the phase completed
+    ///    other shapes. Activation workspace scales with the forward's token
+    ///    count, so each observation is rescaled to this forward's token count
+    ///    (ceiling division) and the largest scaled value wins. An 8,192-token
+    ///    chunk's 8 GB window therefore reserves about 2 GB for a 2,048-token
+    ///    chunk instead of borrowing the absolute 8 GB.
+    /// 3. **Global maximum** — the phase has no evidence at all. The first
+    ///    forward of a new phase reserves the largest window ever observed;
+    ///    its completion records that phase's own evidence and every later
+    ///    forward in the phase reserves proportionally.
+    ///
+    /// Under-projection remains recoverable by design: a typed allocation
+    /// failure restores the request checkpoint, reclaims the exact deficit,
+    /// and retries the unchanged forward, which also records the missing
+    /// shape's evidence. Over-reservation has no such self-correction — it
+    /// demotes expert ownership outright — so specificity wins over blanket
+    /// conservatism here.
+    #[must_use]
+    pub fn admission_transient_reserve_for_context(
+        &self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+    ) -> (usize, AdaptiveRamGrowthTransientReserveSource) {
+        if let Some(&exact_context_high_water_bytes) = self
+            .observed_transient_high_water_bytes_by_context
+            .get(&adaptive_ram_growth_context)
+        {
+            return (
+                exact_context_high_water_bytes,
+                AdaptiveRamGrowthTransientReserveSource::ExactContext,
+            );
+        }
+        let forward_token_count = adaptive_ram_growth_context.forward_token_count();
+        let scaled_phase_reserve_bytes = self
+            .observed_transient_high_water_bytes_by_context
+            .iter()
+            .filter(|(observed_context, _)| {
+                observed_context.memory_phase() == adaptive_ram_growth_context.memory_phase()
+            })
+            .filter_map(|(observed_context, &observed_high_water_bytes)| {
+                scale_transient_to_token_count(
+                    observed_high_water_bytes,
+                    observed_context.forward_token_count(),
+                    forward_token_count,
+                )
+            })
+            .max();
+        if let Some(scaled_phase_reserve_bytes) = scaled_phase_reserve_bytes {
+            return (
+                scaled_phase_reserve_bytes,
+                AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+            );
+        }
+        (
+            self.admission_transient_high_water_bytes(),
+            AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+        )
     }
 
     /// Returns the retained-payload ceiling that keeps the adaptive growth
@@ -381,19 +307,20 @@ impl AdaptiveRamGrowthGuard {
     /// Builds a checked C-stable and P-peak projection from exact-context evidence.
     pub fn project_growth_for_context(
         &self,
-        _adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         current_active_memory_bytes: usize,
         exact_persistent_growth_bytes: usize,
         routed_expert_page_reservation_bytes: usize,
         exact_temporary_workspace_bytes: usize,
     ) -> Result<AdaptiveRamGrowthProjection, AdaptiveRamGrowthGuardError> {
-        // Use the global maximum transient observation rather than an
-        // exact-context or phase-only lookup. Exact contexts include token count
-        // and position bucket, while a short prompt may not retain prefill
-        // evidence at all. A completed decode can still establish the transient
-        // workspace needed by the next request's prefill, so admission must
-        // reserve the largest reusable window across every phase.
-        let observed_transient_high_water_bytes = self.admission_transient_high_water_bytes();
+        // Reserve from the most specific evidence available and widen only when
+        // it is missing (issue #623): the exact context first, then a
+        // token-proportional estimate from the same phase's observations, then
+        // the global maximum for a phase with no evidence at all. Charging one
+        // shape's absolute transient window to every other shape demoted fully
+        // resident expert owners whose own chunk needed a fraction of it.
+        let (observed_transient_high_water_bytes, transient_reserve_source) =
+            self.admission_transient_reserve_for_context(adaptive_ram_growth_context);
         let stable_projected_bytes = current_active_memory_bytes
             .checked_add(exact_persistent_growth_bytes)
             .and_then(|projected_bytes| {
@@ -425,6 +352,7 @@ impl AdaptiveRamGrowthGuard {
             routed_expert_page_reservation_bytes,
             exact_temporary_workspace_bytes,
             observed_transient_high_water_bytes,
+            transient_reserve_source,
             stable_projected_bytes,
             peak_projected_bytes,
             recovery_projected_bytes,

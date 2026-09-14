@@ -28,6 +28,7 @@ pub(crate) fn log_adaptive_ram_growth_admission_decision(
             adaptive_ram_growth_projection.exact_temporary_workspace_bytes(),
         observed_transient_high_water_bytes =
             adaptive_ram_growth_projection.observed_transient_high_water_bytes(),
+        transient_reserve_source = ?adaptive_ram_growth_projection.transient_reserve_source(),
         stable_projected_bytes = adaptive_ram_growth_projection.stable_projected_bytes(),
         peak_projected_bytes = adaptive_ram_growth_projection.peak_projected_bytes(),
         recovery_projected_bytes = adaptive_ram_growth_projection.recovery_projected_bytes(),
@@ -72,6 +73,7 @@ pub(crate) fn log_adaptive_ram_growth_pressure(
             adaptive_ram_growth_projection.routed_expert_page_reservation_bytes(),
         observed_transient_high_water_bytes =
             adaptive_ram_growth_projection.observed_transient_high_water_bytes(),
+        transient_reserve_source = ?adaptive_ram_growth_projection.transient_reserve_source(),
         stable_projected_bytes = adaptive_ram_growth_projection.stable_projected_bytes(),
         peak_projected_bytes = adaptive_ram_growth_projection.peak_projected_bytes(),
         recovery_projected_bytes = adaptive_ram_growth_projection.recovery_projected_bytes(),

@@ -82,10 +82,10 @@ pub(crate) use admission::{
 pub(crate) use budget::context_token_bucket;
 pub use budget::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthProjection, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
-    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
-    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, RamBudgetGeometryError,
-    measured_non_expert_forward_growth_bytes,
+    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
+    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
+    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
+    RamBudgetGeometryError, measured_non_expert_forward_growth_bytes,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
 #[cfg(feature = "direct-mlx")]

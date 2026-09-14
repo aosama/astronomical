@@ -5,7 +5,8 @@
 //! estimates rather than measured production frequencies.
 
 use astronomical_model_serving::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError, MemoryPhase,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
+    AdaptiveRamGrowthTransientReserveSource, MemoryPhase,
 };
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
@@ -61,9 +62,12 @@ fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
         observed_context_projection.observed_transient_high_water_bytes(),
         200
     );
+    // Issue #623: an unseen shape reserves its own token-proportional share of
+    // the observed window (200 bytes at 128 tokens → 400 bytes at 256 tokens),
+    // not the observed shape's absolute window.
     assert_eq!(
         different_context_projection.observed_transient_high_water_bytes(),
-        200
+        400
     );
     assert_eq!(observed_context_projection.stable_projected_bytes(), 800);
     assert_eq!(observed_context_projection.peak_projected_bytes(), 1_000);
@@ -159,8 +163,11 @@ fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
         .project_growth_for_context(exceeding_peak_context, 900, 101, 0, 0)
         .expect("peak one byte above P should project");
 
-    assert_eq!(fitting_projection.peak_projected_bytes(), 1_011);
-    assert!(!fitting_projection.fits_stable_and_peak_limits());
+    // Issue #623: each context reserves its own exact evidence (10 and 11),
+    // not the global maximum. The fitting context therefore peaks exactly at
+    // P = C + 1 percent and is admitted; one byte more requires reclamation.
+    assert_eq!(fitting_projection.peak_projected_bytes(), 1_010);
+    assert!(fitting_projection.fits_stable_and_peak_limits());
     assert_eq!(exceeding_projection.peak_projected_bytes(), 1_012);
     assert_eq!(
         exceeding_projection.operation_reclamation_required_bytes(),
@@ -403,5 +410,149 @@ fn should_reject_a_recovery_projection_overflow() {
     assert_eq!(
         projection_error,
         AdaptiveRamGrowthGuardError::MemoryProjectionOverflow
+    );
+}
+
+// Issue #623: one large shape's transient high-water was charged unchanged to
+// every later forward of every other shape, demoting a fully resident expert
+// owner whose own chunk needed a fraction of the reserved bytes. The admission
+// reserve must therefore be shaped by the forward being admitted, with the
+// global maximum kept only for a phase that has no evidence at all.
+#[test]
+fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
+        .expect("a positive active-memory limit should create a guard");
+    let large_paged_prefill_context =
+        AdaptiveRamGrowthContext::prefill(8_192, 0, false, false, true);
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        large_paged_prefill_context,
+        true,
+        0,
+        0,
+        8_000,
+        0,
+    );
+
+    let small_resident_prefill_context =
+        AdaptiveRamGrowthContext::prefill(2_048, 0, false, false, false);
+    let projection = adaptive_ram_growth_guard
+        .project_growth_for_context(small_resident_prefill_context, 900_000, 10_000, 0, 0)
+        .expect("the smaller shape should project without overflow");
+
+    // 8,000 bytes observed at 8,192 tokens scale to 2,000 bytes at 2,048 tokens
+    // (ceiling division), not the borrowed 8,000-byte absolute window.
+    assert_eq!(projection.observed_transient_high_water_bytes(), 2_000);
+    assert_eq!(
+        projection.transient_reserve_source(),
+        AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+    );
+}
+
+#[test]
+fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
+        .expect("a positive active-memory limit should create a guard");
+    let large_paged_prefill_context =
+        AdaptiveRamGrowthContext::prefill(8_192, 0, false, false, true);
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        large_paged_prefill_context,
+        true,
+        0,
+        0,
+        8_000,
+        0,
+    );
+    let exact_resident_prefill_context =
+        AdaptiveRamGrowthContext::prefill(2_048, 3, false, false, false);
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        exact_resident_prefill_context,
+        true,
+        0,
+        0,
+        1_500,
+        0,
+    );
+
+    let projection = adaptive_ram_growth_guard
+        .project_growth_for_context(exact_resident_prefill_context, 900_000, 10_000, 0, 0)
+        .expect("the exact context should project without overflow");
+
+    assert_eq!(projection.observed_transient_high_water_bytes(), 1_500);
+    assert_eq!(
+        projection.transient_reserve_source(),
+        AdaptiveRamGrowthTransientReserveSource::ExactContext,
+    );
+}
+
+#[test]
+fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
+        .expect("a positive active-memory limit should create a guard");
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        AdaptiveRamGrowthContext::prefill(8_192, 0, false, false, true),
+        true,
+        0,
+        0,
+        8_000,
+        0,
+    );
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        AdaptiveRamGrowthContext::prefill(1_024, 9, false, false, false),
+        true,
+        0,
+        0,
+        3_000,
+        0,
+    );
+
+    // 8,000 × 2,048/8,192 = 2,000; 3,000 × 2,048/1,024 = 6,000. The largest
+    // scaled observation is the conservative proportional estimate.
+    let projection = adaptive_ram_growth_guard
+        .project_growth_for_context(
+            AdaptiveRamGrowthContext::prefill(2_048, 0, false, false, false),
+            900_000,
+            10_000,
+            0,
+            0,
+        )
+        .expect("the unobserved shape should project without overflow");
+
+    assert_eq!(projection.observed_transient_high_water_bytes(), 6_000);
+    assert_eq!(
+        projection.transient_reserve_source(),
+        AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+    );
+}
+
+#[test]
+fn should_keep_the_global_maximum_for_a_phase_without_any_evidence() {
+    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
+        .expect("a positive active-memory limit should create a guard");
+    adaptive_ram_growth_guard.record_completed_growth_for_context(
+        DEFAULT_DECODE_CONTEXT,
+        true,
+        0,
+        0,
+        500,
+        0,
+    );
+
+    // Decode evidence exists but prefill has none. The first prefill reserves
+    // the global maximum; its completion records prefill evidence and every
+    // later prefill reserves proportionally.
+    let projection = adaptive_ram_growth_guard
+        .project_growth_for_context(
+            AdaptiveRamGrowthContext::prefill(2_048, 0, false, false, false),
+            900_000,
+            10_000,
+            0,
+            0,
+        )
+        .expect("the first prefill should project without overflow");
+
+    assert_eq!(projection.observed_transient_high_water_bytes(), 500);
+    assert_eq!(
+        projection.transient_reserve_source(),
+        AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
     );
 }
