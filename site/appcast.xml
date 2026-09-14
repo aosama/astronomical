@@ -4,29 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.41</title>
-            <pubDate>Mon, 14 Sep 2026 11:00:17 -0400</pubDate>
-            <sparkle:version>568</sparkle:version>
-            <sparkle:shortVersionString>0.2.41</sparkle:shortVersionString>
+            <title>0.2.42</title>
+            <pubDate>Mon, 14 Sep 2026 12:17:16 -0400</pubDate>
+            <sparkle:version>571</sparkle:version>
+            <sparkle:shortVersionString>0.2.42</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Highlights
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.42
 
-- Large-prompt serving keeps the model resident instead of evicting experts to SSD mid-request. The planned activation reserve was projected from the full prompt length against per-chunk measurements, promising up to twice the memory ceiling and forcing premature expert demotion during large prefills; the reserve is now resolved at the operation scope, matching the measured workspace. On the large sparse MoE with the drafter engaged at a 50,400-token prompt, the reserve dropped from 40-43 GB to under 3 GB and the mid-prefill demotion no longer occurs.
-- The menu's MLX memory legend no longer reports impossible values: the Owner overrun row is now expressed in the same scale as the other rows, so it can never exceed the ceiling.
+### Fixed
 
-## Compatibility
+- A chat request whose thinking allowance exceeds the caller's own output cap is now served with a shrunken thinking allowance instead of being rejected. The thinking budget is a ceiling on reasoning, so shrinking the discretionary allowance honors the caller's "at most N output tokens" contract (#653). The true floor is preserved: requests whose output budget cannot hold the forced transition plus one visible answer token are still rejected, now reporting the effective allowance.
 
-- No REST API, model-discovery, or configuration changes. Requests that previously completed (with avoidable SSD reads) complete the same way, with more expert retention.
+### Compatibility
 
-## Distribution
+- No REST, IPC, or configuration schema changes. Existing configurations, Library state, and prompt caches are preserved.
 
-- Signed with Developer ID, notarized by Apple, and stapled. The Sparkle update feed is signed and activated on the public appcast.
+### Distribution
+
+- Signed and notarized macOS arm64 disk image, stapled and Sparkle-signed, with a signed update feed. Existing Stable installations receive this release through the ordinary Sparkle update journey.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.41/Astronomical-0.2.41-macOS-arm64.dmg" length="16323517" type="application/octet-stream" sparkle:edSignature="SGcgQNXkZ1lH7ichk+1poPCdqdl38zkd6mvDqrOVSrLS7KRf7zoWkDFyphsVUv0kcWOSKafsVuphs1dfZbD0Cg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.42/Astronomical-0.2.42-macOS-arm64.dmg" length="16313936" type="application/octet-stream" sparkle:edSignature="TfepZeFPe7KWnmJUN1DTP3t9gNjIsuCRrgSi9WeycpXud0MiR5BTHeL11YRcwJimWdbLkn4lvNev426qhxXWDA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: qPZGjwKcKH5tXMEH7MMiEIEeNROt4rMhsy8xspnpwT7xlkdGc18lkN3P+SUwnikMEx6QVYth960UT5CO53y5Bg==
-length: 2320
+edSignature: i5OZtXPtHQkW6o5FDEBE9XgZKjiCT3bWqpv7A4QaWL9o4f3QcJefdiRywaRBaC7FC+b+ccwWd7XVypxSFpEsAg==
+length: 2107
 -->
