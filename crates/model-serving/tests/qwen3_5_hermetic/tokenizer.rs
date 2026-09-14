@@ -349,47 +349,6 @@ fn should_prepare_a_model_owned_multitoken_transition_ending_at_the_thinking_mar
     );
 }
 
-#[test]
-fn should_reject_a_thinking_budget_that_cannot_fit_its_transition_and_visible_answer() {
-    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
-        &ornith_tokenizer_json_bytes(248_056),
-        SYNTHETIC_MODEL_ID,
-        ORNITH_VOCABULARY_SIZE,
-        ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
-    )
-    .expect("the synthetic tokenizer should load");
-    let preparation_error = tokenizer
-        .prepare_chat(
-            &ChatGenerationCommand {
-                request_id: RequestId::new(4_004),
-                model: SYNTHETIC_MODEL_ID.to_owned(),
-                messages: vec![ChatMessage::User {
-                    content: ROMEO_AND_JULIET_SOURCE.chars().take(128).collect(),
-                    images: Vec::new(),
-                }],
-                tools: Vec::new(),
-                tool_choice: ChatToolChoice::None,
-                settings: ChatGenerationSettings {
-                    max_output_tokens: 2,
-                    temperature_thousandths: None,
-                    top_p_thousandths: None,
-                    seed: None,
-                    thinking_budget: Some(1),
-                },
-                qwen_thinking_channel_seed: None,
-                structured_generation: None,
-            },
-            true,
-        )
-        .expect_err("the request cannot reserve its complete model-owned transition");
-
-    assert!(matches!(
-        preparation_error,
-        Qwen3_5TokenizerError::ThinkingBudgetOutputReservation { .. }
-    ));
-}
-
 const ROMEO_AND_JULIET_THINKING_CHANNEL_SEED: &str =
     "Two households, both alike in dignity, in Romeo and Juliet.";
 
@@ -506,7 +465,7 @@ fn should_prepare_chat_tokens_that_include_the_seeded_thinking_channel_text() {
     );
 }
 
-fn ornith_tokenizer_json_bytes(image_pad_token_id: u32) -> Vec<u8> {
+pub(super) fn ornith_tokenizer_json_bytes(image_pad_token_id: u32) -> Vec<u8> {
     let vocab = serde_json::json!({
         "<unk>": 0,
         "<unk>": 0,
@@ -539,7 +498,7 @@ fn ornith_tokenizer_json_bytes(image_pad_token_id: u32) -> Vec<u8> {
     .expect("the synthetic tokenizer JSON should serialize")
 }
 
-fn ornith_tokenizer_json_bytes_missing_image_pad() -> Vec<u8> {
+pub(super) fn ornith_tokenizer_json_bytes_missing_image_pad() -> Vec<u8> {
     let vocab = serde_json::json!({
         "<unk>": 0,
         "<|endoftext|>": 248_044,
