@@ -14,6 +14,7 @@ use super::persistent_prompt_cache_visual_identity::{
 };
 use super::{
     Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
+    sparse_anchored_dense_restore::SparseAnchoredDenseTailOutcome,
     speculative_prefill::configured_speculative_prefill_failure,
     speculative_prefill::{
         Qwen3_5SpeculativePrefillRequestEligibility,
@@ -211,6 +212,7 @@ impl Qwen3_5EngineState {
             let mut speculative_prefill_restored_target_token_positions = None;
             let mut restored_target_work_token_count = 0_u64;
             let mut restored_sparse_target_state = false;
+            let mut sparse_anchored_dense_capture_context = None;
             let mut last_restored_persistent_prompt_cache_block_key: Option<
                 PersistentPromptCacheBlockKey,
             > = None;
@@ -302,7 +304,54 @@ impl Qwen3_5EngineState {
                         speculative_prefill_restored_target_token_positions =
                             Some(restored_target_prefix.selected_target_token_positions);
                         restored_sparse_target_state = true;
-                        can_use_persistent_prompt_cache = false;
+                        let sparse_anchored_tail_outcome = self
+                            .restore_or_plan_sparse_anchored_dense_tail(
+                                inference_request.request_id(),
+                                &prompt_token_ids,
+                                &ordered_image_sha256_digests,
+                                &persistent_prompt_cache_block_causal_inputs,
+                                prefill_cursor,
+                                restored_target_work_token_count as usize,
+                                total_context_tokens,
+                                &mut request_decoder_state,
+                                &mut performance_attribution,
+                            )
+                            .map_err(|sparse_anchored_restore_error| {
+                                configured_speculative_prefill_failure(
+                                    inference_request.request_id(),
+                                    "sparse-anchored dense tail restoration",
+                                    sparse_anchored_restore_error,
+                                )
+                            })?;
+                        match sparse_anchored_tail_outcome {
+                            SparseAnchoredDenseTailOutcome::Restored {
+                                restored_tail_token_count,
+                                last_anchored_block_key,
+                                capture_context,
+                            } => {
+                                prefill_cursor = prefill_cursor
+                                    .checked_add(restored_tail_token_count)
+                                    .ok_or_else(|| {
+                                        fatal_engine_error(
+                                            "sparse-anchored dense tail restore overflowed",
+                                        )
+                                    })?;
+                                next_position_tokens =
+                                    u32::try_from(prefill_cursor).map_err(|_| {
+                                        fatal_engine_error(
+                                            "restored prompt prefix exceeds the u32 range",
+                                        )
+                                    })?;
+                                sparse_anchored_dense_capture_context = Some(capture_context);
+                                let _ = last_anchored_block_key;
+                            }
+                            SparseAnchoredDenseTailOutcome::Planned(capture_context) => {
+                                sparse_anchored_dense_capture_context = Some(capture_context);
+                            }
+                            SparseAnchoredDenseTailOutcome::CaptureDisabled => {
+                                can_use_persistent_prompt_cache = false;
+                            }
+                        }
                     }
                     Ok(None) => {}
                     Err(target_state_restore_error) => {
@@ -488,6 +537,7 @@ impl Qwen3_5EngineState {
                 speculative_prefill_draft_phase_announced: false,
                 speculative_prefill_selected_token_positions: None,
                 speculative_prefill_dense_target_prefix_token_count: 0,
+                sparse_anchored_dense_capture: sparse_anchored_dense_capture_context,
                 speculative_prefill_prompt_token_indices: None,
                 speculative_prefill_processed_visual_images,
                 speculative_prefill_restored_target_token_positions,
