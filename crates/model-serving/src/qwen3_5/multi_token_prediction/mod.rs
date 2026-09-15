@@ -36,7 +36,9 @@ mod verification_decision;
 #[cfg(feature = "direct-mlx")]
 mod verified_emission_queue;
 
-pub use artifact::{Qwen3_5MtpArtifactCapability, Qwen3_5MtpTargetOnlyReason};
+pub use artifact::{
+    Qwen3_5MtpArtifactCapability, Qwen3_5MtpExpertsLayout, Qwen3_5MtpTargetOnlyReason,
+};
 #[cfg(feature = "direct-mlx")]
 pub use decode::qwen3_5_depth_one_mtp_window_fits;
 #[cfg(feature = "direct-mlx")]

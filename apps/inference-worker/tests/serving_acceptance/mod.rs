@@ -4,5 +4,6 @@ pub(crate) mod image_generation;
 pub(crate) mod installed_models;
 pub(crate) mod k2_horizon_mova;
 pub(crate) mod laguna;
+pub(crate) mod qwen3_6;
 pub(crate) mod speculative_prefill;
 pub(crate) mod vision;

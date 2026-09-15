@@ -260,11 +260,60 @@ impl Qwen3_5ResidentExpertWeights {
             "completed resident expert gate/up materialization"
         );
 
-        Ok(Self::new(
-            resident_layers,
-            complete_model_expert_entry_count,
-            complete_model_payload_bytes,
-        ))
+        // The sidecar-fused MTP head owns its routed experts directly. Append
+        // them as the owner's final layer so the MTP forward routes through the
+        // same resident gather path without a pager plan.
+        let sidecar_mtp_routed_experts_payload_bytes = model
+            .mtp_weights
+            .as_ref()
+            .and_then(|mtp_weights| mtp_weights.routed_experts.as_ref())
+            .map(|routed_experts| {
+                (routed_experts.fused_gate_up.byte_count() + routed_experts.down.byte_count())
+                    as u64
+            })
+            .unwrap_or(0);
+        let sidecar_mtp_layer = model
+            .mtp_weights
+            .as_ref()
+            .and_then(|mtp_weights| mtp_weights.routed_experts.as_ref())
+            .map(|routed_experts| -> Result<Qwen3_5ResidentExpertLayerWeights, Qwen3_5ExecutionError> {
+                // MLX retains are reference-count bumps, not data copies: the
+                // MTP head and the resident owner share the same evaluated
+                // buffers while each keeps independent ownership.
+                let fused_gate_up = routed_experts
+                    .fused_gate_up
+                    .retain()
+                    .map_err(Qwen3_5ExecutionError::from)?;
+                let down = routed_experts
+                    .down
+                    .retain()
+                    .map_err(Qwen3_5ExecutionError::from)?;
+                Ok(Qwen3_5ResidentExpertLayerWeights::new(
+                    Qwen3_5ResidentGateUpWeights::Fused {
+                        projection: Qwen3_5AffineWeights::NativeBfloat16 {
+                            weight: fused_gate_up,
+                        },
+                        materialization_transient_payload_bytes: 0,
+                    },
+                    Qwen3_5AffineWeights::NativeBfloat16 { weight: down },
+                ))
+            })
+            .transpose()?;
+        let candidate_owner = match sidecar_mtp_layer {
+            Some(sidecar_mtp_layer) => Self::with_appended_sidecar_mtp_layer(
+                resident_layers,
+                complete_model_expert_entry_count,
+                complete_model_payload_bytes,
+                sidecar_mtp_layer,
+                sidecar_mtp_routed_experts_payload_bytes,
+            ),
+            None => Self::new(
+                resident_layers,
+                complete_model_expert_entry_count,
+                complete_model_payload_bytes,
+            ),
+        };
+        Ok(candidate_owner)
     }
 }
 
