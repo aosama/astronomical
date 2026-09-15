@@ -19,6 +19,15 @@ pub struct OptiQMetadata {
 
 impl OptiQMetadata {
     /// Parses and validates the complete bounded OptiQ metadata document.
+    ///
+    /// Two document shapes are accepted. A document carrying `per_layer` is a
+    /// measured bit-map and keeps the exact strict contract: unknown fields are
+    /// rejected and every measured profile must match the config. A document
+    /// without `per_layer` is provenance-only (expert-compressed variants such
+    /// as REAP-pruned or merged artifacts publish compression-run evidence
+    /// here); it makes no per-module quantization claims, so it contributes
+    /// zero measured modules and does not constrain execution. The byte bound
+    /// applies to both shapes.
     pub fn from_json_bytes(metadata_bytes: &[u8]) -> Result<Self, OptiQMetadataError> {
         if metadata_bytes.len() > MAXIMUM_OPTIQ_METADATA_BYTES {
             return Err(OptiQMetadataError::MetadataTooLarge {
@@ -26,33 +35,70 @@ impl OptiQMetadata {
                 maximum_size_bytes: MAXIMUM_OPTIQ_METADATA_BYTES,
             });
         }
-        let metadata_document = serde_json::from_slice::<OptiQMetadataDocument>(metadata_bytes)
-            .map_err(OptiQMetadataError::DeserializeMetadata)?;
-        let mut measured_module_profiles = BTreeMap::new();
-        for (module_name, quantization_override) in metadata_document.per_layer {
-            if !is_mlx_affine_quantization_group_size_supported(quantization_override.group_size) {
-                return Err(OptiQMetadataError::UnsupportedGroupSize {
-                    module_name,
-                    actual_group_size: quantization_override.group_size,
-                });
+        match serde_json::from_slice::<OptiQMetadataDocument>(metadata_bytes) {
+            Ok(metadata_document) => {
+                let mut measured_module_profiles = BTreeMap::new();
+                for (module_name, quantization_override) in metadata_document.per_layer {
+                    if !is_mlx_affine_quantization_group_size_supported(
+                        quantization_override.group_size,
+                    ) {
+                        return Err(OptiQMetadataError::UnsupportedGroupSize {
+                            module_name,
+                            actual_group_size: quantization_override.group_size,
+                        });
+                    }
+                    if !is_mlx_affine_quantization_bit_width_supported(quantization_override.bits) {
+                        return Err(OptiQMetadataError::UnsupportedBits {
+                            module_name,
+                            actual_bits: quantization_override.bits,
+                        });
+                    }
+                    measured_module_profiles.insert(
+                        module_name,
+                        OptiQQuantizationProfile {
+                            bits: quantization_override.bits,
+                            group_size: quantization_override.group_size,
+                        },
+                    );
+                }
+                Ok(Self {
+                    measured_module_profiles,
+                })
             }
-            if !is_mlx_affine_quantization_bit_width_supported(quantization_override.bits) {
-                return Err(OptiQMetadataError::UnsupportedBits {
-                    module_name,
-                    actual_bits: quantization_override.bits,
-                });
+            Err(deserialization_error) => {
+                Self::provenance_only_from_json_bytes(metadata_bytes, deserialization_error)
             }
-            measured_module_profiles.insert(
-                module_name,
-                OptiQQuantizationProfile {
-                    bits: quantization_override.bits,
-                    group_size: quantization_override.group_size,
-                },
-            );
         }
-        Ok(Self {
-            measured_module_profiles,
-        })
+    }
+
+    /// Accepts a bounded provenance-only document that declares no measured
+    /// bit-map. Strict parsing failed, so the document must be a JSON object
+    /// without any `per_layer` key: such a document makes no per-module
+    /// quantization claims, so it cannot constrain execution and contributes
+    /// zero measured modules. A malformed document that does claim measurements
+    /// still fails with the strict error unchanged.
+    fn provenance_only_from_json_bytes(
+        metadata_bytes: &[u8],
+        strict_deserialization_error: serde_json::Error,
+    ) -> Result<Self, OptiQMetadataError> {
+        let json_value: serde_json::Value =
+            serde_json::from_slice(metadata_bytes).map_err(|_| {
+                OptiQMetadataError::DeserializeMetadata(
+                    serde_json::from_slice::<OptiQMetadataDocument>(metadata_bytes).unwrap_err(),
+                )
+            })?;
+        let is_provenance_only = json_value
+            .as_object()
+            .is_some_and(|document| !document.contains_key("per_layer"));
+        if is_provenance_only {
+            Ok(Self {
+                measured_module_profiles: BTreeMap::new(),
+            })
+        } else {
+            Err(OptiQMetadataError::DeserializeMetadata(
+                strict_deserialization_error,
+            ))
+        }
     }
 
     /// Returns the number of sensitivity-measured quantized modules.
