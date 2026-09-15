@@ -120,3 +120,59 @@ fn should_compare_supported_optiq_metadata_group_sizes_with_the_model_config() {
         }
     ));
 }
+
+#[test]
+fn should_accept_provenance_only_optiq_metadata_without_a_measured_bit_map() {
+    // Expert-compressed variants (for example REAP expert pruning) publish a
+    // provenance document shaped around the compression run instead of a
+    // sensitivity bit-map. It makes no per-module quantization claims, so it
+    // must parse with zero measured modules and never block the load.
+    let optiq_metadata_bytes = serde_json::to_vec(&json!({
+        "expert_pruning": {
+            "method": "reap",
+            "parent_model": "example/example-parent",
+            "num_experts_before": 256,
+            "top_k": 8,
+            "uniform_retention": true,
+            "retention_target": 0.5
+        }
+    }))
+    .expect("the provenance-only OptiQ metadata fixture should serialize");
+
+    let optiq_metadata = OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)
+        .expect("provenance-only OptiQ metadata should parse without a measured bit-map");
+
+    assert_eq!(optiq_metadata.measured_module_count(), 0);
+}
+
+#[test]
+fn should_reject_measured_optiq_metadata_with_unknown_fields() {
+    // Presence of `per_layer` keeps the exact strict contract: unknown fields
+    // stay rejected so a measured document cannot smuggle undeclared content.
+    let optiq_metadata_bytes = serde_json::to_vec(&json!({
+        "method": "static_mixed_precision",
+        "base_model": "example/example-parent",
+        "reference": "structural_rules",
+        "target_bpw": 4.0,
+        "achieved_bpw": 4.0,
+        "n_high_bits": 0,
+        "n_low_bits": 1,
+        "threshold": 0.0,
+        "per_layer": {
+            "language_model.model.layers.5.mlp.switch_mlp.gate_proj": {
+                "bits": 4,
+                "group_size": 64
+            }
+        },
+        "unexpected_field": true
+    }))
+    .expect("the unknown-field OptiQ metadata fixture should serialize");
+
+    let metadata_error = OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)
+        .expect_err("measured OptiQ metadata with unknown fields should stay rejected");
+
+    assert!(matches!(
+        metadata_error,
+        OptiQMetadataError::DeserializeMetadata(_)
+    ));
+}
