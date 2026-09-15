@@ -411,11 +411,17 @@ pub fn apply_top_p_mask(
 
     // Scatter back to original order using inverse permutation.
     // inverse_indices[sorted_indices[i]] = i
+    // The range pattern is row-independent: build one row and broadcast it to
+    // every row instead of reshaping a flat arange (which only works when the
+    // caller supplies exactly one row).
     let range_indices = runtime
         .arange_i32(0, top_k)
         .map_err(sampling_runtime_error)?;
+    let range_row = runtime
+        .reshape(&range_indices, &[1, 1, top_k])
+        .map_err(sampling_runtime_error)?;
     let range_indices_reshaped = runtime
-        .reshape(&range_indices, &[1, selected_row_count, top_k])
+        .broadcast_to(&range_row, &[1, selected_row_count, top_k])
         .map_err(sampling_runtime_error)?;
     let zeros_template = runtime
         .array_from_i32(

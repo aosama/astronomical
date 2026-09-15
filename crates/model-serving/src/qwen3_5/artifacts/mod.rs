@@ -17,7 +17,7 @@ pub(crate) use super::quantizations;
 pub(crate) use super::quantizations::optiq::{OptiQMetadata, OptiQMetadataError};
 pub(crate) use super::vision::{Qwen3_5VisionConfig, vision_tensor_spec};
 pub use crate::qwen3_5::multi_token_prediction::{
-    Qwen3_5MtpArtifactCapability, Qwen3_5MtpTargetOnlyReason,
+    Qwen3_5MtpArtifactCapability, Qwen3_5MtpExpertsLayout, Qwen3_5MtpTargetOnlyReason,
 };
 pub use crate::qwen3_5::multi_token_prediction::{
     qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,

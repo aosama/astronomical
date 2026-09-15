@@ -1,5 +1,5 @@
 use astronomical_model_serving::{
-    MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpRuntimeState,
+    MtpDraftDepth, Qwen3_5MtpArtifactCapability, Qwen3_5MtpExpertsLayout, Qwen3_5MtpRuntimeState,
     qwen3_5_depth_one_mtp_window_fits, qwen3_5_mtp_runtime_configuration_after_load,
     qwen3_5_mtp_runtime_state_after_load,
 };
@@ -13,6 +13,7 @@ fn should_report_bounded_unavailability_after_optional_mtp_initialization_fails(
             artifact_maximum_draft_depth: Some(MtpDraftDepth::DEPTH_ONE),
             artifact_default_draft_depth: None,
             mtp_tensor_count: 42,
+            mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
         },
         false,
     );
@@ -34,6 +35,7 @@ fn should_resolve_explicit_depth_as_the_effective_execution_depth() {
             MtpDraftDepth::new(2).expect("depth two should be valid"),
         ),
         mtp_tensor_count: 42,
+        mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
     };
 
     let (runtime_state, reason, depth_status) = qwen3_5_mtp_runtime_configuration_after_load(
@@ -58,6 +60,7 @@ fn should_use_an_explicit_artifact_default_for_automatic_depth() {
         artifact_maximum_draft_depth: Some(maximum_depth),
         artifact_default_draft_depth: Some(default_depth),
         mtp_tensor_count: 42,
+        mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
     };
 
     let (_, _, depth_status) =
@@ -75,6 +78,7 @@ fn should_use_production_depth_one_when_the_artifact_has_no_default() {
         ),
         artifact_default_draft_depth: None,
         mtp_tensor_count: 42,
+        mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
     };
 
     let (_, _, depth_status) =
@@ -90,6 +94,7 @@ fn should_clamp_an_over_requested_depth_to_a_declared_artifact_maximum_without_d
         artifact_maximum_draft_depth: Some(MtpDraftDepth::DEPTH_ONE),
         artifact_default_draft_depth: None,
         mtp_tensor_count: 42,
+        mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
     };
     let (runtime_state, reason, depth_status) = qwen3_5_mtp_runtime_configuration_after_load(
         true,
@@ -118,6 +123,7 @@ fn should_honor_an_explicit_depth_when_the_artifact_declares_no_maximum() {
         artifact_maximum_draft_depth: None,
         artifact_default_draft_depth: None,
         mtp_tensor_count: 42,
+        mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
     };
     let (runtime_state, reason, depth_status) = qwen3_5_mtp_runtime_configuration_after_load(
         true,
@@ -146,6 +152,7 @@ fn should_keep_depth_one_as_the_automatic_default_on_a_silent_artifact() {
         artifact_maximum_draft_depth: None,
         artifact_default_draft_depth: None,
         mtp_tensor_count: 42,
+        mtp_experts_layout: Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
     };
 
     let (runtime_state, reason, depth_status) =

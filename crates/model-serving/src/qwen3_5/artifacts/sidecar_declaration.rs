@@ -12,7 +12,7 @@ use crate::safetensors::SafetensorsTensorView;
 
 const MAXIMUM_SIDECAR_RELATIVE_PATH_BYTES: usize = 4_096;
 const MTP_STORED_PREFIX: &str = "mtp.";
-const MTP_CANONICAL_PREFIX: &str = "language_model.mtp.";
+pub(crate) const MTP_CANONICAL_PREFIX: &str = "language_model.mtp.";
 // The one Qwen architecture sidecar receives a reserved opaque identity. Main-index sources are
 // assigned upward from one, and the bounded index document cannot contain enough file names to
 // reach this value, so the source cannot alias an indexed physical file.

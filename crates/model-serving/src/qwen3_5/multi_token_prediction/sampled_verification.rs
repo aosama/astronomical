@@ -241,15 +241,27 @@ impl Qwen3_5Model {
             &[1, draft_count_i32, vocabulary_size_i32],
             &[1, 1, 1],
         )?;
+        // One draft index per verifier row: row i of the target verifies draft i.
+        // A [1, 1, draft_count] index array would broadcast against the row axis
+        // and gather every draft from every row; the per-row layout gathers
+        // exactly the drafted token of each row.
         let draft_token_index_row = self
             .runtime()
-            .array_from_u32(&proposal.draft_token_ids, &[1, 1, draft_count_i32])?;
+            .array_from_u32(&proposal.draft_token_ids, &[1, draft_count_i32, 1])?;
         let target_probabilities_at_drafts =
             self.runtime()
                 .take_along_axis(&target_verify_rows, &draft_token_index_row, -1)?;
+        let target_probabilities_at_drafts = self
+            .runtime()
+            .reshape(&target_probabilities_at_drafts, &[1, 1, draft_count_i32])
+            .map_err(Qwen3_5ExecutionError::from)?;
         let draft_probabilities_at_drafts =
             self.runtime()
                 .take_along_axis(&draft_probabilities, &draft_token_index_row, -1)?;
+        let draft_probabilities_at_drafts = self
+            .runtime()
+            .reshape(&draft_probabilities_at_drafts, &[1, 1, draft_count_i32])
+            .map_err(Qwen3_5ExecutionError::from)?;
         // Acceptance probability min(1, p/q); a zero draft probability is an
         // automatic rejection, mirroring the pure verifier decision boundary.
         let one_scalar = self.runtime().array_from_f32(&[1.0], &[])?;

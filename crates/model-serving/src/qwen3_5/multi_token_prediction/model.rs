@@ -31,6 +31,10 @@ pub(crate) struct Qwen3_5MtpWeights {
     pub(super) fusion_projection: Qwen3_5AffineWeights,
     pub(super) decoder_layer_weights: Qwen3_5DecoderLayerWeights,
     pub(super) final_normalization_weight: MlxArray,
+    /// Fused per-expert routed experts bound from a sidecar that stores the
+    /// MTP head outside the packed switch_mlp namespace. `None` for packed
+    /// layouts, whose routed experts live in the shared pager instead.
+    pub(crate) routed_experts: Option<Qwen3_5MtpRoutedExperts>,
     /// Owners for MTP tensors stored outside target-language shards.
     ///
     /// The opaque source identity handles both indexed MTP-only files and architecture sidecars;
@@ -38,6 +42,16 @@ pub(crate) struct Qwen3_5MtpWeights {
     #[allow(dead_code)]
     auxiliary_mtp_sources: HashMap<TensorSourceId, MlxSafetensors>,
     tensor_count: usize,
+}
+
+/// Sidecar-fused routed experts for the one-layer MTP head.
+///
+/// Both arrays keep the artifact's `[expert, output, input]` BF16 layout, so the
+/// resident gather path consumes them without requantization or reshaping.
+#[derive(Debug)]
+pub(crate) struct Qwen3_5MtpRoutedExperts {
+    pub(crate) fused_gate_up: MlxArray,
+    pub(crate) down: MlxArray,
 }
 
 impl Qwen3_5MtpWeights {
@@ -146,19 +160,38 @@ impl Qwen3_5MtpWeights {
             &mut bound_mtp_tensors,
             "language_model.mtp.norm.weight".to_owned(),
         )?;
+        // The sidecar's fused per-expert routed experts bind directly onto the
+        // MTP head. They never enter the shared pager, so binding consumes them
+        // here and the resident owner appends them as its final layer. These
+        // tensors are sidecar extras without generated profiles, so they are
+        // looked up by stored name across the auxiliary sources instead of the
+        // profile-driven inventory.
+        const FUSED_GATE_UP_STORED_NAME: &str = "mtp.layers.0.mlp.experts.gate_up_proj";
+        const FUSED_DOWN_STORED_NAME: &str = "mtp.layers.0.mlp.experts.down_proj";
+        let routed_experts = auxiliary_mtp_sources.values().find_map(|auxiliary_source| {
+            let fused_gate_up = auxiliary_source.tensor(FUSED_GATE_UP_STORED_NAME).ok()?;
+            let down = auxiliary_source.tensor(FUSED_DOWN_STORED_NAME).ok()?;
+            Some(Qwen3_5MtpRoutedExperts {
+                fused_gate_up,
+                down,
+            })
+        });
         if let Some(unassigned_tensor_name) = bound_mtp_tensors.keys().next() {
             return Err(Qwen3_5ExecutionError::UnassignedTensor {
                 tensor_name: unassigned_tensor_name.clone(),
             });
         }
+        let routed_experts_bound = routed_experts.is_some();
         Ok(Some(Self {
             pre_fc_normalization_embedding_weight,
             pre_fc_normalization_hidden_weight,
             fusion_projection,
             decoder_layer_weights,
             final_normalization_weight,
+            routed_experts,
             auxiliary_mtp_sources,
-            tensor_count: resident_mtp_tensor_profiles.len(),
+            tensor_count: resident_mtp_tensor_profiles.len()
+                + usize::from(routed_experts_bound) * 2,
         }))
     }
 
@@ -194,6 +227,10 @@ impl Qwen3_5MtpWeights {
         self.decoder_layer_weights
             .append_array_references(array_references);
         array_references.push(&self.final_normalization_weight);
+        if let Some(routed_experts) = self.routed_experts.as_ref() {
+            array_references.push(&routed_experts.fused_gate_up);
+            array_references.push(&routed_experts.down);
+        }
     }
 
     /// Repairs raw Hugging Face MTP RMSNorm gammas without changing trunk weights.

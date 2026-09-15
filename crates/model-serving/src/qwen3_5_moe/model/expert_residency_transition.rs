@@ -171,6 +171,19 @@ impl Qwen3_5Model {
         // owner when the leftover ceiling admits it. Fit is decided below, not
         // by a sticky paged flag from the earlier demotion.
         let complete_expert_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
+        // The sidecar-fused MTP routed experts join the complete owner, so the
+        // fit projection must charge their bytes like any other expert layer.
+        let sidecar_mtp_routed_experts_payload_bytes = self
+            .mtp_weights
+            .as_ref()
+            .and_then(|mtp_weights| mtp_weights.routed_experts.as_ref())
+            .map(|routed_experts| {
+                (routed_experts.fused_gate_up.byte_count() + routed_experts.down.byte_count())
+                    as u64
+            })
+            .unwrap_or(0);
+        let complete_expert_payload_bytes =
+            complete_expert_payload_bytes.saturating_add(sidecar_mtp_routed_experts_payload_bytes);
         tracing::info!(
             ?transition_reason,
             complete_expert_payload_bytes,
