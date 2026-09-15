@@ -14,7 +14,9 @@ use super::artifact_helpers::{
     captured_required_file_bytes, read_required_file_bytes, required_file,
 };
 use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
-use super::sidecar_declaration::{Qwen3_5MtpSidecarCandidate, Qwen3_5MtpSidecarDeclaration};
+use super::sidecar_declaration::{
+    MTP_CANONICAL_PREFIX, Qwen3_5MtpSidecarCandidate, Qwen3_5MtpSidecarDeclaration,
+};
 use super::tensor_spec::qwen3_5_language_tensor_profiles;
 use super::validated_artifact::ValidatedQwen3_5Artifact;
 use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
@@ -247,9 +249,36 @@ impl Qwen3_5ArtifactValidator {
         } else if let Err(contract_error) = mtp_contract.as_ref() {
             Qwen3_5MtpArtifactCapability::target_only(contract_error.into())
         } else {
+            // The sidecar carries its full stored-name set (profile-described plus
+            // accepted extras such as the fused per-expert expert tensors), so the
+            // capability classifier sees the complete physical inventory rather
+            // than only the profile-described subset.
+            let sidecar_full_canonical_names = validated_mtp_sidecar
+                .as_ref()
+                .map(|sidecar| {
+                    sidecar
+                        .source
+                        .stored_tensor_names()
+                        .filter_map(|stored_name| {
+                            // Stored sidecar names repeat the mtp. namespace prefix;
+                            // canonical identity drops the duplicate component.
+                            stored_name
+                                .strip_prefix("mtp.")
+                                .map(|suffix| format!("{MTP_CANONICAL_PREFIX}{suffix}"))
+                        })
+                        .collect::<BTreeSet<_>>()
+                })
+                .unwrap_or_default();
+            let capability_input_names = if sidecar_full_canonical_names.is_empty() {
+                canonical_mtp_names
+            } else {
+                let mut capability_names = canonical_mtp_names;
+                capability_names.extend(sidecar_full_canonical_names);
+                capability_names
+            };
             Qwen3_5MtpArtifactCapability::from_canonical_tensor_names(
                 &config,
-                canonical_mtp_names,
+                capability_input_names,
                 mtp_contract.as_ref().ok(),
             )
         };

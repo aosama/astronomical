@@ -301,7 +301,7 @@ pub use qwen3_5::{
     Qwen3_5GenerationProcessor, Qwen3_5ImageDimensions, Qwen3_5ImageGrid,
     Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5InferenceRequest,
     Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract, Qwen3_5MtpContractError,
-    Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
+    Qwen3_5MtpExpertsLayout, Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
     Qwen3_5MtpSidecarValidationError, Qwen3_5MtpSidecarValidationOutcome,
     Qwen3_5MtpTargetOnlyReason, Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserError,
     Qwen3_5ProcessedImage, Qwen3_5PromptError, Qwen3_5PromptRenderer,
