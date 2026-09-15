@@ -130,6 +130,40 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit-REAP-19B",
+            "revision": "058c69e3e49281114ece164777f7d6347d2cd2a8",
+            "display_name": "Ornith 1.5 35B A3B OptiQ 4-bit REAP 19B",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 13756988894,
+            "public": true,
+            "description": "An expert-pruned REAP variant of the Ornith 1.5 35B-A3B MoE model, retaining 128 of 256 experts per layer (Router-weighted Expert Activation Pruning, Cerebras Research) at the same 8-experts-per-token routing, roughly halving expert memory. Mixed-precision OptiQ quantization (4/8-bit affine, group 64) with a bf16 vision tower sidecar and an int4 multi-token prediction head for speculative decoding. Image input and MTP require mlx-optiq.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ 4/8-bit affine (group 64), REAP-pruned",
+            "architecture_summary": "Qwen3.5 MoE VLM, 19B total params after pruning, ~3B active (A3B), 40 layers, 128 retained experts (pruned from 256), 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
+            "upstream_license": "Apache-2.0",
+            "included_paths": [
+                ".gitattributes",
+                "chat_template.jinja",
+                "config.json",
+                "generation_config.json",
+                "kv_config.json",
+                "model.safetensors.index.json",
+                "model-00001-of-00003.safetensors",
+                "model-00002-of-00003.safetensors",
+                "model-00003-of-00003.safetensors",
+                "optiq/",
+                "optiq_metadata.json",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "README.md"
+            ]
+        },
+        {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
             "revision": "b9b8fd725c22e38b2962e0044b8e7b9d4b707095",
             "display_name": "Ornith 1.5 35B A3B OptiQ Static 5.5bpw",
