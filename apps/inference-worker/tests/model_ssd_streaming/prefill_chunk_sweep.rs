@@ -229,8 +229,13 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             WorkerEvent::ImageGenerationProgress { .. }
             | WorkerEvent::ImageGenerationCompleted { .. }
             | WorkerEvent::ImageGenerationFailed { .. }
-            | WorkerEvent::ImageGenerationFinalized { .. } => {
-                panic!("an autoregressive model SSD streaming benchmark received an image event")
+            | WorkerEvent::ImageGenerationFinalized { .. }
+            | WorkerEvent::EmbeddingsCompleted { .. }
+            | WorkerEvent::EmbeddingsFailed { .. }
+            | WorkerEvent::EmbeddingsFinalized { .. } => {
+                panic!(
+                    "an autoregressive model SSD streaming benchmark received an image or embeddings event"
+                )
             }
         }
     }
