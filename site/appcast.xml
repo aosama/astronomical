@@ -4,34 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.43</title>
-            <pubDate>Mon, 14 Sep 2026 18:00:23 -0400</pubDate>
-            <sparkle:version>575</sparkle:version>
-            <sparkle:shortVersionString>0.2.43</sparkle:shortVersionString>
+            <title>0.2.44</title>
+            <pubDate>Mon, 14 Sep 2026 21:27:27 -0400</pubDate>
+            <sparkle:version>580</sparkle:version>
+            <sparkle:shortVersionString>0.2.44</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.43
+            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.44
 
-## Fixed
+## Changes
 
-- **Honest cache-reuse reporting**: `prompt_tokens_details.cached_tokens` now reports every restored prompt token — dense and SpecPrefill sparse alike. A session reusing ~97% of its prompt previously reported ~0% to usage consumers.
-- **Dense prompt-cache capture after SpecPrefill restore**: conversation tails processed after a sparse restore are now published to the SSD cache and restored by later requests. Previously the restored prefix stayed frozen while every request re-prefilled the entire growing tail; time-to-first-token climbed with each message. Now each request pays only its new tokens and stays in the low single-digit seconds.
+- Model serving now loads expert-pruned OptiQ (REAP) artifacts whose `optiq_metadata.json` records only pruning provenance and carries no measured bit-map. Previously those artifacts failed to load at metadata decode. The OptiQ metadata validator accepts any provenance-only shape through one discriminator — the presence of a measured bit-map — rather than a pruning-method name, so the current and future expert-compression methods are supported without new code.
+- The `Ornith-1.5-35B-A3B-OptiQ-4bit-REAP-19B` variant is published to the model library and offered for one-click download through Observatory and the menu.
 
-## Preserved
+## Compatibility
 
-- Existing SSD prompt-cache state remains valid; new anchored chains build on top of previously captured prefixes.
-- Image (visual) requests keep their previous prompt-cache behavior.
-- No configuration or model-artifact changes are required.
+- Backward compatible: the change is additive. Models that were rejected before this release continue to be rejected; the release does not change how models rejected ahead of it behave.
+- Requires Apple Silicon macOS with the `mlx-optiq` optional dependency at runtime.
+
+## Preserved state
+
+- Existing models, configuration, and local release state are preserved through the update.
 
 ## Distribution
 
-- macOS arm64 DMG, Developer ID–signed with Hardened Runtime, notarized and stapled.
-- Sparkle update feed Ed25519-signed; in-app updates verify signatures before installing.
+- Distributed as a signed, Apple-notarized DMG. Assets are published bound by SHA-256 digests in the release manifest, and the signed Sparkle feed is activated through a separate signed update. The release is not installed or launched as part of publishing; it is delivered through the ordinary public download or Sparkle update journey, exactly as every user receives it.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.43/Astronomical-0.2.43-macOS-arm64.dmg" length="16308765" type="application/octet-stream" sparkle:edSignature="W+VHV6CTHPjFb5JR7SD1d3GaXU362V9ZGfLfmiCv7eiCzRqun5w1/hr2H2e8JsPfvL5xPWHXcHPRUPWIHxjjCw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.44/Astronomical-0.2.44-macOS-arm64.dmg" length="16311648" type="application/octet-stream" sparkle:edSignature="w6VmPbJD1FeKkcp0zML93txVYYkP2UIedzqOEewlceJkC8hbC05+Nd3lWSA9LW8u7QNdBNF2lVYIJXHESBRoDQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: uRSB+q8s7bgImo50W9OFFJLYbvT3tpxkw32SLJnFtX8oTn7jZBWkCDPa01Vh3jq/W4rZaEy6EtZe5Y55w0fTBA==
-length: 2362
+edSignature: yprfBYBFLgcbBBW4L3530FZJtbsY0TTzRsIQB2p6xA95yBCLKxIhWQq79HSt7hUdNjySF0vF5o0vuOxDzDm4Dw==
+length: 2684
 -->
