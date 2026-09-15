@@ -18,6 +18,14 @@
       .doc-body strong { color: var(--paper); }
       .doc-body code { color: var(--paper); }
       .support-cta { margin-block: 24px; }
+      .release-note-title { font-size: 1rem; margin: 0 0 4px; color: var(--paper); }
+      .release-note-date { color: var(--paper-muted); font-size: 0.85rem; display: block; margin-bottom: 10px; }
+      .release-note { border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; background: rgba(244, 240, 230, 0.03); }
+      .release-feed { display: grid; gap: 18px; margin-block: 24px 8px; }
+      .release-note-body h1, .release-note-body h2 { font-size: 1rem; margin: 14px 0 6px; color: var(--paper); }
+      .release-note-body h1:first-child, .release-note-body h2:first-child { margin-top: 0; }
+      .release-note-body ul { margin: 6px 0; }
+      .release-note-empty { color: var(--paper-muted); }
     </style>
   </head>
   <body>
@@ -49,8 +57,13 @@
           <ul>
             <li><strong>System requirements.</strong> Astronomical needs an Apple silicon Mac (M1 or later) running macOS 14 (Sonoma) or later. Support across that spectrum is declared best-effort: hardware features the GPU cannot prove fall back to public MLX paths with no loss of declared model precision. Memory needs depend on the model you load; the app shows a recommended ceiling before a model is admitted.</li>
             <li><strong>Check your version.</strong> The menu-bar popover shows the app version and build number. Mention both when reporting.</li>
+            <li><strong>Latest Stable release.</strong> The current signed Mac release is <strong id="release-latest-version">available on GitHub Releases</strong> — <a id="release-latest-link" href="https://github.com/aosama/astronomical/releases/latest">download it</a> or update through the in-app Sparkle updater.</li>
             <li><strong>Try the obvious fix.</strong> A stuck model download recovers by retrying the download; a wedged server responds to "Restart server" in the popover.</li>
           </ul>
+
+          <h2>What's New</h2>
+          <p>Release notes are derived from the signed public update feed the app itself checks, so this list stays current without manual edits.</p>
+          <div class="release-feed" id="release-changelog" role="list"></div>
 
           <h2>What to include in a report</h2>
           <ol>
@@ -88,5 +101,6 @@
       <p>Local language, vision, and image models for Apple silicon.</p>
       <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./privacy.html">Privacy</a><a href="./index.html">Home</a></div>
     </footer>
+    <script src="./assets/release-feed.js"></script>
   </body>
 </html>
