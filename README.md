@@ -1,12 +1,12 @@
 # Astronomical
 
+<a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
+
 **Run bigger local language and vision models on Apple Silicon without requiring every sparse expert to live in RAM.**
 
 You set the model RAM your laptop can spare. Astronomical is a local model runner for Mac users who want serious models, private inference, and direct control over memory: it automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
 
 Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
-
-<a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
 
 ![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.jpeg)
 
