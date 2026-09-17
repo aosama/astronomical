@@ -111,7 +111,6 @@ Astronomical is an Apple Silicon local model runner. The active architecture is 
 
 ## Conventions
 
-- Follow .github/instructions/rust.instructions.md for Rust and keep code Java-readable.
 - Use CARGO_BUILD_JOBS="$(sysctl -n hw.logicalcpu)" for non-trivial Cargo verification on macOS.
 - Classify tests by the highest external dependency needed to prove their contract: hermetic, rest_api, direct_mlx, mlx_memory_contract, serving_acceptance, prompt_cache_acceptance, performance_measurement, macos_menu_contract, native_metal_contract, memory_management_acceptance, or structural_guard. Do not create a new test binary only to express a semantic category; preserve the existing execution boundary when it is the more expensive dependency. Memory-management acceptance uses installed models and proves runtime memory behavior.
 - Run routine hermetic, REST, and commit verification through Cargo aliases on one stable target. Commit verification compiles both required Rust boundaries once and then executes them once with live attributed progress. Run named model, memory, and performance journeys through `scripts/run-disposable-cargo-journey.sh`; use `--list` to discover the accepted names. Direct MLX scripts use disposable targets with live progress and individual 120-second guards.
