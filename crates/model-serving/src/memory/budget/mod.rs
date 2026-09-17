@@ -12,6 +12,7 @@ mod adaptive_growth_projection;
 #[cfg(feature = "direct-mlx")]
 mod live_allocation;
 mod ram;
+mod ram_activation;
 mod ram_geometry;
 mod ram_values;
 

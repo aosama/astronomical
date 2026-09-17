@@ -482,6 +482,7 @@ expected_journeys = {
     "accept-laguna-family-swap",
     "accept-thinking-seed",
     "accept-hard-thinking-budget",
+    "accept-follow-up-turn-admission",
     "accept-client-thinking-budget",
     "accept-structured-output",
     "accept-embeddings",
