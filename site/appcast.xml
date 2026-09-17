@@ -4,36 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.44</title>
-            <pubDate>Mon, 14 Sep 2026 21:27:27 -0400</pubDate>
-            <sparkle:version>580</sparkle:version>
-            <sparkle:shortVersionString>0.2.44</sparkle:shortVersionString>
+            <title>0.2.45</title>
+            <pubDate>Thu, 17 Sep 2026 08:28:24 -0400</pubDate>
+            <sparkle:version>597</sparkle:version>
+            <sparkle:shortVersionString>0.2.45</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.44
+            <description sparkle:format="markdown"><![CDATA[## Highlights
 
-## Changes
-
-- Model serving now loads expert-pruned OptiQ (REAP) artifacts whose `optiq_metadata.json` records only pruning provenance and carries no measured bit-map. Previously those artifacts failed to load at metadata decode. The OptiQ metadata validator accepts any provenance-only shape through one discriminator — the presence of a measured bit-map — rather than a pruning-method name, so the current and future expert-compression methods are supported without new code.
-- The `Ornith-1.5-35B-A3B-OptiQ-4bit-REAP-19B` variant is published to the model library and offered for one-click download through Observatory and the menu.
+- **Fixed: follow-up turns no longer rejected after a long prefill.** One successful long request could leave the adaptive memory budget with an inflated activation reserve, so chat clients saw repeated `generation context exceeds available GPU wired memory` failures until the app restarted. The reserve now resolves at the planned chunk scope and every projection is capped at the configured memory ceiling.
+- **Enabled: OptiQ sidecar multi-token prediction.** Compatible Qwen artifacts with OptiQ MTP metadata can opt in to multi-token prediction through `acceleration.mtp.enabled`, with per-model draft depth.
+- **Fixed: multi-row GPU sampling bugs** in the OptiQ path.
 
 ## Compatibility
 
-- Backward compatible: the change is additive. Models that were rejected before this release continue to be rejected; the release does not change how models rejected ahead of it behave.
-- Requires Apple Silicon macOS with the `mlx-optiq` optional dependency at runtime.
-
-## Preserved state
-
-- Existing models, configuration, and local release state are preserved through the update.
+- Requires macOS 14.0 or later on Apple Silicon.
+- Existing configurations, model libraries, downloads, and the persistent prompt cache are preserved by the update.
 
 ## Distribution
 
-- Distributed as a signed, Apple-notarized DMG. Assets are published bound by SHA-256 digests in the release manifest, and the signed Sparkle feed is activated through a separate signed update. The release is not installed or launched as part of publishing; it is delivered through the ordinary public download or Sparkle update journey, exactly as every user receives it.
+- Signed with Developer ID Application, notarized and stapled by Apple, and distributed as a signed disk image.
+- The Sparkle update feed is signed; existing installations update in place through the app's menu.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.44/Astronomical-0.2.44-macOS-arm64.dmg" length="16311648" type="application/octet-stream" sparkle:edSignature="w6VmPbJD1FeKkcp0zML93txVYYkP2UIedzqOEewlceJkC8hbC05+Nd3lWSA9LW8u7QNdBNF2lVYIJXHESBRoDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.45/Astronomical-0.2.45-macOS-arm64.dmg" length="16538534" type="application/octet-stream" sparkle:edSignature="ieY1Ub4MFJ81el8Gs6wwt67EmKGJhgZro39vPxtm4i79h8VlFN5zqPCTsaHWoXVbWJUpyUKbzlok8ru3Ar1fAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: yprfBYBFLgcbBBW4L3530FZJtbsY0TTzRsIQB2p6xA95yBCLKxIhWQq79HSt7hUdNjySF0vF5o0vuOxDzDm4Dw==
-length: 2684
+edSignature: mqB4IGTM0xP4xTkHot4dW/2IZhFRuBMWvFYJCq8BSSZqwBgyb8gjoEZOq2FiFz39hKdqrsjuMjjfEq2SpyOsDQ==
+length: 2330
 -->
