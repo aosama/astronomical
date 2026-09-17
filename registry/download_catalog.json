@@ -347,6 +347,23 @@
                 "chat_template.jinja",
                 "special_tokens_map.json"
             ]
+        },
+        {
+            "huggingface_id": "Jundot/Qwen3.8-27B-oQ4e-mtp",
+            "revision": "04dc5509edd8670fc78cc8c2f74bf9b77b1f2acc",
+            "display_name": "Qwen 3.8 27B oQ4e MTP 4-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 16994886691,
+            "public": true,
+            "description": "An oQ4e 4-bit affine (group 64) quant of the dense Qwen 3.8 27B VLM, calibrated with the oqe toolchain and shipped with the calibration report (oq_imatrix_report.json). Takes images and text, reasons before answering, and bundles an int4 multi-token prediction head for speculative decoding; the head and bf16 vision tower live inside the model shards.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "oQ4e 4-bit affine (group 64)",
+            "architecture_summary": "Qwen3.5 dense VLM, 27B params, 64 layers mixed linear-attention/full-attention, hidden 5120, bf16 vision tower, int4 MTP head"
         }
     ]
 }
