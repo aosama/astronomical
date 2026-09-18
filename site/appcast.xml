@@ -4,32 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.45</title>
-            <pubDate>Thu, 17 Sep 2026 08:28:24 -0400</pubDate>
-            <sparkle:version>597</sparkle:version>
-            <sparkle:shortVersionString>0.2.45</sparkle:shortVersionString>
+            <title>0.2.46</title>
+            <pubDate>Fri, 18 Sep 2026 19:21:12 -0400</pubDate>
+            <sparkle:version>605</sparkle:version>
+            <sparkle:shortVersionString>0.2.46</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Highlights
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.46
 
-- **Fixed: follow-up turns no longer rejected after a long prefill.** One successful long request could leave the adaptive memory budget with an inflated activation reserve, so chat clients saw repeated `generation context exceeds available GPU wired memory` failures until the app restarted. The reserve now resolves at the planned chunk scope and every projection is capped at the configured memory ceiling.
-- **Enabled: OptiQ sidecar multi-token prediction.** Compatible Qwen artifacts with OptiQ MTP metadata can opt in to multi-token prediction through `acceleration.mtp.enabled`, with per-model draft depth.
-- **Fixed: multi-row GPU sampling bugs** in the OptiQ path.
+Stable, signed, notarized macOS (Apple silicon) release.
+
+## Changes since 0.2.45
+
+- Laguna accepts OpenAI-style thinking levels: a client-selected `reasoning_effort` now prepares a chat instead of failing with `positive thinking budgets are not supported by Laguna generation`. Thinking stays template-driven with no token ceiling on this family (#703, #704).
+- The MTP decode head remains eligible for requests while the persistent prompt cache is available, so prompt-cache users keep MTP decode acceleration (#701).
+- Download catalog adds Jundot/Qwen3.8-27B-oQ4e-mtp.
+- Documentation: repository discovery guide refreshed to the 0.2.45 release state (#702); Laguna thinking-budget contract and release-verification lessons recorded (#706).
 
 ## Compatibility
 
-- Requires macOS 14.0 or later on Apple Silicon.
-- Existing configurations, model libraries, downloads, and the persistent prompt cache are preserved by the update.
+- REST surface and configuration schema unchanged; existing configuration, model downloads, and prompt caches carry over.
 
 ## Distribution
 
-- Signed with Developer ID Application, notarized and stapled by Apple, and distributed as a signed disk image.
-- The Sparkle update feed is signed; existing installations update in place through the app's menu.
+Developer ID signed with Hardened Runtime, notarized and stapled, Sparkle Ed25519 signed feed. Every release artifact is digest-bound to `release-manifest.json`.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.45/Astronomical-0.2.45-macOS-arm64.dmg" length="16538534" type="application/octet-stream" sparkle:edSignature="ieY1Ub4MFJ81el8Gs6wwt67EmKGJhgZro39vPxtm4i79h8VlFN5zqPCTsaHWoXVbWJUpyUKbzlok8ru3Ar1fAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.46/Astronomical-0.2.46-macOS-arm64.dmg" length="16539241" type="application/octet-stream" sparkle:edSignature="aVsCc1/Uqk/fP3uPZftKn8WxKHZ+Hto3s6zWHr9VWJuPSAvA/cgT56JtuehKNy47J9q2Asyd3hcIA/hRKkbBAg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: mqB4IGTM0xP4xTkHot4dW/2IZhFRuBMWvFYJCq8BSSZqwBgyb8gjoEZOq2FiFz39hKdqrsjuMjjfEq2SpyOsDQ==
-length: 2330
+edSignature: aLOi1omfO4iadw3F+yB3PabiHUdAc4rT0h7KnNytLAZpd+j/ZnBCZ6Ce7ymgU10/qpXWOK+4q/tQNQ3WBSBfBw==
+length: 2316
 -->
