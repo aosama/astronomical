@@ -21,7 +21,7 @@ jobs:
       macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
     steps:
       - name: Check out source history
-        uses: actions/checkout@v4 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -63,7 +63,7 @@ jobs:
           printf '%s\n' 'Error: required macOS verification could not classify the changed content' >&2
           exit 1
       - name: Check out source
-        uses: actions/checkout@v4 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -127,7 +127,7 @@ jobs:
       - name: Restore cargo-downloads-cache
         id: cargo-downloads-cache
         continue-on-error: true
-        uses: actions/cache/restore@v6 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -152,7 +152,7 @@ jobs:
       - name: Restore native-archives-cache
         id: native-archives-cache
         continue-on-error: true
-        uses: actions/cache/restore@v6 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Astronomical/native-dependencies
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
@@ -173,7 +173,7 @@ jobs:
       - name: Restore native-build-cache
         id: native-build-cache
         continue-on-error: true
-        uses: actions/cache/restore@v6 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           # Key on native build identity alone so the same identity restores
@@ -198,7 +198,7 @@ jobs:
       - name: Restore sccache-cache
         id: sccache-cache
         continue-on-error: true
-        uses: actions/cache/restore@v6 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Astronomical/sccache
           # Key on Cargo.lock (not github.sha) so the same dependency graph
@@ -229,7 +229,7 @@ jobs:
       - name: Restore swiftpm-cache
         id: swiftpm-cache
         continue-on-error: true
-        uses: actions/cache/restore@v6 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/astronomical-menu/.build
           key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
@@ -344,7 +344,7 @@ jobs:
         id: cargo-downloads-cache-save
         if: ${{ !cancelled() && steps.cargo-downloads-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
-        uses: actions/cache/save@v6 # v6.1.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -368,7 +368,7 @@ jobs:
         id: native-archives-cache-save
         if: ${{ !cancelled() && steps.native-archives-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
-        uses: actions/cache/save@v6 # v6.1.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Astronomical/native-dependencies
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
@@ -390,7 +390,7 @@ jobs:
         id: native-build-cache-save
         if: ${{ !cancelled() && steps.native-build-result.outputs.was_built == 'true' }}
         continue-on-error: true
-        uses: actions/cache/save@v6 # v6.1.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
@@ -412,7 +412,7 @@ jobs:
         id: sccache-cache-save
         if: ${{ !cancelled() && steps.sccache-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
-        uses: actions/cache/save@v6 # v6.1.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/Astronomical/sccache
           key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
@@ -434,7 +434,7 @@ jobs:
         id: swiftpm-cache-save
         if: ${{ !cancelled() && steps.swiftpm-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
-        uses: actions/cache/save@v6 # v6.1.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/astronomical-menu/.build
           key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
@@ -450,7 +450,7 @@ jobs:
 
       - name: Upload Cargo timing report
         if: always()
-        uses: actions/upload-artifact@v4 # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cargo-timings-macos-hermetic-${{ github.run_attempt }}
           path: target/cargo-timings/
