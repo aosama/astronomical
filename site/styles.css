@@ -83,7 +83,7 @@ img {
   align-items: center;
   gap: 11px;
   font-family: var(--display);
-  font-size: 1.15rem;
+  font-size: 1.2125rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
@@ -98,7 +98,7 @@ img {
   gap: 34px;
   color: var(--paper-muted);
   font-family: var(--mono);
-  font-size: 0.82rem;
+  font-size: 1.0125rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -135,7 +135,7 @@ img {
 .decision-box > span,
 .principle-callout > span {
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.8625rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -158,7 +158,7 @@ img {
 .report-hero h1 {
   margin: 22px 0 28px;
   font-family: var(--display);
-  font-size: clamp(4.8rem, 8vw, 8.2rem);
+  font-size: clamp(4.8625rem, 8vw, 8.2625rem);
   font-stretch: condensed;
   font-weight: 900;
   letter-spacing: -0.075em;
@@ -175,7 +175,7 @@ img {
 .hero-deck {
   max-width: 650px;
   color: var(--paper-muted);
-  font-size: clamp(1.15rem, 1.8vw, 1.4rem);
+  font-size: clamp(1.2125rem, 1.8vw, 1.4625rem);
   line-height: 1.55;
 }
 
@@ -195,7 +195,7 @@ img {
   padding: 0 22px;
   border: 1px solid var(--line-strong);
   font-family: var(--mono);
-  font-size: 0.82rem;
+  font-size: 0.8825rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -292,14 +292,14 @@ img {
 .core-detail,
 .orbit-note {
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.8625rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .core strong {
   font-family: var(--display);
-  font-size: clamp(1.7rem, 4vw, 3rem);
+  font-size: clamp(1.7625rem, 4vw, 3.0625rem);
   line-height: 1;
 }
 
@@ -327,11 +327,11 @@ img {
   align-items: center;
   border-top: 1px solid var(--line);
   color: var(--paper-muted);
-  font-size: 0.9rem;
+  font-size: 0.9625rem;
 }
 
 .site-footer > p { text-align: center; }
-.site-footer > div { display: flex; justify-content: end; gap: 24px; font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; }
+.site-footer > div { display: flex; justify-content: end; gap: 24px; font-family: var(--mono); font-size: 0.8625rem; text-transform: uppercase; }
 
 @media (max-width: 900px) {
   :root { --shell: min(100% - 32px, 720px); }
@@ -347,7 +347,7 @@ img {
   .site-nav { flex-wrap: wrap; gap: 10px 14px; }
   .site-nav a:nth-child(2) { display: none; }
   .hero { padding-block: 60px; gap: 45px; }
-  .hero h1 { font-size: clamp(3.7rem, 18vw, 5.5rem); }
+  .hero h1 { font-size: clamp(3.7625rem, 18vw, 5.5625rem); }
   .orbit-note { display: none; }
   .site-footer { grid-template-columns: 1fr; gap: 20px; padding-block: 30px; text-align: left; }
   .site-footer > p { text-align: left; }

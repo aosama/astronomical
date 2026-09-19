@@ -16,7 +16,7 @@
 .fact span {
   color: var(--paper-muted);
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.8625rem;
   letter-spacing: 0.08em;
   line-height: 1.5;
   text-transform: uppercase;
@@ -24,7 +24,7 @@
 
 .fact-strip-label span { color: var(--paper-muted); }
 .fact { display: flex; flex-direction: column; justify-content: space-between; }
-.fact strong { font-family: var(--display); font-size: 2.7rem; letter-spacing: -0.06em; line-height: 1; }
+.fact strong { font-family: var(--display); font-size: 2.7625rem; letter-spacing: -0.06em; line-height: 1; }
 
 /* Homepage Stable version chip (eyebrow) + #use note (issue #675). */
 .eyebrow .home-version {
@@ -32,7 +32,7 @@
   margin-left: 0.35em;
   padding: 2px 10px;
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.8625rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.6;
@@ -56,7 +56,7 @@
   border-radius: 0 8px 8px 0;
   background: var(--ink-soft);
   color: var(--paper-muted);
-  font-size: 1.05rem;
+  font-size: 1.1125rem;
   line-height: 1.55;
 }
 .home-note strong { color: var(--paper); }
@@ -72,7 +72,7 @@
 .residency-intro h2 {
   margin: 14px 0 0;
   font-family: var(--display);
-  font-size: clamp(2.8rem, 5.4vw, 5.6rem);
+  font-size: clamp(2.8625rem, 5.4vw, 5.6625rem);
   font-weight: 850;
   letter-spacing: -0.06em;
   line-height: 0.98;
@@ -102,7 +102,7 @@
 .residency-state > span {
   color: var(--paper-muted);
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.8625rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -110,7 +110,7 @@
 .residency-state strong {
   margin-top: auto;
   font-family: var(--display);
-  font-size: clamp(2rem, 3.2vw, 3.2rem);
+  font-size: clamp(2.0625rem, 3.2vw, 3.2625rem);
   letter-spacing: -0.05em;
   line-height: 0.95;
 }
@@ -140,14 +140,14 @@
   align-self: center;
   color: var(--orange);
   font-family: var(--display);
-  font-size: 3rem;
+  font-size: 3.0625rem;
 }
 
 .residency-note {
   max-width: 720px;
   margin: 30px 0 0 auto;
   color: var(--paper-muted);
-  font-size: 1.15rem;
+  font-size: 1.2125rem;
 }
 
 .residency-note strong {
@@ -191,7 +191,7 @@
 .capability-card > span {
   color: var(--orange);
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.8625rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -200,7 +200,7 @@
 .capability-card strong {
   margin-top: auto;
   font-family: var(--display);
-  font-size: clamp(1.7rem, 2.4vw, 2.4rem);
+  font-size: clamp(1.7625rem, 2.4vw, 2.4625rem);
   letter-spacing: -0.045em;
   line-height: 0.98;
 }
@@ -231,7 +231,7 @@
 .closing h2 {
   margin: 0;
   font-family: var(--display);
-  font-size: clamp(2.8rem, 5.4vw, 5.6rem);
+  font-size: clamp(2.8625rem, 5.4vw, 5.6625rem);
   font-weight: 850;
   letter-spacing: -0.06em;
   line-height: 0.98;
@@ -250,11 +250,11 @@
 .section-heading > p { max-width: 390px; color: var(--paper-muted); }
 
 .report-kicker { color: #62645d; }
-.report-card h3 { margin: 14px 0 18px; font-family: var(--display); font-size: clamp(2.3rem, 4vw, 4.4rem); letter-spacing: -0.055em; line-height: 0.98; }
+.report-card h3 { margin: 14px 0 18px; font-family: var(--display); font-size: clamp(2.3625rem, 4vw, 4.4625rem); letter-spacing: -0.055em; line-height: 0.98; }
 .report-card > p { max-width: 700px; }
 
-.text-link { display: inline-flex; align-items: center; gap: 16px; font-family: var(--mono); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.verdict { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.text-link { display: inline-flex; align-items: center; gap: 16px; font-family: var(--mono); font-size: 0.8825rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.verdict { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-family: var(--mono); font-size: 0.8625rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .verdict i, .verdict > span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .verdict-open { color: #8a5a30; }
 .verdict-verified { color: #39580e; }
@@ -267,18 +267,18 @@
 .report-card-dark { background: var(--ink-soft); }
 .report-card-dark .report-kicker { color: var(--paper-muted); }
 .report-card > .text-link { margin-top: auto; }
-.report-card-top { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.8rem; }
+.report-card-top { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.8625rem; }
 
 .method { display: grid; grid-template-columns: 1fr 1fr; gap: 90px; }
 .method-list { margin: 0; padding: 0; list-style: none; }
 .method-list li { display: grid; grid-template-columns: 48px 1fr; gap: 18px; padding: 24px 0; border-top: 1px solid var(--line); }
-.method-list li > span { color: var(--orange); font-family: var(--mono); font-size: 0.8rem; }
-.method-list strong { font-size: 1.12rem; }
-.method-list p { margin: 5px 0 0; color: var(--paper-muted); font-size: 1.02rem; }
+.method-list li > span { color: var(--orange); font-family: var(--mono); font-size: 0.8625rem; }
+.method-list strong { font-size: 1.1825rem; }
+.method-list p { margin: 5px 0 0; color: var(--paper-muted); font-size: 1.0825rem; }
 
 .closing { padding-block: 160px; text-align: center; }
 .closing h2 { margin-inline: auto; max-width: 900px; }
-.closing > p:not(.eyebrow) { color: var(--paper-muted); font-size: 1.2rem; }
+.closing > p:not(.eyebrow) { color: var(--paper-muted); font-size: 1.2625rem; }
 .closing-actions { justify-content: center; }
 
 @media (max-width: 900px) {

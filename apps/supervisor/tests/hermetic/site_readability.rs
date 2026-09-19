@@ -9,6 +9,12 @@
 //! so a redesign is free to go larger while any declaration that drops back under
 //! the floor fails. The smallest sizes live in stylesheets, not in markup, which
 //! is why the check reads declared sizes instead of rendering a page.
+//!
+//! Every stylesheet and every page under `site/` is in scope, including nested
+//! report pages: a stylesheet that only some pages load, and a page that only
+//! some visitors reach, still publish text to a visitor. An earlier version of
+//! this contract listed three stylesheets by name and missed `report.css`, which
+//! left a live report page publishing 9.6px labels one directory away.
 
 use std::{fs, path::PathBuf};
 
@@ -18,10 +24,32 @@ use std::{fs, path::PathBuf};
 const MINIMUM_PUBLISHED_TEXT_REM: f64 = 0.75;
 
 const SITE_RELATIVE_PATH: &str = "../../site";
-const SHARED_STYLESHEETS: [&str; 3] = ["styles.css", "home.css", "doc.css"];
 
 fn site_directory() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(SITE_RELATIVE_PATH)
+}
+
+/// Every published stylesheet or page below one directory, so a nested report
+/// directory cannot hide from the floor.
+fn published_sources(directory: &PathBuf, extension: &str) -> Vec<PathBuf> {
+    let mut sources = Vec::new();
+    let mut pending = vec![directory.clone()];
+
+    while let Some(current) = pending.pop() {
+        let entries = fs::read_dir(&current)
+            .unwrap_or_else(|error| panic!("{} should be readable: {error}", current.display()));
+        for entry in entries {
+            let path = entry.expect("a site entry should be readable").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|found| found == extension) {
+                sources.push(path);
+            }
+        }
+    }
+
+    sources.sort();
+    sources
 }
 
 /// Every `font-size` value in the site's stylesheets and inline page styles, as
@@ -31,28 +59,17 @@ fn declared_font_size_values() -> Vec<(String, String)> {
     let site = site_directory();
     let mut declarations = Vec::new();
 
-    let mut sources: Vec<PathBuf> = SHARED_STYLESHEETS
-        .iter()
-        .map(|stylesheet| site.join(stylesheet))
-        .collect();
-    for entry in fs::read_dir(&site).expect("the site directory should be readable") {
-        let path = entry.expect("a site entry should be readable").path();
-        if path
-            .extension()
-            .is_some_and(|extension| extension == "html")
-        {
-            sources.push(path);
-        }
-    }
+    let mut sources = published_sources(&site, "css");
+    sources.extend(published_sources(&site, "html"));
 
     for source in sources {
         let contents = fs::read_to_string(&source)
             .unwrap_or_else(|error| panic!("{} should be readable: {error}", source.display()));
         let name = source
-            .file_name()
-            .expect("a source file should have a name")
-            .to_string_lossy()
-            .into_owned();
+            .strip_prefix(&site)
+            .unwrap_or(&source)
+            .display()
+            .to_string();
         for declaration in contents.split("font-size:").skip(1) {
             let value = declaration
                 .split(';')
@@ -134,11 +151,10 @@ fn should_keep_every_published_text_size_at_or_above_the_readability_floor() {
 /// undoing the floor while leaving the declarations looking unchanged.
 #[test]
 fn should_keep_the_root_font_size_at_the_browser_default() {
-    let site = site_directory();
-
-    for stylesheet in SHARED_STYLESHEETS {
-        let contents = fs::read_to_string(site.join(stylesheet))
-            .unwrap_or_else(|error| panic!("{stylesheet} should be readable: {error}"));
+    for stylesheet in published_sources(&site_directory(), "css") {
+        let contents = fs::read_to_string(&stylesheet)
+            .unwrap_or_else(|error| panic!("{} should be readable: {error}", stylesheet.display()));
+        let name = stylesheet.display();
 
         for block in contents.split('}') {
             let Some((selector, body)) = block.split_once('{') else {
@@ -149,7 +165,7 @@ fn should_keep_the_root_font_size_at_the_browser_default() {
                 .any(|part| matches!(part.trim(), "html" | ":root"));
             assert!(
                 !(sets_the_root_scale && body.contains("font-size")),
-                "{stylesheet} must leave the root font size at the browser default, otherwise \
+                "{name} must leave the root font size at the browser default, otherwise \
                  every published rem size renders smaller than the readable floor"
             );
         }
