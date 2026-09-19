@@ -86,6 +86,7 @@ pub use budget::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
     MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
     RamBudgetGeometryError, measured_non_expert_forward_growth_bytes,
+    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
 #[cfg(feature = "direct-mlx")]

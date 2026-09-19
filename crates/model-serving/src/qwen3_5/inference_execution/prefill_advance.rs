@@ -351,6 +351,8 @@ impl Qwen3_5EngineState {
             prompt_prefill_chunk_outcome.active_memory_bytes_before_growth;
         let retained_expert_payload_bytes_before_growth =
             prompt_prefill_chunk_outcome.retained_expert_payload_bytes_before_growth;
+        let streamed_expert_page_bytes_before_growth =
+            prompt_prefill_chunk_outcome.streamed_expert_page_bytes_before_growth;
         let forward_chunk_elapsed_millis =
             prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
         let adaptive_ram_growth_context = prompt_prefill_chunk_outcome.adaptive_ram_growth_context;
@@ -446,6 +448,7 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             exact_temporary_workspace_bytes,
+            streamed_expert_page_bytes_before_growth,
             &mut active_request.performance_attribution,
         )?;
         // Demand-selected pages are materialized once after all prompt chunks.

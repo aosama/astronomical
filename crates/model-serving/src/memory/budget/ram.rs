@@ -451,3 +451,36 @@ pub const fn measured_non_expert_forward_growth_bytes(
         .saturating_sub(active_memory_bytes_before_growth)
         .saturating_sub(newly_retained_expert_payload_bytes)
 }
+
+/// Excludes mandatory expert-page streaming from a forward's learned growth.
+///
+/// Paged prefill promotes expert pages whose payload appears in the MLX peak
+/// but is evicted before completion, so the resident-payload delta misses it
+/// ([`measured_non_expert_forward_growth_bytes`] would falsely charge the
+/// stream to context and activation). The peak's expert component beyond the
+/// pre-growth baseline is the larger of the retention delta and the promoted
+/// stream: retention delta counts what stayed resident, the stream counts
+/// everything promoted, and promotion transfers bytes between the two without
+/// creating more (issue #691). Saturating arithmetic fails safe when sampled
+/// evidence disagrees.
+#[must_use]
+pub const fn measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+    active_memory_bytes_before_growth: u64,
+    peak_memory_bytes_during_growth: u64,
+    retained_expert_payload_bytes_before_growth: u64,
+    retained_expert_payload_bytes_after_growth: u64,
+    promoted_expert_page_stream_bytes: u64,
+) -> u64 {
+    let retained_expert_payload_growth_bytes = retained_expert_payload_bytes_after_growth
+        .saturating_sub(retained_expert_payload_bytes_before_growth);
+    // Ord::max is not a stable const trait yet; compare saturating values directly.
+    let expert_bytes_beyond_pre_growth_baseline =
+        if retained_expert_payload_growth_bytes > promoted_expert_page_stream_bytes {
+            retained_expert_payload_growth_bytes
+        } else {
+            promoted_expert_page_stream_bytes
+        };
+    peak_memory_bytes_during_growth
+        .saturating_sub(active_memory_bytes_before_growth)
+        .saturating_sub(expert_bytes_beyond_pre_growth_baseline)
+}

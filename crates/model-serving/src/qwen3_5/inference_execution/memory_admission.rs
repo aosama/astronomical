@@ -25,8 +25,8 @@ use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
     AdaptiveRamGrowthContext, InferenceEngineError, MemoryPhase, PagedExpertReclamationStep,
-    PerformanceAttribution, PerformanceOperation, combined_persistent_growth_bytes,
-    next_paged_expert_reclamation_step,
+    PerformanceAttribution, PerformanceCounter, PerformanceOperation,
+    combined_persistent_growth_bytes, next_paged_expert_reclamation_step,
 };
 
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
@@ -62,6 +62,34 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
     }
 }
 
+/// The exact pre-forward baselines post-forward learning compares against.
+///
+/// `usize::MAX` / `u64::MAX` sentinels mark a disabled adaptive guard; callers
+/// may still sample telemetry but perform no learning from them.
+pub(in crate::qwen3_5) struct AdaptiveRamGrowthAdmissionBaseline {
+    pub(in crate::qwen3_5) active_memory_bytes: usize,
+    pub(in crate::qwen3_5) retained_expert_payload_bytes: u64,
+    /// Cumulative logical expert-streaming payload bytes at admission commit.
+    /// The delta to this request's value after the forward is that forward's
+    /// mandatory expert-page stream (issue #691).
+    pub(in crate::qwen3_5) streamed_expert_page_bytes: u64,
+    /// Evidence level that composed the admitted projection, exported so
+    /// performance attribution can attribute reserve inflation to its source.
+    pub(in crate::qwen3_5) transient_reserve_source:
+        Option<crate::AdaptiveRamGrowthTransientReserveSource>,
+}
+
+impl AdaptiveRamGrowthAdmissionBaseline {
+    pub(in crate::qwen3_5) const fn disabled_guard_sentinel() -> Self {
+        Self {
+            active_memory_bytes: usize::MAX,
+            retained_expert_payload_bytes: u64::MAX,
+            streamed_expert_page_bytes: 0,
+            transient_reserve_source: None,
+        }
+    }
+}
+
 impl Qwen3_5EngineState {
     /// Attributes adaptive admission, including any retained-expert reclamation.
     pub(in crate::qwen3_5) fn measure_adaptive_ram_growth_memory_admission(
@@ -71,23 +99,44 @@ impl Qwen3_5EngineState {
         request_decoder_state: &RequestDecoderStateStack,
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
-    ) -> Result<(usize, u64), AdaptiveRamGrowthMemoryAdmissionError> {
+    ) -> Result<AdaptiveRamGrowthAdmissionBaseline, AdaptiveRamGrowthMemoryAdmissionError> {
         if !self.adaptive_ram_growth_guard_enabled {
-            return Ok((usize::MAX, u64::MAX));
+            return Ok(AdaptiveRamGrowthAdmissionBaseline::disabled_guard_sentinel());
         }
-        let should_log_memory_decision = performance_attribution.is_enabled();
-        performance_attribution.measure_operation(
+        let performance_attribution_measures_admission = performance_attribution.is_enabled();
+        let admitted_baseline = performance_attribution.measure_operation(
             PerformanceOperation::AdaptiveRamGrowthMemoryAdmission,
-            |_performance_attribution| {
+            |performance_attribution| {
                 self.begin_adaptive_ram_growth(
                     adaptive_ram_growth_context,
                     request_decoder_state,
                     additional_persistent_state_growth_bytes,
                     exact_temporary_workspace_bytes,
-                    should_log_memory_decision,
+                    performance_attribution_measures_admission,
+                    performance_attribution,
                 )
             },
-        )
+        )?;
+        // Performance attribution records which reserve source produced this
+        // admission decision, so reserve inflation is attributable from
+        // performance-attribution.jsonl alone (issue #691).
+        if let Some(transient_reserve_source) = admitted_baseline.transient_reserve_source {
+            performance_attribution.record_counter(
+                match transient_reserve_source {
+                    crate::AdaptiveRamGrowthTransientReserveSource::ExactContext => {
+                        PerformanceCounter::AdmissionReserveExactContextSourceCount
+                    }
+                    crate::AdaptiveRamGrowthTransientReserveSource::PhaseScaled => {
+                        PerformanceCounter::AdmissionReservePhaseScaledSourceCount
+                    }
+                    crate::AdaptiveRamGrowthTransientReserveSource::GlobalMaximum => {
+                        PerformanceCounter::AdmissionReserveGlobalMaximumSourceCount
+                    }
+                },
+                1,
+            );
+        }
+        Ok(admitted_baseline)
     }
 
     /// Admits one forward pass and starts an operation-local MLX peak sample.
@@ -98,7 +147,8 @@ impl Qwen3_5EngineState {
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
         should_log_memory_decision: bool,
-    ) -> Result<(usize, u64), AdaptiveRamGrowthMemoryAdmissionError> {
+        performance_attribution: &PerformanceAttribution,
+    ) -> Result<AdaptiveRamGrowthAdmissionBaseline, AdaptiveRamGrowthMemoryAdmissionError> {
         // Capture one internally consistent ownership snapshot. The model borrow
         // ends with this block so later demotion/reclamation may borrow it mutably.
         let (
@@ -421,11 +471,16 @@ impl Qwen3_5EngineState {
             .runtime()
             .reset_peak_memory()
             .map_err(qwen3_5_runtime_error)?;
-        // Return the exact pre-forward baseline and retained payload used by
-        // post-forward learning. `usize::MAX` is reserved by the disabled guard.
-        Ok((
-            memory_snapshot_before_growth.active_memory_bytes(),
-            retained_expert_payload_bytes_before_growth,
-        ))
+        // Return the exact pre-forward baselines used by post-forward learning:
+        // active memory, retained payload, and the cumulative expert-streaming
+        // counter whose later delta is this forward's promoted page bytes
+        // (issue #691). `usize::MAX` is reserved by the disabled guard.
+        Ok(AdaptiveRamGrowthAdmissionBaseline {
+            active_memory_bytes: memory_snapshot_before_growth.active_memory_bytes(),
+            retained_expert_payload_bytes: retained_expert_payload_bytes_before_growth,
+            streamed_expert_page_bytes: performance_attribution
+                .expert_streaming_payload_byte_count(),
+            transient_reserve_source: Some(first_forward_projection.transient_reserve_source()),
+        })
     }
 }

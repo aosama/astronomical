@@ -25,6 +25,7 @@ use crate::{PerformanceCounter, Qwen3_5PersistentPromptCacheBoundaryCheckpoint};
 pub(super) struct PromptPrefillChunkOutcome {
     pub(super) active_memory_bytes_before_growth: usize,
     pub(super) retained_expert_payload_bytes_before_growth: u64,
+    pub(super) streamed_expert_page_bytes_before_growth: u64,
     pub(super) forward_chunk_elapsed_millis: u64,
     pub(super) adaptive_ram_growth_context: crate::AdaptiveRamGrowthContext,
     pub(super) exact_temporary_workspace_bytes: usize,
@@ -161,6 +162,8 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_growth: admission_outcome.active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth: admission_outcome
                 .retained_expert_payload_bytes_before_growth,
+            streamed_expert_page_bytes_before_growth: admission_outcome
+                .streamed_expert_page_bytes_before_growth,
             forward_chunk_elapsed_millis: forward_elapsed.as_millis() as u64,
             adaptive_ram_growth_context: plan
                 .adaptive_ram_growth_context

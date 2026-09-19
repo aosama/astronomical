@@ -13,6 +13,7 @@ use crate::AdaptiveRamGrowthContext;
 pub(super) struct AdmissionOutcome {
     pub(super) active_memory_bytes_before_growth: usize,
     pub(super) retained_expert_payload_bytes_before_growth: u64,
+    pub(super) streamed_expert_page_bytes_before_growth: u64,
     pub(super) target_expert_payload_bytes_reclaimed_during_context_admission: u64,
     /// This admission demoted a complete resident expert owner into paged
     /// streaming.
@@ -56,14 +57,16 @@ impl Qwen3_5EngineState {
         // Resident -> Paged transition. Reborrow the model afterward so graph
         // construction cannot accidentally retain the pre-transition owner.
         let admission_started_at = std::time::Instant::now();
-        let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) = self
-            .measure_adaptive_ram_growth_memory_admission(
-                adaptive_ram_growth_context,
-                &mut active_request.performance_attribution,
-                &active_request.request_decoder_state,
-                additional_persistent_state_growth_bytes,
-                exact_temporary_workspace_bytes,
-            )?;
+        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
+            adaptive_ram_growth_context,
+            &mut active_request.performance_attribution,
+            &active_request.request_decoder_state,
+            additional_persistent_state_growth_bytes,
+            exact_temporary_workspace_bytes,
+        )?;
+        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
+        let retained_expert_payload_bytes_before_growth =
+            admitted_baseline.retained_expert_payload_bytes;
         let admission_elapsed = admission_started_at.elapsed();
         if admission_elapsed > std::time::Duration::from_millis(500) {
             tracing::info!(
@@ -100,6 +103,7 @@ impl Qwen3_5EngineState {
         Ok(AdmissionOutcome {
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
+            streamed_expert_page_bytes_before_growth: admitted_baseline.streamed_expert_page_bytes,
             target_expert_payload_bytes_reclaimed_during_context_admission,
             demoted_complete_resident_expert_owner,
         })
