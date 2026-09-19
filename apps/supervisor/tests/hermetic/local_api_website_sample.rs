@@ -177,3 +177,99 @@ async fn should_answer_the_verification_command_the_local_api_page_publishes() {
     assert_eq!(completion["object"], "chat.completion");
     assert_eq!(completion["choices"][0]["message"]["content"], "done");
 }
+
+#[test]
+fn should_publish_provider_configuration_that_parses_once_the_identifier_is_pasted() {
+    let page = local_api_page();
+    let mut provider_configurations = 0;
+    for snippet_block in published_snippet_blocks(&page) {
+        if !snippet_block.trim_start().starts_with('{') {
+            continue;
+        }
+        let pasted_block = snippet_block.replace(MODEL_IDENTIFIER_PLACEHOLDER, MODEL_ID);
+        let document: serde_json::Value = match serde_json::from_str(&pasted_block) {
+            Ok(document) => document,
+            Err(source) => panic!(
+                "a published configuration must be valid JSON once the identifier is pasted: {source}"
+            ),
+        };
+
+        let (provider, is_opencode) = if document.get("provider").is_some() {
+            (&document["provider"]["astronomical"], true)
+        } else {
+            (
+                document
+                    .get("providers")
+                    .and_then(|providers| providers.get("astronomical"))
+                    .unwrap_or(&serde_json::Value::Null),
+                false,
+            )
+        };
+        if provider.as_object().is_none() {
+            continue;
+        }
+        provider_configurations += 1;
+
+        let opencode_base_url = if is_opencode {
+            provider["options"]["baseURL"].as_str()
+        } else {
+            provider["baseUrl"].as_str()
+        };
+        let published_base_url =
+            opencode_base_url.expect("a published provider must name a base URL");
+        assert!(
+            published_base_url.starts_with("http://127.0.0.1:"),
+            "the published base URL must stay a loopback address"
+        );
+        assert!(
+            published_base_url.ends_with("/v1"),
+            "the published base URL must carry the versioned path prefix the app serves"
+        );
+
+        let published_credential = if is_opencode {
+            provider["options"]["apiKey"].as_str()
+        } else {
+            provider["apiKey"].as_str()
+        }
+        .expect("a published provider must carry the credential field a client requires");
+        assert!(
+            !published_credential.is_empty(),
+            "agents refuse a provider with an empty credential field, so the recipe must carry the placeholder"
+        );
+        assert!(
+            !published_credential.starts_with("sk-"),
+            "the published credential must never read as a secret"
+        );
+
+        if is_opencode {
+            assert_eq!(provider["npm"], "@ai-sdk/openai-compatible");
+            assert_eq!(
+                provider["models"][MODEL_ID],
+                serde_json::json!({"name": MODEL_ID}),
+                "the published model entry must be the identifier a reader pastes"
+            );
+        } else {
+            assert_eq!(provider["api"], "openai-completions");
+            for suppressed_option in [
+                "supportsStore",
+                "supportsStrictMode",
+                "supportsDeveloperRole",
+            ] {
+                assert_eq!(
+                    provider["compat"][suppressed_option], false,
+                    "the Pi recipe must suppress {suppressed_option}, which this endpoint answers with a JSON error"
+                );
+            }
+            assert_eq!(
+                provider["models"][0],
+                serde_json::json!({"id": MODEL_ID, "name": MODEL_ID}),
+                "the published model entry must be the identifier a reader pastes"
+            );
+        }
+    }
+
+    assert_eq!(
+        provider_configurations, 2,
+        "the page should publish one opencode and one Pi provider configuration"
+    );
+}

@@ -81,14 +81,19 @@
       "baseUrl": "http://127.0.0.1:6732/v1",
       "api": "openai-completions",
       "apiKey": "astronomical",
-      "compat": { "supportsStrictMode": false },
+      "compat": {
+        "supportsStore": false,
+        "supportsStrictMode": false,
+        "supportsDeveloperRole": false
+      },
       "models": [
         { "id": "&lt;identifier from /v1/models&gt;", "name": "&lt;identifier from /v1/models&gt;" }
       ]
     }
   }
 }</code></pre>
-          <p>Pi lists the model from this file. One request option still stops a Pi session with the app as it ships today: Pi sends <code>store</code>, and the chat endpoint rejects that option with <code>request option 'store' is unsupported</code>. The configuration above is otherwise complete — with only that option dropped in transit, a Pi prompt answered from this Mac. Until the endpoint accepts it, use a client that does not send <code>store</code>, or opencode above, which completes today.</p>
+          <p>Pi lists the model from this file, and with these three compatibility values a Pi session works. Each has a measured reason: this endpoint's chat contract does not accept the <code>store</code> request option, the <code>strict</code> field inside a tool definition, or the <code>developer</code> role that reasoning-capable clients lead their system prompt with — a request carrying any of them is answered with a JSON error, not corrected. Setting them false keeps Pi on the shapes this Mac serves.</p>
+          <p>A model that answers with thinking wants <code>reasoning: true</code> on its entry; with that declared, a session picks a level like <code>-m "astronomical/&lt;identifier from /v1/models&gt;:medium"</code>. Both shapes were run against the app before being published.</p>
 
           <h2>Verify the endpoint</h2>
           <p>This is the shortest request that proves a client path works end to end. It asks for a JSON answer, so it succeeds whether the model replies with prose or thinks first.</p>
