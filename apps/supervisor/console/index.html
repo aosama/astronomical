@@ -21,11 +21,11 @@
                 </div>
             </div>
             <nav class="observatory-navigation" aria-label="Observatory sections">
-                <button class="navigation-button" type="button" data-observatory-destination="overview" aria-controls="overview-view" aria-current="page">Overview</button>
-                <button class="navigation-button" type="button" data-observatory-destination="chat" aria-controls="chat-view">Chat</button>
-                <button class="navigation-button" type="button" data-observatory-destination="model" aria-controls="model-view">Model</button>
-                <button class="navigation-button" type="button" data-observatory-destination="library" aria-controls="library-view">Library</button>
-                <button class="navigation-button" type="button" data-observatory-destination="settings" aria-controls="settings-view">Settings</button>
+                <button class="navigation-button" type="button" data-observatory-destination="overview" aria-controls="overview-view" aria-current="page"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.75" y="1.75" width="5.5" height="5.5" rx="1.5"/><rect x="8.75" y="1.75" width="5.5" height="5.5" rx="1.5"/><rect x="1.75" y="8.75" width="5.5" height="5.5" rx="1.5"/><rect x="8.75" y="8.75" width="5.5" height="5.5" rx="1.5"/></svg>Overview</button>
+                <button class="navigation-button" type="button" data-observatory-destination="chat" aria-controls="chat-view"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8a6 6 0 1 1-2.34-4.76L14 2l-.4 2.9A5.96 5.96 0 0 1 14 8Z"/><path d="M5.5 8h.01M8 8h.01M10.5 8h.01"/></svg>Chat</button>
+                <button class="navigation-button" type="button" data-observatory-destination="model" aria-controls="model-view"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.75" y="2.75" width="10.5" height="10.5" rx="2"/><path d="M2.75 6.25h10.5M6.25 6.25v7"/></svg>Model</button>
+                <button class="navigation-button" type="button" data-observatory-destination="library" aria-controls="library-view"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.75A1.25 1.25 0 0 1 4.25 1.5H13v11.75H4.25A1.25 1.25 0 0 0 3 14.5V2.75Z"/><path d="M3 13.25A1.25 1.25 0 0 0 4.25 14.5H13"/></svg>Library</button>
+                <button class="navigation-button" type="button" data-observatory-destination="settings" aria-controls="settings-view"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4"/></svg>Settings</button>
             </nav>
             <p class="sidebar-note">Private, local, and served by astronomicald on this Mac.</p>
         </aside>
@@ -147,29 +147,37 @@
                         <p>Talk directly to the ready model without leaving this Mac.</p>
                     </div>
                     <section id="playground" class="panel playground">
-                        <div class="playground-grid">
-                            <div class="playground-left">
-                                <section id="chat-transcript" class="chat-transcript" aria-live="polite" aria-label="Chat transcript"></section>
-                                <div id="chat-error-banner" class="chat-error-banner" hidden></div>
-                                <div class="chat-image-preview-row">
-                                    <img id="chat-image-preview" class="chat-image-preview" alt="" hidden>
-                                    <button id="chat-image-clear" class="button button-secondary" type="button" hidden>Remove image</button>
-                                </div>
-                                <textarea id="chat-input" class="chat-input" placeholder="Ask Astronomical anything…" rows="3" aria-label="Message to send"></textarea>
-                                <div class="chat-composer-row">
-                                    <label class="chat-attach"><span class="chat-attach-label">Attach image</span><input type="file" id="chat-image" accept="image/*" hidden></label>
-                                    <button id="chat-send" class="button button-primary" type="button">Send</button>
-                                    <button id="chat-stop" class="button button-secondary" type="button" disabled>Stop</button>
+                        <div class="playground-column">
+                            <section id="chat-transcript" class="chat-transcript" aria-live="polite" aria-label="Chat transcript"></section>
+                            <div id="chat-error-banner" class="chat-error-banner" hidden></div>
+                            <div class="chat-image-preview-row">
+                                <img id="chat-image-preview" class="chat-image-preview" alt="" hidden>
+                                <button id="chat-image-clear" class="button button-secondary" type="button" hidden>Remove image</button>
+                            </div>
+                            <div class="composer-dock">
+                                <textarea id="chat-input" class="chat-input" placeholder="Message Astronomical…" rows="1" aria-label="Message to send"></textarea>
+                                <div class="composer-toolbar">
+                                    <label class="composer-round-button chat-attach" title="Attach image">
+                                        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2.75v8.5M4.75 8 8 11.25 11.25 8"/></svg>
+                                        <input type="file" id="chat-image" accept="image/*" hidden>
+                                    </label>
+                                    <button id="chat-stop" class="composer-round-button" type="button" title="Stop generating" disabled><svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg></button>
+                                    <span class="composer-spacer"></span>
+                                    <button id="chat-send" class="composer-send-button" type="button" title="Send" aria-label="Send message"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg></button>
                                 </div>
                             </div>
                             <aside class="playground-right" aria-label="Chat options">
-                                <h3>Sampling</h3>
-                                <div class="sampling-controls">
-                                    <label class="sampling-control"><span class="sampling-label">Temperature</span><input type="range" id="sampling-temperature" min="0" max="2" step="0.05" value="0.7"><span id="sampling-temperature-value" class="sampling-value">0.70</span></label>
-                                    <label class="sampling-control"><span class="sampling-label">Top p</span><input type="range" id="sampling-top-p" min="0" max="1" step="0.01" value="1.0"><span id="sampling-top-p-value" class="sampling-value">1.00</span></label>
-                                    <label class="sampling-control"><span class="sampling-label">Max tokens</span><input type="range" id="sampling-max-tokens" min="1" max="8192" step="1" value="512"><span id="sampling-max-tokens-value" class="sampling-value">512</span></label>
-                                </div>
-                                <details class="raw-stream-wrapper"><summary>Raw stream</summary><pre id="raw-stream" class="raw-stream"></pre></details>
+                                <details>
+                                    <summary>Sampling</summary>
+                                    <div class="playground-right-body">
+                                        <div class="sampling-controls">
+                                            <label class="sampling-control"><span class="sampling-label">Temperature</span><input type="range" id="sampling-temperature" min="0" max="2" step="0.05" value="0.7"><span id="sampling-temperature-value" class="sampling-value">0.70</span></label>
+                                            <label class="sampling-control"><span class="sampling-label">Top p</span><input type="range" id="sampling-top-p" min="0" max="1" step="0.01" value="1.0"><span id="sampling-top-p-value" class="sampling-value">1.00</span></label>
+                                            <label class="sampling-control"><span class="sampling-label">Max tokens</span><input type="range" id="sampling-max-tokens" min="1" max="8192" step="1" value="512"><span id="sampling-max-tokens-value" class="sampling-value">512</span></label>
+                                        </div>
+                                        <details class="raw-stream-wrapper"><summary>Raw stream</summary><pre id="raw-stream" class="raw-stream"></pre></details>
+                                    </div>
+                                </details>
                             </aside>
                         </div>
                     </section>
