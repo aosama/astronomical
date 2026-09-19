@@ -1,6 +1,7 @@
 use astronomical_model_serving::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MemoryPhase, MlxRamBudget, MlxRamBudgetMeasurement,
     MlxRamBudgetModelGeometry, measured_non_expert_forward_growth_bytes,
+    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
 };
 
 fn fable_class_geometry() -> MlxRamBudgetModelGeometry {
@@ -471,4 +472,57 @@ fn should_cap_the_activation_reserve_at_the_active_memory_ceiling() {
     let plan = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
 
     assert_eq!(plan.activation_headroom_bytes, ceiling_bytes);
+}
+
+#[test]
+fn should_exclude_mandatory_expert_page_streaming_from_the_learned_context_growth() {
+    // Issue #691: the composed context/activation learning sees a peak that
+    // includes mandatory streamed page traffic. With a zero resident delta the
+    // whole stream must leave the residual; the pre-fix formula would charge
+    // it to context and activation.
+    let learned_growth_bytes =
+        measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+            1_000, 1_600, 500, 500, 400,
+        );
+
+    assert_eq!(learned_growth_bytes, 200);
+}
+
+#[test]
+fn should_charge_retained_expert_growth_as_one_beyond_baseline_owner_while_streaming() {
+    // Retained (300) and streamed (500) promotion overlap: the peak's expert
+    // component beyond the pre-growth baseline is the larger of the two, so
+    // the residual keeps only the genuine non-expert growth.
+    let learned_growth_bytes =
+        measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+            1_000, 1_700, 1_000, 1_300, 500,
+        );
+
+    assert_eq!(learned_growth_bytes, 200);
+}
+
+#[test]
+fn should_match_the_stream_free_contract_when_no_expert_page_stream_occurred() {
+    // Identical measurements to the pre-#691 formula when zero pages streamed:
+    // the pinned #623/#644 contracts must keep holding byte for byte.
+    let learned_growth_bytes =
+        measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+            1_000, 2_600, 400, 900, 0,
+        );
+    let baseline_growth_bytes = measured_non_expert_forward_growth_bytes(1_000, 2_600, 400, 900);
+
+    assert_eq!(learned_growth_bytes, baseline_growth_bytes);
+    assert_eq!(learned_growth_bytes, 1_100);
+}
+
+#[test]
+fn should_saturate_context_growth_to_zero_when_stream_evidence_dominates() {
+    // Churn can make stream evidence exceed the whole recorded window; the
+    // budget must clamp instead of wrapping (fail safe, recoverable by design).
+    let learned_growth_bytes =
+        measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+            1_000, 1_300, 500, 400, 900,
+        );
+
+    assert_eq!(learned_growth_bytes, 0);
 }

@@ -3,6 +3,12 @@
 //! Enum discriminants index a fixed array on the hot path. `COUNT`, `ALL`, and
 //! `identifier` must therefore change together: their shared order is the
 //! zero-allocation bridge from recording to serialized diagnostics.
+//!
+//! Declaring a counter means appending its variant and listing it once in
+//! `ALL`, then taking `COUNT` from that newest variant. The hermetic catalog
+//! journey in `tests/hermetic/performance_attribution/counter_catalog.rs`
+//! guards the invariant, because a counter outside the reserved storage
+//! panicked the inference worker mid-request instead of failing a build.
 
 /// One bounded numerical counter attached to a performance-attribution report.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -151,13 +157,22 @@ pub enum PerformanceCounter {
     /// Previous-token experts dropped because leftover slots were full (#537).
     PreviousTokenPrefetchCapacityDropCount,
     Qwen4ExpIndexerSelectedKeyCount,
+    /// Admission decisions composed from the exact-context transient evidence (#691).
+    AdmissionReserveExactContextSourceCount,
+    /// Admission decisions composed from a token-scaled phase estimate (#691).
+    AdmissionReservePhaseScaledSourceCount,
+    /// Admission decisions composed from the all-phase maximum (#691).
+    AdmissionReserveGlobalMaximumSourceCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
-    pub(super) const COUNT: usize = Self::Qwen4ExpIndexerSelectedKeyCount as usize + 1;
-    pub(super) const ALL: [Self; Self::COUNT] = [
+    /// Number of distinct counters the enabled report storage reserves.
+    pub const COUNT: usize = Self::AdmissionReserveGlobalMaximumSourceCount as usize + 1;
+    /// Every counter in declaration order, so report serialization can pair a
+    /// counter with its stored value by position without an allocation.
+    pub const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
         Self::RestoredPersistentPromptCacheTokenCount,
         Self::GeneratedTokenCount,
@@ -270,9 +285,13 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchByteCount,
         Self::PreviousTokenPrefetchCapacityDropCount,
         Self::Qwen4ExpIndexerSelectedKeyCount,
+        Self::AdmissionReserveExactContextSourceCount,
+        Self::AdmissionReservePhaseScaledSourceCount,
+        Self::AdmissionReserveGlobalMaximumSourceCount,
     ];
 
-    pub(super) const fn identifier(self) -> &'static str {
+    /// Stable report identifier for this counter.
+    pub const fn identifier(self) -> &'static str {
         match self {
             Self::PromptTokenCount => "prompt_token_count",
             Self::RestoredPersistentPromptCacheTokenCount => {
@@ -500,6 +519,15 @@ impl PerformanceCounter {
                 "previous_token_prefetch_capacity_drop_count"
             }
             Self::Qwen4ExpIndexerSelectedKeyCount => "qwen4_exp_indexer_selected_key_count",
+            Self::AdmissionReserveExactContextSourceCount => {
+                "admission_reserve_exact_context_source_count"
+            }
+            Self::AdmissionReservePhaseScaledSourceCount => {
+                "admission_reserve_phase_scaled_source_count"
+            }
+            Self::AdmissionReserveGlobalMaximumSourceCount => {
+                "admission_reserve_global_maximum_source_count"
+            }
         }
     }
 }

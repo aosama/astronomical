@@ -23,7 +23,8 @@ use crate::qwen3_5_moe::model::record_expert_reclamation_attribution;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
-    RetainedExpertReclamation, measured_non_expert_forward_growth_bytes,
+    RetainedExpertReclamation,
+    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
 };
 
@@ -66,6 +67,7 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
     active_memory_bytes_before_growth: usize,
     retained_expert_payload_bytes_before_growth: u64,
     exact_temporary_workspace_bytes: usize,
+    streamed_expert_page_bytes_before_growth: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
     // The snapshot is captured under attribution so the published pair describes
@@ -81,14 +83,28 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
         return Ok(observation);
     }
     let memory_snapshot_after_growth = observation.mlx_memory_snapshot;
+    // Mandatory expert pages promoted by this forward: the countervalue delta
+    // of the request's logical streaming payload counter. They are expert-page
+    // spike ownership, not activation, so both learning sites exclude them
+    // (issue #691).
+    let promoted_expert_page_stream_bytes = performance_attribution
+        .expert_streaming_payload_byte_count()
+        .saturating_sub(streamed_expert_page_bytes_before_growth);
+    let retained_expert_payload_bytes_after_growth = model
+        .expert_weight_memory_cache_statistics()
+        .resident_payload_byte_count;
+    let retained_expert_payload_growth_bytes = retained_expert_payload_bytes_after_growth
+        .saturating_sub(retained_expert_payload_bytes_before_growth);
 
-    adaptive_ram_growth_guard.record_completed_growth_for_context(
+    adaptive_ram_growth_guard.record_completed_growth_excluding_expert_page_stream(
         adaptive_ram_growth_context,
         should_retain_adaptive_ram_growth_observation,
         active_memory_bytes_before_growth,
         memory_snapshot_after_growth.active_memory_bytes(),
         memory_snapshot_after_growth.peak_memory_bytes(),
         exact_temporary_workspace_bytes,
+        retained_expert_payload_growth_bytes,
+        promoted_expert_page_stream_bytes,
     );
 
     // Expert paging needs the phase high-water even when this exact context will
@@ -112,6 +128,7 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
             context_observed_transient_high_water_bytes,
             exact_temporary_workspace_bytes,
             &memory_snapshot_after_growth,
+            promoted_expert_page_stream_bytes,
         );
         record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
     }
@@ -129,6 +146,7 @@ pub(in crate::qwen3_5) fn record_completed_adaptive_ram_growth(
     active_memory_bytes_before_growth: usize,
     retained_expert_payload_bytes_before_growth: u64,
     exact_temporary_workspace_bytes: usize,
+    streamed_expert_page_bytes_before_growth: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), InferenceEngineError> {
     if active_memory_bytes_before_growth == usize::MAX {
@@ -142,6 +160,7 @@ pub(in crate::qwen3_5) fn record_completed_adaptive_ram_growth(
         active_memory_bytes_before_growth,
         retained_expert_payload_bytes_before_growth,
         exact_temporary_workspace_bytes,
+        streamed_expert_page_bytes_before_growth,
         performance_attribution,
     )?;
     Ok(())
@@ -156,20 +175,20 @@ fn record_composed_ram_budget_measurement(
     observed_transient_high_water_bytes: usize,
     exact_temporary_workspace_bytes: usize,
     memory_snapshot_after_growth: &MlxMemorySnapshot,
+    promoted_expert_page_stream_bytes: u64,
 ) -> RetainedExpertReclamation {
     let mlx_ram_budget_phase = adaptive_ram_growth_context.memory_phase();
-    // Peak includes complete/routed pages promoted by mandatory reads. Subtract
-    // only newly retained payload so the composed budget learns request workspace
-    // without reserving the same expert ownership a second time.
     let retained_expert_payload_bytes_after_growth = model
         .expert_weight_memory_cache_statistics()
         .resident_payload_byte_count;
-    let measured_context_and_activation_bytes = measured_non_expert_forward_growth_bytes(
-        u64::try_from(active_memory_bytes_before_growth).unwrap_or(u64::MAX),
-        u64::try_from(memory_snapshot_after_growth.peak_memory_bytes()).unwrap_or(u64::MAX),
-        retained_expert_payload_bytes_before_growth,
-        retained_expert_payload_bytes_after_growth,
-    );
+    let measured_context_and_activation_bytes =
+        measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+            u64::try_from(active_memory_bytes_before_growth).unwrap_or(u64::MAX),
+            u64::try_from(memory_snapshot_after_growth.peak_memory_bytes()).unwrap_or(u64::MAX),
+            retained_expert_payload_bytes_before_growth,
+            retained_expert_payload_bytes_after_growth,
+            promoted_expert_page_stream_bytes,
+        );
     model
         .mlx_ram_budget_mut()
         .record_measurement(MlxRamBudgetMeasurement {

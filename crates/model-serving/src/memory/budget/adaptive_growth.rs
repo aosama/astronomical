@@ -371,6 +371,42 @@ impl AdaptiveRamGrowthGuard {
         peak_memory_bytes_during_growth: usize,
         exact_temporary_workspace_bytes: usize,
     ) {
+        self.record_completed_growth_excluding_expert_page_stream(
+            adaptive_ram_growth_context,
+            should_retain_observation,
+            active_memory_bytes_before_growth,
+            active_memory_bytes_after_growth,
+            peak_memory_bytes_during_growth,
+            exact_temporary_workspace_bytes,
+            0,
+            0,
+        );
+    }
+
+    /// Retains recurring-context transient evidence after a forward that
+    /// promoted mandatory expert pages.
+    ///
+    /// `retained_expert_payload_growth_bytes` is the resident-payload delta the
+    /// forward created and `promoted_expert_page_stream_bytes` is everything
+    /// that forward streamed from storage. Pages that stayed resident are
+    /// already excluded because the post-forward active sample (`max` below)
+    /// includes the retention delta; subtracting them again would erase real
+    /// activation headroom. Pages that were streamed and evicted appear only
+    /// in the peak, so they must leave the residual — otherwise every future
+    /// activation reserve derived from this evidence inflates by the streamed
+    /// byte size and shrinks the expert-retention budget (issue #691).
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_completed_growth_excluding_expert_page_stream(
+        &mut self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        should_retain_observation: bool,
+        active_memory_bytes_before_growth: usize,
+        active_memory_bytes_after_growth: usize,
+        peak_memory_bytes_during_growth: usize,
+        exact_temporary_workspace_bytes: usize,
+        retained_expert_payload_growth_bytes: u64,
+        promoted_expert_page_stream_bytes: u64,
+    ) {
         if !should_retain_observation {
             return;
         }
@@ -380,9 +416,17 @@ impl AdaptiveRamGrowthGuard {
         // real activation headroom and let the next forward overfill retention.
         let stable_active_memory_bytes =
             active_memory_bytes_before_growth.max(active_memory_bytes_after_growth);
+        // Streamed page bytes inside the peak but outside that stable baseline:
+        // promotions beyond the resident delta were read in and evicted, so they
+        // are expert-page spike ownership, never activation (issue #691).
+        let expert_page_bytes_outside_stable_baseline = usize::try_from(
+            promoted_expert_page_stream_bytes.saturating_sub(retained_expert_payload_growth_bytes),
+        )
+        .unwrap_or(usize::MAX);
         let observed_transient_growth_bytes = peak_memory_bytes_during_growth
             .saturating_sub(stable_active_memory_bytes)
-            .saturating_sub(exact_temporary_workspace_bytes);
+            .saturating_sub(exact_temporary_workspace_bytes)
+            .saturating_sub(expert_page_bytes_outside_stable_baseline);
         // Store the residual only. Explicit workspace is supplied again by the
         // next operation; retaining it in learned history would double-count it.
         self.observed_transient_high_water_bytes_by_context

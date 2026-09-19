@@ -219,16 +219,18 @@ impl Qwen3_5EngineState {
                         active_request.has_optional_prediction_session(),
                         sparse_experts_are_paged,
                     );
-                    let (
-                        active_memory_bytes_before_growth,
-                        retained_expert_payload_bytes_before_growth,
-                    ) = self.measure_adaptive_ram_growth_memory_admission(
+                    let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
                         adaptive_ram_growth_context,
                         &mut active_request.performance_attribution,
                         &active_request.request_decoder_state,
                         0,
                         0,
                     )?;
+                    let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
+                    let retained_expert_payload_bytes_before_growth =
+                        admitted_baseline.retained_expert_payload_bytes;
+                    let streamed_expert_page_bytes_before_growth =
+                        admitted_baseline.streamed_expert_page_bytes;
                     self.save_speculative_prefill_target_prefix(active_request)?;
                     let model = self.model.as_ref().ok_or_else(|| {
                         fatal_engine_error("Qwen3.5 engine lost its loaded model")
@@ -310,6 +312,7 @@ impl Qwen3_5EngineState {
                         active_memory_bytes_before_growth,
                         retained_expert_payload_bytes_before_growth,
                         0,
+                        streamed_expert_page_bytes_before_growth,
                         &mut active_request.performance_attribution,
                     )?;
                     first_generated_token
@@ -425,14 +428,17 @@ impl Qwen3_5EngineState {
             active_request.has_optional_prediction_session(),
             sparse_experts_are_paged,
         );
-        let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) = self
-            .measure_adaptive_ram_growth_memory_admission(
-                adaptive_ram_growth_context,
-                &mut active_request.performance_attribution,
-                &active_request.request_decoder_state,
-                0,
-                0,
-            )?;
+        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
+            adaptive_ram_growth_context,
+            &mut active_request.performance_attribution,
+            &active_request.request_decoder_state,
+            0,
+            0,
+        )?;
+        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
+        let retained_expert_payload_bytes_before_growth =
+            admitted_baseline.retained_expert_payload_bytes;
+        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
         let model = self
             .model
             .as_ref()
@@ -505,6 +511,7 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             0,
+            streamed_expert_page_bytes_before_growth,
             &mut active_request.performance_attribution,
         )?;
 
