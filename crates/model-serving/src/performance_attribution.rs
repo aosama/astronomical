@@ -201,6 +201,20 @@ impl PerformanceAttribution {
             enabled_attribution.counter_values[counter as usize].saturating_add(amount);
     }
 
+    /// Returns the cumulative logical expert-streaming payload bytes recorded so
+    /// far for this request. Sampling it before and after one forward yields
+    /// that forward's mandatory expert-page stream, which the completed-forward
+    /// learning must exclude from activation evidence (issue #691).
+    #[must_use]
+    pub fn expert_streaming_payload_byte_count(&self) -> u64 {
+        self.enabled_attribution
+            .as_ref()
+            .map_or(0, |enabled_attribution| {
+                enabled_attribution.counter_values
+                    [PerformanceCounter::RustExpertStreamingPayloadByteCount as usize]
+            })
+    }
+
     /// Replaces one report counter with an exact amount.
     ///
     /// Peak-coherent snapshots need this: recording each term of a split with
