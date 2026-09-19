@@ -7,6 +7,7 @@ use serde_json::Value;
 
 const ATTRIBUTED_PREFILL_TRANSIENT_HIGH_WATER_BYTES: u64 = 1_234_567;
 
+mod counter_catalog;
 mod expert_route_reuse;
 mod expert_streaming_source;
 mod log;
