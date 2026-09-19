@@ -8,15 +8,8 @@
     <meta name="theme-color" content="#10120f">
     <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./doc.css">
     <style>
-      .doc { padding-block: 96px; }
-      .doc-body { max-width: 720px; margin-inline: auto; }
-      .doc-body h1 { font-size: 2rem; margin: 0 0 8px; }
-      .doc-body h2 { font-size: 1.2rem; margin-block: 32px 8px; }
-      .doc-body p, .doc-body li { color: var(--paper-muted); line-height: 1.65; }
-      .doc-body ul, .doc-body ol { padding-left: 20px; }
-      .doc-body strong { color: var(--paper); }
-      .doc-body code { color: var(--paper); }
       .support-cta { margin-block: 24px; }
       .release-note-title { font-size: 1rem; margin: 0 0 4px; color: var(--paper); }
       .release-note-date { color: var(--paper-muted); font-size: 0.85rem; display: block; margin-bottom: 10px; }
@@ -79,7 +72,7 @@
           <ul>
             <li><strong>A model will not download.</strong> Model files come from public model repositories. Check your connection, then retry the download from the model library. Corporate and school networks sometimes block these repositories.</li>
             <li><strong>The app says there is not enough memory.</strong> The memory ceiling is a safety boundary, not a bug. Pick a smaller quantization of the same model, or free wired memory and retry. The recommendation in the native menu accounts for your installed memory.</li>
-            <li><strong>How do I use the local API?</strong> The app serves an OpenAI-compatible interface on this Mac at a loopback address; the popover shows the port. Point any local client at it. Requests never leave this machine.</li>
+            <li><strong>How do I use the local API?</strong> The app serves an OpenAI-compatible interface on this Mac's loopback address. The menu popover shows the port of the installed channel — <strong>6732</strong> for Stable and <strong>6733</strong> for Development — and Observatory's Connect page shows the full base URL. Point a local client at it; <a href="./local-api.html">the local API page</a> carries the model identifier, the credential field, and configuration ready to paste into a coding agent. Requests never leave this machine.</li>
             <li><strong>Where are my models stored?</strong> In the app's designated application-support location. App Store builds keep everything inside their sandbox container; you can remove all of it by deleting the app's data.</li>
           </ul>
 

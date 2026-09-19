@@ -8,6 +8,7 @@ use astronomical_config::{
 use super::write_config;
 
 mod chunking;
+mod local_api_base_urls;
 mod logging;
 mod maximum_mlx_memory;
 mod migration;
