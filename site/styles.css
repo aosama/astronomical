@@ -22,6 +22,11 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Type floors for the marketing pages: no rendered text below 0.8rem (12.8px),
+   body prose at 1rem or larger. The smallest roles were raised furthest because
+   uppercase mono with wide letter-spacing reads smaller than its nominal size,
+   which is why 9px labels were hard to read at a glance but impossible to read
+   at length. Headline scales are deliberately untouched. */
 body {
   margin: 0;
   background: var(--ink);
@@ -78,7 +83,7 @@ img {
   align-items: center;
   gap: 11px;
   font-family: var(--display);
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
@@ -93,7 +98,7 @@ img {
   gap: 34px;
   color: var(--paper-muted);
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -130,7 +135,7 @@ img {
 .decision-box > span,
 .principle-callout > span {
   font-family: var(--mono);
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -170,7 +175,7 @@ img {
 .hero-deck {
   max-width: 650px;
   color: var(--paper-muted);
-  font-size: clamp(1.05rem, 1.8vw, 1.3rem);
+  font-size: clamp(1.15rem, 1.8vw, 1.4rem);
   line-height: 1.55;
 }
 
@@ -190,7 +195,7 @@ img {
   padding: 0 22px;
   border: 1px solid var(--line-strong);
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -287,7 +292,7 @@ img {
 .core-detail,
 .orbit-note {
   font-family: var(--mono);
-  font-size: 0.55rem;
+  font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -322,11 +327,11 @@ img {
   align-items: center;
   border-top: 1px solid var(--line);
   color: var(--paper-muted);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
 }
 
 .site-footer > p { text-align: center; }
-.site-footer > div { display: flex; justify-content: end; gap: 24px; font-family: var(--mono); font-size: 0.65rem; text-transform: uppercase; }
+.site-footer > div { display: flex; justify-content: end; gap: 24px; font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; }
 
 @media (max-width: 900px) {
   :root { --shell: min(100% - 32px, 720px); }
@@ -335,15 +340,18 @@ img {
 }
 
 @media (max-width: 620px) {
-  .site-header { min-height: 76px; }
-  .site-nav { gap: 14px; }
+  .site-header { min-height: 76px; flex-wrap: wrap; padding-block: 12px; }
+  /* The header and footer rows never wrapped, so they only fit the narrowest
+     screens while the type stayed small. Wrapping keeps the readable sizes
+     without widening the page. */
+  .site-nav { flex-wrap: wrap; gap: 10px 14px; }
   .site-nav a:nth-child(2) { display: none; }
   .hero { padding-block: 60px; gap: 45px; }
   .hero h1 { font-size: clamp(3.7rem, 18vw, 5.5rem); }
   .orbit-note { display: none; }
   .site-footer { grid-template-columns: 1fr; gap: 20px; padding-block: 30px; text-align: left; }
   .site-footer > p { text-align: left; }
-  .site-footer > div { justify-content: start; }
+  .site-footer > div { justify-content: start; flex-wrap: wrap; gap: 10px 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
