@@ -32,10 +32,10 @@
     border-bottom: 1px solid var(--border);
     background: linear-gradient(105deg, rgba(110, 168, 247, 0.06), transparent 52%);
 }
-.library-hero-headline { margin: 0; font-size: 17px; color: var(--text); }
+.library-hero-headline { margin: 0; font-size: 18px; color: var(--text); }
 .library-hero-ready-count { color: var(--ok); font-weight: 650; }
 .library-hero-downloadable-count { color: var(--accent-cool); font-weight: 650; }
-.library-hero-size { margin: 4px 0 0; color: var(--text-dim); font-size: 14px; }
+.library-hero-size { margin: 4px 0 0; color: var(--text-dim); font-size: 15px; }
 
 /* Filter bar */
 .library-filter-bar {
@@ -109,7 +109,7 @@
     margin: 4px 0 0;
     color: var(--text-dim);
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 14px;
     overflow-wrap: break-word;
 }
 
@@ -120,7 +120,7 @@
     border: 1px solid var(--border);
     border-radius: 999px;
     color: var(--text-dim);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -141,7 +141,7 @@
 .library-model-description {
     margin: 14px 0 0;
     color: var(--text);
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.55;
 }
 
@@ -158,7 +158,7 @@
     border-radius: 999px;
     background: rgba(110, 168, 247, 0.08);
     color: var(--accent-cool);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.02em;
 }
@@ -170,18 +170,18 @@
     grid-template-columns: auto minmax(0, 1fr);
     gap: 6px 16px;
 }
-.library-model-facts dt { color: var(--text-dim); font-size: 14px; }
+.library-model-facts dt { color: var(--text-dim); font-size: 15px; }
 .library-model-facts dd {
     margin: 0;
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 15px;
     overflow-wrap: anywhere;
 }
 
 /* Download state text */
-.library-download-state { margin: 0; color: var(--text); font-size: 17px; font-weight: 650; }
-.library-download-detail { color: var(--text-dim); margin: 10px 0 0; font-size: 14px; }
+.library-download-state { margin: 0; color: var(--text); font-size: 18px; font-weight: 650; }
+.library-download-detail { color: var(--text-dim); margin: 10px 0 0; font-size: 15px; }
 
 /* Progress bar — thick, installer-style */
 .library-download-progress {
@@ -219,7 +219,7 @@
 .library-details-heading {
     margin: 0 0 14px;
     color: var(--text-dim);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -230,12 +230,12 @@
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px 18px;
 }
-.library-detail-list dt { color: var(--text-dim); font-size: 14px; }
+.library-detail-list dt { color: var(--text-dim); font-size: 15px; }
 .library-detail-list dd {
     margin: 0;
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 15px;
     overflow-wrap: anywhere;
 }
 
@@ -248,7 +248,7 @@
 .library-model-location-label {
     margin: 0 0 5px;
     color: var(--text-dim);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -260,7 +260,7 @@
     word-break: normal;
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.6;
 }
 .library-location-actions {

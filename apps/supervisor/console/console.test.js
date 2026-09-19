@@ -280,6 +280,7 @@ test("maps every observatory destination to a stable URL path", () => {
     assert.equal(pathMap.overview, "/overview");
     assert.equal(pathMap.chat, "/chat");
     assert.equal(pathMap.library, "/library");
+    assert.equal(pathMap.connect, "/connect");
     assert.equal(pathMap.memory, undefined);
     assert.equal(pathMap.cache, undefined);
     assert.equal(pathMap.model, "/model");
@@ -294,6 +295,7 @@ test("maps every observatory URL path back to its destination", () => {
     assert.equal(reverseMap["/overview"], "overview");
     assert.equal(reverseMap["/chat"], "chat");
     assert.equal(reverseMap["/library"], "library");
+    assert.equal(reverseMap["/connect"], "connect");
     assert.equal(reverseMap["/memory"], undefined);
     assert.equal(reverseMap["/cache"], undefined);
     assert.equal(reverseMap["/model"], "model");
