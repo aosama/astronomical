@@ -2,49 +2,46 @@ import SwiftUI
 import ThinTalkCore
 
 /// Root of the chat application. Owns the view model for the lifetime of the
-/// window and loads the models on first appearance.
+/// window and loads the models on first appearance. Production renders the real,
+/// client-backed conversation; it never depends on the preview mock data.
 struct RootView: View {
-  @StateObject private var viewModel: ChatViewModel
+  @State private var viewModel: ChatViewModel
   @State private var loadStarted = false
 
   init(viewModel: ChatViewModel = .default()) {
-    _viewModel = StateObject(wrappedValue: viewModel)
+    _viewModel = State(initialValue: viewModel)
   }
 
   var body: some View {
-    HStack(spacing: 0) {
-      // Sidebar skeleton: the session rail is lifted from the UX preview so the
-      // agreed layout can be styled here in the real app. Styling lives in the
-      // preview scaffold; this wires it beside the backend-backed chat below.
-      PreviewSidebar(
-        viewModel: PreviewSidebarViewModel(
-          conversations: PreviewData.conversations,
-          identity: PreviewData.identity)
-      )
-      // A hairline seam instead of a system divider, which renders as a thick
-      // grabbable wedge that reads as a resize handle.
-      Rectangle()
-        .fill(PreviewTheme.border)
-        .frame(width: 1)
-      mainPane
-    }
-    .background(PreviewTheme.windowBackground)
-    .onAppear {
-      guard !loadStarted else { return }
-      loadStarted = true
-      Task { await viewModel.load() }
-    }
+    ChatPane(viewModel: viewModel)
+      .background(PreviewTheme.windowBackground)
+      .onAppear {
+        guard !loadStarted else { return }
+        loadStarted = true
+        Task { await viewModel.load() }
+      }
   }
+}
 
-  private var mainPane: some View {
+/// The single-pane conversation surface: message list, composer, and any failure
+/// or state banner. This is one View type so a change in one section does not
+/// re-run the others.
+struct ChatPane: View {
+  @Bindable var viewModel: ChatViewModel
+
+  var body: some View {
     VStack(spacing: 0) {
-      messageList
+      MessageList(viewModel: viewModel)
       Divider()
         .background(PreviewTheme.border)
         .padding(.horizontal, 24)
-      composeBar
-      if let failure = viewModel.currentFailure { failureBanner(failure) }
-      if let stateError = stateErrorText { banner(stateError) }
+      ComposeBar(viewModel: viewModel)
+      if let failure = viewModel.currentFailure {
+        ChatFailureBanner(failure: failure, onRetry: viewModel.retry)
+      }
+      if let stateError = stateErrorText {
+        StateErrorBanner(message: stateError)
+      }
     }
     .frame(minWidth: 1100, minHeight: 700)
   }
@@ -55,54 +52,49 @@ struct RootView: View {
     default: return nil
     }
   }
+}
 
-  // MARK: - Messages
+// MARK: - Messages
 
-  private var messageList: some View {
-    // The empty state overlays the scroll view instead of living inside it so
-    // it can center vertically across the whole pane, like the product's home
-    // screen, instead of sitting at the top of an empty list.
+/// Scrollable conversation with an empty-state overlay that centers vertically
+/// across the whole pane, like the product's home screen.
+struct MessageList: View {
+  @Bindable var viewModel: ChatViewModel
+
+  var body: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 12) {
-        ForEach(viewModel.messages) { message in messageRow(message) }
+        ForEach(viewModel.messages) { message in
+          MessageRow(
+            message: message,
+            content: viewModel.attributedText(message.content),
+            reasoning: viewModel.attributedText(message.reasoning)
+          )
+        }
       }
       .padding()
       .frame(maxWidth: .infinity)
     }
-    .overlay { emptyState }
+    .overlay { EmptyStateView(viewModel: viewModel) }
   }
+}
 
-  @ViewBuilder
-  private var emptyState: some View {
-    if viewModel.messages.isEmpty {
-      VStack(spacing: 10) {
-        HStack(spacing: 10) {
-          Image(systemName: "brain.head.profile")
-            .font(.system(size: 28, weight: .medium))
-            .foregroundStyle(
-              LinearGradient(
-                colors: [Color.cyan, Color.purple],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
-          Text("Thin Talk")
-            .font(.system(size: 30, weight: .bold))
-        }
-        Text("Ask your local model anything.")
-          .font(.system(size: 15, weight: .medium))
-        if viewModel.state == .empty {
-          Text("No chat model is available yet. Add one from the Library.")
-            .font(.caption)
-        }
-      }
-      .foregroundColor(.primary)
-    }
-  }
+/// One conversation message: role label, optional reasoning block, and the
+/// rendered (already-attributed) answer. Attributed strings are pre-computed so
+/// this row stays cheap and does no parsing in body.
+struct MessageRow: View {
+  let message: ChatMessage
+  let content: AttributedString
+  let reasoning: AttributedString
 
-  private func messageRow(_ message: ChatMessage) -> some View {
+  var body: some View {
     let isUser = message.role == .user
     return VStack(alignment: .leading, spacing: 6) {
-      Text(message.role == .user ? "You" : "Assistant").font(.caption).foregroundColor(.secondary)
+      Text(message.role == .user ? "You" : "Assistant")
+        .font(.caption)
+        .foregroundColor(.secondary)
       if !message.reasoning.isEmpty {
-        Text(markdownText(message.reasoning))
+        Text(reasoning)
           .font(.callout)
           .foregroundColor(.secondary)
           .italic()
@@ -111,7 +103,7 @@ struct RootView: View {
           .background(Color.secondary.opacity(0.08))
           .clipShape(RoundedRectangle(cornerRadius: 8))
       }
-      Text(markdownText(message.content))
+      Text(content)
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -120,26 +112,47 @@ struct RootView: View {
     .clipShape(RoundedRectangle(cornerRadius: 10))
     .padding(.horizontal)
   }
+}
 
-  /// Renders assistant markdown inline. Falls back to the raw string when the
-  /// text is not valid markdown, because a partially streamed reply is often
-  /// mid-syntax and must never crash the conversation.
-  private func markdownText(_ raw: String) -> AttributedString {
-    if let attributed = try? AttributedString(
-      markdown: raw,
-      options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-    ) {
-      return attributed
+/// Empty conversation state, including the "no model available" guidance.
+struct EmptyStateView: View {
+  @Bindable var viewModel: ChatViewModel
+
+  var body: some View {
+    if viewModel.messages.isEmpty {
+      VStack(spacing: 10) {
+        HStack(spacing: 10) {
+          Image(systemName: "brain.head.profile")
+            .font(.title2)
+            .foregroundStyle(
+              LinearGradient(
+                colors: [Color.cyan, Color.purple],
+                startPoint: .topLeading, endPoint: .bottomTrailing))
+            .accessibilityHidden(true)
+          Text("Thin Talk")
+            .font(.title)
+        }
+        Text("Ask your local model anything.")
+          .font(.headline)
+        if viewModel.state == .empty {
+          Text("No chat model is available yet. Add one from the Library.")
+            .font(.caption)
+        }
+      }
+      .foregroundColor(.primary)
     }
-    return AttributedString(raw)
   }
+}
 
-  // MARK: - Compose
+// MARK: - Compose
 
-  private var composeBar: some View {
-    // One continuous rounded bar: the message field on top, the model
-    // selector centered below it, and the action button at the trailing edge,
-    // so the composer reads as a single surface instead of stacked fields.
+/// One continuous rounded bar: the message field on top, the model selector
+/// centered below it, and the action button at the trailing edge, so the
+/// composer reads as a single surface instead of stacked fields.
+struct ComposeBar: View {
+  @Bindable var viewModel: ChatViewModel
+
+  var body: some View {
     VStack(spacing: 6) {
       TextField("Message Thin Talk", text: $viewModel.draft, axis: .vertical)
         .textFieldStyle(.plain)
@@ -154,9 +167,12 @@ struct RootView: View {
         }
       HStack(spacing: 8) {
         Spacer(minLength: 8)
-        modelPicker
+        ModelPicker(
+          models: viewModel.availableModels,
+          selection: $viewModel.selectedModelID
+        )
         Spacer(minLength: 8)
-        actionButton
+        ActionButton(viewModel: viewModel)
       }
       .padding(.horizontal, 10)
       .padding(.bottom, 8)
@@ -170,11 +186,21 @@ struct RootView: View {
     .background(PreviewTheme.windowBackground)
   }
 
-  @ViewBuilder
-  private var modelPicker: some View {
-    if !viewModel.availableModels.isEmpty {
-      Picker("Model", selection: $viewModel.selectedModelID) {
-        ForEach(viewModel.availableModels) { model in
+  private func sendDraft() {
+    guard !viewModel.isStreaming else { return }
+    viewModel.sendMessage()
+  }
+}
+
+/// Model selector shown when one or more chat-capable models are available.
+struct ModelPicker: View {
+  let models: [ThinTalkModel]
+  @Binding var selection: String?
+
+  var body: some View {
+    if !models.isEmpty {
+      Picker("Model", selection: $selection) {
+        ForEach(models) { model in
           Text(model.id).tag(model.id)
         }
       }
@@ -183,9 +209,13 @@ struct RootView: View {
       .labelStyle(.titleAndIcon)
     }
   }
+}
 
-  @ViewBuilder
-  private var actionButton: some View {
+/// Send / Stop action button, driven purely by the streaming state.
+struct ActionButton: View {
+  @Bindable var viewModel: ChatViewModel
+
+  var body: some View {
     if viewModel.isStreaming {
       Button("Stop") {
         viewModel.stopStreaming()
@@ -198,26 +228,32 @@ struct RootView: View {
         .keyboardShortcut(.defaultAction)
     }
   }
+}
 
-  private func sendDraft() {
-    guard !viewModel.isStreaming else { return }
-    viewModel.sendMessage()
-  }
+// MARK: - Banners
 
-  // MARK: - Banners
+/// A classified failure with its specific next action and a retry affordance.
+struct ChatFailureBanner: View {
+  let failure: ChatFailure
+  let onRetry: () -> Void
 
-  private func failureBanner(_ failure: ChatFailure) -> some View {
+  var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       if let reason = failure.message { Text(reason).foregroundColor(.red) }
       Text(failure.nextAction).font(.caption)
-      Button("Retry") { viewModel.retry() }
+      Button("Retry", action: onRetry)
         .buttonStyle(.borderedProminent)
     }
     .padding()
     .background(Color.red.opacity(0.08))
   }
+}
 
-  private func banner(_ message: String) -> some View {
+/// A general state error (for example, a startup handshake failure).
+struct StateErrorBanner: View {
+  let message: String
+
+  var body: some View {
     Text(message)
       .font(.caption)
       .foregroundColor(.secondary)
