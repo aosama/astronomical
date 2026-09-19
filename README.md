@@ -8,9 +8,9 @@ You set the model RAM your laptop can spare. Astronomical is a local model runne
 
 Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
 
-![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.jpeg)
+[![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.jpeg)](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.mp4)
 
-*A captured development run of Qwen3.6-35B-A3B-oQ4e-mtp: 21.61 GB on disk, an 11 GB model-memory ceiling, automatic RAM plus SSD expert streaming, and live prompt-processing telemetry. This demonstrates the operating mode, not a universal throughput guarantee; results vary by model, context, storage, and Mac.*
+*A captured development run of Qwen3.6-35B-A3B-oQ4e-mtp: 21.61 GB on disk, an 11 GB model-memory ceiling, automatic RAM plus SSD expert streaming, and live prompt-processing telemetry. This demonstrates the operating mode, not a universal throughput guarantee; results vary by model, context, storage, and Mac. Click the image for the [25-second silent demo](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.mp4): a 23.55 GB mixture-of-experts model generating fully resident under a 30 GB ceiling, then switching to RAM plus SSD streaming after the ceiling is lowered. Captured run, not a throughput claim.*
 
 ## Built for the RAM you have
 
