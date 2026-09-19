@@ -173,15 +173,14 @@ fn should_apply_thinking_precedence_as_request_then_generation_config_then_templ
             .thinking_enabled()
     );
 
-    // Laguna must not advertise a positive hard limit until its decoder commits
-    // a family-owned forced transition into the model's own context.
-    let positive_budget_error = generation_false_processor
+    // A client-supplied positive budget (an OpenAI reasoning_effort level mapped by the
+    // REST contract) becomes a thinking-enabling hint: Laguna keeps its template-driven
+    // thinking but carries no enforceable token ceiling.
+    let hinted_thinking_preparation = generation_false_processor
         .prepare_chat(&romeo_and_juliet_command(9_806, Some(256)))
-        .expect_err("an unenforced positive thinking budget should be rejected");
-    assert!(matches!(
-        positive_budget_error,
-        LagunaPreparationError::PositiveThinkingBudgetUnsupported
-    ));
+        .expect("a positive thinking budget hint should enable thinking without a ceiling");
+    assert!(hinted_thinking_preparation.thinking_enabled());
+    assert!(hinted_thinking_preparation.thinking_budget().is_none());
 
     let mut template_default_artifact = SyntheticLagunaTextArtifact::extra_small_inline();
     template_default_artifact.set_embedded_chat_template(template_with_defaults(true, false));

@@ -172,10 +172,9 @@ impl LagunaGenerationProcessor {
                     LagunaPreparationError::PromptTokenization(source)
                 }
             })?;
-        let thinking_budget = chat_command
-            .settings
-            .thinking_budget
-            .filter(|thinking_budget| *thinking_budget > 0 && thinking_enabled);
+        // Laguna cannot enforce a token ceiling (no family-owned transition),
+        // so the prepared request deliberately carries no budget.
+        let thinking_budget = None;
         let inference_request = LagunaInferenceRequest::new(
             chat_command.request_id,
             prompt_token_ids,
@@ -214,13 +213,10 @@ impl LagunaGenerationProcessor {
                 maximum_output_tokens: self.maximum_output_tokens,
             });
         }
-        if chat_command
-            .settings
-            .thinking_budget
-            .is_some_and(|thinking_budget| thinking_budget > 0)
-        {
-            return Err(LagunaPreparationError::PositiveThinkingBudgetUnsupported);
-        }
+        // Laguna renders thinking through its prompt template but has no family-owned
+        // budget transition, so a client-supplied positive budget (for example an
+        // OpenAI reasoning_effort level mapped by the REST contract) acts as an
+        // enabling hint and cannot impose a token ceiling.
         if chat_command.messages.iter().any(
             |message| matches!(message, ChatMessage::User { images, .. } if !images.is_empty()),
         ) {
