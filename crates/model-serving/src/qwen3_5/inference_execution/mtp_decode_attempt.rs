@@ -89,40 +89,47 @@ impl Qwen3_5EngineState {
                 true,
                 model.sparse_experts_are_paged(),
             );
-            let memory_admission = self.measure_adaptive_ram_growth_memory_admission(
+            let admitted_memory_baseline = self.measure_adaptive_ram_growth_memory_admission(
                 growth_context,
                 &mut active_request.performance_attribution,
                 &active_request.request_decoder_state,
                 prediction_history_growth_bytes,
                 verification_workspace_bytes,
             );
-            let (active_memory_bytes_before_growth, retained_expert_payload_bytes_before_growth) =
-                match memory_admission {
-                    Ok(admitted_memory) => admitted_memory,
-                    Err(AdaptiveRamGrowthMemoryAdmissionError::Engine(memory_error)) => {
-                        return Err(memory_error);
-                    }
-                    Err(AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }) => {
-                        last_rejected_memory_projection = Some((
-                            prediction_history_growth_bytes,
-                            verification_transient_array_bytes,
-                            boundary_snapshot_bytes,
-                        ));
-                        // Rejected depths keep one downgrade count each. Byte projections wait
-                        // for the admitted depth or the final target-only fallback below.
-                        active_request
-                            .performance_attribution_mut()
-                            .record_counter(PerformanceCounter::MtpMemoryDepthDowngradeCount, 1);
-                        tracing::info!(
-                            request_id = request_id.value(),
-                            candidate_depth = candidate_depth.get(),
-                            reason,
-                            "MTP depth did not fit memory admission; trying a shallower depth"
-                        );
-                        candidate_depth_value = candidate_depth_value.saturating_sub(1);
-                        continue;
-                    }
-                };
+            let (
+                active_memory_bytes_before_growth,
+                retained_expert_payload_bytes_before_growth,
+                streamed_expert_page_bytes_before_growth,
+            ) = match admitted_memory_baseline {
+                Ok(admitted_memory) => (
+                    admitted_memory.active_memory_bytes,
+                    admitted_memory.retained_expert_payload_bytes,
+                    admitted_memory.streamed_expert_page_bytes,
+                ),
+                Err(AdaptiveRamGrowthMemoryAdmissionError::Engine(memory_error)) => {
+                    return Err(memory_error);
+                }
+                Err(AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }) => {
+                    last_rejected_memory_projection = Some((
+                        prediction_history_growth_bytes,
+                        verification_transient_array_bytes,
+                        boundary_snapshot_bytes,
+                    ));
+                    // Rejected depths keep one downgrade count each. Byte projections wait
+                    // for the admitted depth or the final target-only fallback below.
+                    active_request
+                        .performance_attribution_mut()
+                        .record_counter(PerformanceCounter::MtpMemoryDepthDowngradeCount, 1);
+                    tracing::info!(
+                        request_id = request_id.value(),
+                        candidate_depth = candidate_depth.get(),
+                        reason,
+                        "MTP depth did not fit memory admission; trying a shallower depth"
+                    );
+                    candidate_depth_value = candidate_depth_value.saturating_sub(1);
+                    continue;
+                }
+            };
             record_mtp_memory_projection(
                 active_request,
                 prediction_history_growth_bytes,
@@ -151,6 +158,7 @@ impl Qwen3_5EngineState {
                     active_memory_bytes_before_growth,
                     retained_expert_payload_bytes_before_growth,
                     verification_workspace_bytes,
+                    streamed_expert_page_bytes_before_growth,
                     &mut active_request.performance_attribution,
                 )?;
                 return Ok(None);
@@ -163,6 +171,7 @@ impl Qwen3_5EngineState {
                 active_memory_bytes_before_growth,
                 retained_expert_payload_bytes_before_growth,
                 verification_workspace_bytes,
+                streamed_expert_page_bytes_before_growth,
                 &mut active_request.performance_attribution,
             )?;
             let emission = self.build_generated_token_emission(
