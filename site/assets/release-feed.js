@@ -129,6 +129,40 @@
     }
   }
 
+  // Homepage (index.html) version chip + #use note. Guarded by element
+  // existence, so this is a no-op on support.html and leaves that page alone.
+  function renderHomepageStable(releases) {
+    var versionNode = document.getElementById('home-stable-version');
+    var noteNode = document.getElementById('home-stable-note');
+    var versionLabel = latestVersionLabel(releases);
+    if (versionLabel && versionNode) {
+      versionNode.textContent = versionLabel;
+      versionNode.href =
+        'https://github.com/aosama/astronomical/releases/tag/' + versionLabel;
+    }
+    if (versionLabel && noteNode) {
+      noteNode.innerHTML =
+        'Stable is now <strong>' + escapeHtml(versionLabel) +
+        '</strong> — open it and the local runner goes live on this Mac; ' +
+        'Observatory is the local console for the Library, status, and interim chat.';
+    }
+  }
+
+  function renderHomepageFailure() {
+    var versionNode = document.getElementById('home-stable-version');
+    var noteNode = document.getElementById('home-stable-note');
+    if (versionNode) {
+      versionNode.textContent = 'on GitHub Releases';
+      versionNode.href = 'https://github.com/aosama/astronomical/releases/latest';
+    }
+    if (noteNode) {
+      noteNode.innerHTML =
+        'Stable is on <strong>GitHub Releases</strong> (signed + notarized Mac disk image; Sparkle updates). ' +
+        'After you open it, you can tell the local runner is live on this Mac and see one next step. ' +
+        'Observatory remains the local console for the Library, status, and interim chat.';
+    }
+  }
+
   // Safe markdown subset renderer. Input is escaped before any tag is
   // emitted, so descriptions from the appcast can never inject markup.
   function escapeHtml(text) {
@@ -216,9 +250,11 @@
       .then(function (releases) {
         renderLatestStable(releases);
         renderChangelog(releases);
+        renderHomepageStable(releases);
       })
       .catch(function () {
         renderFeedFailure();
+        renderHomepageFailure();
       });
   }
 
