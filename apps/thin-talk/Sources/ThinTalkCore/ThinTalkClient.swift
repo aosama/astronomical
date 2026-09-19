@@ -439,21 +439,6 @@ public struct ThinTalkClient: Sendable {
   }
 }
 
-private extension ChatFailureKind {
-  var defaultReason: String {
-    switch self {
-    case .noUsableModel: return "No usable model is available."
-    case .modelLoadFailed: return "The model could not be loaded."
-    case .workerUnavailable: return "The runner is not available."
-    case .engineBusy: return "The runner is busy."
-    case .invalidRequest: return "The request was invalid."
-    case .malformedModelOutput: return "The reply could not be parsed."
-    case .stall: return "The reply stalled."
-    case .unknown: return "Something went wrong."
-    }
-  }
-}
-
 struct ModelsDocument: Decodable {
   let data: [RawModel]
 }

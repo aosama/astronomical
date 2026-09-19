@@ -30,9 +30,15 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   public let isDirty: Bool
 
   public static func current(bundle: Bundle = .main) -> ThinTalkApplicationIdentity {
+    // Debug overrides: set THINTALK_CHANNEL=stable|development (and optionally
+    // THINTALK_SUPERVISOR_PORT) to target another installed supervisor without
+    // rebuilding Info.plist. Falls back to the bundle, then channel defaults.
+    let environment = ProcessInfo.processInfo.environment
+    let explicitPort = Int(environment["THINTALK_SUPERVISOR_PORT"] ?? "")
+    let explicitChannel = ThinTalkChannel(rawValue: environment["THINTALK_CHANNEL"] ?? "")
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
-    let channel = ThinTalkChannel(rawValue: rawChannel ?? "") ?? .development
-    let configuredPort = bundle.object(forInfoDictionaryKey: "AstronomicalSupervisorPort") as? Int
+    let channel = explicitChannel ?? (ThinTalkChannel(rawValue: rawChannel ?? "") ?? .development)
+    let configuredPort = explicitPort ?? (bundle.object(forInfoDictionaryKey: "AstronomicalSupervisorPort") as? Int)
     return ThinTalkApplicationIdentity(
       channel: channel,
       supervisorPort: configuredPort ?? channel.defaultSupervisorPort,
