@@ -120,7 +120,8 @@ main() {
     run_step test-observatory-contracts "$TEST_TIMEOUT_SECONDS" node --test --test-reporter=spec \
         apps/supervisor/console/console.test.js \
         apps/supervisor/console/library.test.js \
-        apps/supervisor/console/library-fetch.test.js
+        apps/supervisor/console/library-fetch.test.js \
+        apps/supervisor/console/connect.test.js
     run_step compile-rust "$COMPILE_TIMEOUT_SECONDS" cargo verify-commit-rust \
         --timings --no-run --jobs "$logical_cpu_count"
     run_step run-rust "$TEST_TIMEOUT_SECONDS" cargo verify-commit-rust \

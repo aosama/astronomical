@@ -16,6 +16,7 @@ const OBSERVATORY_PATH_MAP = {
     chat: "/chat",
     model: "/model",
     library: "/library",
+    connect: "/connect",
     settings: "/settings"
 };
 
@@ -34,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
     wireObservatoryNavigation();
     wireLibraryCatalog();
+    wireConnectMaterial();
     pollStatus();
     pollCacheStats();
     pollModels();
@@ -222,6 +224,11 @@ async function pollModels() {
         const data = await response.json();
         const models = data.data || [];
         const selectedModel = selectAdvertisedModel(models, selectedModelId);
+        renderConnectionMaterial({
+            consoleOrigin: connectionConsoleOrigin(),
+            modelIdentifiers: connectionModelIdentifiers(data),
+            selectedModelIdentifier: selectedModel ? selectedModel.id : ""
+        });
         if (selectedModel) {
             selectedModelId = selectedModel.id;
             selectedModelMaximumInputTokens = Number(selectedModel.max_input_tokens || 0) || null;

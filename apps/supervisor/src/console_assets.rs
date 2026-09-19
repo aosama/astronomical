@@ -14,6 +14,7 @@ const LIBRARY_JS: &str = include_str!("../console/library.js");
 const LIBRARY_RENDER_JS: &str = include_str!("../console/library-render.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../console/memory-control.js");
+const CONNECT_JS: &str = include_str!("../console/connect.js");
 const PLAYGROUND_JS: &str = include_str!("../console/playground.js");
 const CONSOLE_CSS: &str = include_str!("../console/console.css");
 const LIBRARY_CSS: &str = include_str!("../console/library.css");
@@ -34,19 +35,22 @@ where
         .route("/chat", get(console_index))
         .route("/model", get(console_index))
         .route("/library", get(console_index))
+        .route("/connect", get(console_index))
         .route("/settings", get(console_index))
         .route("/console.js", get(console_script))
         .route("/library.js", get(library_script))
         .route("/library-render.js", get(library_render_script))
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
+        .route("/connect.js", get(connect_script))
         .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
         .route("/library.css", get(library_stylesheet))
 }
 
-/// `GET /` — the Observatory single-page shell. References `/console.js` and
-/// `/console.css` so a browser loads behavior and styling with no build step.
+/// `GET /` — the Observatory single-page shell. References the per-view scripts and
+/// `/console.css`, each served from this module, so a browser loads behavior and
+/// styling with no build step.
 pub(crate) async fn console_index() -> Response {
     embedded_text_response(INDEX_HTML, HTML_CONTENT_TYPE)
 }
@@ -71,6 +75,14 @@ pub(crate) async fn overview_compact_script() -> Response {
 
 pub(crate) async fn memory_control_script() -> Response {
     embedded_text_response(MEMORY_CONTROL_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /connect.js` — the connection material that teaches a user how to point an
+/// OpenAI-compatible coding agent at this Mac. It derives every published value from
+/// the console origin, so a copied sample matches the port the running instance
+/// actually listens on rather than a port baked in when the sample was written.
+pub(crate) async fn connect_script() -> Response {
+    embedded_text_response(CONNECT_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn playground_script() -> Response {
