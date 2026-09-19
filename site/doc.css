@@ -3,14 +3,14 @@
    restate these or the three document pages drift apart. */
 .doc { padding-block: 96px; }
 .doc-body { max-width: 720px; margin-inline: auto; }
-.doc-body h1 { font-size: 2rem; margin: 0 0 8px; }
-.doc-body h2 { font-size: 1.35rem; margin-block: 32px 8px; }
-.doc-body h3 { font-size: 1.15rem; margin-block: 26px 6px; color: var(--paper); }
-.doc-body p, .doc-body li { color: var(--paper-muted); line-height: 1.65; }
+.doc-body h1 { font-size: 2.0625rem; margin: 0 0 8px; }
+.doc-body h2 { font-size: 1.5125rem; margin-block: 32px 8px; }
+.doc-body h3 { font-size: 1.3125rem; margin-block: 26px 6px; color: var(--paper); }
+.doc-body p, .doc-body li { color: var(--paper-muted); font-size: 1.1875rem; line-height: 1.65; }
 .doc-body ul, .doc-body ol { padding-left: 20px; }
 .doc-body strong { color: var(--paper); }
 .doc-body code { color: var(--paper); }
-.doc-meta { color: var(--paper-muted); font-size: 1rem; }
+.doc-meta { color: var(--paper-muted); font-size: 1.1875rem; }
 
 /* A snippet is one selectable block that a reader copies wholesale, so it keeps
    its own scroll area instead of wrapping and silently changing what is copied. */
@@ -25,7 +25,7 @@
 .doc-snippet:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
 .doc-snippet code {
   font-family: var(--mono);
-  font-size: 0.95rem;
+  font-size: 1.0125rem;
   line-height: 1.6;
   white-space: pre;
 }
