@@ -1,0 +1,31 @@
+/* Typography shared by the site's document pages.
+   Page-specific rules stay inline in the page that needs them; a page must not
+   restate these or the three document pages drift apart. */
+.doc { padding-block: 96px; }
+.doc-body { max-width: 720px; margin-inline: auto; }
+.doc-body h1 { font-size: 2rem; margin: 0 0 8px; }
+.doc-body h2 { font-size: 1.2rem; margin-block: 32px 8px; }
+.doc-body h3 { font-size: 1rem; margin-block: 26px 6px; color: var(--paper); }
+.doc-body p, .doc-body li { color: var(--paper-muted); line-height: 1.65; }
+.doc-body ul, .doc-body ol { padding-left: 20px; }
+.doc-body strong { color: var(--paper); }
+.doc-body code { color: var(--paper); }
+.doc-meta { color: var(--paper-muted); font-size: 0.9rem; }
+
+/* A snippet is one selectable block that a reader copies wholesale, so it keeps
+   its own scroll area instead of wrapping and silently changing what is copied. */
+.doc-snippet {
+  margin: 12px 0 20px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(244, 240, 230, 0.03);
+}
+.doc-snippet:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
+.doc-snippet code {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre;
+}

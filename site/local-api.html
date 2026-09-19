@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local API | Astronomical</title>
+    <meta name="description" content="Point a local client at Astronomical's OpenAI-compatible loopback API: the address and port for each channel, where the model identifier comes from, the credential field, and copy-paste configuration for opencode and Pi.">
+    <meta name="theme-color" content="#10120f">
+    <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./doc.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Astronomical home">
+        <img src="./assets/mark.svg" alt="" width="36" height="36">
+        <span>Astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="./index.html">Home</a>
+        <a href="./support.html">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="doc shell">
+        <div class="doc-body">
+          <p class="eyebrow">Local API</p>
+          <h1>Connect a coding agent to this Mac</h1>
+          <p>The app serves an OpenAI-compatible API over loopback. Four values stand between a coding agent and your local models: the address, the model identifier, the credential field, and the request.</p>
+          <p>Everything on this page was checked against a running app, and the values below are the ones the app serves today.</p>
+
+          <h2>The address</h2>
+          <ul>
+            <li><strong>Stable.</strong> <code>http://127.0.0.1:6732/v1</code></li>
+            <li><strong>Development.</strong> <code>http://127.0.0.1:6733/v1</code></li>
+          </ul>
+          <p>Each installed channel owns its port, so Stable and Development can run side by side and a client pointed at one never reaches the other. The address is loopback only: no other machine can reach it, and the agent or client must be on this Mac.</p>
+          <p>The server runs while the app runs. The menu popover shows the port of the installed channel, and Observatory, the local console, is served by that same server — open it and choose <strong>Connect</strong> to see the full base URL of the instance you are running, generated from the instance itself rather than copied from this page.</p>
+          <p>There is no authorization check, which also means no isolation: any process on this Mac can reach the endpoint. Treat the port as this machine's own business, not as a shared service.</p>
+
+          <h2>The model identifier</h2>
+          <p>Model identifiers name artifacts, not families, so the correct value comes from the app rather than from a list. Install a model from the Observatory Library first, then read the identifiers the app currently serves:</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="Command that lists the model identifiers the app serves"><code>curl -s http://127.0.0.1:6732/v1/models</code></pre>
+          <p>Each entry in the returned list carries an <code>id</code>. That <code>id</code> is the identifier to paste into the samples below, and the same identifier appears in the Library and in the menu. A request naming an identifier the app does not serve is rejected with a JSON error instead of being guessed:</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="The JSON error returned for an unserved model identifier"><code>{"error":{"message":"model is not loaded by the local worker","type":"invalid_request_error","param":"model","code":"model_not_found"}}</code></pre>
+          <p>Where a sample below shows <code>&lt;identifier from /v1/models&gt;</code>, paste one of those identifiers.</p>
+
+          <h2>The credential</h2>
+          <p>The endpoint performs no authorization check, so no credential is required and none can be wrong. Many clients nonetheless refuse to use a provider whose credential field is empty. Give them an inert placeholder such as <code>astronomical</code>: it is not a secret, it is never validated, and it never leaves this Mac.</p>
+
+          <h2>opencode</h2>
+          <p>Save this to <code>~/.config/opencode/opencode.json</code>. OpenCode merges configuration sources, so an existing file only needs the <code>provider</code> entry added. Settings are taken from the published OpenCode configuration format, and the recipe below was run against the app before it was written down.</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="opencode configuration for the local Astronomical provider"><code>{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "astronomical": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Astronomical (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:6732/v1",
+        "apiKey": "astronomical"
+      },
+      "models": {
+        "&lt;identifier from /v1/models&gt;": { "name": "&lt;identifier from /v1/models&gt;" }
+      }
+    }
+  }
+}</code></pre>
+          <p>OpenCode lists the model from the <code>/models</code> picker. To send one prompt without the picker:</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="Running one opencode prompt against the local provider"><code>opencode run -m "astronomical/&lt;identifier from /v1/models&gt;" "Say hello in one short sentence."</code></pre>
+
+          <h2>Pi</h2>
+          <p>Save this to <code>~/.pi/agent/models.json</code>. Pi expects a placeholder key for a keyless local server, which is what the <code>apiKey</code> field carries here.</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="Pi configuration for the local Astronomical provider"><code>{
+  "providers": {
+    "astronomical": {
+      "baseUrl": "http://127.0.0.1:6732/v1",
+      "api": "openai-completions",
+      "apiKey": "astronomical",
+      "compat": { "supportsStrictMode": false },
+      "models": [
+        { "id": "&lt;identifier from /v1/models&gt;", "name": "&lt;identifier from /v1/models&gt;" }
+      ]
+    }
+  }
+}</code></pre>
+          <p>Pi lists the model from this file. One request option still stops a Pi session with the app as it ships today: Pi sends <code>store</code>, and the chat endpoint rejects that option with <code>request option 'store' is unsupported</code>. The configuration above is otherwise complete — with only that option dropped in transit, a Pi prompt answered from this Mac. Until the endpoint accepts it, use a client that does not send <code>store</code>, or opencode above, which completes today.</p>
+
+          <h2>Verify the endpoint</h2>
+          <p>This is the shortest request that proves a client path works end to end. It asks for a JSON answer, so it succeeds whether the model replies with prose or thinks first.</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="Single chat completion request that verifies the endpoint"><code>curl -s http://127.0.0.1:6732/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"&lt;identifier from /v1/models&gt;","messages":[{"role":"user","content":"Say hello in one short sentence."}],"max_tokens":1024}'</code></pre>
+          <p>A working endpoint answers with a completion object: <code>"object": "chat.completion"</code> and an entry under <code>choices</code>. The first request for a model also loads it, which takes longer than later ones. A reasoning model may fill <code>reasoning_content</code> before <code>content</code>; either way, a JSON reply is the proof that the endpoint answered.</p>
+          <p>The served paths, in full: <code>/v1/chat/completions</code>, <code>/v1/responses</code>, <code>/v1/models</code>, <code>/v1/embeddings</code>, and <code>/v1/images/generations</code>.</p>
+
+          <h2>Launcher command</h2>
+          <p><strong>Planned, not shipped.</strong> A launcher will write these files for you: <code>astronomical launch opencode</code> and <code>astronomical launch pi</code>. Until it ships, the manual configuration above is the working path; when it ships, it comes first and this page stays as the fallback. See <a class="text-link" href="https://github.com/aosama/astronomical/issues/423">the launcher issue <span aria-hidden="true">↗</span></a>.</p>
+
+          <p class="doc-meta">Astronomical is open source under its repository license. Privacy policy: <a href="./privacy.html">privacy.html</a>.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="./index.html">
+        <img src="./assets/mark.svg" alt="" width="30" height="30">
+        <span>Astronomical</span>
+      </a>
+      <p>Local language, vision, and image models for Apple silicon.</p>
+      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./support.html">Support</a><a href="./index.html">Home</a><a href="https://discord.gg/dc4E6r4WD">Discord</a></div>
+    </footer>
+  </body>
+</html>
