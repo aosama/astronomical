@@ -23,6 +23,7 @@ mod model_load_timeout;
 mod persistent_prompt_cache_diagnostics;
 mod qwen_thinking_channel_seed;
 mod request_queue;
+mod site_readability;
 mod supervisor_performance_attribution;
 mod worker_cancellation;
 mod worker_health_snapshot;
