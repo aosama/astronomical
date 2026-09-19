@@ -18,6 +18,10 @@ const EXPECTED_MEMORY_PRESSURE_MARKER: &str =
     "id=\"compact-memory-pressure-state\" class=\"compact-memory-pressure-state\"";
 const EXPECTED_DISCOVERY_REVEAL_MARKER: &str =
     "id=\"model-discovery-reveal-config\" class=\"button button-secondary\"";
+const EXPECTED_CONNECT_REGION_MARKER: &str =
+    "data-observatory-view=\"connect\" aria-labelledby=\"connect-title\"";
+const EXPECTED_CONNECT_NAVIGATION_MARKER: &str = "data-observatory-destination=\"connect\"";
+const EXPECTED_CONNECT_SCRIPT_MARKER: &str = "src=\"/connect.js\"";
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_index_html_at_root() {
@@ -57,11 +61,30 @@ async fn should_serve_the_embedded_observatory_index_html_at_root() {
         shell_text.contains(EXPECTED_DISCOVERY_REVEAL_MARKER),
         "the Observatory should provide a persistent duplicate-model repair control"
     );
+    assert!(
+        shell_text.contains(EXPECTED_CONNECT_REGION_MARKER),
+        "the Observatory should expose the coding-agent connection region"
+    );
+    assert!(
+        shell_text.contains(EXPECTED_CONNECT_NAVIGATION_MARKER),
+        "the connection region should be reachable from the Observatory navigation"
+    );
+    assert!(
+        shell_text.contains(EXPECTED_CONNECT_SCRIPT_MARKER),
+        "the served shell should load the connection material script"
+    );
 }
 
 #[tokio::test]
 async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
-    for observatory_path in ["/overview", "/chat", "/model", "/settings"] {
+    for observatory_path in [
+        "/overview",
+        "/chat",
+        "/model",
+        "/library",
+        "/connect",
+        "/settings",
+    ] {
         let application = build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
@@ -255,6 +278,43 @@ async fn should_serve_the_embedded_compact_overview_javascript() {
         .expect("the compact overview script should be UTF-8");
     assert!(script_text.contains("reconciledMlxMemorySegmentBytes"));
     assert!(script_text.contains("renderSpeculativePrefillCacheEfficacy"));
+}
+
+#[tokio::test]
+async fn should_serve_the_embedded_connection_material_script() {
+    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/connect.js")
+                .body(Body::empty())
+                .expect("the connect script request should be valid"),
+        )
+        .await
+        .expect("the application should return the connection material script");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .is_some_and(|content_type| content_type
+                .to_str()
+                .is_ok_and(|content_type| content_type.starts_with("application/javascript")))
+    );
+    let response_body = to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("the connection material script body should be readable");
+    let script_text = String::from_utf8(response_body.to_vec())
+        .expect("the connection material script should be UTF-8");
+    assert!(
+        script_text.contains("connect-api-base-url"),
+        "the connection material must render the live local API address"
+    );
+    assert!(
+        script_text.contains("openai-completions"),
+        "the connection material must publish a Pi provider block"
+    );
 }
 
 #[tokio::test]
