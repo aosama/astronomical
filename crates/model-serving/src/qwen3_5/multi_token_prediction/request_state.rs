@@ -27,7 +27,6 @@ impl Qwen3_5MultiTokenPredictionRequest {
         model_has_mtp_weights: bool,
         has_precomputed_visual_embeddings: bool,
         has_processed_visual_images: bool,
-        persistent_prompt_cache_is_available: bool,
         sparse_experts_are_paged: bool,
         prompt_token_count: usize,
         restored_prompt_token_count: u32,
@@ -40,10 +39,9 @@ impl Qwen3_5MultiTokenPredictionRequest {
             model_has_mtp_weights,
             has_precomputed_visual_embeddings,
             has_processed_visual_images,
-            persistent_prompt_cache_is_available,
-            sparse_experts_are_paged,
-            prompt_token_count,
             restored_prompt_token_count,
+            prompt_token_count,
+            sparse_experts_are_paged,
         );
         if !is_eligible {
             return Ok(None);
@@ -173,7 +171,6 @@ pub(crate) fn create_optional_prediction_session(
     model_has_optional_prediction_weights: bool,
     has_precomputed_visual_embeddings: bool,
     has_processed_visual_images: bool,
-    persistent_prompt_cache_is_available: bool,
     sparse_experts_are_paged: bool,
     prompt_token_count: usize,
     restored_prompt_token_count: u32,
@@ -186,7 +183,6 @@ pub(crate) fn create_optional_prediction_session(
         model_has_optional_prediction_weights,
         has_precomputed_visual_embeddings,
         has_processed_visual_images,
-        persistent_prompt_cache_is_available,
         sparse_experts_are_paged,
         prompt_token_count,
         restored_prompt_token_count,

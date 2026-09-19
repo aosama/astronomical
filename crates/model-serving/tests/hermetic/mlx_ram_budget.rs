@@ -393,3 +393,82 @@ fn should_keep_the_first_decode_protected_by_the_largest_prefill_evidence() {
 
     assert_eq!(first_decode_plan.activation_headroom_bytes, 700_000_000);
 }
+
+// Issue #690: the request-admission path composes the generation-context
+// workspace reservation from `activation_headroom_bytes(Prefill,
+// total_context_tokens)` — bypassing the operation-scoped `plan()` that the
+// #644 fix corrected. One successful chunked prefill teaches the budget a
+// chunk-sized activation observation; the next request scales that observation
+// proportionally by total context and admission rejects everything with a
+// paper reserve several times the ceiling (measured 143 GB against a 39 GB
+// ceiling in production). The admission-side composition must resolve the
+// activation reserve at the operation scope exactly like `plan()` does.
+#[test]
+fn should_keep_the_admission_workspace_activation_reserve_independent_of_the_prompt_context() {
+    // The learned evidence is chunk-shaped (2,048-token prefill chunks), and
+    // the geometry's small layer floor lets learned evidence dominate so the
+    // scaling defect is observable. Real per-token state bytes make the
+    // context reserve distinguishable across the two context sizes.
+    let mut geometry = small_layer_geometry();
+    geometry.sequence_state_bytes_per_token = 24_000;
+    let mut mlx_ram_budget =
+        MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 2_048,
+        measured_context_and_activation_bytes: 1_500_000_000,
+        observed_activation_headroom_bytes: 400_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    // A follow-up turn of the same conversation: total context grew by a few
+    // hundred tokens, prompt is 18k, and the admission path composes the
+    // workspace from the planned chunk operation bound (2,048-token chunks),
+    // matching the real admission call site.
+    let admission_workspace =
+        mlx_ram_budget.context_admission_workspace_snapshot(38_814, 2_048, 0, 0);
+    let small_request_workspace =
+        mlx_ram_budget.context_admission_workspace_snapshot(2_048, 2_048, 0, 0);
+
+    assert_eq!(
+        admission_workspace.activation_headroom_bytes,
+        small_request_workspace.activation_headroom_bytes,
+        "the admission-side activation reserve must not scale with total context tokens",
+    );
+    // The activation reserve must never exceed the active-memory ceiling:
+    // measured evidence keeps its pinned dominance over the static floor, but
+    // no projection may manufacture a reserve the ceiling could never grant.
+    assert!(
+        admission_workspace.activation_headroom_bytes
+            <= admission_workspace.mlx_active_memory_ceiling_bytes,
+        "the learned activation reserve must never exceed the active-memory ceiling",
+    );
+    // The context reserve must still grow with the prompt context.
+    assert!(
+        admission_workspace.context_window_reserve_bytes
+            > small_request_workspace.context_window_reserve_bytes,
+        "the context reserve must still grow with the prompt context",
+    );
+}
+
+// Issue #690: no projection — measured or scaled — may manufacture a reserve
+// the ceiling could never grant. Learned evidence keeps its pinned dominance
+// over the static floor, but the activation reserve is structurally capped at
+// the active-memory ceiling.
+#[test]
+fn should_cap_the_activation_reserve_at_the_active_memory_ceiling() {
+    let ceiling_bytes = 39_000_000_000_u64;
+    let mut mlx_ram_budget = MlxRamBudget::new(ceiling_bytes, small_layer_geometry())
+        .expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 2_048,
+        measured_context_and_activation_bytes: 1_500_000_000,
+        observed_activation_headroom_bytes: ceiling_bytes * 10,
+        exact_temporary_workspace_bytes: 0,
+    });
+
+    let plan = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
+
+    assert_eq!(plan.activation_headroom_bytes, ceiling_bytes);
+}

@@ -15,7 +15,9 @@ struct AstronomicalMenuApp: App {
 
   @NSApplicationDelegateAdaptor(AstronomicalMenuApplication.self) private var applicationDelegate
 
+  // No scenes. The menu app manages its own state bar UI entirely through its
+  // NSApplicationDelegate, so a SwiftUI scene is unnecessary — and a `Settings`
+  // scene is a bug: it renders a titled Settings window that auto-opens on launch.
   var body: some Scene {
-    Settings { EmptyView() }
   }
 }

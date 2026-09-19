@@ -4,36 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.44</title>
-            <pubDate>Mon, 14 Sep 2026 21:27:27 -0400</pubDate>
-            <sparkle:version>580</sparkle:version>
-            <sparkle:shortVersionString>0.2.44</sparkle:shortVersionString>
+            <title>0.2.46</title>
+            <pubDate>Fri, 18 Sep 2026 19:21:12 -0400</pubDate>
+            <sparkle:version>605</sparkle:version>
+            <sparkle:shortVersionString>0.2.46</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.44
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.46
 
-## Changes
+Stable, signed, notarized macOS (Apple silicon) release.
 
-- Model serving now loads expert-pruned OptiQ (REAP) artifacts whose `optiq_metadata.json` records only pruning provenance and carries no measured bit-map. Previously those artifacts failed to load at metadata decode. The OptiQ metadata validator accepts any provenance-only shape through one discriminator — the presence of a measured bit-map — rather than a pruning-method name, so the current and future expert-compression methods are supported without new code.
-- The `Ornith-1.5-35B-A3B-OptiQ-4bit-REAP-19B` variant is published to the model library and offered for one-click download through Observatory and the menu.
+## Changes since 0.2.45
+
+- Laguna accepts OpenAI-style thinking levels: a client-selected `reasoning_effort` now prepares a chat instead of failing with `positive thinking budgets are not supported by Laguna generation`. Thinking stays template-driven with no token ceiling on this family (#703, #704).
+- The MTP decode head remains eligible for requests while the persistent prompt cache is available, so prompt-cache users keep MTP decode acceleration (#701).
+- Download catalog adds Jundot/Qwen3.8-27B-oQ4e-mtp.
+- Documentation: repository discovery guide refreshed to the 0.2.45 release state (#702); Laguna thinking-budget contract and release-verification lessons recorded (#706).
 
 ## Compatibility
 
-- Backward compatible: the change is additive. Models that were rejected before this release continue to be rejected; the release does not change how models rejected ahead of it behave.
-- Requires Apple Silicon macOS with the `mlx-optiq` optional dependency at runtime.
-
-## Preserved state
-
-- Existing models, configuration, and local release state are preserved through the update.
+- REST surface and configuration schema unchanged; existing configuration, model downloads, and prompt caches carry over.
 
 ## Distribution
 
-- Distributed as a signed, Apple-notarized DMG. Assets are published bound by SHA-256 digests in the release manifest, and the signed Sparkle feed is activated through a separate signed update. The release is not installed or launched as part of publishing; it is delivered through the ordinary public download or Sparkle update journey, exactly as every user receives it.
+Developer ID signed with Hardened Runtime, notarized and stapled, Sparkle Ed25519 signed feed. Every release artifact is digest-bound to `release-manifest.json`.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.44/Astronomical-0.2.44-macOS-arm64.dmg" length="16311648" type="application/octet-stream" sparkle:edSignature="w6VmPbJD1FeKkcp0zML93txVYYkP2UIedzqOEewlceJkC8hbC05+Nd3lWSA9LW8u7QNdBNF2lVYIJXHESBRoDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.46/Astronomical-0.2.46-macOS-arm64.dmg" length="16539241" type="application/octet-stream" sparkle:edSignature="aVsCc1/Uqk/fP3uPZftKn8WxKHZ+Hto3s6zWHr9VWJuPSAvA/cgT56JtuehKNy47J9q2Asyd3hcIA/hRKkbBAg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: yprfBYBFLgcbBBW4L3530FZJtbsY0TTzRsIQB2p6xA95yBCLKxIhWQq79HSt7hUdNjySF0vF5o0vuOxDzDm4Dw==
-length: 2684
+edSignature: aLOi1omfO4iadw3F+yB3PabiHUdAc4rT0h7KnNytLAZpd+j/ZnBCZ6Ce7ymgU10/qpXWOK+4q/tQNQ3WBSBfBw==
+length: 2316
 -->

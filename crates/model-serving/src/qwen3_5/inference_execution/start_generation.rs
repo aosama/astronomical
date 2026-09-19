@@ -452,7 +452,6 @@ impl Qwen3_5EngineState {
                 model_has_optional_prediction_head,
                 has_precomputed_visual_embeddings,
                 has_processed_visual_images,
-                persistent_prompt_cache_is_available,
                 sparse_experts_are_paged,
                 prompt_token_ids.len(),
                 persistent_prompt_cache_token_count,
