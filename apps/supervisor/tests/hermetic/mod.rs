@@ -18,6 +18,7 @@ mod download_payload_support;
 mod generation_performance_log;
 mod hugging_face_hub;
 mod image_generation;
+mod local_api_website_sample;
 mod model_load_timeout;
 mod persistent_prompt_cache_diagnostics;
 mod qwen_thinking_channel_seed;
