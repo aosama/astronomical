@@ -33,16 +33,20 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
 }
 
 /// Metadata for one attachment the user may attach to a message. Kept minimal so
-/// extensible features can grow the shape instead of replacing it.
+/// extensible features can grow the shape instead of replacing it. `assetURL` is
+/// an opaque canvas URL produced by the asset registry, never a file path, so a
+/// rendered answer can display an image without learning where it lives.
 public struct ChatAttachment: Identifiable, Sendable, Equatable {
   public let id: UUID
   public let type: String
   public let label: String
+  public var assetURL: String?
 
-  public init(id: UUID = UUID(), type: String, label: String) {
+  public init(id: UUID = UUID(), type: String, label: String, assetURL: String? = nil) {
     self.id = id
     self.type = type
     self.label = label
+    self.assetURL = assetURL
   }
 }
 

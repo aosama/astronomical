@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import Observation
+import ThinTalkCanvas
 import ThinTalkCore
 
 /// How the chat surface discovered its models at startup.
@@ -14,6 +16,9 @@ enum LoadState: Equatable, Sendable {
 /// Owns the conversation: drives the streaming client, keeps the message history,
 /// and preserves the user's ask so a failure always offers a recoverable next
 /// action. It only renders state; all REST and failure logic lives in the client.
+///
+/// The canvas is a pure function of `canvasSnapshot`, so this type decides what the
+/// conversation looks like and the web surface decides only how it is drawn.
 @MainActor
 @Observable
 final class ChatViewModel {
@@ -21,21 +26,35 @@ final class ChatViewModel {
   var availableModels: [ThinTalkModel] = []
   var selectedModelID: String?
   var draft = ""
+  /// How much thinking the next turn may spend.
+  ///
+  /// Persisted so a deliberate choice survives a relaunch, while a fresh install
+  /// still starts on Quick. The choice applies to the next request, which is why
+  /// it is read at send time rather than captured when the window opens.
+  var thinkingEffort: ThinkingEffort {
+    didSet {
+      guard thinkingEffort != oldValue else { return }
+      ThinkingEffortPreference.save(thinkingEffort)
+    }
+  }
   private(set) var state: LoadState = .idle
   private(set) var currentFailure: ChatFailure?
   private(set) var isStreaming = false
   private(set) var assistantMessageID: UUID?
+  private(set) var canvasSnapshot = TranscriptSnapshot()
+
+  /// Files the canvas may display, addressed by opaque token rather than path.
+  let assetRegistry = TranscriptAssetRegistry()
 
   private let client: ThinTalkClient
   private var streamingTask: Task<Void, Never>?
 
-  // Derived markdown is memoised so streaming deltas do not re-parse the whole
-  // conversation on every body pass. Cache writes must not notify observers,
-  // hence @ObservationIgnored.
-  @ObservationIgnored private var markdownCache: [String: AttributedString] = [:]
-
-  init(client: ThinTalkClient) {
+  init(
+    client: ThinTalkClient,
+    thinkingEffort: ThinkingEffort = ThinkingEffortPreference.load()
+  ) {
     self.client = client
+    self.thinkingEffort = thinkingEffort
   }
 
   static func `default`() -> ChatViewModel {
@@ -54,6 +73,7 @@ final class ChatViewModel {
     } catch {
       state = .failed(error.localizedDescription)
     }
+    refreshCanvasSnapshot()
   }
 
   // MARK: - Sending
@@ -65,6 +85,7 @@ final class ChatViewModel {
     let userMessage = ChatMessage(role: .user, content: trimmed)
     messages.append(userMessage)
     currentFailure = nil
+    refreshCanvasSnapshot()
     beginStreaming(requestMessages: messages)
   }
 
@@ -73,6 +94,7 @@ final class ChatViewModel {
     guard let userMessage = messages.last, userMessage.role == .user else { return }
     let requestMessages = Array(messages.dropLast()) + [userMessage]
     currentFailure = nil
+    refreshCanvasSnapshot()
     beginStreaming(requestMessages: requestMessages)
   }
 
@@ -80,35 +102,109 @@ final class ChatViewModel {
     streamingTask?.cancel()
     streamingTask = nil
     isStreaming = false
+    refreshCanvasSnapshot()
   }
 
-  /// Renders assistant markdown inline, memoised per raw string. Falls back to
-  /// the raw string when the text is not valid markdown, because a partially
-  /// streamed reply is often mid-syntax and must never crash the conversation.
-  func attributedText(_ raw: String) -> AttributedString {
-    if let cached = markdownCache[raw] { return cached }
-    let attributed: AttributedString =
-      (try? AttributedString(
-        markdown: raw,
-        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-      )) ?? AttributedString(raw)
-    markdownCache[raw] = attributed
-    return attributed
+  // MARK: - Canvas interaction
+
+  /// Performs the one interaction the canvas reported. Copying, regenerating, and
+  /// opening a link all run here so the canvas never owns a behaviour.
+  func handle(_ action: CanvasAction) {
+    switch action.kind {
+    case .ready:
+      return
+    case .copy:
+      copyToPasteboard(messageID: action.messageID)
+    case .regenerate:
+      retry()
+    case .openExternal:
+      guard let externalURL = action.externalURL else { return }
+      NSWorkspace.shared.open(externalURL)
+    }
   }
+
+  private func copyToPasteboard(messageID: UUID?) {
+    let resolvedID = messageID ?? messages.last?.id
+    guard let message = messages.first(where: { $0.id == resolvedID }) else { return }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(message.content, forType: .string)
+  }
+
+  // MARK: - Canvas state
 
   private func beginStreaming(requestMessages: [ChatMessage]) {
     streamingTask?.cancel()
     streamingTask = nil
     isStreaming = true
+    refreshCanvasSnapshot()
     streamingTask = Task {
-      guard let modelID = selectedModelID else { isStreaming = false; return }
-      for await event in client.chatStream(modelID: modelID, messages: requestMessages) {
-        if let failure = ChatConversationReducer.apply(event: event, to: &messages, assistantID: &assistantMessageID) {
+      guard let modelID = selectedModelID else {
+        isStreaming = false
+        refreshCanvasSnapshot()
+        return
+      }
+      for await event in client.chatStream(
+        modelID: modelID, messages: requestMessages, thinkingEffort: thinkingEffort
+      ) {
+        if let failure = ChatConversationReducer.apply(
+          event: event, to: &messages, assistantID: &assistantMessageID)
+        {
           currentFailure = failure
           isStreaming = false
         }
+        refreshCanvasSnapshot()
       }
       isStreaming = false
+      refreshCanvasSnapshot()
+    }
+  }
+
+  /// Rebuilds the snapshot the canvas renders. Called after every mutation so the
+  /// planner can send the smallest update that reflects what changed.
+  private func refreshCanvasSnapshot() {
+    canvasSnapshot = TranscriptSnapshot(
+      messages: messages.map(transcriptMessage(from:)),
+      model: selectedModelID,
+      channel: client.applicationIdentity.channel.displayName,
+      notice: noticeText
+    )
+  }
+
+  private func transcriptMessage(from message: ChatMessage) -> TranscriptMessage {
+    TranscriptMessage(
+      id: message.id,
+      role: message.role == .user ? .user : .assistant,
+      markdown: message.content,
+      reasoning: message.reasoning,
+      attachments: message.attachments.compactMap { attachment in
+        guard let assetURL = attachment.assetURL else { return nil }
+        return TranscriptAttachment(
+          id: attachment.id, assetURL: assetURL, label: attachment.label)
+      },
+      state: messageState(for: message)
+    )
+  }
+
+  private func messageState(for message: ChatMessage) -> TranscriptMessageState {
+    if isStreaming, message.id == messages.last?.id, message.role == .assistant {
+      return .streaming
+    }
+    if message.role == .assistant, currentFailure != nil, message.id == messages.last?.id {
+      return .failed
+    }
+    return .complete
+  }
+
+  private var noticeText: String? {
+    switch state {
+    case .empty:
+      return "No chat model is available yet. Add one from the Library."
+    case .idle, .loading:
+      return "Looking for a chat model on this Mac."
+    case .failed(let message):
+      return message
+    case .ready:
+      return nil
     }
   }
 }

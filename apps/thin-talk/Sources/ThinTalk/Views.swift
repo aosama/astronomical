@@ -1,4 +1,5 @@
 import SwiftUI
+import ThinTalkCanvas
 import ThinTalkCore
 
 /// Root of the chat application. Owns the view model for the lifetime of the
@@ -23,15 +24,19 @@ struct RootView: View {
   }
 }
 
-/// The single-pane conversation surface: message list, composer, and any failure
-/// or state banner. This is one View type so a change in one section does not
-/// re-run the others.
+/// The single-pane conversation surface: canvas, composer, and any failure or
+/// state banner. Each section is its own `View` type so a change in one does not
+/// re-evaluate the others.
 struct ChatPane: View {
   @Bindable var viewModel: ChatViewModel
 
   var body: some View {
     VStack(spacing: 0) {
-      MessageList(viewModel: viewModel)
+      ConversationCanvas(
+        snapshot: viewModel.canvasSnapshot,
+        assetRegistry: viewModel.assetRegistry,
+        onAction: viewModel.handle
+      )
       Divider()
         .background(PreviewTheme.border)
         .padding(.horizontal, 24)
@@ -39,108 +44,58 @@ struct ChatPane: View {
       if let failure = viewModel.currentFailure {
         ChatFailureBanner(failure: failure, onRetry: viewModel.retry)
       }
-      if let stateError = stateErrorText {
-        StateErrorBanner(message: stateError)
-      }
     }
     .frame(minWidth: 1100, minHeight: 700)
   }
+}
 
-  private var stateErrorText: String? {
-    switch viewModel.state {
-    case .failed(let message): return message
-    default: return nil
+// MARK: - Canvas
+
+/// Hosts the conversation canvas. The canvas renders the transcript, so this view
+/// only supplies the snapshot, the appearance, and the assets the page may load.
+///
+/// When the bundled shell is missing the pane says so instead of showing an empty
+/// surface, because a silent blank conversation is indistinguishable from a broken
+/// model.
+struct ConversationCanvas: View {
+  @Environment(\.colorScheme) private var colorScheme
+
+  let snapshot: TranscriptSnapshot
+  let assetRegistry: TranscriptAssetRegistry
+  let onAction: (CanvasAction) -> Void
+
+  var body: some View {
+    if let webDirectory = CanvasWebResources.bundledDirectory() {
+      ConversationCanvasView(
+        snapshot: snapshot,
+        isDarkAppearance: colorScheme == .dark,
+        webDirectory: webDirectory,
+        assetRegistry: assetRegistry,
+        onAction: onAction
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(PreviewTheme.windowBackground)
+    } else {
+      CanvasUnavailableView()
     }
   }
 }
 
-// MARK: - Messages
-
-/// Scrollable conversation with an empty-state overlay that centers vertically
-/// across the whole pane, like the product's home screen.
-struct MessageList: View {
-  @Bindable var viewModel: ChatViewModel
-
+/// Visible failure for a canvas that cannot load its own shell.
+struct CanvasUnavailableView: View {
   var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 12) {
-        ForEach(viewModel.messages) { message in
-          MessageRow(
-            message: message,
-            content: viewModel.attributedText(message.content),
-            reasoning: viewModel.attributedText(message.reasoning)
-          )
-        }
-      }
-      .padding()
-      .frame(maxWidth: .infinity)
-    }
-    .overlay { EmptyStateView(viewModel: viewModel) }
-  }
-}
-
-/// One conversation message: role label, optional reasoning block, and the
-/// rendered (already-attributed) answer. Attributed strings are pre-computed so
-/// this row stays cheap and does no parsing in body.
-struct MessageRow: View {
-  let message: ChatMessage
-  let content: AttributedString
-  let reasoning: AttributedString
-
-  var body: some View {
-    let isUser = message.role == .user
-    return VStack(alignment: .leading, spacing: 6) {
-      Text(message.role == .user ? "You" : "Assistant")
+    VStack(spacing: 8) {
+      Image(systemName: "rectangle.on.rectangle.slash")
+        .font(.title2)
+        .accessibilityHidden(true)
+      Text("The conversation canvas is unavailable.")
+        .font(.headline)
+      Text("Its bundled rendering assets are missing from this build.")
         .font(.caption)
         .foregroundColor(.secondary)
-      if !message.reasoning.isEmpty {
-        Text(reasoning)
-          .font(.callout)
-          .foregroundColor(.secondary)
-          .italic()
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(8)
-          .background(Color.secondary.opacity(0.08))
-          .clipShape(RoundedRectangle(cornerRadius: 8))
-      }
-      Text(content)
-        .textSelection(.enabled)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(10)
-    .background((isUser ? Color.blue : Color.gray.opacity(0.15)).opacity(0.12))
-    .clipShape(RoundedRectangle(cornerRadius: 10))
-    .padding(.horizontal)
-  }
-}
-
-/// Empty conversation state, including the "no model available" guidance.
-struct EmptyStateView: View {
-  @Bindable var viewModel: ChatViewModel
-
-  var body: some View {
-    if viewModel.messages.isEmpty {
-      VStack(spacing: 10) {
-        HStack(spacing: 10) {
-          Image(systemName: "brain.head.profile")
-            .font(.title2)
-            .foregroundStyle(
-              LinearGradient(
-                colors: [Color.cyan, Color.purple],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
-            .accessibilityHidden(true)
-          Text("Thin Talk")
-            .font(.title)
-        }
-        Text("Ask your local model anything.")
-          .font(.headline)
-        if viewModel.state == .empty {
-          Text("No chat model is available yet. Add one from the Library.")
-            .font(.caption)
-        }
-      }
-      .foregroundColor(.primary)
-    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(PreviewTheme.windowBackground)
   }
 }
 
@@ -159,9 +114,8 @@ struct ComposeBar: View {
         .lineLimit(1...6)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .disabled(viewModel.state != .ready)
-        .onKeyPress(.return, phases: .down) {
-          _ in
+        .disabled(viewModel.state != .ready && viewModel.state != .empty)
+        .onKeyPress(.return, phases: .down) { _ in
           sendDraft()
           return .handled
         }
@@ -171,6 +125,7 @@ struct ComposeBar: View {
           models: viewModel.availableModels,
           selection: $viewModel.selectedModelID
         )
+        ThinkingEffortPicker(effort: $viewModel.thinkingEffort)
         Spacer(minLength: 8)
         ActionButton(viewModel: viewModel)
       }
@@ -211,6 +166,24 @@ struct ModelPicker: View {
   }
 }
 
+/// Thinking-budget selector. Each choice states its own token cost, so the reader
+/// sees what depth costs before spending it rather than after.
+struct ThinkingEffortPicker: View {
+  @Binding var effort: ThinkingEffort
+
+  var body: some View {
+    Picker("Thinking", selection: $effort) {
+      ForEach(ThinkingEffort.allCases) { level in
+        Text(level.budgetSummary).tag(level)
+      }
+    }
+    .pickerStyle(.menu)
+    .frame(maxWidth: 200)
+    .labelStyle(.titleAndIcon)
+    .help("How many tokens the model may spend thinking before it answers.")
+  }
+}
+
 /// Send / Stop action button, driven purely by the streaming state.
 struct ActionButton: View {
   @Bindable var viewModel: ChatViewModel
@@ -246,19 +219,5 @@ struct ChatFailureBanner: View {
     }
     .padding()
     .background(Color.red.opacity(0.08))
-  }
-}
-
-/// A general state error (for example, a startup handshake failure).
-struct StateErrorBanner: View {
-  let message: String
-
-  var body: some View {
-    Text(message)
-      .font(.caption)
-      .foregroundColor(.secondary)
-      .padding()
-      .frame(maxWidth: .infinity)
-      .background(Color.orange.opacity(0.1))
   }
 }

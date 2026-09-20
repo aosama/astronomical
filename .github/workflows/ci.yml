@@ -262,6 +262,9 @@ jobs:
         id: macos-menu-contracts
         run: scripts/test-macos-menu-contracts.sh
         timeout-minutes: 2
+      - name: Run Thin Talk conversation canvas contracts
+        run: swift test --package-path apps/thin-talk
+        timeout-minutes: 6
       - name: Run Observatory contracts
         run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js apps/supervisor/console/connect.test.js
         timeout-minutes: 2

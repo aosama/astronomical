@@ -85,6 +85,22 @@ is_staged_source_file_path() {
     esac
 }
 
+# Vendored third-party assets are not authored here. They are pinned by digest in
+# the script that fetches them, and a minified bundle legitimately occupies one
+# very long line, so counting them would say nothing about the code in this
+# repository while failing a legitimate commit.
+is_vendored_asset_path() {
+    vendored_asset_path="$1"
+    case "${vendored_asset_path}" in
+        */vendor/*|vendor/*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 check_staged_source_file_sizes() {
     repository_root="$1"
     staged_path_manifest="${TEMPORARY_DIRECTORY}/staged-paths.txt"
@@ -99,6 +115,9 @@ check_staged_source_file_sizes() {
     while IFS= read -r staged_source_file_path || [ -n "${staged_source_file_path}" ]; do
         assert_within_timeout
         if ! is_staged_source_file_path "${staged_source_file_path}"; then
+            continue
+        fi
+        if is_vendored_asset_path "${staged_source_file_path}"; then
             continue
         fi
         checked_staged_source_file_count=$((checked_staged_source_file_count + 1))

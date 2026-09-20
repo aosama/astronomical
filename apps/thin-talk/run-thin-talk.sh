@@ -104,6 +104,17 @@ cp "${package_path}/.build/release/ThinTalk" \
     "${app_bundle_path}/Contents/MacOS/ThinTalk"
 chmod +x "${app_bundle_path}/Contents/MacOS/ThinTalk"
 
+# The conversation canvas renders from assets the SwiftPM resource bundle carries.
+# A bundle without them would open a blank conversation, so a missing resource
+# bundle fails the build instead of shipping a silently empty canvas.
+canvas_resource_bundle="${package_path}/.build/release/ThinTalk_ThinTalkCanvas.bundle"
+[ -d "$canvas_resource_bundle" ] || {
+    printf '%s\n' "Error: conversation canvas resources are unavailable at ${canvas_resource_bundle}" >&2
+    exit 1
+}
+rm -rf "${app_bundle_path}/Contents/Resources/ThinTalk_ThinTalkCanvas.bundle"
+cp -R "$canvas_resource_bundle" "${app_bundle_path}/Contents/Resources/"
+
 iconset_directory="${app_bundle_path}/Contents/Resources/Astronomical.iconset"
 icon_resource="${app_bundle_path}/Contents/Resources/Astronomical.icns"
 swift "${repository_root}/scripts/internal/render-macos-app-icon.swift" \
