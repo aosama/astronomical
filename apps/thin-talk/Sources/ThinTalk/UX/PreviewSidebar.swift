@@ -1,4 +1,5 @@
 import SwiftUI
+import ThinTalkUI
 
 /// Sidebar that mirrors the reference Copilot layout exactly:
 /// brand row → three nav items (Discover/Imagine/Library) → a

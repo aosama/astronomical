@@ -1,6 +1,6 @@
 import SwiftUI
 import Foundation
-import ThinTalkCore
+import ThinTalkUI
 
 /// Launches the app as a full-window application (visible in the Dock and
 /// Spotlight), not a menu-bar item, matching the requirement that a thin chat

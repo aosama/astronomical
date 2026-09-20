@@ -17,6 +17,10 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "ThinTalk", targets: ["ThinTalk"]),
+        // The chat surface is also linked by astronomical-menu, which opens the
+        // conversation as one window of the one Astronomical app (issue 647
+        // decision revision, 2026-09-20). One module set, two hosts.
+        .library(name: "ThinTalkChat", targets: ["ThinTalkCore", "ThinTalkCanvas", "ThinTalkUI"]),
     ],
     targets: [
         .target(name: "ThinTalkCore", path: "Sources/ThinTalkCore"),
@@ -26,14 +30,19 @@ let package = Package(
             path: "Sources/ThinTalkCanvas",
             resources: [.copy("Resources/web")]
         ),
+        .target(
+            name: "ThinTalkUI",
+            dependencies: ["ThinTalkCore", "ThinTalkCanvas"],
+            path: "Sources/ThinTalkUI"
+        ),
         .executableTarget(
             name: "ThinTalk",
-            dependencies: ["ThinTalkCore", "ThinTalkCanvas"],
+            dependencies: ["ThinTalkUI"],
             path: "Sources/ThinTalk"
         ),
         .testTarget(
             name: "ThinTalkContractTests",
-            dependencies: ["ThinTalkCore", "ThinTalkCanvas"],
+            dependencies: ["ThinTalkCore", "ThinTalkCanvas", "ThinTalkUI"],
             path: "Tests/ThinTalkContractTests"
         ),
     ]

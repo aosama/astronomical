@@ -38,7 +38,7 @@ final class ThinTalkProductionPathContractTests: XCTestCase {
   func test_should_build_production_views_without_preview_mock_data() throws {
     let source = try String(
       contentsOf: packageDirectoryURL
-        .appendingPathComponent("Sources/ThinTalk/Views.swift"),
+        .appendingPathComponent("Sources/ThinTalkUI/Views.swift"),
       encoding: .utf8
     )
 

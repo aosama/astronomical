@@ -14,9 +14,19 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.9.6"),
+        // The menu application hosts the conversation as one of its windows:
+        // the Chat menu item opens the persistent Thin Talk chat surface inside
+        // this same app process (issue 647 decision revision, 2026-09-20).
+        .package(path: "../thin-talk"),
     ],
     targets: [
-        .target(name: "AstronomicalMenuCore", path: "Sources/AstronomicalMenuCore"),
+        .target(
+            name: "AstronomicalMenuCore",
+            dependencies: [
+                .product(name: "ThinTalkChat", package: "thin-talk"),
+            ],
+            path: "Sources/AstronomicalMenuCore"
+        ),
         .target(
             name: "AstronomicalMenuSparkleUpdateController",
             dependencies: [

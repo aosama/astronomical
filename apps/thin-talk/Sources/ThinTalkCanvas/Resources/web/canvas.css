@@ -63,11 +63,27 @@ body {
   border: 1px solid rgb(56 64 82 / 45%);
 }
 
+.message--user {
+  align-items: flex-end;
+}
+
 .message--user .message__answer {
   background: rgb(89 102 242 / 14%);
   border-color: rgb(89 102 242 / 32%);
-  border-radius: 14px;
-  padding: 14px 18px;
+  border-radius: 18px 18px 4px 18px;
+  padding: 14px 16px 12px;
+  max-width: 78%;
+  font-size: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message__answer--user .message__role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  opacity: 0.85;
 }
 
 .message__meta {

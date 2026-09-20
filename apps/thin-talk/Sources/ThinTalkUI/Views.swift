@@ -5,15 +5,15 @@ import ThinTalkCore
 /// Root of the chat application. Owns the view model for the lifetime of the
 /// window and loads the models on first appearance. Production renders the real,
 /// client-backed conversation; it never depends on the preview mock data.
-struct RootView: View {
+public struct RootView: View {
   @State private var viewModel: ChatViewModel
   @State private var loadStarted = false
 
-  init(viewModel: ChatViewModel = .default()) {
+  public init(viewModel: ChatViewModel = .default()) {
     _viewModel = State(initialValue: viewModel)
   }
 
-  var body: some View {
+  public var body: some View {
     ChatPane(viewModel: viewModel)
       .background(PreviewTheme.windowBackground)
       .onAppear {
@@ -156,12 +156,13 @@ struct ModelPicker: View {
     if !models.isEmpty {
       Picker("Model", selection: $selection) {
         ForEach(models) { model in
-          Text(model.id).tag(model.id)
+          Text(model.name.isEmpty ? model.id : model.name).tag(model.id)
         }
       }
       .pickerStyle(.menu)
       .frame(maxWidth: 260)
       .labelStyle(.titleAndIcon)
+      .help(models.first(where: { $0.id == selection })?.id ?? "")
     }
   }
 }
