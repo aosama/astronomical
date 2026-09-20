@@ -10,38 +10,56 @@ public enum CanvasWebResources {
   /// The buddy bundle SwiftPM emits for this target's copied resources.
   public static let resourceBundleName = "ThinTalk_ThinTalkCanvas"
 
-  /// Marker used only so `Bundle(for:)` can resolve the bundle that owns the
-  /// object code of this module at runtime.
+  /// Marker used only so `Bundle(for:)` can resolve the bundle that owns this
+  /// target's object code at runtime.
   private final class BundleToken {}
 
   /// The directory holding the shell document and the vendored renderer assets.
   ///
-  /// This deliberately does NOT call `Bundle.module`: that SwiftPM-generated accessor
-  /// ends in `fatalError` when the bundle is not where it expects, which killed the
-  /// host process the moment ThinTalkCanvas was linked into the menu app. Instead it
-  /// replicates that accessor's search, in the same order —
-  ///   1. the `PACKAGE_RESOURCE_BUNDLE_PATH`/`_URL` environment override that `swift
-  ///      test` injects in debug builds (the path the contracts are exercised on),
-  ///   2. `Bundle.main.resourceURL`  (package linked into an app),
-  ///   3. `Bundle(for:).resourceURL` (package linked into a framework),
-  ///   4. `Bundle.main.bundleURL`    (command-line tool),
-  /// — but degrades to `nil` rather than trapping, so a missing bundle renders a
-  /// visible canvas-unavailable state instead of crashing the process hosting chat.
+  /// This deliberately does NOT call `Bundle.module`. That generated accessor ends in
+  /// `fatalError` when it cannot place the bundle, which killed the host process the
+  /// moment ThinTalkCanvas was linked into the menu app; here a missing bundle
+  /// degrades to a visible canvas-unavailable state instead.
+  ///
+  /// The replacement cannot simply mirror `Bundle.module`, because SwiftPM generates
+  /// two different accessors. The Swift Build (xcodebuild-routed) one searches the
+  /// app, framework, and tool locations. The classic one searches only
+  /// `Bundle.main.bundleURL` and then a *baked absolute build path*, so it only works
+  /// on the machine that performed the build. Neither may be hardcoded here.
+  ///
+  /// What both layouts have in common at runtime is where the bundle sits relative to
+  /// the code that needs it: inside the host's resources, next to the host bundle, or
+  /// as a sibling of the bundle that owns this target's object code (the classic test
+  /// and tool placement). These candidates cover those relationships in every host
+  /// this package ships into: the app, the test runner, and a command-line tool.
   public static func bundledDirectory() -> URL? {
-    let environment = ProcessInfo.processInfo.environment
+    let bundleFileName = "\(resourceBundleName).bundle"
+    let mainBundle = Bundle.main
+    let moduleBundle = Bundle(for: BundleToken.self)
+
     var candidateDirectories: [URL] = []
+    let environment = ProcessInfo.processInfo.environment
     if let overridePath = environment["PACKAGE_RESOURCE_BUNDLE_PATH"] ?? environment["PACKAGE_RESOURCE_BUNDLE_URL"] {
       candidateDirectories.append(URL(fileURLWithPath: overridePath))
     }
-    if let mainResourcesURL = Bundle.main.resourceURL {
-      candidateDirectories.append(mainResourcesURL)
-    }
-    if let forResourceURL = Bundle(for: BundleToken.self).resourceURL {
-      candidateDirectories.append(forResourceURL)
-    }
-    candidateDirectories.append(Bundle.main.bundleURL)
+    let relationships: [URL?] = [
+      // Resources of the host bundle (the packaged app, and the test bundle when the
+      // build copies resources into it).
+      mainBundle.resourceURL,
+      moduleBundle.resourceURL,
+      // The host bundle itself, and the bundle owning this target's object code,
+      // which is where a command-line tool and a framework-hosted build place it.
+      mainBundle.bundleURL,
+      moduleBundle.bundleURL,
+      // Siblings of those bundles: the classic SwiftPM placement for tests and tools.
+      moduleBundle.bundleURL.deletingLastPathComponent(),
+      mainBundle.bundleURL.deletingLastPathComponent(),
+      // The executables' own directories, for a tool whose bundle URL is not a bundle.
+      mainBundle.executableURL?.deletingLastPathComponent(),
+      moduleBundle.executableURL?.deletingLastPathComponent(),
+    ]
+    candidateDirectories.append(contentsOf: relationships.compactMap { $0 })
 
-    let bundleFileName = "\(resourceBundleName).bundle"
     for directory in candidateDirectories {
       let bundleURL = directory.appendingPathComponent(bundleFileName)
       guard let resourceBundle = Bundle(url: bundleURL),
