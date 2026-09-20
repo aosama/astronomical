@@ -110,6 +110,12 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
     statusMessage.textContent = "Model catalog loaded.";
     resolvedCatalogContainer.dataset.libraryState = "ready";
 
+    // Snapshot the active search input BEFORE building the replacement bar:
+    // the element being replaced is still the one the user is typing into,
+    // and elements created for this render can shadow it in id lookups.
+    // Capturing after the rebuild would observe the fresh, unfocused input
+    // and silently drop focus on every keystroke.
+    const searchSnapshot = captureLibrarySearchSnapshot();
     const heroSummary = createLibraryHeroSummary(catalogRows);
     const filterBar = createLibraryFilterBar(catalogRows);
     const catalogList = document.createElement("div");
@@ -131,7 +137,52 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
         filterBar,
         catalogList
     );
+    // Restore focus and caret only after the replacement bar is connected to
+    // the container, so the id lookup resolves the fresh input the user is
+    // meant to keep typing into.
+    restoreLibrarySearchSnapshot(searchSnapshot);
     return "ready";
+}
+
+function captureLibrarySearchSnapshot() {
+    const searchInput = document.getElementById("library-search");
+    if (!searchInput) {
+        return null;
+    }
+    return {
+        focused: document.activeElement === searchInput,
+        value: typeof searchInput.value === "string" ? searchInput.value : "",
+        selectionStart: Number.isInteger(searchInput.selectionStart)
+            ? searchInput.selectionStart
+            : null
+    };
+}
+
+function librarySearchCaretIndex(capturedCaretIndex, valueLength) {
+    const caretIndex = capturedCaretIndex ?? valueLength;
+    return Math.min(Math.max(caretIndex, 0), valueLength);
+}
+
+function restoreLibrarySearchSnapshot(searchSnapshot) {
+    if (!searchSnapshot?.focused) {
+        return;
+    }
+    const searchInput = document.getElementById("library-search");
+    if (!searchInput || typeof searchInput.focus !== "function") {
+        return;
+    }
+    // The filter bar can be above the viewport while the user is browsing
+    // results; restoring keyboard focus must not move the page to that bar.
+    searchInput.focus({ preventScroll: true });
+    if (typeof searchInput.setSelectionRange === "function") {
+        // Keep the caret where the user placed it so typing mid-query keeps
+        // inserting there instead of jumping to the end of the text.
+        const caretIndex = librarySearchCaretIndex(
+            searchSnapshot.selectionStart,
+            searchInput.value.length
+        );
+        searchInput.setSelectionRange(caretIndex, caretIndex);
+    }
 }
 
 function filterLibraryRows(catalogRows) {

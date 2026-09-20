@@ -26,7 +26,7 @@ function createLibraryContext() {
     return scriptContext;
 }
 
-function createLibraryElement(tagName) {
+function createLibraryElement(tagName, onElementRegistered, onElementFocused) {
     return {
         tagName: tagName.toUpperCase(),
         className: "",
@@ -38,8 +38,26 @@ function createLibraryElement(tagName) {
         style: {},
         value: "",
         classList: { add() {}, remove() {} },
-        addEventListener() {},
-        appendChild(child) { this.children.push(child); return child; },
+        listeners: {},
+        addEventListener(eventType, listener) {
+            (this.listeners[eventType] ||= []).push(listener);
+        },
+        focus(options = {}) {
+            if (onElementFocused) onElementFocused(this, options);
+        },
+        setSelectionRange(startIndex, endIndex) {
+            this.selectionStart = startIndex;
+            this.selectionEnd = endIndex;
+            this.selectionRange = [startIndex, endIndex];
+        },
+        dispatch(eventType) {
+            for (const listener of this.listeners[eventType] || []) listener({ type: eventType });
+        },
+        appendChild(child) {
+            this.children.push(child);
+            if (onElementRegistered) onElementRegistered(child);
+            return child;
+        },
         querySelectorAll() { return []; },
         removeAttribute(attributeName) { delete this.attributes[attributeName]; },
         setAttribute(attributeName, attributeValue) {
@@ -47,28 +65,42 @@ function createLibraryElement(tagName) {
         },
         replaceChildren(...replacementChildren) {
             this.children = replacementChildren;
+            if (onElementRegistered) {
+                for (const child of replacementChildren) onElementRegistered(child);
+            }
         }
     };
 }
 
 function createLibraryDocument() {
-    const catalogContainer = createLibraryElement("div");
+    const elementByIdRegistry = {};
+    const registerElementById = (element) => {
+        if (element.id) elementByIdRegistry[element.id] = element;
+    };
+    const catalogContainer = createLibraryElement("div", registerElementById);
     const catalogStatus = createLibraryElement("p");
     catalogStatus.id = "library-catalog-status";
     catalogStatus.setAttribute("role", "status");
     catalogStatus.setAttribute("aria-live", "polite");
     catalogContainer.replaceChildren(catalogStatus);
-    return {
+    const shell = {
         catalogContainer,
         catalogStatus,
-        createElement: createLibraryElement,
+        activeElement: null,
+        lastFocusOptions: null,
+        createElement(tagName) {
+            return createLibraryElement(tagName, registerElementById, (element, options) => {
+                shell.activeElement = element;
+                shell.lastFocusOptions = options;
+            });
+        },
         createTextNode(text) { return { tagName: "#text", textContent: text, children: [] }; },
         getElementById(elementId) {
             if (elementId === "library-catalog") { return catalogContainer; }
-            if (elementId === "library-catalog-status") { return catalogStatus; }
-            return null;
+            return elementByIdRegistry[elementId] || null;
         }
     };
+    return shell;
 }
 
 function validCatalogEntry(overrides = {}) {
