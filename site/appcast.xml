@@ -4,39 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.47</title>
-            <pubDate>Sat, 19 Sep 2026 18:19:00 -0400</pubDate>
-            <sparkle:version>626</sparkle:version>
-            <sparkle:shortVersionString>0.2.47</sparkle:shortVersionString>
+            <title>0.2.48</title>
+            <pubDate>Sun, 20 Sep 2026 15:01:36 -0400</pubDate>
+            <sparkle:version>639</sparkle:version>
+            <sparkle:shortVersionString>0.2.48</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Release Astronomical 0.2.47
+            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.48
 
-Astronomical 0.2.47 ships the work merged into `main` after the v0.2.46 stable tag, plus new coding-agent start material and website refinements.
+Thin Talk
 
-## What is new
+- Conversation answers now render on a local web canvas with mathematics (KaTeX), diagrams, and code highlighting; all rendering assets ship inside the application.
+- A thinking-effort control lets you tune answer quality per turn.
+- Conversations launch directly from the menu bar, and every turn stays readable while the conversation continues.
 
-- **Better long-term expert retention on paged MoE models.** The adaptive memory guard now excludes one-time streamed expert-page payloads from the learned prefill-activation budget. Previously, experts streamed from storage, promoted, and evicted inside a single forward were counted toward the residual-growth evidence, which inflated the learned activation reserve and shrank the long-term expert-retention budget. The residual now reflects true activation cost, keeping the expert budget steadier across long and repeated prompts.
-- **Finer performance attribution.** New admission-reserve source counters report exactly where the transient reserve is resolved — exact context, phase-scaled estimate, or global maximum.
-- **Menu app stability.** Removes an orphaned settings scene that could open a blank window on launch, and hardens thin-talk failure handling.
-- **Coding-agent start.** Publishes Observatory connection material and website getting-started samples, plus a Pi recipe that works out of the box.
-- **Website.** Readable font sizes, current Stable version shown on the homepage, and report-page sizing fixes.
+Chat
 
-## Compatibility
+- Fixed a rejection that stopped an entire chat thread before generation when a declared tool property used a schema with three or more `anyOf` branches. Local model serving now accepts any branch count, and if a tool declaration is still unsupported, the reason shown names the offending tool and property instead of an opaque parser message.
 
-- No configuration schema change; existing config, model discovery, and library catalog carry forward unchanged.
-- Prompt-cache, expert state, and user state are preserved.
-- The single-model-resident architecture is unchanged.
+Compatibility
 
-## Distribution
+- Requires macOS 14.0 or newer on Apple silicon (arm64).
+- Installs in place through Sparkle; existing configuration, model stores, and caches are preserved.
 
-- Distribution is a single notarized and stapled macOS DMG, plus a signed Sparkle update feed.
-- Verify the released DMG SHA-256 against the published manifest, and confirm the appcast enclosure Ed25519 signature validates against the embedded public key.
+This release is signed with the Developer ID Application identity, notarized by Apple, and the stapled application is Sparkle-signed before distribution.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.47/Astronomical-0.2.47-macOS-arm64.dmg" length="16537952" type="application/octet-stream" sparkle:edSignature="/pCOZt2LGBzEHgSrrscmfcZ7iq1sKL37aBSFGJKYkExpHUCTdzMNMrdtZddVnFyGylk3WA3hMB422LQFya1CDA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.48/Astronomical-0.2.48-macOS-arm64.dmg" length="17994562" type="application/octet-stream" sparkle:edSignature="1GUSiGV8k/fd76WbDYP6gTGvt3fXawC1JhN0bQepgF8yQAgUV+Z0H9m4N9rDe4apWevvCxx4I9hlSOerHJ3LAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: M/B0A5SelAMbSDUP36C1Oz0XdJksWs4qcG+xdPUZfdaUGVrhZ4Mw4DfQT/LoI/QeQq7IhguEqme39/UZ0yQ2AQ==
-length: 3072
+edSignature: fEauP9YaKEs2o3jpCUMaCJpZ4PUh358pxjFD6oVGNGt73e1loV+vw1XMurcl3NcmwchIungokEooNAc4hpGcCg==
+length: 2286
 -->
