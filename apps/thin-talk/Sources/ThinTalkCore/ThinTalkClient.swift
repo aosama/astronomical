@@ -78,12 +78,26 @@ struct ChatCompletionChunk: Decodable {
   }
 }
 
-/// One non-streaming chat completion request. Kept minimal for the text-only
+/// One streaming chat completion request. Kept minimal for the text-only
 /// surface; richer modality content is composed at the request boundary later.
 struct ChatCompletionRequest: Encodable {
   var model: String
   var stream: Bool
   var messages: [ChatCompletionMessagePayload]
+  /// Bounds how long the model may think before it must answer.
+  ///
+  /// Sent under the supervisor's canonical numeric spelling: the REST contract
+  /// rejects unrecognised fields outright, so this key name is part of the wire
+  /// agreement rather than an internal detail. The engine ignores the budget for
+  /// models that cannot think, so asking for one never breaks plain chat.
+  var thinkingBudget: Int
+
+  enum CodingKeys: String, CodingKey {
+    case model
+    case stream
+    case messages
+    case thinkingBudget = "thinking_budget"
+  }
 }
 
 /// One request message payload. For text-only messages, content is a string.
@@ -270,10 +284,15 @@ public struct ThinTalkClient: Sendable {
 
   /// Consumes one streaming chat completion and yields deltas until the stream
   /// finishes, a failure is classified, or the watchdog reports a stall.
-  public func chatStream(modelID: String, messages: [ChatMessage]) -> AsyncStream<ChatEvent> {
+  public func chatStream(
+    modelID: String, messages: [ChatMessage], thinkingEffort: ThinkingEffort
+  ) -> AsyncStream<ChatEvent> {
     AsyncStream { externalContinuation in
       let channel = EventChannel<ChatEvent>()
-      let producer = Task { await self.consumeInto(modelID: modelID, messages: messages, channel: channel) }
+      let producer = Task {
+        await self.consumeInto(
+          modelID: modelID, messages: messages, thinkingEffort: thinkingEffort, channel: channel)
+      }
       let watchdog = Task {
         let pollInterval: TimeInterval = 1.0
         var lastActivity = Date()
@@ -303,10 +322,13 @@ public struct ThinTalkClient: Sendable {
   }
 
   private func consumeInto(
-    modelID: String, messages: [ChatMessage], channel: EventChannel<ChatEvent>
+    modelID: String, messages: [ChatMessage], thinkingEffort: ThinkingEffort,
+    channel: EventChannel<ChatEvent>
   ) async {
     do {
-      try await sendChat(modelID: modelID, messages: messages) { channel.enqueue($0) }
+      try await sendChat(modelID: modelID, messages: messages, thinkingEffort: thinkingEffort) {
+        channel.enqueue($0)
+      }
       channel.finish()
     } catch let failure as ChatFailure {
       channel.enqueue(.failure(failure))
@@ -318,14 +340,16 @@ public struct ThinTalkClient: Sendable {
   }
 
   private func sendChat(
-    modelID: String, messages: [ChatMessage], yield: (ChatEvent) -> Void
+    modelID: String, messages: [ChatMessage], thinkingEffort: ThinkingEffort,
+    yield: (ChatEvent) -> Void
   ) async throws {
     let request = ChatCompletionRequest(
       model: modelID,
       stream: true,
       messages: messages.map { message in
         ChatCompletionMessagePayload(role: message.role.rawValue, content: message.content)
-      }
+      },
+      thinkingBudget: thinkingEffort.thinkingBudgetTokens
     )
     let requestBody = try JSONEncoder().encode(request)
     var requestURL = URLRequest(url: try applicationIdentity.endpointURL(path: "/v1/chat/completions"))

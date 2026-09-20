@@ -26,6 +26,7 @@ final class ThinTalkClientContractTests: XCTestCase {
     StubSupervisorURLProtocol.chatHoldOpen = false
     StubSupervisorURLProtocol.receivedRequestPaths = []
     StubSupervisorURLProtocol.receivedRequestMethods = []
+    StubSupervisorURLProtocol.receivedRequestBodies = []
     super.tearDown()
   }
 
@@ -93,7 +94,8 @@ final class ThinTalkClientContractTests: XCTestCase {
     let client = StubbedClientFactory.stableClient()
     var events: [ChatEvent] = []
     for await event in client.chatStream(
-      modelID: "fictional/chat-7b", messages: [ChatMessage(role: .user, content: "Hi")]
+      modelID: "fictional/chat-7b", messages: [ChatMessage(role: .user, content: "Hi")],
+      thinkingEffort: .default
     ) {
       events.append(event)
     }
@@ -137,7 +139,8 @@ final class ThinTalkClientContractTests: XCTestCase {
     let client = StubbedClientFactory.stableClient()
     var failure: ChatFailure?
     for await event in client.chatStream(
-      modelID: "a/b", messages: [ChatMessage(role: .user, content: "Hi")]
+      modelID: "a/b", messages: [ChatMessage(role: .user, content: "Hi")],
+      thinkingEffort: .default
     ) {
       if case .failure(let captured) = event { failure = captured }
     }
@@ -151,7 +154,8 @@ final class ThinTalkClientContractTests: XCTestCase {
     let client = StubbedClientFactory.stableClient(stallTimeout: 1.5)
     var stallFailure: ChatFailure?
     for await captured in client.chatStream(
-      modelID: "fictional/chat-7b", messages: [ChatMessage(role: .user, content: "Hi")]
+      modelID: "fictional/chat-7b", messages: [ChatMessage(role: .user, content: "Hi")],
+      thinkingEffort: .default
     ) {
       if case .failure(let failure) = captured { stallFailure = failure }
       break

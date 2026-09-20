@@ -10,7 +10,11 @@ readonly TEST_TIMEOUT_SECONDS=120
 # The direct-MLX lane compiles its feature world in an owned Cargo target before
 # its own bounded run, so it needs the compilation timeout class.
 readonly DIRECT_MLX_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=19
+# The Thin Talk package compiles its own Swift world before its hermetic canvas
+# contracts run in a web view, so it needs the compilation timeout class rather
+# than the 120-second test bound.
+readonly THIN_TALK_TIMEOUT_SECONDS=600
+readonly TOTAL_STEP_COUNT=21
 
 COMPLETED_STEP_COUNT=0
 
@@ -84,6 +88,7 @@ main() {
     require_command cargo
     require_command date
     require_command node
+    require_command swift
     require_command sysctl
     resolve_timeout_executable
 
@@ -103,6 +108,7 @@ main() {
 
     run_step rust-dependency-notices "$TEST_TIMEOUT_SECONDS" scripts/generate-rust-dependency-notices.sh --check
     run_step rust-dependency-notices-contract "$TEST_TIMEOUT_SECONDS" scripts/test-rust-dependency-notices-contract.sh
+    run_step thin-talk-canvas-assets "$TEST_TIMEOUT_SECONDS" scripts/vendor-thin-talk-canvas-assets.sh --verify-only
     run_step commit-release-isolation "$TEST_TIMEOUT_SECONDS" scripts/test-commit-release-isolation.sh
     run_step ci-native-cache-contract "$TEST_TIMEOUT_SECONDS" scripts/test-ci-native-cache-coordination.sh
     run_step cargo-artifact-lifecycle-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-lifecycle-contract.sh
@@ -115,6 +121,7 @@ main() {
     run_step test-macos-app-validation-contract "$TEST_TIMEOUT_SECONDS" scripts/test-validate-macos-app-contract.sh
     run_step test-channel-isolation "$TEST_TIMEOUT_SECONDS" scripts/check-test-channel-isolation.sh
     run_step test-macos-menu-contracts "$TEST_TIMEOUT_SECONDS" scripts/test-macos-menu-contracts.sh
+    run_step thin-talk-contracts "$THIN_TALK_TIMEOUT_SECONDS" swift test --package-path apps/thin-talk
     run_step test-pull-request-policy-contracts "$TEST_TIMEOUT_SECONDS" node \
         --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js
     run_step test-observatory-contracts "$TEST_TIMEOUT_SECONDS" node --test --test-reporter=spec \

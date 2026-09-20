@@ -16,6 +16,9 @@ final class StubSupervisorURLProtocol: URLProtocol, @unchecked Sendable {
   nonisolated(unsafe) static var chatHoldOpen = false
   nonisolated(unsafe) static var receivedRequestPaths: [String] = []
   nonisolated(unsafe) static var receivedRequestMethods: [String] = []
+  /// Outbound JSON bodies, so a test can observe what actually left the process
+  /// instead of trusting that a field took the whole path to the wire.
+  nonisolated(unsafe) static var receivedRequestBodies: [Data] = []
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -24,6 +27,7 @@ final class StubSupervisorURLProtocol: URLProtocol, @unchecked Sendable {
     let path = request.url?.path ?? ""
     Self.receivedRequestPaths.append(path)
     Self.receivedRequestMethods.append(request.httpMethod ?? "GET")
+    Self.receivedRequestBodies.append(Self.wireBody(of: request))
 
     guard let requestURL = request.url, let urlProtocolClient = client else {
       return
@@ -73,6 +77,28 @@ final class StubSupervisorURLProtocol: URLProtocol, @unchecked Sendable {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [StubSupervisorURLProtocol.self]
     return configuration
+  }
+
+  /// Reads the outbound JSON from the request.
+  ///
+  /// A data task reaches a URL protocol with its body attached as a stream rather
+  /// than as `httpBody`, so reading only `httpBody` would leave every captured
+  /// request looking empty and let a broken wire contract pass unnoticed.
+  private static func wireBody(of request: URLRequest) -> Data {
+    if let body = request.httpBody, !body.isEmpty {
+      return body
+    }
+    guard let stream = request.httpBodyStream else { return Data() }
+    stream.open()
+    defer { stream.close() }
+    var body = Data()
+    var buffer = [UInt8](repeating: 0, count: 4096)
+    while stream.hasBytesAvailable {
+      let readCount = stream.read(&buffer, maxLength: buffer.count)
+      if readCount <= 0 { break }
+      body.append(buffer, count: readCount)
+    }
+    return body
   }
 
   static let matchingStableStatusResponse: ResponseConfiguration = .init(
