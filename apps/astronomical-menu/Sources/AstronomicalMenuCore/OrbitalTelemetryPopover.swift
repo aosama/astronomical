@@ -19,6 +19,7 @@ struct OrbitalTelemetryPopover: View {
   let applicationIdentity: ApplicationIdentity
   let openObservatory: () -> Void
   let openLibrary: () -> Void
+  let openChat: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
   let checkForUpdates: () -> Void
@@ -162,6 +163,12 @@ struct OrbitalTelemetryPopover: View {
       }
       .buttonStyle(.borderedProminent)
       .tint(.cyan)
+      Button(action: openChat) {
+        Label("Chat", systemImage: "bubble.left.and.bubble.right")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(.indigo)
       HStack {
         Button("Reload config", action: reloadConfiguration)
         Button("Restart server", action: restartServer)

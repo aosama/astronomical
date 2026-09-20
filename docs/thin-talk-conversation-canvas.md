@@ -110,3 +110,13 @@ BSD license file. `--verify-only` checks the committed bytes without network acc
 The `marked-katex-extension` UMD bundle was evaluated and then removed: it grafts
 KaTeX output during markdown parsing, which puts it in front of the sanitiser, so
 the extraction is done in house instead.
+
+## Launch story (decision, 2026-09-20)
+
+End users launch the conversation from the Astronomical menu-bar app: its **Chat** item
+opens the persistent Thin Talk window. There is no second Applications entry, no second
+Dock or Spotlight icon, and no separate update feed — one download, one install location,
+one icon. Directly building and launching the package (`apps/thin-talk/run-thin-talk.sh`)
+remains a developer affordance, not an end-user journey. The thin-client boundary is
+unchanged: the canvas stays a rendering tenant over the one supervisor REST contract.
+This matches the revised Surface and launch-point decisions on issue 647.

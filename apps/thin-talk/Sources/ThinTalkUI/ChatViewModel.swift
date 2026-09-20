@@ -5,7 +5,7 @@ import ThinTalkCanvas
 import ThinTalkCore
 
 /// How the chat surface discovered its models at startup.
-enum LoadState: Equatable, Sendable {
+public enum LoadState: Equatable, Sendable {
   case idle
   case loading
   case ready
@@ -21,17 +21,17 @@ enum LoadState: Equatable, Sendable {
 /// conversation looks like and the web surface decides only how it is drawn.
 @MainActor
 @Observable
-final class ChatViewModel {
-  var messages: [ChatMessage] = []
-  var availableModels: [ThinTalkModel] = []
-  var selectedModelID: String?
-  var draft = ""
+public final class ChatViewModel {
+  public var messages: [ChatMessage] = []
+  public var availableModels: [ThinTalkModel] = []
+  public var selectedModelID: String?
+  public var draft = ""
   /// How much thinking the next turn may spend.
   ///
   /// Persisted so a deliberate choice survives a relaunch, while a fresh install
   /// still starts on Quick. The choice applies to the next request, which is why
   /// it is read at send time rather than captured when the window opens.
-  var thinkingEffort: ThinkingEffort {
+  public var thinkingEffort: ThinkingEffort {
     didSet {
       guard thinkingEffort != oldValue else { return }
       ThinkingEffortPreference.save(thinkingEffort)
@@ -49,7 +49,7 @@ final class ChatViewModel {
   private let client: ThinTalkClient
   private var streamingTask: Task<Void, Never>?
 
-  init(
+  public init(
     client: ThinTalkClient,
     thinkingEffort: ThinkingEffort = ThinkingEffortPreference.load()
   ) {
@@ -57,7 +57,7 @@ final class ChatViewModel {
     self.thinkingEffort = thinkingEffort
   }
 
-  static func `default`() -> ChatViewModel {
+  public static func `default`() -> ChatViewModel {
     ChatViewModel(client: ThinTalkClient(applicationIdentity: ThinTalkApplicationIdentity.current()))
   }
 
@@ -102,6 +102,8 @@ final class ChatViewModel {
     streamingTask?.cancel()
     streamingTask = nil
     isStreaming = false
+    removeEmptyAssistantTurn()
+    assistantMessageID = nil
     refreshCanvasSnapshot()
   }
 
@@ -134,7 +136,13 @@ final class ChatViewModel {
 
   private func beginStreaming(requestMessages: [ChatMessage]) {
     streamingTask?.cancel()
-    streamingTask = nil
+    // Open the assistant turn up-front and hand its id to the reducer. Without
+    // this, assistantMessageID leaks from the previous turn and a second answer
+    // keeps appending inside the first assistant bubble; a visible "thinking"
+    // placeholder also prevents stacked user turns from looking unanswered.
+    let placeholderID = UUID()
+    assistantMessageID = placeholderID
+    messages.append(ChatMessage(id: placeholderID, role: .assistant, content: ""))
     isStreaming = true
     refreshCanvasSnapshot()
     streamingTask = Task {
@@ -151,12 +159,26 @@ final class ChatViewModel {
         {
           currentFailure = failure
           isStreaming = false
+          removeEmptyAssistantTurn()
+          assistantMessageID = nil
         }
         refreshCanvasSnapshot()
       }
       isStreaming = false
+      removeEmptyAssistantTurn()
+      assistantMessageID = nil
       refreshCanvasSnapshot()
     }
+  }
+
+  /// Drops a turn the model never filled, so a stopped or failed request leaves
+  /// no empty failed-completed bubble behind the user's question.
+  private func removeEmptyAssistantTurn() {
+    guard let id = assistantMessageID,
+          let index = messages.firstIndex(where: { $0.id == id }),
+          messages[index].content.isEmpty, messages[index].reasoning.isEmpty
+    else { return }
+    messages.remove(at: index)
   }
 
   /// Rebuilds the snapshot the canvas renders. Called after every mutation so the

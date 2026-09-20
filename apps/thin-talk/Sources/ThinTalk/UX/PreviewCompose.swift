@@ -1,4 +1,5 @@
 import SwiftUI
+import ThinTalkUI
 
 /// Compose dock: large input area with send button.
 ///

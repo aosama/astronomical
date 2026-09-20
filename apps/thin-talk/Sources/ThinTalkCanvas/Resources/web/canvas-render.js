@@ -73,12 +73,13 @@
     if (message.state !== "complete" && message.state !== "stopped") {
       return "";
     }
-    return (
-      '<div class="message__actions">' +
-      '<button class="message__action" data-testid="action-copy" data-action="copy">Copy</button>' +
-      '<button class="message__action" data-testid="action-regenerate" data-action="regenerate">Regenerate</button>' +
-      "</div>"
-    );
+    // Regenerate belongs to what the model produced; offering it under the
+    // user's own words made every turn look like another compose surface.
+    var actions = ['<button class="message__action" data-testid="action-copy" data-action="copy">Copy</button>'];
+    if (message.role !== "user") {
+      actions.push('<button class="message__action" data-testid="action-regenerate" data-action="regenerate">Regenerate</button>');
+    }
+    return '<div class="message__actions">' + actions.join("") + "</div>";
   }
 
   /**
@@ -112,23 +113,29 @@
     var answerBody = renderMarkdown(message.markdown);
     var attachments = attachmentStripHtml(message.attachments || []);
     var cards = (message.cards || []).map(cardHtml).join("");
+    if (message.role === "user") {
+      // The sender label lives inside the user bubble so stacked user turns
+      // read as sent messages instead of extra compose fields.
+      return (
+        '<div class="message__answer message__answer--user">' +
+        '<span class="message__role">You</span>' +
+        '<div class="markdown-body">' + answerBody + '</div>' +
+        attachments +
+        '</div>' +
+        actionsHtml(message)
+      );
+    }
     return (
       '<div class="message__meta">' +
-      '<span class="message__role">' +
-      (message.role === "user" ? "You" : "Assistant") +
-      "</span>" +
-      '<span class="message__state">' +
-      stateLabel(message.state) +
-      "</span>" +
-      "</div>" +
+      '<span class="message__role">Assistant</span>' +
+      '<span class="message__state">' + stateLabel(message.state) + '</span>' +
+      '</div>' +
       '<div class="message__answer">' +
       reasoning +
-      '<div class="markdown-body">' +
-      answerBody +
-      "</div>" +
+      '<div class="markdown-body">' + answerBody + '</div>' +
       cards +
       attachments +
-      "</div>" +
+      '</div>' +
       actionsHtml(message)
     );
   }

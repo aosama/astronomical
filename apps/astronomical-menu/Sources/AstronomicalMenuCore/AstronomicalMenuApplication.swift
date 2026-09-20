@@ -16,6 +16,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
   private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
+  private lazy var chatWindowController = ChatWindowController(
+    thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity))
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
@@ -47,6 +49,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         applicationIdentity: applicationIdentity,
         openObservatory: { [weak self] in self?.openObservatory() },
         openLibrary: { [weak self] in self?.openLibrary() },
+        openChat: { [weak self] in self?.showChatWindow() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
         checkForUpdates: { [weak self] in self?.checkForUpdates() },
@@ -147,6 +150,12 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       }
       telemetryStore.refreshNow()
     }
+  }
+
+  // Reopening chat after a close restores the accessory posture the menu
+  // application normally keeps, exactly like the welcome window does.
+  private func showChatWindow() {
+    chatWindowController.showChatWindow(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
   }
 
   private func shouldShowFirstRunWelcome() -> Bool {
