@@ -218,14 +218,18 @@ final class DaemonControlTests: XCTestCase {
   }
 
   @MainActor
-  func test_should_classify_an_immediate_daemon_exit_as_early_exit_when_readiness_timeout_is_short()
+  func test_should_classify_an_immediate_daemon_exit_as_early_exit()
     async throws
   {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/usr/bin/false")
     defer { testContext.removeTemporaryDirectory() }
+    // The fake never becomes healthy, so the deadline is always reached and only a reaped
+    // dead child can win over the readiness timeout. The budget must tolerate runner load:
+    // a 10ms deadline elapsed before the just-spawned child reaped under load and the exit
+    // was misreported as a readiness timeout (issue #738).
     let daemonLifecycleController = testContext.makeController(
       supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: .max),
-      readinessTimeout: .milliseconds(10))
+      readinessTimeout: .seconds(2))
 
     do {
       try await daemonLifecycleController.startDaemonIfNeeded()
