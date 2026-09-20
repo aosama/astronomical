@@ -61,6 +61,11 @@ CARGO
 set -eu
 printf '%s\n' "$*" >> "${ASTRONOMICAL_TEST_NODE_LOG:?}"
 NODE
+    cat > "${fake_command_directory}/swift" <<'SWIFT'
+#!/usr/bin/env sh
+set -eu
+printf '%s\n' "$*" >> "${ASTRONOMICAL_TEST_SWIFT_LOG:?}"
+SWIFT
     cat > "${fake_command_directory}/sccache" <<'SCCACHE'
 #!/usr/bin/env sh
 set -eu
@@ -85,7 +90,8 @@ create_fake_repository_scripts() {
         test-channel-isolation-checker-contract.sh \
         test-validate-macos-app-contract.sh \
         check-test-channel-isolation.sh \
-        test-macos-menu-contracts.sh
+        test-macos-menu-contracts.sh \
+        vendor-thin-talk-canvas-assets.sh
     do
         cat > "${sandbox_scripts_directory}/${script_name}" <<'SCRIPT'
 #!/usr/bin/env sh
@@ -187,6 +193,7 @@ main() {
     script_log="${SANDBOX_DIRECTORY}/script.log"
     sccache_log="${SANDBOX_DIRECTORY}/sccache.log"
     timeout_log="${SANDBOX_DIRECTORY}/timeout.log"
+    swift_log="${SANDBOX_DIRECTORY}/swift.log"
     verification_output="${SANDBOX_DIRECTORY}/verification.log"
     custom_target_directory="${SANDBOX_DIRECTORY}/caller-cargo-target"
     mkdir -p "$custom_target_directory"
@@ -203,6 +210,7 @@ main() {
             ASTRONOMICAL_TEST_SCRIPT_LOG="$script_log" \
             ASTRONOMICAL_TEST_SCCACHE_LOG="$sccache_log" \
             ASTRONOMICAL_TEST_TIMEOUT_LOG="$timeout_log" \
+            ASTRONOMICAL_TEST_SWIFT_LOG="$swift_log" \
             run_verification_script "${sandbox_scripts_directory}/verify-before-commit.sh" "$verification_output"
     )
 
@@ -238,7 +246,15 @@ main() {
         print_error "the direct-MLX lane did not retain its separate compile-class timeout"
         exit 1
     }
-    [ "$(grep -c '^120s|' "$timeout_log")" -eq 18 ] || {
+    grep -F '600s|swift' "$timeout_log" >/dev/null || {
+        print_error "the Thin Talk package did not retain its separate compile-class timeout"
+        exit 1
+    }
+    grep -Fx -- 'test --package-path apps/thin-talk' "$swift_log" >/dev/null || {
+        print_error "verification did not run the Thin Talk Swift package contracts"
+        exit 1
+    }
+    [ "$(grep -c '^120s|' "$timeout_log")" -eq 19 ] || {
         print_error "verification did not bound every non-compilation step to 120 seconds"
         exit 1
     }
@@ -261,7 +277,8 @@ main() {
         test-channel-isolation-checker-contract.sh \
         test-validate-macos-app-contract.sh \
         check-test-channel-isolation.sh \
-        test-macos-menu-contracts.sh
+        test-macos-menu-contracts.sh \
+        vendor-thin-talk-canvas-assets.sh
     do
         [ "$(grep -c "^${expected_script_name} " "$script_log")" -eq 1 ] || {
             print_error "verification did not run ${expected_script_name} exactly once"
@@ -288,6 +305,7 @@ main() {
             ASTRONOMICAL_TEST_SCRIPT_LOG="$script_log" \
             ASTRONOMICAL_TEST_SCCACHE_LOG="$sccache_log" \
             ASTRONOMICAL_TEST_TIMEOUT_LOG="$timeout_log" \
+            ASTRONOMICAL_TEST_SWIFT_LOG="$swift_log" \
             run_verification_script "${sandbox_scripts_directory}/verify-before-commit.sh" "$failure_output"
     ) || failure_exit_status=$?
     [ "$failure_exit_status" -eq 37 ] || {

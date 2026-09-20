@@ -86,7 +86,7 @@ run_staged_pre_commit_hook() {
 
 main() {
     started_epoch_seconds="$(date +%s)"
-    printf '%s\n' "[source-size-test] status=start scenarios=11 timeout_seconds=${MAXIMUM_ELAPSED_SECONDS} ETA_seconds=10"
+    printf '%s\n' "[source-size-test] status=start scenarios=12 timeout_seconds=${MAXIMUM_ELAPSED_SECONDS} ETA_seconds=10"
     TEMPORARY_DIRECTORY="$(mktemp -d)"
     warning_root="${TEMPORARY_DIRECTORY}/warning"
     failing_root="${TEMPORARY_DIRECTORY}/failing"
@@ -111,7 +111,7 @@ main() {
         "${missing_final_newline_root}/src/failing_without_final_newline.rs" \
         551
 
-    printf '%s\n' "[source-size-test] status=progress scenarios=0/11 scenario=warning expected=success ETA_seconds=10"
+    printf '%s\n' "[source-size-test] status=progress scenarios=0/12 scenario=warning expected=success ETA_seconds=10"
     warning_scenario_output="$(sh "${SOURCE_SIZE_CHECKER}" "${warning_root}")"
     printf '%s\n' "${warning_scenario_output}"
     case "${warning_scenario_output}" in
@@ -121,7 +121,7 @@ main() {
             exit 1
             ;;
     esac
-    printf '%s\n' "[source-size-test] status=progress scenarios=1/11 scenario=generated expected=success ETA_seconds=9"
+    printf '%s\n' "[source-size-test] status=progress scenarios=1/12 scenario=generated expected=success ETA_seconds=9"
     generated_scenario_output="$(sh "${SOURCE_SIZE_CHECKER}" "${generated_root}")"
     printf '%s\n' "${generated_scenario_output}"
     case "${generated_scenario_output}" in
@@ -130,22 +130,22 @@ main() {
             exit 1
             ;;
     esac
-    printf '%s\n' "[source-size-test] status=progress scenarios=2/11 scenario=misleading-generated-marker expected=failure ETA_seconds=8"
+    printf '%s\n' "[source-size-test] status=progress scenarios=2/12 scenario=misleading-generated-marker expected=failure ETA_seconds=8"
     if sh "${SOURCE_SIZE_CHECKER}" "${misleading_generated_marker_root}"; then
         printf '%s\n' '[source-size-test] status=failed reason=misleading-generated-marker-was-excluded' >&2
         exit 1
     fi
-    printf '%s\n' "[source-size-test] status=progress scenarios=3/11 scenario=failing expected=failure ETA_seconds=7"
+    printf '%s\n' "[source-size-test] status=progress scenarios=3/12 scenario=failing expected=failure ETA_seconds=7"
     if sh "${SOURCE_SIZE_CHECKER}" "${failing_root}"; then
         printf '%s\n' '[source-size-test] status=failed reason=551-lines-was-accepted' >&2
         exit 1
     fi
-    printf '%s\n' "[source-size-test] status=progress scenarios=4/11 scenario=missing-final-newline expected=failure ETA_seconds=6"
+    printf '%s\n' "[source-size-test] status=progress scenarios=4/12 scenario=missing-final-newline expected=failure ETA_seconds=6"
     if sh "${SOURCE_SIZE_CHECKER}" "${missing_final_newline_root}"; then
         printf '%s\n' '[source-size-test] status=failed reason=551-lines-without-final-newline-was-accepted' >&2
         exit 1
     fi
-    printf '%s\n' "[source-size-test] status=progress scenarios=5/11 scenario=staged-rust-boundary expected=success ETA_seconds=5"
+    printf '%s\n' "[source-size-test] status=progress scenarios=5/12 scenario=staged-rust-boundary expected=success ETA_seconds=5"
     initialize_staged_hook_repository "${staged_hook_repository_root}"
     write_source_file "${staged_hook_repository_root}/boundary.rs" 600 '// staged Rust source line'
     git -C "${staged_hook_repository_root}" add boundary.rs
@@ -153,27 +153,27 @@ main() {
     printf '%s\n' '// unstaged source line beyond the staged boundary' >> "${staged_hook_repository_root}/boundary.rs"
     run_staged_pre_commit_hook "${staged_hook_repository_root}"
 
-    printf '%s\n' "[source-size-test] status=progress scenarios=6/11 scenario=staged-python expected=success ETA_seconds=4"
+    printf '%s\n' "[source-size-test] status=progress scenarios=6/12 scenario=staged-python expected=success ETA_seconds=4"
     write_source_file "${staged_hook_repository_root}/boundary.py" 600 '# staged Python source line'
     git -C "${staged_hook_repository_root}" add boundary.py
     run_staged_pre_commit_hook "${staged_hook_repository_root}"
 
-    printf '%s\n' "[source-size-test] status=progress scenarios=7/11 scenario=staged-swift expected=success ETA_seconds=3"
+    printf '%s\n' "[source-size-test] status=progress scenarios=7/12 scenario=staged-swift expected=success ETA_seconds=3"
     write_source_file "${staged_hook_repository_root}/Boundary.swift" 600 '// staged Swift source line'
     git -C "${staged_hook_repository_root}" add Boundary.swift
     run_staged_pre_commit_hook "${staged_hook_repository_root}"
 
-    printf '%s\n' "[source-size-test] status=progress scenarios=8/11 scenario=staged-generated expected=success ETA_seconds=2"
+    printf '%s\n' "[source-size-test] status=progress scenarios=8/12 scenario=staged-generated expected=success ETA_seconds=2"
     write_source_file "${staged_hook_repository_root}/generated.py" 601 '# generated Python source line' '# @generated deterministic binding'
     git -C "${staged_hook_repository_root}" add generated.py
     run_staged_pre_commit_hook "${staged_hook_repository_root}"
 
-    printf '%s\n' "[source-size-test] status=progress scenarios=9/11 scenario=staged-markdown expected=success ETA_seconds=1"
+    printf '%s\n' "[source-size-test] status=progress scenarios=9/12 scenario=staged-markdown expected=success ETA_seconds=1"
     write_source_file "${staged_hook_repository_root}/oversized.md" 601 'non-code documentation line'
     git -C "${staged_hook_repository_root}" add oversized.md
     run_staged_pre_commit_hook "${staged_hook_repository_root}"
 
-    printf '%s\n' "[source-size-test] status=progress scenarios=10/11 scenario=staged-limit expected=failure ETA_seconds=0"
+    printf '%s\n' "[source-size-test] status=progress scenarios=10/12 scenario=staged-limit expected=failure ETA_seconds=0"
     write_source_file "${staged_hook_repository_root}/too_long.cpp" 601 '// staged C++ source line'
     git -C "${staged_hook_repository_root}" add too_long.cpp
     if staged_hook_output="$(run_staged_pre_commit_hook "${staged_hook_repository_root}" 2>&1)"; then
@@ -196,6 +196,19 @@ main() {
         printf '%s\n' '[source-size-test] status=failed reason=blocked-commit-created-history' >&2
         exit 1
     fi
+    printf '%s\n' "[source-size-test] status=progress scenarios=11/12 scenario=staged-vendored-asset expected=success ETA_seconds=0"
+    # Scenario 10 leaves an oversized file staged, so this case stages only the
+    # vendored asset to prove the exemption rather than the earlier failure.
+    git -C "${staged_hook_repository_root}" reset --quiet
+    mkdir -p "${staged_hook_repository_root}/Sources/App/Resources/web/vendor"
+    write_source_file \
+        "${staged_hook_repository_root}/Sources/App/Resources/web/vendor/bundle.min.js" \
+        900 \
+        'var vendored=1;'
+    git -C "${staged_hook_repository_root}" add \
+        Sources/App/Resources/web/vendor/bundle.min.js
+    run_staged_pre_commit_hook "${staged_hook_repository_root}"
+
     elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
     if [ "${elapsed_seconds}" -gt "${MAXIMUM_ELAPSED_SECONDS}" ]; then
         printf '%s\n' "[source-size-test] status=failed reason=timeout elapsed_seconds=${elapsed_seconds}" >&2

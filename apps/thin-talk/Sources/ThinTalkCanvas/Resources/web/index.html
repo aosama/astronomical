@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The page is a rendering tenant for model output, so it may execute only its
+      own bundled scripts and may load images only through the private asset
+      scheme. `connect-src 'none'` and `default-src 'none'` mean a payload that
+      slips past sanitisation still cannot reach the network.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' thintalk-asset:; style-src 'self' thintalk-asset: 'unsafe-inline'; img-src 'self' thintalk-asset: data:; font-src 'self' thintalk-asset:; connect-src 'none'; media-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
+    />
+    <link rel="stylesheet" href="thintalk-asset://shell/vendor/katex/katex.min.css" />
+    <link rel="stylesheet" href="thintalk-asset://shell/vendor/highlight-github-dark.min.css" />
+    <link rel="stylesheet" href="thintalk-asset://shell/canvas.css" />
+    <title>Thin Talk</title>
+  </head>
+  <body>
+    <main id="transcript" role="log" aria-live="polite" aria-label="Conversation"></main>
+    <section id="empty-state" class="empty-state" hidden>
+      <h1 class="empty-state__title">Thin Talk</h1>
+      <p class="empty-state__subtitle">Ask your local model anything.</p>
+      <p class="empty-state__notice" id="empty-state-notice"></p>
+    </section>
+    <!--
+      Script order is the dependency order of the canvas modules: the content-key
+      and trust foundations, then the maths and diagram pipelines that build on
+      them, then the renderer that composes answers, then the transcript layer.
+    -->
+    <script src="thintalk-asset://shell/vendor/morphdom-umd.min.js"></script>
+    <script src="thintalk-asset://shell/vendor/purify.min.js"></script>
+    <script src="thintalk-asset://shell/vendor/katex/katex.min.js"></script>
+    <script src="thintalk-asset://shell/vendor/mermaid.min.js"></script>
+    <script src="thintalk-asset://shell/vendor/marked.min.js"></script>
+    <script src="thintalk-asset://shell/vendor/highlight.min.js"></script>
+    <script src="thintalk-asset://shell/canvas-content-key.js"></script>
+    <script src="thintalk-asset://shell/canvas-trust.js"></script>
+    <script src="thintalk-asset://shell/canvas-math.js"></script>
+    <script src="thintalk-asset://shell/canvas-diagrams.js"></script>
+    <script src="thintalk-asset://shell/canvas-render.js"></script>
+    <script src="thintalk-asset://shell/canvas.js"></script>
+  </body>
+</html>
