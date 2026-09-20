@@ -1,5 +1,6 @@
 import SwiftUI
 import ThinTalkCore
+import ThinTalkUI
 
 /// Main conversation canvas. Mirrors the reference layout exactly:
 /// intro bullets → divider → "Visual:" heading + carousel → divider

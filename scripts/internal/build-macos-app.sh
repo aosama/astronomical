@@ -440,6 +440,15 @@ main() {
 
     cp "${repository_root}/apps/astronomical-menu/.build/release/${menu_swift_product}" \
        "${app_bundle_path}/Contents/MacOS/astronomical-menu"
+    # The conversation surface's offline shell lives in the ThinTalk bundle's
+    # resources; the host app loads it as a buddy bundle next to its own
+    # resources, and a missing bundle must degrade visibly, not crash.
+    thintalk_resource_bundle="${repository_root}/apps/astronomical-menu/.build/out/Products/Release/ThinTalk_ThinTalkCanvas.bundle"
+    [ -d "$thintalk_resource_bundle" ] || {
+        print_error "the Thin Talk resource bundle is missing after the Swift package build: ${thintalk_resource_bundle}"
+        exit 1
+    }
+    cp -R "$thintalk_resource_bundle" "${app_bundle_path}/Contents/Resources/ThinTalk_ThinTalkCanvas.bundle"
     cargo_release_directory="${CARGO_TARGET_DIR}/${host_target_triple}/release"
     cp "${cargo_release_directory}/astronomicald" \
        "${app_bundle_path}/Contents/MacOS/astronomicald"

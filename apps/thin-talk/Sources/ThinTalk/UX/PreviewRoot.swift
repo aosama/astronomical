@@ -1,4 +1,5 @@
 import SwiftUI
+import ThinTalkUI
 
 /// Root layout that owns the full Thin Talk UX: sidebar + main pane
 /// (header → conversation → compose dock).

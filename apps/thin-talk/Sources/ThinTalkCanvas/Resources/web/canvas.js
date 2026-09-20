@@ -74,7 +74,12 @@
         renderPlainTextFallback(message);
       }
     });
-    if (wasFollowing) {
+    // A turn the local user just sent always pulls the transcript back to the
+    // newest content. The decision is made here, from the batch itself, rather
+    // than from followScroll, because the reader's scroll event from being
+    // dragged up can land between the snapshot and this flush and reset it.
+    var followNow = wasFollowing || batch.some(function (m) { return m && m.role === "user"; });
+    if (followNow) {
       scrollToBottom();
     }
   }
@@ -92,6 +97,11 @@
   function applyMessage(message) {
     if (!message || !message.id) {
       return;
+    }
+    // A turn the local user just sent always pulls the transcript back to the
+    // newest content; only model output respects the reader's scroll position.
+    if (message.role === "user") {
+      followScroll = true;
     }
     var article = articlesByMessageID[message.id];
     if (!article) {
