@@ -46,9 +46,12 @@ final class DaemonControlTests: XCTestCase {
     let testContext = try DaemonLifecycleTestContext(
       daemonExecutablePath: "/does-not-exist/astronomicald")
     defer { testContext.removeTemporaryDirectory() }
+    // The fake becomes healthy on the third check regardless of elapsed time, so the
+    // budget only has to tolerate runner load; a sub-quarter-second wall clock failed
+    // repeatedly on loaded CI runners (issue #738).
     let daemonLifecycleController = testContext.makeController(
       supervisorClient: ExistingDelayedReadinessSupervisorClient(readyAfterCheckCount: 3),
-      readinessTimeout: .milliseconds(100))
+      readinessTimeout: .seconds(2))
 
     try await daemonLifecycleController.startDaemonIfNeeded()
 
@@ -171,7 +174,8 @@ final class DaemonControlTests: XCTestCase {
     let startupClient = DelayedReadinessSupervisorClient(readyAfterCheckCount: 3)
     let startupController = testContext.makeController(
       supervisorClient: startupClient,
-      daemonArguments: ["30"])
+      daemonArguments: ["30"],
+      readinessTimeout: .seconds(2))
     defer { startupController.stopOwnedDaemon() }
 
     try await startupController.startDaemonIfNeeded()
