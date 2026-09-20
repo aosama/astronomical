@@ -1,5 +1,9 @@
 use super::*;
 
+use astronomical_model_serving::{
+    MalformedModelOutputDiagnostic, Qwen3_5OutputParserError, Qwen3_5RequestOutputError,
+};
+
 #[test]
 fn should_emit_null_for_a_nullable_string_tool_parameter() {
     let declared_tools = [ChatToolDefinition {
@@ -165,6 +169,102 @@ fn should_accept_copilot_opaque_canvas_action_parameters() {
             function_name: "invoke_canvas_action".to_owned(),
             arguments_json: r#"{"input":{"action":"zoom"}}"#.to_owned(),
         })]
+    );
+}
+
+#[test]
+fn should_accept_a_multi_branch_string_any_of_tool_parameter() {
+    // A client tool inventory may declare an enum-like parameter as more than two
+    // anyOf branches; only the branch types affect argument parsing, so the count
+    // must not reject the complete chat thread.
+    let declared_tools = [ChatToolDefinition {
+        name: "xcode_build".to_owned(),
+        description: None,
+        parameters_json: r#"{"type":"object","properties":{"includeBuildLog":{"anyOf":[{"type":"string","const":"onFailure"},{"type":"string","const":"always"},{"type":"string","const":"never"}]}}}"#.to_owned(),
+    }];
+    let mut output_parser = Qwen3_5OutputParser::new(&declared_tools)
+        .expect("a multi-branch string anyOf schema should be supported");
+
+    let tool_call_xml = format!(
+        "{TOOL_CALL_START}<function=xcode_build><parameter=includeBuildLog>always</parameter></function>{TOOL_CALL_END}"
+    );
+    let output_events = output_parser
+        .push_fragment(&tool_call_xml)
+        .expect("the multi-branch anyOf parameter should parse");
+
+    assert_eq!(
+        output_events,
+        vec![Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {
+            index: 0,
+            function_name: "xcode_build".to_owned(),
+            arguments_json: r#"{"includeBuildLog":"always"}"#.to_owned(),
+        })]
+    );
+}
+
+#[test]
+fn should_accept_a_multi_branch_any_of_with_a_null_branch() {
+    let declared_tools = [ChatToolDefinition {
+        name: "recall".to_owned(),
+        description: None,
+        parameters_json: r#"{"type":"object","properties":{"limit":{"anyOf":[{"type":"string"},{"type":"integer"},{"type":"null"}]}}}"#.to_owned(),
+    }];
+    let mut output_parser = Qwen3_5OutputParser::new(&declared_tools)
+        .expect("a multi-branch anyOf with a null branch should be supported");
+
+    let tool_call_xml = format!(
+        "{TOOL_CALL_START}<function=recall><parameter=limit>7</parameter></function>{TOOL_CALL_END}"
+    );
+    let output_events = output_parser
+        .push_fragment(&tool_call_xml)
+        .expect("mixed branch types should parse arguments dynamically");
+
+    assert_eq!(
+        output_events,
+        vec![Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {
+            index: 0,
+            function_name: "recall".to_owned(),
+            arguments_json: r#"{"limit":7}"#.to_owned(),
+        })]
+    );
+}
+
+#[test]
+fn should_name_the_offending_tool_and_property_when_a_declared_schema_is_rejected() {
+    let parser_error = Qwen3_5OutputParser::new(&[ChatToolDefinition {
+        name: "broken_tool".to_owned(),
+        description: None,
+        parameters_json: r#"{"type":"object","properties":{"flag":{"type":42}}}"#.to_owned(),
+    }])
+    .expect_err("an unsupported property type declaration must be rejected");
+    let request_output_error = Qwen3_5RequestOutputError::Parser {
+        source: parser_error,
+        diagnostic: Box::new(MalformedModelOutputDiagnostic {
+            diagnostic_code: "invalid_tool_parameter_type_declaration",
+            parser_error:
+                "declared tool 'broken_tool' property 'flag' has an unsupported type declaration"
+                    .to_owned(),
+            generated_token_ids: Vec::new(),
+            pending_token_ids: Vec::new(),
+            decoded_output_text: String::new(),
+            parser_state: "initialization",
+            parser_pending_output_text: String::new(),
+        }),
+    };
+
+    let surfaced_message = request_output_error.to_string();
+
+    assert!(
+        surfaced_message.contains("broken_tool") && surfaced_message.contains("flag"),
+        "a rejected declaration must name the offending tool and property so the failure is actionable, but the message was: {surfaced_message}"
+    );
+    assert!(
+        matches!(
+            &request_output_error,
+            Qwen3_5RequestOutputError::Parser { source, .. }
+                if matches!(source, Qwen3_5OutputParserError::InvalidToolParameterTypeDeclaration { .. })
+        ),
+        "the typed parser error must stay available as the error source"
     );
 }
 
