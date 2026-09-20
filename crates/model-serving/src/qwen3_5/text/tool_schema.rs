@@ -212,14 +212,17 @@ fn parse_declared_parameter_schema(
         }
         None => match parse_nullable_any_of_type(property_schema_fields) {
             Some((parameter_type, is_nullable)) => (Some(parameter_type), is_nullable),
-            None if has_supported_flexible_any_of(property_schema_fields) => (None, false),
-            None if !property_schema_fields.contains_key("anyOf") => (None, false),
-            None => {
-                return Err(Qwen3_5OutputParserError::MissingToolParameterType {
-                    function_name: function_name.to_owned(),
-                    parameter_name: parameter_name.to_owned(),
-                });
-            }
+            None => match parse_flexible_any_of_type(property_schema_fields) {
+                Some(FlexibleAnyOfType::Uniform(parameter_type)) => (Some(parameter_type), false),
+                Some(FlexibleAnyOfType::Mixed) => (None, false),
+                None if !property_schema_fields.contains_key("anyOf") => (None, false),
+                None => {
+                    return Err(Qwen3_5OutputParserError::MissingToolParameterType {
+                        function_name: function_name.to_owned(),
+                        parameter_name: parameter_name.to_owned(),
+                    });
+                }
+            },
         },
         Some(_) => {
             return Err(
@@ -236,26 +239,54 @@ fn parse_declared_parameter_schema(
     })
 }
 
-fn has_supported_flexible_any_of(property_schema_fields: &Map<String, Value>) -> bool {
+/// How a multi-branch `anyOf` declaration maps to argument parsing.
+enum FlexibleAnyOfType {
+    /// Every non-null branch declares the same type, so arguments parse as that type.
+    Uniform(String),
+    /// Branches declare different types, so arguments parse dynamically as JSON.
+    Mixed,
+}
+
+/// Resolves a multi-branch `anyOf` declaration that is not a two-branch nullable pair.
+fn parse_flexible_any_of_type(
+    property_schema_fields: &Map<String, Value>,
+) -> Option<FlexibleAnyOfType> {
     let Some(Value::Array(any_of_schemas)) = property_schema_fields.get("anyOf") else {
-        return false;
+        return None;
     };
-    if any_of_schemas.len() != 2 {
-        return false;
+    // Client tool inventories declare enum-like parameters with three or more
+    // branches. Only the branch types influence argument parsing, so the branch
+    // count carries no behavioral meaning and must not reject the complete thread.
+    if any_of_schemas.len() < 2 {
+        return None;
     }
-    any_of_schemas.iter().all(|any_of_schema| {
+    let mut uniform_type: Option<&str> = None;
+    for any_of_schema in any_of_schemas {
         let Value::Object(schema_fields) = any_of_schema else {
-            return false;
+            return None;
         };
-        matches!(
-            schema_fields.get("type"),
-            Some(Value::String(parameter_type))
-                if matches!(
-                    parameter_type.as_str(),
-                    "string" | "boolean" | "integer" | "number" | "array" | "object"
-                )
-        )
-    })
+        let Some(Value::String(branch_type)) = schema_fields.get("type") else {
+            return None;
+        };
+        if branch_type == "null" {
+            if schema_fields.len() != 1 {
+                return None;
+            }
+            continue;
+        }
+        if !matches!(
+            branch_type.as_str(),
+            "string" | "boolean" | "integer" | "number" | "array" | "object"
+        ) {
+            return None;
+        }
+        match uniform_type {
+            None => uniform_type = Some(branch_type),
+            Some(seen_type) if seen_type == branch_type => {}
+            Some(_) => return Some(FlexibleAnyOfType::Mixed),
+        }
+    }
+    uniform_type.map(|shared_type| FlexibleAnyOfType::Uniform(shared_type.to_owned()))
 }
 
 fn parse_nullable_any_of_type(

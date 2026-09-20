@@ -157,7 +157,7 @@ impl Qwen3_5RequestOutput {
 pub enum Qwen3_5RequestOutputError {
     #[error("failed to decode a Qwen3.5 output token")]
     Tokenizer(#[from] Qwen3_5TokenizerError),
-    #[error("failed to parse Qwen3.5 structured output")]
+    #[error("failed to parse Qwen3.5 structured output: {source}")]
     Parser {
         #[source]
         source: Qwen3_5OutputParserError,
