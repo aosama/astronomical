@@ -11,6 +11,83 @@ const {
     vm
 } = require("./library-test-support.js");
 
+// Renders the catalog the way loadLibraryCatalog does and wires the
+// controls, so a test can pretend a browser is ready for the user to type.
+function createTypingSession() {
+    const scriptContext = createLibraryContext();
+    const libraryDocument = createLibraryDocument();
+    scriptContext.document = libraryDocument;
+    scriptContext.catalogDocument = {
+        schema_version: 2,
+        entries: [
+            validCatalogEntry(),
+            validCatalogEntry({
+                huggingface_id: "astronomical-test/example-laguna",
+                display_name: "Example laguna",
+                family: "laguna"
+            })
+        ]
+    };
+
+    assert.equal(
+        vm.runInContext(
+            "renderLibraryCatalogDocument(catalogDocument)",
+            scriptContext
+        ),
+        "ready"
+    );
+    // Simulate what loadLibraryCatalog does — it is the only code path that
+    // assigns libraryCatalogDocument in production.
+    vm.runInContext("libraryCatalogDocument = catalogDocument", scriptContext);
+    // A real browser wires the handlers one tick after the first render,
+    // well before the user types the first character.
+    vm.runInContext("wireLibraryControls()", scriptContext);
+
+    const currentSearchInput = () => libraryDocument.catalogContainer.children.find(
+        (renderedElement) => renderedElement.className === "library-filter-bar"
+    ).children.find(
+        (element) => element.id === "library-search"
+    );
+    return { libraryDocument, currentSearchInput };
+}
+
+test("keeps the search input focused, valued, and caret-set while typing", () => {
+    const { libraryDocument, currentSearchInput } = createTypingSession();
+    // The user clicks into the field and types — the exact flow the issue
+    // report describes losing.
+    const originalSearchInput = currentSearchInput();
+    libraryDocument.activeElement = originalSearchInput;
+    originalSearchInput.value = "qwen";
+    originalSearchInput.dispatch("input");
+
+    const rebuiltSearchInput = currentSearchInput();
+    assert.equal(rebuiltSearchInput.id, "library-search");
+    assert.equal(libraryDocument.activeElement, rebuiltSearchInput);
+    assert.equal(libraryDocument.lastFocusOptions.preventScroll, true);
+    assert.equal(rebuiltSearchInput.value, "qwen");
+    assert.deepEqual(rebuiltSearchInput.selectionRange, [4, 4]);
+    // The catalog list now shows only the matching rows.
+    const catalogList = libraryDocument.catalogContainer.children.find(
+        (renderedElement) => renderedElement.className === "library-catalog-list"
+    );
+    assert.equal(catalogList.children.length, 1);
+});
+
+test("restores the caret where the user placed it when typing mid-query", () => {
+    const { libraryDocument, currentSearchInput } = createTypingSession();
+    const originalSearchInput = currentSearchInput();
+    libraryDocument.activeElement = originalSearchInput;
+    // A click between characters leaves the caret there, and the browser
+    // reports that position on the input event after a key press.
+    originalSearchInput.value = "qwen3-max";
+    originalSearchInput.setSelectionRange(2, 2);
+    originalSearchInput.dispatch("input");
+
+    const rebuiltSearchInput = currentSearchInput();
+    assert.equal(rebuiltSearchInput.value, "qwen3-max");
+    assert.deepEqual(rebuiltSearchInput.selectionRange, [2, 2]);
+});
+
 test("renders an empty catalog through the bounded empty state", () => {
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();

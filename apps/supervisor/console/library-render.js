@@ -57,7 +57,12 @@ function createLibraryFilterBar(catalogRows) {
     searchInput.id = "library-search";
     searchInput.type = "search";
     searchInput.placeholder = "Search models";
-    searchInput.value = librarySearchQuery;
+    // The filter state stores only the normalized lowercase query used for
+    // filtering; the input keeps the exact text the user is typing.
+    const previousSearchInput = document.getElementById("library-search");
+    searchInput.value = previousSearchInput
+        ? previousSearchInput.value
+        : librarySearchQuery;
     searchInput.setAttribute("aria-label", "Search models");
     const readinessFilter = document.createElement("select");
     readinessFilter.id = "library-readiness-filter";

@@ -6,7 +6,7 @@
 
 - All commands and tests must emit a live progress indicator instead of leaving the user with silent output.
 
-- MLX/GPU acceptance journeys must never run in parallel. Each journey loads model weights into wired GPU memory, so concurrent journeys multiply that demand past the machine's physical limit and can hard-panic the whole system (watchdog starvation → forced power-off). This is enforced structurally: `scripts/run-bounded-cargo-test.sh` rejects any ignored-test invocation that asks for more than one test thread and injects `--test-threads=1` otherwise, so callers cannot parallelize real-model journeys. Confirm no other Astronomical instance is holding a resident model before starting. Test threads = 1 is not applicable for hermetic tests, those can be parallelized safely since they use CPU only.
+- MLX/GPU acceptance journeys must never run in parallel. Each journey loads model weights into wired GPU memory, so concurrent journeys multiply that demand past the machine's physical limit and can hard-panic the whole system (watchdog starvation → forced power-off). This is enforced structurally: `scripts/run-bounded-cargo-test.sh` rejects any ignored-test invocation that asks for more than one test thread and injects `--test-threads=1` otherwise, so callers cannot parallelize real-model journeys. Test threads = 1 is not applicable for hermetic tests, those can be parallelized safely since they use CPU only.
 
 - All and any tests must have a built in timeout with a maximum of 120 seconds. Exceptions can be made for tests that deal with performance endurance tests and/or reproducing OOM issues.
 
