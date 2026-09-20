@@ -228,6 +228,12 @@ done
 mkdir -p "${package_path:?package path is required}/.build/release"
 printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${package_path}/.build/release/${menu_product}"
 chmod +x "${package_path}/.build/release/${menu_product}"
+# The builder requires the Thin Talk canvas resource bundle the Swift package
+# emits beside the menu product; without it the sandbox fails before any later
+# case's guard is reached (the metallib rejection check in this suite).
+canvas_resource_bundle="${package_path}/.build/out/Products/Release/ThinTalk_ThinTalkCanvas.bundle"
+mkdir -p "${canvas_resource_bundle:?canvas resource bundle path is required}"
+printf '%s\n' fixture > "${canvas_resource_bundle}/fixture"
 SWIFT
     cat > "${fake_command_directory}/iconutil" <<'ICONUTIL'
 #!/usr/bin/env sh
