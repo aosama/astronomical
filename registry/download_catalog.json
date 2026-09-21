@@ -182,6 +182,23 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ornith-ai/Ornith-1.5-35B-A3B-MLX-6bit",
+            "revision": "585b7867b0517980293ece857b26d64e84491352",
+            "display_name": "Ornith 1.5 35B A3B MLX 6-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 28190535198,
+            "public": true,
+            "description": "A six-bit affine MLX quant of the Ornith 1.5 35B-A3B sparse mixture-of-experts model, activating about 3B parameters per token across 256 experts. It supports reasoning and native tool calls with a 262144-token context window; text-only, about 28.2 GB on disk.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "6-bit affine (group 64)",
+            "architecture_summary": "Ornith 1.5 35B-A3B sparse MoE, 35B total params, ~3B active, 40 layers, 256 experts, 8 routed per token, 2048 hidden, text-only",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "mlx-community/Laguna-XS-2.1-6bit",
             "revision": "5f60b7511ea0be481a68be1500baf15b0bcccba6",
             "display_name": "Laguna XS 2.1 6-bit",
