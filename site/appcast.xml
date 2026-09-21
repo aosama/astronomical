@@ -4,35 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.48</title>
-            <pubDate>Sun, 20 Sep 2026 15:01:36 -0400</pubDate>
-            <sparkle:version>639</sparkle:version>
-            <sparkle:shortVersionString>0.2.48</sparkle:shortVersionString>
+            <title>0.2.49</title>
+            <pubDate>Sun, 20 Sep 2026 22:22:34 -0400</pubDate>
+            <sparkle:version>645</sparkle:version>
+            <sparkle:shortVersionString>0.2.49</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.48
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.49 — Stable Release Notes
 
-Thin Talk
+## What's new
 
-- Conversation answers now render on a local web canvas with mathematics (KaTeX), diagrams, and code highlighting; all rendering assets ship inside the application.
-- A thinking-effort control lets you tune answer quality per turn.
-- Conversations launch directly from the menu bar, and every turn stays readable while the conversation continues.
+- **Hugging Face shared-blob resolution**: Astronomical now accepts both Xet-backed and classic LFS shared-blob layouts in the Hugging Face cache, fixing artifact-validation failures for models hosted via Xet.
+- **Supervisor Library UI**: The Library search now preserves focus, caret position, and scroll offset while filtering results, providing a smoother search experience.
+- **Repository documentation**: Updated repo-discovery-guide and AGENTS.md with testing and development workflow rules.
 
-Chat
+## Compatibility
 
-- Fixed a rejection that stopped an entire chat thread before generation when a declared tool property used a schema with three or more `anyOf` branches. Local model serving now accepts any branch count, and if a tool declaration is still unsupported, the reason shown names the offending tool and property instead of an opaque parser message.
+- macOS 14.0 and above, arm64 only.
+- No configuration or data migration required.
+- Sparkle update available from v0.2.48.
 
-Compatibility
+## Distribution statement
 
-- Requires macOS 14.0 or newer on Apple silicon (arm64).
-- Installs in place through Sparkle; existing configuration, model stores, and caches are preserved.
-
-This release is signed with the Developer ID Application identity, notarized by Apple, and the stapled application is Sparkle-signed before distribution.
+This release is signed with Developer ID Application, Hardened Runtime, and a timestamp. The DMG is notarized by Apple and stapled. The Sparkle feed is signed with Ed25519. All artifacts are digest-bound in `release-manifest.json`.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.48/Astronomical-0.2.48-macOS-arm64.dmg" length="17994562" type="application/octet-stream" sparkle:edSignature="1GUSiGV8k/fd76WbDYP6gTGvt3fXawC1JhN0bQepgF8yQAgUV+Z0H9m4N9rDe4apWevvCxx4I9hlSOerHJ3LAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.49/Astronomical-0.2.49-macOS-arm64.dmg" length="18006708" type="application/octet-stream" sparkle:edSignature="auvfJMbJ666F2LwuUO9en0qr6YzI9cSkDJGh5UcrEm7FRKePvNcUf7npp3/U13f8caGjU6ZeRMTpbOXj/T6UBQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: fEauP9YaKEs2o3jpCUMaCJpZ4PUh358pxjFD6oVGNGt73e1loV+vw1XMurcl3NcmwchIungokEooNAc4hpGcCg==
-length: 2286
+edSignature: Q+SIB2208k3t+QiadZIOprYstF30DgxbPdgAPgjhufNjRqahud53Uo3fEBilTvPBeRuTHX7gMlX1lLDufLGNBA==
+length: 2191
 -->
