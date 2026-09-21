@@ -45,19 +45,7 @@ impl Qwen3_5ModelStartupError {
     #[must_use]
     pub fn public_model_load_failure_reason(&self) -> String {
         let unbounded_public_model_load_failure_reason = match self {
-            Self::ArtifactValidation {
-                source: Qwen3_5ArtifactValidationError::OptiQMetadata(metadata_error),
-                ..
-            } => format!("Qwen3.5 OptiQ metadata validation failed: {metadata_error}"),
-            Self::ArtifactValidation {
-                source: Qwen3_5ArtifactValidationError::Config(config_error),
-                ..
-            } => format!("Qwen3.5 config validation failed: {config_error}"),
-            Self::ArtifactValidation {
-                source: Qwen3_5ArtifactValidationError::Qwen3_5ShardIndex(shard_index_error),
-                ..
-            } => format!("Qwen3.5 shard-index validation failed: {shard_index_error}"),
-            Self::ArtifactValidation { .. } => "Qwen3.5 artifact validation failed".to_owned(),
+            Self::ArtifactValidation { source, .. } => source.public_failure_reason(),
             Self::ProcessorInitialization { .. } => {
                 "Qwen3.5 processor initialization failed".to_owned()
             }

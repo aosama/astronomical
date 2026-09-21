@@ -3,6 +3,7 @@ mod error;
 mod raw_safetensors_inventory;
 mod required_files;
 mod safetensors_dtype;
+mod shared_blob_resolution;
 mod tensor_inventory;
 mod types;
 mod validated_artifact;

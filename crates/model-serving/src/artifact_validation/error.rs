@@ -125,6 +125,42 @@ pub enum ArtifactValidationError {
         expected_blob_directory: PathBuf,
     },
 
+    /// A Hugging Face shared cache blob could not be checked against its snapshot tree record.
+    #[error(
+        "Hugging Face shared cache file {file_name} could not be verified against its snapshot tree record"
+    )]
+    HuggingFaceSharedBlobMetadataUnavailable {
+        /// Required file name from the artifact profile.
+        file_name: String,
+        /// Reason the shared blob could not be verified.
+        #[source]
+        source: io::Error,
+    },
+
+    /// A resolved Hugging Face shared cache blob is not the content address the snapshot records.
+    #[error(
+        "Hugging Face snapshot file {file_name} resolves to a shared cache blob that is not the content-addressed object for digest {recorded_digest_text}"
+    )]
+    HuggingFaceSharedBlobIdentityMismatch {
+        /// Required file name from the artifact profile.
+        file_name: String,
+        /// Digest the snapshot tree records for this file.
+        recorded_digest_text: String,
+    },
+
+    /// A resolved Hugging Face shared cache blob disagrees with its recorded size.
+    #[error(
+        "Hugging Face shared cache file {file_name} has {actual_size_bytes} bytes, but its snapshot tree record declares {recorded_size_bytes} bytes"
+    )]
+    HuggingFaceSharedBlobSizeMismatch {
+        /// Required file name from the artifact profile.
+        file_name: String,
+        /// Size the snapshot tree records.
+        recorded_size_bytes: u64,
+        /// Size observed on disk.
+        actual_size_bytes: u64,
+    },
+
     /// A required path is not a regular file.
     #[error("required model file {file_name} is not a regular file")]
     RequiredFileIsNotRegular {
@@ -367,4 +403,50 @@ pub enum ArtifactValidationError {
     /// The bounded artifact declared more physical sources than an opaque source ID can represent.
     #[error("safetensors source count overflowed the validated source identity range")]
     TensorSourceCountOverflow,
+}
+
+impl ArtifactValidationError {
+    /// Returns a bounded, path-free explanation suitable for a public load error.
+    #[must_use]
+    pub fn public_failure_reason(&self) -> String {
+        let unbounded_reason = match self {
+            Self::ModelDirectoryNotFound { .. } => {
+                "model artifact directory does not exist or is not a directory".to_owned()
+            }
+            Self::HuggingFaceSnapshotSymlinkEscapesBlobDirectory { .. } => {
+                "a model file resolves outside its permitted Hugging Face snapshot".to_owned()
+            }
+            Self::HuggingFaceSharedBlobMetadataUnavailable { .. } => {
+                "a Hugging Face shared cache file could not be verified against its snapshot tree record"
+                    .to_owned()
+            }
+            Self::HuggingFaceSharedBlobIdentityMismatch { .. } => {
+                "a Hugging Face shared cache file is not the object its snapshot record declares"
+                    .to_owned()
+            }
+            Self::HuggingFaceSharedBlobSizeMismatch { .. } => {
+                "a Hugging Face shared cache file disagrees with the size its snapshot record declares"
+                    .to_owned()
+            }
+            Self::TruncatedSafetensorsFile { .. } => self
+                .to_string()
+                .replacen("safetensors file", "truncated safetensors file", 1),
+            _ => self.to_string(),
+        };
+        bound_public_artifact_failure_reason(unbounded_reason)
+    }
+}
+
+fn bound_public_artifact_failure_reason(unbounded_reason: String) -> String {
+    const MAX_PUBLIC_REASON_CHARACTERS: usize = 512;
+    let path_free_reason = unbounded_reason.replace('/', "_").replace('\\', "_");
+    let mut reason = path_free_reason
+        .chars()
+        .take(MAX_PUBLIC_REASON_CHARACTERS)
+        .collect::<String>();
+    if path_free_reason.chars().count() > MAX_PUBLIC_REASON_CHARACTERS {
+        reason.pop();
+        reason.push('…');
+    }
+    reason
 }
