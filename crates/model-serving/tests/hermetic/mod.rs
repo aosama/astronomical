@@ -1,5 +1,6 @@
 mod adaptive_ram_growth_guard;
 mod adaptive_ram_growth_observations;
+mod artifact_public_reason;
 mod artifact_validator;
 mod attention;
 mod complete_residency_headroom_boundary;

@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::os::unix::fs::symlink;
+use std::path::PathBuf;
 
 use astronomical_model_serving::{
     ArtifactValidationError, RequiredFileProfile, validate_required_file_for_tests,
@@ -37,6 +38,171 @@ fn should_accept_a_hugging_face_snapshot_symlink_to_its_own_blob_directory() {
         .read_to_end(&mut actual_config_bytes)
         .expect("the retained descriptor should read the validated blob");
     assert_eq!(actual_config_bytes, expected_config_bytes);
+}
+
+/// Digest the shared store names its object after in the shared-blob fixtures.
+const SHARED_BLOB_CONTENT_DIGEST: &str =
+    "ab00000000000000000000000000000000000000000000000000000000000000";
+
+/// Digest the shared store does not name its object after; a snapshot tree
+/// record carrying it must not authenticate the fixture's shared blob.
+const UNRELATED_CONTENT_DIGEST: &str =
+    "cd00000000000000000000000000000000000000000000000000000000000000";
+
+const SHARED_BLOB_CONFIG_BYTES: &[u8] = br#"{"model_type":"qwen3_5_moe"}"#;
+
+/// One Hugging Face hub whose model entry reaches an object in the hub-level
+/// shared blob store, so each test can vary exactly one verification input.
+struct SharedBlobLayout {
+    hub_directory: tempfile::TempDir,
+    snapshot_directory: PathBuf,
+}
+
+impl SharedBlobLayout {
+    /// Creates the shared store object, the entry's local blob link, the
+    /// snapshot symlink, and the entry's tree metadata directory.
+    fn create() -> Self {
+        let hub_directory =
+            tempfile::tempdir().expect("the test should create a temporary hub root");
+        let model_cache_directory = hub_directory.path().join("models--example--model");
+        let local_blob_directory = model_cache_directory.join("blobs");
+        let snapshot_directory = model_cache_directory.join("snapshots/commit-hash");
+        let shared_blob_directory = hub_directory.path().join("blobs/ab");
+        std::fs::create_dir_all(&local_blob_directory)
+            .expect("the test should create the entry blob directory");
+        std::fs::create_dir_all(&shared_blob_directory)
+            .expect("the test should create the shared blob directory");
+        std::fs::create_dir_all(&snapshot_directory)
+            .expect("the test should create the snapshot directory");
+        std::fs::create_dir_all(model_cache_directory.join("trees"))
+            .expect("the test should create the tree metadata directory");
+        std::fs::write(
+            shared_blob_directory.join(SHARED_BLOB_CONTENT_DIGEST),
+            SHARED_BLOB_CONFIG_BYTES,
+        )
+        .expect("the test should write the shared immutable blob");
+        symlink(
+            "../../blobs/ab/ab00000000000000000000000000000000000000000000000000000000000000",
+            local_blob_directory.join("local-config-blob"),
+        )
+        .expect("the test should link the entry blob name to the shared blob");
+        symlink(
+            "../../blobs/local-config-blob",
+            snapshot_directory.join("config.json"),
+        )
+        .expect("the test should create the Hugging Face snapshot symlink");
+
+        Self {
+            hub_directory,
+            snapshot_directory,
+        }
+    }
+
+    /// Writes the snapshot tree record that anchors trust for the shared blob.
+    fn write_tree_record(&self, recorded_digest_text: &str, recorded_size_bytes: u64) {
+        std::fs::write(
+            self.hub_directory
+                .path()
+                .join("models--example--model/trees/commit-hash.json"),
+            serde_json::json!({
+                "format_version": 1,
+                "files": {
+                    "config.json": {
+                        "size": recorded_size_bytes,
+                        "blob_id": "git-blob-id",
+                        "lfs_sha256": recorded_digest_text,
+                        "lfs_size": recorded_size_bytes
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .expect("the test should write the snapshot tree metadata");
+    }
+
+    fn validate(&self) -> Result<(), ArtifactValidationError> {
+        validate_required_file_for_tests(
+            &self.snapshot_directory,
+            &RequiredFileProfile {
+                file_name: "config.json".to_owned(),
+                size_bytes: SHARED_BLOB_CONFIG_BYTES.len() as u64,
+            },
+        )
+        .map(drop)
+    }
+}
+
+#[test]
+fn should_accept_a_hugging_face_snapshot_symlink_to_a_verified_shared_blob() {
+    let shared_blob_layout = SharedBlobLayout::create();
+    shared_blob_layout.write_tree_record(
+        SHARED_BLOB_CONTENT_DIGEST,
+        SHARED_BLOB_CONFIG_BYTES.len() as u64,
+    );
+
+    shared_blob_layout
+        .validate()
+        .expect("a snapshot symlink to a snapshot-recorded shared blob should validate");
+}
+
+#[test]
+fn should_reject_a_shared_blob_that_is_not_the_snapshot_recorded_content_address() {
+    let shared_blob_layout = SharedBlobLayout::create();
+    shared_blob_layout.write_tree_record(
+        UNRELATED_CONTENT_DIGEST,
+        SHARED_BLOB_CONFIG_BYTES.len() as u64,
+    );
+
+    let validation_error = shared_blob_layout
+        .validate()
+        .expect_err("a shared blob outside its recorded content address must fail closed");
+
+    assert!(matches!(
+        validation_error,
+        ArtifactValidationError::HuggingFaceSharedBlobIdentityMismatch {
+            file_name,
+            recorded_digest_text,
+        } if file_name == "config.json" && recorded_digest_text == UNRELATED_CONTENT_DIGEST
+    ));
+}
+
+#[test]
+fn should_reject_a_shared_blob_whose_size_disagrees_with_its_snapshot_tree_record() {
+    let shared_blob_layout = SharedBlobLayout::create();
+    shared_blob_layout.write_tree_record(
+        SHARED_BLOB_CONTENT_DIGEST,
+        SHARED_BLOB_CONFIG_BYTES.len() as u64 + 1,
+    );
+
+    let validation_error = shared_blob_layout
+        .validate()
+        .expect_err("a shared blob whose size disagrees with its record must fail closed");
+
+    assert!(matches!(
+        validation_error,
+        ArtifactValidationError::HuggingFaceSharedBlobSizeMismatch {
+            file_name,
+            recorded_size_bytes,
+            actual_size_bytes,
+        } if file_name == "config.json"
+            && recorded_size_bytes == SHARED_BLOB_CONFIG_BYTES.len() as u64 + 1
+            && actual_size_bytes == SHARED_BLOB_CONFIG_BYTES.len() as u64
+    ));
+}
+
+#[test]
+fn should_reject_a_shared_blob_without_a_snapshot_tree_record() {
+    let shared_blob_layout = SharedBlobLayout::create();
+
+    let validation_error = shared_blob_layout
+        .validate()
+        .expect_err("a shared blob no tree record describes must fail closed");
+
+    assert!(matches!(
+        validation_error,
+        ArtifactValidationError::HuggingFaceSharedBlobMetadataUnavailable { file_name, .. }
+            if file_name == "config.json"
+    ));
 }
 
 #[test]

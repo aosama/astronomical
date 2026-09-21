@@ -42,7 +42,8 @@ fn should_omit_local_model_paths_from_other_artifact_validation_failures() {
 
     let public_failure_reason = model_startup_error.public_model_load_failure_reason();
 
-    assert_eq!(public_failure_reason, "Qwen3.5 artifact validation failed");
+    assert!(public_failure_reason.starts_with("Qwen3.5 artifact validation failed"));
+    assert!(public_failure_reason.contains("model artifact directory"));
     assert!(!public_failure_reason.contains(&local_model_directory.to_string_lossy()[..]));
 }
 

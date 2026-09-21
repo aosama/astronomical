@@ -478,7 +478,7 @@ pub(super) fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
 /// A cause-preserving failure while validating the complete Qwen3.5 artifact.
 #[derive(Debug, Error)]
 pub enum Qwen3_5ArtifactValidationError {
-    #[error("Qwen3.5 file or safetensors validation failed")]
+    #[error("Qwen3.5 file or safetensors validation failed: {0}")]
     Artifact(#[from] ArtifactValidationError),
     #[error("Qwen3.5 config validation failed")]
     Config(#[from] Qwen3_5ConfigError),
@@ -486,4 +486,41 @@ pub enum Qwen3_5ArtifactValidationError {
     OptiQMetadata(#[from] OptiQMetadataError),
     #[error("Qwen3.5 shard-index validation failed")]
     Qwen3_5ShardIndex(#[from] Qwen3_5ArtifactError),
+}
+
+impl Qwen3_5ArtifactValidationError {
+    /// Returns a bounded explanation suitable for a public model-load error.
+    #[must_use]
+    pub fn public_failure_reason(&self) -> String {
+        match self {
+            Self::Artifact(validation_error) => bound_public_qwen3_5_failure_reason(format!(
+                "Qwen3.5 artifact validation failed: {}",
+                validation_error.public_failure_reason()
+            )),
+            Self::Config(config_error) => {
+                format!("Qwen3.5 config validation failed: {config_error}")
+            }
+            Self::OptiQMetadata(metadata_error) => {
+                format!("Qwen3.5 OptiQ metadata validation failed: {metadata_error}")
+            }
+            Self::Qwen3_5ShardIndex(shard_index_error) => {
+                format!("Qwen3.5 shard-index validation failed: {shard_index_error}")
+            }
+        }
+    }
+}
+
+fn bound_public_qwen3_5_failure_reason(unbounded_reason: String) -> String {
+    const MAX_PUBLIC_REASON_CHARACTERS: usize = 512;
+    let mut bounded_reason = unbounded_reason
+        .replace('/', "_")
+        .replace('\\', "_")
+        .chars()
+        .take(MAX_PUBLIC_REASON_CHARACTERS)
+        .collect::<String>();
+    if unbounded_reason.chars().count() > MAX_PUBLIC_REASON_CHARACTERS {
+        bounded_reason.pop();
+        bounded_reason.push('…');
+    }
+    bounded_reason
 }
