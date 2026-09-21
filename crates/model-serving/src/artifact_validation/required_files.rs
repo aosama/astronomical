@@ -4,6 +4,7 @@ use std::io;
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 
+use super::shared_blob_resolution::resolve_verified_shared_hub_blob_path;
 use super::validated_artifact::{ValidatedRequiredFile, validated_file_identity};
 use super::{ArtifactValidationError, RequiredFileProfile, ValidatedWeightsFile};
 
@@ -287,16 +288,32 @@ fn resolve_hugging_face_snapshot_blob_path(
             source,
         }
     })?;
-    if !canonical_blob_path.starts_with(&canonical_blob_directory) {
-        return Err(
-            ArtifactValidationError::HuggingFaceSnapshotSymlinkEscapesBlobDirectory {
-                file_name: required_file_name.to_owned(),
-                resolved_target_path: canonical_blob_path,
-                expected_blob_directory: canonical_blob_directory,
-            },
-        );
+    if canonical_blob_path.starts_with(&canonical_blob_directory) {
+        return Ok(Some(canonical_blob_path));
     }
-    Ok(Some(canonical_blob_path))
+
+    // Newer Hugging Face caches keep large immutable objects once in the hub's
+    // shared blob store and link them from each entry's own blob names, so a
+    // snapshot file can legitimately resolve past this entry's `blobs/`. Accept
+    // that layout only for a blob the snapshot tree record authenticates.
+    if let Some(hub_root_directory) = model_cache_directory.parent()
+        && let Some(verified_shared_blob_path) = resolve_verified_shared_hub_blob_path(
+            hub_root_directory,
+            model_directory,
+            &canonical_blob_path,
+            required_file_name,
+        )?
+    {
+        return Ok(Some(verified_shared_blob_path));
+    }
+
+    Err(
+        ArtifactValidationError::HuggingFaceSnapshotSymlinkEscapesBlobDirectory {
+            file_name: required_file_name.to_owned(),
+            resolved_target_path: canonical_blob_path,
+            expected_blob_directory: canonical_blob_directory,
+        },
+    )
 }
 
 pub(crate) fn hugging_face_snapshot_model_id(model_directory: &Path) -> Option<String> {
