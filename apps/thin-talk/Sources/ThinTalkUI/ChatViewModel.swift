@@ -26,6 +26,11 @@ public final class ChatViewModel {
   public var availableModels: [ThinTalkModel] = []
   public var selectedModelID: String?
   public var draft = ""
+  /// Composer font size in points. Cmd+/Cmd- adjusts this within bounds.
+  /// Stored (not computed) so @Observable propagates updates to the composer's
+  /// font modifier; it is mirrored into ComposerFontSize for persistence.
+  @ObservationIgnored
+  public var fontZoom: CGFloat = ComposerFontSize.load()
   /// How much thinking the next turn may spend.
   ///
   /// Persisted so a deliberate choice survives a relaunch, while a fresh install
@@ -48,6 +53,9 @@ public final class ChatViewModel {
 
   private let client: ThinTalkClient
   private var streamingTask: Task<Void, Never>?
+  // nonisolated(unsafe) to allow cleanup from deinit.
+  @ObservationIgnored
+  private nonisolated(unsafe) var keyMonitor: Any?
 
   public init(
     client: ThinTalkClient,
@@ -55,6 +63,41 @@ public final class ChatViewModel {
   ) {
     self.client = client
     self.thinkingEffort = thinkingEffort
+    setupKeyboardShortcuts()
+  }
+
+  deinit {
+    if let monitor = keyMonitor {
+      NSEvent.removeMonitor(monitor)
+    }
+  }
+
+  private func setupKeyboardShortcuts() {
+    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      guard let self = self else { return event }
+      // Handle Cmd+/Cmd- for font zoom.
+      // Cmd+= produces "=", Cmd+Shift+= produces "+"; both mean zoom in.
+      // Cmd+- produces "-", Cmd+Shift+- produces "_"; both mean zoom out.
+      if event.modifierFlags.contains(.command) {
+        let chars = event.characters ?? ""
+        if chars == "+" || chars == "=" {
+          self.adjustFontSize(by: 1)
+          return nil
+        } else if chars == "-" || chars == "_" {
+          self.adjustFontSize(by: -1)
+          return nil
+        }
+      }
+      return event
+    }
+  }
+
+  private func adjustFontSize(by delta: Int) {
+    let newSize = fontZoom + CGFloat(delta) * ComposerFontSize.step
+    if newSize >= ComposerFontSize.minSize && newSize <= ComposerFontSize.maxSize {
+      fontZoom = newSize
+      ComposerFontSize.save(newSize)
+    }
   }
 
   public static func `default`() -> ChatViewModel {
