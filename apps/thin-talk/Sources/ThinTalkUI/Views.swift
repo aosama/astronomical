@@ -37,9 +37,6 @@ struct ChatPane: View {
         assetRegistry: viewModel.assetRegistry,
         onAction: viewModel.handle
       )
-      Divider()
-        .background(PreviewTheme.border)
-        .padding(.horizontal, 24)
       ComposeBar(viewModel: viewModel)
       if let failure = viewModel.currentFailure {
         ChatFailureBanner(failure: failure, onRetry: viewModel.retry)
@@ -101,40 +98,63 @@ struct CanvasUnavailableView: View {
 
 // MARK: - Compose
 
-/// One continuous rounded bar: the message field on top, the model selector
-/// centered below it, and the action button at the trailing edge, so the
-/// composer reads as a single surface instead of stacked fields.
+/// One continuous rounded bar: the message field on top, the action pill bar
+/// below it. Layout matches Copilot's composer: left-side pill buttons for
+/// attachments, thinking effort, and features; right-side icon buttons for
+/// visual mode and voice input. The send/stop action lives on the far right.
 struct ComposeBar: View {
   @Bindable var viewModel: ChatViewModel
 
   var body: some View {
-    VStack(spacing: 6) {
+    VStack(spacing: 0) {
       TextField("Message Thin Talk", text: $viewModel.draft, axis: .vertical)
         .textFieldStyle(.plain)
+        .font(.system(size: viewModel.fontZoom))
         .lineLimit(1...6)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .disabled(viewModel.state != .ready && viewModel.state != .empty)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        // Composer stays editable in all states except loading, so the user can
+        // type their ask immediately rather than hearing alert beeps while waiting
+        // for the supervisor to connect or recover from a failure.
+        .disabled(viewModel.state == .loading)
         .onKeyPress(.return, phases: .down) { _ in
           sendDraft()
           return .handled
         }
+      .submitLabel(.send)
+
       HStack(spacing: 8) {
-        Spacer(minLength: 8)
-        ModelPicker(
-          models: viewModel.availableModels,
-          selection: $viewModel.selectedModelID
-        )
-        ThinkingEffortPicker(effort: $viewModel.thinkingEffort)
-        Spacer(minLength: 8)
-        ActionButton(viewModel: viewModel)
+        // Left-side pill buttons
+        AttachmentPillButton()
+        SmartThinkingPill(effort: $viewModel.thinkingEffort)
+        FeaturePillButton()
+
+        Spacer(minLength: 16)
+
+        // Right-side icon buttons
+        GlassesIconPillButton()
+        VoiceIconPillButton()
+
+        if viewModel.isStreaming {
+          StopActionIconButton()
+        } else {
+          SendActionIconButton(isEnabled: !viewModel.draft.isEmpty && viewModel.state == .ready)
+            .onTapGesture { viewModel.sendMessage() }
+            .keyboardShortcut(.defaultAction)
+        }
       }
-      .padding(.horizontal, 10)
-      .padding(.bottom, 8)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
     }
     .background(PreviewTheme.panel)
-    .clipShape(RoundedRectangle(cornerRadius: 14))
-    .overlay(RoundedRectangle(cornerRadius: 14).stroke(PreviewTheme.border, lineWidth: 1))
+    .clipShape(RoundedRectangle(cornerRadius: 22))
+    .overlay(
+      RoundedRectangle(cornerRadius: 22)
+        .stroke(
+          PreviewTheme.accent.opacity(0.45),
+          lineWidth: 1.2
+        )
+    )
     .padding(.horizontal, 24)
     .padding(.top, 4)
     .padding(.bottom, 14)
@@ -147,60 +167,129 @@ struct ComposeBar: View {
   }
 }
 
-/// Model selector shown when one or more chat-capable models are available.
-struct ModelPicker: View {
-  let models: [ThinTalkModel]
-  @Binding var selection: String?
+// MARK: - Compose Pill Buttons
 
+/// Leftmost pill: attachment/add button placeholder.
+struct AttachmentPillButton: View {
   var body: some View {
-    if !models.isEmpty {
-      Picker("Model", selection: $selection) {
-        ForEach(models) { model in
-          Text(model.name.isEmpty ? model.id : model.name).tag(model.id)
-        }
-      }
-      .pickerStyle(.menu)
-      .frame(maxWidth: 260)
-      .labelStyle(.titleAndIcon)
-      .help(models.first(where: { $0.id == selection })?.id ?? "")
+    Button {
+      // Placeholder for attachment picker
+    } label: {
+      Image(systemName: "plus")
+        .font(.body)
+        .foregroundColor(.white)
+        .frame(width: 32, height: 32)
+        .background(Circle().fill(PreviewTheme.panelAlt))
     }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Attach file")
   }
 }
 
-/// Thinking-budget selector. Each choice states its own token cost, so the reader
-/// sees what depth costs before spending it rather than after.
-struct ThinkingEffortPicker: View {
+/// "Smart" pill: Thinking-effort selector styled as a rounded pill with dropdown arrow.
+struct SmartThinkingPill: View {
   @Binding var effort: ThinkingEffort
 
   var body: some View {
-    Picker("Thinking", selection: $effort) {
+    Menu {
       ForEach(ThinkingEffort.allCases) { level in
-        Text(level.budgetSummary).tag(level)
+        Button {
+          effort = level
+        } label: {
+          Text(level.budgetSummary)
+        }
       }
+    } label: {
+      HStack(spacing: 4) {
+        Text("Smart")
+          .font(.body)
+          .foregroundColor(.white)
+        Image(systemName: "chevron.down")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 4)
+      .background(Capsule().fill(PreviewTheme.panelAlt))
     }
-    .pickerStyle(.menu)
-    .frame(maxWidth: 200)
-    .labelStyle(.titleAndIcon)
+    .buttonStyle(.plain)
+    .accessibilityLabel("Thinking level")
     .help("How many tokens the model may spend thinking before it answers.")
   }
 }
 
-/// Send / Stop action button, driven purely by the streaming state.
-struct ActionButton: View {
-  @Bindable var viewModel: ChatViewModel
+/// Feature pill: placeholder for additional features dropdown.
+struct FeaturePillButton: View {
+  var body: some View {
+    Menu {
+      // Placeholder menu items
+      Text("Coming soon")
+    } label: {
+      Image(systemName: "sparkles")
+        .font(.body)
+        .foregroundColor(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(PreviewTheme.panelAlt))
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Features")
+  }
+}
+
+/// Right-side icon pill: glasses/visual mode placeholder.
+struct GlassesIconPillButton: View {
+  var body: some View {
+    Button {
+      // Placeholder for visual mode toggle
+    } label: {
+      Image(systemName: "goggles")
+        .font(.body)
+        .foregroundColor(.secondary)
+        .frame(width: 32, height: 32)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Toggle visual mode")
+  }
+}
+
+/// Right-side icon pill: voice input placeholder.
+struct VoiceIconPillButton: View {
+  var body: some View {
+    Button {
+      // Placeholder for voice input
+    } label: {
+      Image(systemName: "waveform")
+        .font(.body)
+        .foregroundColor(.secondary)
+        .frame(width: 32, height: 32)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Voice input")
+  }
+}
+
+/// Send icon button (arrow up) for the rightmost action.
+struct SendActionIconButton: View {
+  let isEnabled: Bool
 
   var body: some View {
-    if viewModel.isStreaming {
-      Button("Stop") {
-        viewModel.stopStreaming()
-      }
-      .buttonStyle(.bordered)
-    } else {
-      Button("Send") { viewModel.sendMessage() }
-        .buttonStyle(.borderedProminent)
-        .disabled(viewModel.draft.isEmpty || viewModel.state != .ready)
-        .keyboardShortcut(.defaultAction)
-    }
+    Image(systemName: "arrowshape.turn.up.right")
+      .font(.body)
+      .foregroundColor(isEnabled ? .white : PreviewTheme.textSecondary.opacity(0.5))
+      .frame(width: 32, height: 32)
+      .background(isEnabled ? Circle().fill(PreviewTheme.accent) : Circle().fill(PreviewTheme.panelAlt))
+  }
+}
+
+/// Stop icon button (square) for the rightmost action during streaming.
+struct StopActionIconButton: View {
+  var body: some View {
+    Image(systemName: "stop.fill")
+      .font(.body)
+      .foregroundColor(.white)
+      .frame(width: 32, height: 32)
+      .background(Circle().fill(Color.red.opacity(0.8)))
   }
 }
 
