@@ -34,6 +34,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
   private let isDarkAppearance: Bool
   private let webDirectory: URL
   private let assetRegistry: TranscriptAssetRegistry
+  private let pageZoom: CGFloat
   private let onAction: (CanvasAction) -> Void
 
   public init(
@@ -41,12 +42,14 @@ public struct ConversationCanvasView: NSViewRepresentable {
     isDarkAppearance: Bool,
     webDirectory: URL,
     assetRegistry: TranscriptAssetRegistry,
+    pageZoom: CGFloat = 1.0,
     onAction: @escaping (CanvasAction) -> Void
   ) {
     self.snapshot = snapshot
     self.isDarkAppearance = isDarkAppearance
     self.webDirectory = webDirectory
     self.assetRegistry = assetRegistry
+    self.pageZoom = pageZoom
     self.onAction = onAction
   }
 
@@ -70,6 +73,9 @@ public struct ConversationCanvasView: NSViewRepresentable {
     let webView = WKWebView(frame: .zero, configuration: configuration)
     webView.navigationDelegate = context.coordinator
     webView.allowsMagnification = false
+    // The GUI zoom control must resize the transcript too, so the web content
+    // follows the same scale factor the SwiftUI surface uses.
+    webView.pageZoom = pageZoom
     webView.setValue(false, forKey: "drawsBackground")
     // The window colour sits behind the page so the first paint does not flash
     // white between the SwiftUI background and the canvas background.
@@ -91,6 +97,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
 
   public func updateNSView(_ webView: WKWebView, context: Context) {
     context.coordinator.onAction = onAction
+    webView.pageZoom = pageZoom
     context.coordinator.sendAppearance(isDarkAppearance)
     context.coordinator.send(snapshot: snapshot)
   }

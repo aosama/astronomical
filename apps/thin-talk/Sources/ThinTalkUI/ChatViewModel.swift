@@ -26,10 +26,12 @@ public final class ChatViewModel {
   public var availableModels: [ThinTalkModel] = []
   public var selectedModelID: String?
   public var draft = ""
-  /// Composer font size in points. Cmd+/Cmd- adjusts this within bounds.
-  /// Stored (not computed) so @Observable propagates updates to the composer's
-  /// font modifier; it is mirrored into ComposerFontSize for persistence.
-  @ObservationIgnored
+  /// GUI-wide text size in points. Cmd+/Cmd- adjusts this within bounds.
+  /// Tracked by @Observable so a zoom re-renders the whole window: the canvas
+  /// mirrors this through its page zoom and every native surface sizes its
+  /// text from it. It is mirrored into ComposerFontSize so a deliberate
+  /// choice persists across launches. (Marking this @ObservationIgnored froze
+  /// live zooming: the value changed and persisted, but nothing re-rendered.)
   public var fontZoom: CGFloat = ComposerFontSize.load()
   /// How much thinking the next turn may spend.
   ///
