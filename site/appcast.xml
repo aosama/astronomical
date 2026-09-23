@@ -4,34 +4,30 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.49</title>
-            <pubDate>Sun, 20 Sep 2026 22:22:34 -0400</pubDate>
-            <sparkle:version>645</sparkle:version>
-            <sparkle:shortVersionString>0.2.49</sparkle:shortVersionString>
+            <title>0.2.50</title>
+            <pubDate>Wed, 23 Sep 2026 00:57:02 -0400</pubDate>
+            <sparkle:version>659</sparkle:version>
+            <sparkle:shortVersionString>0.2.50</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.49 — Stable Release Notes
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.50
 
-## What's new
-
-- **Hugging Face shared-blob resolution**: Astronomical now accepts both Xet-backed and classic LFS shared-blob layouts in the Hugging Face cache, fixing artifact-validation failures for models hosted via Xet.
-- **Supervisor Library UI**: The Library search now preserves focus, caret position, and scroll offset while filtering results, providing a smoother search experience.
-- **Repository documentation**: Updated repo-discovery-guide and AGENTS.md with testing and development workflow rules.
+- **Library**: Ornith 1.5 35B A3B MLX 6-bit is now available as a downloadable model.
+- **Thin Talk**: live keyboard font zoom for the entire window, and a restyled composer with font zoom support.
+- **REST API**: the full thinking-controls spelling family (`thinking`, `reasoning_effort`, `text_verbosity`, `include_thoughts`, `text`) is resolved on both `/v1/chat/completions` and `/v1/responses`, including streaming.
+- **Robustness**: a declared tool property whose `anyOf` cannot be resolved no longer rejects the entire chat thread, and chat history replayed from other providers (for example assistant `refusal` fields) is accepted instead of returning 400. Strictness is preserved for unknown roles, content-part types, thinking-controls objects, caller-declared tools, and `response_format`.
+- **Dependencies**: crc32fast 1.5.1 to 1.5.2.
 
 ## Compatibility
 
-- macOS 14.0 and above, arm64 only.
-- No configuration or data migration required.
-- Sparkle update available from v0.2.48.
+In-place Sparkle update. Your configuration, user state, and local model caches are preserved. REST API changes are strictly additive: existing accepted request shapes continue to work.
 
-## Distribution statement
-
-This release is signed with Developer ID Application, Hardened Runtime, and a timestamp. The DMG is notarized by Apple and stapled. The Sparkle feed is signed with Ed25519. All artifacts are digest-bound in `release-manifest.json`.
+Astronomical 0.2.50 is signed with the Developer ID Application identity (Hardened Runtime, timestamped) and notarized by Apple for macOS 14.0 and above on Apple Silicon (arm64).
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.49/Astronomical-0.2.49-macOS-arm64.dmg" length="18006708" type="application/octet-stream" sparkle:edSignature="auvfJMbJ666F2LwuUO9en0qr6YzI9cSkDJGh5UcrEm7FRKePvNcUf7npp3/U13f8caGjU6ZeRMTpbOXj/T6UBQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.50/Astronomical-0.2.50-macOS-arm64.dmg" length="18029354" type="application/octet-stream" sparkle:edSignature="sE/gU+Yiodzj5R+kbeu5WXBa6NBmKQZBI5fQYN+Xa6DvbQ7fP6B/beAsdGHsYaAYWrd2Z9lUsEVxG5BzzBF9Aw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Q+SIB2208k3t+QiadZIOprYstF30DgxbPdgAPgjhufNjRqahud53Uo3fEBilTvPBeRuTHX7gMlX1lLDufLGNBA==
-length: 2191
+edSignature: fnE02NgQUvV2+/70RfD7zEqm+YQ+8pFfRSqkXgHCsk8TOfQLUQ9sViUjcyHRfBAcoxXSiDEXOM5Peqgh38n1BQ==
+length: 2482
 -->
