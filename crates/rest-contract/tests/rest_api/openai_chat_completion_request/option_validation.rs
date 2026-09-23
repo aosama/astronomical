@@ -130,26 +130,6 @@ fn should_reject_a_known_but_unsupported_opencode_option_explicitly() {
 }
 
 #[test]
-fn should_reject_an_unknown_openai_field_explicitly() {
-    let request_json = r#"
-    {
-        "model": "astronomical/fake-mixture-of-experts",
-        "messages": [{"role": "user", "content": "Inspect the repository."}],
-        "logit_bias": {"13": -100}
-    }
-    "#;
-    let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
-        .expect("unknown fields should decode so contract validation can return a typed error");
-
-    assert_eq!(
-        chat_completion_request.validate(),
-        Err(OpenAiChatCompletionValidationError::UnknownField {
-            field_name: "logit_bias".to_owned(),
-        })
-    );
-}
-
-#[test]
 fn should_accept_history_tool_calls_with_model_invented_names() {
     // The Qwen output parser deliberately fail-opens closed tool-call envelopes
     // with unknown or malformed names to the harness. A follow-up request

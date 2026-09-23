@@ -90,12 +90,10 @@ pub struct OpenAiChatCompletionRequest {
 
 impl OpenAiChatCompletionRequest {
     /// Validates request bounds before the supervisor sends structured data to the worker.
+    /// Unknown top-level fields are deliberately absorbed and ignored: callers replay
+    /// provider-specific options that the local endpoint has no use for, and one
+    /// unsupported option must not reject the whole request (#772).
     pub fn validate(&self) -> Result<(), OpenAiChatCompletionValidationError> {
-        if let Some((field_name, _)) = self.unknown_fields.first_key_value() {
-            return Err(OpenAiChatCompletionValidationError::UnknownField {
-                field_name: field_name.clone(),
-            });
-        }
         validate_non_empty_string("model", &self.model)?;
         if self.messages.is_empty() {
             return Err(OpenAiChatCompletionValidationError::EmptyMessages);
@@ -444,9 +442,6 @@ pub enum OpenAiChatCompletionValidationError {
     /// A recognized OpenAI-compatible request option is not implemented yet.
     #[error("request option '{option_name}' is unsupported")]
     UnsupportedOption { option_name: &'static str },
-    /// An unrecognized request field was supplied.
-    #[error("request field '{field_name}' is unknown")]
-    UnknownField { field_name: String },
     /// `response_format` failed public structured-output validation.
     #[error(transparent)]
     StructuredOutput(#[from] OpenAiStructuredOutputValidationError),

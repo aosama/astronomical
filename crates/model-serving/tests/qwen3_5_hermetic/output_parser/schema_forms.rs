@@ -269,6 +269,59 @@ fn should_name_the_offending_tool_and_property_when_a_declared_schema_is_rejecte
 }
 
 #[test]
+fn should_tolerate_unresolvable_any_of_in_a_declared_tool_property() {
+    // Real harness inventories (e.g. Copilot Desktop's save_workflow.agent_scope) declare
+    // properties whose anyOf no resolver can reduce to a single coercion type: branches
+    // without a type member, single-branch unions, type-list shorthands, and non-array
+    // anyOf values. JSON Schema treats type as optional, so these fall back to dynamic
+    // JSON argument parsing instead of rejecting the complete chat thread (#771).
+    let unresolvable_shapes = [
+        (
+            r#"{"anyOf":[{"enum":["agent","team","workspace"]}]}"#,
+            "workspace",
+            r#"{"agent_scope":"workspace"}"#,
+        ),
+        (
+            r#"{"anyOf":["string","null"]}"#,
+            "agent",
+            r#"{"agent_scope":"agent"}"#,
+        ),
+        (
+            r#"{"anyOf":{"type":"string"}}"#,
+            "team",
+            r#"{"agent_scope":"team"}"#,
+        ),
+    ];
+    for (property_schema, parameter_value, expected_arguments_json) in unresolvable_shapes {
+        let declared_tools = [ChatToolDefinition {
+            name: "save_workflow".to_owned(),
+            description: None,
+            parameters_json: format!(
+                r#"{{"type":"object","properties":{{"agent_scope":{property_schema}}}}}"#
+            ),
+        }];
+        let mut output_parser = Qwen3_5OutputParser::new(&declared_tools)
+            .expect("an unresolvable anyOf declaration must not reject the declared tool");
+
+        let tool_call_xml = format!(
+            "{TOOL_CALL_START}<function=save_workflow><parameter=agent_scope>{parameter_value}</parameter></function>{TOOL_CALL_END}"
+        );
+        let output_events = output_parser
+            .push_fragment(&tool_call_xml)
+            .expect("the tool call should parse even though the property type is unresolvable");
+
+        assert_eq!(
+            output_events,
+            vec![Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {
+                index: 0,
+                function_name: "save_workflow".to_owned(),
+                arguments_json: expected_arguments_json.to_owned(),
+            })]
+        );
+    }
+}
+
+#[test]
 fn should_accept_a_declared_tool_schema_deeper_than_the_previous_parser_limit() {
     let mut nested_schema = r#"{"type":"string"}"#.to_owned();
     for _nesting_level in 0..10 {
