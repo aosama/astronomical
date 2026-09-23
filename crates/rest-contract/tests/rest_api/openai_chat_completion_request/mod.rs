@@ -4,6 +4,7 @@ use astronomical_rest_contract::{
 };
 use serde_json::json;
 
+mod history_compatibility;
 mod image_content;
 mod option_validation;
 mod standard_request;

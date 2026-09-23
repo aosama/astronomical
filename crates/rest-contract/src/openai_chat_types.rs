@@ -7,8 +7,13 @@ use crate::{
 };
 
 /// A chat history message supported by the initial local text-only endpoint.
+///
+/// Unknown message fields are ignored: mainstream harnesses replay history produced by
+/// other providers (for example OpenAI's `refusal` marker), and one third-party field
+/// must not reject the whole conversation (#772). The `role` tag stays the strict
+/// structural discriminator.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(tag = "role", rename_all = "lowercase", deny_unknown_fields)]
+#[serde(tag = "role", rename_all = "lowercase")]
 pub enum OpenAiChatMessage {
     /// An initial system instruction.
     System { content: OpenAiMessageContent },
@@ -22,6 +27,11 @@ pub enum OpenAiChatMessage {
         reasoning_content: Option<String>,
         #[serde(default)]
         tool_calls: Vec<OpenAiAssistantToolCall>,
+        /// OpenAI safety marker: the model's refusal text when an upstream provider
+        /// content-filtered the turn. Folded into the message content so replayed
+        /// history is preserved.
+        #[serde(default)]
+        refusal: Option<String>,
     },
     /// A result returned by one prior assistant tool call.
     Tool {
@@ -38,8 +48,13 @@ impl OpenAiChatMessage {
                 content,
                 reasoning_content,
                 tool_calls,
+                refusal,
             } => {
-                if content.is_none() && reasoning_content.is_none() && tool_calls.is_empty() {
+                if content.is_none()
+                    && reasoning_content.is_none()
+                    && tool_calls.is_empty()
+                    && refusal.as_deref().is_none_or(str::is_empty)
+                {
                     return Err(OpenAiChatCompletionValidationError::EmptyAssistantMessage);
                 }
                 if let Some(content) = content {
@@ -79,8 +94,14 @@ impl OpenAiChatMessage {
                 content,
                 reasoning_content,
                 tool_calls,
+                refusal,
             } => Ok(OpenAiChatMessageParts::Assistant {
-                content: content.map(OpenAiMessageContent::into_text).transpose()?,
+                // A replayed upstream refusal with no visible content becomes the message
+                // content so the harness keeps the full conversation fidelity (#772).
+                content: content
+                    .map(OpenAiMessageContent::into_text)
+                    .transpose()?
+                    .or_else(|| refusal.filter(|refusal_text| !refusal_text.is_empty())),
                 reasoning_content,
                 tool_calls: tool_calls
                     .into_iter()
@@ -147,7 +168,6 @@ impl OpenAiMessageContent {
             }
         }
     }
-
     fn into_text(self) -> Result<String, OpenAiChatCompletionValidationError> {
         self.validate()?;
         match self {
@@ -155,8 +175,13 @@ impl OpenAiMessageContent {
             Self::Parts(content_parts) => Ok(content_parts.into_iter().fold(
                 String::new(),
                 |mut combined_content, content_part| {
-                    if let OpenAiContentPart::Text { text } = content_part {
-                        combined_content.push_str(&text);
+                    match content_part {
+                        OpenAiContentPart::Text { text } => combined_content.push_str(&text),
+                        // A replayed refusal fragment is assistant text for history fidelity.
+                        OpenAiContentPart::Refusal { refusal } => {
+                            combined_content.push_str(&refusal)
+                        }
+                        _ => {}
                     }
                     combined_content
                 },
@@ -177,6 +202,7 @@ impl OpenAiMessageContent {
                 for content_part in content_parts {
                     match content_part {
                         OpenAiContentPart::Text { text } => combined_text.push_str(&text),
+                        OpenAiContentPart::Refusal { refusal } => combined_text.push_str(&refusal),
                         OpenAiContentPart::ImageUrl { image_url } => {
                             decoded_images.push(decode_image_url(&image_url.url)?);
                         }
@@ -192,14 +218,18 @@ impl OpenAiMessageContent {
     }
 }
 
-/// A typed content part. Text and data-URI images are supported by the local endpoint.
+/// A typed content part. Text, refusal, and data-URI images are supported by the
+/// local endpoint; unknown part types stay a hard error because the part type is a
+/// structural discriminator, not a provider extension field.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OpenAiContentPart {
     /// A text fragment.
     Text { text: String },
     /// An image input encoded as a `data:image/...;base64,...` URI.
     ImageUrl { image_url: OpenAiImageUrl },
+    /// An OpenAI safety-refusal fragment; folded into the message text on replay.
+    Refusal { refusal: String },
     /// An audio input, intentionally unsupported by the initial endpoint.
     InputAudio { input_audio: Value },
     /// A video input, intentionally unsupported by the initial endpoint.
@@ -208,7 +238,6 @@ pub enum OpenAiContentPart {
 
 /// The `image_url` object inside an `image_url` content part.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct OpenAiImageUrl {
     /// The image URL. Only `data:image/...;base64,...` URIs are accepted.
     pub(crate) url: String,
@@ -218,6 +247,7 @@ impl OpenAiContentPart {
     fn validate(&self) -> Result<(), OpenAiChatCompletionValidationError> {
         match self {
             Self::Text { text: _ } => Ok(()),
+            Self::Refusal { refusal: _ } => Ok(()),
             Self::ImageUrl { image_url } => validate_image_url_scheme(&image_url.url),
             Self::InputAudio { .. } => Err(
                 OpenAiChatCompletionValidationError::UnsupportedContentPart {
@@ -335,7 +365,6 @@ pub enum OpenAiToolChoice {
 
 /// The named function inside a forced tool choice.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct OpenAiFunctionChoice {
     name: String,
 }
@@ -374,7 +403,6 @@ impl OpenAiToolChoice {
 
 /// One assistant tool call retained in chat history.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct OpenAiAssistantToolCall {
     id: String,
     #[serde(rename = "type")]
@@ -420,7 +448,6 @@ pub struct OpenAiAssistantToolCallParts {
 
 /// One JSON-encoded function invocation retained in assistant history.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct OpenAiAssistantToolFunction {
     name: String,
     arguments: String,
@@ -428,7 +455,6 @@ pub struct OpenAiAssistantToolFunction {
 
 /// Stream-specific OpenAI options accepted by this endpoint.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct OpenAiStreamOptions {
     #[serde(default)]
     pub(crate) include_usage: bool,

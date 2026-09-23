@@ -52,14 +52,6 @@ pub enum Qwen3_5OutputParserError {
         /// Property name.
         parameter_name: String,
     },
-    /// A declared property omitted its type.
-    #[error("property '{parameter_name}' for '{function_name}' omits its JSON Schema type")]
-    MissingToolParameterType {
-        /// Function name.
-        function_name: String,
-        /// Property name.
-        parameter_name: String,
-    },
     /// A property type union was not one supported type plus `null`.
     #[error(
         "property '{parameter_name}' for '{function_name}' has an unsupported type declaration"
@@ -181,7 +173,6 @@ impl Qwen3_5OutputParserError {
             Self::InvalidDeclaredToolSchema { .. } => "invalid_declared_tool_schema",
             Self::DeclaredToolSchemaMustBeObject { .. } => "declared_tool_schema_must_be_object",
             Self::InvalidToolPropertySchema { .. } => "invalid_tool_property_schema",
-            Self::MissingToolParameterType { .. } => "missing_tool_parameter_type",
             Self::InvalidToolParameterTypeDeclaration { .. } => {
                 "invalid_tool_parameter_type_declaration"
             }
