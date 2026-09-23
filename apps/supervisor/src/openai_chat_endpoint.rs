@@ -140,6 +140,7 @@ pub(crate) async fn create_chat_completion(
                 .into_response();
         }
     };
+    let reasoning_excluded = request_parts.reasoning_excluded;
     let structured_output = request_parts.structured_output.clone();
     let settings_presence = crate::request_generation_defaults::RequestGenerationSettingsPresence {
         maximum_output_tokens: request_parts.requested_maximum_output_tokens.is_some(),
@@ -293,6 +294,7 @@ pub(crate) async fn create_chat_completion(
                 completion_id,
                 created_at_unix_seconds,
                 model_id,
+                reasoning_excluded,
                 structured_output.as_ref(),
             )
             .await,
@@ -308,6 +310,7 @@ pub(crate) async fn create_chat_completion(
                 created_at_unix_seconds,
                 model_id,
                 includes_usage,
+                reasoning_excluded,
             ),
         ),
         structured_output.as_ref(),

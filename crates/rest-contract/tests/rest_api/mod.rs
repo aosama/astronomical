@@ -6,3 +6,4 @@ mod openai_models_and_errors;
 mod openai_response_format;
 mod openai_responses_request;
 mod openai_responses_response;
+mod openai_responses_thinking_controls;

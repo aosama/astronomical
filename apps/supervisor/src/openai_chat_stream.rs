@@ -16,6 +16,7 @@ pub(crate) struct OpenAiChatStreamEncoder {
     includes_usage: bool,
     model_id: String,
     request_id: u64,
+    reasoning_excluded: bool,
 }
 
 impl OpenAiChatStreamEncoder {
@@ -25,6 +26,7 @@ impl OpenAiChatStreamEncoder {
         created: u64,
         model_id: String,
         includes_usage: bool,
+        reasoning_excluded: bool,
     ) -> Self {
         Self {
             completion_id,
@@ -32,6 +34,7 @@ impl OpenAiChatStreamEncoder {
             includes_usage,
             model_id,
             request_id,
+            reasoning_excluded,
         }
     }
 
@@ -52,6 +55,10 @@ impl OpenAiChatStreamEncoder {
     ) -> Result<VecDeque<Event>, axum::Error> {
         match stream_event {
             ChatGenerationStreamEvent::ReasoningFragment(reasoning) => {
+                if self.reasoning_excluded {
+                    // The model still thought; only the client-visible deltas are withheld.
+                    return Ok(VecDeque::new());
+                }
                 self.single_chunk(OpenAiChatCompletionChunk::reasoning_delta(
                     self.completion_id.clone(),
                     self.created,

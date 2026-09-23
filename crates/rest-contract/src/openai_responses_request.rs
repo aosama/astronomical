@@ -5,12 +5,14 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    DEFAULT_OPENAI_OUTPUT_TOKENS, EnforcedStructuredGeneration, MAX_OPENAI_OUTPUT_TOKENS,
-    OpenAiResponseFormat, OpenAiResponseFunctionTool, OpenAiResponseInput,
-    OpenAiResponseInputParts, OpenAiResponseRequestConfiguration, OpenAiResponseToolChoice,
-    OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition, OpenAiResponseToolDefinitionParts,
-    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
-    OpenAiStructuredOutputsValidationError, enforced_generation_from_extra_body,
+    ChatTemplateKwargsRequestObject, DEFAULT_OPENAI_OUTPUT_TOKENS, EnforcedStructuredGeneration,
+    MAX_OPENAI_OUTPUT_TOKENS, OpenAiResponseFormat, OpenAiResponseFunctionTool,
+    OpenAiResponseInput, OpenAiResponseInputParts, OpenAiResponseRequestConfiguration,
+    OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition,
+    OpenAiResponseToolDefinitionParts, OpenAiStructuredOutput,
+    OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
+    OpenAiStructuredOutputsValidationError, ReasoningRequestObject, ThinkingControls,
+    ThinkingControlsError, ThinkingControlsInputs, enforced_generation_from_extra_body,
     merge_structured_output_requests, structured_output_from_responses_text_format,
 };
 
@@ -58,7 +60,17 @@ pub struct OpenAiResponsesRequest {
     #[serde(default)]
     prompt_cache_retention: Option<String>,
     #[serde(default)]
-    reasoning: Option<Value>,
+    reasoning: Option<ReasoningRequestObject>,
+    /// OpenAI `reasoning_effort` level name; resolved through the shared
+    /// thinking-control resolution.
+    #[serde(default)]
+    reasoning_effort: Option<String>,
+    /// Qwen-style flat switch for the thinking channel.
+    #[serde(default)]
+    enable_thinking: Option<bool>,
+    /// vLLM-style template-kwarg block carrying the thinking toggle.
+    #[serde(default)]
+    chat_template_kwargs: Option<ChatTemplateKwargsRequestObject>,
     #[serde(default)]
     stream_options: Option<Value>,
     #[serde(default)]
@@ -97,31 +109,24 @@ pub struct OpenAiResponsesRequest {
 }
 
 impl OpenAiResponsesRequest {
-    /// Resolves the thinking budget across the canonical spelling and the
-    /// coding-agent aliases, mirroring the output-token budget rule: several
-    /// spellings are fine while they agree, and disagreement is a caller bug
-    /// that must fail loudly instead of silently picking one.
-    fn thinking_budget_resolution(&self) -> Result<Option<u32>, OpenAiResponsesValidationError> {
-        let mut resolved_budget: Option<u32> = None;
-        for budget_spelling in [
-            self.thinking_budget,
-            self.thinking_token_budget,
-            self.thinking_budget_tokens,
-        ] {
-            match (resolved_budget, budget_spelling) {
-                (None, budget) => resolved_budget = budget,
-                (Some(agreed_budget), Some(budget)) if agreed_budget == budget => {}
-                (Some(_), Some(_)) => {
-                    return Err(OpenAiResponsesValidationError::ConflictingThinkingBudgets {
-                        thinking_budget: self.thinking_budget,
-                        thinking_token_budget: self.thinking_token_budget,
-                        thinking_budget_tokens: self.thinking_budget_tokens,
-                    });
-                }
-                (Some(_), None) => {}
-            }
+    /// Resolves every submitted thinking-control spelling into one hard budget
+    /// plus the stream exclusion preference, mirroring the output-token budget
+    /// rule: several spellings are fine while they agree, and disagreement is
+    /// a caller bug that must fail loudly instead of silently picking one.
+    fn resolve_thinking_controls(
+        &self,
+    ) -> Result<ThinkingControls, OpenAiResponsesValidationError> {
+        ThinkingControlsInputs {
+            thinking_budget: self.thinking_budget,
+            thinking_token_budget: self.thinking_token_budget,
+            thinking_budget_tokens: self.thinking_budget_tokens,
+            reasoning: self.reasoning.as_ref(),
+            reasoning_effort: self.reasoning_effort.as_deref(),
+            enable_thinking: self.enable_thinking,
+            chat_template_kwargs: self.chat_template_kwargs.as_ref(),
         }
-        Ok(resolved_budget)
+        .resolve()
+        .map_err(OpenAiResponsesValidationError::ThinkingControls)
     }
 
     /// Validates and consumes this public request into protocol-neutral parts.
@@ -146,7 +151,7 @@ impl OpenAiResponsesRequest {
         }
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
-        let thinking_budget = self.thinking_budget_resolution()?;
+        let thinking_controls = self.resolve_thinking_controls()?;
         let structured_output = merge_structured_output_requests(
             self.response_format
                 .clone()
@@ -182,7 +187,8 @@ impl OpenAiResponsesRequest {
             temperature: self.temperature,
             top_p: self.top_p,
             stream: self.stream,
-            thinking_budget,
+            thinking_budget: thinking_controls.budget,
+            reasoning_excluded: thinking_controls.reasoning_excluded,
             structured_output,
             enforced_structured_generation,
         })
@@ -204,6 +210,8 @@ pub struct OpenAiResponsesRequestParts {
     pub top_p: Option<f32>,
     pub stream: bool,
     pub thinking_budget: Option<u32>,
+    /// Whether reasoning deltas must be withheld from the response stream.
+    pub reasoning_excluded: bool,
     pub structured_output: Option<OpenAiStructuredOutput>,
     pub enforced_structured_generation: Option<EnforcedStructuredGeneration>,
 }
@@ -245,15 +253,9 @@ pub enum OpenAiResponsesValidationError {
     EmptyContentParts,
     #[error("image input is supported only in user messages")]
     ImageInputOutsideUserMessage,
-    /// Two or more thinking-budget spellings were supplied and disagreed.
-    #[error(
-        "thinking_budget ({thinking_budget:?}) conflicts with thinking_token_budget ({thinking_token_budget:?}) and thinking_budget_tokens ({thinking_budget_tokens:?})"
-    )]
-    ConflictingThinkingBudgets {
-        thinking_budget: Option<u32>,
-        thinking_token_budget: Option<u32>,
-        thinking_budget_tokens: Option<u32>,
-    },
+    /// A reasoning-control spelling was contradictory or unrecognized.
+    #[error(transparent)]
+    ThinkingControls(#[from] ThinkingControlsError),
     #[error("invalid image input: {0}")]
     ImageInput(#[source] crate::OpenAiChatCompletionValidationError),
     #[error("encrypted foreign reasoning cannot be replayed locally")]

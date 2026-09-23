@@ -239,7 +239,7 @@ fn should_reject_responses_guided_grammar_until_enforced() {
 }
 
 #[test]
-fn should_accept_copilot_reasoning_effort_as_a_harmless_noop() {
+fn should_resolve_copilot_reasoning_effort_into_the_thinking_budget() {
     let request = serde_json::from_str::<OpenAiResponsesRequest>(
         r#"{
             "model":"ornith",
@@ -251,7 +251,8 @@ fn should_accept_copilot_reasoning_effort_as_a_harmless_noop() {
 
     let request_parts = request
         .into_parts()
-        .expect("the fixed local reasoning behavior should ignore Copilot's effort hint");
+        .expect("Copilot's effort hint now enforces the matching budget");
 
     assert_eq!(request_parts.model, "ornith");
+    assert_eq!(request_parts.thinking_budget, Some(8192));
 }

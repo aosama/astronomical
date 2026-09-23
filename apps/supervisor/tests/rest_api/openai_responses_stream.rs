@@ -9,6 +9,7 @@ fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() 
         "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
+        false,
     );
     let mut encoded_events = encoder.initial_events();
     encoded_events.extend(
@@ -90,6 +91,7 @@ fn should_stream_raw_reasoning_as_summary_text_without_encrypted_content() {
         "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
+        false,
     );
     let mut encoded_events = encoder.initial_events();
     encoded_events.extend(
@@ -175,6 +177,7 @@ fn should_close_open_text_before_emitting_an_incomplete_terminal_event() {
         "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
+        false,
     );
     let mut encoded_events = encoder.initial_events();
     encoded_events.extend(
@@ -222,6 +225,7 @@ fn should_emit_a_terminal_failed_response_for_a_worker_reported_context_failure(
         "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
+        false,
     );
     let mut encoded_events = encoder.initial_events();
     encoded_events.extend(
@@ -258,6 +262,7 @@ fn should_mark_partially_emitted_output_incomplete_when_the_worker_fails() {
         "astronomical/fake-mixture-of-experts".to_owned(),
         None,
         Default::default(),
+        false,
     );
     let mut encoded_events = encoder.initial_events();
     encoded_events.extend(
@@ -292,6 +297,84 @@ fn should_mark_partially_emitted_output_incomplete_when_the_worker_fails() {
         terminal_event["response"]["error"]["code"],
         "response_generation_failed"
     );
+}
+
+#[test]
+fn should_withhold_reasoning_items_but_keep_reasoning_usage_when_excluded() {
+    let mut encoder = OpenAiResponsesStreamEncoder::new(
+        "resp_instance-16".to_owned(),
+        1_753_000_000,
+        "astronomical/fake-mixture-of-experts".to_owned(),
+        None,
+        Default::default(),
+        true,
+    );
+    let mut encoded_events = encoder.initial_events();
+    encoded_events.extend(
+        encoder
+            .encode(ChatGenerationStreamEvent::ReasoningFragment(
+                "internal thought".to_owned(),
+            ))
+            .expect("an excluded reasoning fragment should encode as nothing"),
+    );
+    encoded_events.extend(
+        encoder
+            .encode(ChatGenerationStreamEvent::TextFragment(
+                "Visible answer".to_owned(),
+            ))
+            .expect("the visible text should encode"),
+    );
+    encoded_events.extend(
+        encoder
+            .encode(ChatGenerationStreamEvent::Completed {
+                prompt_token_count: 10,
+                generated_token_count: 7,
+                reasoning_token_count: 5,
+                cached_token_count: 0,
+                reason: ChatGenerationCompletionReason::EndOfSequence,
+            })
+            .expect("completion should encode"),
+    );
+
+    let serialized_events = encoded_events
+        .iter()
+        .map(|encoded_event| serde_json::to_value(encoded_event).expect("event should serialize"))
+        .collect::<Vec<_>>();
+    let all_events =
+        serde_json::to_string(&serialized_events).expect("the event documents should serialize");
+    assert!(
+        !all_events.contains("reasoning_summary_text"),
+        "excluded reasoning must not emit reasoning events: {all_events}"
+    );
+    assert!(
+        !all_events.contains("internal thought"),
+        "excluded reasoning text must not reach the stream: {all_events}"
+    );
+    let terminal_event = serialized_events
+        .last()
+        .expect("the stream should end with the completed event");
+    assert_eq!(terminal_event["type"], "response.completed");
+    assert_eq!(
+        terminal_event["response"]["usage"]["output_tokens_details"]["reasoning_tokens"], 5,
+        "usage must still report the reasoning token count"
+    );
+    let output_item_types: Vec<String> = terminal_event["response"]["output"]
+        .as_array()
+        .expect("the response should carry output items")
+        .iter()
+        .map(|output_item| {
+            output_item["type"]
+                .as_str()
+                .expect("output item type")
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(
+        output_item_types,
+        vec!["message"],
+        "only the visible message should survive exclusion"
+    );
+    assert_no_response_id_fields(&encoded_events);
 }
 
 fn assert_no_response_id_fields(

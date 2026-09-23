@@ -23,6 +23,7 @@ pub struct OpenAiResponsesStreamEncoder {
     next_output_index: usize,
     reasoning_output_index: Option<usize>,
     text_output_index: Option<usize>,
+    reasoning_excluded: bool,
     collector: Option<OpenAiResponsesCollector>,
 }
 
@@ -34,6 +35,7 @@ impl OpenAiResponsesStreamEncoder {
         model_id: String,
         instructions: Option<String>,
         request_configuration: OpenAiResponseRequestConfiguration,
+        reasoning_excluded: bool,
     ) -> Self {
         let collector = OpenAiResponsesCollector::new(
             response_id.clone(),
@@ -52,6 +54,7 @@ impl OpenAiResponsesStreamEncoder {
             next_output_index: 0,
             reasoning_output_index: None,
             text_output_index: None,
+            reasoning_excluded,
             collector: Some(collector),
         }
     }
@@ -101,6 +104,11 @@ impl OpenAiResponsesStreamEncoder {
             }
             ChatGenerationStreamEvent::PrefillProgress { .. } => Ok(VecDeque::new()),
             ChatGenerationStreamEvent::ReasoningFragment(reasoning_text) => {
+                if self.reasoning_excluded {
+                    // The model still thought and the token count still lands in
+                    // usage; only the client-visible reasoning item is withheld.
+                    return Ok(VecDeque::new());
+                }
                 self.collector_mut()?.ingest_event(
                     ChatGenerationStreamEvent::ReasoningFragment(reasoning_text.clone()),
                 )?;
