@@ -5,11 +5,12 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    EnforcedStructuredGeneration, OpenAiChatMessage, OpenAiChatMessageParts, OpenAiResponseFormat,
-    OpenAiStopSequences, OpenAiStreamOptions, OpenAiStructuredOutput,
-    OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
+    ChatTemplateKwargsRequestObject, EnforcedStructuredGeneration, OpenAiChatMessage,
+    OpenAiChatMessageParts, OpenAiResponseFormat, OpenAiStopSequences, OpenAiStreamOptions,
+    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
     OpenAiStructuredOutputsValidationError, OpenAiToolChoice, OpenAiToolChoiceMode,
-    OpenAiToolDefinition, OpenAiToolDefinitionParts, enforced_generation_from_extra_body,
+    OpenAiToolDefinition, OpenAiToolDefinitionParts, ReasoningRequestObject, ThinkingControls,
+    ThinkingControlsError, ThinkingControlsInputs, enforced_generation_from_extra_body,
 };
 
 /// The maximum accepted nesting depth of a function JSON Schema.
@@ -59,6 +60,16 @@ pub struct OpenAiChatCompletionRequest {
     /// coding-agent traffic alongside `thinking_token_budget`.
     #[serde(default)]
     thinking_budget_tokens: Option<u32>,
+    /// OpenRouter-style reasoning object carrying an effort level, a direct
+    /// token limit, an on/off switch, and a stream-exclusion preference.
+    #[serde(default)]
+    reasoning: Option<ReasoningRequestObject>,
+    /// Qwen-style flat switch for the thinking channel.
+    #[serde(default)]
+    enable_thinking: Option<bool>,
+    /// vLLM-style template-kwarg block carrying the thinking toggle.
+    #[serde(default)]
+    chat_template_kwargs: Option<ChatTemplateKwargsRequestObject>,
     #[serde(default)]
     stop: Option<OpenAiStopSequences>,
     #[serde(default)]
@@ -99,7 +110,7 @@ impl OpenAiChatCompletionRequest {
 
         self.validate_tool_choice()?;
         self.validate_output_token_budget()?;
-        self.thinking_budget_resolution()?;
+        self.resolve_thinking_controls()?;
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;
         validate_sampling_parameter("top_p", self.top_p, 0.0, 1.0)?;
         self.validate_unsupported_options()?;
@@ -156,53 +167,24 @@ impl OpenAiChatCompletionRequest {
         self.seed
     }
 
-    /// Returns the optional thinking-token budget after request validation.
-    ///
-    /// Canonical and alias spellings must agree when more than one appears on
-    /// the wire; the caller surfaces the disagreement as a structured error.
-    pub fn thinking_budget(&self) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
-        self.thinking_budget_resolution()
-    }
-
-    /// Resolves the thinking budget across the canonical spelling and the
-    /// coding-agent aliases, mirroring the output-token budget rule: several
-    /// spellings are fine while they agree, and disagreement is a caller bug
-    /// that must fail loudly instead of silently picking one.
-    ///
-    /// When no numeric spelling appears, the OpenAI `reasoning_effort` level
-    /// name maps to the token budget coding agents display for that level
-    /// (Pi's defaults). An explicit numeric budget wins over the level name
-    /// because it is the more precise statement of the same intent.
-    fn thinking_budget_resolution(
+    /// Resolves every submitted thinking-control spelling into one hard budget
+    /// plus the stream exclusion preference, mirroring the output-token budget
+    /// rule: several spellings are fine while they agree, and disagreement is
+    /// a caller bug that must fail loudly instead of silently picking one.
+    fn resolve_thinking_controls(
         &self,
-    ) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
-        let mut resolved_budget: Option<u32> = None;
-        for budget_spelling in [
-            self.thinking_budget,
-            self.thinking_token_budget,
-            self.thinking_budget_tokens,
-        ] {
-            match (resolved_budget, budget_spelling) {
-                (None, budget) => resolved_budget = budget,
-                (Some(agreed_budget), Some(budget)) if agreed_budget == budget => {}
-                (Some(_), Some(_)) => {
-                    return Err(
-                        OpenAiChatCompletionValidationError::ConflictingThinkingBudgets {
-                            thinking_budget: self.thinking_budget,
-                            thinking_token_budget: self.thinking_token_budget,
-                            thinking_budget_tokens: self.thinking_budget_tokens,
-                        },
-                    );
-                }
-                (Some(_), None) => {}
-            }
+    ) -> Result<ThinkingControls, OpenAiChatCompletionValidationError> {
+        ThinkingControlsInputs {
+            thinking_budget: self.thinking_budget,
+            thinking_token_budget: self.thinking_token_budget,
+            thinking_budget_tokens: self.thinking_budget_tokens,
+            reasoning: self.reasoning.as_ref(),
+            reasoning_effort: self.reasoning_effort.as_deref(),
+            enable_thinking: self.enable_thinking,
+            chat_template_kwargs: self.chat_template_kwargs.as_ref(),
         }
-        if resolved_budget.is_none()
-            && let Some(reasoning_effort) = self.reasoning_effort.as_deref()
-        {
-            resolved_budget = reasoning_effort_token_budget(reasoning_effort)?;
-        }
-        Ok(resolved_budget)
+        .resolve()
+        .map_err(OpenAiChatCompletionValidationError::ThinkingControls)
     }
 
     /// Validates and consumes this REST DTO into protocol-neutral request parts.
@@ -223,7 +205,7 @@ impl OpenAiChatCompletionRequest {
             self.structured_outputs.clone(),
             self.guided_grammar.as_deref(),
         )?;
-        let thinking_budget = self.thinking_budget_resolution()?;
+        let thinking_controls = self.resolve_thinking_controls()?;
         Ok(OpenAiChatCompletionRequestParts {
             model: self.model,
             messages: self
@@ -245,7 +227,8 @@ impl OpenAiChatCompletionRequest {
             temperature: self.temperature,
             top_p: self.top_p,
             seed: self.seed,
-            thinking_budget,
+            thinking_budget: thinking_controls.budget,
+            reasoning_excluded: thinking_controls.reasoning_excluded,
             stream: self.stream,
             includes_usage_in_stream,
             structured_output,
@@ -352,8 +335,11 @@ pub struct OpenAiChatCompletionRequestParts {
     pub top_p: Option<f32>,
     /// Optional deterministic sampler seed.
     pub seed: Option<u64>,
-    /// Maximum tokens the model may spend inside the thinking block.
+    /// Maximum tokens the model may spend inside the thinking block; `Some(0)`
+    /// is an explicit disable that renders the thinking channel closed.
     pub thinking_budget: Option<u32>,
+    /// Whether reasoning deltas must be withheld from the response stream.
+    pub reasoning_excluded: bool,
     /// Whether the client requested SSE streaming.
     pub stream: bool,
     /// Whether the stream's terminal event must carry usage.
@@ -362,30 +348,6 @@ pub struct OpenAiChatCompletionRequestParts {
     pub structured_output: Option<OpenAiStructuredOutput>,
     /// Extra-body constraint that must be token-masked or the request fails.
     pub enforced_structured_generation: Option<EnforcedStructuredGeneration>,
-}
-
-/// Maps an OpenAI `reasoning_effort` level name to the thinking-token budget
-/// coding agents display for that level. The values mirror Pi's default
-/// thinking budgets so the number an agent shows its user is the number this
-/// server enforces. `xhigh` clamps to `high`, matching the agents' own
-/// clamping. `off` and `none` carry no enforceable budget today: thinking
-/// cannot be disabled through the budget alone, so they resolve to the
-/// model-default behavior instead of a silent lie.
-fn reasoning_effort_token_budget(
-    reasoning_effort: &str,
-) -> Result<Option<u32>, OpenAiChatCompletionValidationError> {
-    match reasoning_effort {
-        "minimal" => Ok(Some(1024)),
-        "low" => Ok(Some(2048)),
-        "medium" => Ok(Some(8192)),
-        "high" | "xhigh" => Ok(Some(16384)),
-        "off" | "none" => Ok(None),
-        other => Err(
-            OpenAiChatCompletionValidationError::UnknownReasoningEffort {
-                reasoning_effort: other.to_owned(),
-            },
-        ),
-    }
 }
 
 /// A request rejected before worker admission by the public OpenAI contract.
@@ -458,23 +420,9 @@ pub enum OpenAiChatCompletionValidationError {
         max_tokens: u32,
         max_completion_tokens: u32,
     },
-    /// Two or more thinking-budget spellings were supplied and disagreed.
-    #[error(
-        "thinking_budget ({thinking_budget:?}) conflicts with thinking_token_budget ({thinking_token_budget:?}) and thinking_budget_tokens ({thinking_budget_tokens:?})"
-    )]
-    ConflictingThinkingBudgets {
-        thinking_budget: Option<u32>,
-        thinking_token_budget: Option<u32>,
-        thinking_budget_tokens: Option<u32>,
-    },
-    /// A reasoning-effort level name this server does not enforce. Coding
-    /// agents send `reasoning_effort` as their only thinking signal, so an
-    /// unrecognized label must fail loudly rather than silently changing how
-    /// much the model thinks.
-    #[error(
-        "reasoning_effort '{reasoning_effort}' is not a recognized thinking level; expected minimal, low, medium, high, xhigh, off, or none"
-    )]
-    UnknownReasoningEffort { reasoning_effort: String },
+    /// A reasoning-control spelling was contradictory or unrecognized.
+    #[error(transparent)]
+    ThinkingControls(#[from] ThinkingControlsError),
     /// The output token budget was zero or too large for the worker representation.
     #[error(
         "output token count is {actual_output_tokens}, outside the 1..={maximum_output_tokens} token range"

@@ -135,6 +135,62 @@ async fn should_expose_only_text_fragment_as_visible_content_when_reasoning_prec
 }
 
 #[tokio::test]
+async fn should_withhold_reasoning_deltas_from_the_stream_when_excluded() {
+    let application = build_application(ScriptedExecutor::ready(vec![
+        ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
+        ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
+        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+    ]));
+
+    let (status, response_body) = post_chat_with_body(
+        application,
+        r#"{"model":"astronomical/streaming-test-model","messages":[{"role":"user","content":"hello"}],"stream":true,"reasoning":{"max_tokens":1024,"exclude":true}}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let parsed_stream = ParsedChatSseStream::parse(&response_body);
+    assert_eq!(
+        parsed_stream.reasoning_text(),
+        "",
+        "excluded reasoning must not emit reasoning deltas: {response_body}"
+    );
+    assert_eq!(
+        parsed_stream.visible_text_for_opencode(),
+        "Visible title",
+        "the visible answer must still stream when reasoning is excluded"
+    );
+    assert_eq!(parsed_stream.finish_reason(), Some("stop"));
+}
+
+#[tokio::test]
+async fn should_withhold_reasoning_content_from_non_streaming_responses_when_excluded() {
+    let application = build_application(ScriptedExecutor::ready(vec![
+        ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
+        ChatGenerationStreamEvent::TextFragment("Visible title".to_owned()),
+        completed_generation_event(ChatGenerationCompletionReason::EndOfSequence),
+    ]));
+
+    let (status, response_body) = post_chat_with_body(
+        application,
+        r#"{"model":"astronomical/streaming-test-model","messages":[{"role":"user","content":"hello"}],"stream":false,"reasoning":{"effort":"low","exclude":true}}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response_document: Value =
+        serde_json::from_str(&response_body).expect("the non-streaming body should be JSON");
+    assert!(
+        response_document["choices"][0]["message"]["reasoning_content"].is_null(),
+        "excluded reasoning must not be assembled into the non-streaming response: {response_body}"
+    );
+    assert_eq!(
+        response_document["choices"][0]["message"]["content"],
+        "Visible title"
+    );
+}
+
+#[tokio::test]
 async fn should_stream_parallel_tool_calls_in_openai_compatible_chunks_for_opencode() {
     let application = build_application(ScriptedExecutor::ready(vec![
         ChatGenerationStreamEvent::ToolCall {
