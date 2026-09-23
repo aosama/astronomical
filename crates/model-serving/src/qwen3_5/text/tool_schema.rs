@@ -215,13 +215,13 @@ fn parse_declared_parameter_schema(
             None => match parse_flexible_any_of_type(property_schema_fields) {
                 Some(FlexibleAnyOfType::Uniform(parameter_type)) => (Some(parameter_type), false),
                 Some(FlexibleAnyOfType::Mixed) => (None, false),
-                None if !property_schema_fields.contains_key("anyOf") => (None, false),
-                None => {
-                    return Err(Qwen3_5OutputParserError::MissingToolParameterType {
-                        function_name: function_name.to_owned(),
-                        parameter_name: parameter_name.to_owned(),
-                    });
-                }
+                // JSON Schema makes `type` optional, and real harness inventories declare
+                // properties whose `anyOf` no resolver can reduce to a single coercion type
+                // (branches without a type member, single-branch unions, type-list
+                // shorthands, non-array values). Argument parsing depends only on the
+                // resolved type, so an unresolvable union degrades to dynamic JSON parsing
+                // instead of rejecting the complete chat thread (#736, #771).
+                None => (None, false),
             },
         },
         Some(_) => {
