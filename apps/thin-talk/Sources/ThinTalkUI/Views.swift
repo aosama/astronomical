@@ -34,12 +34,13 @@ struct ChatPane: View {
     VStack(spacing: 0) {
       ConversationCanvas(
         snapshot: viewModel.canvasSnapshot,
+        pageZoom: viewModel.fontZoom / 14,
         assetRegistry: viewModel.assetRegistry,
         onAction: viewModel.handle
       )
       ComposeBar(viewModel: viewModel)
       if let failure = viewModel.currentFailure {
-        ChatFailureBanner(failure: failure, onRetry: viewModel.retry)
+        ChatFailureBanner(failure: failure, textScale: viewModel.fontZoom / 14, onRetry: viewModel.retry)
       }
     }
     .frame(minWidth: 1100, minHeight: 700)
@@ -58,6 +59,7 @@ struct ConversationCanvas: View {
   @Environment(\.colorScheme) private var colorScheme
 
   let snapshot: TranscriptSnapshot
+  let pageZoom: CGFloat
   let assetRegistry: TranscriptAssetRegistry
   let onAction: (CanvasAction) -> Void
 
@@ -68,6 +70,7 @@ struct ConversationCanvas: View {
         isDarkAppearance: colorScheme == .dark,
         webDirectory: webDirectory,
         assetRegistry: assetRegistry,
+        pageZoom: pageZoom,
         onAction: onAction
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,7 +129,7 @@ struct ComposeBar: View {
       HStack(spacing: 8) {
         // Left-side pill buttons
         AttachmentPillButton()
-        SmartThinkingPill(effort: $viewModel.thinkingEffort)
+        SmartThinkingPill(effort: $viewModel.thinkingEffort, textScale: viewModel.fontZoom / 14)
         FeaturePillButton()
 
         Spacer(minLength: 16)
@@ -189,6 +192,9 @@ struct AttachmentPillButton: View {
 /// "Smart" pill: Thinking-effort selector styled as a rounded pill with dropdown arrow.
 struct SmartThinkingPill: View {
   @Binding var effort: ThinkingEffort
+  /// GUI-wide zoom factor (1.0 at the 14pt base) so pill and menu text follow
+  /// the same scale as the rest of the native surface.
+  let textScale: CGFloat
 
   var body: some View {
     Menu {
@@ -196,13 +202,13 @@ struct SmartThinkingPill: View {
         Button {
           effort = level
         } label: {
-          Text(level.budgetSummary)
+          Text(level.budgetSummary).font(.system(size: 14 * textScale))
         }
       }
     } label: {
       HStack(spacing: 4) {
         Text("Smart")
-          .font(.body)
+          .font(.system(size: 14 * textScale))
           .foregroundColor(.white)
         Image(systemName: "chevron.down")
           .font(.caption)
@@ -298,13 +304,19 @@ struct StopActionIconButton: View {
 /// A classified failure with its specific next action and a retry affordance.
 struct ChatFailureBanner: View {
   let failure: ChatFailure
+  /// GUI-wide zoom factor (1.0 at the 14pt base) so the banner follows the
+  /// same scale as the rest of the native surface.
+  let textScale: CGFloat
   let onRetry: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      if let reason = failure.message { Text(reason).foregroundColor(.red) }
-      Text(failure.nextAction).font(.caption)
+      if let reason = failure.message {
+        Text(reason).foregroundColor(.red).font(.system(size: 14 * textScale))
+      }
+      Text(failure.nextAction).font(.system(size: 12 * textScale))
       Button("Retry", action: onRetry)
+        .controlSize(textScale > 1 ? .large : .regular)
         .buttonStyle(.borderedProminent)
     }
     .padding()
