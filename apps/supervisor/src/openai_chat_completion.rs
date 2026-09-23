@@ -18,10 +18,15 @@ pub(crate) async fn create_non_streaming_chat_completion(
     completion_id: String,
     created_at_unix_seconds: u64,
     model_id: String,
+    reasoning_excluded: bool,
     structured_output: Option<&OpenAiStructuredOutput>,
 ) -> Response {
-    let mut chat_completion_collector =
-        OpenAiChatCompletionCollector::new(completion_id, created_at_unix_seconds, model_id);
+    let mut chat_completion_collector = OpenAiChatCompletionCollector::new(
+        completion_id,
+        created_at_unix_seconds,
+        model_id,
+        reasoning_excluded,
+    );
     while let Some(chat_stream_event) = chat_stream_event_receiver.recv().await {
         match chat_stream_event {
             ChatGenerationStreamEvent::Completed {
@@ -108,17 +113,24 @@ pub(crate) struct OpenAiChatCompletionCollector {
     model_id: String,
     text_content: String,
     reasoning_content: String,
+    reasoning_excluded: bool,
     tool_calls: Vec<OpenAiResponseToolCall>,
 }
 
 impl OpenAiChatCompletionCollector {
-    pub(crate) fn new(completion_id: String, created: u64, model_id: String) -> Self {
+    pub(crate) fn new(
+        completion_id: String,
+        created: u64,
+        model_id: String,
+        reasoning_excluded: bool,
+    ) -> Self {
         Self {
             completion_id,
             created,
             model_id,
             text_content: String::new(),
             reasoning_content: String::new(),
+            reasoning_excluded,
             tool_calls: Vec::new(),
         }
     }
@@ -143,6 +155,10 @@ impl OpenAiChatCompletionCollector {
     ) -> Option<OpenAiErrorResponse> {
         match stream_event {
             ChatGenerationStreamEvent::ReasoningFragment(reasoning) => {
+                if self.reasoning_excluded {
+                    // The model still thought; only the client-visible text is withheld.
+                    return None;
+                }
                 self.reasoning_content.push_str(&reasoning);
                 None
             }

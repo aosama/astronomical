@@ -16,6 +16,7 @@ mod openai_responses_response;
 mod openai_responses_stream;
 mod openai_responses_tools;
 mod openai_structured_outputs;
+mod thinking_controls;
 
 pub use image_input::{MAX_OPENAI_IMAGE_BYTES, OpenAiImageInput};
 pub use openai_chat_completion_request::{
@@ -85,4 +86,8 @@ pub use openai_structured_outputs::{
     EnforcedStructuredGeneration, MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES, OpenAiStructuredOutputs,
     OpenAiStructuredOutputsValidationError, enforced_generation_from_extra_body,
     guided_grammar_to_enforced_generation,
+};
+pub use thinking_controls::{
+    ChatTemplateKwargsRequestObject, ReasoningRequestObject, ThinkingControls,
+    ThinkingControlsError, ThinkingControlsInputs,
 };
