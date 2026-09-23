@@ -4,30 +4,26 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.50</title>
-            <pubDate>Wed, 23 Sep 2026 00:57:02 -0400</pubDate>
-            <sparkle:version>659</sparkle:version>
-            <sparkle:shortVersionString>0.2.50</sparkle:shortVersionString>
+            <title>0.2.51</title>
+            <pubDate>Wed, 23 Sep 2026 01:51:41 -0400</pubDate>
+            <sparkle:version>662</sparkle:version>
+            <sparkle:shortVersionString>0.2.51</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.50
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.51
 
-- **Library**: Ornith 1.5 35B A3B MLX 6-bit is now available as a downloadable model.
-- **Thin Talk**: live keyboard font zoom for the entire window, and a restyled composer with font zoom support.
-- **REST API**: the full thinking-controls spelling family (`thinking`, `reasoning_effort`, `text_verbosity`, `include_thoughts`, `text`) is resolved on both `/v1/chat/completions` and `/v1/responses`, including streaming.
-- **Robustness**: a declared tool property whose `anyOf` cannot be resolved no longer rejects the entire chat thread, and chat history replayed from other providers (for example assistant `refusal` fields) is accepted instead of returning 400. Strictness is preserved for unknown roles, content-part types, thinking-controls objects, caller-declared tools, and `response_format`.
-- **Dependencies**: crc32fast 1.5.1 to 1.5.2.
+- **Fix**: thinking controls no longer reject unknown subfields inside the `reasoning` and `chat_template_kwargs` objects. GitHub Copilot Desktop sends the OpenAI `reasoning.summary` spelling, and previous versions returned 400 for the entire request, so a fresh Copilot session could not send any message. The `summary` preference is accepted explicitly, unknown provider spellings are absorbed, and contradictory control values (disable combined with a positive budget, conflicting budgets, unknown effort labels) still fail loudly.
 
 ## Compatibility
 
-In-place Sparkle update. Your configuration, user state, and local model caches are preserved. REST API changes are strictly additive: existing accepted request shapes continue to work.
+In-place Sparkle update. Your configuration, user state, and local model caches are preserved. The REST API change is strictly additive: request bodies that were previously rejected are now accepted, and accepted control semantics are unchanged.
 
-Astronomical 0.2.50 is signed with the Developer ID Application identity (Hardened Runtime, timestamped) and notarized by Apple for macOS 14.0 and above on Apple Silicon (arm64).
+Astronomical 0.2.51 is signed with the Developer ID Application identity (Hardened Runtime, timestamped) and notarized by Apple for macOS 14.0 and above on Apple Silicon (arm64).
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.50/Astronomical-0.2.50-macOS-arm64.dmg" length="18029354" type="application/octet-stream" sparkle:edSignature="sE/gU+Yiodzj5R+kbeu5WXBa6NBmKQZBI5fQYN+Xa6DvbQ7fP6B/beAsdGHsYaAYWrd2Z9lUsEVxG5BzzBF9Aw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.51/Astronomical-0.2.51-macOS-arm64.dmg" length="18029219" type="application/octet-stream" sparkle:edSignature="UIJEN3msyWHE9UUx5hlgjrFu/BmFz54BQzy/aoXjAr+5cX6wXSoiNBHeip91Oub0T1f5KIRbFFYwgWSF0JQlCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: fnE02NgQUvV2+/70RfD7zEqm+YQ+8pFfRSqkXgHCsk8TOfQLUQ9sViUjcyHRfBAcoxXSiDEXOM5Peqgh38n1BQ==
-length: 2482
+edSignature: EKhpWvVPO5w/Leb9MVu6O4yJhQEnUd7bBgzICLHRv+NlEYlrQy3w1BFQWn+ZfuwHVGkFw3QRX7hAF4iFJW+zAQ==
+length: 2230
 -->
