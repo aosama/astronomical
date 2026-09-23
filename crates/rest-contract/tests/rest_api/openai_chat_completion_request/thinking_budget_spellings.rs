@@ -352,10 +352,13 @@ fn should_reject_disabled_thinking_with_a_positive_budget() {
 }
 
 #[test]
-fn should_reject_unknown_subfields_of_the_reasoning_and_template_kwarg_objects() {
+fn should_absorb_unknown_reasoning_and_template_kwarg_subfields() {
     for unknown_subfield in [
         "{\"effort\": \"low\", \"bogus\": 1}",
         "{\"max_tokens\": 1, \"bogus\": 1}",
+        // Copilot Desktop sends the OpenAI `summary` spelling; unknown fields
+        // inside provider-shaped thinking objects must never reject the thread.
+        "{\"effort\": \"medium\", \"summary\": \"auto\"}",
     ] {
         let request_json = format!(
             r#"{{
@@ -365,8 +368,8 @@ fn should_reject_unknown_subfields_of_the_reasoning_and_template_kwarg_objects()
             }}"#
         );
         assert!(
-            serde_json::from_str::<OpenAiChatCompletionRequest>(&request_json).is_err(),
-            "an unknown reasoning subfield must fail loudly: {request_json}"
+            serde_json::from_str::<OpenAiChatCompletionRequest>(&request_json).is_ok(),
+            "an unknown reasoning subfield must be absorbed: {request_json}"
         );
     }
 
@@ -378,9 +381,22 @@ fn should_reject_unknown_subfields_of_the_reasoning_and_template_kwarg_objects()
     }
     "#;
     assert!(
-        serde_json::from_str::<OpenAiChatCompletionRequest>(request_json).is_err(),
-        "unknown chat_template_kwargs entries must fail loudly"
+        serde_json::from_str::<OpenAiChatCompletionRequest>(request_json).is_ok(),
+        "unknown chat_template_kwargs entries must be absorbed"
     );
+}
+
+#[test]
+fn should_keep_resolved_thinking_controls_unchanged_beside_absorbed_fields() {
+    let parts = parse_chat_request_parts(
+        r#"{
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [{"role": "user", "content": "write a function"}],
+        "reasoning": {"effort": "medium", "summary": "auto", "vendor_note": {"nested": true}}
+    }"#,
+    );
+    assert_eq!(parts.thinking_budget, Some(8192));
+    assert!(!parts.reasoning_excluded);
 }
 
 fn parse_chat_request_parts(request_json: &str) -> OpenAiChatCompletionRequestParts {

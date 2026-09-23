@@ -167,8 +167,14 @@ fn should_reject_disagreeing_numeric_and_level_spellings() {
 }
 
 #[test]
-fn should_reject_unknown_subfields_of_the_reasoning_object() {
-    for unknown_subfield in ["{\"effort\": \"low\", \"bogus\": 1}", "{\"bogus\": true}"] {
+fn should_absorb_unknown_subfields_of_the_reasoning_object() {
+    for unknown_subfield in [
+        "{\"effort\": \"low\", \"bogus\": 1}",
+        "{\"bogus\": true}",
+        // Copilot Desktop sends the OpenAI `summary` spelling; unknown fields
+        // inside provider-shaped thinking objects must never reject the thread.
+        "{\"effort\": \"medium\", \"summary\": \"auto\"}",
+    ] {
         let decode_result = serde_json::from_str::<OpenAiResponsesRequest>(&format!(
             r#"{{
                 "model": "astronomical/fake-mixture-of-experts",
@@ -177,8 +183,8 @@ fn should_reject_unknown_subfields_of_the_reasoning_object() {
             }}"#
         ));
         assert!(
-            decode_result.is_err(),
-            "an unknown reasoning subfield must fail loudly: {unknown_subfield}"
+            decode_result.is_ok(),
+            "an unknown reasoning subfield must be absorbed: {unknown_subfield}"
         );
     }
 
@@ -190,8 +196,8 @@ fn should_reject_unknown_subfields_of_the_reasoning_object() {
         }"#,
     );
     assert!(
-        decode_result.is_err(),
-        "unknown chat_template_kwargs entries must fail loudly"
+        decode_result.is_ok(),
+        "unknown chat_template_kwargs entries must be absorbed"
     );
 }
 

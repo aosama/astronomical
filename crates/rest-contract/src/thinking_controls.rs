@@ -12,8 +12,11 @@ use serde::Deserialize;
 use thiserror::Error;
 
 /// OpenRouter-style `reasoning` object accepted on both generation endpoints.
+///
+/// Unknown fields are absorbed rather than rejected: this object is
+/// provider-shaped and new spellings appear weekly (issue #777), so only the
+/// contradictory *control values* below are caller errors.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct ReasoningRequestObject {
     /// Effort level name; see `reasoning_effort_level` for the accepted set.
     #[serde(default)]
@@ -28,11 +31,17 @@ pub struct ReasoningRequestObject {
     /// Keep the model thinking but withhold reasoning deltas from the stream.
     #[serde(default)]
     pub exclude: Option<bool>,
+    /// OpenAI summary-inclusion preference (`auto`/`concise`/`detailed`).
+    /// Absorbed without behavior change: Astronomical always streams
+    /// reasoning deltas unless `exclude` withholds them.
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 
 /// vLLM-style template-kwarg block; only the thinking toggle is meaningful here.
+/// Unknown template variables are absorbed: gateways add template-specific
+/// kwargs that are not thinking controls.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
 pub struct ChatTemplateKwargsRequestObject {
     #[serde(default)]
     pub enable_thinking: Option<bool>,
@@ -74,6 +83,7 @@ impl<'a> ThinkingControlsInputs<'a> {
             max_tokens: None,
             enabled: None,
             exclude: None,
+            summary: None,
         });
 
         let resolved_numeric = resolve_numeric_group(
