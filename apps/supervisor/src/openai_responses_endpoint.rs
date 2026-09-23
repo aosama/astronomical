@@ -79,6 +79,7 @@ pub(crate) async fn create_response(
         );
     }
     let should_stream_response = request_parts.stream;
+    let reasoning_excluded = request_parts.reasoning_excluded;
     let structured_output = request_parts.structured_output.clone();
     let response_instructions = request_parts.instructions.clone();
     let response_request_configuration = request_parts.response_configuration();
@@ -221,6 +222,7 @@ pub(crate) async fn create_response(
                 model_id,
                 response_instructions,
                 response_request_configuration,
+                reasoning_excluded,
                 structured_output.as_ref(),
             )
             .await,
@@ -236,6 +238,7 @@ pub(crate) async fn create_response(
                 model_id,
                 response_instructions,
                 response_request_configuration,
+                reasoning_excluded,
             ),
         ),
         structured_output.as_ref(),
@@ -249,6 +252,7 @@ async fn create_non_streaming_response(
     model_id: String,
     instructions: Option<String>,
     request_configuration: OpenAiResponseRequestConfiguration,
+    reasoning_excluded: bool,
     structured_output: Option<&astronomical_rest_contract::OpenAiStructuredOutput>,
 ) -> Response {
     let mut response_collector = OpenAiResponsesCollector::new(
@@ -296,6 +300,13 @@ async fn create_non_streaming_response(
                 Ok(response) => Json(response).into_response(),
                 Err(assembly_error) => assembly_failure_response(assembly_error.to_string()),
             };
+        }
+        if let ChatGenerationStreamEvent::ReasoningFragment(_) = &stream_event
+            && reasoning_excluded
+        {
+            // The model still thought; the token count still lands in usage via
+            // the Completed event. Withhold only the client-visible reasoning item.
+            continue;
         }
         if let Err(assembly_error) = response_collector.ingest_event(stream_event) {
             return assembly_failure_response(assembly_error.to_string());

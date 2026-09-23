@@ -1,4 +1,5 @@
 use super::*;
+use astronomical_rest_contract::ThinkingControlsError;
 
 #[test]
 fn should_accept_opencode_large_output_budget_without_a_public_coding_cap() {
@@ -192,8 +193,10 @@ fn should_reject_an_unknown_oversized_reasoning_effort_label_instead_of_ignoring
 
     assert_eq!(
         validation_error,
-        OpenAiChatCompletionValidationError::UnknownReasoningEffort {
-            reasoning_effort: oversized_reasoning_effort,
-        }
+        OpenAiChatCompletionValidationError::ThinkingControls(
+            ThinkingControlsError::UnknownReasoningEffort {
+                reasoning_effort: oversized_reasoning_effort,
+            }
+        )
     );
 }

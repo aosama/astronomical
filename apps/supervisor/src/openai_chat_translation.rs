@@ -39,6 +39,7 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
         top_p,
         seed,
         thinking_budget,
+        reasoning_excluded: _,
         stream: _,
         includes_usage_in_stream: _,
         structured_output,
