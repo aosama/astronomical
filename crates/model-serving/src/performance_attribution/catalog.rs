@@ -121,6 +121,8 @@ pub enum PerformanceOperation {
     ImageTransformerBlockGroupSynchronizationWait,
     ImageSchedulerUpdateGraphConstruction,
     ImageSchedulerUpdateSynchronizationWait,
+    ImagePipelineConstruction,
+    ImageRenderBoundary,
     ImageTransformerRelease,
     ImageVaeComponentMapping,
     ImageVaeComponentLoading,
@@ -261,6 +263,8 @@ impl PerformanceOperation {
         Self::ImageTransformerBlockGroupSynchronizationWait,
         Self::ImageSchedulerUpdateGraphConstruction,
         Self::ImageSchedulerUpdateSynchronizationWait,
+        Self::ImagePipelineConstruction,
+        Self::ImageRenderBoundary,
         Self::ImageTransformerRelease,
         Self::ImageVaeComponentMapping,
         Self::ImageVaeComponentLoading,
@@ -479,6 +483,8 @@ impl PerformanceOperation {
             Self::ImageSchedulerUpdateSynchronizationWait => {
                 "image_scheduler_update_synchronization_wait"
             }
+            Self::ImagePipelineConstruction => "image_pipeline_construction",
+            Self::ImageRenderBoundary => "image_render_boundary",
             Self::ImageTransformerRelease => "image_transformer_release",
             Self::ImageVaeComponentMapping => "image_vae_component_mapping",
             Self::ImageVaeComponentLoading => "image_vae_component_loading",

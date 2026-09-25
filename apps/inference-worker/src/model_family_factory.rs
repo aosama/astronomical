@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use astronomical_config::{
     ModelFamily, PromptCacheConfig, classify_model_directory, verify_flux2_klein_model_directory,
+    verify_qwen_image_21_model_directory,
 };
 use astronomical_ipc_protocol::{
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
@@ -10,7 +11,8 @@ use astronomical_ipc_protocol::{
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
     K2HorizonMoVAServingSettings, LagunaServingSettings, ModelFactory, ModelFactoryRuntime,
-    ModelFamilyGenerationProcessor, ModelFamilyInferenceEngine, ModernBertEmbeddingEngine,
+    ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceEngine,
+    ModernBertEmbeddingEngine, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
     deepseek_v4_unavailable_reason, initialize_k2_horizon_mova_model_with_serving_settings,
     initialize_laguna_model_with_serving_settings,
 };
@@ -32,7 +34,7 @@ pub(crate) type InferenceWorker = EngineBackedWorker<
     ModelFamilyGenerationProcessor,
     ModelFamilyInferenceEngine,
     ModelFamilyFactory,
-    Flux2KleinImageEngine,
+    ModelFamilyImageEngine,
     ModernBertEmbeddingEngine,
 >;
 
@@ -77,7 +79,7 @@ impl
     ModelFactory<
         ModelFamilyGenerationProcessor,
         ModelFamilyInferenceEngine,
-        Flux2KleinImageEngine,
+        ModelFamilyImageEngine,
         ModernBertEmbeddingEngine,
     > for ModelFamilyFactory
 {
@@ -89,7 +91,7 @@ impl
         ModelFactoryRuntime<
             ModelFamilyGenerationProcessor,
             ModelFamilyInferenceEngine,
-            Flux2KleinImageEngine,
+            ModelFamilyImageEngine,
             ModernBertEmbeddingEngine,
         >,
         String,
@@ -218,13 +220,58 @@ impl
                     verified_evidence.license.spdx_identifier(),
                 );
                 Ok(ModelFactoryRuntime::Image(
-                    Flux2KleinImageEngine::from_model_family_factory(
-                        model_directory_path,
-                        provenance,
-                        effective_mlx_memory_ceiling_bytes,
-                        allocator_cache_memory_limit_bytes,
-                        performance_attribution_enabled,
-                        performance_attribution_log_path,
+                    ModelFamilyImageEngine::Flux2Klein(
+                        Flux2KleinImageEngine::from_model_family_factory(
+                            model_directory_path,
+                            provenance,
+                            effective_mlx_memory_ceiling_bytes,
+                            allocator_cache_memory_limit_bytes,
+                            performance_attribution_enabled,
+                            performance_attribution_log_path,
+                        ),
+                    ),
+                ))
+            }
+            (
+                Some(ModelFamily::QwenImage21),
+                WorkerModelConfiguration::QwenImage21(model_configuration),
+            ) => {
+                let verification_directory_path = model_directory_path.clone();
+                let verified_evidence = tokio::task::spawn_blocking(move || {
+                    verify_qwen_image_21_model_directory(&verification_directory_path)
+                        // Discovery retains typed diagnostics, while this worker boundary must not
+                        // reveal which mutable local artifact detail changed after selection.
+                        .map_err(|_| {
+                            "selected Qwen-Image-2.1 artifact failed exact-directory verification"
+                                .to_owned()
+                        })
+                })
+                .await
+                .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())??;
+                if model_configuration.model_family != WorkerImageGenerationModelFamily::QwenImage21
+                    || model_configuration.model_id != verified_evidence.canonical_model_id
+                    || model_configuration.artifact_revision != verified_evidence.revision
+                {
+                    return Err(
+                        "selected Qwen-Image-2.1 model identity or revision is unsupported"
+                            .to_owned(),
+                    );
+                }
+                let provenance = QwenImage21ArtifactProvenance::new(
+                    verified_evidence.provider_model_id,
+                    verified_evidence.revision,
+                    verified_evidence.license.spdx_identifier(),
+                );
+                Ok(ModelFactoryRuntime::Image(
+                    ModelFamilyImageEngine::QwenImage21(
+                        QwenImage21ImageEngine::from_model_family_factory(
+                            model_directory_path,
+                            provenance,
+                            effective_mlx_memory_ceiling_bytes,
+                            allocator_cache_memory_limit_bytes,
+                            performance_attribution_enabled,
+                            performance_attribution_log_path,
+                        ),
                     ),
                 ))
             }

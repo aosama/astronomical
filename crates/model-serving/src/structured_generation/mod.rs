@@ -288,7 +288,10 @@ mod tests {
         );
         let biases = constraint.logit_bias_values();
         assert_eq!(biases[0], 0.0);
-        assert_eq!(biases[1], 0.0);
+        // The pattern is anchored at the start, and both alternatives begin with "Romeo", so a " and"
+        // continuation is unreachable from the start state. What this test protects is that it stays
+        // reachable *after* the shared prefix, which the assertions below cover.
+        assert_eq!(biases[1], f32::NEG_INFINITY);
         constraint.accept_visible_token(0);
         assert_eq!(constraint.logit_bias_values()[1], 0.0);
         constraint.accept_visible_token(1);

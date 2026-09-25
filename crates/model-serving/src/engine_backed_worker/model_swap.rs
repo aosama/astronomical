@@ -267,6 +267,9 @@ fn factory_runtime_matches_configuration<Processor, Engine, ImageEngine, Embeddi
             ModelFactoryRuntime::Image(_),
             WorkerModelConfiguration::Flux2Klein(_)
         ) | (
+            ModelFactoryRuntime::Image(_),
+            WorkerModelConfiguration::QwenImage21(_)
+        ) | (
             ModelFactoryRuntime::Embeddings(_),
             WorkerModelConfiguration::Embeddings(_)
         )
