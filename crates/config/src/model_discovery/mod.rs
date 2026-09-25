@@ -21,6 +21,8 @@ mod model_family;
 mod modernbert;
 mod qwen3_5;
 mod qwen4_exp;
+mod qwen_image_21;
+mod qwen_image_21_documents;
 
 pub(crate) use artifact_discovery::{try_discover_model, try_discover_model_with_id};
 pub use classified_artifacts::{
@@ -36,6 +38,10 @@ pub use flux2_klein::{
 pub use model_family::{
     ModelFamily, ModelFamilyClassificationError, classify_model_directory,
     classify_pipeline_index_bytes,
+};
+pub use qwen_image_21::{
+    QwenImage21DirectoryEvidence, QwenImage21DirectoryVerificationError,
+    verify_model_directory as verify_qwen_image_21_model_directory,
 };
 pub use qwen3_5::{
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, context_window_tokens, required_shard_file_names,
@@ -82,14 +88,18 @@ pub struct EmbeddingModelCapabilities {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModelLicense {
     Apache20,
+    QwenResearch,
 }
 
 impl ModelLicense {
-    /// Returns the canonical SPDX license identifier exposed to API adapters.
+    /// Returns the canonical SPDX model-license identity exposed to API adapters.
     #[must_use]
     pub const fn spdx_identifier(self) -> &'static str {
         match self {
             Self::Apache20 => "Apache-2.0",
+            // The artifact's README records this as its `license_name`; the spelling is the
+            // identifier, not a display label, and the model-serving validator pins the same.
+            Self::QwenResearch => "qwen-research",
         }
     }
 }

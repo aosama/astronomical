@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
 };
-use astronomical_model_serving::{ModelFactory, ModelFactoryRuntime};
+use astronomical_model_serving::{ModelFactory, ModelFactoryRuntime, ModelFamilyImageEngine};
 use serde_json::json;
 
 use super::flux2_klein_fixture::{
@@ -33,7 +33,10 @@ async fn should_create_a_lazy_flux_image_runtime_for_the_pinned_configuration() 
     let ModelFactoryRuntime::Image(image_engine) = factory_runtime else {
         panic!("FLUX must not receive a fabricated autoregressive processor");
     };
-    assert_eq!(image_engine.loaded_revision(), None);
+    let ModelFamilyImageEngine::Flux2Klein(flux_engine) = image_engine else {
+        panic!("the FLUX configuration must select the FLUX image engine");
+    };
+    assert_eq!(flux_engine.loaded_revision(), None);
 }
 
 #[tokio::test]

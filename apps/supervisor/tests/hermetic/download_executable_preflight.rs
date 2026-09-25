@@ -136,7 +136,7 @@ async fn should_classify_a_pipeline_artifact_by_its_index_before_its_config() {
         // document would be rejected even though disk discovery would serve it.
         let transport = Arc::new(MetadataCountingTransport::new([
             repository_metadata_response(),
-            flux_pipeline_tree_response(),
+            pipeline_tree_response(),
             flux_pipeline_index_response(),
         ]));
         let journey = DownloadJourney::new(transport.clone()).await;
@@ -155,6 +155,35 @@ async fn should_classify_a_pipeline_artifact_by_its_index_before_its_config() {
     })
     .await
     .expect("pipeline precedence journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_pass_a_qwen_image_pipeline_artifact_past_the_gate() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        // Qwen-Image-2.1 advertises the same diffusers pipeline shape as FLUX: preflight
+        // classifies model_index.json, accepts the executable family, and never reads
+        // config.json before payload transfer starts.
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            pipeline_tree_response(),
+            qwen_image_pipeline_index_response(),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey.start_download_and_await_transfer_attempt().await;
+
+        assert_eq!(
+            transport.metadata_request_count(),
+            3,
+            "the gate must classify the Qwen-Image-2.1 pipeline from model_index.json"
+        );
+        assert!(
+            transport.payload_request_count() >= 1,
+            "an executable Qwen-Image-2.1 pipeline must reach payload transfer"
+        );
+    })
+    .await
+    .expect("Qwen-Image-2.1 pipeline preflight journey should remain bounded");
 }
 
 #[tokio::test]
@@ -393,11 +422,22 @@ fn qwen_tree_response() -> HubHttpResponse {
     ]))
 }
 
-fn flux_pipeline_tree_response() -> HubHttpResponse {
+fn pipeline_tree_response() -> HubHttpResponse {
     tree_response(serde_json::json!([
         {"type":"file","size":9,"path":"config.json","oid":GIT_BLOB_SHA1},
         {"type":"file","size":60,"path":"model_index.json","oid":GIT_BLOB_SHA1}
     ]))
+}
+
+fn qwen_image_pipeline_index_response() -> HubHttpResponse {
+    json_response(serde_json::json!({
+        "_class_name": "QwenImage21Pipeline",
+        "processor": ["transformers", "Qwen3VLProcessor"],
+        "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+        "text_encoder": ["transformers", "Qwen3VLForConditionalGeneration"],
+        "transformer": ["diffusers", "QwenImage21Transformer2DModel"],
+        "vae": ["diffusers", "AutoencoderKLQwenImage21"]
+    }))
 }
 
 fn flux_pipeline_index_response() -> HubHttpResponse {

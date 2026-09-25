@@ -33,6 +33,9 @@ pub(crate) mod mtp_depth_release_gate;
 pub(crate) mod qwen3_5;
 pub(crate) mod qwen3_5_moe;
 pub(crate) mod qwen4_exp;
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) mod qwen_image_21;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]

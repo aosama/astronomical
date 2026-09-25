@@ -49,6 +49,7 @@ pub struct WorkerLoadedAutoregressiveModelRuntimeConfiguration {
 #[serde(rename_all = "snake_case")]
 pub enum WorkerImageGenerationModelFamily {
     Flux2Klein,
+    QwenImage21,
 }
 
 /// Typed embedding profile identifier carried without autoregressive placeholders.
@@ -80,6 +81,15 @@ pub struct WorkerFlux2KleinModelConfiguration {
     pub artifact_revision: String,
 }
 
+/// Exact Qwen-Image-2.1 artifact identity required by the selected image profile.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerQwenImage21ModelConfiguration {
+    pub model_id: String,
+    pub model_family: WorkerImageGenerationModelFamily,
+    pub artifact_revision: String,
+}
+
 /// Complete effective execution policy for one canonical requestable model.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(
@@ -91,6 +101,7 @@ pub struct WorkerFlux2KleinModelConfiguration {
 pub enum WorkerModelConfiguration {
     Autoregressive(WorkerAutoregressiveModelConfiguration),
     Flux2Klein(WorkerFlux2KleinModelConfiguration),
+    QwenImage21(WorkerQwenImage21ModelConfiguration),
     Embeddings(WorkerEmbeddingModelConfiguration),
 }
 
@@ -105,6 +116,7 @@ pub enum WorkerModelConfiguration {
 pub enum WorkerLoadedModelRuntimeConfiguration {
     Autoregressive(WorkerLoadedAutoregressiveModelRuntimeConfiguration),
     Flux2Klein(WorkerFlux2KleinModelConfiguration),
+    QwenImage21(WorkerQwenImage21ModelConfiguration),
     Embeddings(WorkerEmbeddingModelConfiguration),
 }
 
@@ -115,6 +127,7 @@ impl WorkerModelConfiguration {
         match self {
             Self::Autoregressive(configuration) => &configuration.model_id,
             Self::Flux2Klein(configuration) => &configuration.model_id,
+            Self::QwenImage21(configuration) => &configuration.model_id,
             Self::Embeddings(configuration) => &configuration.model_id,
         }
     }
@@ -124,7 +137,7 @@ impl WorkerModelConfiguration {
     pub const fn autoregressive(&self) -> Option<&WorkerAutoregressiveModelConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_) | Self::Embeddings(_) => None,
+            Self::Flux2Klein(_) | Self::QwenImage21(_) | Self::Embeddings(_) => None,
         }
     }
 
@@ -135,7 +148,7 @@ impl WorkerModelConfiguration {
     ) -> Option<&mut WorkerAutoregressiveModelConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_) | Self::Embeddings(_) => None,
+            Self::Flux2Klein(_) | Self::QwenImage21(_) | Self::Embeddings(_) => None,
         }
     }
 
@@ -174,6 +187,9 @@ impl WorkerModelConfiguration {
             Self::Flux2Klein(configuration) => {
                 WorkerLoadedModelRuntimeConfiguration::Flux2Klein(configuration.clone())
             }
+            Self::QwenImage21(configuration) => {
+                WorkerLoadedModelRuntimeConfiguration::QwenImage21(configuration.clone())
+            }
             Self::Embeddings(configuration) => {
                 WorkerLoadedModelRuntimeConfiguration::Embeddings(configuration.clone())
             }
@@ -188,6 +204,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
         match self {
             Self::Autoregressive(configuration) => &configuration.model_id,
             Self::Flux2Klein(configuration) => &configuration.model_id,
+            Self::QwenImage21(configuration) => &configuration.model_id,
             Self::Embeddings(configuration) => &configuration.model_id,
         }
     }
@@ -199,7 +216,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
     ) -> Option<&WorkerLoadedAutoregressiveModelRuntimeConfiguration> {
         match self {
             Self::Autoregressive(configuration) => Some(configuration),
-            Self::Flux2Klein(_) | Self::Embeddings(_) => None,
+            Self::Flux2Klein(_) | Self::QwenImage21(_) | Self::Embeddings(_) => None,
         }
     }
 }
