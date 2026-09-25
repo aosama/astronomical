@@ -8,13 +8,13 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, ChatModelCapabilities, DiscoveredModel,
-    ModelCapabilities, ResolvedModelConfig, SpeculativePrefillConfig,
+    ModelCapabilities, ModelFamily, ResolvedModelConfig, SpeculativePrefillConfig,
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerEmbeddingModelConfiguration,
     WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerSpeculativePrefillConfiguration,
+    WorkerQwenImage21ModelConfiguration, WorkerSpeculativePrefillConfiguration,
 };
 
 use crate::runtime_model_policy::{
@@ -157,6 +157,37 @@ impl ResolvedModelPolicyCatalog {
     }
 
     fn image_policy(discovered_model: &DiscoveredModel) -> RuntimeModelPolicy {
+        let worker_model_configuration = match discovered_model.model_family {
+            ModelFamily::Flux2Klein => {
+                WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
+                    model_id: discovered_model.model_id.clone(),
+                    model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                    artifact_revision: discovered_model.revision.clone(),
+                })
+            }
+            ModelFamily::QwenImage21 => {
+                WorkerModelConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
+                    model_id: discovered_model.model_id.clone(),
+                    model_family: WorkerImageGenerationModelFamily::QwenImage21,
+                    artifact_revision: discovered_model.revision.clone(),
+                })
+            }
+            // An image capability requires one of the image families above; a discovered
+            // directory that classifies otherwise fails at worker selection instead of
+            // silently receiving a Flux identity it never verified.
+            ModelFamily::Qwen3_5
+            | ModelFamily::Qwen4Exp
+            | ModelFamily::Laguna
+            | ModelFamily::DeepSeekV4
+            | ModelFamily::K2HorizonMoVA
+            | ModelFamily::ModernBert => {
+                WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
+                    model_id: discovered_model.model_id.clone(),
+                    model_family: WorkerImageGenerationModelFamily::Flux2Klein,
+                    artifact_revision: discovered_model.revision.clone(),
+                })
+            }
+        };
         RuntimeModelPolicy {
             model_directory: discovered_model.model_directory.clone(),
             // Chat request defaults remain inert for a typed image worker policy.
@@ -170,13 +201,7 @@ impl ResolvedModelPolicyCatalog {
             default_maximum_context_tokens: 0,
             configured_chunking_fields: Default::default(),
             acceleration_availability: Default::default(),
-            worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
-                WorkerFlux2KleinModelConfiguration {
-                    model_id: discovered_model.model_id.clone(),
-                    model_family: WorkerImageGenerationModelFamily::Flux2Klein,
-                    artifact_revision: discovered_model.revision.clone(),
-                },
-            ),
+            worker_model_configuration,
         }
     }
 

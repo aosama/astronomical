@@ -66,6 +66,9 @@ pub enum DownloadCatalogFamily {
     Qwen3_5,
     Laguna,
     Flux2Klein,
+    /// The wire name matches the discovery family, including its underscore before 21.
+    #[serde(rename = "qwen_image_21")]
+    QwenImage21,
     /// The wire name matches the discovery model_type, which has no underscore.
     #[serde(rename = "modernbert")]
     ModernBert,
@@ -81,6 +84,7 @@ impl DownloadCatalogFamily {
             Self::Qwen3_5 => "qwen3_5",
             Self::Laguna => "laguna",
             Self::Flux2Klein => "flux2_klein",
+            Self::QwenImage21 => "qwen_image_21",
             Self::ModernBert => "modernbert",
             Self::K2HorizonMoVA => "k2_horizon_mova",
         }

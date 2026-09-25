@@ -21,4 +21,5 @@ mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
+mod qwen_image_21_http_journey;
 mod worker_failure_diagnostics;

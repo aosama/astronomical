@@ -35,3 +35,9 @@ tracing.workspace = true
 [dev-dependencies]
 tempfile = "=3.27.0"
 tracing-subscriber.workspace = true
+
+# The render example drives the MLX pipeline, so it only exists in the direct-MLX feature world;
+# without this gate a default-feature build of the crate's targets cannot link the example.
+[[example]]
+name = "qwen_image_21_render"
+required-features = ["direct-mlx"]

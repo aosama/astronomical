@@ -25,6 +25,7 @@ mod persistent_cache;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod qwen4_exp;
+mod qwen_image_21;
 mod safetensors;
 mod sampling_seed;
 mod sparse_experts;
@@ -250,7 +251,8 @@ pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;
 pub use model_family_runtime::{
-    ModelFamilyGenerationProcessor, ModelFamilyInferenceRequest, ModelFamilyRequestOutput,
+    ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceRequest,
+    ModelFamilyRequestOutput,
 };
 pub use model_generation_processor::{
     MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
@@ -325,6 +327,44 @@ pub use qwen3_5::{
     qwen3_5_vision_tensor_profiles, resolve_sampling_seed, translate_qwen3_5_preparation_error,
     translate_request_output_error, validate_context_token_count,
     validate_qwen3_5_mtp_sidecar_for_tests, validate_qwen3_5_mtp_sidecar_result_for_tests,
+};
+
+// Qwen-Image-2.1: the family's pure contracts, artifact validation, and geometry constants. The
+// MLX components (text encoder, transformer, VAE decoder, pipeline) follow below under `direct-mlx`.
+pub use qwen_image_21::{
+    CacheMode, FlowMatchSchedule, FlowMatchSchedulerParams, NUM_TRAIN_TIMESTEPS,
+    PromptConditioningOutput, QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_LICENSE_IDENTIFIER,
+    QWEN_IMAGE_21_OFFICIAL_MODEL_ID, QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT,
+    QWEN_IMAGE_21_PROVIDER_MODEL_ID, QWEN_IMAGE_21_SPATIAL_COMPRESSION_RATIO,
+    QWEN_IMAGE_21_SYS_PROMPT, QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QWEN_IMAGE_21_VAE_SCALE_FACTOR,
+    QwenImage21ArtifactError, QwenImage21ArtifactProvenance, QwenImage21ArtifactValidator,
+    QwenImage21ConfigError, QwenImage21License, QwenImage21PipelineConfig,
+    QwenImage21RetainedArtifactFiles, QwenImage21Rope, QwenImage21SchedulerConfig,
+    QwenImage21TensorDescriptor, QwenImage21TensorInventory, QwenImage21TensorProfile,
+    QwenImage21TextEncoderConfig, QwenImage21TransformerConfig, QwenImage21VaeConfig,
+    QwenImage21VaeError, SinusoidalTimesteps, TextConditioningError, VAE_SPATIAL_MULTIPLE,
+    ValidatedQwenImage21Artifact, build_block_causal_mask, build_image_ids,
+    build_prompt_conditioning, build_schedule, build_target_token_mask, cache_is_valid,
+    cache_query_slice, cache_write_slice, calculate_dimensions, calculate_shift,
+    causal_modulation_row_map, decoded_pixel_dimensions, default_shift, euler_step,
+    frequencies_for_tests, latent_spatial_dimensions, normalize_empty_prompt, pack_latents_seq_len,
+    prefix_length, prefix_segments, quantized_group_count, quantized_row_count,
+    render_t2i_prompt_template, render_ti2i_prompt_template,
+    render_ti2i_prompt_template_with_image_count, resolve_generation_dimensions,
+    round_half_to_even, round_to_nearest_multiple, special_tokens, text_encoder_tensor_profiles,
+    transformer_tensor_profiles, unpack_spatial_dims, vae_tensor_profiles, zero_center_rms_norm,
+};
+pub use qwen_image_21::{
+    QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES, QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
+    QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineError,
+    QwenImage21EngineRequest, QwenImage21ImageEngine, QwenImage21RenderAdvance,
+    QwenImage21RenderRequest, QwenImage21Rendered, qwen_image_21_image_generation_capabilities,
+    qwen_image_21_official_model_id, validate_official_request,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen_image_21::{
+    QwenImage21MlxComponents, QwenImage21Pipeline, QwenImage21TextEncoder, QwenImage21Transformer,
+    QwenImage21TransformerRequest, QwenImage21VaeDecoder,
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{
