@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::model_discovery::{
     ChatModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities,
     ModelFamily, ModelLicense, classified_artifacts, derive_revision_from_config_bytes,
-    flux2_klein, k2_horizon_mova, laguna, model_family, modernbert, qwen3_5,
+    flux2_klein, k2_horizon_mova, laguna, model_family, modernbert, qwen_image_21, qwen3_5,
 };
 
 pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
@@ -160,6 +160,22 @@ pub fn try_discover_model_with_id(
         }
         // Classification is intentionally broader than executable discovery.
         ModelFamily::DeepSeekV4 => None,
+        // The native T2I engine is wired end to end (worker factory arm, supervisor image
+        // policy, preflight, catalog), so a verified Qwen-Image-2.1 artifact now advertises
+        // with the same evidence shape as FLUX.2 Klein.
+        ModelFamily::QwenImage21 => {
+            let verified_evidence = qwen_image_21::verify_model_directory(model_directory).ok()?;
+            Some(DiscoveredModel {
+                model_id: verified_evidence.canonical_model_id,
+                provider_model_id: Some(verified_evidence.provider_model_id),
+                model_family,
+                revision: verified_evidence.revision,
+                model_directory: model_directory.to_path_buf(),
+                capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
+                license: Some(verified_evidence.license),
+                model_size_bytes: verified_evidence.model_size_bytes,
+            })
+        }
         // Recognized but deliberately not executable: no engine exists yet, so
         // the artifact stays unpublished while classification still names the
         // family for download preflight and bounded diagnostics.

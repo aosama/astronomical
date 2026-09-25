@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerAutoregressiveModelConfiguration,
     WorkerChunkingConfiguration, WorkerCommand, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel,
-    WorkerModelConfiguration, WorkerStartupConfiguration,
+    WorkerModelConfiguration, WorkerQwenImage21ModelConfiguration, WorkerStartupConfiguration,
 };
 use tokio::io::duplex;
 
@@ -195,6 +195,37 @@ fn should_acknowledge_the_exact_tagged_flux_runtime_configuration_without_chat_f
             "configuration": {
                 "model_id": "FLUX.2-klein-4B",
                 "model_family": "flux2_klein",
+                "artifact_revision": "reviewed-revision"
+            }
+        })
+    );
+}
+
+#[test]
+fn should_acknowledge_the_exact_tagged_qwen_image_runtime_configuration_without_chat_fields() {
+    let model_configuration =
+        WorkerModelConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
+            model_id: "qwen-image-2.1".to_owned(),
+            model_family: WorkerImageGenerationModelFamily::QwenImage21,
+            artifact_revision: "reviewed-revision".to_owned(),
+        });
+
+    let runtime_configuration = model_configuration.runtime_configuration();
+    assert_eq!(
+        runtime_configuration,
+        WorkerLoadedModelRuntimeConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
+            model_id: "qwen-image-2.1".to_owned(),
+            model_family: WorkerImageGenerationModelFamily::QwenImage21,
+            artifact_revision: "reviewed-revision".to_owned(),
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(runtime_configuration).expect("Qwen policy should serialize"),
+        serde_json::json!({
+            "kind": "qwen_image21",
+            "configuration": {
+                "model_id": "qwen-image-2.1",
+                "model_family": "qwen_image21",
                 "artifact_revision": "reviewed-revision"
             }
         })

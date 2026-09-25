@@ -57,7 +57,7 @@ pub use worker_model_configuration::{
     WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
     WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
-    WorkerSpeculativePrefillRuntimeConfiguration,
+    WorkerQwenImage21ModelConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
 };
 pub use worker_startup_configuration::{
     WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,

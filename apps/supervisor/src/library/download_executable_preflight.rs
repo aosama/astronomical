@@ -91,12 +91,14 @@ impl DownloadExecutablePreflight {
                     "model_index.json is not a classifiable pipeline document: {parse_error}"
                 ))
             })?;
-        if classified_family.is_some() {
-            return Ok(());
+        match classified_family {
+            Some(ModelFamily::Flux2Klein) => Ok(()),
+            Some(ModelFamily::QwenImage21) => Ok(()),
+            Some(_) => Ok(()),
+            None => Err(DownloadExecutablePreflightError::NotExecutable(
+                "model_index.json does not describe a supported text-to-image pipeline".to_owned(),
+            )),
         }
-        Err(DownloadExecutablePreflightError::NotExecutable(
-            "model_index.json does not describe a supported text-to-image pipeline".to_owned(),
-        ))
     }
 
     async fn validate_config_artifact(
@@ -136,7 +138,8 @@ impl DownloadExecutablePreflight {
             ModelFamily::Laguna
             | ModelFamily::K2HorizonMoVA
             | ModelFamily::ModernBert
-            | ModelFamily::Flux2Klein => Ok(()),
+            | ModelFamily::Flux2Klein
+            | ModelFamily::QwenImage21 => Ok(()),
             ModelFamily::Qwen3_5 => {
                 self.validate_qwen3_5_manifest_shape(
                     manifest,

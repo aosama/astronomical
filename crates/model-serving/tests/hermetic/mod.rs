@@ -13,6 +13,9 @@ mod expert_residency_policy;
 mod kernel_capability;
 mod memory_policy;
 mod mlx_ram_budget;
+// The #596 reproduction exercises the feature-gated ModernBERT tokenizer, so it runs in the
+// unified (feature-enabled) lanes exactly like the other gated hermetic modules.
+#[cfg(feature = "direct-mlx")]
 mod modernbert_tokenizer_gap;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_materialization;

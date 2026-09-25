@@ -112,6 +112,29 @@
             "upstream_license": "Apache-2.0"
         },
         {
+            "huggingface_id": "mlx-community/Qwen-Image-2.1-MLX-4bit",
+            "revision": "4db4e8c0c0e7a1debf0320415bec8388e888494c",
+            "display_name": "Qwen-Image 2.1 4-bit",
+            "family": "qwen_image_21",
+            "approximate_size_bytes": 10497210127,
+            "public": true,
+            "description": "A local text-to-image model that creates one lossless PNG from a prompt.",
+            "capabilities": {
+                "supports_image_generation": true
+            },
+            "included_paths": [
+                "README.md",
+                "model_index.json",
+                "processor/",
+                "scheduler/",
+                "text_encoder/",
+                "transformer/",
+                "vae/"
+            ],
+            "architecture_summary": "Qwen-Image 2.1 MMDiT, Qwen3-VL text encoder, 4-bit affine MLX weights",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
             "revision": "5f31fcd089ce6f47f1073d3ae43dcb3a0bd1869f",
             "display_name": "Ornith 1.5 35B A3B OptiQ 4bit",

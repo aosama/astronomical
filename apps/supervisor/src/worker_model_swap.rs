@@ -190,6 +190,9 @@ fn validate_model_swap_event(
         WorkerLoadedModelRuntimeConfiguration::Flux2Klein(_) => {
             capabilities.chat.is_none() && capabilities.image_generation.is_some()
         }
+        WorkerLoadedModelRuntimeConfiguration::QwenImage21(_) => {
+            capabilities.chat.is_none() && capabilities.image_generation.is_some()
+        }
         WorkerLoadedModelRuntimeConfiguration::Embeddings(_) => {
             capabilities.chat.is_none()
                 && capabilities.image_generation.is_none()

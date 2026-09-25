@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::{deepseek_v4, flux2_klein, k2_horizon_mova, laguna, modernbert, qwen3_5, qwen4_exp};
+use super::{
+    deepseek_v4, flux2_klein, k2_horizon_mova, laguna, modernbert, qwen_image_21, qwen3_5,
+    qwen4_exp,
+};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -18,6 +21,7 @@ pub enum ModelFamily {
     DeepSeekV4,
     K2HorizonMoVA,
     Flux2Klein,
+    QwenImage21,
     ModernBert,
 }
 
@@ -181,7 +185,17 @@ fn classify_pipeline_directory(
                 source,
             }
         })?;
-    Ok(is_flux2_klein.then_some(ModelFamily::Flux2Klein))
+    if is_flux2_klein {
+        return Ok(Some(ModelFamily::Flux2Klein));
+    }
+    let is_qwen_image_21 = qwen_image_21::classifies_pipeline_index(&pipeline_index_bytes)
+        .map_err(
+            |source| ModelFamilyClassificationError::ParsePipelineIndex {
+                model_directory: model_directory.to_path_buf(),
+                source,
+            },
+        )?;
+    Ok(is_qwen_image_21.then_some(ModelFamily::QwenImage21))
 }
 
 /// Classifies a Diffusers pipeline index document without a file-system read, reusing the exact
@@ -192,8 +206,12 @@ fn classify_pipeline_directory(
 pub fn classify_pipeline_index_bytes(
     pipeline_index_bytes: &[u8],
 ) -> Result<Option<ModelFamily>, serde_json::Error> {
-    flux2_klein::classifies_pipeline_index(pipeline_index_bytes)
-        .map(|is_flux2_klein| is_flux2_klein.then_some(ModelFamily::Flux2Klein))
+    let is_flux2_klein = flux2_klein::classifies_pipeline_index(pipeline_index_bytes)?;
+    if is_flux2_klein {
+        return Ok(Some(ModelFamily::Flux2Klein));
+    }
+    let is_qwen_image_21 = qwen_image_21::classifies_pipeline_index(pipeline_index_bytes)?;
+    Ok(is_qwen_image_21.then_some(ModelFamily::QwenImage21))
 }
 
 /// Minimal duplicate-aware projection keeps family dispatch independent from full config shape.
