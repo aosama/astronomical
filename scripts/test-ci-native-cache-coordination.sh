@@ -238,7 +238,7 @@ assert_workflow_contract() {
         raise "change-scope policy is not script-owned" unless classification_step.fetch("run").include?("classify-ci-change-scope.sh")
         raise "classifier job still computes unused native identity" if detection_job.fetch("steps").any? { |step| step["run"]&.include?("native-build-cache-fingerprint.sh") }
         verification_job = workflow.fetch("jobs").fetch("verify")
-        raise "required check name changed" unless verification_job.fetch("name") == "10-minute macOS hermetic verification"
+        raise "required check name changed" unless verification_job.fetch("name") == "macOS hermetic verification"
         raise "required check exceeded its hard cap" unless verification_job.fetch("timeout-minutes") == 15
         expected_authority = "${{ always() && (needs.detect-changes.result != '\''success'\'' || needs.detect-changes.outputs.macos_verification_required == '\''true'\'') }}"
         raise "macOS authority does not fail closed" unless verification_job.fetch("if") == expected_authority
