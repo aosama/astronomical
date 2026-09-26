@@ -2,7 +2,11 @@
 
 ## North Star
 
-A performance optimized local VLM/LLM runner completely optimized for Apple silicon. Built based on the C++ APIs provided from Apple. Astronomical assumes that user is running it for personal use on their Macbook.
+A performance optimized local VLM/LLM runner completely optimized for Apple silicon. Built based on the C++ APIs provided from Apple. Astronomical assumes that user is running it for personal use on their peronal computer.
+
+## Target User Base
+
+- Primary user segment target is average joe computer user aka normies.
 
 ## Product principles
 
