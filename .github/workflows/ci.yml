@@ -42,8 +42,11 @@ jobs:
   verify:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
-    # This name is the Protect-main required-check identity, not a duration.
-    name: 10-minute macOS hermetic verification
+    # Protect-main required-check identity: stable, duration-free. The runtime cap
+    # lives in timeout-minutes below, never here, so the identity can't silently
+    # drift from reality. Keep it in sync with branch protection (configured outside
+    # this repo) if you ever change it.
+    name: macOS hermetic verification
     runs-on: macos-26
     concurrency:
       group: macos-hermetic-${{ github.event_name }}-${{ github.ref }}
