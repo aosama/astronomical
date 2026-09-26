@@ -51,6 +51,86 @@ final class SupervisorStatusJourneyTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_present_a_complete_qwen_image_status_response_in_the_menu_store() async throws {
+    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: try fixtureData(named: "full-qwen-image-status")
+    )
+    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+
+    await telemetryStore.refresh()
+
+    guard case let .qwenImage21(imageConfiguration) = telemetryStore.statusDocument
+      .workerRuntimeFeatureConfiguration?.loadedModel
+    else {
+      return XCTFail("The tagged Qwen-Image configuration must retain its model family")
+    }
+    XCTAssertEqual(imageConfiguration.modelIdentifier, "fictional/qwen-image-model")
+    XCTAssertEqual(imageConfiguration.modelFamily, .qwenImage21)
+    XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
+    XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
+    XCTAssertEqual(telemetryStore.statusDocument.menuBarTitle, "Image 50%")
+    XCTAssertEqual(telemetryStore.statusDocument.progressTitle, "50% · 2 / 4 steps")
+  }
+
+  @MainActor
+  func test_should_present_a_complete_embedding_status_response_in_the_menu_store() async throws {
+    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: try fixtureData(named: "full-embedding-status")
+    )
+    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+
+    await telemetryStore.refresh()
+
+    guard case let .embeddings(embeddingConfiguration) = telemetryStore.statusDocument
+      .workerRuntimeFeatureConfiguration?.loadedModel
+    else {
+      return XCTFail("The tagged embedding configuration must retain its model family")
+    }
+    XCTAssertEqual(embeddingConfiguration.modelIdentifier, "fictional/embedding-model")
+    XCTAssertEqual(embeddingConfiguration.modelFamily, .modernBert)
+    XCTAssertEqual(embeddingConfiguration.vectorWidth, 768)
+    XCTAssertEqual(embeddingConfiguration.maximumInputTokens, 8_192)
+    XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
+  }
+
+  @MainActor
+  func test_should_diagnose_an_unknown_loaded_model_family_and_recover_on_the_next_valid_status() async throws {
+    let validStatusResponse = try fixtureData(named: "full-qwen-image-status")
+    var malformedStatusFixture = try jsonObject(from: validStatusResponse)
+    var runtimeConfiguration = try XCTUnwrap(
+      malformedStatusFixture["worker_runtime_feature_configuration"] as? [String: Any])
+    var loadedModel = try XCTUnwrap(runtimeConfiguration["loaded_model"] as? [String: Any])
+    loadedModel["kind"] = "some_future_image_family"
+    runtimeConfiguration["loaded_model"] = loadedModel
+    malformedStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
+    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: try JSONSerialization.data(withJSONObject: malformedStatusFixture)
+    )
+    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+
+    await telemetryStore.refresh()
+
+    XCTAssertEqual(telemetryStore.statusDocument.status, "unavailable")
+    XCTAssertTrue(
+      telemetryStore.lastStatusRefreshErrorMessage?.contains("some_future_image_family") == true)
+
+    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: validStatusResponse
+    )
+    await telemetryStore.refresh()
+
+    XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
+    XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
+  }
+
+  @MainActor
   func test_should_diagnose_worker_policy_drift_and_recover_on_the_next_valid_status() async throws {
     let validStatusResponse = try fixtureData(named: "full-autoregressive-status")
     var malformedStatusFixture = try jsonObject(from: validStatusResponse)
