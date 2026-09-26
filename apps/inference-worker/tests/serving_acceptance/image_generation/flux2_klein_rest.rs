@@ -349,8 +349,6 @@ fn flux_request_body(canonical_model_id: &str, acceptance_prompt: &str) -> Strin
         "seed": ACCEPTANCE_SEED,
         "width": ACCEPTANCE_WIDTH_PIXELS,
         "height": ACCEPTANCE_HEIGHT_PIXELS,
-        "steps": 4,
-        "guidance": 1.0,
         "response_format": "b64_json"
     })
     .to_string()

@@ -68,11 +68,19 @@ pub struct ChatModelCapabilities {
 }
 
 /// Image operations advertised without inventing autoregressive token limits.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ImageGenerationCapabilities {
     pub supports_text_to_image: bool,
     pub supports_image_editing: bool,
     pub supports_multiple_reference_images: bool,
+    /// The family's canonical denoising-step count, applied to every served request.
+    ///
+    /// The REST surface deliberately carries no caller override: a mistuned step count
+    /// quarter-denoises the render (ghosted subjects, streaked texture) while every
+    /// structural check still passes, so the schedule is a discovery fact of the family
+    /// rather than a knob. The engine-side step envelope lives in the family's serving
+    /// profile (`model-serving`); this value must stay within that envelope.
+    pub default_steps: u16,
 }
 
 /// Embedding inference advertised without inventing autoregressive token limits.

@@ -59,41 +59,45 @@ async fn should_generate_one_base64_png_through_the_public_http_journey() {
     assert_eq!(commands.len(), 1);
     assert_eq!(commands[0].model, IMAGE_MODEL_ID);
     assert_eq!(commands[0].settings.seed, 7);
+    // The diffusion schedule is server-owned: the executed command carries the step count the
+    // worker advertised as its profile default, never a caller-supplied value.
+    assert_eq!(commands[0].settings.steps, 4);
+    assert_eq!(commands[0].settings.guidance_thousandths, 1_000);
 }
 
 #[tokio::test]
 async fn should_reject_every_unsupported_image_field_before_dispatch() {
     let invalid_requests = [
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": " ", "width": 1024, "height": 1024, "steps": 4, "guidance": 1.0, "response_format": "b64_json"}),
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": " ", "width": 1024, "height": 1024, "response_format": "b64_json"}),
             "prompt",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 63, "height": 1024, "steps": 4, "guidance": 1.0, "response_format": "b64_json"}),
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 63, "height": 1024, "response_format": "b64_json"}),
             "width",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 80, "height": 1023, "steps": 4, "guidance": 1.0, "response_format": "b64_json"}),
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 80, "height": 1023, "response_format": "b64_json"}),
             "height",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "steps": 5, "guidance": 1.0, "response_format": "b64_json"}),
-            "steps",
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "steps": 4, "response_format": "b64_json"}),
+            "request",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "steps": 4, "guidance": 1.1, "response_format": "b64_json"}),
-            "guidance",
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "guidance": 1.0, "response_format": "b64_json"}),
+            "request",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "steps": 4, "guidance": 1.0, "response_format": "url"}),
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "response_format": "url"}),
             "response_format",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "steps": 4, "guidance": 1.0, "response_format": "b64_json", "n": 2}),
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "response_format": "b64_json", "n": 2}),
             "n",
         ),
         (
-            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "steps": 4, "guidance": 1.0, "response_format": "b64_json", "quality": "hd"}),
+            serde_json::json!({"model": IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 1024, "response_format": "b64_json", "quality": "hd"}),
             "request",
         ),
     ];
@@ -336,8 +340,6 @@ async fn should_reject_malformed_json_and_transport_overflow_before_dispatch() {
                 "prompt": oversized_prompt,
                 "width": 1024,
                 "height": 1024,
-                "steps": 4,
-                "guidance": 1.0,
                 "response_format": "b64_json"
             })))
             .await
@@ -358,8 +360,6 @@ fn valid_request_document() -> serde_json::Value {
         "seed": 7,
         "width": 1024,
         "height": 1024,
-        "steps": 4,
-        "guidance": 1.0,
         "response_format": "b64_json"
     })
 }
@@ -400,6 +400,7 @@ fn image_model() -> DiscoveredModel {
             supports_text_to_image: true,
             supports_image_editing: false,
             supports_multiple_reference_images: false,
+            default_steps: 4,
         }),
         license: Some(ModelLicense::Apache20),
         model_size_bytes: 1,

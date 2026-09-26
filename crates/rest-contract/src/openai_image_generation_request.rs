@@ -12,10 +12,12 @@ pub const MIN_OPENAI_IMAGE_DIMENSION_PIXELS: u32 = 64;
 pub const MAX_OPENAI_IMAGE_DIMENSION_PIXELS: u32 = 1_024;
 
 const IMAGE_DIMENSION_MULTIPLE_PIXELS: u32 = 16;
-const SUPPORTED_IMAGE_STEPS: u32 = 4;
-const SUPPORTED_IMAGE_GUIDANCE: f32 = 1.0;
 
 /// One strict request to the local OpenAI-compatible image generation endpoint.
+///
+/// The diffusion schedule is deliberately absent from the wire: the worker's model profile
+/// owns the step count and guidance (the reference default schedule), so callers cannot
+/// trade away quality with a mistuned control value.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct OpenAiImageGenerationRequest {
     model: String,
@@ -24,8 +26,6 @@ pub struct OpenAiImageGenerationRequest {
     seed: Option<u64>,
     width: u32,
     height: u32,
-    steps: u32,
-    guidance: f32,
     response_format: String,
     #[serde(default = "default_image_count")]
     n: u32,
@@ -51,16 +51,6 @@ impl OpenAiImageGenerationRequest {
         }
         validate_dimension("width", self.width)?;
         validate_dimension("height", self.height)?;
-        if self.steps != SUPPORTED_IMAGE_STEPS {
-            return Err(OpenAiImageGenerationValidationError::UnsupportedStepCount {
-                actual_steps: self.steps,
-            });
-        }
-        if self.guidance != SUPPORTED_IMAGE_GUIDANCE {
-            return Err(OpenAiImageGenerationValidationError::UnsupportedGuidance {
-                actual_guidance: self.guidance,
-            });
-        }
         if self.response_format != "b64_json" {
             return Err(
                 OpenAiImageGenerationValidationError::UnsupportedResponseFormat {
@@ -82,8 +72,6 @@ impl OpenAiImageGenerationRequest {
             seed: self.seed,
             width: self.width,
             height: self.height,
-            steps: self.steps,
-            guidance: self.guidance,
             response_format: OpenAiImageGenerationResponseFormat::Base64Json,
             image_count: self.n,
         })
@@ -98,8 +86,6 @@ pub struct OpenAiImageGenerationRequestParts {
     pub seed: Option<u64>,
     pub width: u32,
     pub height: u32,
-    pub steps: u32,
-    pub guidance: f32,
     pub response_format: OpenAiImageGenerationResponseFormat,
     pub image_count: u32,
 }
@@ -132,12 +118,6 @@ pub enum OpenAiImageGenerationValidationError {
         minimum_pixels: u32,
         maximum_pixels: u32,
     },
-    /// The initial native profile has one supported diffusion schedule.
-    #[error("image generation supports exactly 4 steps, received {actual_steps}")]
-    UnsupportedStepCount { actual_steps: u32 },
-    /// The initial native profile has one supported guidance setting.
-    #[error("image generation supports guidance 1.0 only, received {actual_guidance}")]
-    UnsupportedGuidance { actual_guidance: f32 },
     /// Only inline base64 JSON preserves the initial endpoint's local transport contract.
     #[error("image response format '{response_format}' is unsupported")]
     UnsupportedResponseFormat { response_format: String },

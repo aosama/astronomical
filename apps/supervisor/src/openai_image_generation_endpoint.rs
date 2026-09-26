@@ -78,16 +78,24 @@ pub(crate) async fn create_image_generation(
             "model_not_found",
         );
     };
-    if !matches!(
-        &discovered_model.capabilities,
-        ModelCapabilities::ImageGeneration(capabilities) if capabilities.supports_text_to_image
-    ) {
+    let ModelCapabilities::ImageGeneration(image_capabilities) = &discovered_model.capabilities
+    else {
+        return invalid_request_response(
+            "the requested model does not support text-to-image generation",
+            Some("model"),
+            "model_capability_mismatch",
+        );
+    };
+    if !image_capabilities.supports_text_to_image {
         return invalid_request_response(
             "the requested model does not support text-to-image generation",
             Some("model"),
             "model_capability_mismatch",
         );
     }
+    // The diffusion schedule is a discovery fact of the model family: image workers start idle
+    // and only publish their capabilities after the request-triggered model swap, so the
+    // family's canonical step count is read from discovery rather than from worker state.
 
     let request_id = match allocate_chat_request_id(&application_state.next_chat_request_id) {
         Some(request_id) => request_id,
@@ -103,8 +111,7 @@ pub(crate) async fn create_image_generation(
         settings: ImageGenerationSettings {
             width_pixels: request_parts.width,
             height_pixels: request_parts.height,
-            // REST validation has already established the exact supported values.
-            steps: u16::try_from(request_parts.steps).unwrap_or(4),
+            steps: image_capabilities.default_steps,
             guidance_thousandths: 1_000,
             seed: effective_seed,
         },
@@ -171,8 +178,6 @@ fn image_validation_parameter(error: &OpenAiImageGenerationValidationError) -> &
         OpenAiImageGenerationValidationError::UnsupportedDimension { parameter_name, .. } => {
             parameter_name
         }
-        OpenAiImageGenerationValidationError::UnsupportedStepCount { .. } => "steps",
-        OpenAiImageGenerationValidationError::UnsupportedGuidance { .. } => "guidance",
         OpenAiImageGenerationValidationError::UnsupportedResponseFormat { .. } => "response_format",
         OpenAiImageGenerationValidationError::UnsupportedImageCount { .. } => "n",
     }

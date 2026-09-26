@@ -8,11 +8,11 @@
 //! and the REST response contract — so a green run here means the code actually works, not that
 //! each layer works in isolation.
 //!
-//! The render runs at 256×256 with the REST contract's fixed four steps so the whole journey
-//! fits the bounded 115-second budget on any machine that can hold the model. Setting
-//! `ASTRONOMICAL_QWEN_IMAGE_21_RENDER_OUTPUT` writes the served PNG to that path so a human can
-//! inspect it for coherence — pixel-statistics assertions cannot see garbling that keeps
-//! neighbour pixels correlated.
+//! The render runs at 256×256 with the worker profile's default schedule (the reference's 40
+//! steps) so the whole journey fits the bounded 115-second budget on any machine that can hold
+//! the model. Setting `ASTRONOMICAL_QWEN_IMAGE_21_RENDER_OUTPUT` writes the served PNG to that
+//! path so a human can inspect it for coherence — pixel-statistics assertions cannot see
+//! garbling that keeps neighbour pixels correlated.
 //!
 //! Prerequisites: the real worker binary must sit next to the daemon binary, so build both
 //! before running (`cargo build -p astronomical-supervisor -p astronomical-inference-worker`).
@@ -37,8 +37,6 @@ const JOURNEY_PROMPT: &str =
     "It is the east, and Juliet is the sun. Golden dawn light over a balcony garden.";
 const JOURNEY_WIDTH: u32 = 256;
 const JOURNEY_HEIGHT: u32 = 256;
-/// The REST image contract accepts exactly four steps and guidance 1.0.
-const JOURNEY_STEPS: u32 = 4;
 const JOURNEY_SEED: u64 = 20260924;
 const EXPECTED_MODEL_ID: &str = "Qwen-Image-2.1-MLX-4bit";
 /// Minimum neighbour luma correlation the served image must clear to count as a picture.
@@ -245,7 +243,7 @@ async fn post_image_generation_request_with_startup_retries(
 
 async fn post_image_generation_request(daemon_address: SocketAddr, model_id: &str) -> String {
     let request_body = format!(
-        r#"{{"model":"{model_id}","prompt":"{JOURNEY_PROMPT}","width":{JOURNEY_WIDTH},"height":{JOURNEY_HEIGHT},"steps":{JOURNEY_STEPS},"guidance":1.0,"response_format":"b64_json","seed":{JOURNEY_SEED}}}"#
+        r#"{{"model":"{model_id}","prompt":"{JOURNEY_PROMPT}","width":{JOURNEY_WIDTH},"height":{JOURNEY_HEIGHT},"response_format":"b64_json","seed":{JOURNEY_SEED}}}"#
     );
     let mut daemon_connection = TcpStream::connect(daemon_address)
         .await
