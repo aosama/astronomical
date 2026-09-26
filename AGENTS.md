@@ -26,6 +26,12 @@
 
 - Tests must use temporary directories, repository fixtures, or clearly fictional placeholder paths that cannot identify a developer workstation.
 
+## Never Kill the Running Stable Instance
+
+- While developing this codebase, never kill, stop, terminate, or force-quit the running Stable instance: the `astronomicald` daemon on `127.0.0.1:6732`, the `~/Applications/Astronomical.app`, or any process bound to the Stable state directory `~/.astronomical`. Stable is the user's live daily driver and its process lifecycle is owned by macOS LaunchAgents, not by this repository.
+- All development, debugging, and validation run against the Development instance (`~/.astronomical-dev`, `127.0.0.1:6733`, `Astronomical Development.app`). If you need a clean slate, restart or rebuild the Development instance -- never the Stable one.
+- This means no `pkill`/`killall`/`kill` against `astronomicald`, no `launchctl stop` on the Stable agent, and no killing the Stable app from the Dock or Activity Monitor. If a Stable process is wedged, report it and let the user handle it; do not terminate it yourself.
+
 ## There are No Downstream Consumers or Dependencies
 
 - There are no downstream consumers or other dependant applications -- hence no need for deprication or compatibilty shims or any other techniques. Work in a fail forward fashion.
@@ -34,11 +40,6 @@
 
 - Code files should remain around the 500 lines marker not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
-
-## Repo Discovery Guide Line Budget
-
-- `repo-discovery-guide-for-agents.md` is exempt from the 200-line budget in the repo-discovery-guide skill. Let it run longer than 200 lines when verified evidence needs the room.
-- Do not delete, merge, or compress a recorded gotcha to satisfy a line count. A missing retired-path or measured-regression warning costs more in rediscovery than the lines it occupies, so keep prose lean and omit lower-value detail while preserving each fact that has been verified against the running system.
 
 ## There is No Backward Compatibility Requirements for the REST API surface
 
