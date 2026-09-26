@@ -43,6 +43,8 @@ struct WorkerRuntimeFeatureConfiguration: Codable, Equatable {
 enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
   case autoregressive(WorkerLoadedAutoregressiveModelRuntimeConfiguration)
   case flux2Klein(WorkerLoadedFlux2KleinModelRuntimeConfiguration)
+  case qwenImage21(WorkerLoadedQwenImage21ModelRuntimeConfiguration)
+  case embeddings(WorkerLoadedEmbeddingModelRuntimeConfiguration)
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case kind
@@ -52,6 +54,8 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
   private enum Kind: String, Codable {
     case autoregressive
     case flux2Klein = "flux2_klein"
+    case qwenImage21 = "qwen_image21"
+    case embeddings
   }
 
   init(from decoder: Decoder) throws {
@@ -71,6 +75,18 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
           WorkerLoadedFlux2KleinModelRuntimeConfiguration.self,
           forKey: .configuration
         ))
+    case .qwenImage21:
+      self = .qwenImage21(
+        try container.decode(
+          WorkerLoadedQwenImage21ModelRuntimeConfiguration.self,
+          forKey: .configuration
+        ))
+    case .embeddings:
+      self = .embeddings(
+        try container.decode(
+          WorkerLoadedEmbeddingModelRuntimeConfiguration.self,
+          forKey: .configuration
+        ))
     }
   }
 
@@ -82,6 +98,12 @@ enum WorkerLoadedModelRuntimeConfiguration: Codable, Equatable {
       try container.encode(configuration, forKey: .configuration)
     case let .flux2Klein(configuration):
       try container.encode(Kind.flux2Klein, forKey: .kind)
+      try container.encode(configuration, forKey: .configuration)
+    case let .qwenImage21(configuration):
+      try container.encode(Kind.qwenImage21, forKey: .kind)
+      try container.encode(configuration, forKey: .configuration)
+    case let .embeddings(configuration):
+      try container.encode(Kind.embeddings, forKey: .kind)
       try container.encode(configuration, forKey: .configuration)
     }
   }
@@ -149,8 +171,59 @@ struct WorkerLoadedFlux2KleinModelRuntimeConfiguration: Codable, Equatable {
   }
 }
 
+struct WorkerLoadedQwenImage21ModelRuntimeConfiguration: Codable, Equatable {
+  let modelIdentifier: String
+  let modelFamily: WorkerImageGenerationModelFamily
+  let artifactRevision: String
+
+  enum CodingKeys: String, CodingKey, CaseIterable {
+    case modelIdentifier = "model_id"
+    case modelFamily = "model_family"
+    case artifactRevision = "artifact_revision"
+  }
+
+  init(from decoder: Decoder) throws {
+    try decoder.rejectUnknownKeys(CodingKeys.self)
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
+    modelFamily = try container.decode(WorkerImageGenerationModelFamily.self, forKey: .modelFamily)
+    artifactRevision = try container.decode(String.self, forKey: .artifactRevision)
+  }
+}
+
+struct WorkerLoadedEmbeddingModelRuntimeConfiguration: Codable, Equatable {
+  let modelIdentifier: String
+  let modelFamily: WorkerEmbeddingModelFamily
+  let artifactRevision: String
+  let vectorWidth: UInt32
+  let maximumInputTokens: UInt32
+
+  enum CodingKeys: String, CodingKey, CaseIterable {
+    case modelIdentifier = "model_id"
+    case modelFamily = "model_family"
+    case artifactRevision = "artifact_revision"
+    case vectorWidth = "vector_width"
+    case maximumInputTokens = "maximum_input_tokens"
+  }
+
+  init(from decoder: Decoder) throws {
+    try decoder.rejectUnknownKeys(CodingKeys.self)
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
+    modelFamily = try container.decode(WorkerEmbeddingModelFamily.self, forKey: .modelFamily)
+    artifactRevision = try container.decode(String.self, forKey: .artifactRevision)
+    vectorWidth = try container.decode(UInt32.self, forKey: .vectorWidth)
+    maximumInputTokens = try container.decode(UInt32.self, forKey: .maximumInputTokens)
+  }
+}
+
 enum WorkerImageGenerationModelFamily: String, Codable, Equatable {
   case flux2Klein = "flux2_klein"
+  case qwenImage21 = "qwen_image21"
+}
+
+enum WorkerEmbeddingModelFamily: String, Codable, Equatable {
+  case modernBert = "modernbert"
 }
 
 struct WorkerSpeculativePrefillRuntimeConfiguration: Codable, Equatable {
