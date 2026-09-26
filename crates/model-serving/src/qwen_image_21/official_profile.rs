@@ -22,7 +22,9 @@ pub const QWEN_IMAGE_21_IMAGE_DIMENSION_MULTIPLE_PIXELS: u32 =
     crate::qwen_image_21::VAE_SPATIAL_MULTIPLE as u32;
 /// Lower step bound: at least one denoising step, matching the pipeline's own requirement.
 pub const QWEN_IMAGE_21_MINIMUM_IMAGE_GENERATION_STEPS: u16 = 1;
-/// Upper step bound: the reference pipeline's default inference step count.
+/// Upper step bound: the reference pipeline's default inference step count, which is also
+/// the schedule every served request runs (mirrored as the discovery-time
+/// `default_steps` in the config crate because the supervisor cannot reach this crate).
 pub const QWEN_IMAGE_21_MAXIMUM_IMAGE_GENERATION_STEPS: u16 = 40;
 /// Qwen-Image-2.1 samples without classifier-free guidance; 1.0 is the neutral scale the
 /// reference documents for exactly that case, and the supervisor always sends it.

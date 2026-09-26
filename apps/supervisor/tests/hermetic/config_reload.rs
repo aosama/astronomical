@@ -471,6 +471,7 @@ fn image_discovered_model(
             supports_text_to_image: true,
             supports_image_editing,
             supports_multiple_reference_images: false,
+            default_steps: 4,
         }),
         license: Some(astronomical_config::ModelLicense::Apache20),
         model_size_bytes: 4_000,
