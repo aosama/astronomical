@@ -132,6 +132,8 @@ fn verify_model_directory_evidence(
             supports_text_to_image: true,
             supports_image_editing: false,
             supports_multiple_reference_images: false,
+            // FLUX.2 Klein is a distilled turbo model whose reference schedule is four steps.
+            default_steps: 4,
         },
         model_size_bytes,
     })
