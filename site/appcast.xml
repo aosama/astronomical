@@ -4,37 +4,42 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.53</title>
-            <pubDate>Fri, 25 Sep 2026 23:13:59 -0400</pubDate>
-            <sparkle:version>669</sparkle:version>
-            <sparkle:shortVersionString>0.2.53</sparkle:shortVersionString>
+            <title>0.2.54</title>
+            <pubDate>Sat, 26 Sep 2026 09:35:17 -0400</pubDate>
+            <sparkle:version>672</sparkle:version>
+            <sparkle:shortVersionString>0.2.54</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.53
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.54
 
-## What's new
+This release fixes local image generation quality on macOS.
 
-- **Menu bar progress now shows during Qwen image generation and for embedding models.** Astronomical now reports live progress in the macOS menu bar — `Image 25% -> 50% -> 75%` while a Qwen Image 2.1 image renders, plus equivalent status for embedding models. Previously the menu bar froze with no progress while a Qwen or embedding model was loaded. This closes [#786](https://github.com/aosama/astronomical/issues/786).
+## What changed
+
+Image generation now renders on each model's canonical diffusion schedule instead of a pinned four-step count.
+
+The local image generation endpoint previously forced a single four-step denoising schedule for every image-generation model. A model whose reference schedule is longer was rendered with only four steps, producing results with muted, streaked, or ghosted detail. The diffusion schedule is now a per-model-family discovery fact, so each model uses its own reference count — for example Qwen Image 2.1 runs its canonical 40 steps, and FLUX.2 Klein runs its four-step reference schedule. Full image quality is restored for every image-generation model.
+
+The local `POST /v1/images/generations` request no longer accepts the optional `steps` and `guidance` fields. A mistuned step count can quarter-denoise a render while every structural check still passes, so the schedule is owned by the model family rather than exposed as a caller control.
 
 ## Compatibility
 
-- Apple Silicon Macs, macOS 14.0 (Sonoma) and later.
-- No configuration or API migration from 0.2.52.
+- The local `POST /v1/images/generations` endpoint no longer reads `steps` or `guidance` from requests. Callers that sent them were already limited to a single hard-coded value; the endpoint now derives the correct count from the model family.
+- Request validation is otherwise unchanged: image dimensions stay within 64–1024 pixels in multiples of 16, `n` stays one, and `response_format` stays `b64_json`.
 
-## Your state is preserved
+## Preserved
 
-- Your model RAM ceiling, model library, and prompt cache are unchanged by this update.
+- Model selection, resolution validation, and seeded, deterministic output are unchanged.
+- No local state, caches, or user settings are affected.
 
-## Signed and verified distribution
+## Distribution
 
-- Distributed as a Developer ID-signed app built with the Hardened Runtime for `arm64`.
-- Downloaded through the signed Apple Notarization process and stapled.
-- Updates are delivered through the signed Sparkle feed. Verify the download by checking its SHA-256 against the digest recorded in this release's manifest.
+Astronomical 0.2.54 is distributed as a code-signed, Hardened Runtime, notarized macOS `.dmg`. The GitHub release asset and the Sparkle update feed enclosure are pinned to their SHA-256 digests, and the live signed update feed is updated after publication.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.53/Astronomical-0.2.53-macOS-arm64.dmg" length="18290774" type="application/octet-stream" sparkle:edSignature="IoGsXciGToU7qwfsG6gAPhdJ92K1JVlmPAVgOdd7bz9lmC4CNVh6+t4HfXfsQLFUbTmDQEl+mSWCLewY7SV0Cg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.54/Astronomical-0.2.54-macOS-arm64.dmg" length="18288739" type="application/octet-stream" sparkle:edSignature="NIKUP+RwZ2sL4M3Svs+ZGuneaReYCgHgABQbaP6HtXUEK3Ej+uhk7m13YUM9FmAqBQMb118YZBIFHvxDDMpoBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: qEnSN394xRdKgU8qCYXxF7Yfpo8RcgmjvrN5ez32v1JPyArmbeWqo/TI/xMr8umOSemhP/AdnxSM7JSRfUG7DQ==
-length: 2283
+edSignature: PZeizqaze8q8jaXGvKtnO66mPazhB0bawwh+AfIg7SpPoa0JA5CHBhLC44MdtlyVCxKzKCuKEtOhkE28YykwDA==
+length: 3149
 -->
