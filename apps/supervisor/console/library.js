@@ -13,6 +13,10 @@ const LIBRARY_CATALOG_TIMEOUT_MILLIS = 10_000;
 let libraryCatalogLoadPromise = null;
 let libraryCatalogDocument = null;
 let libraryCurrentDownload = { state: "idle" };
+// Fingerprint and outcome of the last full catalog render; the 1s poll skips
+// re-rendering when nothing changed (see renderLibraryCatalogDocument).
+let libraryRenderedStateFingerprint = null;
+let libraryRenderedStateOutcome = "unavailable";
 let libraryPollingTimer = null;
 let libraryRefreshPromise = null;
 let libraryProgressSample = null;
@@ -96,11 +100,28 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
     if (!resolvedCatalogContainer) {
         return "unavailable";
     }
+    // The 1s download poll re-enters this function every tick; when no render
+    // input moved, skip the rebuild so in-progress text selection and focus
+    // survive (replacing nodes cuts selections out from under an active drag).
+    const renderStateFingerprint = JSON.stringify([
+        catalogDocument,
+        libraryCurrentDownload,
+        librarySearchQuery,
+        libraryFamilyFilter,
+        libraryReadinessFilter,
+        libraryExpandedModelId,
+    ]);
+    if (renderStateFingerprint === libraryRenderedStateFingerprint) {
+        return libraryRenderedStateOutcome;
+    }
+    libraryRenderedStateFingerprint = renderStateFingerprint;
     const catalogRows = libraryCatalogRowsFromDocument(catalogDocument);
     if (catalogRows === null) {
+        libraryRenderedStateOutcome = "unavailable";
         return renderLibraryUnavailableState(resolvedCatalogContainer);
     }
     if (catalogRows.length === 0) {
+        libraryRenderedStateOutcome = "empty";
         return renderLibraryEmptyState(resolvedCatalogContainer);
     }
 
@@ -141,6 +162,7 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
     // the container, so the id lookup resolves the fresh input the user is
     // meant to keep typing into.
     restoreLibrarySearchSnapshot(searchSnapshot);
+    libraryRenderedStateOutcome = "ready";
     return "ready";
 }
 
