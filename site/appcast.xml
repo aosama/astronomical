@@ -4,26 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.51</title>
-            <pubDate>Wed, 23 Sep 2026 01:51:41 -0400</pubDate>
-            <sparkle:version>662</sparkle:version>
-            <sparkle:shortVersionString>0.2.51</sparkle:shortVersionString>
+            <title>0.2.52</title>
+            <pubDate>Fri, 25 Sep 2026 21:55:49 -0400</pubDate>
+            <sparkle:version>666</sparkle:version>
+            <sparkle:shortVersionString>0.2.52</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.51
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.52
 
-- **Fix**: thinking controls no longer reject unknown subfields inside the `reasoning` and `chat_template_kwargs` objects. GitHub Copilot Desktop sends the OpenAI `reasoning.summary` spelling, and previous versions returned 400 for the entire request, so a fresh Copilot session could not send any message. The `summary` preference is accepted explicitly, unknown provider spellings are absorbed, and contradictory control values (disable combined with a positive budget, conflicting budgets, unknown effort labels) still fail loudly.
+## What's new
+
+- **Qwen-Image-2.1 text-to-image generation** is served end to end. The model is discovered and verified from the installed artifact, built in the inference worker, dispatched through the supervisor image lane, and gated by the download-executable preflight. A curated entry is available for download in Observatory, then generated through the OpenAI-compatible image endpoint.
+  - Supported envelope matches the verified artifact: 256–1024 px in multiples of 32, 1–40 steps, guidance exactly 1.0.
+  - The pipeline builds per request and reloads weights between renders instead of holding ~10 GB wired idle.
 
 ## Compatibility
 
-In-place Sparkle update. Your configuration, user state, and local model caches are preserved. The REST API change is strictly additive: request bodies that were previously rejected are now accepted, and accepted control semantics are unchanged.
+- Apple Silicon, macOS 14 (Sonoma) and later.
+- One local user and one active generation at a time.
+- No configuration or state migration; existing Stable state and Library downloads are preserved.
 
-Astronomical 0.2.51 is signed with the Developer ID Application identity (Hardened Runtime, timestamped) and notarized by Apple for macOS 14.0 and above on Apple Silicon (arm64).
+## Distribution
+
+- Signed with a Developer ID Application identity, Hardened Runtime, and Apple notarization.
+- Distributed as a signed DMG and Sparkle update, both bound by SHA-256 digests in the release manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.51/Astronomical-0.2.51-macOS-arm64.dmg" length="18029219" type="application/octet-stream" sparkle:edSignature="UIJEN3msyWHE9UUx5hlgjrFu/BmFz54BQzy/aoXjAr+5cX6wXSoiNBHeip91Oub0T1f5KIRbFFYwgWSF0JQlCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.52/Astronomical-0.2.52-macOS-arm64.dmg" length="18258242" type="application/octet-stream" sparkle:edSignature="JoY/IpKcm782vubAo/hTrMcxZoxiw/jLoBWL6MD2RpBnlRaRDswVqAMZaXMjFNhvlRwpkU2daDVyK4ojks5sCA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: EKhpWvVPO5w/Leb9MVu6O4yJhQEnUd7bBgzICLHRv+NlEYlrQy3w1BFQWn+ZfuwHVGkFw3QRX7hAF4iFJW+zAQ==
-length: 2230
+edSignature: DwcQjRAlHhrIX5bXz7wvXwH103lmwIYsSF9DsYKeHTLEeETz7UnT6NYgBAJw0wkrJ2sl0nuGGbBKCs/ADVQKDg==
+length: 2310
 -->
