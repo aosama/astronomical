@@ -4,35 +4,37 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.52</title>
-            <pubDate>Fri, 25 Sep 2026 21:55:49 -0400</pubDate>
-            <sparkle:version>666</sparkle:version>
-            <sparkle:shortVersionString>0.2.52</sparkle:shortVersionString>
+            <title>0.2.53</title>
+            <pubDate>Fri, 25 Sep 2026 23:13:59 -0400</pubDate>
+            <sparkle:version>669</sparkle:version>
+            <sparkle:shortVersionString>0.2.53</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.52
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.53
 
 ## What's new
 
-- **Qwen-Image-2.1 text-to-image generation** is served end to end. The model is discovered and verified from the installed artifact, built in the inference worker, dispatched through the supervisor image lane, and gated by the download-executable preflight. A curated entry is available for download in Observatory, then generated through the OpenAI-compatible image endpoint.
-  - Supported envelope matches the verified artifact: 256–1024 px in multiples of 32, 1–40 steps, guidance exactly 1.0.
-  - The pipeline builds per request and reloads weights between renders instead of holding ~10 GB wired idle.
+- **Menu bar progress now shows during Qwen image generation and for embedding models.** Astronomical now reports live progress in the macOS menu bar — `Image 25% -> 50% -> 75%` while a Qwen Image 2.1 image renders, plus equivalent status for embedding models. Previously the menu bar froze with no progress while a Qwen or embedding model was loaded. This closes [#786](https://github.com/aosama/astronomical/issues/786).
 
 ## Compatibility
 
-- Apple Silicon, macOS 14 (Sonoma) and later.
-- One local user and one active generation at a time.
-- No configuration or state migration; existing Stable state and Library downloads are preserved.
+- Apple Silicon Macs, macOS 14.0 (Sonoma) and later.
+- No configuration or API migration from 0.2.52.
 
-## Distribution
+## Your state is preserved
 
-- Signed with a Developer ID Application identity, Hardened Runtime, and Apple notarization.
-- Distributed as a signed DMG and Sparkle update, both bound by SHA-256 digests in the release manifest.
+- Your model RAM ceiling, model library, and prompt cache are unchanged by this update.
+
+## Signed and verified distribution
+
+- Distributed as a Developer ID-signed app built with the Hardened Runtime for `arm64`.
+- Downloaded through the signed Apple Notarization process and stapled.
+- Updates are delivered through the signed Sparkle feed. Verify the download by checking its SHA-256 against the digest recorded in this release's manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.52/Astronomical-0.2.52-macOS-arm64.dmg" length="18258242" type="application/octet-stream" sparkle:edSignature="JoY/IpKcm782vubAo/hTrMcxZoxiw/jLoBWL6MD2RpBnlRaRDswVqAMZaXMjFNhvlRwpkU2daDVyK4ojks5sCA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.53/Astronomical-0.2.53-macOS-arm64.dmg" length="18290774" type="application/octet-stream" sparkle:edSignature="IoGsXciGToU7qwfsG6gAPhdJ92K1JVlmPAVgOdd7bz9lmC4CNVh6+t4HfXfsQLFUbTmDQEl+mSWCLewY7SV0Cg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: DwcQjRAlHhrIX5bXz7wvXwH103lmwIYsSF9DsYKeHTLEeETz7UnT6NYgBAJw0wkrJ2sl0nuGGbBKCs/ADVQKDg==
-length: 2310
+edSignature: qEnSN394xRdKgU8qCYXxF7Yfpo8RcgmjvrN5ez32v1JPyArmbeWqo/TI/xMr8umOSemhP/AdnxSM7JSRfUG7DQ==
+length: 2283
 -->
