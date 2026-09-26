@@ -12,6 +12,21 @@ function libraryFamilyLabel(family) {
     return family;
 }
 
+// Editorial "start here" list: the two models the Observatory recommends for
+// everyday use. Matched on the stable requestable id when the catalog ships
+// one, falling back to the display name so the 35B 4-bit (which ships no backend
+// id) still matches. Exact-match sets keep the REAP / static / MLX variants out.
+const LIBRARY_EVERYDAY_MODEL_IDS = new Set([
+    "Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
+    "Ornith 1.5 35B A3B OptiQ 4bit",
+]);
+
+function isLibraryEverydayCatalogRow(catalogRow) {
+    const candidates = [catalogRow.requestableModelId, catalogRow.displayName]
+        .filter((value) => typeof value === "string" && value.length > 0);
+    return candidates.some((candidate) => LIBRARY_EVERYDAY_MODEL_IDS.has(candidate));
+}
+
 function formatLibraryContextTokens(tokenCount) {
     if (!tokenCount || tokenCount <= 0) return null;
     if (tokenCount >= 1_000_000) {
@@ -110,6 +125,7 @@ function createLibraryCatalogRow(catalogRow, allRows) {
     const rowClasses = ["library-model-card"];
     if (catalogRow.readyOnThisMac) rowClasses.push("library-model-card-ready");
     if (isDownloading) rowClasses.push("library-model-card-downloading");
+    if (isLibraryEverydayCatalogRow(catalogRow)) rowClasses.push("library-model-card-everyday");
     if (isExpanded) rowClasses.push("library-model-card-expanded");
     row.className = rowClasses.join(" ");
 
@@ -121,7 +137,6 @@ function createLibraryCatalogRow(catalogRow, allRows) {
         row.appendChild(description);
     }
     row.appendChild(createLibraryCapabilityBadges(catalogRow));
-    row.appendChild(createLibraryModelFacts(catalogRow));
 
     const progress = createLibraryProgress(catalogRow);
     if (progress.firstChild) row.appendChild(progress);
@@ -145,12 +160,20 @@ function createLibraryCardHeader(catalogRow) {
     header.className = "library-model-heading";
     const identity = document.createElement("div");
     identity.className = "library-model-identity";
+    const identityChildren = [];
+    if (isLibraryEverydayCatalogRow(catalogRow)) {
+        const everydayBadge = document.createElement("span");
+        everydayBadge.className = "library-everyday-badge";
+        everydayBadge.textContent = "Everyday choice";
+        identityChildren.push(everydayBadge);
+    }
     const displayName = document.createElement("h3");
     displayName.textContent = catalogRow.displayName;
     const providerIdentity = document.createElement("p");
     providerIdentity.className = "library-model-provider-id";
     providerIdentity.textContent = catalogRow.huggingfaceId;
-    identity.replaceChildren(displayName, providerIdentity);
+    identityChildren.push(displayName, providerIdentity);
+    identity.replaceChildren(...identityChildren);
     const availability = document.createElement("span");
     availability.className = catalogRow.readyOnThisMac
         ? "library-availability library-availability-ready"
@@ -195,29 +218,6 @@ function createLibraryCapabilityBadges(catalogRow) {
         badgeContainer.appendChild(badge);
     }
     return badgeContainer;
-}
-
-function createLibraryModelFacts(catalogRow) {
-    const facts = document.createElement("dl");
-    facts.className = "library-model-facts";
-    const factEntries = [];
-    factEntries.push(["Family", libraryFamilyLabel(catalogRow.family)]);
-    factEntries.push(["Download size", catalogRow.approximateSize]);
-    if (catalogRow.quantizationLabel) {
-        factEntries.push(["Quantization", catalogRow.quantizationLabel]);
-    }
-    if (catalogRow.architectureSummary) {
-        factEntries.push(["Architecture", catalogRow.architectureSummary]);
-    }
-    for (const [label, value] of factEntries) {
-        const term = document.createElement("dt");
-        term.textContent = label;
-        const definition = document.createElement("dd");
-        definition.textContent = value;
-        facts.appendChild(term);
-        facts.appendChild(definition);
-    }
-    return facts;
 }
 
 function createLibraryProgress(catalogRow) {

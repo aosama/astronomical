@@ -8,7 +8,7 @@
             "family": "modernbert",
             "approximate_size_bytes": 162580729,
             "public": true,
-            "description": "A sentence-embedding encoder that turns text into 768-dimensional unit-norm vectors served natively through the embeddings endpoint. The 8-bit affine quantization (group 64) keeps the whole model resident in about 0.16 GB of wired GPU memory, and each input is capped at 8192 tokens.",
+            "description": "A small helper that turns text into a compact numerical fingerprint, which is what powers local search, finding similar text, and organizing text on your Mac. It is tiny (about 0.16 GB of memory) and runs quietly in the background. Each piece of text is limited to about 2,000 words.",
             "capabilities": {
                 "supports_embeddings": true
             },
@@ -23,7 +23,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 652031020,
             "public": true,
-            "description": "The smallest Qwen 3.5 dense VLM as a 4-bit affine MLX quant. Chat, reasoning, tool calls, and image understanding in about 0.65 GB of wired GPU memory, with a 262144-token context window and enforced structured outputs. Also the compact drafter for speculative prefill acceptance journeys.",
+            "description": "A small, fast, all-around model for daily tasks - chatting, solving problems, using tools, and looking at pictures. It fits comfortably on most Macs (about 0.65 GB of memory), answers quickly, and keeps a large memory window for long conversations. Doubles as a lightweight assistant that helps bigger models respond faster.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -41,7 +41,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 1749081857,
             "public": true,
-            "description": "The smallest member of the Qwen 3.5 family as a 4-bit affine MLX quant. Chat, reasoning, tool calls, and image understanding in about 1.75 GB of wired GPU memory, with a 262144-token context window and enforced structured outputs.",
+            "description": "A slightly larger all-around model for everyday use - chatting, reasoning, using tools, and understanding images. Runs on most Macs (about 1.75 GB of memory), balances speed and capability, and keeps a large memory window for long conversations and documents.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -59,7 +59,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 24693956069,
             "public": true,
-            "description": "A mixed-precision OptiQ quant of Qwen 3.6 35B-A3B, per-layer 4/8-bit affine (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
+            "description": "A large, capable model that reads pictures and text and gives thoughtful answers. Best for harder work - writing, coding, and multi-step reasoning - when quality matters more than speed. This leaner version runs it on ordinary Macs without a noticeable drop in quality.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -77,7 +77,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 7286495182,
             "public": true,
-            "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 9B dense vision-language model, targeted at 4.5 BPW and achieved at 4.63 BPW (group 64, affine). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. Language tensors are a 4/5/6/8-bit mix; the vision tower stays bf16. Image input and MTP require mlx-optiq.",
+            "description": "A capable everyday model that sees pictures and text, reasons before answering, and answers quickly. A strong all-rounder for common work - writing, coding, and understanding images - with great quality without the wait. Its leaner size runs comfortably on most Macs.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -95,7 +95,7 @@
             "family": "flux2_klein",
             "approximate_size_bytes": 15980141329,
             "public": true,
-            "description": "A local text-to-image model that creates one lossless PNG from a prompt.",
+            "description": "A local image generator that turns a written description into one high-quality image, all on your Mac - no uploads, and no internet needed for the drawing itself.",
             "capabilities": {
                 "supports_image_generation": true
             },
@@ -118,7 +118,7 @@
             "family": "qwen_image_21",
             "approximate_size_bytes": 10497210127,
             "public": true,
-            "description": "A local text-to-image model that creates one lossless PNG from a prompt.",
+            "description": "A local image generator that turns a written description into one clean image on your Mac, with no uploads and no internet needed for the drawing itself.",
             "capabilities": {
                 "supports_image_generation": true
             },
@@ -141,7 +141,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 23565955947,
             "public": true,
-            "description": "A mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, per-layer 4/8-bit affine (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
+            "description": "A large, powerful model for the hard jobs - long writing, complex reasoning, coding, and reading pictures. This leaner version keeps strong quality while fitting ordinary Macs. Expect thoughtful answers over fast ones.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -159,7 +159,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 13756988894,
             "public": true,
-            "description": "An expert-pruned REAP variant of the Ornith 1.5 35B-A3B MoE model, retaining 128 of 256 experts per layer (Router-weighted Expert Activation Pruning, Cerebras Research) at the same 8-experts-per-token routing, roughly halving expert memory. Mixed-precision OptiQ quantization (4/8-bit affine, group 64) with a bf16 vision tower sidecar and an int4 multi-token prediction head for speculative decoding. Image input and MTP require mlx-optiq.",
+            "description": "A large model trimmed to run on more Macs while keeping its thinking power. Built by keeping the most useful experts - the parts that do the heavy lifting - and dropping the rest. Best for complex writing, reasoning, and picture work when you want big-model quality on ordinary hardware.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -193,7 +193,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 27559062441,
             "public": true,
-            "description": "A static mixed-precision OptiQ quant of the Ornith 1.5 35B-A3B mixture-of-experts vision-language model, targeted at 5.5 bits per weight, with per-layer 4/6/8-bit affine scaling (group 64). Takes images and text, reasons before answering, and bundles a multi-token prediction head for speculative decoding. The MoE architecture registers through OptiQ; the bf16 vision tower stays in a separate vision sidecar and the int4 MTP head stays in optiq/mtp.safetensors; image input and MTP require mlx-optiq.",
+            "description": "A large, capable model for writing, reasoning, and picture work, compressed to take less memory so it runs comfortably on more Macs. Quality stays strong - a good option when you want big-model power but have limited memory.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -211,7 +211,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 28190535198,
             "public": true,
-            "description": "A six-bit affine MLX quant of the Ornith 1.5 35B-A3B sparse mixture-of-experts model, activating about 3B parameters per token across 256 experts. It supports reasoning and native tool calls with a 262144-token context window; text-only, about 28.2 GB on disk.",
+            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents, runs comfortably on more Macs thanks to its lighter compression, and takes about 28.2 GB on disk.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -228,7 +228,7 @@
             "family": "laguna",
             "approximate_size_bytes": 27185160853,
             "public": true,
-            "description": "A 33B-parameter sparse mixture-of-experts reasoning model for coding and agentic work, with about 3B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 27.2 GB on disk.",
+            "description": "A large, text-only model tuned for coding and hands-on agentic work - it reasons before answering and uses tools on its own. It works from your drive when a task needs more than memory allows, runs comfortably on more Macs, and takes about 27.2 GB on disk.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -260,7 +260,7 @@
             "family": "laguna",
             "approximate_size_bytes": 23007413034,
             "public": true,
-            "description": "A 33B-parameter sparse mixture-of-experts reasoning model for coding and agentic work, with about 3B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 23.0 GB on disk.",
+            "description": "A large, text-only model tuned for coding and hands-on agentic work - it reasons before answering and uses tools on its own. It works from your drive when a task needs more than memory allows, runs comfortably on more Macs, and takes about 23.0 GB on disk.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -291,7 +291,7 @@
             "family": "laguna",
             "approximate_size_bytes": 18829665100,
             "public": true,
-            "description": "A 33B-parameter sparse mixture-of-experts reasoning model for coding and agentic work, with about 3B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 18.8 GB on disk.",
+            "description": "A large, text-only model tuned for coding and hands-on agentic work - it reasons before answering and uses tools on its own. It works from your drive when a task needs more than memory allows, runs comfortably on more Macs, and takes about 18.8 GB on disk.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -321,7 +321,7 @@
             "family": "k2_horizon_mova",
             "approximate_size_bytes": 21102192601,
             "public": true,
-            "description": "A 36B-parameter sparse mixture-of-experts model with Mixture-of-Values attention and about 4B active parameters per token. Takes text, reasons before answering, and calls tools natively. Under one memory ceiling, experts stream from SSD when they do not fit, without hidden quantization. Text-only, about 21.1 GB on disk.",
+            "description": "A very large, text-only model built for long, thinking-heavy work - it has a huge memory (about 512,000 tokens, enough for a whole book) for reasoning and tool use over long tasks. It works from your drive when needed and takes about 21.1 GB on disk.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -395,7 +395,7 @@
             "family": "qwen3_5",
             "approximate_size_bytes": 16994886691,
             "public": true,
-            "description": "An oQ4e 4-bit affine (group 64) quant of the dense Qwen 3.8 27B VLM, calibrated with the oqe toolchain and shipped with the calibration report (oq_imatrix_report.json). Takes images and text, reasons before answering, and bundles an int4 multi-token prediction head for speculative decoding; the head and bf16 vision tower live inside the model shards.",
+            "description": "A large, capable model that sees pictures and text and gives thoughtful answers. Great for harder writing, coding, and reasoning when quality matters more than speed, and a leaner version that runs on ordinary Macs.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
