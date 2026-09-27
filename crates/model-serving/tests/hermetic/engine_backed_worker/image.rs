@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    ImageGenerationFailureReason, RequestId, WorkerCommand, WorkerEvent,
+    ImageGenerationFailureReason, MlxMemorySnapshotSource, RequestId, WorkerCommand, WorkerEvent,
     WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_model_serving::{
@@ -67,7 +67,7 @@ async fn should_complete_an_image_before_finalization_without_duplicate_delivery
         .await
         .expect("the valid request should start");
     assert!(
-        matches!(next_event(&mut events).await, WorkerEvent::ImageGenerationProgress { request_id, .. } if request_id == RequestId::new(901))
+        matches!(next_event(&mut events).await, WorkerEvent::ImageGenerationProgress { request_id, mlx_memory_snapshot: Some(snapshot), .. } if request_id == RequestId::new(901) && snapshot.source == MlxMemorySnapshotSource::ImageGenerationStep && snapshot.active_memory_bytes > 0)
     );
     assert_completed_payload(next_event(&mut events).await, 901);
     assert_finalized_with_cleanup(next_event(&mut events).await, 901);

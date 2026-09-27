@@ -29,6 +29,7 @@ pub(super) fn handle_worker_image_event(
             completed_steps,
             total_steps,
             elapsed_millis,
+            mlx_memory_snapshot,
         } => {
             let active_image = matching_active_image(active_worker_request, request_id)?;
             let progress_advanced = active_image.latest_phase != Some(phase)
@@ -62,6 +63,11 @@ pub(super) fn handle_worker_image_event(
                     elapsed_millis,
                 },
             );
+            // Mid-render samples stay unvalidated like text-path progress snapshots; only the
+            // finalization snapshot proves cleanup, so a step sample never blocks the render.
+            if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+                publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
+            }
         }
         WorkerEvent::ImageGenerationCompleted {
             request_id,

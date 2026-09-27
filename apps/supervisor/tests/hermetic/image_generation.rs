@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
-    ImageGenerationCommand, ImageGenerationSettings, RequestId,
+    ImageGenerationCommand, ImageGenerationSettings, MlxMemorySnapshotSource, RequestId,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, GenerationQueueDepth, GenerationStartError,
@@ -491,7 +491,7 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
         .expect("shutdown should succeed");
 }
 
-async fn launch_scripted_worker() -> astronomical_supervisor::WorkerHandle {
+pub(super) async fn launch_scripted_worker() -> astronomical_supervisor::WorkerHandle {
     let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
     let worker_handle = crate::common::supervisor::launch_test_executor(executable_path)
@@ -515,7 +515,7 @@ async fn wait_for_worker_status(
     }
 }
 
-fn image_command(request_id: u64, prompt: &str) -> ImageGenerationCommand {
+pub(super) fn image_command(request_id: u64, prompt: &str) -> ImageGenerationCommand {
     ImageGenerationCommand {
         request_id: RequestId::new(request_id),
         model: "astronomical/test-worker".to_owned(),

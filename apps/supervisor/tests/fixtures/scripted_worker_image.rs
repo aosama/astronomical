@@ -57,6 +57,7 @@ where
                     completed_steps: 0,
                     total_steps: generation_command.settings.steps,
                     elapsed_millis: 1,
+                    mlx_memory_snapshot: None,
                 })
                 .await?;
             Ok(ScriptedImageCommandOutcome::CancellationPending {
@@ -72,6 +73,7 @@ where
                         completed_steps: 0,
                         total_steps: generation_command.settings.steps,
                         elapsed_millis: 1,
+                        mlx_memory_snapshot: None,
                     })
                     .await?;
                 tokio::time::sleep(Duration::from_millis(70)).await;
@@ -89,12 +91,38 @@ where
                         completed_steps: 0,
                         total_steps: generation_command.settings.steps,
                         elapsed_millis,
+                        mlx_memory_snapshot: None,
                     })
                     .await?;
                 if progress_index < 2 {
                     tokio::time::sleep(Duration::from_millis(600)).await;
                 }
             }
+            send_completed_image(generation_command, Duration::ZERO, event_writer).await?;
+            Ok(ScriptedImageCommandOutcome::Finished)
+        }
+        "progress-snapshot-image-fixture" => {
+            event_writer
+                .send_event(&WorkerEvent::ImageGenerationProgress {
+                    request_id: generation_command.request_id,
+                    phase: ImageGenerationPhase::Denoising,
+                    completed_steps: 1,
+                    total_steps: generation_command.settings.steps,
+                    elapsed_millis: 5,
+                    mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
+                        source: MlxMemorySnapshotSource::ImageGenerationStep,
+                        active_memory_bytes: 10_480_000_000,
+                        allocator_cache_memory_bytes: 120_000_000,
+                        peak_memory_bytes: 10_600_000_000,
+                        expert_payload_bytes: 0,
+                        model_core_payload_bytes: 0,
+                        context_state_payload_bytes: 0,
+                        speculative_prefill_draft_memory_bytes: 0,
+                        memory_ceiling_utilization: None,
+                    }),
+                })
+                .await?;
+            tokio::time::sleep(Duration::from_millis(300)).await;
             send_completed_image(generation_command, Duration::ZERO, event_writer).await?;
             Ok(ScriptedImageCommandOutcome::Finished)
         }
@@ -218,6 +246,7 @@ where
             completed_steps: generation_command.settings.steps,
             total_steps: generation_command.settings.steps,
             elapsed_millis: 20,
+            mlx_memory_snapshot: None,
         })
         .await?;
     event_writer
@@ -308,6 +337,7 @@ where
                 completed_steps,
                 total_steps: generation_command.settings.steps,
                 elapsed_millis,
+                mlx_memory_snapshot: None,
             })
             .await?;
     }
