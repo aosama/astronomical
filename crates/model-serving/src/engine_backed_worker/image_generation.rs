@@ -97,6 +97,21 @@ where
             }) if total_steps == active_generation.total_steps
                 && completed_steps <= active_generation.total_steps =>
             {
+                let mlx_memory_snapshot = self
+                    .loaded_runtime
+                    .as_ref()
+                    .and_then(|loaded_runtime| match loaded_runtime {
+                        LoadedRuntime::Image(image_engine) => {
+                            image_engine.collect_mlx_memory_telemetry()
+                        }
+                        LoadedRuntime::Autoregressive(_) | LoadedRuntime::Embeddings(_) => None,
+                    })
+                    .map(|memory_telemetry| {
+                        super::output::worker_memory_snapshot(
+                            MlxMemorySnapshotSource::ImageGenerationStep,
+                            memory_telemetry,
+                        )
+                    });
                 event_writer
                     .send_event(&WorkerEvent::ImageGenerationProgress {
                         request_id,
@@ -104,6 +119,7 @@ where
                         completed_steps,
                         total_steps,
                         elapsed_millis,
+                        mlx_memory_snapshot,
                     })
                     .await?;
                 Ok(Some(active_generation))
