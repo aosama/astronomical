@@ -7,7 +7,8 @@ use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
     ImmediatePersistentPromptCacheSerializedFileWriter, PersistentPromptCacheFileKind,
-    open_without_following_symlinks, read_file_size_bytes, save_serialized_safetensors_file,
+    open_without_following_symlinks, read_file_size_bytes,
+    remove_cache_owned_file_or_confirm_absent, save_serialized_safetensors_file,
 };
 use super::disk_store_index::TrackedPersistentPromptCacheFile;
 use super::speculative_prefill_target_state::{
@@ -149,25 +150,54 @@ impl PersistentPromptCacheDiskStore {
             };
             tracked_target_state_file.file_path.clone()
         };
-        let target_state_file =
-            open_without_following_symlinks(&target_state_file_path).map_err(|source| {
-                PersistentPromptCacheDiskStoreError::OpenBlockFile {
+        let target_state_file = match open_without_following_symlinks(&target_state_file_path) {
+            Ok(target_state_file) => target_state_file,
+            Err(source) => {
+                let open_error = PersistentPromptCacheDiskStoreError::OpenBlockFile {
                     block_file_path: target_state_file_path.clone(),
                     source,
+                };
+                if !open_error.is_treatable_as_cache_miss() {
+                    return Err(open_error);
                 }
-            })?;
+                // The in-memory index outlives files removed out-of-band while the worker
+                // runs: the walk cannot detect the absence, so drop the stale entry and
+                // restore as a miss to let the request fall back to a cold prefill.
+                tracing::debug!(
+                    artifact_file_path = %target_state_file_path.display(),
+                    "sparse target state file vanished after the index walk; treating restore as a lookup miss"
+                );
+                self.untrack_file_and_subtract_global_accounting(
+                    PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
+                    target_state_identity_hash,
+                );
+                return Ok(None);
+            }
+        };
         let target_state_file_header =
-            PersistentSpeculativePrefillTargetStateFileHeader::read_model_bound_from_file(
+            match PersistentSpeculativePrefillTargetStateFileHeader::read_model_bound_from_file(
                 &target_state_file,
                 &target_state_file_path,
                 self.model_contract_ref(),
-            )
-            .map_err(|description| {
-                PersistentPromptCacheDiskStoreError::ValidateModelSpecificArtifact {
-                    artifact_file_path: target_state_file_path.clone(),
-                    source: Box::new(std::io::Error::other(description)),
+            ) {
+                Ok(target_state_file_header) => target_state_file_header,
+                Err(description) => {
+                    // A model-bound header failure means the artifact is unusable before any
+                    // tensor materializes: remove it, drop the index entry, and restore as a
+                    // miss. Only payload corruption (below) keeps failing closed.
+                    tracing::debug!(
+                        artifact_file_path = %target_state_file_path.display(),
+                        header_error = description.as_str(),
+                        "sparse target state header failed validation; removing artifact and treating restore as a lookup miss"
+                    );
+                    remove_cache_owned_file_or_confirm_absent(&target_state_file_path)?;
+                    self.untrack_file_and_subtract_global_accounting(
+                        PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
+                        target_state_identity_hash,
+                    );
+                    return Ok(None);
                 }
-            })?;
+            };
         let loaded_safetensors = runtime
             .load_safetensors(target_state_file, positional_file_read_metrics)
             .map_err(|source| PersistentPromptCacheDiskStoreError::LoadSafetensors { source })?;
