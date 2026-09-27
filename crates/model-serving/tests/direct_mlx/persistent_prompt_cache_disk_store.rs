@@ -1,6 +1,6 @@
 use std::fs;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use astronomical_model_serving::{
     PersistentPromptCacheDiskStoreError, PersistentPromptCachePublicationOutcome,
@@ -11,6 +11,7 @@ use super::persistent_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const PERSISTENT_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
 async fn should_publish_a_block_directly_and_report_idempotent_republication() {
@@ -191,6 +192,61 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
         positional_file_read_snapshot.total_read_elapsed_nanoseconds as f64 / 1_000_000.0,
         restore_evaluation_elapsed.as_secs_f64() * 1_000.0,
     );
+}
+
+// Regression coverage for issue 617 (drafter side): a KV block can vanish between the
+// `has_kv_block` lookup and the open. The raw store load stays fail-closed for the dense
+// restore path, but the error must classify as a treatable cache miss so the SpecPrefill
+// drafter can re-score the prompt from scratch instead of erroring the request.
+
+#[tokio::test]
+async fn should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss() {
+    tokio::time::timeout(PERSISTENT_PROMPT_CACHE_TEST_TIMEOUT, async {
+        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+        let runtime = runtime_with_shared_limits();
+        let persistent_prompt_cache_directory =
+            tempfile::tempdir().expect("the test should create a prompt-cache directory");
+        let persistent_prompt_cache = open_persistent_prompt_cache_disk_store(
+            &persistent_prompt_cache_directory,
+            LARGE_CACHE_LIMIT_BYTES,
+        )
+        .expect("the persistent prompt cache should open an empty directory");
+        let persistent_prompt_cache_block_key = persistent_prompt_cache_block_key_for_seed(0);
+        let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
+        let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
+        persistent_prompt_cache
+            .publish_block(
+                &runtime,
+                &persistent_prompt_cache_block_key,
+                None,
+                &kv_block_tensors,
+                &recurrent_snapshot_tensors,
+            )
+            .expect("the test should durably publish the prompt-cache block");
+
+        let vanished_kv_block_file = persistent_prompt_cache_directory
+            .path()
+            .join("blocks")
+            .join(hex::encode(persistent_prompt_cache_block_key.block_hash()))
+            .join("sequence.safetensors");
+        fs::remove_file(&vanished_kv_block_file)
+            .expect("the test should remove the KV block file out-of-band");
+
+        let vanished_kv_block_error = persistent_prompt_cache
+            .load_kv_block(&runtime, &persistent_prompt_cache_block_key, None)
+            .expect_err("a vanished KV block file must fail the raw load");
+
+        assert!(
+            vanished_kv_block_error.is_treatable_as_cache_miss(),
+            "a vanished KV block file must classify as a treatable cache miss"
+        );
+        assert!(
+            !persistent_prompt_cache.has_kv_block(&persistent_prompt_cache_block_key.block_hash()),
+            "the vanished KV block must stop reporting as present after the failed load"
+        );
+    })
+    .await
+    .expect("the vanished KV block classification should finish within the test timeout");
 }
 
 #[tokio::test]

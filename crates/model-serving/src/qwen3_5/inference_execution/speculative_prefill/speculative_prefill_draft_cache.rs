@@ -182,23 +182,33 @@ impl Qwen3_5EngineState {
                 block_index,
                 last_restored_persistent_prompt_cache_block_key.as_ref(),
             )?;
-            let loaded_kv_block_tensors = performance_attribution
-                .measure_operation(
-                    PerformanceOperation::PersistentPromptCacheKvBlockRead,
-                    |performance_attribution| {
-                        draft_persistent_prompt_cache.load_kv_block(
-                            draft_model.runtime(),
-                            &persistent_prompt_cache_block_key,
-                            performance_attribution.positional_file_read_metrics(),
-                        )
-                    },
-                )?
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    // Files can disappear after lookup (for example external
-                    // cache deletion). Treat the race as an invalid restore,
-                    // never as a partial prefix.
-                    description: "speculative-prefill drafter KV block disappeared during restore",
-                })?;
+            let loaded_kv_block_tensors = match performance_attribution.measure_operation(
+                PerformanceOperation::PersistentPromptCacheKvBlockRead,
+                |performance_attribution| {
+                    draft_persistent_prompt_cache.load_kv_block(
+                        draft_model.runtime(),
+                        &persistent_prompt_cache_block_key,
+                        performance_attribution.positional_file_read_metrics(),
+                    )
+                },
+            ) {
+                Ok(Some(loaded_kv_block_tensors)) => loaded_kv_block_tensors,
+                Ok(None) => {
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        // The store refused to return a block its index reported.
+                        // Treat the inconsistency as an invalid restore, never as a
+                        // partial prefix.
+                        description: "speculative-prefill drafter KV block disappeared during restore",
+                    });
+                }
+                Err(disk_store_error) if disk_store_error.is_treatable_as_cache_miss() => {
+                    // The index scan precedes the open, so a file removed out-of-band
+                    // mid-restore is a plain cache miss: abandon the draft prefix and
+                    // let scoring cover the complete prompt from scratch.
+                    return Ok(None);
+                }
+                Err(disk_store_error) => return Err(disk_store_error.into()),
+            };
             persistent_prompt_cache_kv_block_tensors.push(loaded_kv_block_tensors);
             last_restored_persistent_prompt_cache_block_key =
                 Some(persistent_prompt_cache_block_key);
@@ -209,7 +219,7 @@ impl Qwen3_5EngineState {
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "speculative-prefill drafter restore lost its boundary key",
             })?;
-        let mut persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
+        let mut persistent_prompt_cache_recurrent_snapshot_tensors = match performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
                 |performance_attribution| {
@@ -219,11 +229,22 @@ impl Qwen3_5EngineState {
                         performance_attribution.positional_file_read_metrics(),
                     )
                 },
-            )?
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                description:
-                    "speculative-prefill drafter recurrent snapshot disappeared during restore",
-            })?;
+            ) {
+            Ok(Some(persistent_prompt_cache_recurrent_snapshot_tensors)) => {
+                persistent_prompt_cache_recurrent_snapshot_tensors
+            }
+            Ok(None) => {
+                return Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "speculative-prefill drafter recurrent snapshot disappeared during restore",
+                });
+            }
+            Err(disk_store_error) if disk_store_error.is_treatable_as_cache_miss() => {
+                // Same out-of-band removal race as the KV block loop above: restore
+                // the drafter as a plain cache miss rather than failing the request.
+                return Ok(None);
+            }
+            Err(disk_store_error) => return Err(disk_store_error.into()),
+        };
 
         // Key/value blocks rebuild attention history; the final recurrent
         // snapshot rebuilds non-attention state at exactly the same boundary.
