@@ -5,6 +5,18 @@ import XCTest
 @testable import AstronomicalMenuCore
 
 final class StatusPresentationContractTests: XCTestCase {
+  func test_should_clamp_the_utilization_bar_fill_fraction_to_the_track() {
+    // A fill wider than its track renders outside the capsule as a solid bar;
+    // every usage bar must clamp the fraction before sizing its fill.
+    XCTAssertEqual(usageBarFillFraction(0), 0)
+    XCTAssertEqual(usageBarFillFraction(0.5), 0.5)
+    XCTAssertEqual(usageBarFillFraction(1), 1)
+    XCTAssertEqual(usageBarFillFraction(1.2), 1)
+    XCTAssertEqual(usageBarFillFraction(.infinity), 1)
+    XCTAssertEqual(usageBarFillFraction(-3), 0)
+    XCTAssertEqual(usageBarFillFraction(.nan), 0)
+  }
+
   func test_should_present_combined_target_and_drafter_avoided_prompt_work() throws {
     let statusDocument = try JSONDecoder().decode(
       SupervisorStatusDocument.self,

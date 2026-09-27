@@ -3,9 +3,11 @@ import XCTest
 
 @testable import ThinTalkCore
 
-/// Contract for the composer font-zoom persistence layer: the documented
-/// bounds, the fresh-install default, and that a deliberate size survives a
-/// relaunch while out-of-range input is clamped instead of breaking the composer.
+/// Contract for the GUI text-zoom persistence layer: the documented bounds, the
+/// fresh-install default, and that a deliberate size survives a relaunch while
+/// out-of-range input is clamped instead of breaking the surface. The size now
+/// drives the canvas page zoom, which scales transcript, composer, and banner
+/// together.
 final class ComposerFontSizeTests: XCTestCase {
   func test_should_document_the_boundaries_and_default() {
     XCTAssertEqual(ComposerFontSize.defaultSize, 14)

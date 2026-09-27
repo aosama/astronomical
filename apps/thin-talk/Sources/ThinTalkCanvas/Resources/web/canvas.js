@@ -236,7 +236,8 @@
       ["canvas-trust", window.__thintalkTrust],
       ["canvas-math", window.__thintalkMath],
       ["canvas-diagrams", window.__thintalkDiagrams],
-      ["canvas-content-key", window.__thintalkContentKey]
+      ["canvas-content-key", window.__thintalkContentKey],
+      ["canvas-composer", window.__thintalkComposer]
     ].forEach(function (moduleEntry) {
       if (typeof moduleEntry[1] === "undefined") {
         missing.push(moduleEntry[0]);
@@ -294,6 +295,13 @@
         case "appearance":
           applyAppearance(command.dark === true);
           break;
+        case "composer":
+          if (typeof window.__thintalkComposer === "undefined") {
+            postError("composer state arrived with no composer module");
+            return false;
+          }
+          window.__thintalkComposer.applyState(command);
+          break;
         default:
           return false;
       }
@@ -323,7 +331,8 @@
           trust: typeof window.__thintalkTrust,
           math: typeof window.__thintalkMath,
           diagrams: typeof window.__thintalkDiagrams,
-          contentKey: typeof window.__thintalkContentKey
+          contentKey: typeof window.__thintalkContentKey,
+          composer: typeof window.__thintalkComposer
         },
         scripts: Array.prototype.map.call(document.scripts, function (script) {
           return script.getAttribute("src") || "";

@@ -25,11 +25,13 @@ public final class ChatViewModel {
   public var messages: [ChatMessage] = []
   public var availableModels: [ThinTalkModel] = []
   public var selectedModelID: String?
+  /// The ask the surface reported sending. The page owns its field's in-progress
+  /// text; this only carries the reported ask into `sendMessage`, which clears it.
   public var draft = ""
   /// GUI-wide text size in points. Cmd+/Cmd- adjusts this within bounds.
-  /// Tracked by @Observable so a zoom re-renders the whole window: the canvas
-  /// mirrors this through its page zoom and every native surface sizes its
-  /// text from it. It is mirrored into ComposerFontSize so a deliberate
+  /// Tracked by @Observable so a zoom re-renders the window: the canvas mirrors
+  /// this through its page zoom, which now scales the composer and banner along
+  /// with the transcript. It is mirrored into ComposerFontSize so a deliberate
   /// choice persists across launches. (Marking this @ObservationIgnored froze
   /// live zooming: the value changed and persisted, but nothing re-rendered.)
   public var fontZoom: CGFloat = ComposerFontSize.load()
@@ -49,6 +51,11 @@ public final class ChatViewModel {
   private(set) var isStreaming = false
   private(set) var assistantMessageID: UUID?
   private(set) var canvasSnapshot = TranscriptSnapshot()
+  /// What the canvas page draws for the composer, the effort pill, and the
+  /// failure banner. Mutated beside every snapshot refresh so the page always
+  /// receives both halves of the surface together.
+  private(set) var composerState = CanvasComposerState(
+    isStreaming: false, acceptsInput: false, isReady: false, effort: .default, failure: nil)
 
   /// Files the canvas may display, addressed by opaque token rather than path.
   let assetRegistry = TranscriptAssetRegistry()
@@ -154,16 +161,29 @@ public final class ChatViewModel {
 
   // MARK: - Canvas interaction
 
-  /// Performs the one interaction the canvas reported. Copying, regenerating, and
-  /// opening a link all run here so the canvas never owns a behaviour.
+  /// Performs the one interaction the canvas reported. Sending, stopping, effort
+  /// choice, copying, and opening a link all run here so the page never owns a
+  /// behaviour. The stale Regenerate action was removed: the page only reports
+  /// Copy, so this switch never routes a regeneration.
   func handle(_ action: CanvasAction) {
     switch action.kind {
     case .ready:
       return
+    case .send:
+      guard let reportedAsk = action.detail else { return }
+      draft = reportedAsk
+      sendMessage()
+    case .stop:
+      stopStreaming()
+    case .setEffort:
+      guard let rawLevel = action.detail, let level = ThinkingEffort(rawValue: rawLevel) else {
+        return
+      }
+      thinkingEffort = level
+    case .retry:
+      retry()
     case .copy:
       copyToPasteboard(messageID: action.messageID)
-    case .regenerate:
-      retry()
     case .openExternal:
       guard let externalURL = action.externalURL else { return }
       NSWorkspace.shared.open(externalURL)
@@ -226,14 +246,24 @@ public final class ChatViewModel {
     messages.remove(at: index)
   }
 
-  /// Rebuilds the snapshot the canvas renders. Called after every mutation so the
-  /// planner can send the smallest update that reflects what changed.
+  /// Rebuilds the surface state the canvas renders. Called after every mutation
+  /// so the planner can send the smallest update that reflects what changed, and
+  /// so the composer half never lags the transcript half.
   private func refreshCanvasSnapshot() {
     canvasSnapshot = TranscriptSnapshot(
       messages: messages.map(transcriptMessage(from:)),
       model: selectedModelID,
       channel: client.applicationIdentity.channel.displayName,
       notice: noticeText
+    )
+    composerState = CanvasComposerState(
+      isStreaming: isStreaming,
+      acceptsInput: state != .loading,
+      isReady: state == .ready,
+      effort: thinkingEffort,
+      failure: currentFailure.map {
+        CanvasComposerFailure(message: $0.message, nextAction: $0.nextAction)
+      }
     )
   }
 

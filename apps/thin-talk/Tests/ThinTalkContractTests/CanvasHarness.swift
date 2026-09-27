@@ -138,6 +138,19 @@ final class CanvasHarness: NSObject, WKScriptMessageHandler {
       "\(body)\nreturn true;", arguments: [:], in: nil, contentWorld: .page)
   }
 
+  /// Clicks the first element matching a selector, through the page so the
+  /// browser's own activation behaviour (focus, toggles, forms) applies.
+  func click(_ selector: String) async throws {
+    _ = try await evaluate(
+      """
+      var target = document.querySelector(selector);
+      if (!target) { throw new Error('no element matches ' + selector); }
+      target.click();
+      return true;
+      """,
+      selector: selector)
+  }
+
   func evaluate(_ body: String, selector: String) async throws -> Any? {
     try await webView.callAsyncJavaScript(
       body, arguments: ["selector": selector], in: nil, contentWorld: .page)
