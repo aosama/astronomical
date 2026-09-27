@@ -166,6 +166,8 @@ pub enum MlxMemorySnapshotSource {
     IdlePoll,
     /// A live MLX memory-ceiling control operation completed.
     MemoryLimitAdjusted,
+    /// One image render step completed while generation was still active.
+    ImageGenerationStep,
 }
 
 /// One worker-owned MLX allocator observation reconciled into user-visible owners.
@@ -314,6 +316,9 @@ pub enum WorkerEvent {
         completed_steps: u16,
         total_steps: u16,
         elapsed_millis: u64,
+        /// Present when the image engine could observe MLX memory at this step
+        /// boundary, so the menu shows a measured footprint mid-render.
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one completed encoded image and its reproducibility metadata.
     ImageGenerationCompleted {

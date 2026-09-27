@@ -341,6 +341,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case "finalized": "After cleanup"
     case "idle_poll": "Idle sample"
     case "memory_limit_adjusted": "Memory limit adjusted"
+    case "image_generation_step": "Image render snapshot"
     default: "Not measured"
     }
   }
