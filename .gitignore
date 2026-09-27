@@ -20,6 +20,9 @@ AGENTS.override.md
 # Local UI screenshot captures
 ScreenShots/
 
+# Browser-control harness local state (snapshots captured by playwright-cli)
+.playwright-cli/
+
 # Local environment and machine-specific configuration
 .env
 .env.*

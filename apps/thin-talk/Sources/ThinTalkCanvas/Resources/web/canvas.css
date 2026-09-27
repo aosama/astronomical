@@ -1,8 +1,7 @@
 /*
- * Canvas design tokens. Values mirror PreviewTheme in the SwiftUI layer so the
- * web surface and the surrounding chrome read as one window: window #0f121a,
- * panel #1a1f29, panelAlt #242933, border #384052, accent #5966f2,
- * textPrimary #f2f2f5, textSecondary #b8bdcc, linkBlue #7394ff.
+ * Canvas design tokens — the single source of the app's look. The composer and
+ * failure banner draw from the same tokens as the transcript, and the SwiftUI
+ * preview scaffolding mirrors these values so it keeps rendering honestly.
  */
 :root {
   --window-background: #0f121a;
@@ -35,8 +34,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/*
+ * The transcript scrolls inside this wrapper so the empty state can centre on
+ * the conversation area without covering the composer below it.
+ */
+#surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
 #transcript {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 26px 0 34px;
 }
@@ -462,4 +479,214 @@ body {
 .code-block--diagram-failed .code-block__label::after {
   content: " (diagram could not render)";
   color: #e06868;
+}
+
+/*
+ * Composer and failure banner.
+ *
+ * These are the app's own chrome, now drawn on the same surface as the answers
+ * so the whole window shares one type scale and one set of tokens.
+ */
+.composer {
+  flex: 0 0 auto;
+  margin: 4px 24px 14px;
+  padding: 0 4px 8px;
+  border-radius: 22px;
+  background: var(--panel);
+  border: 1px solid rgb(89 102 242 / 45%);
+}
+
+#composer-input {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  padding: 14px 14px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  resize: none;
+  outline: none;
+  /* A wrapping ask never scrolls sideways. Under a zoomed page WebKit reports
+     the field's own overflow as scrollable and paints a phantom scrollbar bar,
+     so horizontal panning is refused outright; growField owns the vertical axis. */
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+#composer-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+#composer-input:disabled {
+  opacity: 0.55;
+}
+
+.composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 0;
+}
+
+.composer__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer__icon,
+.composer__pill,
+.composer__send {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
+}
+
+.composer__icon {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.composer__icon:disabled,
+.composer__pill:disabled {
+  opacity: 0.45;
+}
+
+.composer__icon svg,
+.composer__pill svg {
+  width: 14px;
+  height: 14px;
+}
+
+.composer__chevron {
+  color: var(--text-secondary);
+}
+
+.composer__menu-anchor {
+  position: relative;
+}
+
+.composer__menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  min-width: 180px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+}
+
+.composer__menu[hidden] {
+  display: none;
+}
+
+.composer__menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.composer__menu button:hover {
+  background: rgb(89 102 242 / 18%);
+}
+
+.composer__menu button[aria-checked="true"] {
+  color: var(--accent);
+}
+
+.composer__send {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.composer__send:disabled {
+  background: var(--panel-alt);
+  color: rgb(242 242 245 / 50%);
+}
+
+.composer__send--stop {
+  background: rgb(242 115 115 / 80%);
+}
+
+/* The class's display rule would beat the browser's own [hidden] style and paint
+   the idle stop (or a streaming send) as a phantom circle, so hide it explicitly. */
+.composer__send[hidden] {
+  display: none;
+}
+
+#failure-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 24px 8px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgb(242 115 115 / 8%);
+  border: 1px solid rgb(242 115 115 / 35%);
+}
+
+#failure-banner[hidden] {
+  display: none;
+}
+
+.failure-banner__text {
+  min-width: 0;
+}
+
+.failure-banner__message {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failure-banner__next {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.failure-banner__retry {
+  flex: 0 0 auto;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
 }

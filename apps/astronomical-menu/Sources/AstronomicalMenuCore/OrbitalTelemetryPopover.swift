@@ -268,7 +268,7 @@ struct GPUUtilizationBar: View {
           .font(PopoverTypography.monospacedBody)
       }
       HorizontalUsageBar(
-        usageFraction: min(1, max(0, (gpuUtilizationPercentage ?? 0) / 100)),
+        usageFraction: usageBarFillFraction((gpuUtilizationPercentage ?? 0) / 100),
         fillColor: .green
       )
     }
@@ -315,7 +315,7 @@ struct PromptReuseBar: View {
         Spacer()
         Text(percentageTitle).font(PopoverTypography.monospacedBody)
       }
-      HorizontalUsageBar(usageFraction: reusedFraction, fillColor: .cyan)
+      HorizontalUsageBar(usageFraction: usageBarFillFraction(reusedFraction), fillColor: .cyan)
       HStack {
         Text("Target + drafter work").foregroundStyle(.secondary)
         Spacer()
@@ -326,6 +326,13 @@ struct PromptReuseBar: View {
   }
 }
 
+/// Fill fraction for a usage bar's track. Out-of-range and NaN inputs clamp to
+/// the track so a fill can never render outside its capsule.
+func usageBarFillFraction(_ fraction: Double) -> Double {
+  if fraction.isNaN { return 0 }
+  return min(1, max(0, fraction))
+}
+
 struct HorizontalUsageBar: View {
   let usageFraction: Double
   let fillColor: Color
@@ -334,7 +341,7 @@ struct HorizontalUsageBar: View {
     GeometryReader { geometry in
       ZStack(alignment: .leading) {
         Capsule().fill(.secondary.opacity(0.18))
-        Capsule().fill(fillColor).frame(width: geometry.size.width * usageFraction)
+        Capsule().fill(fillColor).frame(width: geometry.size.width * usageBarFillFraction(usageFraction))
       }
     }
     .frame(height: 7)

@@ -21,13 +21,17 @@ final class CanvasConversationUsabilityTests: CanvasTestCase {
       "regenerating belongs to what the model produced, never to the user's own words")
   }
 
-  func test_an_assistant_turn_still_offers_both_actions() async throws {
+  func test_an_assistant_turn_offers_copy_but_never_regenerate() async throws {
     let harness = try XCTUnwrap(harness)
     let turn = TranscriptMessage(
       id: UUID(), role: .assistant, markdown: "Answered.", state: .complete)
     try await harness.send(.snapshot(TranscriptSnapshot(messages: [turn], channel: "Development")))
 
-    try await harness.waitForElement("[data-testid='action-regenerate']")
+    try await harness.waitForElement("[data-testid='action-copy']")
+    let regenerateCount = try await harness.count(of: "[data-testid='action-regenerate']")
+    XCTAssertEqual(
+      regenerateCount, 0,
+      "an ask is answered once; a stale re-ask button must never come back")
   }
 
   func test_a_user_turn_is_scrolled_out_of_the_compose_surface_look() async throws {

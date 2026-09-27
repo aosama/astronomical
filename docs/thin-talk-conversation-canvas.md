@@ -4,7 +4,7 @@ This record explains how the right-hand conversation area of Thin Talk renders a
 
 ## Decision
 
-The conversation canvas is one `WKWebView` occupying the right-hand pane. The window chrome, sidebar, composer dock, model selector, and failure banners stay SwiftUI. The web surface renders the transcript; it owns no chat state.
+The conversation surface is one `WKWebView` occupying the window's content area. Everything a reader sees — transcript, composer dock, thinking-effort control, and failure banner — is HyperText Markup Language (HTML) inside that one surface; the native title bar stays AppKit. Swift keeps every behaviour and all chat state; the page owns none.
 
 Three facts drive that split.
 
@@ -12,7 +12,17 @@ Three facts drive that split.
 - Rich answers cannot be expressed natively. `AttributedString(markdown:)` renders no tables, no fenced code with syntax highlighting, and no embedded HTML; the Swift ecosystem's richer options are either in maintenance mode or force architectural compromises. `gonzalezreal/MarkdownUI`, the most established choice, is [explicitly in maintenance mode](https://github.com/gonzalezreal/swift-markdown-ui), with new work moved to Textual.
 - One web view beats many. Combining multiple vertical web views inside a native scroll view is unreliable, and each instance costs a web content process; a single view also restores text selection across the whole transcript, which separate native text views cannot do. The [SuperSwiftMarkup rationale](https://github.com/SuperSwiftMarkup/SuperSwiftMarkdownPrototype) documents both limitations, and Craft's experience with WKWebView in a native shell is a practical account of the same trade.
 
-The cost of this decision is honest: per-message affordances are rendered as HTML controls that report back to Swift, and reading order depends on WebKit's accessibility tree rather than SwiftUI's.
+The cost of this decision is honest: the composer and banner are HTML controls that report to Swift, and reading order depends on WebKit's accessibility tree rather than SwiftUI's.
+
+### Whole-surface split (decision, 2026-09-27)
+
+The 2026-09-19 split kept the composer and failure banner in SwiftUI while the transcript moved to the canvas. Shipping both halves exposed the cost: two theming sources (`PreviewTheme` and `canvas.css`) and two zoom paths (a native composer font and the page zoom) must stay in perfect step or the window reads as two apps glued together. The surface is now all HTML except the title bar and the shell-missing fallback view, so there is exactly one source for fonts, colour tokens, spacing, and zoom.
+
+- Swift pushes one `composer` command (streaming, accepts-input, ready, effort with its options, failure) and receives `send`/`stop`/`setEffort`/`retry` actions alongside the existing copy/regenerate/open-external actions.
+- The draft text stays out of the wire: the page owns the field's in-progress text while the reader types, because echoing a Swift-side copy on every state push would clobber that typing mid-sentence.
+- The GUI zoom (Cmd+/Cmd-) drives the page zoom alone; the composer and banner scale with it for free.
+- The composer and banner markup is app-owned chrome, not model output, so it never passes through the sanitiser; the Content Security Policy and navigation rules are unchanged.
+- The window title bar stays native, and a missing canvas shell still shows the native fallback view — a surface that cannot load must not depend on itself to say so.
 
 ## Rendering pipeline
 
