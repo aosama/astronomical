@@ -221,7 +221,7 @@ final class CanvasRenderingTests: CanvasTestCase {
 
   // MARK: - Bridge
 
-  func test_should_report_copy_and_regenerate_actions_to_swift() async throws {
+  func test_should_report_the_copy_action_to_swift() async throws {
     let harness = try XCTUnwrap(harness)
     let messageID = UUID()
     let message = TranscriptMessage(
@@ -230,13 +230,11 @@ final class CanvasRenderingTests: CanvasTestCase {
     try await harness.waitForElement("[data-testid='action-copy']")
 
     try await harness.setJS("document.querySelector(\"[data-testid='action-copy']\").click()")
-    try await harness.setJS("document.querySelector(\"[data-testid='action-regenerate']\").click()")
-    try await harness.waitForReportedActionCount(2)
+    try await harness.waitForReportedActionCount(1)
 
     let actions = harness.reportedActions
     XCTAssertEqual(actions.first?["action"] as? String, "copy")
     XCTAssertEqual(actions.first?["messageId"] as? String, messageID.uuidString)
-    XCTAssertEqual(actions.last?["action"] as? String, "regenerate")
   }
 
   func test_should_report_a_clicked_link_instead_of_navigating() async throws {

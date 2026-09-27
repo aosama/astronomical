@@ -178,6 +178,36 @@ final class TranscriptCommandCodecTests: XCTestCase {
     XCTAssertEqual(decoded["dark"] as? Bool, false)
   }
 
+  func test_should_encode_a_composer_command_with_its_full_state() throws {
+    let state = CanvasComposerState(
+      isStreaming: true,
+      acceptsInput: true,
+      isReady: true,
+      effort: .balanced,
+      failure: CanvasComposerFailure(
+        message: "The supervisor stopped responding.", nextAction: "Retry it."))
+    let decoded = try decodePayload(of: .composer(state))
+
+    XCTAssertEqual(decoded["kind"] as? String, "composer")
+    XCTAssertEqual(decoded["streaming"] as? Bool, true)
+    XCTAssertEqual(decoded["acceptsInput"] as? Bool, true)
+    XCTAssertEqual(decoded["ready"] as? Bool, true)
+    let effort = try XCTUnwrap(decoded["effort"] as? [String: Any])
+    XCTAssertEqual(effort["value"] as? String, "balanced")
+    let options = try XCTUnwrap(decoded["effortOptions"] as? [[String: Any]])
+    XCTAssertEqual(options.count, ThinkingEffort.allCases.count)
+    let failure = try XCTUnwrap(decoded["failure"] as? [String: Any])
+    XCTAssertEqual(failure["message"] as? String, "The supervisor stopped responding.")
+    XCTAssertEqual(failure["nextAction"] as? String, "Retry it.")
+  }
+
+  func test_should_encode_a_cleared_composer_failure_as_null() throws {
+    let state = CanvasComposerState(
+      isStreaming: false, acceptsInput: true, isReady: true, effort: .quick, failure: nil)
+    let decoded = try decodePayload(of: .composer(state))
+    XCTAssertNil(decoded["failure"], "a healthy surface must hide the banner")
+  }
+
   private func decodePayload(of command: TranscriptCommand) throws -> [String: Any] {
     let invocation = try TranscriptCommandCodec.invocation(for: command)
     let payload = try XCTUnwrap(invocation.split(separator: "\"").dropFirst().first.map(String.init))

@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import ThinTalkCore
 
-/// Owns the conversation area state: messages, streaming, copy, regenerate,
+/// Owns the conversation area state: messages, streaming, copy,
 /// and failure handling. Mirrors `PreviewViewModel` but is scoped to a single
 /// conversation so it can be instantiated independently by the preview root.
 @MainActor
@@ -32,13 +32,6 @@ final class PreviewConversationViewModel: ObservableObject {
     let text = messages.map { $0.displayText }
       .joined(separator: "\n\n")
     NSPasteboard.general.setString(text, forType: .string)
-  }
-
-  func regenerate() {
-    if let last = messages.last, last.role == .assistant {
-      messages.removeLast()
-    }
-    streamAssistant()
   }
 
   func stopStreaming() {

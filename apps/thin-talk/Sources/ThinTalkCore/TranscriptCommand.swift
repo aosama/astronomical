@@ -5,6 +5,7 @@ public enum TranscriptCommand: Sendable, Equatable {
   case snapshot(TranscriptSnapshot)
   case message(TranscriptMessage)
   case appearance(dark: Bool)
+  case composer(CanvasComposerState)
 }
 
 /// Chooses the smallest command that turns one snapshot into the next.
@@ -65,6 +66,12 @@ private struct EncodedCommand: Encodable {
     case channel
     case notice
     case dark
+    case streaming
+    case acceptsInput
+    case ready
+    case effort
+    case effortOptions
+    case failure
   }
 
   private enum MessageKeys: String, CodingKey {
@@ -145,6 +152,48 @@ private struct EncodedCommand: Encodable {
     case .appearance(let dark):
       try container.encode("appearance", forKey: .kind)
       try container.encode(dark, forKey: .dark)
+    case .composer(let composer):
+      try container.encode("composer", forKey: .kind)
+      try container.encode(composer.isStreaming, forKey: .streaming)
+      try container.encode(composer.acceptsInput, forKey: .acceptsInput)
+      try container.encode(composer.isReady, forKey: .ready)
+      try container.encode(EncodedEffort(effort: composer.effort), forKey: .effort)
+      try container.encode(
+        composer.effortOptions.map(EncodedEffort.init), forKey: .effortOptions)
+      try container.encodeIfPresent(
+        composer.failure.map(EncodedFailure.init), forKey: .failure)
     }
+  }
+}
+
+private struct EncodedEffort: Encodable {
+  private enum EffortKeys: String, CodingKey {
+    case value
+    case displayName
+    case budgetSummary
+  }
+
+  let effort: CanvasComposerState.EffortLevel
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: EffortKeys.self)
+    try container.encode(effort.value, forKey: .value)
+    try container.encode(effort.displayName, forKey: .displayName)
+    try container.encode(effort.budgetSummary, forKey: .budgetSummary)
+  }
+}
+
+private struct EncodedFailure: Encodable {
+  private enum FailureKeys: String, CodingKey {
+    case message
+    case nextAction
+  }
+
+  let failure: CanvasComposerFailure
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: FailureKeys.self)
+    try container.encodeIfPresent(failure.message, forKey: .message)
+    try container.encode(failure.nextAction, forKey: .nextAction)
   }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 import ThinTalkCore
 
 /// Owns the UX-preview state: local session history, selected model, the
-/// conversation, and simulation of streaming, failure, copy and regenerate.
+/// conversation, and simulation of streaming, failure and copy.
 /// This is a demonstration of the agreed layout and interactions. All data is
 /// local mock content; there is no network call. Production streaming reuses the
 /// tested `ThinTalkCore.ChatConversationReducer`, but here updates drive the
@@ -76,19 +76,11 @@ final class PreviewViewModel: ObservableObject {
     messages.append(userMessage)
   }
 
-  func regenerate() {
-    if let last = messages.last, last.role == .assistant {
-      messages.removeLast()
-    }
-    streamAssistant()
-  }
-
   func stopStreaming() {
     streamingTask?.cancel()
     streamingTask = nil
     isStreaming = false
   }
-
   func copyMessage(_ message: PreviewMessage) {
     let board = NSPasteboard.general
     board.setString(message.content, forType: .string)

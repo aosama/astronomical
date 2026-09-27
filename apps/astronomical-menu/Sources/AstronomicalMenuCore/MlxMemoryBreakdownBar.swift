@@ -274,5 +274,5 @@ struct MlxMemoryBreakdownBar: View {
 
 func memoryBreakdownFraction(_ byteCount: UInt64, _ limitByteCount: UInt64) -> Double {
   guard limitByteCount > 0 else { return 0 }
-  return min(1, Double(byteCount) / Double(limitByteCount))
+  return usageBarFillFraction(Double(byteCount) / Double(limitByteCount))
 }
