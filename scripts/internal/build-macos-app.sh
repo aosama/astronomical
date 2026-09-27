@@ -577,7 +577,20 @@ main() {
     printf '%s\n' "  Astronomical ${APPLICATION_CHANNEL} app ready in ${total_elapsed_seconds}s"
     printf '%s\n' "  ${app_bundle_path}"
     printf '%s\n' ""
-    printf '%s\n' "  Launch: open \"${app_bundle_path}\""
+    if [ "$APPLICATION_CHANNEL" = "development" ]; then
+        # Phase 5 already proved the menu executable starts and stays alive,
+        # but its validation instance is terminated. The Development app is the
+        # local daily driver and its menu bar icon is the user-facing entry
+        # point, so launch it for real now that the build succeeded.
+        if open "$app_bundle_path"; then
+            printf '%s\n' "  development app launched — menu bar icon is live"
+        else
+            printf '%s\n' "  warning: build succeeded but the app could not be launched; run:"
+            printf '%s\n' "  open \"${app_bundle_path}\""
+        fi
+    else
+        printf '%s\n' "  Launch: open \"${app_bundle_path}\""
+    fi
     printf '%s\n' "══════════════════════════════════════════════════════════════"
     printf '%s\n' ""
 }
