@@ -261,15 +261,23 @@ jobs:
       - name: Verify CI native cache contracts
         run: scripts/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
+      - name: Prepare durable test-log directory
+        run: mkdir -p "$RUNNER_TEMP/test-logs"
       - name: Run macOS menu status contracts
         id: macos-menu-contracts
-        run: scripts/test-macos-menu-contracts.sh
+        run: |
+          set -o pipefail
+          scripts/test-macos-menu-contracts.sh 2>&1 | tee "$RUNNER_TEMP/test-logs/menu-status.log"
         timeout-minutes: 2
       - name: Run Thin Talk conversation canvas contracts
-        run: swift test --package-path apps/thin-talk
+        run: |
+          set -o pipefail
+          swift test --package-path apps/thin-talk 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk.log"
         timeout-minutes: 6
       - name: Run Observatory contracts
-        run: node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js apps/supervisor/console/connect.test.js
+        run: |
+          set -o pipefail
+          node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js apps/supervisor/console/connect.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
         timeout-minutes: 2
       - name: Install verification tools
         run: scripts/install-verification-tools.sh
@@ -333,15 +341,32 @@ jobs:
           esac
           printf '[native-build-result] status=%s\n' "$native_build_status"
       - name: Run hermetic tests
-        run: cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)"
+        run: |
+          # Preserve cargo's exit code through tee so a failing test still fails
+          # this required check; the default GitHub bash shell sets pipefail, but
+          # state it explicitly so the invariant survives a shell change.
+          set -o pipefail
+          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
-        run: cargo test --timings -p astronomical-supervisor --test rest_api_tests library -- --nocapture
+        run: |
+          set -o pipefail
+          cargo test --timings -p astronomical-supervisor --test rest_api_tests library -- --nocapture 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-library.log"
         timeout-minutes: 2
       - name: Verify menu-facing status wire contract
-        run: cargo test -p astronomical-supervisor --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact
+        run: |
+          set -o pipefail
+          cargo test -p astronomical-supervisor --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
         timeout-minutes: 2
 
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-logs-macos-hermetic-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/test-logs/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Start cargo-downloads-cache save timer
         id: cargo-downloads-cache-save-start
         if: ${{ !cancelled() && steps.cargo-downloads-cache.outputs.cache-hit != 'true' }}
