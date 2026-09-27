@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
-    ImageGenerationCommand, ImageGenerationSettings, MlxMemorySnapshotSource, RequestId,
+    ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, GenerationQueueDepth, GenerationStartError,
