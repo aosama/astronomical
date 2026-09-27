@@ -12,26 +12,37 @@ public struct CanvasAction: Sendable, Equatable {
   public enum Kind: String, Sendable {
     case ready
     case copy
-    case regenerate
     case openExternal
+    case send
+    case stop
+    case setEffort
+    case retry
   }
 
   public let kind: Kind
   public let messageID: UUID?
   public let externalURL: URL?
+  /// The free-form payload an action carries: the draft for a send, the chosen
+  /// level for an effort change. Everything here is app-owned input, never model
+  /// output, so it needs no sanitisation.
+  public let detail: String?
 
-  public init(kind: Kind, messageID: UUID? = nil, externalURL: URL? = nil) {
+  public init(
+    kind: Kind, messageID: UUID? = nil, externalURL: URL? = nil, detail: String? = nil
+  ) {
     self.kind = kind
     self.messageID = messageID
     self.externalURL = externalURL
+    self.detail = detail
   }
 }
 
-/// The conversation canvas: one web surface that renders the transcript while
-/// SwiftUI keeps the surrounding chrome, the composer, and every behaviour.
+/// The conversation canvas: one web surface that renders the transcript, the
+/// composer, and the failure banner, while Swift keeps every behaviour.
 public struct ConversationCanvasView: NSViewRepresentable {
   private let snapshot: TranscriptSnapshot
   private let isDarkAppearance: Bool
+  private let composerState: CanvasComposerState
   private let webDirectory: URL
   private let assetRegistry: TranscriptAssetRegistry
   private let pageZoom: CGFloat
@@ -40,6 +51,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
   public init(
     snapshot: TranscriptSnapshot,
     isDarkAppearance: Bool,
+    composerState: CanvasComposerState,
     webDirectory: URL,
     assetRegistry: TranscriptAssetRegistry,
     pageZoom: CGFloat = 1.0,
@@ -47,6 +59,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
   ) {
     self.snapshot = snapshot
     self.isDarkAppearance = isDarkAppearance
+    self.composerState = composerState
     self.webDirectory = webDirectory
     self.assetRegistry = assetRegistry
     self.pageZoom = pageZoom
@@ -89,6 +102,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
     context.coordinator.webView = webView
     context.coordinator.sendAppearance(isDarkAppearance)
     context.coordinator.send(snapshot: snapshot)
+    context.coordinator.sendComposer(composerState)
     if let documentURL = CanvasSecurityPolicy.shellDocumentURL() {
       webView.load(URLRequest(url: documentURL))
     }
@@ -100,6 +114,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
     webView.pageZoom = pageZoom
     context.coordinator.sendAppearance(isDarkAppearance)
     context.coordinator.send(snapshot: snapshot)
+    context.coordinator.sendComposer(composerState)
   }
 
   public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -116,6 +131,7 @@ public struct ConversationCanvasView: NSViewRepresentable {
 
     private var lastSentSnapshot: TranscriptSnapshot?
     private var lastSentAppearance: Bool?
+    private var lastSentComposer: CanvasComposerState?
     private var queuedCommands: [TranscriptCommand] = []
     private var isReady = false
 
@@ -135,6 +151,12 @@ public struct ConversationCanvasView: NSViewRepresentable {
       guard lastSentAppearance != isDark else { return }
       lastSentAppearance = isDark
       push(.appearance(dark: isDark))
+    }
+
+    func sendComposer(_ composer: CanvasComposerState) {
+      guard lastSentComposer != composer else { return }
+      lastSentComposer = composer
+      push(.composer(composer))
     }
 
     private func push(_ command: TranscriptCommand) {
@@ -180,13 +202,18 @@ public struct ConversationCanvasView: NSViewRepresentable {
       else { return }
       let rawMessageID = body["messageId"] as? String ?? ""
       let messageID = UUID(uuidString: rawMessageID)
+      let detail = body["detail"] as? String
       switch kind {
       case .openExternal:
         let rawURL = body["detail"] as? String ?? ""
         guard let externalURL = CanvasSecurityPolicy.externalURL(fromRawValue: rawURL) else { return }
         onAction(CanvasAction(kind: .openExternal, externalURL: externalURL))
-      case .copy, .regenerate:
+      case .copy:
         onAction(CanvasAction(kind: kind, messageID: messageID))
+      case .send, .setEffort:
+        onAction(CanvasAction(kind: kind, detail: detail))
+      case .stop, .retry:
+        onAction(CanvasAction(kind: kind))
       case .ready:
         return
       }
