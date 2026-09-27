@@ -1,5 +1,3 @@
-diff --git a/mlx/io/safetensors.cpp b/mlx/io/safetensors.cpp
-index 75c8a6ddc..e86523168 100644
 --- a/mlx/io/safetensors.cpp
 +++ b/mlx/io/safetensors.cpp
 @@ -1,5 +1,6 @@
@@ -9,10 +7,10 @@ index 75c8a6ddc..e86523168 100644
  #include <json.hpp>
  #include <memory>
  #include <sstream>
-@@ -238,18 +239,26 @@ void save_safetensors(
-   }
-   parent["__metadata__"] = _metadata;
- 
+@@ -221,18 +222,30 @@
+     std::shared_ptr<io::Writer> out_stream,
+     std::unordered_map<std::string, array> a,
+     std::unordered_map<std::string, std::string> metadata /* = {} */) {
 -  {
 -    std::vector<array> to_eval;
 -    to_eval.reserve(a.size());
@@ -21,14 +19,20 @@ index 75c8a6ddc..e86523168 100644
 -      to_eval.push_back(p.second);
 -    }
 -    eval(std::move(to_eval));
-+  // Fix payload order before evaluation. Writing the largest tensors first lets
-+  // the allocator reuse one released contiguous materialization for subsequent
-+  // smaller tensors while the name tie-breaker keeps the file deterministic.
+-  }
+-
+-  // Open only after the inputs are evaluated: opening a FileWriter
+-  // truncates the file and lazy inputs may still read from it.
++  // Fix payload order before evaluation. Writing the largest tensors first
++  // lets the allocator reuse one released contiguous materialization for
++  // subsequent smaller tensors while the name tie-breaker keeps the file
++  // deterministic. Tensors are materialized one at a time in the write loop
++  // below, so the peak is one tensor rather than the sum of all tensors.
 +  std::vector<std::pair<std::string, array>> ordered_arrays;
 +  ordered_arrays.reserve(a.size());
 +  for (const auto& [key, arr] : a) {
 +    ordered_arrays.emplace_back(key, arr);
-   }
++  }
 +  std::sort(
 +      ordered_arrays.begin(),
 +      ordered_arrays.end(),
@@ -38,6 +42,16 @@ index 75c8a6ddc..e86523168 100644
 +        }
 +        return left.first < right.first;
 +      });
++
++  // Open before materializing: opening a FileWriter truncates the file. This
++  // is safe because saving writes a fresh destination whose contents are
++  // never read back by this save; overwriting a file that lazily feeds the
++  // inputs is not supported by this save path.
+   out_stream->open();
+ 
+   ////////////////////////////////////////////////////////
+@@ -253,7 +266,7 @@
+   parent["__metadata__"] = _metadata;
  
    size_t offset = 0;
 -  for (auto& [key, arr] : a) {
@@ -45,7 +59,7 @@ index 75c8a6ddc..e86523168 100644
      json child;
      child["dtype"] = dtype_to_safetensor_str(arr.dtype());
      child["shape"] = arr.shape();
-@@ -262,12 +271,16 @@ void save_safetensors(
+@@ -266,12 +279,16 @@
    uint64_t header_len = header.length();
    out_stream->write(reinterpret_cast<char*>(&header_len), 8);
    out_stream->write(header.c_str(), header_len);
