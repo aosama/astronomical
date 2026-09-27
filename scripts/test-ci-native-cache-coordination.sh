@@ -260,7 +260,10 @@ assert_workflow_contract() {
           "apps/supervisor/console/library-fetch.test.js",
           "apps/supervisor/console/connect.test.js",
         ]
-        raise "Observatory required-CI command changed" unless Shellwords.split(observatory_step.fetch("run")) == expected_observatory_command
+        # The required-CI command now tees to a durable log for rerun-safe
+        # debugging, so assert the test invocation is present rather than the
+        # exact shell wrapper, which would couple the guard to log plumbing.
+        raise "Observatory required-CI command changed" unless observatory_step.fetch("run").include?(expected_observatory_command.join(" "))
         raise "Observatory contracts exceeded their bounded timeout" unless observatory_step.fetch("timeout-minutes") <= 2
         library_rest_step = steps.find { |step| step["name"] == "Run Library REST contracts" }
         raise "Library REST contracts are missing from required CI" unless library_rest_step
@@ -268,7 +271,7 @@ assert_workflow_contract() {
           "cargo", "test", "--timings", "-p", "astronomical-supervisor",
           "--test", "rest_api_tests", "library", "--", "--nocapture",
         ]
-        raise "Library REST required-CI command changed" unless Shellwords.split(library_rest_step.fetch("run")) == expected_library_rest_command
+        raise "Library REST required-CI command changed" unless library_rest_step.fetch("run").include?(expected_library_rest_command.join(" "))
         raise "Library REST contracts exceeded their bounded timeout" unless library_rest_step.fetch("timeout-minutes") <= 2
         compile_step = steps.find { |step| step["name"] == "Compile hermetic tests" }
         raise "hermetic compile step is missing from required CI" unless compile_step
