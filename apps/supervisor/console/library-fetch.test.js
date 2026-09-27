@@ -151,9 +151,17 @@ test("loads the shipped scripts and resolves the startup Library journey", ASYNC
     const scriptSources = Array.from(
         observatoryShell.matchAll(/<script\b[^>]*\bsrc="([^"]+)"[^>]*><\/script>/g),
         (scriptMatch) => scriptMatch[1]
-    );
+    )
+        // The chat render stack is the shared Thin Talk shell: heavy vendor
+        // bundles (KaTeX, Mermaid) with browser dependencies the Library journey
+        // never touches. It is verified by the Rust build (embedded assets) and
+        // Thin Talk's own tests, so this focused Library test loads only the
+        // console's own scripts.
+        .filter((scriptSource) => !scriptSource.startsWith("/render/"));
     for (const scriptSource of scriptSources) {
-        const shippedScriptPath = path.join(__dirname, path.basename(scriptSource));
+        // Script sources are console-rooted URL paths; resolve them against the
+        // console dir so the shipped file is found.
+        const shippedScriptPath = path.join(__dirname, scriptSource.replace(/^\//, ""));
         const shippedScript = fs.readFileSync(shippedScriptPath, "utf8");
         vm.runInContext(shippedScript, scriptContext, { filename: shippedScriptPath });
     }

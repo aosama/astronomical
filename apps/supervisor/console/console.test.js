@@ -248,7 +248,7 @@ test("rejects a serialized chat request after base64 expansion exceeds the HTTP 
 test("retains partial assistant output in conversation history after interruption", () => {
     const scriptContext = createConsoleContext();
     const assistantHistoryMessage = vm.runInContext(
-        'assistantHistoryMessage({ assistantText: "partial", reasoningText: "working" })',
+        'assistantHistoryMessage({ markdown: "partial", reasoning: "working" })',
         scriptContext
     );
 

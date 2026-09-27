@@ -1,10 +1,10 @@
 //! Embedded single-page admin console served by the supervisor.
 //!
-//! The Observatory console is embedded directly in the supervisor binary.
-//! included directly into the `astronomicald` binary through `include_str!`
-//! so the supervisor has no filesystem dependency and no separate frontend
-//! build step. The assets live at `apps/supervisor/console/` and are reached
-//! via `../console/...` from this source file.
+//! The Observatory console is embedded directly into the `astronomicald` binary
+//! through `include_str!` so the supervisor has no filesystem dependency and no
+//! separate frontend build step. The console shell and its assets live at
+//! `apps/supervisor/console/` and are reached via `../console/...`; the chat
+//! answer render stack is served by `console_render_assets` (merged in below).
 
 use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
@@ -46,6 +46,7 @@ where
         .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
         .route("/library.css", get(library_stylesheet))
+        .merge(crate::console_render_assets::render_routes())
 }
 
 /// `GET /` — the Observatory single-page shell. References the per-view scripts and
@@ -104,5 +105,86 @@ fn embedded_text_response(body: &'static str, content_type: &'static str) -> Res
         header::CONTENT_TYPE,
         header::HeaderValue::from_static(content_type),
     );
+    // Embedded assets change with every released binary, so a cached copy always
+    // shows stale UI; forbid caching outright rather than managing revalidation.
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("no-store"),
+    );
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An inline SVG carrying only a viewBox collapses to 0x0 inside a flex
+    /// button, which shipped composer icons as empty circles. Every SVG the
+    /// console styles must therefore carry an explicit CSS size.
+    #[test]
+    fn console_css_sizes_every_styled_svg() {
+        for css_rule_selector in [
+            ".navigation-button svg",
+            ".effort-pill__chevron",
+            ".composer-round-button svg,",
+            ".composer-send-button svg",
+        ] {
+            assert!(
+                CONSOLE_CSS.contains(css_rule_selector),
+                "console.css is missing a sizing rule for `{css_rule_selector}`"
+            );
+        }
+        let composer_icon_rule = CONSOLE_CSS
+            .split(".composer-round-button svg,")
+            .nth(1)
+            .expect("composer icon rule must exist");
+        assert!(
+            composer_icon_rule.contains("width:") && composer_icon_rule.contains("height:"),
+            "composer icon rule must set explicit width and height"
+        );
+    }
+
+    /// The text-size control sets an inline font-size on #chat-transcript; if a
+    /// chat-content rule pins its own fixed size, the control visibly does
+    /// nothing. The transcript declares the default, and message content
+    /// (messages, markdown, role/meta lines) must inherit or use em units.
+    #[test]
+    fn chat_text_scales_with_the_text_size_control() {
+        assert!(
+            CONSOLE_CSS.contains(".chat-transcript:empty::before")
+                && CONSOLE_CSS
+                    .rsplit_once(".chat-transcript:empty::before")
+                    .is_some_and(|(_, after)| after.contains("font-size: inherit;")),
+            "the empty-transcript placeholder must inherit the controlled size"
+        );
+        for rule in CONSOLE_CSS
+            .split('}')
+            .filter_map(|chunk| chunk.split_once('{'))
+        {
+            let (selectors, body) = rule;
+            let is_chat_content = selectors.contains(".chat-message")
+                || selectors.contains(".markdown-body")
+                || selectors.contains(".message__");
+            if !is_chat_content {
+                continue;
+            }
+            for declaration in body.lines().filter(|line| line.contains("font-size:")) {
+                assert!(
+                    declaration.contains("inherit") || declaration.trim_end().ends_with("em;"),
+                    "chat-content rule pins a fixed size, breaking the text-size control: \
+                     selectors `{selectors}` declaration `{declaration}`"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn embedded_responses_forbid_caching() {
+        let response = console_stylesheet().await;
+        let cache_control = response
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .expect("cache-control header must be present");
+        assert_eq!(cache_control, "no-store");
+    }
 }
