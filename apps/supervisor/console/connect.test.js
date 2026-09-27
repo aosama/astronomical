@@ -144,10 +144,16 @@ async function bootShippedObservatoryShell({ origin, modelsResponse }) {
     const scriptSources = Array.from(
         observatoryShell.matchAll(/<script\b[^>]*\bsrc="([^"]+)"[^>]*><\/script>/g),
         (scriptMatch) => scriptMatch[1]
-    );
+    )
+        // The chat render stack is the shared Thin Talk shell: heavy vendor
+        // bundles with browser dependencies this focused boot test does not
+        // exercise. It is verified by the Rust build and Thin Talk's own tests.
+        .filter((scriptSource) => !scriptSource.startsWith("/render/"));
     assert.ok(scriptSources.length > 0, "the shell must declare the Observatory scripts");
     for (const scriptSource of scriptSources) {
-        const shippedScriptPath = path.join(__dirname, path.basename(scriptSource));
+        // Script sources are console-rooted URL paths; resolve them against the
+        // console dir so the shipped file is found.
+        const shippedScriptPath = path.join(__dirname, scriptSource.replace(/^\//, ""));
         vm.runInContext(
             fs.readFileSync(shippedScriptPath, "utf8"),
             scriptContext,

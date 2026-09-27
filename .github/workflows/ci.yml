@@ -277,7 +277,7 @@ jobs:
       - name: Run Observatory contracts
         run: |
           set -o pipefail
-          node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js apps/supervisor/console/connect.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
+          node --test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js apps/supervisor/console/connect.test.js apps/supervisor/console/playground.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
         timeout-minutes: 2
       - name: Install verification tools
         run: scripts/install-verification-tools.sh

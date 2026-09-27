@@ -259,6 +259,7 @@ assert_workflow_contract() {
           "apps/supervisor/console/library.test.js",
           "apps/supervisor/console/library-fetch.test.js",
           "apps/supervisor/console/connect.test.js",
+          "apps/supervisor/console/playground.test.js",
         ]
         # The required-CI command now tees to a durable log for rerun-safe
         # debugging, so assert the test invocation is present rather than the

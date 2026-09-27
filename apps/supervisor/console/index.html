@@ -8,6 +8,8 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/console.css">
     <link rel="stylesheet" href="/library.css">
+    <link rel="stylesheet" href="/render/vendor/katex/katex.min.css">
+    <link rel="stylesheet" href="/render/vendor/highlight-github-dark.min.css">
 </head>
 <body class="observatory">
     <div class="observatory-shell">
@@ -158,6 +160,15 @@
                             <div class="composer-dock">
                                 <textarea id="chat-input" class="chat-input" placeholder="Message Astronomical…" rows="1" aria-label="Message to send"></textarea>
                                 <div class="composer-toolbar">
+                                    <button id="chat-effort" class="effort-pill" type="button" aria-haspopup="menu" aria-expanded="false" title="How much the model thinks before answering">
+                                        <span id="chat-effort-label" class="effort-pill__label">Quick</span>
+                                        <svg class="effort-pill__chevron" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+                                    </button>
+                                    <div id="chat-effort-menu" class="effort-menu" role="menu" hidden>
+                                        <button class="effort-menu__choice" role="menuitem" data-effort="quick">Quick<span class="effort-menu__budget">256 tokens</span></button>
+                                        <button class="effort-menu__choice" role="menuitem" data-effort="balanced">Balanced<span class="effort-menu__budget">512 tokens</span></button>
+                                        <button class="effort-menu__choice" role="menuitem" data-effort="high">High<span class="effort-menu__budget">1024 tokens</span></button>
+                                    </div>
                                     <label class="composer-round-button chat-attach" title="Attach image">
                                         <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2.75v8.5M4.75 8 8 11.25 11.25 8"/></svg>
                                         <input type="file" id="chat-image" accept="image/*" hidden>
@@ -167,18 +178,18 @@
                                     <button id="chat-send" class="composer-send-button" type="button" title="Send" aria-label="Send message"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg></button>
                                 </div>
                             </div>
-                            <aside class="playground-right" aria-label="Chat options">
-                                <details>
-                                    <summary>Sampling</summary>
-                                    <div class="playground-right-body">
-                                        <div class="sampling-controls">
-                                            <label class="sampling-control"><span class="sampling-label">Temperature</span><input type="range" id="sampling-temperature" min="0" max="2" step="0.05" value="0.7"><span id="sampling-temperature-value" class="sampling-value">0.70</span></label>
-                                            <label class="sampling-control"><span class="sampling-label">Top p</span><input type="range" id="sampling-top-p" min="0" max="1" step="0.01" value="1.0"><span id="sampling-top-p-value" class="sampling-value">1.00</span></label>
-                                            <label class="sampling-control"><span class="sampling-label">Max tokens</span><input type="range" id="sampling-max-tokens" min="1" max="8192" step="1" value="512"><span id="sampling-max-tokens-value" class="sampling-value">512</span></label>
+                            <aside class="playground-right" aria-label="Chat display options">
+                                <div class="playground-right-body">
+                                    <div class="font-size-controls">
+                                        <span class="font-size-label" id="font-size-heading">Text size</span>
+                                        <div class="font-size-controls-row" role="group" aria-labelledby="font-size-heading">
+                                            <button id="font-size-decrease" class="font-size-button" type="button" title="Decrease text size" aria-label="Decrease text size">A−</button>
+                                            <span id="font-size-value" class="font-size-value" aria-live="polite">14</span>
+                                            <button id="font-size-increase" class="font-size-button" type="button" title="Increase text size" aria-label="Increase text size">A+</button>
                                         </div>
-                                        <details class="raw-stream-wrapper"><summary>Raw stream</summary><pre id="raw-stream" class="raw-stream"></pre></details>
                                     </div>
-                                </details>
+                                    <p class="playground-note">Effort controls how much the model thinks before answering. It maps to the model's thinking budget; temperature and token caps are not exposed here.</p>
+                                </div>
                             </aside>
                         </div>
                     </section>
@@ -297,6 +308,20 @@
     <script src="/library-render.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
+    <!-- Chat answer render stack: shared source is Thin Talk's canvas shell.
+         Vendor libraries load first, then the bridge-agnostic canvas modules in
+         dependency order (content-key, trust, math, diagrams, render). -->
+    <script src="/render/vendor/morphdom-umd.min.js" defer></script>
+    <script src="/render/vendor/purify.min.js" defer></script>
+    <script src="/render/vendor/katex/katex.min.js" defer></script>
+    <script src="/render/vendor/mermaid.min.js" defer></script>
+    <script src="/render/vendor/marked.min.js" defer></script>
+    <script src="/render/vendor/highlight.min.js" defer></script>
+    <script src="/render/canvas-content-key.js" defer></script>
+    <script src="/render/canvas-trust.js" defer></script>
+    <script src="/render/canvas-math.js" defer></script>
+    <script src="/render/canvas-diagrams.js" defer></script>
+    <script src="/render/canvas-render.js" defer></script>
     <script src="/playground.js" defer></script>
 </body>
 </html>
