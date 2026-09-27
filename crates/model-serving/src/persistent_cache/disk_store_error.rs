@@ -195,6 +195,24 @@ pub enum PersistentPromptCacheDiskStoreError {
 }
 
 impl PersistentPromptCacheDiskStoreError {
+    // Fail-open boundary for the SpecPrefill sparse cache (issue 617): the sparse load path
+    // trusts the in-memory index, so a file removed out-of-band or a corrupted model-bound
+    // header must surface as a lookup miss instead of an error. Payload corruption
+    // (LoadSafetensors) is deliberately excluded: by then materialization has begun and a
+    // miss would silently hand the drafter a state that never fully loaded.
+    #[must_use]
+    pub fn is_treatable_as_cache_miss(&self) -> bool {
+        match self {
+            Self::OpenBlockFile { source, .. }
+                if matches!(source.kind(), std::io::ErrorKind::NotFound) =>
+            {
+                true
+            }
+            Self::ValidateBlock { .. } | Self::ValidateModelSpecificArtifact { .. } => true,
+            _ => false,
+        }
+    }
+
     #[must_use]
     pub fn active_memory_deficit_bytes(&self) -> Option<usize> {
         let Self::SaveSafetensors {
