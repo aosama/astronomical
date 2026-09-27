@@ -4,41 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.55</title>
-            <pubDate>Sun, 27 Sep 2026 10:41:50 -0400</pubDate>
-            <sparkle:version>680</sparkle:version>
-            <sparkle:shortVersionString>0.2.55</sparkle:shortVersionString>
+            <title>0.2.56</title>
+            <pubDate>Sun, 27 Sep 2026 18:02:13 -0400</pubDate>
+            <sparkle:version>692</sparkle:version>
+            <sparkle:shortVersionString>0.2.56</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.55
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.56
 
-Astronomical 0.2.55 is a Stable release for macOS.
+## New
+- **Observatory console chat unified with Thin Talk** — the console now shares the same conversation surface and rendering as Thin Talk, with updated console rendering.
 
-## What changed
+## Fixes
+- **Live MLX memory snapshot during image generation** — memory usage is now correctly reported during image generation steps.
 
-- **Thin Talk canvas composer.** The conversation composer was extracted into the Thin Talk web canvas, and two WebKit rendering defects were fixed: a phantom vertical scrollbar and a stop button that could disappear. The menu usage bar is now clamped to stay within the menu.
-- **Observatory Night.** New identity tokens, a refreshed type scale, and unification of the Observatory pages.
-- **Stable-instance guardrail.** A documentation guardrail against terminating the running Stable daemon and app.
-- **CI hardening.** The macOS hermetic required check was renamed so its name carries no duration.
+## Runtime
+- Updated the pinned MLX runtime from v0.32.2 to v0.32.3.
 
 ## Compatibility
-
-- No changes to the local REST API surface or model behavior in this release.
-- The macOS app requires macOS 14.0 or later and targets arm64.
-
-## Preserved
-
-- Model selection, validation, and deterministic output are unchanged.
-- No local state, caches, or user settings are affected.
+- This release preserves existing user state, configuration, and downloaded models.
 
 ## Distribution
-
-Astronomical 0.2.55 is distributed as a code-signed, Hardened Runtime, notarized macOS `.dmg`. The GitHub release asset and the Sparkle update feed enclosure are pinned to their SHA-256 digests, and the live signed update feed is updated after publication.
+- macOS 14.0 or later, Apple Silicon (arm64). Signed with a Developer ID and notarized by Apple; delivered through the public download and the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.55/Astronomical-0.2.55-macOS-arm64.dmg" length="18258091" type="application/octet-stream" sparkle:edSignature="nSRq3Z38reI/E5s6UTrbRwCymICOqYzY877o5cwnwwhX+ZUVzGb52ZeHrFdsqCA2lBzoSB/Be8HKiq3hm6QgDw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.56/Astronomical-0.2.56-macOS-arm64.dmg" length="19715472" type="application/octet-stream" sparkle:edSignature="3QA5Y6XVBFAaEoBrf8ziX7o9KDkBo1U8u1AOViw8CMFn94HX2jsFXommaGatZrRLLHj6qqUZof4/RuZLAgFPCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: ghUaSrCRwueMeU5ohcmBx1fUcgrGhT7tqrAG+yI7KO+as+6RkJEoHrXVsWRP5WcDVBGhE/XBBGvbVovCcdgSAA==
-length: 2500
+edSignature: AuZAlhJBq70HPg6zmo5y18cnjhZ2R/49hOBMDWsC49HqWqutKLObLVasCFAjdbICr7a+kodwxekg7rLUCJiMBw==
+length: 1927
 -->
