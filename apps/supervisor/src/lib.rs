@@ -12,6 +12,7 @@ mod config_reload_response;
 mod config_reveal_endpoint;
 mod configuration_status;
 mod console_assets;
+mod console_render_assets;
 mod embeddings_executor;
 mod generation_performance_log;
 mod image_generation_executor;

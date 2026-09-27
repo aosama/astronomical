@@ -1,12 +1,36 @@
 // Astronomical Observatory chat playground.
+//
+// This owns the console chat: the request it sends, the effort pill that maps to
+// the model's thinking budget, the text-size control, and the transcript it
+// renders. Rendering is delegated to the shared Thin Talk render stack
+// (window.__thintalkRenderer) so the console and the canvas answer the same
+// question — "what HTML may this message insert?" — with one pipeline. The
+// console keeps no copy of the markdown / KaTeX / Mermaid / sanitiser logic.
 
 const CHAT_URL = "/v1/chat/completions";
 const MAX_CHAT_REQUEST_BODY_BYTES = 32 * 1024 * 1024;
 const MAX_IMAGE_BYTES_BEFORE_BASE64_EXPANSION = 24 * 1024 * 1024;
 
+// Effort levels the console exposes. Each maps to a thinking budget (in tokens)
+// the backend reads as thinking_budget. Temperature, top-p and token caps are
+// intentionally absent: effort is the only model-control the console offers.
+const EFFORT_LEVELS = [
+    { value: "quick", label: "Quick", thinkingBudget: 256 },
+    { value: "balanced", label: "Balanced", thinkingBudget: 512 },
+    { value: "high", label: "High", thinkingBudget: 1024 },
+];
+const DEFAULT_EFFORT = "quick";
+const EFFORT_STORAGE_KEY = "observatory:chat:effort";
+const FONT_SIZE_STORAGE_KEY = "observatory:chat:fontSize";
+const MIN_FONT_SIZE = 12;
+const MAX_FONT_SIZE = 24;
+const DEFAULT_FONT_SIZE = 14;
+
 let currentChatAbortController = null;
 let pendingImageDataUri = null;
 const transcriptHistory = [];
+let currentEffort = DEFAULT_EFFORT;
+let currentFontSize = DEFAULT_FONT_SIZE;
 
 function wirePlayground() {
     const sendButton = document.getElementById("chat-send");
@@ -24,26 +48,128 @@ function wirePlayground() {
     stopButton.addEventListener("click", stopChat);
     imageInput.addEventListener("change", handleImageSelected);
     imageClearButton.addEventListener("click", clearAttachedImage);
-    const temperatureSlider = document.getElementById("sampling-temperature");
-    const topPSlider = document.getElementById("sampling-top-p");
-    const maxTokensSlider = document.getElementById("sampling-max-tokens");
-    temperatureSlider.addEventListener("input", () => {
-        document.getElementById("sampling-temperature-value").textContent =
-            parseFloat(temperatureSlider.value).toFixed(2);
+    wireEffortPill();
+    wireFontSizeControls();
+    document.getElementById("chat-transcript").addEventListener("click", handleTranscriptCommand);
+    applyFontSize();
+    updateEffortLabel();
+}
+
+function resolveEffortLevel(value) {
+    return EFFORT_LEVELS.find((level) => level.value === value) || EFFORT_LEVELS[0];
+}
+
+function loadEffort() {
+    try {
+        const stored = localStorage.getItem(EFFORT_STORAGE_KEY);
+        if (stored && resolveEffortLevel(stored).value === stored) {
+            return stored;
+        }
+    } catch (storageError) {
+        /* Storage may be unavailable; fall through to the default. */
+    }
+    return DEFAULT_EFFORT;
+}
+
+function wireEffortPill() {
+    currentEffort = loadEffort();
+    const pill = document.getElementById("chat-effort");
+    const menu = document.getElementById("chat-effort-menu");
+    pill.addEventListener("click", () => {
+        const opening = menu.hidden;
+        menu.hidden = !opening;
+        pill.setAttribute("aria-expanded", opening ? "true" : "false");
     });
-    topPSlider.addEventListener("input", () => {
-        document.getElementById("sampling-top-p-value").textContent =
-            parseFloat(topPSlider.value).toFixed(2);
+    menu.addEventListener("click", (event) => {
+        const choice = event.target.closest("[data-effort]");
+        if (!choice) {
+            return;
+        }
+        setEffort(choice.dataset.effort);
+        menu.hidden = true;
+        pill.setAttribute("aria-expanded", "false");
     });
-    maxTokensSlider.addEventListener("input", () => {
-        document.getElementById("sampling-max-tokens-value").textContent =
-            parseInt(maxTokensSlider.value, 10).toLocaleString();
+    document.addEventListener("click", (event) => {
+        if (!menu.hidden && !pill.contains(event.target) && !menu.contains(event.target)) {
+            menu.hidden = true;
+            pill.setAttribute("aria-expanded", "false");
+        }
     });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !menu.hidden) {
+            menu.hidden = true;
+            pill.setAttribute("aria-expanded", "false");
+            pill.focus();
+        }
+    });
+}
+
+function setEffort(value) {
+    currentEffort = value;
+    try {
+        localStorage.setItem(EFFORT_STORAGE_KEY, value);
+    } catch (storageError) {
+        /* Persistence is best-effort; the in-memory value still applies. */
+    }
+    updateEffortLabel();
+}
+
+function updateEffortLabel() {
+    const level = resolveEffortLevel(currentEffort);
+    document.getElementById("chat-effort-label").textContent = level.label;
+    document.getElementById("chat-effort").title =
+        "Thinking effort: " + level.label + " (" + level.thinkingBudget + " tokens)";
+    document.querySelectorAll("#chat-effort-menu [data-effort]").forEach((choice) => {
+        choice.setAttribute("aria-checked", choice.dataset.effort === currentEffort ? "true" : "false");
+    });
+}
+
+function loadFontSize() {
+    try {
+        const stored = Number(localStorage.getItem(FONT_SIZE_STORAGE_KEY));
+        if (Number.isInteger(stored) && stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) {
+            return stored;
+        }
+    } catch (storageError) {
+        /* Storage may be unavailable; fall through to the default. */
+    }
+    return DEFAULT_FONT_SIZE;
+}
+
+function wireFontSizeControls() {
+    currentFontSize = loadFontSize();
+    document.getElementById("font-size-decrease").addEventListener("click", () => {
+        setFontSize(Math.max(MIN_FONT_SIZE, currentFontSize - 1));
+    });
+    document.getElementById("font-size-increase").addEventListener("click", () => {
+        setFontSize(Math.min(MAX_FONT_SIZE, currentFontSize + 1));
+    });
+    applyFontSize();
+}
+
+function setFontSize(size) {
+    currentFontSize = size;
+    try {
+        localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(size));
+    } catch (storageError) {
+        /* Persistence is best-effort; the in-memory value still applies. */
+    }
+    applyFontSize();
+}
+
+function applyFontSize() {
+    const transcript = document.getElementById("chat-transcript");
+    if (transcript) {
+        transcript.style.fontSize = currentFontSize + "px";
+    }
+    document.getElementById("font-size-value").textContent = String(currentFontSize);
 }
 
 function handleImageSelected(event) {
     const selectedImageFile = event.target.files && event.target.files[0];
-    if (!selectedImageFile) { return; }
+    if (!selectedImageFile) {
+        return;
+    }
     if (selectedImageFile.size > MAX_IMAGE_BYTES_BEFORE_BASE64_EXPANSION) {
         showChatError("The image is too large for the server's 32 MiB request limit.");
         event.target.value = "";
@@ -57,7 +183,9 @@ function handleImageSelected(event) {
         preview.hidden = false;
         document.getElementById("chat-image-clear").hidden = false;
     };
-    imageFileReader.onerror = () => { showChatError("Could not read the selected image."); };
+    imageFileReader.onerror = () => {
+        showChatError("Could not read the selected image.");
+    };
     imageFileReader.readAsDataURL(selectedImageFile);
 }
 
@@ -73,33 +201,28 @@ function clearAttachedImage() {
 function collectCurrentMessage() {
     const inputTextarea = document.getElementById("chat-input");
     const text = inputTextarea.value.trim();
-    if (!text && !pendingImageDataUri) { return null; }
-    if (!pendingImageDataUri) { return { role: "user", content: text }; }
+    if (!text && !pendingImageDataUri) {
+        return null;
+    }
+    if (!pendingImageDataUri) {
+        return { role: "user", content: text };
+    }
     const messageContent = [];
-    if (text) { messageContent.push({ type: "text", text: text }); }
+    if (text) {
+        messageContent.push({ type: "text", text: text });
+    }
     messageContent.push({ type: "image_url", image_url: { url: pendingImageDataUri } });
     return { role: "user", content: messageContent };
 }
 
 function chatRequestFitsHttpBodyLimit(serializedRequestBody) {
-    return new TextEncoder().encode(serializedRequestBody).byteLength
-        <= MAX_CHAT_REQUEST_BODY_BYTES;
-}
-
-function assistantHistoryMessage(streamedResponse) {
-    if (!streamedResponse.assistantText && !streamedResponse.reasoningText) { return null; }
-    const assistantMessage = { role: "assistant" };
-    if (streamedResponse.assistantText) {
-        assistantMessage.content = streamedResponse.assistantText;
-    }
-    if (streamedResponse.reasoningText) {
-        assistantMessage.reasoning_content = streamedResponse.reasoningText;
-    }
-    return assistantMessage;
+    return new TextEncoder().encode(serializedRequestBody).byteLength <= MAX_CHAT_REQUEST_BODY_BYTES;
 }
 
 function visibleUserMessageText(message) {
-    if (typeof message.content === "string") { return message.content; }
+    if (typeof message.content === "string") {
+        return message.content;
+    }
     const visibleParts = message.content
         .filter((contentPart) => contentPart.type === "text")
         .map((contentPart) => contentPart.text);
@@ -112,7 +235,9 @@ function visibleUserMessageText(message) {
 async function sendChat() {
     hideChatError();
     const currentMessage = collectCurrentMessage();
-    if (!currentMessage) { return; }
+    if (!currentMessage) {
+        return;
+    }
     if (!selectedModelId) {
         showChatError("No model is available. Check the configured model directories.");
         return;
@@ -121,10 +246,8 @@ async function sendChat() {
         model: selectedModelId,
         messages: transcriptHistory.concat([currentMessage]),
         stream: true,
-        temperature: parseFloat(document.getElementById("sampling-temperature").value),
-        top_p: parseFloat(document.getElementById("sampling-top-p").value),
-        max_tokens: parseInt(document.getElementById("sampling-max-tokens").value, 10),
-        stream_options: { include_usage: true }
+        thinking_budget: resolveEffortLevel(currentEffort).thinkingBudget,
+        stream_options: { include_usage: true },
     };
     const serializedRequestBody = JSON.stringify(requestBody);
     if (!chatRequestFitsHttpBodyLimit(serializedRequestBody)) {
@@ -133,42 +256,48 @@ async function sendChat() {
     }
 
     transcriptHistory.push(currentMessage);
-    appendTranscriptMessage("user", currentMessage);
+    appendTranscriptMessage("user", {
+        role: "user",
+        markdown: visibleUserMessageText(currentMessage),
+        state: "complete",
+    });
     document.getElementById("chat-input").value = "";
     clearAttachedImage();
-    const assistantBubble = appendTranscriptMessage("assistant", null);
-    const reasoningBubble = appendTranscriptMessage("reasoning", null);
-    reasoningBubble.element.hidden = true;
-    const streamedResponse = { assistantText: "", reasoningText: "" };
+    const assistantHandle = appendTranscriptMessage("assistant", {
+        role: "assistant",
+        markdown: "",
+        reasoning: "",
+        state: "streaming",
+    });
+    const streamedState = { markdown: "", reasoning: "" };
     currentChatAbortController = new AbortController();
     setSendStopState(true);
-    const rawStream = document.getElementById("raw-stream");
-    rawStream.textContent = "";
     try {
         const response = await fetch(CHAT_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: serializedRequestBody,
-            signal: currentChatAbortController.signal
+            signal: currentChatAbortController.signal,
         });
         if (!response.ok) {
             throw new Error(parseErrorEnvelope(await response.text(), response.status));
         }
-        await streamChatResponse(response, assistantBubble, reasoningBubble, rawStream, streamedResponse);
-        if (!streamedResponse.assistantText && !streamedResponse.reasoningText) {
-            assistantBubble.textNode.textContent = "(no output)";
+        await streamChatResponse(response, assistantHandle, streamedState);
+        if (!streamedState.markdown && !streamedState.reasoning) {
+            assistantHandle.renderMessage.markdown = "(no output)";
         }
+        assistantHandle.renderMessage.state = "complete";
+        renderDisplayMessage(assistantHandle);
     } catch (requestError) {
         if (requestError.name !== "AbortError") {
             showChatError(requestError.message || "The local worker request failed.");
         }
     } finally {
-        const assistantMessage = assistantHistoryMessage(streamedResponse);
+        const assistantMessage = assistantHistoryMessage(streamedState);
         if (assistantMessage) {
             transcriptHistory.push(assistantMessage);
         } else {
-            assistantBubble.element.remove();
-            reasoningBubble.element.remove();
+            assistantHandle.element.remove();
             transcriptHistory.pop();
         }
         setSendStopState(false);
@@ -176,112 +305,142 @@ async function sendChat() {
     }
 }
 
-async function streamChatResponse(response, assistantBubble, reasoningBubble, rawStream, streamedResponse) {
+function assistantHistoryMessage(streamedState) {
+    if (!streamedState.markdown && !streamedState.reasoning) {
+        return null;
+    }
+    const assistantMessage = { role: "assistant" };
+    if (streamedState.markdown) {
+        assistantMessage.content = streamedState.markdown;
+    }
+    if (streamedState.reasoning) {
+        assistantMessage.reasoning_content = streamedState.reasoning;
+    }
+    return assistantMessage;
+}
+
+async function streamChatResponse(response, assistantHandle, streamedState) {
     const responseReader = response.body.getReader();
     const textDecoder = new TextDecoder();
     let pendingEventText = "";
     while (true) {
         const { value: responseBytes, done: responseIsComplete } = await responseReader.read();
-        if (responseIsComplete) { break; }
+        if (responseIsComplete) {
+            break;
+        }
         pendingEventText += textDecoder.decode(responseBytes, { stream: true });
         const completeEvents = pendingEventText.split("\n\n");
         pendingEventText = completeEvents.pop();
         for (const eventText of completeEvents) {
-            applyServerSentEvent(eventText, assistantBubble, reasoningBubble, rawStream, streamedResponse);
+            applyServerSentEvent(eventText, assistantHandle, streamedState);
         }
     }
 }
 
-function applyServerSentEvent(eventText, assistantBubble, reasoningBubble, rawStream, streamedResponse) {
+function applyServerSentEvent(eventText, assistantHandle, streamedState) {
     const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
-    if (!dataLine) { return; }
+    if (!dataLine) {
+        return;
+    }
     const payload = dataLine.slice(5).trim();
-    if (payload === "[DONE]") { return; }
-    rawStream.textContent += payload + "\n\n";
+    if (payload === "[DONE]") {
+        return;
+    }
     let parsedPayload;
-    try { parsedPayload = JSON.parse(payload); } catch (parseError) { return; }
+    try {
+        parsedPayload = JSON.parse(payload);
+    } catch (parseError) {
+        return;
+    }
     if (parsedPayload.error) {
         throw new Error(parsedPayload.error.message || "The local worker request failed.");
     }
-    const delta = parsedPayload.choices && parsedPayload.choices[0]
-        && parsedPayload.choices[0].delta;
-    if (!delta) { return; }
+    const delta = parsedPayload.choices && parsedPayload.choices[0] && parsedPayload.choices[0].delta;
+    if (!delta) {
+        return;
+    }
     if (delta.reasoning_content) {
-        streamedResponse.reasoningText += delta.reasoning_content;
-        reasoningBubble.element.hidden = false;
-        reasoningBubble.textNode.textContent = streamedResponse.reasoningText;
+        streamedState.reasoning += delta.reasoning_content;
+        assistantHandle.renderMessage.reasoning = streamedState.reasoning;
     }
     if (delta.content) {
-        streamedResponse.assistantText += delta.content;
-        renderAssistantText(assistantBubble, streamedResponse.assistantText);
+        streamedState.markdown += delta.content;
+        assistantHandle.renderMessage.markdown = streamedState.markdown;
+        renderDisplayMessage(assistantHandle);
     }
 }
 
-function renderAssistantText(assistantBubble, fullText) {
-    const container = assistantBubble.element;
-    container.textContent = "";
-    const fenceMarker = "```";
-    const segments = [];
-    let cursor = 0;
-    while (cursor < fullText.length) {
-        const fenceStart = fullText.indexOf(fenceMarker, cursor);
-        if (fenceStart === -1) {
-            segments.push({ kind: "text", text: fullText.slice(cursor) });
-            break;
-        }
-        if (fenceStart > cursor) {
-            segments.push({ kind: "text", text: fullText.slice(cursor, fenceStart) });
-        }
-        const codeStart = fenceStart + fenceMarker.length;
-        const fenceEnd = fullText.indexOf(fenceMarker, codeStart);
-        if (fenceEnd === -1) {
-            segments.push({ kind: "code", text: fullText.slice(codeStart) });
-            break;
-        }
-        segments.push({ kind: "code", text: fullText.slice(codeStart, fenceEnd) });
-        cursor = fenceEnd + fenceMarker.length;
+function renderDisplayMessage(handle) {
+    if (typeof __thintalkRenderer === "undefined" || typeof morphdom === "undefined") {
+        renderPlainTextFallback(handle);
+        return;
     }
-    for (const segment of segments) {
-        if (segment.kind === "code") {
-            const preformattedText = document.createElement("pre");
-            preformattedText.textContent = stripLeadingNewline(segment.text);
-            container.appendChild(preformattedText);
-        } else {
-            container.appendChild(document.createTextNode(segment.text));
-        }
+    const article = handle.element;
+    const probe = document.createElement("div");
+    probe.className = "message__probe";
+    probe.innerHTML = __thintalkRenderer.messageHtml(handle.renderMessage);
+    __thintalkRenderer.labelCodeBlocks(probe);
+    __thintalkRenderer.stampExpensiveKeys(probe);
+    morphdom(article, probe, {
+        childrenOnly: true,
+        getNodeKey: __thintalkRenderer.nodeKey,
+        onBeforeElUpdated: __thintalkRenderer.beforeElUpdated,
+    });
+    __thintalkRenderer.highlightCodeBlocks(article);
+    if (handle.renderMessage.state === "complete" || handle.renderMessage.state === "stopped") {
+        __thintalkRenderer.renderDiagrams(article);
     }
 }
 
-function stripLeadingNewline(text) {
-    return text.charAt(0) === "\n" ? text.slice(1) : text;
+function renderPlainTextFallback(handle) {
+    handle.element.textContent = "";
+    const fallback = document.createElement("div");
+    fallback.className = "chat-message-fallback";
+    fallback.textContent = handle.renderMessage.markdown || "";
+    handle.element.appendChild(fallback);
+}
+
+function handleTranscriptCommand(event) {
+    const copyButton = event.target.closest('[data-action="copy"]');
+    if (!copyButton) {
+        return;
+    }
+    const answer = copyButton.closest(".message__answer") || copyButton.closest(".chat-message");
+    const text = answer ? answer.textContent : "";
+    navigator.clipboard.writeText(text).then(
+        () => {
+            copyButton.textContent = "Copied";
+            setTimeout(() => {
+                copyButton.textContent = "Copy";
+            }, 1200);
+        },
+        () => {
+            showChatError("Could not copy to the clipboard.");
+        },
+    );
+}
+
+function appendTranscriptMessage(role, renderMessage) {
+    const transcript = document.getElementById("chat-transcript");
+    const article = document.createElement("div");
+    article.className = "chat-message chat-message-" + role;
+    article.setAttribute("data-role", role);
+    transcript.appendChild(article);
+    const handle = { element: article, renderMessage: renderMessage };
+    renderDisplayMessage(handle);
+    transcript.scrollTop = transcript.scrollHeight;
+    return handle;
 }
 
 function stopChat() {
-    if (currentChatAbortController) { currentChatAbortController.abort(); }
+    if (currentChatAbortController) {
+        currentChatAbortController.abort();
+    }
 }
 
 function setSendStopState(streaming) {
     document.getElementById("chat-send").disabled = streaming;
     document.getElementById("chat-stop").disabled = !streaming;
-}
-
-function appendTranscriptMessage(role, message) {
-    const transcript = document.getElementById("chat-transcript");
-    const wrapper = document.createElement("div");
-    wrapper.className = "chat-message chat-message-" + role;
-    wrapper.setAttribute("data-role", role);
-    const textNode = document.createTextNode("");
-    if (role === "reasoning") {
-        const labelNode = document.createElement("span");
-        labelNode.textContent = "Reasoning:\n";
-        wrapper.appendChild(labelNode);
-    } else if (role === "user" && message) {
-        textNode.textContent = visibleUserMessageText(message);
-    }
-    wrapper.appendChild(textNode);
-    transcript.appendChild(wrapper);
-    transcript.scrollTop = transcript.scrollHeight;
-    return { element: wrapper, textNode: textNode };
 }
 
 function showChatError(message) {
@@ -299,8 +458,14 @@ function hideChatError() {
 function parseErrorEnvelope(bodyText, statusCode) {
     try {
         const parsedBody = JSON.parse(bodyText);
-        if (parsedBody.error && parsedBody.error.message) { return parsedBody.error.message; }
-        if (parsedBody.error && typeof parsedBody.error === "string") { return parsedBody.error; }
-    } catch (parseError) { /* Fall through to the bounded status message. */ }
+        if (parsedBody.error && parsedBody.error.message) {
+            return parsedBody.error.message;
+        }
+        if (parsedBody.error && typeof parsedBody.error === "string") {
+            return parsedBody.error;
+        }
+    } catch (parseError) {
+        /* Fall through to the bounded status message. */
+    }
     return "Request failed (HTTP " + statusCode + ")";
 }
