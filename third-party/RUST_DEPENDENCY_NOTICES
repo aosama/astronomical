@@ -2162,7 +2162,6 @@ Used by:
 - derive_builder_core 0.20.2
 - derive_builder_macro 0.20.2
 - jni-sys 0.4.1
-- quick-error 2.0.1
 - unicode_categories 0.1.1
 
                                  Apache License
@@ -5255,7 +5254,6 @@ Used by:
 - eventsource-stream 0.2.3
 - fdeflate 0.3.7
 - ident_case 1.0.1
-- image-webp 0.2.4
 - image 0.25.10
 - itoa 1.0.18
 - jni-macros 0.22.4
