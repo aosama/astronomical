@@ -296,11 +296,16 @@ public struct ThinTalkClient: Sendable {
       let watchdog = Task {
         let pollInterval: TimeInterval = 1.0
         var lastActivity = Date()
-        while !channel.isFinished {
-          let activityDate = lastActivity
+        // Drain the channel fully before honoring `finished`: the loop must not
+        // test `isFinished` between events, or a fast producer that enqueues
+        // everything before this poller drains would have its tail events
+        // dropped. `next` returns nil both on a poll timeout and when the
+        // channel finished with an empty queue, so finished-only exit lives in
+        // the nil branch.
+        while !Task.isCancelled {
           guard let event = channel.next(timeout: pollInterval) else {
-            let elapsed = Date().timeIntervalSince(activityDate)
             if channel.isFinished { break }
+            let elapsed = Date().timeIntervalSince(lastActivity)
             if elapsed >= self.stallTimeout {
               externalContinuation.yield(.failure(ChatFailure(kind: .stall)))
               channel.finish()
