@@ -1,19 +1,24 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    env, io, net::SocketAddr, path::PathBuf, process::ExitCode, sync::Arc, sync::RwLock,
+    env, io,
+    net::SocketAddr,
+    path::PathBuf,
+    process::ExitCode,
+    sync::{Arc, RwLock, atomic::AtomicU64},
     time::Duration,
 };
 
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
+use astronomical_ipc_protocol::DaemonTransportError;
 use astronomical_supervisor::{
-    ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog, DownloadCatalog,
-    DownloadCatalogError, GenerationPerformanceLog, ImageGenerationTimeouts,
-    LibraryDownloadCoordinatorError, LibraryModelDiscoveryRefresh, ReqwestHubTransportBuildError,
-    ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver, ShutdownController,
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
+    ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog,
+    DaemonIpcGenerationContext, DownloadCatalog, DownloadCatalogError, GenerationPerformanceLog,
+    ImageGenerationTimeouts, LibraryDownloadCoordinatorError, LibraryModelDiscoveryRefresh,
+    ReqwestHubTransportBuildError, ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver,
+    ShutdownController, SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
     SupervisorPerformanceOperation, WorkerControlError, WorkerHandle,
-    build_application_with_full_control_and_library_download,
+    build_application_with_full_control_and_library_download, start_daemon_ipc_service,
 };
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
@@ -198,6 +203,7 @@ async fn run_daemon(
             }
         };
     let reloadable_config = Arc::new(RwLock::new(resolved_runtime_config));
+    let next_chat_request_id = Arc::new(AtomicU64::new(1));
     let shutdown_controller = ShutdownController::new();
     let internal_shutdown_receiver = shutdown_controller.subscribe();
     let download_catalog = Arc::new(download_catalog);
@@ -224,8 +230,23 @@ async fn run_daemon(
         .recover_startup_state()
         .await
         .map_err(DaemonError::RecoverLibraryDownload)?;
+    // The daemon IPC service must start before the builder consumes the
+    // worker handle: the CLI socket shares the worker and the request-id
+    // counter with the REST surface, so both must exist first.
+    let daemon_ipc_service = start_daemon_ipc_service(
+        &instance_paths,
+        DaemonIpcGenerationContext {
+            executor: Arc::new(worker_handle.clone()),
+            reloadable_config: Some(Arc::clone(&reloadable_config)),
+            next_chat_request_id: Arc::clone(&next_chat_request_id),
+        },
+        &supervisor_attribution_log,
+    )
+    .await
+    .map_err(DaemonError::StartDaemonIpc)?;
     let application = build_application_with_full_control_and_library_download(
         worker_handle.clone(),
+        next_chat_request_id,
         Arc::clone(&reloadable_config),
         runtime_config_resolver,
         shutdown_controller,
@@ -245,9 +266,11 @@ async fn run_daemon(
         .await
         .map(|_| ())
         .map_err(DaemonError::ShutdownWorker);
+    let daemon_ipc_shutdown_result = daemon_ipc_service.shutdown().await;
 
     serve_result?;
     worker_shutdown_result?;
+    daemon_ipc_shutdown_result.map_err(DaemonError::ShutdownDaemonIpc)?;
 
     Ok(())
 }
@@ -321,6 +344,10 @@ enum DaemonError {
 
     #[error("failed to shut down inference worker: {0}")]
     ShutdownWorker(#[source] WorkerControlError),
+    #[error("failed to start the daemon IPC service: {0}")]
+    StartDaemonIpc(#[source] DaemonTransportError),
+    #[error("failed to shut down the daemon IPC service: {0}")]
+    ShutdownDaemonIpc(#[source] DaemonTransportError),
     #[error("failed to create the Astronomical log directory: {0}")]
     CreateLogDirectory(#[source] io::Error),
     #[error("failed to create the Astronomical log appender: {0}")]

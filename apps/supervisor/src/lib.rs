@@ -13,6 +13,8 @@ mod config_reveal_endpoint;
 mod configuration_status;
 mod console_assets;
 mod console_render_assets;
+mod daemon_ipc;
+mod daemon_ipc_embeddings;
 mod embeddings_executor;
 mod generation_performance_log;
 mod image_generation_executor;
@@ -105,6 +107,7 @@ pub use config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
     ResolvedRuntimeConfigResolver,
 };
+pub use daemon_ipc::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
 pub use embeddings_executor::{EmbeddingsExecutionError, EmbeddingsOutput};
 pub use generation_performance_log::{
     GenerationPerformanceLog, GenerationPerformanceRecord, ImageGenerationPerformanceRecord,

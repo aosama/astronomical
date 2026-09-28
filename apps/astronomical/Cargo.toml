@@ -16,8 +16,10 @@ workspace = true
 
 [dependencies]
 astronomical-config = { path = "../../crates/config" }
+astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

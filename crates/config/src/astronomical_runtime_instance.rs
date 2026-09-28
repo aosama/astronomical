@@ -310,6 +310,12 @@ impl AstronomicalInstancePaths {
         self.state_directory.join("instance.lock")
     }
 
+    /// Private local IPC socket the daemon serves ephemeral CLI verbs on.
+    #[must_use]
+    pub fn ipc_socket_file_path(&self) -> PathBuf {
+        self.state_directory.join("ipc.sock")
+    }
+
     /// Optional user-authored Markdown seeded into Qwen3.5 reasoning.
     ///
     /// The file is never created automatically. Missing is a no-op at request time.
