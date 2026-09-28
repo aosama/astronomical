@@ -3,7 +3,10 @@ use futures_util::SinkExt;
 use tokio::io::AsyncWrite;
 use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
 
-use crate::{MAX_IPC_FRAME_BYTES, ProtocolError, WorkerCommand, WorkerEvent, encode_event};
+use crate::{
+    DaemonRequest, DaemonResponse, MAX_IPC_FRAME_BYTES, ProtocolError, WorkerCommand, WorkerEvent,
+    encode_daemon_request, encode_daemon_response, encode_event,
+};
 
 /// Sends bounded, length-delimited JSON commands to the worker.
 pub struct ProtocolWriter<WriteTransport> {
@@ -39,6 +42,24 @@ where
     pub async fn send_event(&mut self, worker_event: &WorkerEvent) -> Result<(), ProtocolError> {
         let serialized_event = encode_event(worker_event)?;
         self.send_serialized_message(serialized_event).await
+    }
+
+    /// Serializes and transmits one daemon request frame.
+    pub async fn send_daemon_request(
+        &mut self,
+        daemon_request: &DaemonRequest,
+    ) -> Result<(), ProtocolError> {
+        let serialized_request = encode_daemon_request(daemon_request)?;
+        self.send_serialized_message(serialized_request).await
+    }
+
+    /// Serializes and transmits one daemon response frame.
+    pub async fn send_daemon_response(
+        &mut self,
+        daemon_response: &DaemonResponse,
+    ) -> Result<(), ProtocolError> {
+        let serialized_response = encode_daemon_response(daemon_response)?;
+        self.send_serialized_message(serialized_response).await
     }
 
     /// Flushes queued frames, then drops the owned write transport to deliver EOF.

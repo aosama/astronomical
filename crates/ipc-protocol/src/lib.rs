@@ -3,6 +3,10 @@
 mod base64_bytes;
 mod chat_generation;
 mod chat_generation_validation;
+mod daemon_client;
+mod daemon_listener;
+mod daemon_protocol;
+mod daemon_transport_error;
 mod embeddings;
 mod image_generation;
 mod message_codec;
@@ -24,6 +28,13 @@ pub use chat_generation::{
     structured_regex_dfa_pattern,
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
+pub use daemon_client::DaemonIpcClient;
+pub use daemon_listener::{DaemonIpcListener, StreamingResponseWriter};
+pub use daemon_protocol::{
+    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonRequest, DaemonResponse,
+    DaemonWorkerStatus,
+};
+pub use daemon_transport_error::DaemonTransportError;
 pub use embeddings::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,
 };
@@ -33,7 +44,10 @@ pub use image_generation::{
     ImageGenerationResultMetadata, ImageGenerationSettings, ImageGenerationValidationError,
     WorkerEmbeddingCapabilities, WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
 };
-pub use message_codec::{decode_command, decode_event, encode_command, encode_event};
+pub use message_codec::{
+    decode_command, decode_daemon_request, decode_daemon_response, decode_event, encode_command,
+    encode_daemon_request, encode_daemon_response, encode_event,
+};
 pub use persistent_prompt_cache_diagnostics::{
     WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
     WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,

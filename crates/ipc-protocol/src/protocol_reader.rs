@@ -3,7 +3,8 @@ use tokio::io::AsyncRead;
 use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 
 use crate::{
-    MAX_IPC_FRAME_BYTES, ProtocolError, WorkerCommand, WorkerEvent, decode_command, decode_event,
+    DaemonRequest, DaemonResponse, MAX_IPC_FRAME_BYTES, ProtocolError, WorkerCommand, WorkerEvent,
+    decode_command, decode_daemon_request, decode_daemon_response, decode_event,
 };
 
 /// Receives bounded, length-delimited JSON commands from the supervisor.
@@ -40,6 +41,22 @@ where
             return Ok(None);
         };
         decode_event(&serialized_event).map(Some)
+    }
+
+    /// Reads the next daemon request, or `None` when the transport closes cleanly.
+    pub async fn next_daemon_request(&mut self) -> Result<Option<DaemonRequest>, ProtocolError> {
+        let Some(serialized_request) = self.next_frame().await? else {
+            return Ok(None);
+        };
+        decode_daemon_request(&serialized_request).map(Some)
+    }
+
+    /// Reads the next daemon response, or `None` when the transport closes cleanly.
+    pub async fn next_daemon_response(&mut self) -> Result<Option<DaemonResponse>, ProtocolError> {
+        let Some(serialized_response) = self.next_frame().await? else {
+            return Ok(None);
+        };
+        decode_daemon_response(&serialized_response).map(Some)
     }
 
     async fn next_frame(&mut self) -> Result<Option<bytes::BytesMut>, ProtocolError> {

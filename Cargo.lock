@@ -42,9 +42,11 @@ name = "astronomical-cli"
 version = "0.2.56"
 dependencies = [
  "astronomical-config",
+ "astronomical-ipc-protocol",
  "serde_json",
  "tempfile",
  "thiserror",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

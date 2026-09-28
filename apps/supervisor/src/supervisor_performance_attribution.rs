@@ -33,6 +33,10 @@ pub enum SupervisorPerformanceOperation {
     Publication,
     DiscoveryRefresh,
     QwenThinkingChannelSeedLoad,
+    DaemonIpcHandshake,
+    DaemonIpcStatus,
+    DaemonIpcChatGenerate,
+    DaemonIpcEmbedGenerate,
 }
 
 impl SupervisorPerformanceOperation {
@@ -47,6 +51,10 @@ impl SupervisorPerformanceOperation {
             Self::Publication => "publication",
             Self::DiscoveryRefresh => "discovery_refresh",
             Self::QwenThinkingChannelSeedLoad => "qwen_thinking_channel_seed_load",
+            Self::DaemonIpcHandshake => "daemon_ipc_handshake",
+            Self::DaemonIpcStatus => "daemon_ipc_status",
+            Self::DaemonIpcChatGenerate => "daemon_ipc_chat_generate",
+            Self::DaemonIpcEmbedGenerate => "daemon_ipc_embed_generate",
         }
     }
 }

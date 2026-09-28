@@ -240,3 +240,5 @@ impl astronomical_supervisor::ImageGenerationExecutor for ScriptedExecutor {
         })
     }
 }
+
+pub(crate) mod daemon_ipc;

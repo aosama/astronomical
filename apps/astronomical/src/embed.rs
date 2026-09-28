@@ -1,0 +1,188 @@
+//! The one-shot `astronomical embed` journey: text in, one JSON vector
+//! document out, exit.
+//!
+//! The CLI never touches the REST surface. It speaks the framed daemon IPC
+//! protocol over the instance's unix socket: the shared probe establishes
+//! whether a model is resident, then one connection carries the embeddings
+//! batch.
+
+use std::{
+    io::{Read, Write},
+    time::Duration,
+};
+
+use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse, EmbeddingsFailureReason};
+use serde_json::json;
+use tokio::time::timeout;
+
+use crate::{DaemonProbe, EmbedArguments, errors::EmbedError};
+
+/// Collaborators the embed journey needs, injected so tests can stub them.
+pub struct EmbedDependencies<'a> {
+    /// Instance sockets to try, most preferred first.
+    pub candidate_socket_paths: Vec<std::path::PathBuf>,
+    /// Read to EOF when no text or file was supplied.
+    pub stdin: &'a mut dyn Read,
+    /// Where the JSON vector document goes.
+    pub stdout: &'a mut dyn Write,
+    /// Bound for each protocol stage of the journey.
+    pub request_timeout: Duration,
+}
+
+/// Runs the whole embed journey against the resident daemon.
+pub async fn run_embed(
+    embed_arguments: &EmbedArguments,
+    embed_dependencies: &mut EmbedDependencies<'_>,
+) -> Result<(), EmbedError> {
+    let input_text = resolve_input_text(embed_arguments, embed_dependencies.stdin)?;
+    let daemon_probe = DaemonProbe {
+        candidate_socket_paths: embed_dependencies.candidate_socket_paths.clone(),
+        request_timeout: embed_dependencies.request_timeout,
+    };
+    let ready_model_id = daemon_probe.ready_model_id().await?;
+    if ready_model_id.is_none() && embed_arguments.model_id.is_none() {
+        return Err(EmbedError::NoModelLoaded);
+    }
+    embed_input_text(
+        input_text,
+        embed_arguments.model_id.clone(),
+        &daemon_probe,
+        embed_dependencies,
+    )
+    .await
+}
+
+/// Text > file contents > stdin read to EOF. An empty resolved input is a
+/// usage failure, not an empty embedding.
+fn resolve_input_text(
+    embed_arguments: &EmbedArguments,
+    stdin: &mut dyn Read,
+) -> Result<String, EmbedError> {
+    let resolved_input = if let Some(text) = &embed_arguments.text {
+        text.clone()
+    } else if let Some(file_path) = &embed_arguments.file_path {
+        std::fs::read_to_string(file_path).map_err(|read_error| {
+            EmbedError::InputFileUnreadable {
+                file_path: file_path.clone(),
+                cause: read_error.to_string(),
+            }
+        })?
+    } else {
+        let mut stdin_text = String::new();
+        stdin
+            .read_to_string(&mut stdin_text)
+            .map_err(|read_error| EmbedError::StdinUnreadable {
+                cause: read_error.to_string(),
+            })?;
+        stdin_text
+    };
+    if resolved_input.trim().is_empty() {
+        return Err(EmbedError::EmbedInputRequired);
+    }
+    Ok(resolved_input)
+}
+
+/// Submits one embeddings batch and writes the single terminal frame as one
+/// JSON document on stdout.
+async fn embed_input_text(
+    input_text: String,
+    requested_model_id: Option<String>,
+    daemon_probe: &DaemonProbe,
+    embed_dependencies: &mut EmbedDependencies<'_>,
+) -> Result<(), EmbedError> {
+    let mut daemon_client = daemon_probe.connect().await?;
+    let embed_generate_request = DaemonRequest::EmbedGenerate {
+        model: requested_model_id,
+        inputs: vec![input_text],
+        dimensions: None,
+    };
+    timeout(
+        embed_dependencies.request_timeout,
+        daemon_client.send_request(&embed_generate_request),
+    )
+    .await
+    .map_err(|_elapsed| EmbedError::DaemonStoppedResponding)?
+    .map_err(|_transport_error| EmbedError::DaemonStoppedResponding)?;
+
+    let embeddings_response = timeout(
+        embed_dependencies.request_timeout,
+        daemon_client.next_response(),
+    )
+    .await
+    .map_err(|_elapsed| EmbedError::DaemonStoppedResponding)?
+    .map_err(|_transport_error| EmbedError::DaemonStoppedResponding)?
+    .ok_or(EmbedError::DaemonStoppedResponding)?;
+    match embeddings_response {
+        DaemonResponse::EmbeddingsCompleted {
+            model,
+            vectors,
+            input_token_counts,
+        } => write_vector_document(
+            embed_dependencies.stdout,
+            &model,
+            vectors.first().map(Vec::as_slice).unwrap_or(&[]),
+            input_token_counts.first().copied().unwrap_or(0),
+        ),
+        DaemonResponse::EmbeddingsFailed { reason } => Err(EmbedError::EmbeddingsFailed { reason }),
+        DaemonResponse::GenerationRejected { reason } => {
+            Err(EmbedError::EmbeddingsRejected { reason })
+        }
+        // Handshake, status, and chat frames cannot answer an embeddings
+        // request; treat the daemon as gone rather than guessing.
+        _ => Err(EmbedError::DaemonStoppedResponding),
+    }
+}
+
+fn write_vector_document(
+    stdout: &mut dyn Write,
+    model_id: &str,
+    embedding: &[f32],
+    input_tokens: u32,
+) -> Result<(), EmbedError> {
+    let vector_document = json!({
+        "model": model_id,
+        "embedding": embedding,
+        "input_tokens": input_tokens,
+    });
+    let serialized_document =
+        serde_json::to_string(&vector_document).map_err(|_serialization_error| {
+            EmbedError::StdoutUnwritable {
+                cause: "the vector document could not be serialized".to_owned(),
+            }
+        })?;
+    stdout
+        .write_all(serialized_document.as_bytes())
+        .and_then(|()| {
+            stdout.write_all(b"\n")?;
+            stdout.flush()
+        })
+        .map_err(|output_error| EmbedError::StdoutUnwritable {
+            cause: output_error.to_string(),
+        })
+}
+
+/// Human phrasing for the typed embeddings failure, shared by Display and
+/// Debug renderings.
+pub(crate) fn embeddings_failure_reason_text(reason: &EmbeddingsFailureReason) -> String {
+    match reason {
+        EmbeddingsFailureReason::InvalidRequest { reason } => {
+            format!("the model rejected the input: {reason}")
+        }
+        EmbeddingsFailureReason::FatalExecution { reason } => {
+            format!("the model failed to finish the embedding: {reason}")
+        }
+        EmbeddingsFailureReason::ContextLengthExceeded {
+            actual_total_context_tokens,
+            maximum_context_tokens,
+        } => format!(
+            "the input needs {actual_total_context_tokens} context tokens but the model's \
+             context window is {maximum_context_tokens} tokens"
+        ),
+        EmbeddingsFailureReason::EngineBusy => {
+            "the embedding engine is busy with another request".to_owned()
+        }
+        EmbeddingsFailureReason::MalformedModelOutput => {
+            "the model produced vectors that could not be pooled or normalized".to_owned()
+        }
+    }
+}
