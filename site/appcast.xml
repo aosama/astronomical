@@ -4,43 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.57</title>
-            <pubDate>Mon, 28 Sep 2026 13:42:02 -0400</pubDate>
-            <sparkle:version>700</sparkle:version>
-            <sparkle:shortVersionString>0.2.57</sparkle:shortVersionString>
+            <title>0.2.58</title>
+            <pubDate>Mon, 28 Sep 2026 18:10:38 -0400</pubDate>
+            <sparkle:version>704</sparkle:version>
+            <sparkle:shortVersionString>0.2.58</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.57
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.58
 
-This release introduces the one-shot command-line surface backed by the running Astronomical daemon.
+### Added
 
-### New CLI verbs
+- The `astronomical` command-line interface now ships inside the macOS app bundle. After installing or updating, the app installs and automatically repairs the `/usr/local/bin/astronomical` symlink on launch, so the CLI works in your terminal without any separate setup. You can also install or remove the link anytime from the menu bar popover.
 
-- `astronomical respond` — send a chat prompt to the running daemon and print the completion.
-- `astronomical embed` — request embeddings for text and print the embedding output.
-- `astronomical schema object` — generate JSON Schema descriptions for request and response objects.
-- `astronomical validate config` — validate an Astronomical runtime configuration file.
+### Fixed
 
-The verbs connect to the daemon over its IPC socket, report the ready model, and fail with clear errors when the daemon is not running or the requested model is not ready.
+- Chat streaming no longer drops trailing text deltas when a response finishes between stream polls. This fix also removes an intermittent failure in the conversation canvas test contracts.
 
-### Serving improvements
+### Notes
 
-- Speculative prefill now fails open when a persisted target state vanishes, instead of blocking generation.
-- Added a representative-generation acceptance journey for speculative prefill streaming.
-
-### Dependency hygiene
-
-- Removed the unused WebP decoding feature from the image crate, shrinking the dependency surface.
-
-### Compatibility
-
-- The one-shot verbs require the Astronomical daemon to be running.
-- No changes to model packaging, memory policies, or on-disk instance state.
+- Requires macOS 14.0 or later on Apple silicon.
+- Your existing settings, models, and state are preserved by this update.
+- This release is signed, notarized, and distributed as a disk image through the public download and the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.57/Astronomical-0.2.57-macOS-arm64.dmg" length="19727734" type="application/octet-stream" sparkle:edSignature="EZ1Bjw2AZAM5XMf498hDLLWKFftgwZp1YD6kouURjU8leidk79l9eeSWYBlUk1NpGXQjJ9Gj0mMeMmDcwBnAAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.58/Astronomical-0.2.58-macOS-arm64.dmg" length="20353098" type="application/octet-stream" sparkle:edSignature="YDYYSfh18NQAeWUTuIU5+T+JZEsclFxOaXZFdicFdYKuT5rMi4SwFezg+3E6V2vypHHSGkFv/YUnXt5aLEcMDw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: kaPrrgExtqBlN5JvaHj6AHvIE3Nhbd5rBOph0043IvcmzQ2Z+1NPLCMev0Cc2JTNI7tfq8aQhFOpIZ7z1cvcCA==
-length: 2436
+edSignature: IqWIsE3JT5zT5/bOImIG8X7BVIr4MsG+d8P9Asgm4xZH4Frk4iDjwY7Zq9Je0Ymk87FzXxp4jnExSv3fvAGnCQ==
+length: 2078
 -->
