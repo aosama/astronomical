@@ -24,7 +24,7 @@ create_fixture_app() {
         "${sparkle_version}/XPCServices/Installer.xpc"
     printf '%s\n' fixture > "${app_bundle}/Contents/Resources/share/mlx/mlx.metallib"
     printf '%s\n' fixture > "${sparkle_version}/Autoupdate"
-    for executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
+    for executable_name in astronomical-menu astronomicald astronomical-inference-worker astronomical; do
         printf '%s\n' fixture > "${app_bundle}/Contents/MacOS/${executable_name}"
     done
 }

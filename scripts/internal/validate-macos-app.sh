@@ -220,8 +220,9 @@ main() {
     daemon_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomicald"
     menu_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical-menu"
     worker_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical-inference-worker"
+    cli_executable="${APP_BUNDLE_PATH}/Contents/MacOS/astronomical"
     sparkle_framework="${APP_BUNDLE_PATH}/Contents/Frameworks/Sparkle.framework"
-    for bundled_executable in "$daemon_executable" "$menu_executable" "$worker_executable"; do
+    for bundled_executable in "$daemon_executable" "$menu_executable" "$worker_executable" "$cli_executable"; do
         [ -x "$bundled_executable" ] || { print_error "bundled executable is unavailable: ${bundled_executable}"; exit 1; }
     done
     application_channel_early="$(read_plist_value AstronomicalChannel)"

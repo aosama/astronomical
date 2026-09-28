@@ -45,6 +45,10 @@ assert_bundle_exists() {
         print_error "worker executable is unavailable in ${expected_app_bundle}"
         exit 1
     }
+    [ -x "${expected_app_bundle}/Contents/MacOS/astronomical" ] || {
+        print_error "CLI executable is unavailable in ${expected_app_bundle}"
+        exit 1
+    }
     [ -s "${expected_app_bundle}/Contents/Resources/Astronomical.icns" ] || {
         print_error "packaged macOS icon is unavailable in ${expected_app_bundle}"
         exit 1
@@ -135,6 +139,8 @@ main() {
         "${sandbox_repository}/third-party"
     cp "${repository_root}/scripts/internal/build-macos-app.sh" \
         "${sandbox_internal_scripts_directory}/build-macos-app.sh"
+    cp "${repository_root}/scripts/internal/package-mlx-metallib.sh" \
+        "${sandbox_internal_scripts_directory}/package-mlx-metallib.sh"
     cp "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
         "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
     mkdir -p "${sandbox_internal_scripts_directory}/entitlements"
@@ -171,8 +177,10 @@ mkdir -p "$cargo_release_directory"
 printf '%s\n' '#!/usr/bin/env sh' 'exit 0' > "${cargo_release_directory}/astronomicald"
 cp "${cargo_release_directory}/astronomicald" \
     "${cargo_release_directory}/astronomical-inference-worker"
+printf '%s\n' '#!/usr/bin/env sh' '[ "$1" = "--version" ] && { printf "%s\n" "0.0.0"; exit 0; }' 'exit 0' > "${cargo_release_directory}/astronomical"
 chmod +x "${cargo_release_directory}/astronomicald" \
-    "${cargo_release_directory}/astronomical-inference-worker"
+    "${cargo_release_directory}/astronomical-inference-worker" \
+    "${cargo_release_directory}/astronomical"
 CARGO
     cat > "${fake_command_directory}/rustc" <<'RUSTC'
 #!/usr/bin/env sh
@@ -432,6 +440,14 @@ CODESIGN
             exit 1
         }
     done
+    # The CLI runs from the user's terminal, so it must be signed bare: no
+    # sandbox profile of any kind may ride on it.
+    cli_entitlements_lines="$(grep -E -- '--entitlements ' "$app_store_entitlements_log" \
+        | grep -c 'MacOS/astronomical$' || true)"
+    [ "$cli_entitlements_lines" = "0" ] || {
+        print_error "App Store CLI was signed with an entitlements profile"
+        exit 1
+    }
     grep -F -- '--features astronomical-supervisor/app-store-state-root' \
         "${SANDBOX_DIRECTORY}/fake-cargo-args.log" >/dev/null || {
         print_error "App Store build did not enable the app-store-state-root feature"

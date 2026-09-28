@@ -84,6 +84,7 @@ main() {
         "${APP_BUNDLE}/Contents/MacOS/astronomical-menu" \
         "${APP_BUNDLE}/Contents/MacOS/astronomicald" \
         "${APP_BUNDLE}/Contents/MacOS/astronomical-inference-worker" \
+        "${APP_BUNDLE}/Contents/MacOS/astronomical" \
         "$APP_BUNDLE"
     do
         validate_code_object "$code_object_path"
