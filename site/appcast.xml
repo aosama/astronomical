@@ -4,33 +4,43 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.56</title>
-            <pubDate>Sun, 27 Sep 2026 18:02:13 -0400</pubDate>
-            <sparkle:version>692</sparkle:version>
-            <sparkle:shortVersionString>0.2.56</sparkle:shortVersionString>
+            <title>0.2.57</title>
+            <pubDate>Mon, 28 Sep 2026 13:42:02 -0400</pubDate>
+            <sparkle:version>700</sparkle:version>
+            <sparkle:shortVersionString>0.2.57</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.56
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.57
 
-## New
-- **Observatory console chat unified with Thin Talk** — the console now shares the same conversation surface and rendering as Thin Talk, with updated console rendering.
+This release introduces the one-shot command-line surface backed by the running Astronomical daemon.
 
-## Fixes
-- **Live MLX memory snapshot during image generation** — memory usage is now correctly reported during image generation steps.
+### New CLI verbs
 
-## Runtime
-- Updated the pinned MLX runtime from v0.32.2 to v0.32.3.
+- `astronomical respond` — send a chat prompt to the running daemon and print the completion.
+- `astronomical embed` — request embeddings for text and print the embedding output.
+- `astronomical schema object` — generate JSON Schema descriptions for request and response objects.
+- `astronomical validate config` — validate an Astronomical runtime configuration file.
 
-## Compatibility
-- This release preserves existing user state, configuration, and downloaded models.
+The verbs connect to the daemon over its IPC socket, report the ready model, and fail with clear errors when the daemon is not running or the requested model is not ready.
 
-## Distribution
-- macOS 14.0 or later, Apple Silicon (arm64). Signed with a Developer ID and notarized by Apple; delivered through the public download and the signed Sparkle update feed.
+### Serving improvements
+
+- Speculative prefill now fails open when a persisted target state vanishes, instead of blocking generation.
+- Added a representative-generation acceptance journey for speculative prefill streaming.
+
+### Dependency hygiene
+
+- Removed the unused WebP decoding feature from the image crate, shrinking the dependency surface.
+
+### Compatibility
+
+- The one-shot verbs require the Astronomical daemon to be running.
+- No changes to model packaging, memory policies, or on-disk instance state.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.56/Astronomical-0.2.56-macOS-arm64.dmg" length="19715472" type="application/octet-stream" sparkle:edSignature="3QA5Y6XVBFAaEoBrf8ziX7o9KDkBo1U8u1AOViw8CMFn94HX2jsFXommaGatZrRLLHj6qqUZof4/RuZLAgFPCQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.57/Astronomical-0.2.57-macOS-arm64.dmg" length="19727734" type="application/octet-stream" sparkle:edSignature="EZ1Bjw2AZAM5XMf498hDLLWKFftgwZp1YD6kouURjU8leidk79l9eeSWYBlUk1NpGXQjJ9Gj0mMeMmDcwBnAAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: AuZAlhJBq70HPg6zmo5y18cnjhZ2R/49hOBMDWsC49HqWqutKLObLVasCFAjdbICr7a+kodwxekg7rLUCJiMBw==
-length: 1927
+edSignature: kaPrrgExtqBlN5JvaHj6AHvIE3Nhbd5rBOph0043IvcmzQ2Z+1NPLCMev0Cc2JTNI7tfq8aQhFOpIZ7z1cvcCA==
+length: 2436
 -->
