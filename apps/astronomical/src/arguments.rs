@@ -1,21 +1,30 @@
-//! Parses the user-facing `astronomical` command tree. Launch is the only
-//! product verb in this slice.
+//! Parses the user-facing `astronomical` command tree. Launch drives a
+//! harness; schema and validate are ephemeral in-process verbs (issue #821).
 
 use std::ffi::OsString;
 
 use crate::errors::UsageError;
+use crate::schema_arguments::SchemaArguments;
+use crate::validate_config_arguments::ValidateConfigArguments;
 
 const HELP_TEXT: &str = concat!(
-    "Astronomical launch\n\n",
+    "Astronomical\n\n",
     "Usage: astronomical launch [tool]\n",
     "       astronomical launch opencode [--model MODEL_ID]\n",
+    "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
+    "       astronomical validate config [--instance stable|development] [--json]\n",
     "       astronomical --help\n",
     "       astronomical --version\n\n",
-    "Launch a coding harness against the local Astronomical Library.\n\n",
+    "Launch a coding harness against the local Astronomical Library, or run\n",
+    "ephemeral in-process utilities against the instance configuration.\n\n",
     "Commands:\n",
-    "  launch [tool]   Start a supported harness (OpenCode in this release)\n\n",
+    "  launch [tool]    Start a supported harness (OpenCode in this release)\n",
+    "  schema object    Build a strict JSON object schema for structured output\n",
+    "  validate config  Report effective values of an instance configuration\n\n",
     "Options:\n",
     "  --model MODEL_ID   Library chat model to use when several exist and stdin is not a terminal\n",
+    "  --instance NAME    Which instance to inspect for validate config (default: development)\n",
+    "  --json             Render the validate config report as JSON\n",
     "  -v, --verbose      Print launch timings on stderr\n",
     "  -h, --help         Show this help\n",
     "  --version          Show the CLI version\n",
@@ -27,6 +36,8 @@ pub enum CliCommand {
     Help,
     Version,
     Launch(LaunchArguments),
+    Schema(SchemaArguments),
+    ValidateConfig(ValidateConfigArguments),
 }
 
 /// Launch-specific arguments after `astronomical launch`.
@@ -67,13 +78,48 @@ pub fn parse_command(
     let command_name = remaining_arguments[0].to_str().ok_or_else(|| {
         UsageError::UnknownCommand(remaining_arguments[0].to_string_lossy().into_owned())
     })?;
-    if command_name != "launch" {
-        return Err(UsageError::UnknownCommand(command_name.to_owned()));
+    match command_name {
+        "launch" => parse_launch_arguments(&remaining_arguments[1..]).map(CliCommand::Launch),
+        "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
+        "validate" => {
+            parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
+        }
+        other => Err(UsageError::UnknownCommand(other.to_owned())),
     }
+}
 
+fn parse_schema_command(
+    remaining_arguments: &[OsString],
+) -> Result<crate::schema_arguments::SchemaArguments, UsageError> {
+    let schema_target = remaining_arguments
+        .first()
+        .and_then(|argument| argument.to_str())
+        .ok_or_else(|| UsageError::MissingCommand)?;
+    if schema_target != "object" {
+        return Err(UsageError::UnknownSchemaTarget(schema_target.to_owned()));
+    }
+    crate::schema_arguments::parse_schema_arguments(&remaining_arguments[1..])
+}
+
+fn parse_validate_command(
+    remaining_arguments: &[OsString],
+) -> Result<crate::validate_config_arguments::ValidateConfigArguments, UsageError> {
+    let validate_target = remaining_arguments
+        .first()
+        .and_then(|argument| argument.to_str())
+        .ok_or_else(|| UsageError::MissingCommand)?;
+    if validate_target != "config" {
+        return Err(UsageError::UnknownValidateTarget(
+            validate_target.to_owned(),
+        ));
+    }
+    crate::validate_config_arguments::parse_validate_config_arguments(&remaining_arguments[1..])
+}
+
+fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArguments, UsageError> {
     let mut tool_slug = None;
     let mut model_id = None;
-    let mut argument_index = 1;
+    let mut argument_index = 0;
     while argument_index < remaining_arguments.len() {
         let argument = &remaining_arguments[argument_index];
         if argument == "--model" {
@@ -107,8 +153,8 @@ pub fn parse_command(
         argument_index += 1;
     }
 
-    Ok(CliCommand::Launch(LaunchArguments {
+    Ok(LaunchArguments {
         tool_slug,
         model_id,
-    }))
+    })
 }

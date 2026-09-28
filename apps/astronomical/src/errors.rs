@@ -45,4 +45,22 @@ pub enum UsageError {
     RepeatedArgument(&'static str),
     #[error("launch accepts at most one tool name")]
     MultipleTools,
+    #[error("schema object needs --name NAME")]
+    SchemaNameRequired,
+    #[error(
+        "schema object needs at least one property. Try: astronomical schema object --name Thing --string label"
+    )]
+    SchemaPropertyRequired,
+    #[error("{0} must follow a property")]
+    SchemaModifierWithoutProperty(String),
+    #[error("property may be supplied only once: {0}")]
+    SchemaDuplicateProperty(String),
+    #[error("invalid property path: {0}")]
+    SchemaInvalidPropertyPath(String),
+    #[error("unknown schema target: {0}. Supported targets: object")]
+    UnknownSchemaTarget(String),
+    #[error("unknown validate target: {0}. Supported targets: config")]
+    UnknownValidateTarget(String),
+    #[error("unknown instance {0}: expected stable or development")]
+    UnknownInstance(String),
 }
