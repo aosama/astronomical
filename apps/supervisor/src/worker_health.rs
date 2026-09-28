@@ -1,8 +1,9 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, SpeculativePrefillRuntimeState, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
-    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
+    DaemonWorkerStatus, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState,
+    SpeculativePrefillRuntimeState, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -27,6 +28,16 @@ pub enum WorkerHealthStatus {
     Ready,
     /// The worker is absent or otherwise unavailable.
     Unavailable,
+}
+
+impl From<WorkerHealthStatus> for DaemonWorkerStatus {
+    fn from(worker_health_status: WorkerHealthStatus) -> Self {
+        match worker_health_status {
+            WorkerHealthStatus::Loading => Self::Loading,
+            WorkerHealthStatus::Ready => Self::Ready,
+            WorkerHealthStatus::Unavailable => Self::Unavailable,
+        }
+    }
 }
 
 impl WorkerHealthStatus {

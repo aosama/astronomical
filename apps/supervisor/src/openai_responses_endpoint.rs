@@ -121,7 +121,12 @@ pub(crate) async fn create_response(
     );
     chat_generation_command.qwen_thinking_channel_seed =
         crate::load_configured_qwen_thinking_channel_seed(
-            &application_state,
+            application_state.reloadable_config.as_ref(),
+            application_state
+                .runtime_config_resolver
+                .as_ref()
+                .map(|runtime_config_resolver| runtime_config_resolver.instance_paths()),
+            &application_state.supervisor_attribution_log,
             &chat_generation_command.model,
         )
         .await;

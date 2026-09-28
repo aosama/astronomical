@@ -14,6 +14,7 @@ use crate::{
 
 pub fn build_application_with_full_control_and_library_download(
     worker_handle: WorkerHandle,
+    next_chat_request_id: Arc<AtomicU64>,
     reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
     runtime_config_resolver: ResolvedRuntimeConfigResolver,
     shutdown_controller: crate::shutdown_control::ShutdownController,
@@ -32,7 +33,7 @@ pub fn build_application_with_full_control_and_library_download(
         .map(|resolved| Arc::new(RwLock::new(resolved.clone())));
     application_router(ApplicationState {
         completion_id_namespace: Arc::from("library-production"),
-        next_chat_request_id: Arc::new(AtomicU64::new(1)),
+        next_chat_request_id,
         generation_executor: Arc::new(worker_handle.clone()),
         worker_control: Some(worker_handle),
         download_catalog,

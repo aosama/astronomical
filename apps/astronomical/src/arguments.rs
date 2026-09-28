@@ -1,9 +1,11 @@
 //! Parses the user-facing `astronomical` command tree. Launch drives a
 //! harness; schema and validate are ephemeral in-process verbs (issue #821).
 
-use std::ffi::OsString;
+use std::{ffi::OsString, path::PathBuf};
 
+use crate::embed_arguments::EmbedArguments;
 use crate::errors::UsageError;
+use crate::respond_arguments::RespondArguments;
 use crate::schema_arguments::SchemaArguments;
 use crate::validate_config_arguments::ValidateConfigArguments;
 
@@ -11,6 +13,8 @@ const HELP_TEXT: &str = concat!(
     "Astronomical\n\n",
     "Usage: astronomical launch [tool]\n",
     "       astronomical launch opencode [--model MODEL_ID]\n",
+    "       astronomical respond PROMPT [--model MODEL_ID] [--no-stream]\n",
+    "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
     "       astronomical validate config [--instance stable|development] [--json]\n",
     "       astronomical --help\n",
@@ -19,10 +23,14 @@ const HELP_TEXT: &str = concat!(
     "ephemeral in-process utilities against the instance configuration.\n\n",
     "Commands:\n",
     "  launch [tool]    Start a supported harness (OpenCode in this release)\n",
+    "  respond PROMPT   One-shot chat answer from the loaded model, streamed to stdout\n",
+    "  embed [TEXT]     One-shot embedding vector from the loaded model as one JSON document\n",
     "  schema object    Build a strict JSON object schema for structured output\n",
     "  validate config  Report effective values of an instance configuration\n\n",
     "Options:\n",
     "  --model MODEL_ID   Library chat model to use when several exist and stdin is not a terminal\n",
+    "  --no-stream        Print the finished respond answer once instead of streaming\n",
+    "  --file PATH        Embed the file's contents instead of TEXT or stdin\n",
     "  --instance NAME    Which instance to inspect for validate config (default: development)\n",
     "  --json             Render the validate config report as JSON\n",
     "  -v, --verbose      Print launch timings on stderr\n",
@@ -36,6 +44,8 @@ pub enum CliCommand {
     Help,
     Version,
     Launch(LaunchArguments),
+    Respond(RespondArguments),
+    Embed(EmbedArguments),
     Schema(SchemaArguments),
     ValidateConfig(ValidateConfigArguments),
 }
@@ -80,6 +90,8 @@ pub fn parse_command(
     })?;
     match command_name {
         "launch" => parse_launch_arguments(&remaining_arguments[1..]).map(CliCommand::Launch),
+        "respond" => parse_respond_arguments(&remaining_arguments[1..]).map(CliCommand::Respond),
+        "embed" => parse_embed_arguments(&remaining_arguments[1..]).map(CliCommand::Embed),
         "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
         "validate" => {
             parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
@@ -155,6 +167,130 @@ fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArgu
 
     Ok(LaunchArguments {
         tool_slug,
+        model_id,
+    })
+}
+
+fn parse_respond_arguments(
+    remaining_arguments: &[OsString],
+) -> Result<RespondArguments, UsageError> {
+    let mut prompt = None;
+    let mut model_id = None;
+    let mut no_stream = false;
+    let mut argument_index = 0;
+    while argument_index < remaining_arguments.len() {
+        let argument = &remaining_arguments[argument_index];
+        if argument == "--model" {
+            if model_id.is_some() {
+                return Err(UsageError::RepeatedArgument("--model"));
+            }
+            let raw_model_id = remaining_arguments
+                .get(argument_index + 1)
+                .ok_or(UsageError::MissingValue("--model"))?
+                .to_str()
+                .ok_or(UsageError::MissingValue("--model"))?;
+            if raw_model_id.is_empty() || raw_model_id.starts_with('-') {
+                return Err(UsageError::MissingValue("--model"));
+            }
+            model_id = Some(raw_model_id.to_owned());
+            argument_index += 2;
+            continue;
+        }
+        if argument == "--no-stream" {
+            if no_stream {
+                return Err(UsageError::RepeatedArgument("--no-stream"));
+            }
+            no_stream = true;
+            argument_index += 1;
+            continue;
+        }
+        if argument.to_string_lossy().starts_with('-') {
+            return Err(UsageError::UnknownArgument(
+                argument.to_string_lossy().into_owned(),
+            ));
+        }
+        if prompt.is_some() {
+            return Err(UsageError::UnknownArgument(
+                argument.to_string_lossy().into_owned(),
+            ));
+        }
+        let raw_prompt = argument
+            .to_str()
+            .ok_or_else(|| UsageError::UnknownArgument(argument.to_string_lossy().into_owned()))?;
+        prompt = Some(raw_prompt.to_owned());
+        argument_index += 1;
+    }
+
+    Ok(RespondArguments {
+        prompt: prompt.ok_or(UsageError::RespondPromptRequired)?,
+        model_id,
+        no_stream,
+    })
+}
+
+fn parse_embed_arguments(remaining_arguments: &[OsString]) -> Result<EmbedArguments, UsageError> {
+    let mut text = None;
+    let mut file_path = None;
+    let mut model_id = None;
+    let mut argument_index = 0;
+    while argument_index < remaining_arguments.len() {
+        let argument = &remaining_arguments[argument_index];
+        if argument == "--model" {
+            if model_id.is_some() {
+                return Err(UsageError::RepeatedArgument("--model"));
+            }
+            let raw_model_id = remaining_arguments
+                .get(argument_index + 1)
+                .ok_or(UsageError::MissingValue("--model"))?
+                .to_str()
+                .ok_or(UsageError::MissingValue("--model"))?;
+            if raw_model_id.is_empty() || raw_model_id.starts_with('-') {
+                return Err(UsageError::MissingValue("--model"));
+            }
+            model_id = Some(raw_model_id.to_owned());
+            argument_index += 2;
+            continue;
+        }
+        if argument == "--file" {
+            if file_path.is_some() {
+                return Err(UsageError::RepeatedArgument("--file"));
+            }
+            let raw_file_path = remaining_arguments
+                .get(argument_index + 1)
+                .ok_or(UsageError::MissingValue("--file"))?
+                .to_str()
+                .ok_or(UsageError::MissingValue("--file"))?;
+            if raw_file_path.is_empty() || raw_file_path.starts_with('-') {
+                return Err(UsageError::MissingValue("--file"));
+            }
+            file_path = Some(PathBuf::from(raw_file_path));
+            argument_index += 2;
+            continue;
+        }
+        if argument.to_string_lossy().starts_with('-') {
+            return Err(UsageError::UnknownArgument(
+                argument.to_string_lossy().into_owned(),
+            ));
+        }
+        if text.is_some() {
+            return Err(UsageError::UnknownArgument(
+                argument.to_string_lossy().into_owned(),
+            ));
+        }
+        let raw_text = argument
+            .to_str()
+            .ok_or_else(|| UsageError::UnknownArgument(argument.to_string_lossy().into_owned()))?;
+        text = Some(raw_text.to_owned());
+        argument_index += 1;
+    }
+    if text.is_some() && file_path.is_some() {
+        return Err(UsageError::EmbedInputConflict);
+    }
+    // No input at all parses: the journey resolves stdin and fails at
+    // runtime when even stdin is empty.
+    Ok(EmbedArguments {
+        text,
+        file_path,
         model_id,
     })
 }

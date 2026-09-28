@@ -1,6 +1,8 @@
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{MAX_IPC_FRAME_BYTES, ProtocolError, WorkerCommand, WorkerEvent};
+use crate::{
+    DaemonRequest, DaemonResponse, MAX_IPC_FRAME_BYTES, ProtocolError, WorkerCommand, WorkerEvent,
+};
 
 /// Serializes one bounded command sent to the inference worker.
 pub fn encode_command(worker_command: &WorkerCommand) -> Result<Vec<u8>, ProtocolError> {
@@ -35,6 +37,26 @@ pub fn decode_event(serialized_event: &[u8]) -> Result<WorkerEvent, ProtocolErro
         _ => {}
     }
     Ok(worker_event)
+}
+
+/// Serializes one bounded request sent by a local CLI process to the daemon.
+pub fn encode_daemon_request(daemon_request: &DaemonRequest) -> Result<Vec<u8>, ProtocolError> {
+    encode_message(daemon_request)
+}
+
+/// Deserializes one bounded request received by the daemon.
+pub fn decode_daemon_request(serialized_request: &[u8]) -> Result<DaemonRequest, ProtocolError> {
+    decode_message(serialized_request)
+}
+
+/// Serializes one bounded response sent by the daemon to a local CLI process.
+pub fn encode_daemon_response(daemon_response: &DaemonResponse) -> Result<Vec<u8>, ProtocolError> {
+    encode_message(daemon_response)
+}
+
+/// Deserializes one bounded response received by a local CLI process.
+pub fn decode_daemon_response(serialized_response: &[u8]) -> Result<DaemonResponse, ProtocolError> {
+    decode_message(serialized_response)
 }
 
 fn encode_message<Message>(message: &Message) -> Result<Vec<u8>, ProtocolError>

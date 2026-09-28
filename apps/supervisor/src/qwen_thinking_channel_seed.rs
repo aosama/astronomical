@@ -3,24 +3,30 @@
 //! Missing, empty, unreadable, or non-UTF-8 files are absent. The supervisor never
 //! creates this file; the user authors it when they want a thinking-channel seed.
 
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
+use astronomical_config::AstronomicalInstancePaths;
 use astronomical_ipc_protocol::MAX_QWEN_THINKING_CHANNEL_SEED_BYTES;
 use tokio::io::AsyncReadExt;
 
 use crate::{
-    SupervisorPerformanceMeasurement, SupervisorPerformanceOperation, application::ApplicationState,
+    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
+    SupervisorPerformanceOperation, config_reload::ResolvedRuntimeConfig,
 };
 
 const QWEN_THINKING_CHANNEL_SEED_LOAD_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub(crate) async fn load_configured_qwen_thinking_channel_seed(
-    application_state: &ApplicationState,
+    reloadable_config: Option<&Arc<RwLock<ResolvedRuntimeConfig>>>,
+    seed_instance_paths: Option<&AstronomicalInstancePaths>,
+    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
     model_id: &str,
 ) -> Option<String> {
-    let should_load_seed = application_state
-        .reloadable_config
-        .as_ref()
+    let should_load_seed = reloadable_config
         .and_then(|reloadable_config| reloadable_config.read().ok())
         .is_some_and(|resolved_runtime_config| {
             resolved_runtime_config.experimental_qwen_thinking_channel_seed_enabled
@@ -35,13 +41,9 @@ pub(crate) async fn load_configured_qwen_thinking_channel_seed(
     if !should_load_seed {
         return None;
     }
-    let thinking_channel_seed_file_path = application_state
-        .runtime_config_resolver
-        .as_ref()?
-        .instance_paths()
-        .qwen_thinking_channel_seed_file_path();
-    application_state
-        .supervisor_attribution_log
+    let thinking_channel_seed_file_path =
+        seed_instance_paths?.qwen_thinking_channel_seed_file_path();
+    supervisor_attribution_log
         .measure_async_operation_best_effort(
             SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
             || load_qwen_thinking_channel_seed_outcome(true, &thinking_channel_seed_file_path),

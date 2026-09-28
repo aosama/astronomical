@@ -352,3 +352,43 @@ fn should_never_share_app_store_state_with_the_home_dot_folder_channel() {
         app_store_paths.state_directory()
     );
 }
+
+#[test]
+fn should_expose_daemon_ipc_socket_path_beside_the_instance_lock_for_every_instance() {
+    let fictional_home_directory = PathBuf::from("/Users/example");
+    let fictional_test_state_directory = PathBuf::from("/tmp/astronomical-test-instance");
+
+    let stable_paths = AstronomicalInstancePaths::for_home_directory(
+        &fictional_home_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let development_paths = AstronomicalInstancePaths::for_home_directory(
+        &fictional_home_directory,
+        AstronomicalRuntimeInstance::Development,
+    );
+    let explicit_test_paths = AstronomicalInstancePaths::for_state_directory(
+        fictional_test_state_directory.clone(),
+        AstronomicalRuntimeInstance::Development,
+    );
+
+    assert_eq!(
+        stable_paths.ipc_socket_file_path(),
+        fictional_home_directory.join(".astronomical/ipc.sock")
+    );
+    assert_eq!(
+        development_paths.ipc_socket_file_path(),
+        fictional_home_directory.join(".astronomical-dev/ipc.sock")
+    );
+    assert_eq!(
+        explicit_test_paths.ipc_socket_file_path(),
+        fictional_test_state_directory.join("ipc.sock")
+    );
+    assert_ne!(
+        stable_paths.ipc_socket_file_path(),
+        development_paths.ipc_socket_file_path()
+    );
+    assert_ne!(
+        stable_paths.ipc_socket_file_path(),
+        stable_paths.instance_lock_file_path()
+    );
+}
