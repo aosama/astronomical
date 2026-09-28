@@ -139,12 +139,18 @@ build_sparkle_cli() {
     sparkle_checkout="$1"
     sparkle_cli="${sparkle_checkout}/build/Release/sparkle.app/Contents/MacOS/sparkle"
     if [ ! -x "$sparkle_cli" ]; then
+        # Sparkle's Xcode project pins MACOSX_DEPLOYMENT_TARGET=10.13, which
+        # Xcode 27+ rejects outright because its supported range starts at
+        # 12.0. The override only affects this locally driven fixture updater;
+        # the release artifacts come from the SwiftPM artifacts, whose bytes
+        # this does not touch.
         xcodebuild \
             -project "${sparkle_checkout}/Sparkle.xcodeproj" \
             -target sparkle-cli \
             -configuration Release \
             ONLY_ACTIVE_ARCH=YES \
             ARCHS=arm64 \
+            MACOSX_DEPLOYMENT_TARGET=12.0 \
             build >&2
     fi
     [ -x "$sparkle_cli" ] || { print_error "Sparkle command-line updater was not built"; exit 1; }
