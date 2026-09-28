@@ -16,6 +16,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
   private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
+  private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
   private lazy var chatWindowController = ChatWindowController(
     thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity))
   private var statusItem: NSStatusItem?
@@ -67,6 +68,9 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
           }
         ),
         updatesSupported: applicationUpdateController.supportsUserUpdateControls,
+        terminalCommandSupported: applicationIdentity.channel != .development,
+        installTerminalCommand: { [weak self] in self?.installTerminalCommand() },
+        removeTerminalCommand: { [weak self] in self?.removeTerminalCommand() },
         revealConfiguration: revealConfiguration,
         showWelcome: { [weak self] in self?.showWelcomeWindow() },
         quitApplication: { NSApp.terminate(nil) }
@@ -102,6 +106,10 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     } else {
       DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
     }
+    // Full auto-repair (owner decision on issue #825): a terminal-command
+    // link this app owns dangles whenever the bundle moves; recreating it on
+    // every launch keeps the command current without user action.
+    Task { [weak self] in await self?.cliLinkInstaller.repairOnLaunchIfNeeded() }
   }
 
   public func applicationWillTerminate(_ notification: Notification) {
@@ -212,6 +220,28 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
 
   private func checkForUpdates() {
     requestManualApplicationUpdateCheck(using: applicationUpdateController)
+  }
+
+  private func installTerminalCommand() {
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        try await cliLinkInstaller.installTerminalCommand()
+      } catch {
+        NSApp.presentError(error)
+      }
+    }
+  }
+
+  private func removeTerminalCommand() {
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        try await cliLinkInstaller.removeTerminalCommand()
+      } catch {
+        NSApp.presentError(error)
+      }
+    }
   }
 }
 
