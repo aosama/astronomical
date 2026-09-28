@@ -102,6 +102,14 @@ exit 0
 MENU
     cp "${source_app_bundle}/Contents/MacOS/astronomical-menu" \
         "${source_app_bundle}/Contents/MacOS/astronomical-inference-worker"
+    cat > "${source_app_bundle}/Contents/MacOS/astronomical" <<'CLI'
+#!/usr/bin/env sh
+if [ "${1:-}" = "--version" ]; then
+    printf '%s\n' '0.2.0'
+    exit 0
+fi
+exit 0
+CLI
     cat > "${fake_command_directory}/plutil" <<'PLUTIL'
 #!/usr/bin/env sh
 case "$2" in
@@ -146,7 +154,8 @@ exec /bin/mv "$@"
 MOVE
     chmod +x "${source_app_bundle}/Contents/MacOS/astronomicald" "$fake_command_directory"/*
     chmod +x "${source_app_bundle}/Contents/MacOS/astronomical-menu" \
-        "${source_app_bundle}/Contents/MacOS/astronomical-inference-worker"
+        "${source_app_bundle}/Contents/MacOS/astronomical-inference-worker" \
+        "${source_app_bundle}/Contents/MacOS/astronomical"
     mkdir -p "$test_home_directory"
 
     printf '%s\n' '[stable-installer-test] case=noncanonical-home-is-rejected status=start'
@@ -180,6 +189,28 @@ MOVE
     cp "${source_app_bundle}/Contents/MacOS/astronomical-menu" \
         "${source_app_bundle}/Contents/MacOS/astronomical-inference-worker"
     printf '%s\n' '[stable-installer-test] case=missing-worker-is-rejected status=success'
+
+    printf '%s\n' '[stable-installer-test] case=missing-cli-is-rejected status=start'
+    rm "${source_app_bundle}/Contents/MacOS/astronomical"
+    if run_installer "none" "${SANDBOX_DIRECTORY}/missing-cli.log"; then
+        print_error "installer unexpectedly accepted a bundle without its CLI"
+        exit 1
+    fi
+    grep -F "required Stable executable is unavailable: astronomical" \
+        "${SANDBOX_DIRECTORY}/missing-cli.log" >/dev/null || {
+            print_error "missing CLI rejection did not identify the CLI"
+            exit 1
+        }
+    cat > "${source_app_bundle}/Contents/MacOS/astronomical" <<'CLI'
+#!/usr/bin/env sh
+if [ "${1:-}" = "--version" ]; then
+    printf '%s\n' '0.2.0'
+    exit 0
+fi
+exit 0
+CLI
+    chmod +x "${source_app_bundle}/Contents/MacOS/astronomical"
+    printf '%s\n' '[stable-installer-test] case=missing-cli-is-rejected status=success'
 
     printf '%s\n' '[stable-installer-test] case=missing-metallib-is-rejected status=start'
     rm -f "${source_app_bundle}/Contents/Resources/share/mlx/mlx.metallib"

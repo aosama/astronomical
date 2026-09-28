@@ -87,7 +87,7 @@ main() {
         }
     done
     [ -d "$SOURCE_APP_BUNDLE" ] || { print_error "Stable app bundle not found: ${SOURCE_APP_BUNDLE}"; exit 1; }
-    for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker; do
+    for bundled_executable_name in astronomical-menu astronomicald astronomical-inference-worker astronomical; do
         bundled_executable="${SOURCE_APP_BUNDLE}/Contents/MacOS/${bundled_executable_name}"
         [ -x "$bundled_executable" ] || {
             print_error "required Stable executable is unavailable: ${bundled_executable_name}"
@@ -134,6 +134,11 @@ main() {
     case "$daemon_version_output" in
         *"${application_version}"*"${application_commit}"*) ;;
         *) print_error "Stable app and bundled daemon identities do not match"; exit 1 ;;
+    esac
+    cli_version_output="$("${SOURCE_APP_BUNDLE}/Contents/MacOS/astronomical" --version)"
+    case "$cli_version_output" in
+        *"${application_version}"*) ;;
+        *) print_error "Stable app and bundled CLI identities do not match"; exit 1 ;;
     esac
     printf '%s step=validate-stable-bundle status=success elapsed_seconds=%s version=%s commit=%s\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$(( $(date +%s) - validation_started_at ))" \

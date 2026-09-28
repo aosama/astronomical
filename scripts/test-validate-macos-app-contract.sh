@@ -53,6 +53,10 @@ MENU
 #!/usr/bin/env sh
 exit 0
 WORKER
+    cat > "${fixture_app_bundle}/Contents/MacOS/astronomical" <<'CLI'
+#!/usr/bin/env sh
+exit 0
+CLI
     chmod +x "${fixture_app_bundle}/Contents/MacOS/"*
 }
 

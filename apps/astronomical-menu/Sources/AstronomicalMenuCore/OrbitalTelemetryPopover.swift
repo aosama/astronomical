@@ -26,6 +26,9 @@ struct OrbitalTelemetryPopover: View {
   @Binding var automaticallyChecksForUpdates: Bool
   @Binding var selectedUpdateChannel: ApplicationUpdateChannel
   let updatesSupported: Bool
+  let terminalCommandSupported: Bool
+  let installTerminalCommand: () -> Void
+  let removeTerminalCommand: () -> Void
   let revealConfiguration: () -> Void
   let showWelcome: () -> Void
   let quitApplication: () -> Void
@@ -182,6 +185,11 @@ struct OrbitalTelemetryPopover: View {
                 Text(updateChannel.displayName).tag(updateChannel)
               }
             }
+            Divider()
+          }
+          if terminalCommandSupported {
+            Button("Install “astronomical” command in terminal…", action: installTerminalCommand)
+            Button("Remove “astronomical” terminal command…", action: removeTerminalCommand)
             Divider()
           }
           Button("Welcome…", action: showWelcome)
