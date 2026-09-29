@@ -24,6 +24,34 @@ pub fn leaf_model_id(model_id: &str) -> &str {
     model_id.rsplit('/').next().unwrap_or(model_id)
 }
 
+/// Suggests up to three known model IDs that plausibly match the request:
+/// case-insensitive substring matches in both directions, then candidates
+/// sharing the request's leading token (typo tolerance for family prefixes).
+/// Returned suggestions are lowercased.
+pub fn near_model_matches(
+    requested_model_id: &str,
+    candidate_model_ids: &[impl AsRef<str>],
+) -> Vec<String> {
+    let requested = requested_model_id.to_ascii_lowercase();
+    let leading_token = requested
+        .split(['/', ' ', '-'])
+        .next()
+        .unwrap_or(&requested);
+    let mut matches = candidate_model_ids
+        .iter()
+        .map(|model_id| model_id.as_ref().to_ascii_lowercase())
+        .filter(|candidate| {
+            candidate.contains(&requested)
+                || requested.contains(candidate.as_str())
+                || candidate.starts_with(leading_token)
+        })
+        .collect::<Vec<_>>();
+    matches.sort();
+    matches.dedup();
+    matches.truncate(3);
+    matches
+}
+
 /// Decodes a Hugging Face cache directory name into an `organization/model` ID.
 pub fn decode_huggingface_cache_directory_name(directory_name: &str) -> Option<String> {
     let encoded_model_id = directory_name.strip_prefix("models--")?;

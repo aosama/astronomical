@@ -37,6 +37,11 @@ pub enum SupervisorPerformanceOperation {
     DaemonIpcStatus,
     DaemonIpcChatGenerate,
     DaemonIpcEmbedGenerate,
+    DaemonIpcModelsList,
+    DaemonIpcCatalog,
+    DaemonIpcDownloadStart,
+    DaemonIpcDownloadStatus,
+    DaemonIpcDefaultModelSet,
 }
 
 impl SupervisorPerformanceOperation {
@@ -55,6 +60,11 @@ impl SupervisorPerformanceOperation {
             Self::DaemonIpcStatus => "daemon_ipc_status",
             Self::DaemonIpcChatGenerate => "daemon_ipc_chat_generate",
             Self::DaemonIpcEmbedGenerate => "daemon_ipc_embed_generate",
+            Self::DaemonIpcModelsList => "daemon_ipc_models_list",
+            Self::DaemonIpcCatalog => "daemon_ipc_catalog",
+            Self::DaemonIpcDownloadStart => "daemon_ipc_download_start",
+            Self::DaemonIpcDownloadStatus => "daemon_ipc_download_status",
+            Self::DaemonIpcDefaultModelSet => "daemon_ipc_default_model_set",
         }
     }
 }

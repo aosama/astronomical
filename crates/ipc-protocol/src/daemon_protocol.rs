@@ -53,6 +53,21 @@ pub enum DaemonRequest {
         /// Optional Matryoshka dimension truncation requested by the caller.
         dimensions: Option<u32>,
     },
+    /// Lists the models discovered on this Mac with their capability flags.
+    ModelsList,
+    /// Lists the release download catalog with ready/download state per entry.
+    Catalog,
+    /// Starts (or resumes a matching paused) download for one catalog entry.
+    /// Accepts the requestable model id or the full huggingface id.
+    DownloadStart {
+        model_id: String,
+    },
+    /// Reports the active library download job, if any.
+    DownloadStatus,
+    /// Persists a new default model id for one-shot CLI verbs.
+    DefaultModelSet {
+        model_id: String,
+    },
 }
 
 /// One reply the daemon sends back to the local CLI process. `Eq` is
@@ -69,7 +84,22 @@ pub enum DaemonResponse {
     Status {
         worker_status: DaemonWorkerStatus,
         ready_model_id: Option<String>,
+        /// Effective default model id: the persisted value, falling back to
+        /// the built-in default when the config sets none.
+        default_model_id: Option<String>,
     },
+    /// Answer to [`DaemonRequest::ModelsList`].
+    ModelsList { models: Vec<DaemonListedModel> },
+    /// Answer to [`DaemonRequest::Catalog`].
+    Catalog { entries: Vec<DaemonCatalogEntry> },
+    /// Terminal frame for an admitted [`DaemonRequest::DownloadStart`].
+    DownloadStarted { huggingface_id: String },
+    /// Answer to [`DaemonRequest::DownloadStatus`].
+    DownloadStatus { job: Option<DaemonDownloadJob> },
+    /// Terminal frame for an admitted [`DaemonRequest::DefaultModelSet`].
+    DefaultModelSet { default_model_id: String },
+    /// Terminal refusal when the daemon declines a model-management request.
+    RequestRejected { reason: String },
     /// One visible answer fragment, streamed in generation order.
     ChatGenerationText { text: String },
     /// One reasoning-channel fragment.
@@ -103,4 +133,59 @@ pub enum DaemonResponse {
     },
     /// Terminal frame for a failed embedding batch.
     EmbeddingsFailed { reason: EmbeddingsFailureReason },
+}
+
+/// One model discovered on this Mac, any capability class.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DaemonListedModel {
+    /// Requestable model id (leaf of the huggingface id).
+    pub model_id: String,
+    /// Model family label, e.g. `qwen`.
+    pub family: String,
+    /// Effective context window in tokens after policy clamping.
+    /// `None` for models that are not chat-capable (image, embeddings).
+    pub context_window: Option<u32>,
+    /// True when this model can produce embeddings for `embed`.
+    pub supports_embeddings: bool,
+    /// True when this model is currently resident in the worker.
+    pub is_resident: bool,
+    /// Artifact size in bytes; the CLI renders decimal SI gigabytes.
+    pub size_bytes: u64,
+}
+
+/// One release download-catalog entry with its local readiness.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DaemonCatalogEntry {
+    pub huggingface_id: String,
+    pub display_name: String,
+    pub family: String,
+    /// Approximate download size in bytes; the CLI renders decimal SI GB.
+    pub approximate_size_bytes: u64,
+    /// True when the entry is discovered or has a validated publication here.
+    pub ready_on_this_mac: bool,
+    /// Requestable model id once ready; `None` while not downloaded.
+    pub requestable_model_id: Option<String>,
+    /// Active download job state for this entry, if one runs.
+    pub download_state: Option<String>,
+    pub context_window: Option<u32>,
+    pub supports_reasoning: bool,
+    pub supports_vision: bool,
+    pub supports_tool_calls: bool,
+    pub supports_image_generation: bool,
+    pub supports_embeddings: bool,
+}
+
+/// The active library download job, if any.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DaemonDownloadJob {
+    pub huggingface_id: String,
+    /// Durable job state, e.g. `downloading`, `verifying`, `publishing`.
+    pub state: String,
+    pub bytes_completed: u64,
+    pub bytes_total: u64,
+    /// Public error code when the job failed.
+    pub error: Option<String>,
 }
