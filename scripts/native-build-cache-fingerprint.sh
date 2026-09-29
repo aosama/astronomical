@@ -101,12 +101,18 @@ resolve_repository_root() {
 
 append_source_identity() {
     tracked_paths_file="${TEMPORARY_DIRECTORY}/tracked-paths"
+    # The identity covers only inputs that determine the native artifact's
+    # bytes: C++ sources, third-party pins and patches, the store schema, and
+    # this script's identity policy. The Rust build-orchestration sources
+    # (build.rs and its build_* modules) are deliberately excluded because
+    # they are the executor: edits to progress logging, parallelism
+    # resolution, or store plumbing must not force a full CMake rebuild and
+    # re-open the rust-versus-cmake contention window on CI. Every artifact
+    # -affecting cmake argument is already fingerprinted through the
+    # compatibility probes, the profile, and the third-party files; a change
+    # to cmake invocation semantics must bump
+    # crates/runtime-integration/native-build-store-schema-version instead.
     git -C "$repository_root" ls-files --cached --others --exclude-standard -- \
-        crates/runtime-integration/build.rs \
-        crates/runtime-integration/build_bindings.rs \
-        crates/runtime-integration/build_native_linking.rs \
-        crates/runtime-integration/build_native_store.rs \
-        crates/runtime-integration/build_native_store_manifest.rs \
         crates/runtime-integration/native-build-store-schema-version \
         crates/runtime-integration/native \
         scripts/native-build-cache-fingerprint.sh \

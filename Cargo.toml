@@ -6,6 +6,7 @@ members = [
     "crates/config",
     "crates/ipc-protocol",
     "crates/model-serving",
+    "crates/native-build-tool",
     "crates/rest-contract",
     "crates/runtime-integration",
     "experimental/aligned-expert-packs",
@@ -17,6 +18,7 @@ default-members = [
     "crates/config",
     "crates/ipc-protocol",
     "crates/model-serving",
+    "crates/native-build-tool",
     "crates/rest-contract",
     "crates/runtime-integration",
 ]
