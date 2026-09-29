@@ -148,6 +148,13 @@ impl ChunkingConfigFile {
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
+/// The previously shipped resident-chunk default. Load-time persistence rewrites
+/// this exact value to the current default so config.json files written with the
+/// 4,096-token chunk — whose measured win turned out to be a page-cache warmth
+/// artifact, with 2,048 reproducibly faster at 10k words — adopt the reverted
+/// default without a manual edit; any other persisted value is deliberate user
+/// intent and is preserved.
+pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// Independent SSD-paged prompt chunk. Owned separately from the resident chunk.
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 pub const DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS: u32 = 2_048;

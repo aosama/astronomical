@@ -3,7 +3,9 @@ use astronomical_runtime_integration::{
     MlxRuntime, MlxRuntimeError,
 };
 
-use super::gated_delta_sequence::gated_delta_kernel_source;
+use super::gated_delta_pipelined_kernel::{
+    THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
+};
 use super::gated_delta_sequence_contract::{
     gated_delta_sequence_error, template_arguments, validate_gated_delta_sequence_shapes,
 };
@@ -13,19 +15,25 @@ const GATED_DELTA_CHECKPOINT_SETUP_SOURCE: &str = r#"
     int next_checkpoint_token_count = first_checkpoint_token_count;
 "#;
 const GATED_DELTA_CHECKPOINT_WRITE_SOURCE: &str = r#"
-            auto completed_token_count = first_token + token_in_block + 1;
-            if (checkpoint_index < checkpoint_count &&
-                completed_token_count == next_checkpoint_token_count) {
-                auto checkpoint_state = (device float4*)(recurrent_boundary_states +
-                    (((((size_t)checkpoint_index * B + batch_index) * Hv +
-                       value_head_index) * Dv + first_value_row + value_row_in_block) *
-                     Dk + first_key_dimension));
-                for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-                    checkpoint_state[fragment_index] = state_fragment[fragment_index];
+                const int completed_token_count = first_token +
+                    /* ASTRONOMICAL_CHECKPOINT_TOKEN */ + 1;
+                if (checkpoint_index < checkpoint_count &&
+                    completed_token_count == next_checkpoint_token_count) {
+                    auto checkpoint_state = (device float4*)(
+                        recurrent_boundary_states +
+                        (((((size_t)checkpoint_index * B + batch_index) * Hv +
+                           value_head_index) * Dv + first_value_row +
+                           value_row_in_block) * Dk));
+                    for (int fragment_index = 0; fragment_index < 4;
+                         ++fragment_index) {
+                        checkpoint_state[key_segment_index +
+                            8 * fragment_index] =
+                            state_fragment[fragment_index];
+                    }
+                    ++checkpoint_index;
+                    next_checkpoint_token_count +=
+                        checkpoint_interval_token_count;
                 }
-                ++checkpoint_index;
-                next_checkpoint_token_count += checkpoint_interval_token_count;
-            }
 "#;
 
 /// Boundary checkpoint outputs from one fused gated-delta sequence.
@@ -37,7 +45,7 @@ pub struct Qwen3_5GatedDeltaBoundaryCheckpointResult {
 
 /// Builds the fused Qwen3.5 gated-delta boundary-checkpoint kernel.
 pub fn qwen3_5_gated_delta_checkpoint_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
-    let checkpoint_kernel_source = gated_delta_kernel_source(
+    let checkpoint_kernel_source = gated_delta_pipelined_kernel_source(
         GATED_DELTA_CHECKPOINT_SETUP_SOURCE,
         GATED_DELTA_CHECKPOINT_WRITE_SOURCE,
     );
@@ -162,11 +170,12 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
             ),
         ],
         [
-            256 * (sequence_shape.value_head_dimension / 32),
+            THREADGROUP_THREAD_COUNT as i32
+                * (sequence_shape.value_head_dimension / VALUE_ROW_BLOCK_SIZE as i32),
             sequence_shape.value_head_count,
             sequence_shape.batch_size,
         ],
-        [256, 1, 1],
+        [THREADGROUP_THREAD_COUNT as i32, 1, 1],
         &checkpoint_template_arguments,
     )?;
     let mut output_iterator = outputs.into_iter();
