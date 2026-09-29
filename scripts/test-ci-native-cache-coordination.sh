@@ -216,11 +216,13 @@ assert_change_scope() {
 
 assert_workflow_contract() {
     workflow_path="$1"
+    composite_action_path="$2"
     # GitHub expressions must reach Ruby unchanged so the contract compares the
     # workflow's actual expression strings rather than shell-expanded values.
     # shellcheck disable=SC2016
     ruby -ryaml -rshellwords -e '
         workflow = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)
+        composite = YAML.safe_load(File.read(ARGV.fetch(1)), aliases: true)
         triggers = workflow.fetch(true)
         raise "pull-request verification trigger is missing" unless triggers.key?("pull_request")
         raise "manual verification trigger is missing" unless triggers.key?("workflow_dispatch")
@@ -237,16 +239,25 @@ assert_workflow_contract() {
         raise "change-scope classifier step is missing" unless classification_step
         raise "change-scope policy is not script-owned" unless classification_step.fetch("run").include?("classify-ci-change-scope.sh")
         raise "classifier job still computes unused native identity" if detection_job.fetch("steps").any? { |step| step["run"]&.include?("native-build-cache-fingerprint.sh") }
-        verification_job = workflow.fetch("jobs").fetch("verify")
+        verification_job = workflow.fetch("jobs").fetch("rust-core")
+        swift_node_job = workflow.fetch("jobs").fetch("swift-node")
+        static_job = workflow.fetch("jobs").fetch("static")
         raise "required check name changed" unless verification_job.fetch("name") == "macOS hermetic verification"
         raise "required check exceeded its hard cap" unless verification_job.fetch("timeout-minutes") == 15
+        raise "swift-node exceeded its hard cap" unless swift_node_job.fetch("timeout-minutes") == 12
         expected_authority = "${{ always() && (needs.detect-changes.result != '\''success'\'' || needs.detect-changes.outputs.macos_verification_required == '\''true'\'') }}"
         raise "macOS authority does not fail closed" unless verification_job.fetch("if") == expected_authority
+        raise "swift-node authority does not fail closed" unless swift_node_job.fetch("if") == expected_authority
         verification_concurrency = verification_job.fetch("concurrency")
         expected_group = "macos-hermetic-${{ github.event_name }}-${{ github.ref }}"
         raise "macOS concurrency is not event-and-ref scoped" unless verification_concurrency.fetch("group") == expected_group
         raise "required macOS verification must not cancel in-flight runs" unless verification_concurrency.fetch("cancel-in-progress") == false
+        swift_concurrency = swift_node_job.fetch("concurrency")
+        raise "swift-node concurrency is not event-and-ref scoped" unless swift_concurrency.fetch("group") == "macos-swift-node-${{ github.event_name }}-${{ github.ref }}"
+        raise "swift-node must not cancel in-flight runs" unless swift_concurrency.fetch("cancel-in-progress") == false
+        raise "static checks must require successful classification" unless static_job.fetch("if").include?("needs.detect-changes.result ==")
         steps = verification_job.fetch("steps")
+        swift_steps = swift_node_job.fetch("steps")
         classification_guard = steps.find { |step| step["name"] == "Require successful change classification" }
         raise "classification failure guard is missing" unless classification_guard
         raise "classification guard condition changed" unless classification_guard.fetch("if").include?("detect-changes.result != '\''success'\''")
@@ -280,40 +291,41 @@ assert_workflow_contract() {
         raise "hermetic compile does not use --no-run" unless compile_command.include?("--no-run")
         raise "hermetic compile omits hermetic_tests" unless compile_command.include?("--test hermetic_tests")
         raise "hermetic compile omits rest_api_tests" unless compile_command.include?("--test rest_api_tests")
-        swiftpm_timestamp_step = steps.find { |step| step["name"] == "Keep restored SwiftPM artifacts newer than checkout" }
+        swiftpm_timestamp_step = swift_steps.find { |step| step["name"] == "Keep restored SwiftPM artifacts newer than checkout" }
         raise "SwiftPM timestamp reuse step is missing from required CI" unless swiftpm_timestamp_step
         raise "SwiftPM timestamp reuse is not gated on a cache hit" unless swiftpm_timestamp_step.fetch("if").include?("swiftpm-cache.outputs.cache-hit")
         raise "SwiftPM timestamp reuse does not touch restored artifacts" unless swiftpm_timestamp_step.fetch("run").include?("touch -c")
+        assert_composite_cache_owner = lambda do |job_steps, owner_id, expected_paths, restored_paths|
+          restore_step = job_steps.find { |step| step["id"] == owner_id }
+          raise "missing cache owner #{owner_id}" unless restore_step
+          raise "cache owner #{owner_id} must restore through the shared composite action" unless restore_step.fetch("uses") == "./.github/actions/astronomical-cache"
+          restore_configuration = restore_step.fetch("with")
+          raise "cache owner #{owner_id} must declare the restore operation" unless restore_configuration.fetch("operation") == "restore"
+          path_text = restore_configuration.fetch("path")
+          expected_paths.each { |expected_path| raise "#{owner_id} omits #{expected_path}" unless path_text.include?(expected_path) }
+          raise "target must not be cached" if path_text.lines.map(&:strip).include?("target")
+          restored_paths.concat(path_text.lines.map(&:strip).reject(&:empty?))
+          raise "#{owner_id} has the wrong report owner" unless restore_configuration.fetch("owner") == owner_id.delete_suffix("-cache")
+          save_step = job_steps.find { |step| step["id"] == "#{owner_id}-save" }
+          raise "#{owner_id} has no save owner" unless save_step
+          raise "cache owner #{owner_id} must save through the shared composite action" unless save_step.fetch("uses") == "./.github/actions/astronomical-cache"
+          save_configuration = save_step.fetch("with")
+          raise "cache owner #{owner_id} must declare the save operation" unless save_configuration.fetch("operation") == "save"
+          save_condition = save_step.fetch("if")
+          is_conditional = save_condition.include?("success()") || save_condition.include?("!cancelled()")
+          raise "#{owner_id} save is unconditional" unless is_conditional
+          raise "#{owner_id} save path diverges from its restore path" unless save_configuration.fetch("path") == path_text
+          raise "#{owner_id} save key diverges from its restore key" unless save_configuration.fetch("key") == restore_configuration.fetch("key")
+        end
         cache_owners = {
           "cargo-downloads-cache" => ["~/.cargo/registry", "~/.cargo/git"],
           "native-archives-cache" => ["~/Library/Caches/Astronomical/native-dependencies"],
           "native-build-cache" => ["env.NATIVE_BUILD_ENTRY_DIRECTORY"],
           "sccache-cache" => ["~/Library/Caches/Astronomical/sccache"],
-          "swiftpm-cache" => ["apps/astronomical-menu/.build"],
         }
         restored_paths = []
-        cache_owners.each do |owner_id, expected_paths|
-          restore_step = steps.find { |step| step["id"] == owner_id }
-          raise "missing cache owner #{owner_id}" unless restore_step
-          cache_action = restore_step.fetch("uses")
-          raise "cache owner #{owner_id} is not a pinned restore action" unless cache_action.match?(%r{\Aactions/cache/restore@[0-9a-f]{40}\z})
-          path_text = restore_step.fetch("with").fetch("path")
-          expected_paths.each { |expected_path| raise "#{owner_id} omits #{expected_path}" unless path_text.include?(expected_path) }
-          raise "target must not be cached" if path_text.lines.map(&:strip).include?("target")
-          restored_paths.concat(path_text.lines.map(&:strip).reject(&:empty?))
-          report_step = steps.find { |step| step["name"] == "Report #{owner_id} restoration" }
-          raise "#{owner_id} has no immediate owner report" unless report_step
-          report_environment = report_step.fetch("env")
-          raise "#{owner_id} report has the wrong owner" unless report_environment.fetch("CACHE_OWNER") == owner_id.delete_suffix("-cache")
-          raise "#{owner_id} report omits cache outcome" unless report_environment.fetch("CACHE_STEP_OUTCOME").include?("steps.#{owner_id}.outcome")
-          save_step = steps.find { |step| step["name"] == "Save #{owner_id}" }
-          raise "#{owner_id} has no save owner" unless save_step
-          save_action = save_step.fetch("uses")
-          raise "cache owner #{owner_id} is not a pinned save action" unless save_action.match?(%r{\Aactions/cache/save@[0-9a-f]{40}\z})
-          save_condition = save_step.fetch("if")
-          is_conditional = save_condition.include?("success()") || save_condition.include?("!cancelled()")
-          raise "#{owner_id} save is unconditional" unless is_conditional
-        end
+        cache_owners.each { |owner_id, expected_paths| assert_composite_cache_owner.call(steps, owner_id, expected_paths, restored_paths) }
+        assert_composite_cache_owner.call(swift_steps, "swiftpm-cache", ["apps/astronomical-menu/.build"], restored_paths)
         raise "cache owners overlap paths" unless restored_paths.uniq.length == restored_paths.length
 
         native_restore = steps.find { |step| step["id"] == "native-build-cache" }
@@ -327,13 +339,40 @@ assert_workflow_contract() {
         raise "sccache key couples to the native identity; the native build product cache owns that identity" if sccache_restore.fetch("with").fetch("key").include?("NATIVE_BUILD_IDENTITY")
         sccache_fallbacks = sccache_restore.fetch("with").fetch("restore-keys").to_s.split(/\s*\n\s*/).reject(&:empty?)
         raise "sccache restore omits an identity-free fallback" unless sccache_fallbacks.any? { |fallback| !fallback.include?("NATIVE_BUILD_IDENTITY") }
-        swift_restore = steps.find { |step| step["id"] == "swiftpm-cache" }
+        swift_restore = swift_steps.find { |step| step["id"] == "swiftpm-cache" }
         raise "Swift state is coupled to Rust" if swift_restore.fetch("with").fetch("key").include?("Cargo")
         raise "Swift cache omits toolchain compatibility" unless swift_restore.fetch("with").fetch("key").include?("SWIFT_TOOLCHAIN_IDENTITY")
-        cache_owners.each_value do |_|
-          # Owner-specific action names expose compressed bytes in hosted logs.
+        composite_runs = composite.fetch("runs")
+        raise "shared cache action must run as a composite" unless composite_runs.fetch("using") == "composite"
+        composite_steps = composite_runs.fetch("steps")
+        composite_restore = composite_steps.find { |step| step["id"] == "restore" }
+        raise "shared cache action restore step is missing" unless composite_restore
+        raise "shared cache action restore is not a pinned actions/cache/restore" unless composite_restore.fetch("uses").match?(%r{\Aactions/cache/restore@[0-9a-f]{40}\z})
+        composite_save = composite_steps.find { |step| step["id"] == "save" }
+        raise "shared cache action save step is missing" unless composite_save
+        raise "shared cache action save is not a pinned actions/cache/save" unless composite_save.fetch("uses").match?(%r{\Aactions/cache/save@[0-9a-f]{40}\z})
+        composite_report = composite_steps.find { |step| step["id"] == "report" }
+        raise "shared cache action report step is missing" unless composite_report
+        report_environment = composite_report.fetch("env")
+        raise "shared cache action report does not forward the owner" unless report_environment.fetch("CACHE_OWNER").include?("inputs.owner")
+        raise "shared cache action report does not forward the restore outcome" unless report_environment.fetch("CACHE_STEP_OUTCOME").include?("steps.restore.outcome")
+        raise "shared cache action report does not forward the save outcome" unless report_environment.fetch("CACHE_STEP_OUTCOME").include?("steps.save.outcome")
+        raise "shared cache action report must call the restoration reporter" unless composite_report.fetch("run").include?("report-build-cache-restoration.sh")
+        raise "shared cache action must surface cache hits to callers" unless composite.fetch("outputs").fetch("cache-hit").fetch("value").include?("steps.restore.outputs.cache-hit")
+        timed_steps = [steps, swift_steps, static_job.fetch("steps")].flatten
+            .select { |step| step["run"].to_s.include?("ci-step-timing.sh end") }
+        raise "workflow has no timed steps to attribute" if timed_steps.empty?
+        timed_steps.each do |timed_step|
+            end_segment = timed_step["run"][/ci-step-timing\.sh end ([a-z0-9-]+)/, 1]
+            raise "timed step #{timed_step["name"].inspect} does not name its end segment" unless end_segment
+            raise "timed step #{timed_step["name"].inspect} ends #{end_segment} without a begin call" unless timed_step["run"].include?("ci-step-timing.sh begin #{end_segment}")
         end
-    ' "$workflow_path"
+        [verification_job, swift_node_job].each do |macos_job|
+            publish_step = macos_job.fetch("steps").find { |step| step["run"].to_s.include?("publish-ci-timing-summary.sh") }
+            raise "macOS job #{macos_job.fetch("name").inspect} never publishes the step timing summary" unless publish_step
+            raise "step timing summary must publish even for failed runs" unless publish_step.fetch("if") == "always()"
+        end
+    ' "$workflow_path" "$composite_action_path"
 }
 
 main() {
@@ -521,7 +560,7 @@ main() {
     printf '%s\n' '[ci-native-cache-test] case=cache-classification status=success'
 
     printf '%s\n' '[ci-native-cache-test] case=workflow-cache-ownership status=start'
-    assert_workflow_contract "${repository_root}/.github/workflows/ci.yml"
+    assert_workflow_contract "${repository_root}/.github/workflows/ci.yml" "${repository_root}/.github/actions/astronomical-cache/action.yml"
     printf '%s\n' '[ci-native-cache-test] case=workflow-cache-ownership status=success'
 }
 
