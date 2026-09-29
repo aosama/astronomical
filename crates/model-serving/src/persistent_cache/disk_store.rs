@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use super::block_format_error::PersistentPromptCacheBlockError;
 use super::block_key::PersistentPromptCacheBlockKey;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
@@ -403,12 +404,29 @@ impl PersistentPromptCacheDiskStore {
                 });
             }
         };
-        if let Err(validation_error) = validate_current_file_header(
+        let header_validation = validate_current_file_header(
             file_kind,
             &block_file,
             &block_file_path,
             &self.model_contract,
-        ) {
+        )
+        .and_then(|stored_block_token_count| match stored_block_token_count {
+            // Fail closed when the file's stored token count disagrees with the
+            // key that addressed it: a partial tail must never be served for a
+            // full-block key or the reverse. The comparison uses the key's
+            // actual token count because staging stamps partial-tail files with
+            // their real token count, not the contract's full block count.
+            Some(stored_block_token_count)
+                if stored_block_token_count != persistent_prompt_cache_block_key.token_count() =>
+            {
+                Err(PersistentPromptCacheBlockError::BlockTokenCountMismatch {
+                    actual_block_token_count: stored_block_token_count,
+                    expected_block_token_count: persistent_prompt_cache_block_key.token_count(),
+                })
+            }
+            _ => Ok(()),
+        });
+        if let Err(validation_error) = header_validation {
             // Corrupt block: delete first (NotFound counts as already absent),
             // then untrack only after successful deletion. On any other
             // deletion failure, keep tracking and surface RemovePromptCacheFile.
