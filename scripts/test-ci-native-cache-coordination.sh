@@ -359,6 +359,19 @@ assert_workflow_contract() {
         raise "shared cache action report does not forward the save outcome" unless report_environment.fetch("CACHE_STEP_OUTCOME").include?("steps.save.outcome")
         raise "shared cache action report must call the restoration reporter" unless composite_report.fetch("run").include?("report-build-cache-restoration.sh")
         raise "shared cache action must surface cache hits to callers" unless composite.fetch("outputs").fetch("cache-hit").fetch("value").include?("steps.restore.outputs.cache-hit")
+        timed_steps = [steps, swift_steps, static_job.fetch("steps")].flatten
+            .select { |step| step["run"].to_s.include?("ci-step-timing.sh end") }
+        raise "workflow has no timed steps to attribute" if timed_steps.empty?
+        timed_steps.each do |timed_step|
+            end_segment = timed_step["run"][/ci-step-timing\.sh end ([a-z0-9-]+)/, 1]
+            raise "timed step #{timed_step["name"].inspect} does not name its end segment" unless end_segment
+            raise "timed step #{timed_step["name"].inspect} ends #{end_segment} without a begin call" unless timed_step["run"].include?("ci-step-timing.sh begin #{end_segment}")
+        end
+        [verification_job, swift_node_job].each do |macos_job|
+            publish_step = macos_job.fetch("steps").find { |step| step["run"].to_s.include?("publish-ci-timing-summary.sh") }
+            raise "macOS job #{macos_job.fetch("name").inspect} never publishes the step timing summary" unless publish_step
+            raise "step timing summary must publish even for failed runs" unless publish_step.fetch("if") == "always()"
+        end
     ' "$workflow_path" "$composite_action_path"
 }
 
