@@ -32,10 +32,10 @@ readonly DIRECT_MLX_TIMEOUT_SECONDS=600
 # contracts run in a web view, so it needs the compilation timeout class rather
 # than the 120-second test bound.
 readonly THIN_TALK_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=22
+readonly TOTAL_STEP_COUNT=23
 readonly REPOSITORY_CONTRACT_STEP_COUNT=13
 readonly SWIFT_NODE_CONTRACT_STEP_COUNT=5
-readonly CARGO_CORE_STEP_COUNT=4
+readonly CARGO_CORE_STEP_COUNT=5
 readonly PHASE_PROGRESS_INTERVAL_SECONDS=2
 readonly FAILED_PHASE_LOG_TAIL_LINES=40
 # Grace window for phase process groups to exit after a termination signal
@@ -165,7 +165,7 @@ phase_repository_contracts() {
     run_step thin-talk-canvas-assets "$TEST_TIMEOUT_SECONDS" scripts/vendor-thin-talk-canvas-assets.sh --verify-only || return $?
     run_step commit-release-isolation "$TEST_TIMEOUT_SECONDS" scripts/test-commit-release-isolation.sh || return $?
     run_step ci-native-cache-contract "$TEST_TIMEOUT_SECONDS" scripts/test-ci-native-cache-coordination.sh || return $?
-    run_step cache-prune-contract "$TEST_TIMEOUT_SECONDS" scripts/test-prune-ci-github-caches.sh || return $?
+    run_step cache-prune-contract "$TEST_TIMEOUT_SECONDS" scripts/test-prune-ci-caches-contract.sh || return $?
     run_step cargo-artifact-lifecycle-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-lifecycle-contract.sh || return $?
     run_step bounded-cargo-test-lock-contract "$TEST_TIMEOUT_SECONDS" scripts/test-bounded-cargo-test-lock-contract.sh || return $?
     run_step cargo-artifact-cleanup-signal-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-cleanup-signal-contract.sh || return $?
@@ -218,6 +218,10 @@ phase_cargo_core() {
     # verification contract pins that ordering, and the direct-MLX lane may only
     # start once the shared graph has compiled so a compile failure stops the
     # journey before the lane burns its disposable-target build.
+    # The native CMake build runs alone before any Rust compilation so the
+    # two never compete for cores; every later Cargo step reuses the store.
+    run_step prewarm-native-build "$COMPILE_TIMEOUT_SECONDS" \
+        scripts/prewarm-native-build.sh --profile core || return $?
     run_step compile-rust "$COMPILE_TIMEOUT_SECONDS" cargo verify-commit-rust \
         --timings --no-run --jobs "$logical_cpu_count" || return $?
     # Hosted CI cannot execute the direct-MLX lane; the 2026-08-26 Laguna

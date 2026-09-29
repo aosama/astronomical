@@ -147,6 +147,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-native-build-tool"
+version = "0.2.59"
+dependencies = [
+ "fs4",
+ "sha2",
+]
+
+[[package]]
 name = "astronomical-rest-contract"
 version = "0.2.59"
 dependencies = [

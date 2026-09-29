@@ -1,219 +1,154 @@
-//! Lifecycle, heartbeat, and tolerance contracts for the native build progress
-//! stream that CI tails into the live job log.
+//! Contracts for the live native-build progress stream that hosted CI tails
+//! while cargo keeps the build script's own output captured.
 
-use std::{path::PathBuf, time::Duration};
+use std::fs;
+use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
 
 #[path = "../../build_progress.rs"]
 mod build_progress;
 
-use build_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
+use build_progress::NativeBuildProgress;
 
-const TEST_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(10);
-
-fn progress_file_path(temporary_directory: &std::path::Path, case_name: &str) -> PathBuf {
-    temporary_directory.join(format!("{case_name}-progress.log"))
+fn write_progress_file_path(progress_directory: &tempfile::TempDir) -> PathBuf {
+    progress_directory.path().join("native-build-progress")
 }
 
-fn read_progress_lines(progress_file_path: &std::path::Path) -> Vec<String> {
-    std::fs::read_to_string(progress_file_path)
-        .expect("the progress file should be readable")
+#[test]
+fn should_write_operation_lifecycle_lines_to_the_progress_file() {
+    let progress_directory =
+        tempfile::tempdir().expect("the test should create a progress directory");
+    let progress_file_path = write_progress_file_path(&progress_directory);
+    let native_build_progress = NativeBuildProgress::from_file_path(progress_file_path.clone())
+        .expect("an absolute progress path should be accepted");
+
+    native_build_progress.record_build_start("15");
+    let configure_progress = native_build_progress.begin_operation("native-configure");
+    configure_progress.complete("success");
+    let compile_progress = native_build_progress.begin_operation("native-compile");
+    compile_progress.complete("failed");
+    native_build_progress.record_build_completion(true, Duration::from_millis(1250));
+
+    let progress_text =
+        fs::read_to_string(&progress_file_path).expect("the test should read the progress file");
+    assert!(
+        progress_text.contains("[native-build-progress] status=start parallel_jobs=15"),
+        "the stream should open with a build start line carrying the parallel job count: {progress_text}"
+    );
+    assert!(
+        progress_text.contains("operation=native-configure status=start"),
+        "each operation should announce its start: {progress_text}"
+    );
+    assert!(
+        progress_text.contains("operation=native-configure status=success elapsed_seconds="),
+        "each operation should announce its outcome with elapsed time: {progress_text}"
+    );
+    assert!(
+        progress_text.contains("operation=native-compile status=failed elapsed_seconds="),
+        "a failed operation should be recorded so CI sees where the build died: {progress_text}"
+    );
+    assert!(
+        progress_text.contains("status=complete outcome=built elapsed_seconds="),
+        "the stream should close with the overall build outcome: {progress_text}"
+    );
+}
+
+#[test]
+fn should_emit_heartbeat_lines_while_an_operation_is_running() {
+    let progress_directory =
+        tempfile::tempdir().expect("the test should create a progress directory");
+    let progress_file_path = write_progress_file_path(&progress_directory);
+    let native_build_progress = NativeBuildProgress::from_file_path(progress_file_path.clone())
+        .expect("an absolute progress path should be accepted")
+        .with_heartbeat_interval(Duration::from_millis(100));
+
+    let compile_progress = native_build_progress.begin_operation("native-compile");
+    // The window must stay long relative to the heartbeat interval: a loaded
+    // CI runner can starve the heartbeat thread for whole intervals, so a
+    // 350 ms window once observed a single beat and failed the assertion.
+    thread::sleep(Duration::from_millis(2000));
+    compile_progress.complete("success");
+
+    let progress_text =
+        fs::read_to_string(&progress_file_path).expect("the test should read the progress file");
+    let heartbeat_line_count = progress_text
         .lines()
-        .map(str::to_owned)
-        .collect()
-}
-
-#[test]
-fn should_stream_lifecycle_events_for_a_successful_operation() {
-    let temporary_directory = tempfile::tempdir().expect("the test should create temporary output");
-    let progress_file_path = progress_file_path(temporary_directory.path(), "lifecycle");
-    let native_build_progress =
-        NativeBuildProgress::new(Some(progress_file_path.clone()), TEST_HEARTBEAT_INTERVAL);
-
-    let operation_result: Result<(), String> =
-        native_build_progress.run_operation("native-compile", || Ok(()));
-
-    assert_eq!(operation_result, Ok(()));
-    let progress_lines = read_progress_lines(&progress_file_path);
-    assert!(
-        progress_lines
-            .iter()
-            .any(|progress_line| progress_line.contains("operation=native-compile status=start")),
-        "the operation start should be streamed"
-    );
-    let success_line = progress_lines
-        .iter()
-        .find(|progress_line| progress_line.contains("operation=native-compile status=success"))
-        .expect("the success outcome should be streamed");
-    assert!(
-        success_line.contains("elapsed_seconds="),
-        "the success line should attribute elapsed time: {success_line}"
-    );
-}
-
-#[test]
-fn should_stream_the_failure_reason_for_a_failed_operation() {
-    let temporary_directory = tempfile::tempdir().expect("the test should create temporary output");
-    let progress_file_path = progress_file_path(temporary_directory.path(), "failure");
-    let native_build_progress =
-        NativeBuildProgress::new(Some(progress_file_path.clone()), TEST_HEARTBEAT_INTERVAL);
-
-    let operation_result: Result<(), String> = native_build_progress
-        .run_operation("native-configure", || {
-            Err("synthetic native failure".to_owned())
-        });
-
-    assert_eq!(operation_result.unwrap_err(), "synthetic native failure");
-    let progress_lines = read_progress_lines(&progress_file_path);
-    let failed_line = progress_lines
-        .iter()
-        .find(|progress_line| progress_line.contains("operation=native-configure status=failed"))
-        .expect("the failure outcome should be streamed");
-    assert!(
-        failed_line.contains("error=synthetic native failure"),
-        "the failed line should carry the failure reason: {failed_line}"
-    );
-    assert!(
-        failed_line.contains("elapsed_seconds="),
-        "the failed line should attribute elapsed time: {failed_line}"
-    );
-    assert!(
-        !progress_lines
-            .iter()
-            .any(|progress_line| progress_line.contains("status=success")),
-        "a failed operation must not stream a success outcome"
-    );
-}
-
-#[test]
-fn should_stream_heartbeats_while_a_long_operation_runs() {
-    let temporary_directory = tempfile::tempdir().expect("the test should create temporary output");
-    let progress_file_path = progress_file_path(temporary_directory.path(), "heartbeat");
-    let native_build_progress =
-        NativeBuildProgress::new(Some(progress_file_path.clone()), TEST_HEARTBEAT_INTERVAL);
-
-    let operation_result: Result<(), String> =
-        native_build_progress.run_operation("native-compile", || {
-            std::thread::sleep(Duration::from_millis(200));
-            Ok(())
-        });
-
-    assert_eq!(operation_result, Ok(()));
-    let progress_lines = read_progress_lines(&progress_file_path);
-    let heartbeat_count = progress_lines
-        .iter()
-        .filter(|progress_line| progress_line.contains("status=heartbeat"))
+        .filter(|line| line.contains("status=running"))
         .count();
     assert!(
-        heartbeat_count >= 2,
-        "a long operation should stream periodic heartbeats, found {heartbeat_count}"
-    );
-    assert!(
-        progress_lines
-            .iter()
-            .filter(|progress_line| progress_line.contains("status=heartbeat"))
-            .all(|progress_line| progress_line.contains("operation=native-compile")),
-        "heartbeats should name the operation they keep visible"
+        heartbeat_line_count >= 2,
+        "a long operation should emit periodic heartbeats, found {heartbeat_line_count}: {progress_text}"
     );
 }
 
 #[test]
-fn should_not_stream_heartbeats_after_the_operation_completes() {
-    let temporary_directory = tempfile::tempdir().expect("the test should create temporary output");
-    let progress_file_path = progress_file_path(temporary_directory.path(), "heartbeat-order");
-    let native_build_progress =
-        NativeBuildProgress::new(Some(progress_file_path.clone()), TEST_HEARTBEAT_INTERVAL);
+fn should_stop_heartbeat_lines_after_operation_completion() {
+    let progress_directory =
+        tempfile::tempdir().expect("the test should create a progress directory");
+    let progress_file_path = write_progress_file_path(&progress_directory);
+    let native_build_progress = NativeBuildProgress::from_file_path(progress_file_path.clone())
+        .expect("an absolute progress path should be accepted")
+        .with_heartbeat_interval(Duration::from_millis(50));
 
-    let operation_result: Result<(), String> =
-        native_build_progress.run_operation("native-compile", || {
-            std::thread::sleep(Duration::from_millis(200));
-            Ok(())
-        });
+    let compile_progress = native_build_progress.begin_operation("native-compile");
+    thread::sleep(Duration::from_millis(150));
+    compile_progress.complete("success");
+    let line_count_after_completion = fs::read_to_string(&progress_file_path)
+        .expect("the test should read the progress file")
+        .lines()
+        .count();
 
-    assert_eq!(operation_result, Ok(()));
-    let progress_lines = read_progress_lines(&progress_file_path);
-    let success_line_index = progress_lines
-        .iter()
-        .position(|progress_line| progress_line.contains("status=success"))
-        .expect("the success outcome should be streamed");
-    assert!(
-        progress_lines[success_line_index + 1..]
-            .iter()
-            .all(|progress_line| !progress_line.contains("status=heartbeat")),
-        "no heartbeat may appear after the operation outcome"
-    );
-}
-
-#[test]
-fn should_stream_recorded_events_to_the_progress_file() {
-    let temporary_directory = tempfile::tempdir().expect("the test should create temporary output");
-    let progress_file_path = progress_file_path(temporary_directory.path(), "recorded");
-    let native_build_progress =
-        NativeBuildProgress::new(Some(progress_file_path.clone()), TEST_HEARTBEAT_INTERVAL);
-
-    native_build_progress.record_event("status=started profile=core");
-
-    let progress_lines = read_progress_lines(&progress_file_path);
-    assert!(
-        progress_lines
-            .iter()
-            .any(|progress_line| progress_line.contains("status=started profile=core")),
-        "recorded lifecycle events should reach the progress file"
-    );
-}
-
-#[test]
-fn should_keep_building_when_the_progress_file_is_unwritable() {
-    let temporary_directory = tempfile::tempdir().expect("the test should create temporary output");
-    // A directory where the progress file should be makes every append fail.
-    let unwritable_progress_path = temporary_directory.path().join("progress-directory");
-    std::fs::create_dir(&unwritable_progress_path)
-        .expect("the test should create the unwritable progress boundary");
-    let native_build_progress =
-        NativeBuildProgress::new(Some(unwritable_progress_path), TEST_HEARTBEAT_INTERVAL);
-
-    let operation_result: Result<(), String> =
-        native_build_progress.run_operation("native-compile", || Ok(()));
-
-    assert_eq!(operation_result, Ok(()));
-    native_build_progress.record_event("status=started profile=core");
-}
-
-#[test]
-fn should_operate_without_a_progress_file() {
-    let native_build_progress = NativeBuildProgress::new(None, TEST_HEARTBEAT_INTERVAL);
-
-    let operation_result: Result<(), String> =
-        native_build_progress.run_operation("native-compile", || Ok(()));
-
-    assert_eq!(operation_result, Ok(()));
-    native_build_progress.record_event("status=started profile=core");
-}
-
-#[test]
-fn should_construct_from_the_ambient_environment() {
-    let ambient_native_build_progress = NativeBuildProgress::from_environment();
-
-    let operation_result: Result<(), String> =
-        ambient_native_build_progress.run_operation("native-compile", || Ok(()));
-
-    assert_eq!(operation_result, Ok(()));
-}
-
-#[test]
-fn should_expose_the_progress_file_variable_to_cargo_rerun_contracts() {
-    const NATIVE_BUILD_SCRIPT_SOURCE: &str = include_str!("../../build.rs");
-    const PROGRESS_MODULE_SOURCE: &str = include_str!("../../build_progress.rs");
+    thread::sleep(Duration::from_millis(200));
+    let line_count_after_quiet_period = fs::read_to_string(&progress_file_path)
+        .expect("the test should read the progress file")
+        .lines()
+        .count();
 
     assert_eq!(
-        NATIVE_BUILD_PROGRESS_FILE_VARIABLE, "ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE",
-        "the progress file variable name must stay stable for CI"
+        line_count_after_completion, line_count_after_quiet_period,
+        "no heartbeat may outlive its operation"
     );
+}
+
+#[test]
+fn should_ignore_unwritable_progress_paths_instead_of_failing_the_build() {
+    let progress_directory =
+        tempfile::tempdir().expect("the test should create a progress directory");
+    let unwritable_progress_path = progress_directory
+        .path()
+        .join("missing-directory")
+        .join("native-build-progress");
+    let native_build_progress =
+        NativeBuildProgress::from_file_path(unwritable_progress_path.clone())
+            .expect("an absolute progress path should be accepted");
+
+    let configure_progress = native_build_progress.begin_operation("native-configure");
+    configure_progress.complete("success");
+    native_build_progress.record_build_completion(false, Duration::from_millis(5));
+
     assert!(
-        PROGRESS_MODULE_SOURCE.contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"),
-        "the progress file variable name must stay stable for CI"
+        !unwritable_progress_path.exists(),
+        "an unwritable progress path must stay silent instead of creating partial state"
     );
+}
+
+#[test]
+fn should_refuse_a_relative_progress_file_path() {
+    let from_file_path_result =
+        NativeBuildProgress::from_file_path(PathBuf::from("relative/progress-file"));
+
     assert!(
-        NATIVE_BUILD_SCRIPT_SOURCE.contains("NATIVE_BUILD_PROGRESS_FILE_VARIABLE,"),
-        "changing the progress file must rerun the native build script"
+        from_file_path_result.is_err(),
+        "a relative progress path would silently disable the stream in CI and must be rejected"
     );
+}
+
+#[test]
+fn should_write_nothing_when_progress_is_disabled() {
+    let native_build_progress = NativeBuildProgress::disabled();
+
+    let configure_progress = native_build_progress.begin_operation("native-configure");
+    configure_progress.complete("success");
+    native_build_progress.record_build_completion(true, Duration::from_millis(1));
 }

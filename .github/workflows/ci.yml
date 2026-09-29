@@ -52,19 +52,23 @@ jobs:
     # this repo) if you ever change it.
     name: macOS hermetic verification
     runs-on: macos-26
+    # Job permissions replace the workflow-level set: pruning surplus caches
+    # needs actions:write while everything else stays read-only.
+    permissions:
+      contents: read
+      actions: write
     concurrency:
       group: macos-hermetic-${{ github.event_name }}-${{ github.ref }}
       # Never cancel an in-flight required check. A cancelled run with this job
       # name blocks merge even when a later run on the same SHA is green.
       cancel-in-progress: false
-    # contents: read stays the repository default; actions: write exists only
-    # so the cache-prune step can delete surplus Actions caches.
-    permissions:
-      contents: read
-      actions: write
     # Restore, verification, and publication all remain inside the cost boundary.
-    # Allow sufficient headroom for cache saves after a step-level compile timeout;
-    # worst-case cold compile (~425s) + overhead (~185s) + cache saves (~30s) ≈ 640s.
+    # The cap must cover a cold native rebuild: a new native identity (new
+    # fingerprint policy, third-party bump, schema bump) pays a full CMake MLX
+    # build (~360s at the hosted runners' three native jobs) before cargo even
+    # starts. Cold native (~360s) + cold compile (~300s) + tests and overhead
+    # (~180s) ≈ 840s. Cache pruning keeps entries under the eviction threshold,
+    # so cold runs are rare; the cap is a safety net, not the fix.
     timeout-minutes: 15
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
@@ -118,7 +122,6 @@ jobs:
             printf 'NATIVE_BUILD_ENTRY_DIRECTORY=%s\n' "$native_build_entry_directory"
             printf 'ASTRONOMICAL_NATIVE_BUILD_STORE_DIR=%s\n' "$native_build_store_directory"
             printf 'ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE=%s\n' "$native_build_status_file"
-            printf 'ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=%s\n' "$RUNNER_TEMP/astronomical-native-build-progress.log"
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
             # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
@@ -229,23 +232,50 @@ jobs:
           scripts/ci-step-timing.sh begin provision-native-dependencies
           scripts/bootstrap-native-dependencies.sh
       - name: Set maximum parallel build jobs
-        run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
-      - name: Compile hermetic tests
         run: |
-          # The native build can run silently for many minutes; tail its
-          # progress stream so lifecycle and heartbeat lines stay visible in
-          # the live job log. The EXIT trap must stop the tail and close the
-          # timing segment in one function because sh allows a single trap.
-          stop_native_build_progress_tail() {
-            kill "${native_build_progress_tail_pid}" 2>/dev/null || true
-            scripts/ci-step-timing.sh end compile-hermetic-tests
+          printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
+          # The prewarm step runs the CMake MLX build alone before any cargo
+          # step, so the native build can use every core; the in-cargo cmake
+          # fallback cannot fire because the prewarm guarantees a warm store.
+          printf 'ASTRONOMICAL_NATIVE_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
+      - name: Build native library
+        id: native-build-prewarm
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'scripts/ci-step-timing.sh end native-build-prewarm' EXIT
+          scripts/ci-step-timing.sh begin native-build-prewarm
+          # The native CMake build runs alone in this step at the full core
+          # count. Every later Cargo step finds the native build store warm
+          # and skips CMake, so native and Rust compilation never overlap on
+          # the small hosted runners.
+          scripts/prewarm-native-build.sh --profile core
+          [ -f "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE" ] || {
+            printf '%s\n' 'Error: native build status was not published' >&2
+            exit 1
           }
-          trap stop_native_build_progress_tail EXIT
-          scripts/ci-step-timing.sh begin compile-hermetic-tests
-          touch "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
+          native_build_status="$(tr -d '[:space:]' < "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE")"
+          case "$native_build_status" in
+            built) printf 'was_built=true\n' >> "$GITHUB_OUTPUT" ;;
+            reused) printf 'was_built=false\n' >> "$GITHUB_OUTPUT" ;;
+            *) printf '%s\n' 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
+          esac
+          printf '[native-build-prewarm] status=%s\n' "$native_build_status"
+        timeout-minutes: 12
+      - name: Compile hermetic tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Cargo captures build-script stderr, so the native CMake rebuild would
+          # otherwise be a silent multi-minute gap in this step's log. The build
+          # script appends progress lines to this file and tail streams them live.
+          export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="$RUNNER_TEMP/astronomical-native-build-progress"
+          : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
           tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
-          native_build_progress_tail_pid="$!"
-          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
+          progress_tail_pid=$!
+          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci-step-timing.sh end compile-hermetic-tests' EXIT
+          scripts/ci-step-timing.sh begin compile-hermetic-tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-supervisor --test rest_api_tests
         timeout-minutes: 12
       - name: Classify native build result
@@ -272,7 +302,7 @@ jobs:
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
+          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
         run: |
@@ -327,7 +357,7 @@ jobs:
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
       - name: Save native-build-cache
         id: native-build-cache-save
-        if: ${{ !cancelled() && steps.native-build-result.outputs.was_built == 'true' }}
+        if: ${{ !cancelled() && (steps.native-build-result.outputs.was_built == 'true' || steps.native-build-prewarm.outputs.was_built == 'true') }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save
@@ -343,19 +373,19 @@ jobs:
           owner: sccache
           path: ~/Library/Caches/Astronomical/sccache
           key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
-      # Deleting surplus caches needs actions:write, granted at job level
-      # because GitHub Actions does not support step-level permissions. This
-      # keeps the small native-build cache entries from being evicted by the
-      # 10 GB repository limit under LRU pressure from large sccache
-      # generations.
       - name: Prune surplus CI caches
+        # Multiple sccache generations exceed the 10 GB repository cache limit,
+        # which makes GitHub evict the small native-build cache and forces the
+        # next run into a silent multi-minute CMake rebuild. Tolerated failures
+        # keep read-only fork-PR tokens from failing the job.
         if: ${{ !cancelled() }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           trap 'scripts/ci-step-timing.sh end prune-ci-caches' EXIT
           scripts/ci-step-timing.sh begin prune-ci-caches
-          scripts/prune-ci-github-caches.sh
+          scripts/prune-ci-caches.sh
         timeout-minutes: 2
       - name: Upload Cargo timing report
         if: always()

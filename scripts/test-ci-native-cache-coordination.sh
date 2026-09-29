@@ -293,9 +293,9 @@ assert_workflow_contract() {
         raise "hermetic compile omits rest_api_tests" unless compile_command.include?("--test rest_api_tests")
         identity_step = steps.find { |step| step["id"] == "native-build-identity" }
         raise "native identity step is missing from required CI" unless identity_step
-        raise "native build progress file is not exported for CI tailing" unless identity_step.fetch("run").include?("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=")
+        raise "native build progress file is not exported for CI tailing" unless compile_command.include?("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=")
         raise "hermetic compile does not tail the native build progress stream" unless compile_command.include?("tail -f \"$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE\"")
-        raise "hermetic compile does not stop the progress tail on exit" unless compile_command.include?("kill \"${native_build_progress_tail_pid}\"")
+        raise "hermetic compile does not stop the progress tail on exit" unless compile_command.include?("kill \"$progress_tail_pid\"")
         swiftpm_timestamp_step = swift_steps.find { |step| step["name"] == "Keep restored SwiftPM artifacts newer than checkout" }
         raise "SwiftPM timestamp reuse step is missing from required CI" unless swiftpm_timestamp_step
         raise "SwiftPM timestamp reuse is not gated on a cache hit" unless swiftpm_timestamp_step.fetch("if").include?("swiftpm-cache.outputs.cache-hit")
@@ -348,7 +348,7 @@ assert_workflow_contract() {
         raise "surplus cache prune step is missing" unless prune_step
         raise "cache prune must run even when earlier steps fail" unless prune_step.fetch("if").include?("!cancelled()")
         raise "cache prune lacks the workflow token" unless prune_step.fetch("env").fetch("GH_TOKEN") == "${{ github.token }}"
-        raise "cache prune does not call the prune script" unless prune_step.fetch("run").include?("prune-ci-github-caches.sh")
+        raise "cache prune does not call the prune script" unless prune_step.fetch("run").include?("prune-ci-caches.sh")
         raise "cache prune exceeded its bounded timeout" unless prune_step.fetch("timeout-minutes") <= 2
         final_save_index = steps.index { |step| step["id"] == "sccache-cache-save" }
         prune_step_index = steps.index { |step| step["name"] == "Prune surplus CI caches" }

@@ -302,6 +302,9 @@ main() {
     else
         printf '  %s parallel jobs (no sccache detected)\n' "$logical_cpu_count"
     fi
+    # The native build store is machine-wide, so pre-warming once here keeps
+    # the release build's build script from invoking CMake at all.
+    "${repository_root}/scripts/prewarm-native-build.sh" --profile core
     # Cargo prints its own live compilation progress to stderr.
     cargo build --release --target "$host_target_triple" \
         -p astronomical-inference-worker --bin astronomical-inference-worker \

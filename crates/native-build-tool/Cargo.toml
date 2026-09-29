@@ -1,0 +1,18 @@
+[package]
+name = "astronomical-native-build-tool"
+description = "Builds Astronomical's pinned native runtime ahead of Cargo so native and Rust compilation never overlap"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# The included build modules own these dependencies: the native build store
+# locks entries with fs4 and hashes manifests with sha2.
+fs4.workspace = true
+sha2.workspace = true

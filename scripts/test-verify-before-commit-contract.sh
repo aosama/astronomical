@@ -79,10 +79,11 @@ create_fake_repository_scripts() {
     sandbox_scripts_directory="$1"
     for script_name in \
         generate-rust-dependency-notices.sh \
+        prewarm-native-build.sh \
         test-rust-dependency-notices-contract.sh \
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
-        test-prune-ci-github-caches.sh \
+        test-prune-ci-caches-contract.sh \
         test-cargo-artifact-lifecycle-contract.sh \
         test-bounded-cargo-test-lock-contract.sh \
         test-cargo-artifact-cleanup-signal-contract.sh \
@@ -132,6 +133,7 @@ expected_alias_arguments = [
     "-p", "astronomical-config",
     "-p", "astronomical-cli",
     "-p", "astronomical-ipc-protocol",
+    "-p", "astronomical-native-build-tool",
     "-p", "astronomical-runtime-integration",
     "-p", "astronomical-model-serving",
     "-p", "astronomical-inference-worker",
@@ -243,6 +245,10 @@ main() {
         print_error "Rust compilation did not retain its separate timeout"
         exit 1
     }
+    grep -F '600s|scripts/prewarm-native-build.sh' "$timeout_log" >/dev/null || {
+        print_error "the native pre-warm did not retain its compile-class timeout"
+        exit 1
+    }
     grep -F '600s|scripts/test-direct-mlx.sh' "$timeout_log" >/dev/null || {
         print_error "the direct-MLX lane did not retain its separate compile-class timeout"
         exit 1
@@ -267,10 +273,11 @@ main() {
     grep -Fx -- '--test --test-reporter=spec apps/supervisor/console/console.test.js apps/supervisor/console/library.test.js apps/supervisor/console/library-fetch.test.js apps/supervisor/console/connect.test.js apps/supervisor/console/playground.test.js' "$node_log" >/dev/null
     for expected_script_name in \
         generate-rust-dependency-notices.sh \
+        prewarm-native-build.sh \
         test-rust-dependency-notices-contract.sh \
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
-        test-prune-ci-github-caches.sh \
+        test-prune-ci-caches-contract.sh \
         test-cargo-artifact-lifecycle-contract.sh \
         test-bounded-cargo-test-lock-contract.sh \
         test-cargo-artifact-cleanup-signal-contract.sh \

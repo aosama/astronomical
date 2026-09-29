@@ -8,7 +8,7 @@ mod build_legacy_native_output;
 use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
-const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
+const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build_native_compile.rs");
 const BINDGEN_CONFIGURATION: &str = include_str!("../../build_bindings.rs");
 
 #[test]
@@ -87,7 +87,7 @@ fn should_control_the_compiler_and_sdk_that_define_native_compatibility() {
         "remove_uncontrolled_native_environment",
     ] {
         assert!(
-            NATIVE_BUILD_SCRIPT.contains(required_configuration),
+            NATIVE_BUILD_COMPILATION.contains(required_configuration),
             "the native build must control compatibility input {required_configuration}"
         );
     }

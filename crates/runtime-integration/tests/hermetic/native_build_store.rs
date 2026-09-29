@@ -258,6 +258,27 @@ fn should_reject_symlinked_files_inside_a_native_entry() {
     );
 }
 
+#[test]
+fn should_round_trip_every_profile_through_its_identity_name() {
+    for native_build_profile in [
+        NativeBuildProfile::core(),
+        NativeBuildProfile::new(true, false),
+        NativeBuildProfile::new(false, true),
+        NativeBuildProfile::new(true, true),
+    ] {
+        let identity_name = native_build_profile.identity_name();
+        let restored_profile = NativeBuildProfile::from_identity_name(identity_name)
+            .unwrap_or_else(|| panic!("profile {identity_name} should round-trip"));
+
+        assert_eq!(restored_profile.identity_name(), identity_name);
+    }
+}
+
+#[test]
+fn should_reject_an_unknown_identity_name() {
+    assert!(NativeBuildProfile::from_identity_name("core+unknown-probe").is_none());
+}
+
 fn core_native_build_store(store_root: &Path, native_identity: &str) -> NativeBuildStore {
     NativeBuildStore::new(
         store_root,
