@@ -382,7 +382,7 @@ jobs:
           trap 'scripts/ci-step-timing.sh end prune-ci-caches' EXIT
           scripts/ci-step-timing.sh begin prune-ci-caches
           scripts/prune-ci-caches.sh
-        timeout-minutes: 3
+        timeout-minutes: 2
       - name: Upload Cargo timing report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

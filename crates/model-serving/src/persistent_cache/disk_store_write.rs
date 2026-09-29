@@ -5,17 +5,19 @@
 //! `AlreadyPublished`; there is no queued, skipped, or eventually-written state.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
-use crate::PerformanceAttribution;
+use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::block_key::PersistentPromptCacheBlockKey;
 use super::block_manifest::PersistentPromptCacheBlockManifest;
 use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    PersistentPromptCacheFileKind, open_without_following_symlinks, validate_current_file_header,
+    PersistentPromptCacheFileKind, open_without_following_symlinks,
+    remove_cache_owned_directory_or_confirm_absent, validate_current_file_header,
 };
 use super::disk_store_index::TrackedPersistentPromptCacheBlock;
 
@@ -151,7 +153,71 @@ impl PersistentPromptCacheDiskStore {
             boundary_state_tensors,
             performance_attribution,
         )?;
+        self.supersede_shorter_partial_tail_siblings(
+            block_key,
+            parent_block_key,
+            performance_attribution,
+        )?;
         Ok(PersistentPromptCachePublicationOutcome::Published)
+    }
+
+    /// Removes strictly shorter tail siblings sharing the new tail's chain
+    /// position. Prompts grow monotonically within a conversation, so once a
+    /// longer tail is durable at a chain position, every shorter tail written
+    /// earlier by that same conversation can never be probed again. Siblings
+    /// with equal or larger sequence files stay: equal-length tails serve
+    /// divergent conversations that share the parent prefix, and longer tails
+    /// remain the growth path of their own conversations. Full blocks are never
+    /// touched because their sequence files hold more tokens than any tail.
+    fn supersede_shorter_partial_tail_siblings(
+        &self,
+        block_key: &PersistentPromptCacheBlockKey,
+        parent_block_key: Option<&PersistentPromptCacheBlockKey>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        if !self.model_contract.has_sequence_state()
+            || block_key.token_count() >= self.model_contract.block_token_count()
+        {
+            return Ok(());
+        }
+        // Sequence-state file bytes grow strictly with token count, so a
+        // smaller file proves a strictly shorter tail.
+        let new_tail_sequence_file_size_bytes = self
+            .model_contract
+            .sequence_state_file_bytes_for_block_token_count(block_key.token_count())?;
+        let parent_block_hash = parent_block_key.map(PersistentPromptCacheBlockKey::block_hash);
+        let superseded_sibling_directory_paths: Vec<PathBuf> = self
+            .lock_tracked_files()
+            .tracked_blocks()
+            .into_iter()
+            .filter(|(sibling_block_hash, tracked_sibling)| {
+                *sibling_block_hash != block_key.block_hash()
+                    && tracked_sibling.block_index == block_key.block_index()
+                    && tracked_sibling.parent_block_hash == parent_block_hash
+                    && tracked_sibling.sequence_state_file.as_ref().is_some_and(
+                        |sequence_state_file| {
+                            sequence_state_file.file_size_bytes < new_tail_sequence_file_size_bytes
+                        },
+                    )
+            })
+            .map(|(_, tracked_sibling)| tracked_sibling.block_directory_path)
+            .collect();
+        if superseded_sibling_directory_paths.is_empty() {
+            return Ok(());
+        }
+        performance_attribution.measure_operation(
+            PerformanceOperation::PersistentPromptCacheRetentionCleanup,
+            |_performance_attribution| {
+                superseded_sibling_directory_paths.iter().try_for_each(
+                    |superseded_directory_path| {
+                        remove_cache_owned_directory_or_confirm_absent(superseded_directory_path)
+                    },
+                )
+            },
+        )?;
+        self.lock_tracked_files()
+            .remove_blocks_by_directory_paths(&superseded_sibling_directory_paths);
+        self.refresh_global_prompt_cache_accounting()
     }
 
     fn validate_existing_block_for_publication(
@@ -209,6 +275,7 @@ fn validate_existing_state_file(
         &tracked_file.file_path,
         model_contract,
     )
+    .map(|_header_block_token_count| ())
     .map_err(
         |source| PersistentPromptCacheDiskStoreError::ValidateBlock {
             block_file_path: tracked_file.file_path.clone(),

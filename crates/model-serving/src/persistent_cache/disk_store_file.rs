@@ -56,6 +56,7 @@ pub(super) fn save_direct_safetensors_file_with_name(
     directory: &Path,
     file_name: &str,
     tensors: &HashMap<String, MlxArray>,
+    block_token_count: usize,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StagedPersistentPromptCacheStateFile, PersistentPromptCacheDiskStoreError> {
@@ -95,9 +96,10 @@ pub(super) fn save_direct_safetensors_file_with_name(
         .iter()
         .map(|(tensor_name, tensor)| (tensor_name.as_str(), tensor))
         .collect();
-    let block_token_count_metadata = persistent_prompt_cache_model_contract
-        .block_token_count()
-        .to_string();
+    // The header records the block's own token count so partial tails
+    // self-describe their geometry; tensor layout validation reads this same
+    // header, keeping the file self-consistent.
+    let block_token_count_metadata = block_token_count.to_string();
     let storage_contract_fingerprint_metadata =
         persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex();
     let metadata_entries: [(&str, &str); 3] = [
@@ -294,30 +296,36 @@ pub(crate) fn save_serialized_safetensors_file(
     Ok(file_path)
 }
 
+/// Returns the parsed header's block token count for state-bearing file kinds,
+/// or `None` for kinds without a block-token axis. Callers that load by block
+/// key use the count to fail closed when a file's stored token count disagrees
+/// with the key that addressed it (partial tails make this reachable).
 pub(super) fn validate_current_file_header(
     file_kind: PersistentPromptCacheFileKind,
     file: &File,
     file_path: &Path,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
-) -> Result<(), PersistentPromptCacheBlockError> {
+) -> Result<Option<usize>, PersistentPromptCacheBlockError> {
     // Dispatch by semantic ownership, not filename. Each reader validates the
     // exact model-bound metadata and tensor layout required by that artifact.
     match file_kind {
         PersistentPromptCacheFileKind::SequenceStateBlock => {
-            PersistentPromptCacheBlockHeader::read_kv_block_from_file(
+            let block_header = PersistentPromptCacheBlockHeader::read_kv_block_from_file(
                 file,
                 file_path,
                 persistent_prompt_cache_model_contract,
             )?;
+            Ok(Some(block_header.block_token_count()))
         }
         PersistentPromptCacheFileKind::BoundaryStateSnapshot => {
-            PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
+            let block_header = PersistentPromptCacheBlockHeader::read_recurrent_snapshot_from_file(
                 file,
                 file_path,
                 persistent_prompt_cache_model_contract,
             )?;
+            Ok(Some(block_header.block_token_count()))
         }
-        PersistentPromptCacheFileKind::VisualEmbedding => return Ok(()),
+        PersistentPromptCacheFileKind::VisualEmbedding => return Ok(None),
         PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
             super::speculative_prefill_selection::PersistentSpeculativePrefillSelectionFileHeader::read_model_bound_from_file(
                 file,
@@ -328,6 +336,7 @@ pub(super) fn validate_current_file_header(
                 persistent_prompt_cache_block_path: file_path.to_path_buf(),
                 description: source.to_string(),
             })?;
+            Ok(None)
         }
         PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {
             super::speculative_prefill_target_state::PersistentSpeculativePrefillTargetStateFileHeader::read_model_bound_from_file(
@@ -339,9 +348,9 @@ pub(super) fn validate_current_file_header(
                 persistent_prompt_cache_block_path: file_path.to_path_buf(),
                 description,
             })?;
+            Ok(None)
         }
     }
-    Ok(())
 }
 
 pub(super) fn expected_tensor_names(

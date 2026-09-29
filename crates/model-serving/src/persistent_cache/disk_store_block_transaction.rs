@@ -194,13 +194,15 @@ impl PersistentPromptCacheDiskStore {
             &staging_directory,
             BOUNDARY_STATE_FILE_NAME,
             boundary_state_tensors,
+            block_key.token_count(),
             &self.model_contract,
             performance_attribution,
         )
         .map_err(|staging_error| cleanup_staging_after_error(&staging_directory, staging_error))?;
         validate_staged_file_size(
             &staged_boundary_state,
-            self.model_contract.boundary_state_file_bytes(),
+            self.model_contract
+                .boundary_state_file_bytes_for_block_token_count(block_key.token_count())?,
         )
         .map_err(|size_error| cleanup_staging_after_error(&staging_directory, size_error))?;
         performance_attribution
@@ -285,12 +287,14 @@ impl PersistentPromptCacheDiskStore {
                 staging_block_directory,
                 SEQUENCE_STATE_FILE_NAME,
                 sequence_state_tensors,
+                block_key.token_count(),
                 &self.model_contract,
                 performance_attribution,
             )?;
             validate_staged_file_size(
                 &staged_sequence_state,
-                self.model_contract.sequence_state_file_bytes(),
+                self.model_contract
+                    .sequence_state_file_bytes_for_block_token_count(block_key.token_count())?,
             )?;
             Some(staged_sequence_state)
         } else {
@@ -302,12 +306,14 @@ impl PersistentPromptCacheDiskStore {
                 staging_block_directory,
                 BOUNDARY_STATE_FILE_NAME,
                 boundary_state_tensors,
+                block_key.token_count(),
                 &self.model_contract,
                 performance_attribution,
             )?;
             validate_staged_file_size(
                 &staged_boundary_state,
-                self.model_contract.boundary_state_file_bytes(),
+                self.model_contract
+                    .boundary_state_file_bytes_for_block_token_count(block_key.token_count())?,
             )?;
             Some(staged_boundary_state)
         } else {

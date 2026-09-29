@@ -16,6 +16,7 @@ mod cache_disabled;
 mod cache_interaction_matrix;
 mod engine_prompt_cache;
 mod large_prefill_prompt;
+mod partial_tail_reuse;
 #[cfg(feature = "direct-mlx")]
 mod startup_cleanup_attribution;
 #[cfg(feature = "direct-mlx")]

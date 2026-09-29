@@ -387,6 +387,12 @@ impl Qwen3_5EngineState {
                     super::persistent_prompt_cache_capture::PromptStatePersistenceOwner::for_active_request(active_request),
                 )?;
             }
+            self.capture_persistent_prompt_cache_partial_tail_block(
+                persistent_prompt_cache,
+                model,
+                active_request,
+                prefill_end,
+            );
         }
         // Only durable publication success may move these frontiers. If capture
         // failed above, the function returned with both position and cursor at

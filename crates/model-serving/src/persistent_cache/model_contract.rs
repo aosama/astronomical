@@ -308,6 +308,39 @@ impl PersistentPromptCacheModelContract {
         self.sequence_state_file_bytes
     }
 
+    /// Exact on-disk size of a sequence-state file holding `block_token_count`
+    /// tokens. Full blocks reuse the size cached at construction; partial
+    /// prefix-cache tails are computed on demand from the same layout contract.
+    pub fn sequence_state_file_bytes_for_block_token_count(
+        &self,
+        block_token_count: usize,
+    ) -> Result<u64, PersistentPromptCacheModelContractError> {
+        if block_token_count == self.block_token_count {
+            return Ok(self.sequence_state_file_bytes);
+        }
+        exact_state_file_bytes(
+            block_token_count,
+            self.decoder_cache_layout.sequence_tensor_layouts(),
+        )
+    }
+
+    /// Exact on-disk size of a boundary-state file recorded for a block holding
+    /// `block_token_count` tokens. Boundary tensors carry no sequence axis, but
+    /// the header metadata embeds the token count, so the byte size still
+    /// depends on it through the serialized header.
+    pub fn boundary_state_file_bytes_for_block_token_count(
+        &self,
+        block_token_count: usize,
+    ) -> Result<u64, PersistentPromptCacheModelContractError> {
+        if block_token_count == self.block_token_count {
+            return Ok(self.boundary_state_file_bytes);
+        }
+        exact_state_file_bytes(
+            block_token_count,
+            self.decoder_cache_layout.boundary_tensor_layouts(),
+        )
+    }
+
     #[must_use]
     pub const fn boundary_state_file_bytes(&self) -> u64 {
         self.boundary_state_file_bytes

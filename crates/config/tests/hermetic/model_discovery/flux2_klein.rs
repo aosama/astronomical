@@ -49,6 +49,10 @@ fn should_discover_the_reviewed_distilled_bf16_flux2_klein_profile_with_typed_ca
     assert!(image_capabilities.supports_text_to_image);
     assert!(!image_capabilities.supports_image_editing);
     assert!(!image_capabilities.supports_multiple_reference_images);
+    assert_eq!(image_capabilities.default_steps, 4);
+    assert_eq!(image_capabilities.minimum_dimension_pixels, 64);
+    assert_eq!(image_capabilities.maximum_dimension_pixels, 1_024);
+    assert_eq!(image_capabilities.dimension_multiple_pixels, 16);
 }
 
 #[test]

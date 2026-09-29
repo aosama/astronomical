@@ -14,6 +14,7 @@ mod output_parser;
 mod persistent_prompt_cache_block_format;
 mod persistent_prompt_cache_block_key;
 mod persistent_prompt_cache_model_contract;
+mod persistent_prompt_cache_partial_tail_lookup;
 mod persistent_prompt_cache_prefill_boundary;
 mod persistent_prompt_cache_prefix_lookup;
 mod persistent_prompt_cache_stats;

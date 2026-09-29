@@ -106,6 +106,8 @@ pub struct WorkerPersistentPromptCacheRequestDiagnostics {
     pub matched_sequence_state_block_count: u64,
     /// Blocks actually reconstructed after boundary selection.
     pub restored_block_count: u64,
+    /// Token count of the restored partial tail block, when one matched.
+    pub partial_tail_block_token_count: Option<u64>,
     /// First expected sequence block absent from the durable chain, if any.
     pub first_missing_sequence_state_block_index: Option<u64>,
     pub miss_reason: Option<WorkerPersistentPromptCacheMissReason>,
