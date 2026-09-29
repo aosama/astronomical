@@ -41,8 +41,21 @@ pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile:
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()
             .expect("Development configuration should load");
-    let isolated_development_home =
-        tempfile::tempdir().expect("isolated Development home should be created");
+    // Forensic mode: keep the isolated home so the worker log can be
+    // inspected after a failing journey instead of being deleted on unwind.
+    let keep_isolated_home = std::env::var("STREAMING_JOURNEY_KEEP_HOME")
+        .map(|value| value != "0")
+        .unwrap_or(false);
+    let mut isolated_home_builder = tempfile::Builder::new();
+    isolated_home_builder.prefix("ornith-35b-throughput-journey");
+    isolated_home_builder.disable_cleanup(keep_isolated_home);
+    let isolated_development_home = isolated_home_builder
+        .tempdir()
+        .expect("isolated Development home should be created");
+    eprintln!(
+        "[ornith-35b] isolated_home={}",
+        isolated_development_home.path().display()
+    );
     let isolated_state_directory = isolated_development_home.path().join(".astronomical-dev");
     std::fs::create_dir_all(&isolated_state_directory)
         .expect("isolated Development state should be created");
@@ -55,6 +68,13 @@ pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile:
     config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(false);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
+    if let Ok(chunk_override) = std::env::var("STREAMING_JOURNEY_CHUNK_TOKENS") {
+        config_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] = serde_json::json!(
+            chunk_override
+                .parse::<u32>()
+                .expect("valid chunk token count")
+        );
+    }
     std::fs::write(
         isolated_state_directory.join("config.json"),
         config_document.to_string(),
