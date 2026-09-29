@@ -25,7 +25,7 @@ use build_bindings::generate_bindings;
 use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 use build_native_linking::configure_rust_linking;
 use build_native_store::{NativeBuildArtifacts, NativeBuildProfile, NativeBuildStore};
-use build_parallelism::{ResolvedNativeBuildJobs, resolve_native_build_jobs};
+use build_parallelism::{NativeBuildParallelismStrategy, resolve_native_build_parallelism};
 use build_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
@@ -206,12 +206,8 @@ fn build_pinned_native_runtime(
     native_build_directory: &Path,
     native_build_profile: NativeBuildProfile,
 ) -> Result<(), Box<dyn Error>> {
-    let resolved_native_build_jobs = resolve_native_build_jobs_from_environment()?;
-    native_build_progress.record_event(&format!(
-        "status=parallelism jobs={} source={}",
-        resolved_native_build_jobs.job_count,
-        resolved_native_build_jobs.source.log_value()
-    ));
+    let parallelism_strategy = resolve_native_build_parallelism_from_environment()?;
+    native_build_progress.record_event(&parallelism_strategy.progress_line());
     let mut configure_command = Command::new("cmake");
     let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
     let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
@@ -261,19 +257,13 @@ fn build_pinned_native_runtime(
         "native-configure",
     )?;
 
-    let mut native_build_command = Command::new("cmake");
-    native_build_command
-        .arg("--build")
-        .arg(native_build_directory)
-        .arg("--target")
-        .arg("mlxc");
+    let mut native_build_command = native_build_tool_command(native_build_directory);
+    native_build_command.arg("mlxc");
     if native_build_profile.should_build_experimental_aligned_expert_packs() {
         native_build_command.arg("astronomical_metal_expert_loader");
     }
-    native_build_command
-        .arg("--parallel")
-        .arg(resolved_native_build_jobs.job_count.to_string());
     remove_uncontrolled_native_environment(&mut native_build_command);
+    apply_native_build_parallelism(&mut native_build_command, &parallelism_strategy);
     run_command(
         native_build_progress,
         &mut native_build_command,
@@ -281,15 +271,10 @@ fn build_pinned_native_runtime(
     )?;
 
     if native_build_profile.should_build_memory_contract_probe() {
-        let mut probe_build_command = Command::new("cmake");
-        probe_build_command
-            .arg("--build")
-            .arg(native_build_directory)
-            .arg("--target")
-            .arg("mlx_memory_contract_probe")
-            .arg("--parallel")
-            .arg(resolved_native_build_jobs.job_count.to_string());
+        let mut probe_build_command = native_build_tool_command(native_build_directory);
+        probe_build_command.arg("mlx_memory_contract_probe");
         remove_uncontrolled_native_environment(&mut probe_build_command);
+        apply_native_build_parallelism(&mut probe_build_command, &parallelism_strategy);
         run_command(
             native_build_progress,
             &mut probe_build_command,
@@ -301,6 +286,35 @@ fn build_pinned_native_runtime(
         manifest_directory.join("build_native_store.rs").display()
     );
     Ok(())
+}
+
+fn native_build_tool_command(native_build_directory: &Path) -> Command {
+    // The generator is pinned to Unix Makefiles, so make is the native build
+    // tool. Invoking it directly instead of through `cmake --build` lets make
+    // inherit cargo's jobserver file descriptors, which CMake's process
+    // launcher closes and thereby degrades the build to a silent -j1.
+    let mut make_command = Command::new("make");
+    make_command.arg("-C").arg(native_build_directory);
+    make_command
+}
+
+fn apply_native_build_parallelism(
+    native_build_command: &mut Command,
+    parallelism_strategy: &NativeBuildParallelismStrategy,
+) {
+    match parallelism_strategy {
+        NativeBuildParallelismStrategy::CargoJobserver { makeflags } => {
+            // make draws compile jobs from cargo's jobserver, so rustc and
+            // clang together never exceed cargo's job budget. An explicit -j
+            // would bypass the jobserver, so it stays unset in this mode.
+            native_build_command.env("MAKEFLAGS", makeflags);
+        }
+        NativeBuildParallelismStrategy::FixedJobCount { job_count, .. } => {
+            native_build_command
+                .arg("-j")
+                .arg(job_count.get().to_string());
+        }
+    }
 }
 
 fn append_native_archive_configuration(
@@ -431,16 +445,20 @@ fn remove_uncontrolled_native_environment(command: &mut Command) {
     }
 }
 
-fn resolve_native_build_jobs_from_environment() -> Result<ResolvedNativeBuildJobs, Box<dyn Error>> {
-    resolve_native_build_jobs(
-        |variable_name| env::var(variable_name).ok(),
-        || {
-            std::thread::available_parallelism()
-                .ok()
-                .and_then(|machine_parallelism| NonZeroU32::try_from(machine_parallelism).ok())
-        },
-    )
-    .map_err(Into::into)
+fn resolve_native_build_parallelism_from_environment()
+-> Result<NativeBuildParallelismStrategy, Box<dyn Error>> {
+    resolve_native_build_parallelism(read_environment_variable, machine_parallelism)
+        .map_err(Into::into)
+}
+
+fn read_environment_variable(variable_name: &str) -> Option<String> {
+    env::var(variable_name).ok()
+}
+
+fn machine_parallelism() -> Option<NonZeroU32> {
+    std::thread::available_parallelism()
+        .ok()
+        .and_then(|machine_parallelism| NonZeroU32::try_from(machine_parallelism).ok())
 }
 
 fn sccache_compiler_launcher_path() -> Option<PathBuf> {

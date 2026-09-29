@@ -1,15 +1,24 @@
-//! Parallelism resolution contracts: the native build must always run with an
-//! explicit, reported job count and never silently fall back to a serial build.
+//! Parallelism resolution contracts: the native build must never
+//! oversubscribe the machine and never silently fall back to a serial build.
+//! Under cargo the native toolchain joins cargo's jobserver; standalone builds
+//! pin an explicit, reported job count.
 
 use std::num::NonZeroU32;
 
 #[path = "../../build_parallelism.rs"]
 mod build_parallelism;
 
-use build_parallelism::{NativeBuildJobSource, resolve_native_build_jobs};
+use build_parallelism::{
+    NativeBuildJobSource, NativeBuildParallelismStrategy, resolve_native_build_jobs,
+    resolve_native_build_parallelism,
+};
 
 fn machine_parallelism_of(machine_job_count: Option<u32>) -> Option<NonZeroU32> {
     machine_job_count.and_then(NonZeroU32::new)
+}
+
+fn job_count_of(job_count: u32) -> NonZeroU32 {
+    NonZeroU32::new(job_count).expect("test job counts are non-zero")
 }
 
 #[test]
@@ -167,4 +176,91 @@ fn should_accept_surrounding_whitespace_in_job_counts() {
     .expect("a whitespace-padded job count should resolve");
 
     assert_eq!(resolved_jobs.job_count.get(), 6);
+}
+
+#[test]
+fn should_join_the_cargo_jobserver_when_makeflags_are_present() {
+    let parallelism_strategy = resolve_native_build_parallelism(
+        |variable_name| match variable_name {
+            "CARGO_MAKEFLAGS" => Some("-j --jobserver-auth=3,5".to_owned()),
+            "CARGO_BUILD_JOBS" => Some("7".to_owned()),
+            _ => None,
+        },
+        || machine_parallelism_of(Some(11)),
+    )
+    .expect("cargo makeflags should select jobserver participation");
+
+    assert_eq!(
+        parallelism_strategy,
+        NativeBuildParallelismStrategy::CargoJobserver {
+            makeflags: "-j --jobserver-auth=3,5".to_owned()
+        }
+    );
+}
+
+#[test]
+fn should_prefer_the_explicit_override_over_the_cargo_jobserver() {
+    let parallelism_strategy = resolve_native_build_parallelism(
+        |variable_name| match variable_name {
+            "ASTRONOMICAL_NATIVE_BUILD_JOBS" => Some("3".to_owned()),
+            "CARGO_MAKEFLAGS" => Some("-j --jobserver-auth=3,5".to_owned()),
+            _ => None,
+        },
+        || machine_parallelism_of(Some(11)),
+    )
+    .expect("an explicit override should pin the job count");
+
+    assert_eq!(
+        parallelism_strategy,
+        NativeBuildParallelismStrategy::FixedJobCount {
+            job_count: job_count_of(3),
+            source: NativeBuildJobSource::ExplicitOverride,
+        }
+    );
+}
+
+#[test]
+fn should_treat_an_empty_cargo_makeflags_value_as_absent() {
+    let parallelism_strategy = resolve_native_build_parallelism(
+        |variable_name| match variable_name {
+            "CARGO_MAKEFLAGS" => Some("   ".to_owned()),
+            "CARGO_BUILD_JOBS" => Some("5".to_owned()),
+            _ => None,
+        },
+        || machine_parallelism_of(Some(11)),
+    )
+    .expect("an empty makeflags value should fall through to the job count chain");
+
+    assert_eq!(
+        parallelism_strategy,
+        NativeBuildParallelismStrategy::FixedJobCount {
+            job_count: job_count_of(5),
+            source: NativeBuildJobSource::CargoBuildJobs,
+        }
+    );
+}
+
+#[test]
+fn should_report_the_jobserver_progress_line_without_a_job_count() {
+    let parallelism_strategy = NativeBuildParallelismStrategy::CargoJobserver {
+        makeflags: "-j --jobserver-auth=3,5".to_owned(),
+    };
+
+    assert_eq!(
+        parallelism_strategy.progress_line(),
+        "status=parallelism source=cargo-jobserver"
+    );
+}
+
+#[test]
+fn should_report_the_fixed_job_count_progress_line() {
+    let parallelism_strategy = NativeBuildParallelismStrategy::FixedJobCount {
+        job_count: job_count_of(5),
+        source: NativeBuildJobSource::CargoBuildJobs,
+    };
+
+    assert_eq!(
+        parallelism_strategy.progress_line(),
+        "status=parallelism jobs=5 source=cargo-build-jobs"
+    );
 }
