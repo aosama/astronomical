@@ -422,6 +422,23 @@
             "quantization_label": "OptiQ mixed-precision 6/8-bit (affine, groups 64/128)",
             "architecture_summary": "Qwen3.8 MoE VLM, 35B total params, ~3B active (A3B), 40 layers mixed linear-attention/full-attention, 256 experts with 8 routed per token, bf16 vision tower, mixed 6/8-bit MTP head",
             "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "nvythong/Qwen3.8-35B-A3B-Distill-mlx-4Bit",
+            "revision": "220dfec3e716bbae93bd66b643e36b2ffe6853ff",
+            "display_name": "Qwen 3.8 35B A3B Distill 4-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 19529235716,
+            "public": true,
+            "description": "A large, text-only model distilled for reasoning, coding, and tool use. It gives thoughtful answers on hard work and keeps a large memory window for long documents, and its 4-bit compression fits ordinary Macs, taking about 19.5 GB on disk.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 64), 8-bit router and shared-expert gates",
+            "architecture_summary": "Qwen3.8 distill sparse MoE, 35B total params, ~3B active (A3B), 40 layers mixed linear-attention/full-attention, 256 experts, 8 routed per token, text-only",
+            "upstream_license": "Apache-2.0"
         }
     ]
 }
