@@ -18,11 +18,14 @@ mod build_bindings;
 mod build_legacy_native_output;
 mod build_native_linking;
 mod build_native_store;
+mod build_parallelism;
+mod build_progress;
 
 use build_bindings::generate_bindings;
 use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 use build_native_linking::configure_rust_linking;
 use build_native_store::{NativeBuildArtifacts, NativeBuildProfile, NativeBuildStore};
+use build_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
 const EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE: &str =
@@ -49,6 +52,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let manifest_directory = required_path_variable("CARGO_MANIFEST_DIR")?;
     let output_directory = required_path_variable("OUT_DIR")?;
+    let native_build_progress = NativeBuildProgress::from_environment()
+        .map_err(|message| -> Box<dyn Error> { message.into() })?;
+    native_build_progress.record_build_start(&native_parallel_job_count());
+    let native_build_started_at = Instant::now();
     let repository_root = manifest_directory.join("../..").canonicalize()?;
     let native_source_directory = manifest_directory.join("native");
     let native_build_profile = selected_native_build_profile();
@@ -66,10 +73,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             &native_source_directory,
             native_build_directory,
             native_build_profile,
+            &native_build_progress,
         )
     })?;
     remove_legacy_cargo_native_build_directory(&output_directory)?;
     write_native_build_status(&native_build_artifacts)?;
+    native_build_progress.record_build_completion(
+        native_build_artifacts.was_built(),
+        native_build_started_at.elapsed(),
+    );
 
     generate_bindings(
         &native_build_artifacts.include_directory(),
@@ -91,6 +103,7 @@ fn emit_environment_rerun_contracts() {
         NATIVE_DEPENDENCY_CACHE_VARIABLE,
         NATIVE_BUILD_STORE_VARIABLE,
         NATIVE_BUILD_STATUS_FILE_VARIABLE,
+        NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
     ] {
         println!("cargo:rerun-if-env-changed={environment_variable}");
     }
@@ -182,6 +195,7 @@ fn build_pinned_native_runtime(
     native_source_directory: &Path,
     native_build_directory: &Path,
     native_build_profile: NativeBuildProfile,
+    native_build_progress: &NativeBuildProgress,
 ) -> Result<(), Box<dyn Error>> {
     let mut configure_command = Command::new("cmake");
     let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
@@ -226,7 +240,11 @@ fn build_pinned_native_runtime(
             cmake_boolean(native_build_profile.should_build_experimental_aligned_expert_packs())
         ));
     append_native_archive_configuration(&mut configure_command)?;
-    run_command(&mut configure_command, "native-configure")?;
+    run_command(
+        &mut configure_command,
+        "native-configure",
+        native_build_progress,
+    )?;
 
     let mut native_build_command = Command::new("cmake");
     native_build_command
@@ -239,9 +257,13 @@ fn build_pinned_native_runtime(
     }
     native_build_command
         .arg("--parallel")
-        .arg(cargo_build_job_count());
+        .arg(native_parallel_job_count());
     remove_uncontrolled_native_environment(&mut native_build_command);
-    run_command(&mut native_build_command, "native-compile")?;
+    run_command(
+        &mut native_build_command,
+        "native-compile",
+        native_build_progress,
+    )?;
 
     if native_build_profile.should_build_memory_contract_probe() {
         let mut probe_build_command = Command::new("cmake");
@@ -251,9 +273,13 @@ fn build_pinned_native_runtime(
             .arg("--target")
             .arg("mlx_memory_contract_probe")
             .arg("--parallel")
-            .arg(cargo_build_job_count());
+            .arg(native_parallel_job_count());
         remove_uncontrolled_native_environment(&mut probe_build_command);
-        run_command(&mut probe_build_command, "native-memory-contract-probe")?;
+        run_command(
+            &mut probe_build_command,
+            "native-memory-contract-probe",
+            native_build_progress,
+        )?;
     }
     println!(
         "cargo:rerun-if-changed={}",
@@ -390,10 +416,14 @@ fn remove_uncontrolled_native_environment(command: &mut Command) {
     }
 }
 
-fn cargo_build_job_count() -> String {
-    env::var("CARGO_BUILD_JOBS")
-        .or_else(|_| env::var("NUM_JOBS"))
-        .unwrap_or_else(|_| "1".to_owned())
+fn native_parallel_job_count() -> String {
+    build_parallelism::resolve_native_parallel_job_count(
+        env::var("CARGO_BUILD_JOBS").ok().as_deref(),
+        env::var("NUM_JOBS").ok().as_deref(),
+        std::thread::available_parallelism()
+            .map(|available_parallelism| available_parallelism.get())
+            .unwrap_or(1),
+    )
 }
 
 fn sccache_compiler_launcher_path() -> Option<PathBuf> {
@@ -406,19 +436,20 @@ fn cmake_boolean(boolean_value: bool) -> &'static str {
     if boolean_value { "ON" } else { "OFF" }
 }
 
-fn run_command(command: &mut Command, operation: &str) -> Result<(), Box<dyn Error>> {
-    let operation_started_at = Instant::now();
-    eprintln!("[native-build] operation={operation} status=start");
+fn run_command(
+    command: &mut Command,
+    operation: &str,
+    native_build_progress: &NativeBuildProgress,
+) -> Result<(), Box<dyn Error>> {
+    let operation_progress = native_build_progress.begin_operation(operation);
     let command_status = command.status()?;
-    let elapsed_seconds = operation_started_at.elapsed().as_secs_f64();
     if !command_status.success() {
+        let elapsed_seconds = operation_progress.complete("failed").as_secs_f64();
         return Err(format!(
             "native operation {operation} failed after {elapsed_seconds:.3} seconds: {command_status}"
         )
         .into());
     }
-    eprintln!(
-        "[native-build] operation={operation} status=success elapsed_seconds={elapsed_seconds:.3}"
-    );
+    operation_progress.complete("success");
     Ok(())
 }
