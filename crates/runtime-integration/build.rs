@@ -9,20 +9,24 @@ use std::{
     error::Error,
     fs::File,
     io::Write,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     process::Command,
-    time::Instant,
 };
 
 mod build_bindings;
 mod build_legacy_native_output;
 mod build_native_linking;
 mod build_native_store;
+mod build_parallelism;
+mod build_progress;
 
 use build_bindings::generate_bindings;
 use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 use build_native_linking::configure_rust_linking;
 use build_native_store::{NativeBuildArtifacts, NativeBuildProfile, NativeBuildStore};
+use build_parallelism::{ResolvedNativeBuildJobs, resolve_native_build_jobs};
+use build_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
 const EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE: &str =
@@ -60,14 +64,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         &native_build_identity,
         native_build_profile,
     )?;
-    let native_build_artifacts = native_build_store.resolve_or_build(|native_build_directory| {
-        build_pinned_native_runtime(
-            &manifest_directory,
-            &native_source_directory,
-            native_build_directory,
-            native_build_profile,
-        )
-    })?;
+    let native_build_progress = NativeBuildProgress::from_environment();
+    native_build_progress.record_event(&format!(
+        "status=started profile={} identity={native_build_identity}",
+        native_build_profile.identity_name()
+    ));
+    let native_build_artifacts =
+        native_build_progress.run_operation("resolve-native-runtime", || {
+            native_build_store.resolve_or_build(|native_build_directory| {
+                build_pinned_native_runtime(
+                    &native_build_progress,
+                    &manifest_directory,
+                    &native_source_directory,
+                    native_build_directory,
+                    native_build_profile,
+                )
+            })
+        })?;
+    native_build_progress.record_event(&format!(
+        "status={} identity={native_build_identity}",
+        if native_build_artifacts.was_built() {
+            "built"
+        } else {
+            "reused"
+        }
+    ));
     remove_legacy_cargo_native_build_directory(&output_directory)?;
     write_native_build_status(&native_build_artifacts)?;
 
@@ -91,6 +112,7 @@ fn emit_environment_rerun_contracts() {
         NATIVE_DEPENDENCY_CACHE_VARIABLE,
         NATIVE_BUILD_STORE_VARIABLE,
         NATIVE_BUILD_STATUS_FILE_VARIABLE,
+        NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
     ] {
         println!("cargo:rerun-if-env-changed={environment_variable}");
     }
@@ -178,11 +200,18 @@ fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
 }
 
 fn build_pinned_native_runtime(
+    native_build_progress: &NativeBuildProgress,
     manifest_directory: &Path,
     native_source_directory: &Path,
     native_build_directory: &Path,
     native_build_profile: NativeBuildProfile,
 ) -> Result<(), Box<dyn Error>> {
+    let resolved_native_build_jobs = resolve_native_build_jobs_from_environment()?;
+    native_build_progress.record_event(&format!(
+        "status=parallelism jobs={} source={}",
+        resolved_native_build_jobs.job_count,
+        resolved_native_build_jobs.source.log_value()
+    ));
     let mut configure_command = Command::new("cmake");
     let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
     let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
@@ -226,7 +255,11 @@ fn build_pinned_native_runtime(
             cmake_boolean(native_build_profile.should_build_experimental_aligned_expert_packs())
         ));
     append_native_archive_configuration(&mut configure_command)?;
-    run_command(&mut configure_command, "native-configure")?;
+    run_command(
+        native_build_progress,
+        &mut configure_command,
+        "native-configure",
+    )?;
 
     let mut native_build_command = Command::new("cmake");
     native_build_command
@@ -239,9 +272,13 @@ fn build_pinned_native_runtime(
     }
     native_build_command
         .arg("--parallel")
-        .arg(cargo_build_job_count());
+        .arg(resolved_native_build_jobs.job_count.to_string());
     remove_uncontrolled_native_environment(&mut native_build_command);
-    run_command(&mut native_build_command, "native-compile")?;
+    run_command(
+        native_build_progress,
+        &mut native_build_command,
+        "native-compile",
+    )?;
 
     if native_build_profile.should_build_memory_contract_probe() {
         let mut probe_build_command = Command::new("cmake");
@@ -251,9 +288,13 @@ fn build_pinned_native_runtime(
             .arg("--target")
             .arg("mlx_memory_contract_probe")
             .arg("--parallel")
-            .arg(cargo_build_job_count());
+            .arg(resolved_native_build_jobs.job_count.to_string());
         remove_uncontrolled_native_environment(&mut probe_build_command);
-        run_command(&mut probe_build_command, "native-memory-contract-probe")?;
+        run_command(
+            native_build_progress,
+            &mut probe_build_command,
+            "native-memory-contract-probe",
+        )?;
     }
     println!(
         "cargo:rerun-if-changed={}",
@@ -390,10 +431,16 @@ fn remove_uncontrolled_native_environment(command: &mut Command) {
     }
 }
 
-fn cargo_build_job_count() -> String {
-    env::var("CARGO_BUILD_JOBS")
-        .or_else(|_| env::var("NUM_JOBS"))
-        .unwrap_or_else(|_| "1".to_owned())
+fn resolve_native_build_jobs_from_environment() -> Result<ResolvedNativeBuildJobs, Box<dyn Error>> {
+    resolve_native_build_jobs(
+        |variable_name| env::var(variable_name).ok(),
+        || {
+            std::thread::available_parallelism()
+                .ok()
+                .and_then(|machine_parallelism| NonZeroU32::try_from(machine_parallelism).ok())
+        },
+    )
+    .map_err(Into::into)
 }
 
 fn sccache_compiler_launcher_path() -> Option<PathBuf> {
@@ -406,19 +453,16 @@ fn cmake_boolean(boolean_value: bool) -> &'static str {
     if boolean_value { "ON" } else { "OFF" }
 }
 
-fn run_command(command: &mut Command, operation: &str) -> Result<(), Box<dyn Error>> {
-    let operation_started_at = Instant::now();
-    eprintln!("[native-build] operation={operation} status=start");
-    let command_status = command.status()?;
-    let elapsed_seconds = operation_started_at.elapsed().as_secs_f64();
-    if !command_status.success() {
-        return Err(format!(
-            "native operation {operation} failed after {elapsed_seconds:.3} seconds: {command_status}"
-        )
-        .into());
-    }
-    eprintln!(
-        "[native-build] operation={operation} status=success elapsed_seconds={elapsed_seconds:.3}"
-    );
-    Ok(())
+fn run_command(
+    native_build_progress: &NativeBuildProgress,
+    command: &mut Command,
+    operation: &str,
+) -> Result<(), Box<dyn Error>> {
+    native_build_progress.run_operation(operation, || {
+        let command_status = command.status()?;
+        if !command_status.success() {
+            return Err(format!("native operation {operation} failed: {command_status}").into());
+        }
+        Ok(())
+    })
 }

@@ -57,6 +57,11 @@ jobs:
       # Never cancel an in-flight required check. A cancelled run with this job
       # name blocks merge even when a later run on the same SHA is green.
       cancel-in-progress: false
+    # contents: read stays the repository default; actions: write exists only
+    # so the cache-prune step can delete surplus Actions caches.
+    permissions:
+      contents: read
+      actions: write
     # Restore, verification, and publication all remain inside the cost boundary.
     # Allow sufficient headroom for cache saves after a step-level compile timeout;
     # worst-case cold compile (~425s) + overhead (~185s) + cache saves (~30s) ≈ 640s.
@@ -113,6 +118,7 @@ jobs:
             printf 'NATIVE_BUILD_ENTRY_DIRECTORY=%s\n' "$native_build_entry_directory"
             printf 'ASTRONOMICAL_NATIVE_BUILD_STORE_DIR=%s\n' "$native_build_store_directory"
             printf 'ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE=%s\n' "$native_build_status_file"
+            printf 'ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=%s\n' "$RUNNER_TEMP/astronomical-native-build-progress.log"
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
             # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
@@ -226,8 +232,19 @@ jobs:
         run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
         run: |
-          trap 'scripts/ci-step-timing.sh end compile-hermetic-tests' EXIT
+          # The native build can run silently for many minutes; tail its
+          # progress stream so lifecycle and heartbeat lines stay visible in
+          # the live job log. The EXIT trap must stop the tail and close the
+          # timing segment in one function because sh allows a single trap.
+          stop_native_build_progress_tail() {
+            kill "${native_build_progress_tail_pid}" 2>/dev/null || true
+            scripts/ci-step-timing.sh end compile-hermetic-tests
+          }
+          trap stop_native_build_progress_tail EXIT
           scripts/ci-step-timing.sh begin compile-hermetic-tests
+          touch "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
+          tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
+          native_build_progress_tail_pid="$!"
           cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-supervisor --test rest_api_tests
         timeout-minutes: 12
@@ -326,6 +343,20 @@ jobs:
           owner: sccache
           path: ~/Library/Caches/Astronomical/sccache
           key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+      # Deleting surplus caches needs actions:write, granted at job level
+      # because GitHub Actions does not support step-level permissions. This
+      # keeps the small native-build cache entries from being evicted by the
+      # 10 GB repository limit under LRU pressure from large sccache
+      # generations.
+      - name: Prune surplus CI caches
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          trap 'scripts/ci-step-timing.sh end prune-ci-caches' EXIT
+          scripts/ci-step-timing.sh begin prune-ci-caches
+          scripts/prune-ci-github-caches.sh
+        timeout-minutes: 2
       - name: Upload Cargo timing report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
