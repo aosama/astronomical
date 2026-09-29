@@ -488,6 +488,7 @@ pub enum WorkerEvent {
         persistent_prompt_cache_hits: u64,
         persistent_prompt_cache_misses: u64,
         persistent_prompt_cache_tokens_saved: u64,
+        persistent_prompt_cache_partial_tail_hits: u64,
         persistent_prompt_cache_block_token_count: u64,
         persistent_prompt_cache_sequence_state_block_count: u64,
         persistent_prompt_cache_boundary_state_snapshot_count: u64,

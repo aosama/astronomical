@@ -47,6 +47,7 @@ mod disk_store_write;
 mod model_contract;
 mod model_contract_error;
 mod model_contract_storage_geometry;
+mod partial_tail_probe;
 pub(crate) mod persistent_safetensors_header;
 mod prefill_boundary;
 mod prefix_lookup;

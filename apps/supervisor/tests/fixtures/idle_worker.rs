@@ -308,6 +308,7 @@ where
             persistent_prompt_cache_visual_embedding_hits: 0,
             persistent_prompt_cache_visual_embedding_misses: 0,
             persistent_prompt_cache_visual_embedding_rows_loaded: 0,
+            persistent_prompt_cache_partial_tail_hits: 0,
         })
         .await
 }

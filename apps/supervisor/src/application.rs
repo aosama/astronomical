@@ -305,6 +305,7 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
         "persistent_prompt_cache_visual_embedding_hits": persistent_prompt_cache_summary.visual_embedding_hits,
         "persistent_prompt_cache_visual_embedding_misses": persistent_prompt_cache_summary.visual_embedding_misses,
         "persistent_prompt_cache_visual_embedding_rows_loaded": persistent_prompt_cache_summary.visual_embedding_rows_loaded,
+        "persistent_prompt_cache_partial_tail_hits": persistent_prompt_cache_summary.partial_tail_hits,
         "pending_cache_clear": pending_cache_clear,
         "speculative_prefill_cache_efficacy": {
             "target": {

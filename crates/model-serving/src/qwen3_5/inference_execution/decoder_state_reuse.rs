@@ -52,31 +52,25 @@ impl Qwen3_5EngineState {
         let lookup_result = performance_attribution.measure_operation(
             PerformanceOperation::PersistentPromptCachePrefixLookup,
             |_performance_attribution| {
-                if block_causal_inputs.is_empty() {
-                    PersistentPromptCachePrefixLookup::for_prompt(
-                        &persistent_prompt_cache.model_contract,
-                        prompt_token_ids,
-                        |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
-                        |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
-                    )
-                } else {
-                    PersistentPromptCachePrefixLookup::for_prompt_with_block_causal_inputs(
-                        &persistent_prompt_cache.model_contract,
-                        prompt_token_ids,
-                        block_causal_inputs,
-                        |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
-                        |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
-                    )
-                }
+                PersistentPromptCachePrefixLookup::for_prompt_with_partial_tail_block_recovery(
+                    &persistent_prompt_cache.model_contract,
+                    prompt_token_ids,
+                    block_causal_inputs,
+                    |block_hash| persistent_prompt_cache.has_kv_block(block_hash),
+                    |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
+                )
             },
         );
         let restored_token_count = lookup_result.restored_token_count();
+        let restored_partial_tail_block_key =
+            lookup_result.restored_partial_tail_block_key().cloned();
         let prompt_token_count = prompt_token_ids.len();
         let lookup_diagnostics = lookup_result.diagnostics();
         let mut persistent_prompt_cache_diagnostics = persistent_prompt_cache_request_diagnostics(
             persistent_prompt_cache.model_contract.block_token_count(),
             lookup_diagnostics,
             restored_token_count,
+            lookup_diagnostics.restored_partial_tail_block_token_count(),
         );
         if restored_token_count == 0 {
             if matches!(
@@ -124,8 +118,9 @@ impl Qwen3_5EngineState {
         let persistent_prompt_cache_block_token_count =
             persistent_prompt_cache.model_contract.block_token_count();
         let complete_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
-        let mut restored_persistent_prompt_cache_block_keys =
-            Vec::with_capacity(complete_block_count);
+        let mut restored_persistent_prompt_cache_block_keys = Vec::with_capacity(
+            complete_block_count + usize::from(restored_partial_tail_block_key.is_some()),
+        );
         let mut last_restored_persistent_prompt_cache_block_key = None;
         let mut persistent_prompt_cache_restore_temporary_workspace_bytes = 0_usize;
         for block_index in 0..complete_block_count {
@@ -153,9 +148,26 @@ impl Qwen3_5EngineState {
                 Some(persistent_prompt_cache_block_key.clone());
             restored_persistent_prompt_cache_block_keys.push(persistent_prompt_cache_block_key);
         }
-        if let Some(recurrent_snapshot_block_key) =
-            last_restored_persistent_prompt_cache_block_key.as_ref()
-        {
+        // The tail loads like any other sequence block but never becomes a
+        // chain parent: capture keeps chaining from the last complete block.
+        if let Some(restored_partial_tail_block_key) = &restored_partial_tail_block_key {
+            let sequence_state_block_file_size_bytes = persistent_prompt_cache
+                .sequence_state_block_file_size_bytes(&restored_partial_tail_block_key.block_hash())
+                .unwrap_or(0);
+            persistent_prompt_cache_restore_temporary_workspace_bytes =
+                persistent_prompt_cache_restore_temporary_workspace_bytes.saturating_add(
+                    usize::try_from(sequence_state_block_file_size_bytes).unwrap_or(usize::MAX),
+                );
+            restored_persistent_prompt_cache_block_keys
+                .push(restored_partial_tail_block_key.clone());
+        }
+        // Recurrent state needs the newest boundary at the restored end, which
+        // is the tail's snapshot when a tail was restored and otherwise the
+        // last complete block's snapshot.
+        let recurrent_snapshot_source_block_key = restored_partial_tail_block_key
+            .as_ref()
+            .or(last_restored_persistent_prompt_cache_block_key.as_ref());
+        if let Some(recurrent_snapshot_block_key) = recurrent_snapshot_source_block_key {
             let recurrent_snapshot_file_size_bytes = persistent_prompt_cache
                 .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
                 .unwrap_or(0);
@@ -233,13 +245,18 @@ impl Qwen3_5EngineState {
                     ))
                 })?;
             drop(loaded_kv_block_tensors);
-            last_restored_persistent_prompt_cache_block_key =
-                Some(persistent_prompt_cache_block_key);
+            // The tail occupies the slot after the complete blocks; only
+            // complete blocks extend the capture-parent chain.
+            if block_index < complete_block_count {
+                last_restored_persistent_prompt_cache_block_key =
+                    Some(persistent_prompt_cache_block_key);
+            }
         }
         // Sequence state is append-only across every matched block, but recurrent
         // state needs only the newest boundary corresponding to the restored end.
-        let recurrent_snapshot_block_key = last_restored_persistent_prompt_cache_block_key
+        let recurrent_snapshot_block_key = restored_partial_tail_block_key
             .as_ref()
+            .or(last_restored_persistent_prompt_cache_block_key.as_ref())
             .ok_or_else(|| {
                 fatal_engine_error("persistent prompt-cache restore lost snapshot key")
             })?;
@@ -335,7 +352,13 @@ impl Qwen3_5EngineState {
             request_id = request_id.value(),
             prompt_token_count = prompt_token_ids.len(),
             restored_token_count,
-            restored_block_count = complete_block_count,
+            restored_block_count = complete_block_count
+                + usize::from(restored_partial_tail_block_key.is_some()),
+            restored_partial_tail_block_token_count = ?lookup_diagnostics
+                .restored_partial_tail_block_token_count(),
+            restored_partial_tail_block_hash = ?restored_partial_tail_block_key
+                .as_ref()
+                .map(PersistentPromptCacheBlockKey::block_hash),
             complete_prompt_block_count = lookup_diagnostics.complete_prompt_block_count(),
             maximum_restorable_block_count = lookup_diagnostics.maximum_restorable_block_count(),
             matched_sequence_state_block_count = lookup_diagnostics
@@ -356,6 +379,10 @@ impl Qwen3_5EngineState {
             })?;
         self.persistent_prompt_cache_counters
             .record_cache_hit(restored_token_count);
+        if restored_partial_tail_block_key.is_some() {
+            self.persistent_prompt_cache_counters
+                .record_partial_tail_hit();
+        }
         Ok(PersistentPromptCacheRestoreOutcome {
             persistent_prompt_cache_token_count,
             restored_token_count,
@@ -369,10 +396,12 @@ fn persistent_prompt_cache_request_diagnostics(
     persistent_prompt_cache_block_token_count: usize,
     lookup_diagnostics: &crate::PersistentPromptCacheLookupDiagnostics,
     restored_token_count: usize,
+    restored_partial_tail_block_token_count: Option<usize>,
 ) -> WorkerPersistentPromptCacheRequestDiagnostics {
     // Diagnostics are bounded scalar evidence copied over IPC. Never include full
     // hashes, prompts, local paths, or model tensor details in the public log.
-    let restored_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
+    let restored_block_count = restored_token_count / persistent_prompt_cache_block_token_count
+        + usize::from(restored_partial_tail_block_token_count.is_some());
     WorkerPersistentPromptCacheRequestDiagnostics {
         lookup_outcome: if restored_token_count == 0 {
             WorkerPersistentPromptCacheLookupOutcome::Miss
@@ -394,6 +423,11 @@ fn persistent_prompt_cache_request_diagnostics(
         )
         .unwrap_or(u64::MAX),
         restored_block_count: u64::try_from(restored_block_count).unwrap_or(u64::MAX),
+        partial_tail_block_token_count: restored_partial_tail_block_token_count.map(
+            |partial_tail_block_token_count| {
+                u64::try_from(partial_tail_block_token_count).unwrap_or(u64::MAX)
+            },
+        ),
         first_missing_sequence_state_block_index: lookup_diagnostics
             .first_missing_sequence_state_block_index()
             .map(|block_index| u64::try_from(block_index).unwrap_or(u64::MAX)),
