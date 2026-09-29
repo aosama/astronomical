@@ -404,6 +404,24 @@
             },
             "quantization_label": "oQ4e 4-bit affine (group 64)",
             "architecture_summary": "Qwen3.5 dense VLM, 27B params, 64 layers mixed linear-attention/full-attention, hidden 5120, bf16 vision tower, int4 MTP head"
+        },
+        {
+            "huggingface_id": "funnygeeker/Qwen3.8-35B-A3B-Distill-oQ6e-mtp",
+            "revision": "0caaeb0e5482c37b5b1749d04b7dd1893239090d",
+            "display_name": "Qwen 3.8 35B A3B Distill oQ6e MTP 6-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 30106500432,
+            "public": true,
+            "description": "A large, capable model that sees pictures and text and gives thoughtful answers, distilled for higher answer quality. Great for harder writing, coding, and reasoning when quality matters more than speed, and a leaner version that runs on ordinary Macs (about 30 GB of memory).",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ mixed-precision 6/8-bit (affine, groups 64/128)",
+            "architecture_summary": "Qwen3.8 MoE VLM, 35B total params, ~3B active (A3B), 40 layers mixed linear-attention/full-attention, 256 experts with 8 routed per token, bf16 vision tower, mixed 6/8-bit MTP head",
+            "upstream_license": "Apache-2.0"
         }
     ]
 }
