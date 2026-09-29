@@ -93,6 +93,26 @@ pub(crate) async fn create_image_generation(
             "model_capability_mismatch",
         );
     }
+    // Out-of-envelope dimensions are rejected before request-id allocation and queue
+    // admission so a doomed request never wins the active-generation permit or triggers a
+    // model swap that the post-swap capability check would immediately undo.
+    if let Some((parameter_name, violation_message)) = image_capabilities.image_dimension_violation(
+        resolved_model_id,
+        request_parts.width,
+        request_parts.height,
+    ) {
+        tracing::debug!(
+            model = %resolved_model_id,
+            parameter = parameter_name,
+            reason = %violation_message,
+            "rejected an image request outside the model capability envelope"
+        );
+        return invalid_request_response(
+            violation_message,
+            Some(parameter_name),
+            "invalid_request",
+        );
+    }
     // The diffusion schedule is a discovery fact of the model family: image workers start idle
     // and only publish their capabilities after the request-triggered model swap, so the
     // family's canonical step count is read from discovery rather than from worker state.
