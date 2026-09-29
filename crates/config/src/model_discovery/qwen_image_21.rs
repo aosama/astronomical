@@ -133,6 +133,11 @@ pub fn verify_model_directory(
             supports_multiple_reference_images: false,
             // The reference pipeline's own default; lower counts quarter-denoise the render.
             default_steps: 40,
+            // The serving profile's reviewed envelope: 256-pixel minimum side, 1024-pixel
+            // maximum, and the VAE's 32-pixel spatial multiple.
+            minimum_dimension_pixels: 256,
+            maximum_dimension_pixels: 1_024,
+            dimension_multiple_pixels: 32,
         },
         model_size_bytes,
     })

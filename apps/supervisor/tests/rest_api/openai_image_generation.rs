@@ -19,6 +19,7 @@ use tower::ServiceExt;
 use crate::common::ScriptedExecutor;
 
 const IMAGE_MODEL_ID: &str = "FLUX.2-klein-4B";
+const QWEN_IMAGE_MODEL_ID: &str = "Qwen-Image-2.1";
 
 #[tokio::test]
 async fn should_generate_one_base64_png_through_the_public_http_journey() {
@@ -119,6 +120,81 @@ async fn should_reject_every_unsupported_image_field_before_dispatch() {
                 .is_empty()
         );
     }
+}
+
+#[tokio::test]
+async fn should_reject_out_of_envelope_dimensions_before_queue_admission() {
+    let out_of_envelope_requests = [
+        (
+            serde_json::json!({"model": QWEN_IMAGE_MODEL_ID, "prompt": "Romeo", "width": 64, "height": 64, "response_format": "b64_json"}),
+            "width",
+            "at least 256 pixels",
+        ),
+        (
+            serde_json::json!({"model": QWEN_IMAGE_MODEL_ID, "prompt": "Romeo", "width": 1024, "height": 336, "response_format": "b64_json"}),
+            "height",
+            "multiple of 32 pixels",
+        ),
+    ];
+
+    for (request_document, expected_parameter, expected_constraint) in out_of_envelope_requests {
+        let executor = ScriptedExecutor::ready(Vec::new());
+        let received_commands = executor.received_image_generation_commands();
+        let response = build_application_with_discovered_models(executor, vec![qwen_image_model()])
+            .oneshot(image_request(request_document))
+            .await
+            .expect("the application should reject out-of-envelope image input");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response_document = response_json(response).await;
+        assert_eq!(response_document["error"]["param"], expected_parameter);
+        assert_eq!(response_document["error"]["code"], "invalid_request");
+        let rejection_message = response_document["error"]["message"]
+            .as_str()
+            .expect("the rejection should carry a message naming the violated constraint");
+        assert!(
+            rejection_message.contains(expected_constraint),
+            "the message should name the violated constraint: {rejection_message}"
+        );
+        assert!(
+            rejection_message.contains(QWEN_IMAGE_MODEL_ID),
+            "the message should name the target model: {rejection_message}"
+        );
+        assert!(
+            received_commands
+                .lock()
+                .expect("command log should remain available")
+                .is_empty(),
+            "an out-of-envelope request must not be admitted to the queue"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_admit_an_in_envelope_request_at_the_envelope_boundaries() {
+    let executor = ScriptedExecutor::ready(Vec::new());
+    let received_commands = executor.received_image_generation_commands();
+    let request_document = serde_json::json!({
+        "model": QWEN_IMAGE_MODEL_ID,
+        "prompt": "A moonlit balcony scene from Romeo and Juliet",
+        "width": 1_024,
+        "height": 256,
+        "response_format": "b64_json"
+    });
+
+    let response = build_application_with_discovered_models(executor, vec![qwen_image_model()])
+        .oneshot(image_request(request_document))
+        .await
+        .expect("the application should admit an in-envelope image request");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        received_commands
+            .lock()
+            .expect("command log should remain available")
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -401,8 +477,32 @@ fn image_model() -> DiscoveredModel {
             supports_image_editing: false,
             supports_multiple_reference_images: false,
             default_steps: 4,
+            minimum_dimension_pixels: 64,
+            maximum_dimension_pixels: 1_024,
+            dimension_multiple_pixels: 16,
         }),
         license: Some(ModelLicense::Apache20),
+        model_size_bytes: 1,
+    }
+}
+
+fn qwen_image_model() -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: QWEN_IMAGE_MODEL_ID.to_owned(),
+        provider_model_id: Some("mlx-community/Qwen-Image-2.1".to_owned()),
+        model_family: ModelFamily::QwenImage21,
+        revision: "fixture-revision".to_owned(),
+        model_directory: PathBuf::from("fixtures/models/qwen-image-21"),
+        capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
+            supports_text_to_image: true,
+            supports_image_editing: false,
+            supports_multiple_reference_images: false,
+            default_steps: 40,
+            minimum_dimension_pixels: 256,
+            maximum_dimension_pixels: 1_024,
+            dimension_multiple_pixels: 32,
+        }),
+        license: Some(ModelLicense::QwenResearch),
         model_size_bytes: 1,
     }
 }
