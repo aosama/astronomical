@@ -12,10 +12,10 @@ use tokio::time::{Instant, timeout};
 
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::resident_sparse_moe_model_id()
 }
 const SOURCE_DOCUMENT_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
 const SWEEP_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[derive(Debug)]
@@ -28,6 +28,11 @@ struct PrefillChunkMetrics {
     completion_token_count: u64,
     prompt_processing_seconds: f64,
     generation_seconds: f64,
+}
+
+#[test]
+fn should_keep_prefill_sweep_fixture_at_exactly_ten_thousand_words() {
+    assert_eq!(SOURCE_DOCUMENT_FIXTURE.split_whitespace().count(), 10_000);
 }
 
 #[tokio::test(flavor = "multi_thread")]
