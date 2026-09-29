@@ -74,6 +74,56 @@ test("should accept an existing issue independently of its state and body format
     }
 });
 
+test("should accept a bare keyword reference when the heading is forgotten", async () => {
+    const compliance = await validatePullRequestIssue({
+        pullRequestBody: "Fixes #224\n\n## Change\n\nAdd enforcement.",
+        loadIssue: async () => createIssue(),
+    });
+
+    assert.equal(compliance.issueNumber, 224);
+    assert.equal(compliance.relationship, "Fixes");
+});
+
+test("should accept the Linked issue heading without the ## marker", async () => {
+    for (const heading of ["Linked issue", "linked issue:", "# Linked issue", "### Linked issue"]) {
+        const compliance = await validatePullRequestIssue({
+            pullRequestBody: `${heading}\n\nRefs #224`,
+            loadIssue: async () => createIssue(),
+        });
+
+        assert.equal(compliance.issueNumber, 224);
+    }
+});
+
+test("should accept trailing prose after the reference in the Linked issue section", async () => {
+    const compliance = await validatePullRequestIssue({
+        pullRequestBody: "## Linked issue\n\nFixes #224 — the gate instrumentation work.",
+        loadIssue: async () => createIssue(),
+    });
+
+    assert.equal(compliance.issueNumber, 224);
+});
+
+test("should reject a keyword-less issue mention when no heading exists", async () => {
+    await assert.rejects(
+        validatePullRequestIssue({
+            pullRequestBody: "Addresses #224 without any heading or closing keyword.",
+            loadIssue: async () => createIssue(),
+        }),
+        /Add a `## Linked issue` section/,
+    );
+});
+
+test("should reject a body that references several distinct issues without a heading", async () => {
+    await assert.rejects(
+        validatePullRequestIssue({
+            pullRequestBody: "Fixes #224 and Closes #225 in one pass.",
+            loadIssue: async () => createIssue(),
+        }),
+        /exactly one same-repository issue reference/,
+    );
+});
+
 test("should reject a missing Linked issue section", async () => {
     await assert.rejects(
         validatePullRequestIssue({

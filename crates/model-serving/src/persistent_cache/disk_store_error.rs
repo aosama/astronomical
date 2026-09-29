@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use super::block_format_error::PersistentPromptCacheBlockError;
+use super::model_contract_error::PersistentPromptCacheModelContractError;
 
 /// One failure while opening, scanning, saving, or loading a persistent prompt-cache block.
 ///
@@ -192,6 +193,17 @@ pub enum PersistentPromptCacheDiskStoreError {
         maximum_size_bytes: u64,
         remaining_size_bytes: u64,
     },
+    #[error("failed to compute persistent prompt-cache state file geometry: {source}")]
+    ModelContractGeometry {
+        #[source]
+        source: PersistentPromptCacheModelContractError,
+    },
+}
+
+impl From<PersistentPromptCacheModelContractError> for PersistentPromptCacheDiskStoreError {
+    fn from(source: PersistentPromptCacheModelContractError) -> Self {
+        Self::ModelContractGeometry { source }
+    }
 }
 
 impl PersistentPromptCacheDiskStoreError {

@@ -19,9 +19,9 @@ impl RequestDecoderStateStack {
             block_end_tokens,
             persistent_prompt_cache_block_token_count,
         )?;
-        // Sequence state is sliced only at a contract-derived complete boundary. A partial
-        // slice would produce a valid-looking tensor that cannot participate in the hash chain
-        // or be concatenated with other blocks during a later restore.
+        // Sequence state slices may cover a complete block boundary or a partial
+        // prefix-cache tail; both produce tensors that participate in the hash
+        // chain and concatenate with other blocks during a later restore.
         let mut kv_block_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
@@ -265,9 +265,10 @@ fn validate_persistent_prompt_cache_block_range(
             block_end_tokens,
         },
     )?;
-    if block_token_count != persistent_prompt_cache_block_token_count
-        || persistent_prompt_cache_block_token_count == 0
-    {
+    // Partial blocks (prefix-cache tails) hold fewer tokens than a full block
+    // while remaining valid restorable state, so only the contract bound and
+    // non-emptiness are enforced here.
+    if block_token_count == 0 || block_token_count > persistent_prompt_cache_block_token_count {
         return Err(PersistentPromptCacheStateBridgeError::InvalidBlockRange {
             block_start_tokens,
             block_end_tokens,

@@ -6,3 +6,4 @@ mod native_build;
 mod native_build_parallelism;
 mod native_build_progress;
 mod native_build_store;
+mod native_build_wiring;

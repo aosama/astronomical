@@ -83,6 +83,7 @@ create_fake_repository_scripts() {
         test-rust-dependency-notices-contract.sh \
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
+        test-prune-ci-caches-contract.sh \
         test-cargo-artifact-lifecycle-contract.sh \
         test-bounded-cargo-test-lock-contract.sh \
         test-cargo-artifact-cleanup-signal-contract.sh \
@@ -260,7 +261,7 @@ main() {
         print_error "verification did not run the Thin Talk Swift package contracts"
         exit 1
     }
-    [ "$(grep -c '^120s|' "$timeout_log")" -eq 19 ] || {
+    [ "$(grep -c '^120s|' "$timeout_log")" -eq 20 ] || {
         print_error "verification did not bound every non-compilation step to 120 seconds"
         exit 1
     }
@@ -276,6 +277,7 @@ main() {
         test-rust-dependency-notices-contract.sh \
         test-commit-release-isolation.sh \
         test-ci-native-cache-coordination.sh \
+        test-prune-ci-caches-contract.sh \
         test-cargo-artifact-lifecycle-contract.sh \
         test-bounded-cargo-test-lock-contract.sh \
         test-cargo-artifact-cleanup-signal-contract.sh \

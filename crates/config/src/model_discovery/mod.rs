@@ -81,6 +81,57 @@ pub struct ImageGenerationCapabilities {
     /// rather than a knob. The engine-side step envelope lives in the family's serving
     /// profile (`model-serving`); this value must stay within that envelope.
     pub default_steps: u16,
+    /// Smallest renderable image side, mirroring the family's serving-profile minimum.
+    ///
+    /// Like `default_steps`, this mirrors the serving profile (`model-serving`) because
+    /// the supervisor cannot reach that crate; the endpoint validates against it before
+    /// queue admission so out-of-envelope requests never trigger a model swap.
+    pub minimum_dimension_pixels: u32,
+    /// Largest reviewed image side, mirroring the family's serving-profile maximum.
+    pub maximum_dimension_pixels: u32,
+    /// Required pixel alignment for every image side, mirroring the serving profile's
+    /// latent-grid multiple.
+    pub dimension_multiple_pixels: u32,
+}
+
+impl ImageGenerationCapabilities {
+    /// Names the capability-envelope constraint an image request violates, if any.
+    ///
+    /// Returns the violated parameter and a message naming the constraint and the serving
+    /// identity, so callers can reject out-of-envelope requests before queue admission.
+    #[must_use]
+    pub fn image_dimension_violation(
+        &self,
+        model_id: &str,
+        width_pixels: u32,
+        height_pixels: u32,
+    ) -> Option<(&'static str, String)> {
+        for (parameter_name, actual_pixels) in [("width", width_pixels), ("height", height_pixels)]
+        {
+            let violation_message = if actual_pixels < self.minimum_dimension_pixels {
+                format!(
+                    "{parameter_name} must be at least {} pixels for {model_id}, received {actual_pixels}",
+                    self.minimum_dimension_pixels
+                )
+            } else if actual_pixels > self.maximum_dimension_pixels {
+                format!(
+                    "{parameter_name} must be at most {} pixels for {model_id}, received {actual_pixels}",
+                    self.maximum_dimension_pixels
+                )
+            } else if self.dimension_multiple_pixels > 0
+                && !actual_pixels.is_multiple_of(self.dimension_multiple_pixels)
+            {
+                format!(
+                    "{parameter_name} must be a multiple of {} pixels for {model_id}, received {actual_pixels}",
+                    self.dimension_multiple_pixels
+                )
+            } else {
+                continue;
+            };
+            return Some((parameter_name, violation_message));
+        }
+        None
+    }
 }
 
 /// Embedding inference advertised without inventing autoregressive token limits.

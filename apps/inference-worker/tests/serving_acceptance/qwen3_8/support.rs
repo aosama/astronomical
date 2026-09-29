@@ -1,7 +1,8 @@
-//! Launch and observation helpers for the Ornith-1.5-35B throughput journey.
+//! Launch and observation helpers for the Qwen3.8-35B-A3B-Distill journey.
 //!
-//! Each journey owns its own isolated Development home so a duplicate leaf id
-//! under another scan root cannot hide this family from `/v1/models`.
+//! The journey owns an isolated Development home so a duplicate leaf id under
+//! another scan root cannot hide this family from `/v1/models`, and so the
+//! attribution log it reads belongs to this run alone.
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -15,15 +16,12 @@ use crate::serving_acceptance::chat::openai_rest::{
 use crate::support::serving_rest::ServingRestServer;
 
 pub(super) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
+pub(super) const QWEN3_8_MODEL_ID: &str = "Qwen3.8-35B-A3B-Distill-oQ6e-mtp";
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
-pub(super) fn resident_model_id() -> &'static str {
-    crate::support::resident_sparse_moe_model_id()
-}
-
 pub(super) fn model_directory() -> PathBuf {
-    crate::support::configured_installed_model_directory_by_id(resident_model_id())
+    crate::support::configured_installed_model_directory_by_id(QWEN3_8_MODEL_ID)
 }
 
 pub(super) fn romeo_and_juliet_prompt() -> String {
@@ -37,6 +35,11 @@ pub(super) fn romeo_and_juliet_prompt() -> String {
 /// conditions: performance attribution and stage-split decode attribution are
 /// both explicitly disabled, so the baseline measures the path users run and
 /// a developer's local diagnostics settings cannot leak into the numbers.
+///
+/// The model directory given to discovery is the `models--org--repo` cache
+/// entry, not the snapshot inside it: discovery decodes that directory name
+/// into the leaf model ID the worker reports and requests must address, while
+/// a snapshot directory would register the model under its commit hash.
 pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile::TempDir {
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()
@@ -50,8 +53,17 @@ pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile:
         .expect("Development config should be readable");
     let mut config_document: Value =
         serde_json::from_slice(&config_bytes).expect("Development config should parse");
+    let discovery_root_directory = model_directory
+        .ancestors()
+        .find(|ancestor| {
+            ancestor
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("models--"))
+        })
+        .unwrap_or(model_directory);
     config_document["runtime"]["model_directories"] =
-        serde_json::json!([model_directory.to_string_lossy()]);
+        serde_json::json!([discovery_root_directory.to_string_lossy()]);
     config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(false);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
@@ -63,14 +75,12 @@ pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile:
     isolated_development_home
 }
 
-pub(super) async fn launch_resident_rest_server() -> (tempfile::TempDir, ServingRestServer) {
-    let model_id = resident_model_id();
-    let model_directory = model_directory();
-    eprintln!("[ornith-35b] phase=launch model={model_id}");
-    let isolated_development_home = isolated_home_for_measurement(&model_directory);
+pub(super) async fn launch_rest_server() -> (tempfile::TempDir, ServingRestServer) {
+    eprintln!("[qwen3-8] phase=launch model={QWEN3_8_MODEL_ID}");
+    let isolated_development_home = isolated_home_for_measurement(&model_directory());
     let rest_server = launch_serving_rest_server_for_model(
-        model_id,
-        model_directory,
+        QWEN3_8_MODEL_ID,
+        model_directory(),
         Some(isolated_development_home.path()),
         None,
     )
@@ -78,9 +88,9 @@ pub(super) async fn launch_resident_rest_server() -> (tempfile::TempDir, Serving
     (isolated_development_home, rest_server)
 }
 
-pub(super) async fn stop_resident_rest_server(rest_server: ServingRestServer) {
+pub(super) async fn stop_rest_server(rest_server: ServingRestServer) {
     stop_serving_rest_server(rest_server).await;
-    eprintln!("[ornith-35b] phase=done");
+    eprintln!("[qwen3-8] phase=done");
 }
 
 pub(super) async fn status_document(server_address: SocketAddr) -> Value {

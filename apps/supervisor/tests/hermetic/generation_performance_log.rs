@@ -113,6 +113,7 @@ fn should_open_and_append_to_performance_log() {
             maximum_restorable_block_count: 4,
             matched_sequence_state_block_count: 4,
             restored_block_count: 4,
+            partial_tail_block_token_count: None,
             first_missing_sequence_state_block_index: None,
             miss_reason: None,
             expected_block_hash_prefix: None,
@@ -301,6 +302,7 @@ fn should_serialize_null_for_optional_fields() {
             maximum_restorable_block_count: 1,
             matched_sequence_state_block_count: 0,
             restored_block_count: 0,
+            partial_tail_block_token_count: None,
             first_missing_sequence_state_block_index: Some(0),
             miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
             expected_block_hash_prefix: Some(

@@ -134,6 +134,11 @@ fn verify_model_directory_evidence(
             supports_multiple_reference_images: false,
             // FLUX.2 Klein is a distilled turbo model whose reference schedule is four steps.
             default_steps: 4,
+            // The serving profile's reviewed envelope: 64-pixel minimum side, 1024-pixel
+            // maximum, and the 16-pixel latent alignment.
+            minimum_dimension_pixels: 64,
+            maximum_dimension_pixels: 1_024,
+            dimension_multiple_pixels: 16,
         },
         model_size_bytes,
     })
