@@ -287,6 +287,9 @@ exit 0
 CODESIGN
     chmod +x "${fake_command_directory}/codesign"
     write_successful_command "${sandbox_scripts_directory}/bootstrap-native-dependencies.sh"
+    # The builder pre-warms the machine-wide native build store before cargo;
+    # the sandbox must not touch the real store, so the prewarm is stubbed.
+    write_successful_command "${sandbox_scripts_directory}/prewarm-native-build.sh"
     write_successful_command "${sandbox_internal_scripts_directory}/validate-macos-app.sh"
 
     cargo_lane_root="${SANDBOX_DIRECTORY}/cargo-lanes"
