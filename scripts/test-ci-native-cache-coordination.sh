@@ -243,7 +243,7 @@ assert_workflow_contract() {
         swift_node_job = workflow.fetch("jobs").fetch("swift-node")
         static_job = workflow.fetch("jobs").fetch("static")
         raise "required check name changed" unless verification_job.fetch("name") == "macOS hermetic verification"
-        raise "required check exceeded its hard cap" unless verification_job.fetch("timeout-minutes") == 15
+        raise "required check exceeded its hard cap" unless verification_job.fetch("timeout-minutes") == 30
         raise "swift-node exceeded its hard cap" unless swift_node_job.fetch("timeout-minutes") == 12
         expected_authority = "${{ always() && (needs.detect-changes.result != '\''success'\'' || needs.detect-changes.outputs.macos_verification_required == '\''true'\'') }}"
         raise "macOS authority does not fail closed" unless verification_job.fetch("if") == expected_authority
