@@ -1,0 +1,107 @@
+diff --git a/mlx/backend/metal/quantized.cpp b/mlx/backend/metal/quantized.cpp
+--- a/mlx/backend/metal/quantized.cpp
++++ b/mlx/backend/metal/quantized.cpp
+ #include "mlx/primitives.h"
+ #include "mlx/utils.h"
+ 
++#include <cstdio>
++#include <cstdlib>
++#include <optional>
++
+ namespace mlx::core {
+ 
+ namespace {
+@@ -811,6 +815,72 @@
+   compute_encoder.dispatch_threadgroups(grid_dims, group_dims);
+ }
+ 
++// Transposed-prefill tile candidates for the NAX quantized matmul. The tile
++// set and the idea of selecting tiles per shape are ported from the OMLX
++// project's Qwen3.5 prefill kernels
++// (omlx/custom_kernels/qwen35_prefill/csrc/qwen35_qmm_nax.metal, Apache-2.0),
++// which sweep NAX tile shapes instead of pinning one fixed tile. Unlike OMLX
++// we do not pre-instantiate variants into a metallib: this build pins
++// MLX_METAL_JIT ON, so the JIT kernel builder materializes any template
++// combination on first use and tile selection stays a pure dispatch decision.
++struct QmmTNaxTile {
++  int bm;
++  int bn;
++  int bk;
++  int wm;
++  int wn;
++};
++
++// The quantized weight loader requires the K tile to divide the quantization
++// group size evenly, and the NAX main loop requires BK to be a nonzero
++// multiple of the SIMD width.
++bool is_valid_qmm_t_nax_tile(const QmmTNaxTile& tile, int group_size) {
++  return tile.bm > 0 && tile.bn > 0 && tile.wm > 0 && tile.wn > 0 &&
++      tile.bk >= 32 && tile.bk % 32 == 0 && tile.bk <= group_size &&
++      group_size % tile.bk == 0;
++}
++
++// ASTRONOMICAL_QMM_NAX_TILE="bm,bn,bk,wm,wn" forces one tile for every
++// transposed NAX qmm shape. This is the measurement knob for tile sweeps and
++// an operational escape hatch; anything unparsable or invalid is ignored so
++// the shape heuristic below stays authoritative.
++std::optional<QmmTNaxTile> qmm_t_nax_tile_override() {
++  const char* override_text = std::getenv("ASTRONOMICAL_QMM_NAX_TILE");
++  if (!override_text) {
++    return std::nullopt;
++  }
++  QmmTNaxTile tile{};
++  if (std::sscanf(
++          override_text,
++          "%d,%d,%d,%d,%d",
++          &tile.bm,
++          &tile.bn,
++          &tile.bk,
++          &tile.wm,
++          &tile.wn) != 5) {
++    return std::nullopt;
++  }
++  return tile;
++}
++
++QmmTNaxTile select_qmm_t_nax_tile(int token_count, int group_size) {
++  if (auto tile_override = qmm_t_nax_tile_override()) {
++    if (is_valid_qmm_t_nax_tile(*tile_override, group_size)) {
++      return *tile_override;
++    }
++  }
++  // Use the smaller 32-row tile only when one block covers all of M; only
++  // qmm_t_nax has a 32-row instantiation.
++  if (token_count <= 32) {
++    return {32, 64, 64, 2, 2};
++  }
++  // The 4x1 simdgroup layout measured fastest or at parity against the stock
++  // 2x2 layout across the Ornith attention projection sweep (12 shape/token
++  // cells, bit-exact outputs): 2-4x faster at small M, converging with the
++  // stock tile at large M where the matmul becomes bandwidth bound.
++  return {64, 64, 64, 4, 1};
++}
++
+ void qmm_nax(
+     const array& x,
+     const array& w,
+@@ -831,11 +901,17 @@
+ 
+   int wm = 2;
+   int wn = 2;
+-  // Use smaller bm when one block covers all of M. Only qmm_t_nax has a 32-row
+-  // instantiation.
+-  int bm = (transpose && M <= 32) ? 32 : 64;
++  int bm = 64;
+   int bn = 64;
+   int bk = 64;
++  if (transpose) {
++    const QmmTNaxTile tile = select_qmm_t_nax_tile(M, group_size);
++    bm = tile.bm;
++    bn = tile.bn;
++    bk = tile.bk;
++    wm = tile.wm;
++    wn = tile.wn;
++  }
+   MTL::Size group_dims(32, wn, wm);
+   MTL::Size grid_dims((N + bn - 1) / bn, (M + bm - 1) / bm, B);
+ 
