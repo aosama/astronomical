@@ -63,9 +63,13 @@ jobs:
       # name blocks merge even when a later run on the same SHA is green.
       cancel-in-progress: false
     # Restore, verification, and publication all remain inside the cost boundary.
-    # Allow sufficient headroom for cache saves after a step-level compile timeout;
-    # worst-case cold compile (~425s) + overhead (~185s) + cache saves (~30s) ≈ 640s.
-    timeout-minutes: 15
+    # The cap must also cover a cold native rebuild: a new native identity (new
+    # fingerprint policy, third-party bump, schema bump) pays a full CMake MLX
+    # build (~540-720s at the hosted runners' two native jobs) before cargo even
+    # starts, and a cancelled run discards the native cache save, so the next run
+    # would pay it again. Cold native (~720s) + cold compile (~425s) + overhead
+    # (~185s) + cache saves (~30s) ≈ 1360s.
+    timeout-minutes: 30
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
