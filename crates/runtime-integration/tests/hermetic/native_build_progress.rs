@@ -64,7 +64,10 @@ fn should_emit_heartbeat_lines_while_an_operation_is_running() {
         .with_heartbeat_interval(Duration::from_millis(100));
 
     let compile_progress = native_build_progress.begin_operation("native-compile");
-    thread::sleep(Duration::from_millis(350));
+    // The window must stay long relative to the heartbeat interval: a loaded
+    // CI runner can starve the heartbeat thread for whole intervals, so a
+    // 350 ms window once observed a single beat and failed the assertion.
+    thread::sleep(Duration::from_millis(2000));
     compile_progress.complete("success");
 
     let progress_text =
