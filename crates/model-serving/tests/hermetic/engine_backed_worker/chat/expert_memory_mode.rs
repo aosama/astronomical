@@ -30,6 +30,12 @@ async fn should_emit_only_changed_expert_memory_modes_without_losing_token_outpu
     });
 
     assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::ExpertMemoryModeChanged {
+            expert_memory_mode: ExpertMemoryMode::Resident,
+        }
+    );
     supervisor_writer
         .send_command(&WorkerCommand::Generate(chat_command(744, 12)))
         .await
@@ -105,6 +111,12 @@ async fn should_emit_the_recovered_resident_mode_before_completing_the_same_requ
     });
 
     assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::ExpertMemoryModeChanged {
+            expert_memory_mode: ExpertMemoryMode::Resident,
+        }
+    );
     supervisor_writer
         .send_command(&WorkerCommand::Generate(chat_command(745, 2)))
         .await
@@ -180,6 +192,12 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
     });
 
     assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::ExpertMemoryModeChanged {
+            expert_memory_mode: ExpertMemoryMode::Paged,
+        }
+    );
     supervisor_writer
         .send_command(&WorkerCommand::Generate(chat_command(746, 2)))
         .await
@@ -277,6 +295,12 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
     });
 
     assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::ExpertMemoryModeChanged {
+            expert_memory_mode: ExpertMemoryMode::Paged,
+        }
+    );
     supervisor_writer
         .send_command(&WorkerCommand::Generate(chat_command(747, 1)))
         .await
