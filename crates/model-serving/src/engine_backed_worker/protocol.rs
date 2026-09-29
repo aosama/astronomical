@@ -79,6 +79,14 @@ where
                         ),
                     )
                     .await?;
+                // The menu's expert-mode label must be reported fact from the moment readiness
+                // is published. Without this event the label stays a supervisor-side fallback
+                // guess until the first generation starts, which mislabels paged loads.
+                if let Some(expert_memory_mode) = engine_load_result.expert_memory_mode() {
+                    event_writer
+                        .send_event(&WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode })
+                        .await?;
+                }
                 if let Some(worker_runtime_feature_configuration) =
                     self.worker_runtime_feature_configuration()
                 {

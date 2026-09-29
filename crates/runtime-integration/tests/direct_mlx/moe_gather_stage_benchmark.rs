@@ -154,7 +154,7 @@ fn measure_assignment_replication(
 ) -> ReplicationMeasurement {
     let token_states = build_token_states(runtime, token_count, HIDDEN_SIZE);
     let copied_bytes = sorted_row_count * HIDDEN_SIZE * 2;
-    let median_millis = measure_stage(runtime, "assignment_replication", || {
+    let median_millis = measure_stage("assignment_replication", || {
         let sorted_states = runtime
             .take_axis(&token_states, argsort_permutation, 0)
             .expect("the sorted state replication should build");
@@ -175,7 +175,7 @@ fn measure_gather_qmm(
     rhs_indices: Option<&MlxArray>,
     stage_label: &str,
 ) -> f64 {
-    measure_stage(runtime, stage_label, || {
+    measure_stage(stage_label, || {
         let product = runtime
             .gather_quantized_matmul_affine(
                 activations,
@@ -205,7 +205,7 @@ fn measure_swiglu_pass(
 ) -> f64 {
     let rows = sorted_row_count as i32;
     let fused_width = (MOE_INTERMEDIATE * 2) as i32;
-    measure_stage(runtime, "swiglu_elementwise", || {
+    measure_stage("swiglu_elementwise", || {
         let gate = runtime
             .slice(
                 fused_output,
@@ -234,7 +234,7 @@ fn measure_swiglu_pass(
     })
 }
 
-fn measure_stage(runtime: &MlxRuntime, stage_label: &str, stage: impl Fn()) -> f64 {
+fn measure_stage(stage_label: &str, stage: impl Fn()) -> f64 {
     for warmup_iteration in 1..=WARMUP_ITERATIONS {
         eprintln!(
             "[moe-gather-stage] warmup {warmup_iteration}/{WARMUP_ITERATIONS} stage={stage_label}"
