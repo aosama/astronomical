@@ -239,6 +239,9 @@ async fn run_daemon(
             executor: Arc::new(worker_handle.clone()),
             reloadable_config: Some(Arc::clone(&reloadable_config)),
             next_chat_request_id: Arc::clone(&next_chat_request_id),
+            download_catalog: Arc::clone(&download_catalog),
+            library_download_coordinator: Some(Arc::clone(&library_download_coordinator)),
+            instance_paths: instance_paths.clone(),
         },
         &supervisor_attribution_log,
     )

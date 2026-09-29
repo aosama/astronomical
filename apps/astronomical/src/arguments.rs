@@ -5,6 +5,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use crate::embed_arguments::EmbedArguments;
 use crate::errors::UsageError;
+use crate::models_arguments::ModelsCommand;
 use crate::respond_arguments::RespondArguments;
 use crate::schema_arguments::SchemaArguments;
 use crate::validate_config_arguments::ValidateConfigArguments;
@@ -15,20 +16,31 @@ const HELP_TEXT: &str = concat!(
     "       astronomical launch opencode [--model MODEL_ID]\n",
     "       astronomical respond PROMPT [--model MODEL_ID] [--no-stream]\n",
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
+    "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
+    "       astronomical status\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
     "       astronomical validate config [--instance stable|development] [--json]\n",
     "       astronomical --help\n",
     "       astronomical --version\n\n",
-    "Launch a coding harness against the local Astronomical Library, or run\n",
-    "ephemeral in-process utilities against the instance configuration.\n\n",
+    "Launch a coding harness against the local Astronomical Library, manage\n",
+    "the model library through the daemon, or run ephemeral in-process\n",
+    "utilities against the instance configuration.\n\n",
     "Commands:\n",
     "  launch [tool]    Start a supported harness (OpenCode in this release)\n",
-    "  respond PROMPT   One-shot chat answer from the loaded model, streamed to stdout\n",
-    "  embed [TEXT]     One-shot embedding vector from the loaded model as one JSON document\n",
+    "  respond PROMPT   One-shot chat answer; the daemon loads or downloads the\n",
+    "                   model automatically when it is not resident yet\n",
+    "  embed [TEXT]     One-shot embedding vector as one JSON document; the daemon\n",
+    "                   loads or downloads the model automatically when needed\n",
+    "  models list      Models installed on this Mac\n",
+    "  models supported Release catalog: what can be downloaded, with local state\n",
+    "  models default   Show the effective default model; with MODEL_ID, download it\n",
+    "                   first when this Mac lacks it, then persist it\n",
+    "  models download  Start (or resume) a download and wait, with live progress\n",
+    "  status           Worker state, resident model, default model, active download\n",
     "  schema object    Build a strict JSON object schema for structured output\n",
     "  validate config  Report effective values of an instance configuration\n\n",
     "Options:\n",
-    "  --model MODEL_ID   Library chat model to use when several exist and stdin is not a terminal\n",
+    "  --model MODEL_ID   Model to use (default: the daemon's effective default model)\n",
     "  --no-stream        Print the finished respond answer once instead of streaming\n",
     "  --file PATH        Embed the file's contents instead of TEXT or stdin\n",
     "  --instance NAME    Which instance to inspect for validate config (default: development)\n",
@@ -46,6 +58,8 @@ pub enum CliCommand {
     Launch(LaunchArguments),
     Respond(RespondArguments),
     Embed(EmbedArguments),
+    Models(ModelsCommand),
+    Status,
     Schema(SchemaArguments),
     ValidateConfig(ValidateConfigArguments),
 }
@@ -92,6 +106,15 @@ pub fn parse_command(
         "launch" => parse_launch_arguments(&remaining_arguments[1..]).map(CliCommand::Launch),
         "respond" => parse_respond_arguments(&remaining_arguments[1..]).map(CliCommand::Respond),
         "embed" => parse_embed_arguments(&remaining_arguments[1..]).map(CliCommand::Embed),
+        "models" => parse_models_command(&remaining_arguments[1..]).map(CliCommand::Models),
+        "status" => {
+            if remaining_arguments.len() > 1 {
+                return Err(UsageError::UnknownArgument(
+                    remaining_arguments[1].to_string_lossy().into_owned(),
+                ));
+            }
+            Ok(CliCommand::Status)
+        }
         "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
         "validate" => {
             parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
@@ -106,7 +129,7 @@ fn parse_schema_command(
     let schema_target = remaining_arguments
         .first()
         .and_then(|argument| argument.to_str())
-        .ok_or_else(|| UsageError::MissingCommand)?;
+        .ok_or(UsageError::MissingCommand)?;
     if schema_target != "object" {
         return Err(UsageError::UnknownSchemaTarget(schema_target.to_owned()));
     }
@@ -119,13 +142,108 @@ fn parse_validate_command(
     let validate_target = remaining_arguments
         .first()
         .and_then(|argument| argument.to_str())
-        .ok_or_else(|| UsageError::MissingCommand)?;
+        .ok_or(UsageError::MissingCommand)?;
     if validate_target != "config" {
         return Err(UsageError::UnknownValidateTarget(
             validate_target.to_owned(),
         ));
     }
     crate::validate_config_arguments::parse_validate_config_arguments(&remaining_arguments[1..])
+}
+
+fn parse_models_command(remaining_arguments: &[OsString]) -> Result<ModelsCommand, UsageError> {
+    let subcommand = remaining_arguments
+        .first()
+        .and_then(|argument| argument.to_str())
+        .ok_or(UsageError::ModelsSubcommandRequired)?;
+    let trailing_arguments = &remaining_arguments[1..];
+    match subcommand {
+        "list" => {
+            reject_trailing_arguments(trailing_arguments)?;
+            Ok(ModelsCommand::List)
+        }
+        "supported" => {
+            reject_trailing_arguments(trailing_arguments)?;
+            Ok(ModelsCommand::Supported)
+        }
+        "default" => {
+            let model_id = match trailing_arguments.first() {
+                Some(raw_model_id) if !raw_model_id.to_string_lossy().starts_with('-') => {
+                    if trailing_arguments.len() > 1 {
+                        return Err(UsageError::UnknownArgument(
+                            trailing_arguments[1].to_string_lossy().into_owned(),
+                        ));
+                    }
+                    Some(parse_positional_model_id(raw_model_id)?)
+                }
+                Some(raw_flag) => {
+                    return Err(UsageError::UnknownArgument(
+                        raw_flag.to_string_lossy().into_owned(),
+                    ));
+                }
+                None => None,
+            };
+            Ok(ModelsCommand::Default { model_id })
+        }
+        "download" => {
+            if trailing_arguments.is_empty() {
+                return Err(UsageError::ModelsDownloadModelRequired);
+            }
+            let raw_model_id = &trailing_arguments[0];
+            if raw_model_id.to_string_lossy().starts_with('-') {
+                return Err(UsageError::UnknownArgument(
+                    raw_model_id.to_string_lossy().into_owned(),
+                ));
+            }
+            if trailing_arguments.len() > 1 {
+                return Err(UsageError::UnknownArgument(
+                    trailing_arguments[1].to_string_lossy().into_owned(),
+                ));
+            }
+            Ok(ModelsCommand::Download {
+                model_id: parse_positional_model_id(raw_model_id)?,
+            })
+        }
+        other => Err(UsageError::UnknownModelsSubcommand(other.to_owned())),
+    }
+}
+
+fn reject_trailing_arguments(trailing_arguments: &[OsString]) -> Result<(), UsageError> {
+    if let Some(extra_argument) = trailing_arguments.first() {
+        return Err(UsageError::UnknownArgument(
+            extra_argument.to_string_lossy().into_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn parse_positional_model_id(raw_model_id: &OsString) -> Result<String, UsageError> {
+    let model_id = raw_model_id
+        .to_str()
+        .ok_or(UsageError::MissingValue("MODEL_ID"))?;
+    if model_id.is_empty() {
+        return Err(UsageError::MissingValue("MODEL_ID"));
+    }
+    Ok(model_id.to_owned())
+}
+
+/// Reads the value that must follow a value-taking flag. A missing,
+/// invalid, empty, or flag-shaped value is the same usage failure: the
+/// flag's value is what is missing.
+fn flag_value(
+    remaining_arguments: &[OsString],
+    value_index: usize,
+    flag_name: &'static str,
+) -> Result<String, UsageError> {
+    let raw_value = remaining_arguments
+        .get(value_index)
+        .ok_or(UsageError::MissingValue(flag_name))?
+        .to_str()
+        .ok_or(UsageError::MissingValue(flag_name))?;
+    if raw_value.is_empty() || raw_value.starts_with('-') {
+        return Err(UsageError::MissingValue(flag_name));
+    }
+    Ok(raw_value.to_owned())
 }
 
 fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArguments, UsageError> {
@@ -138,15 +256,11 @@ fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArgu
             if model_id.is_some() {
                 return Err(UsageError::RepeatedArgument("--model"));
             }
-            let raw_model_id = remaining_arguments
-                .get(argument_index + 1)
-                .ok_or(UsageError::MissingValue("--model"))?
-                .to_str()
-                .ok_or(UsageError::MissingValue("--model"))?;
-            if raw_model_id.is_empty() || raw_model_id.starts_with('-') {
-                return Err(UsageError::MissingValue("--model"));
-            }
-            model_id = Some(raw_model_id.to_owned());
+            model_id = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--model",
+            )?);
             argument_index += 2;
             continue;
         }
@@ -184,15 +298,11 @@ fn parse_respond_arguments(
             if model_id.is_some() {
                 return Err(UsageError::RepeatedArgument("--model"));
             }
-            let raw_model_id = remaining_arguments
-                .get(argument_index + 1)
-                .ok_or(UsageError::MissingValue("--model"))?
-                .to_str()
-                .ok_or(UsageError::MissingValue("--model"))?;
-            if raw_model_id.is_empty() || raw_model_id.starts_with('-') {
-                return Err(UsageError::MissingValue("--model"));
-            }
-            model_id = Some(raw_model_id.to_owned());
+            model_id = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--model",
+            )?);
             argument_index += 2;
             continue;
         }
@@ -239,15 +349,11 @@ fn parse_embed_arguments(remaining_arguments: &[OsString]) -> Result<EmbedArgume
             if model_id.is_some() {
                 return Err(UsageError::RepeatedArgument("--model"));
             }
-            let raw_model_id = remaining_arguments
-                .get(argument_index + 1)
-                .ok_or(UsageError::MissingValue("--model"))?
-                .to_str()
-                .ok_or(UsageError::MissingValue("--model"))?;
-            if raw_model_id.is_empty() || raw_model_id.starts_with('-') {
-                return Err(UsageError::MissingValue("--model"));
-            }
-            model_id = Some(raw_model_id.to_owned());
+            model_id = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--model",
+            )?);
             argument_index += 2;
             continue;
         }
@@ -255,15 +361,8 @@ fn parse_embed_arguments(remaining_arguments: &[OsString]) -> Result<EmbedArgume
             if file_path.is_some() {
                 return Err(UsageError::RepeatedArgument("--file"));
             }
-            let raw_file_path = remaining_arguments
-                .get(argument_index + 1)
-                .ok_or(UsageError::MissingValue("--file"))?
-                .to_str()
-                .ok_or(UsageError::MissingValue("--file"))?;
-            if raw_file_path.is_empty() || raw_file_path.starts_with('-') {
-                return Err(UsageError::MissingValue("--file"));
-            }
-            file_path = Some(PathBuf::from(raw_file_path));
+            let file_value = flag_value(remaining_arguments, argument_index + 1, "--file")?;
+            file_path = Some(PathBuf::from(file_value));
             argument_index += 2;
             continue;
         }

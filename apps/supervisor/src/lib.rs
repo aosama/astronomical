@@ -15,6 +15,7 @@ mod console_assets;
 mod console_render_assets;
 mod daemon_ipc;
 mod daemon_ipc_embeddings;
+mod daemon_ipc_models;
 mod embeddings_executor;
 mod generation_performance_log;
 mod image_generation_executor;

@@ -3,7 +3,7 @@
 use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
 
-use crate::application::ApplicationState;
+use crate::{application::ApplicationState, library::project_catalog_entries};
 
 pub(crate) fn library_catalog_routes() -> Router<ApplicationState> {
     Router::new().route("/v1/library/catalog", get(get_library_catalog))
@@ -21,39 +21,28 @@ async fn get_library_catalog(
         Some(download_coordinator) => download_coordinator.validated_publications_snapshot().await,
         None => Default::default(),
     };
-    let mut entries = Vec::with_capacity(application_state.download_catalog.entry_count());
-    for catalog_entry in application_state.download_catalog.entries() {
-        let huggingface_id = catalog_entry.huggingface_id();
-        let discovered_model = discovered_models.iter().find(|model| {
-            model.provider_model_id.as_deref() == Some(huggingface_id)
-                && model.revision == catalog_entry.revision()
-        });
-        let has_validated_publication = validated_publications.contains(huggingface_id);
-        let is_ready = discovered_model.is_some() || has_validated_publication;
-        let destination_directory = discovered_model
-            .map(|model| model.model_directory.display().to_string())
-            .or_else(|| {
-                application_state.library_download_coordinator.as_ref().map(
-                    |download_coordinator| {
-                        download_coordinator
-                            .destination_directory(huggingface_id)
-                            .display()
-                            .to_string()
-                    },
-                )
-            });
-        let requestable_model_id = is_ready.then(|| {
-            discovered_model.map_or_else(
-                || requestable_model_id_from_huggingface_id(huggingface_id),
-                |model| model.model_id.clone(),
-            )
+    let projections = project_catalog_entries(
+        &application_state.download_catalog,
+        &discovered_models,
+        &validated_publications,
+        current_job.as_ref(),
+    );
+    let mut entries = Vec::with_capacity(projections.len());
+    for projection in &projections {
+        let destination_directory = projection.discovered_model_directory.clone().or_else(|| {
+            application_state
+                .library_download_coordinator
+                .as_ref()
+                .map(|download_coordinator| {
+                    download_coordinator
+                        .destination_directory(projection.catalog_entry.huggingface_id())
+                        .display()
+                        .to_string()
+                })
         });
         entries.push(LibraryCatalogEntryResponse::from_entry(
-            catalog_entry,
-            is_ready,
+            projection,
             destination_directory,
-            requestable_model_id,
-            current_job.as_ref(),
         ));
     }
     Json(LibraryCatalogResponse {
@@ -108,13 +97,11 @@ struct LibraryCatalogCapabilitiesResponse {
 
 impl LibraryCatalogEntryResponse {
     fn from_entry(
-        catalog_entry: &super::DownloadCatalogEntry,
-        ready_on_this_mac: bool,
+        projection: &super::CatalogEntryProjection,
         destination_directory: Option<String>,
-        requestable_model_id: Option<String>,
-        current_job: Option<&super::DownloadJob>,
     ) -> Self {
-        let capabilities = catalog_entry.capabilities();
+        let catalog_entry = projection.catalog_entry;
+        let capabilities = &projection.capabilities;
         Self {
             huggingface_id: catalog_entry.huggingface_id().to_owned(),
             revision: catalog_entry.revision().to_owned(),
@@ -122,18 +109,14 @@ impl LibraryCatalogEntryResponse {
             family: catalog_entry.family().as_str(),
             approximate_size_bytes: catalog_entry.approximate_size_bytes(),
             public: true,
-            ready_on_this_mac,
+            ready_on_this_mac: projection.ready_on_this_mac,
             destination_directory,
-            download_state: current_job
-                .filter(|job| {
-                    job.huggingface_id() == catalog_entry.huggingface_id() && !ready_on_this_mac
-                })
-                .map(|job| job.state().as_str()),
+            download_state: projection.download_state,
             description: catalog_entry.description().map(str::to_owned),
             quantization_label: catalog_entry.quantization_label().map(str::to_owned),
             architecture_summary: catalog_entry.architecture_summary().map(str::to_owned),
             upstream_license: catalog_entry.upstream_license().map(str::to_owned),
-            requestable_model_id,
+            requestable_model_id: projection.requestable_model_id.clone(),
             capabilities: LibraryCatalogCapabilitiesResponse {
                 supports_reasoning: capabilities.supports_reasoning,
                 supports_vision: capabilities.supports_vision,
@@ -145,15 +128,4 @@ impl LibraryCatalogEntryResponse {
             },
         }
     }
-}
-
-/// Derives the local requestable model ID from the Hugging Face identity's leaf segment.
-/// Discovery publishes Library models under their leaf directory name, so "org/Model-Name"
-/// becomes requestable as "Model-Name".
-fn requestable_model_id_from_huggingface_id(huggingface_id: &str) -> String {
-    huggingface_id
-        .rsplit('/')
-        .next()
-        .unwrap_or(huggingface_id)
-        .to_owned()
 }

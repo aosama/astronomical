@@ -2,18 +2,12 @@
 //! slice 1). The verb must produce strict JSON schemas in-process with no
 //! daemon, no GPU, and no network.
 
-use std::ffi::OsString;
-
 use astronomical_cli::{
-    CliCommand, SchemaArguments, SchemaPropertyInput, SchemaPropertyKind, UsageError,
-    build_schema_document, parse_command, run_schema,
+    CliCommand, SchemaArguments, SchemaPropertyInput, SchemaPropertyKind, build_schema_document,
+    run_schema,
 };
 
-fn parse(arguments: &[&str]) -> Result<CliCommand, UsageError> {
-    parse_command(
-        std::iter::once(OsString::from("astronomical")).chain(arguments.iter().map(OsString::from)),
-    )
-}
+use super::test_support::parse;
 
 fn parsed_schema(arguments: &[&str]) -> SchemaArguments {
     let mut full_arguments = vec!["schema"];

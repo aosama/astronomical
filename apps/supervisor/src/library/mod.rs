@@ -1,6 +1,7 @@
 //! Release-bundled model catalog and its local Library REST boundary.
 
 mod catalog_endpoint;
+mod catalog_projection;
 mod download_catalog;
 mod download_coordinator;
 mod download_disk_preflight;
@@ -32,8 +33,12 @@ mod hugging_face_hub_bounds;
 mod reqwest_hub_transport;
 
 pub(crate) use catalog_endpoint::library_catalog_routes;
+pub(crate) use catalog_projection::{
+    CatalogEntryProjection, project_catalog_entries, requestable_model_id_from_huggingface_id,
+};
 pub use download_catalog::{
-    DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError, DownloadCatalogFamily,
+    DownloadCatalog, DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError,
+    DownloadCatalogFamily,
 };
 pub(crate) use download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision};
 pub use download_coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};

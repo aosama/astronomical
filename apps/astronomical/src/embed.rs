@@ -2,9 +2,10 @@
 //! document out, exit.
 //!
 //! The CLI never touches the REST surface. It speaks the framed daemon IPC
-//! protocol over the instance's unix socket: the shared probe establishes
-//! whether a model is resident, then one connection carries the embeddings
-//! batch.
+//! protocol over the instance's unix socket: the shared model lifecycle
+//! resolves which model to use (flag, daemon default, or built-in) and
+//! downloads it when the Mac lacks it, then one connection carries the
+//! embeddings batch — the daemon loads or swaps the resident model itself.
 
 use std::{
     io::{Read, Write},
@@ -15,7 +16,7 @@ use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse, EmbeddingsFailure
 use serde_json::json;
 use tokio::time::timeout;
 
-use crate::{DaemonProbe, EmbedArguments, errors::EmbedError};
+use crate::{DaemonProbe, EmbedArguments, ModelLifecycle, RequiredCapability, errors::EmbedError};
 
 /// Collaborators the embed journey needs, injected so tests can stub them.
 pub struct EmbedDependencies<'a> {
@@ -25,11 +26,19 @@ pub struct EmbedDependencies<'a> {
     pub stdin: &'a mut dyn Read,
     /// Where the JSON vector document goes.
     pub stdout: &'a mut dyn Write,
+    /// Where download progress goes.
+    pub stderr: &'a mut dyn Write,
     /// Bound for each protocol stage of the journey.
     pub request_timeout: Duration,
+    /// Bound for the whole download-wait stage, if the model must download.
+    pub download_stage_bound: Duration,
+    /// Wait between download status polls.
+    pub download_poll_interval: Duration,
 }
 
-/// Runs the whole embed journey against the resident daemon.
+/// Runs the whole embed journey against the resident daemon: resolve the
+/// model (flag, daemon default, or built-in), let the lifecycle download it
+/// when the Mac lacks it, then submit the embeddings batch.
 pub async fn run_embed(
     embed_arguments: &EmbedArguments,
     embed_dependencies: &mut EmbedDependencies<'_>,
@@ -39,14 +48,31 @@ pub async fn run_embed(
         candidate_socket_paths: embed_dependencies.candidate_socket_paths.clone(),
         request_timeout: embed_dependencies.request_timeout,
     };
-    let ready_model_id = daemon_probe.ready_model_id().await?;
-    if ready_model_id.is_none() && embed_arguments.model_id.is_none() {
-        return Err(EmbedError::NoModelLoaded);
+    let model_lifecycle = ModelLifecycle {
+        daemon_probe,
+        download_stage_bound: embed_dependencies.download_stage_bound,
+        download_poll_interval: embed_dependencies.download_poll_interval,
+    };
+    let mut progress_started = false;
+    let embed_model_id = model_lifecycle
+        .prepare_model_id(
+            embed_arguments.model_id.as_deref(),
+            RequiredCapability::Embeddings,
+            &mut |progress_line| {
+                progress_started = true;
+                let _ = write!(embed_dependencies.stderr, "\r{progress_line}");
+                let _ = embed_dependencies.stderr.flush();
+            },
+        )
+        .await?;
+    if progress_started {
+        // Finalize the live progress line before the JSON document owns stdout.
+        let _ = writeln!(embed_dependencies.stderr);
     }
     embed_input_text(
         input_text,
-        embed_arguments.model_id.clone(),
-        &daemon_probe,
+        embed_model_id,
+        &model_lifecycle.daemon_probe,
         embed_dependencies,
     )
     .await
@@ -86,13 +112,13 @@ fn resolve_input_text(
 /// JSON document on stdout.
 async fn embed_input_text(
     input_text: String,
-    requested_model_id: Option<String>,
+    embed_model_id: String,
     daemon_probe: &DaemonProbe,
     embed_dependencies: &mut EmbedDependencies<'_>,
 ) -> Result<(), EmbedError> {
     let mut daemon_client = daemon_probe.connect().await?;
     let embed_generate_request = DaemonRequest::EmbedGenerate {
-        model: requested_model_id,
+        model: Some(embed_model_id),
         inputs: vec![input_text],
         dimensions: None,
     };

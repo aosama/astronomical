@@ -6,7 +6,9 @@ use std::{
     sync::{Arc, RwLock, atomic::AtomicU64},
 };
 
-use astronomical_config::AstronomicalInstancePaths;
+use astronomical_config::{
+    AstronomicalConfig, AstronomicalInstancePaths, leaf_model_id, near_model_matches,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcListener,
@@ -19,6 +21,7 @@ use crate::{
     ImageGenerationExecutor,
     application::allocate_chat_request_id,
     config_reload::ResolvedRuntimeConfig,
+    library::{DownloadCatalog, LibraryDownloadCoordinator},
     load_configured_qwen_thinking_channel_seed,
     request_generation_defaults::{RequestGenerationSettingsPresence, apply_generation_defaults},
     supervisor_performance_attribution::{
@@ -27,6 +30,10 @@ use crate::{
     },
     worker_health::{WorkerHealthSnapshot, WorkerHealthStatus},
 };
+
+/// Built-in chat model used when the client sends no model and the user has
+/// configured no default; single source of truth lives in the config crate.
+use astronomical_config::BUILTIN_DEFAULT_MODEL_ID;
 
 /// One running daemon IPC service bound to the instance socket.
 pub struct DaemonIpcService {
@@ -66,6 +73,12 @@ pub struct DaemonIpcGenerationContext {
     pub reloadable_config: Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
     /// Shared chat request identifier counter, also used by the REST surface.
     pub next_chat_request_id: Arc<AtomicU64>,
+    /// Bundled release catalog of downloadable models.
+    pub download_catalog: Arc<DownloadCatalog>,
+    /// Library download coordinator, present when the daemon owns Library state.
+    pub library_download_coordinator: Option<Arc<LibraryDownloadCoordinator>>,
+    /// Instance paths used to read and persist user configuration.
+    pub instance_paths: AstronomicalInstancePaths,
 }
 
 /// Starts serving ephemeral local daemon requests on the instance socket.
@@ -158,6 +171,9 @@ async fn handle_streaming_daemon_request(
             let status_response = DaemonResponse::Status {
                 worker_status: health_snapshot.status.into(),
                 ready_model_id: health_snapshot.ready_model_id,
+                default_model_id: Some(effective_default_model_id(
+                    &generation_context.instance_paths,
+                )),
             };
             send_attributed_streaming_response(
                 &supervisor_attribution_log,
@@ -212,7 +228,59 @@ async fn handle_streaming_daemon_request(
             )
             .await
         }
+        DaemonRequest::ModelsList => {
+            crate::daemon_ipc_models::handle_models_list(
+                &generation_context,
+                &supervisor_attribution_log,
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::Catalog => {
+            crate::daemon_ipc_models::handle_catalog(
+                &generation_context,
+                &supervisor_attribution_log,
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::DownloadStart { model_id } => {
+            crate::daemon_ipc_models::handle_download_start(
+                &generation_context,
+                &supervisor_attribution_log,
+                model_id,
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::DownloadStatus => {
+            crate::daemon_ipc_models::handle_download_status(
+                &generation_context,
+                &supervisor_attribution_log,
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::DefaultModelSet { model_id } => {
+            crate::daemon_ipc_models::handle_default_model_set(
+                &generation_context,
+                &supervisor_attribution_log,
+                model_id,
+                streaming_response_writer,
+            )
+            .await
+        }
     }
+}
+
+/// The model ID CLI verbs fall back to: the user-configured default model,
+/// or the built-in fallback when none is configured. The config file is read
+/// fresh so a `models default` made on another CLI process is visible here.
+pub(super) fn effective_default_model_id(instance_paths: &AstronomicalInstancePaths) -> String {
+    AstronomicalConfig::load_from_instance_paths(instance_paths.clone())
+        .ok()
+        .and_then(|user_config| user_config.default_model().map(str::to_owned))
+        .unwrap_or_else(|| BUILTIN_DEFAULT_MODEL_ID.to_owned())
 }
 
 async fn send_attributed_streaming_response(
@@ -248,7 +316,11 @@ async fn stream_chat_generation(
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
     let health_snapshot = generation_context.executor.worker_health_snapshot();
-    if let Some(rejection_reason) = ipc_generation_rejection_reason(&health_snapshot, &model) {
+    if let Some(rejection_reason) = ipc_generation_rejection_reason(
+        &health_snapshot,
+        &generation_context.reloadable_config,
+        &model,
+    ) {
         let rejection_response = DaemonResponse::GenerationRejected {
             reason: rejection_reason,
         };
@@ -301,23 +373,57 @@ async fn stream_chat_generation(
     relay_stream_events(stream_event_receiver, streaming_response_writer).await
 }
 
-/// Rejects a generation when the worker is not ready with the requested
-/// model; returns `None` when the generation may proceed.
+/// Rejects a generation the daemon cannot serve: an unavailable worker, or a
+/// requested model that is unknown to the live model policy catalog (checked
+/// as either a full catalog key or a leaf alias). A known model that is not
+/// resident is admitted on purpose: the worker loop swaps or loads it on
+/// demand, which is how the CLI auto-loads from a cold daemon.
 fn ipc_generation_rejection_reason(
     health_snapshot: &WorkerHealthSnapshot,
+    reloadable_config: &Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
     requested_model_id: &str,
 ) -> Option<String> {
-    if health_snapshot.status != WorkerHealthStatus::Ready {
+    if health_snapshot.status == WorkerHealthStatus::Unavailable {
         return Some("the daemon worker is not ready to serve chat generation".to_owned());
     }
-    match &health_snapshot.ready_model_id {
-        Some(ready_model_id) if ready_model_id == requested_model_id => None,
-        Some(ready_model_id) => Some(format!(
-            "the model {requested_model_id} is not loaded; the resident model is {ready_model_id}"
-        )),
-        None => Some(format!(
-            "the model {requested_model_id} is not loaded and no model is resident"
-        )),
+    let Some(reloadable_config) = reloadable_config else {
+        // No policy catalog wired: the worker loop applies its own unknown-model guard.
+        return None;
+    };
+    let Ok(live_config) = reloadable_config.read() else {
+        return Some("the daemon configuration is temporarily unavailable".to_owned());
+    };
+    let known_model_ids: Vec<&str> = live_config
+        .model_policy_catalog
+        .keys()
+        .map(String::as_str)
+        .collect();
+    let requested_is_known = known_model_ids.contains(&requested_model_id)
+        || known_model_ids.contains(&leaf_model_id(requested_model_id));
+    if !requested_is_known {
+        let suggested_model_ids = near_model_matches(requested_model_id, &known_model_ids);
+        return Some(unknown_model_rejection_reason(
+            requested_model_id,
+            &suggested_model_ids,
+            "the daemon knows no such model; run `astronomical models list` to see installed models or `astronomical models supported` to see downloadable ones",
+        ));
+    }
+    None
+}
+
+/// Builds the shared unknown-model rejection text with near-match suggestions.
+pub(crate) fn unknown_model_rejection_reason(
+    requested_model_id: &str,
+    suggested_model_ids: &[String],
+    base_message: &str,
+) -> String {
+    if suggested_model_ids.is_empty() {
+        format!("the model {requested_model_id} is unknown — {base_message}")
+    } else {
+        format!(
+            "the model {requested_model_id} is unknown — {base_message}; did you mean: {}",
+            suggested_model_ids.join(", ")
+        )
     }
 }
 
@@ -341,14 +447,13 @@ fn apply_ipc_generation_defaults(
         settings_presence,
         generation_settings,
     );
-    if generation_settings.max_output_tokens == 0 {
-        if let Some(ready_model_capabilities) = &health_snapshot.ready_model_capabilities
-            && let Some(chat_capabilities) = &ready_model_capabilities.chat
-        {
-            // The worker advertises u32 token counts; the wire settings field is u16.
-            generation_settings.max_output_tokens =
-                u16::try_from(chat_capabilities.max_output_tokens).unwrap_or(u16::MAX);
-        }
+    if generation_settings.max_output_tokens == 0
+        && let Some(ready_model_capabilities) = &health_snapshot.ready_model_capabilities
+        && let Some(chat_capabilities) = &ready_model_capabilities.chat
+    {
+        // The worker advertises u32 token counts; the wire settings field is u16.
+        generation_settings.max_output_tokens =
+            u16::try_from(chat_capabilities.max_output_tokens).unwrap_or(u16::MAX);
     }
 }
 
@@ -458,7 +563,7 @@ fn stream_error_code_to_failure_reason(stream_error_code: ChatGenerationStreamEr
     }
 }
 
-async fn send_terminal_streaming_response(
+pub(super) async fn send_terminal_streaming_response(
     mut streaming_response_writer: StreamingResponseWriter,
     daemon_response: &DaemonResponse,
 ) -> Result<(), DaemonTransportError> {

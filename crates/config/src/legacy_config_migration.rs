@@ -220,6 +220,7 @@ fn build_migrated_config(
         runtime: RuntimeConfigFile {
             model_directories: legacy_config.model_directories,
             maximum_mlx_memory_gb: legacy_config.maximum_mlx_memory_gb,
+            default_model: None,
             experimental_qwen_thinking_channel_seed_enabled: None,
         },
         prompt_cache: Some(PromptCacheConfigFile {

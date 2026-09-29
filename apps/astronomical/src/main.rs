@@ -48,6 +48,8 @@ fn main() -> ExitCode {
         }
         Ok(CliCommand::Respond(respond_arguments)) => run_respond_verb(respond_arguments),
         Ok(CliCommand::Embed(embed_arguments)) => run_embed_verb(embed_arguments),
+        Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
+        Ok(CliCommand::Status) => run_status_verb(),
         Err(usage_error) => {
             eprint!("astronomical: {usage_error}\n\n{}", help_text());
             ExitCode::from(2)
@@ -78,7 +80,7 @@ fn run_validate_config_verb(
     match run_validate_config(&validate_arguments, &mut validate_dependencies) {
         Ok(()) => ExitCode::SUCCESS,
         Err(validate_error) => {
-            let _ = write!(stderr, "{validate_error}\n");
+            let _ = writeln!(stderr, "{validate_error}");
             ExitCode::FAILURE
         }
     }
@@ -180,12 +182,20 @@ fn run_respond_verb(respond_arguments: astronomical_cli::RespondArguments) -> Ex
         stdout: &mut stdout,
         stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        download_stage_bound: astronomical_cli::model_lifecycle::DOWNLOAD_WAIT_STAGE_BOUND,
+        download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
     };
     match respond_runtime.block_on(astronomical_cli::run_respond(
         &respond_arguments,
         &mut respond_dependencies,
     )) {
         Ok(()) => ExitCode::SUCCESS,
+        // A missing or capability-mismatched model is a usage error, so it
+        // exits 2 like a bad flag.
+        Err(astronomical_cli::RespondError::ModelUnavailable { reason }) => {
+            let _ = writeln!(stderr, "astronomical: {reason}");
+            ExitCode::from(2)
+        }
         Err(respond_error) => {
             let _ = writeln!(stderr, "astronomical: {respond_error}");
             ExitCode::FAILURE
@@ -208,15 +218,83 @@ fn run_embed_verb(embed_arguments: astronomical_cli::EmbedArguments) -> ExitCode
         candidate_socket_paths: candidate_ipc_socket_paths(),
         stdin: &mut stdin,
         stdout: &mut stdout,
+        stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        download_stage_bound: astronomical_cli::model_lifecycle::DOWNLOAD_WAIT_STAGE_BOUND,
+        download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
     };
     match embed_runtime.block_on(astronomical_cli::run_embed(
         &embed_arguments,
         &mut embed_dependencies,
     )) {
         Ok(()) => ExitCode::SUCCESS,
+        // A missing or capability-mismatched model is a usage error, so it
+        // exits 2 like a bad flag.
+        Err(astronomical_cli::EmbedError::ModelUnavailable { reason }) => {
+            let _ = writeln!(stderr, "astronomical: {reason}");
+            ExitCode::from(2)
+        }
         Err(embed_error) => {
             let _ = writeln!(stderr, "astronomical: {embed_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_models_verb(models_command: astronomical_cli::ModelsCommand) -> ExitCode {
+    let models_runtime = match build_current_thread_runtime() {
+        Ok(models_runtime) => models_runtime,
+        Err(runtime_error) => {
+            eprintln!("astronomical: {runtime_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+    let mut models_dependencies = astronomical_cli::ModelsDependencies {
+        candidate_socket_paths: candidate_ipc_socket_paths(),
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        download_stage_bound: astronomical_cli::model_lifecycle::DOWNLOAD_WAIT_STAGE_BOUND,
+        download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
+    };
+    match models_runtime.block_on(astronomical_cli::run_models(
+        &models_command,
+        &mut models_dependencies,
+    )) {
+        Ok(()) => ExitCode::SUCCESS,
+        // A missing model on `models download` is a usage error, so it
+        // exits 2 like a bad flag.
+        Err(astronomical_cli::ModelsError::ModelUnavailable { reason }) => {
+            let _ = writeln!(stderr, "astronomical: {reason}");
+            ExitCode::from(2)
+        }
+        Err(models_error) => {
+            let _ = writeln!(stderr, "astronomical: {models_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_status_verb() -> ExitCode {
+    let status_runtime = match build_current_thread_runtime() {
+        Ok(status_runtime) => status_runtime,
+        Err(runtime_error) => {
+            eprintln!("astronomical: {runtime_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut stdout = io::stdout();
+    let mut status_dependencies = astronomical_cli::StatusDependencies {
+        candidate_socket_paths: candidate_ipc_socket_paths(),
+        stdout: &mut stdout,
+        request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+    };
+    match status_runtime.block_on(astronomical_cli::run_status(&mut status_dependencies)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(status_error) => {
+            let _ = writeln!(io::stderr(), "astronomical: {status_error}");
             ExitCode::FAILURE
         }
     }

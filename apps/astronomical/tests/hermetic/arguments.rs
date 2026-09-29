@@ -1,13 +1,7 @@
-use std::ffi::OsString;
-
 use astronomical_cli::errors::UsageError;
-use astronomical_cli::{CliCommand, LaunchArguments, parse_command};
+use astronomical_cli::{CliCommand, LaunchArguments};
 
-fn parse(arguments: &[&str]) -> Result<CliCommand, UsageError> {
-    let process_arguments =
-        std::iter::once(OsString::from("astronomical")).chain(arguments.iter().map(OsString::from));
-    parse_command(process_arguments)
-}
+use super::test_support::parse;
 
 #[test]
 fn should_print_help_for_help_flag() {

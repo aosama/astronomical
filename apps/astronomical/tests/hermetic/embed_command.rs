@@ -3,29 +3,21 @@
 //! speaking the real framed protocol over a real unix socket.
 
 use std::{
-    ffi::OsString,
     io::{Read, Write},
     path::PathBuf,
-    process,
-    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use astronomical_cli::errors::{EmbedError, UsageError};
-use astronomical_cli::{CliCommand, EmbedArguments, EmbedDependencies, parse_command, run_embed};
-use astronomical_ipc_protocol::{
-    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonRequest, DaemonResponse,
-    DaemonWorkerStatus, EmbeddingsFailureReason, ProtocolReader, ProtocolWriter,
-};
+use astronomical_cli::errors::EmbedError;
+use astronomical_cli::{CliCommand, EmbedArguments, EmbedDependencies, UsageError, run_embed};
+use astronomical_ipc_protocol::EmbeddingsFailureReason;
 use tokio::time::timeout;
 
-const EMBED_TEST_TIMEOUT: Duration = Duration::from_secs(10);
-const SOCKET_FILE_NAME: &str = "ipc.sock";
-
-fn parse(arguments: &[&str]) -> Result<CliCommand, UsageError> {
-    let process_arguments =
-        std::iter::once(OsString::from("astronomical")).chain(arguments.iter().map(OsString::from));
-    parse_command(process_arguments)
-}
+use super::stub_daemon::{
+    StubDaemonConfig, StubEmbeddingsOutcome, StubInstalledModel, spawn_stub_daemon,
+};
+use super::test_support::{
+    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, parse,
+};
 
 fn embed_arguments(
     text: Option<&str>,
@@ -43,123 +35,28 @@ fn embed_dependencies<'a>(
     candidate_socket_paths: Vec<PathBuf>,
     stdin: &'a mut dyn Read,
     stdout: &'a mut Vec<u8>,
+    stderr: &'a mut Vec<u8>,
 ) -> EmbedDependencies<'a> {
     EmbedDependencies {
         candidate_socket_paths,
         stdin,
         stdout: stdout as &mut dyn Write,
-        request_timeout: EMBED_TEST_TIMEOUT,
+        stderr: stderr as &mut dyn Write,
+        request_timeout: TEST_TIMEOUT,
+        download_stage_bound: TEST_TIMEOUT,
+        download_poll_interval: DOWNLOAD_POLL_INTERVAL,
     }
 }
 
-fn fresh_embed_test_directory(test_name: &str) -> PathBuf {
-    let nanos_since_epoch = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock should provide time after the epoch")
-        .as_nanos();
-    let test_directory = std::env::temp_dir().join(format!(
-        "ast-embed-{}-{}-{test_name}",
-        process::id(),
-        nanos_since_epoch % 1_000_000_000
-    ));
-    std::fs::create_dir_all(&test_directory).expect("the embed test directory should be creatable");
-    test_directory
-}
-
-/// Outcome the stub daemon serves for one embeddings request.
-#[derive(Clone, Copy)]
-enum StubEmbeddingsOutcome {
-    Completed,
-    ContextLengthExceeded,
-}
-
-/// Stub daemon answering the real framed protocol: handshake, status, and
-/// one embeddings result frame per embeddings request.
-fn spawn_stub_embed_daemon(
-    socket_path: PathBuf,
-    ready_model_id: Option<String>,
-    embeddings_outcome: StubEmbeddingsOutcome,
-) -> tokio::task::JoinHandle<()> {
-    let ready_model_id = std::sync::Arc::new(ready_model_id);
-    // Bind before spawning so the client can never race an unbound socket.
-    let std_listener = std::os::unix::net::UnixListener::bind(&socket_path)
-        .expect("the stub daemon should bind the test socket");
-    std_listener
-        .set_nonblocking(true)
-        .expect("the stub listener should accept non-blocking mode");
-    let unix_listener = tokio::net::UnixListener::from_std(std_listener)
-        .expect("the stub listener should register with the runtime");
-    tokio::spawn(async move {
-        loop {
-            let Ok((connection_stream, _peer_address)) = unix_listener.accept().await else {
-                return;
-            };
-            let ready_model_id = std::sync::Arc::clone(&ready_model_id);
-            tokio::spawn(async move {
-                let (read_half, write_half) = connection_stream.into_split();
-                let mut protocol_reader = ProtocolReader::new(read_half);
-                let mut protocol_writer = ProtocolWriter::new(write_half);
-                loop {
-                    let Some(daemon_request) = protocol_reader.next_daemon_request().await.expect(
-                        "the stub daemon request read should not fail at the transport layer",
-                    ) else {
-                        return;
-                    };
-                    match daemon_request {
-                        DaemonRequest::Handshake => {
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::HandshakeAccepted {
-                                    protocol_version: DAEMON_PROTOCOL_VERSION,
-                                    application_name: DAEMON_APPLICATION_NAME.to_owned(),
-                                })
-                                .await
-                                .expect("the stub handshake should transmit");
-                        }
-                        DaemonRequest::Status => {
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::Status {
-                                    worker_status: DaemonWorkerStatus::Ready,
-                                    ready_model_id: ready_model_id.as_ref().clone(),
-                                })
-                                .await
-                                .expect("the stub status should transmit");
-                        }
-                        DaemonRequest::EmbedGenerate { .. } => {
-                            let embeddings_response = match embeddings_outcome {
-                                StubEmbeddingsOutcome::Completed => {
-                                    DaemonResponse::EmbeddingsCompleted {
-                                        model: ready_model_id
-                                            .as_ref()
-                                            .clone()
-                                            .expect("the completed stub always has a model"),
-                                        vectors: vec![vec![0.25, -0.5]],
-                                        input_token_counts: vec![3],
-                                    }
-                                }
-                                StubEmbeddingsOutcome::ContextLengthExceeded => {
-                                    DaemonResponse::EmbeddingsFailed {
-                                        reason: EmbeddingsFailureReason::ContextLengthExceeded {
-                                            actual_total_context_tokens: 5_000,
-                                            maximum_context_tokens: 2_048,
-                                        },
-                                    }
-                                }
-                            };
-                            protocol_writer
-                                .send_daemon_response(&embeddings_response)
-                                .await
-                                .expect("the stub embeddings frame should transmit");
-                            let _ = protocol_writer.close().await;
-                            return;
-                        }
-                        DaemonRequest::ChatGenerate { .. } => {
-                            panic!("the embed journey must never send a chat generation request");
-                        }
-                    }
-                }
-            });
-        }
-    })
+/// Stub with one resident embeddings model named as the effective default:
+/// the no-flag resolution path.
+fn resident_default_stub_config(embeddings_outcome: StubEmbeddingsOutcome) -> StubDaemonConfig {
+    StubDaemonConfig {
+        installed_models: vec![StubInstalledModel::embeddings("test/local-embedder", true)],
+        default_model_id: Some("test/local-embedder".to_owned()),
+        embeddings_outcome,
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -218,20 +115,24 @@ fn should_reject_embed_with_both_text_and_file_as_a_usage_error() {
 
 #[tokio::test]
 async fn should_embed_a_text_argument_into_one_json_vector_document() {
-    let test_directory = fresh_embed_test_directory("text-argument");
+    let test_directory = fresh_test_directory("embed", "text-argument");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_embed_daemon(
+    let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
-        Some("test/local-embedder".to_owned()),
-        StubEmbeddingsOutcome::Completed,
+        resident_default_stub_config(StubEmbeddingsOutcome::Completed),
     );
     let mut stdin_content = std::io::Cursor::new(Vec::new());
     let mut stdout = Vec::new();
-    let mut embed_dependencies =
-        embed_dependencies(vec![socket_path], &mut stdin_content, &mut stdout);
+    let mut stderr = Vec::new();
+    let mut embed_dependencies = embed_dependencies(
+        vec![socket_path],
+        &mut stdin_content,
+        &mut stdout,
+        &mut stderr,
+    );
 
     let embed_outcome = timeout(
-        EMBED_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_embed(
             &embed_arguments(Some("hello"), None, None),
             &mut embed_dependencies,
@@ -262,23 +163,27 @@ async fn should_embed_a_text_argument_into_one_json_vector_document() {
 
 #[tokio::test]
 async fn should_embed_text_from_a_file() {
-    let test_directory = fresh_embed_test_directory("file-input");
+    let test_directory = fresh_test_directory("embed", "file-input");
     let input_file_path = test_directory.join("input.txt");
     std::fs::write(&input_file_path, "hello from a file")
         .expect("the embed input file should be writable");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_embed_daemon(
+    let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
-        Some("test/local-embedder".to_owned()),
-        StubEmbeddingsOutcome::Completed,
+        resident_default_stub_config(StubEmbeddingsOutcome::Completed),
     );
     let mut stdin_content = std::io::Cursor::new(Vec::new());
     let mut stdout = Vec::new();
-    let mut embed_dependencies =
-        embed_dependencies(vec![socket_path], &mut stdin_content, &mut stdout);
+    let mut stderr = Vec::new();
+    let mut embed_dependencies = embed_dependencies(
+        vec![socket_path],
+        &mut stdin_content,
+        &mut stdout,
+        &mut stderr,
+    );
 
     let embed_outcome = timeout(
-        EMBED_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_embed(
             &embed_arguments(None, Some(input_file_path), None),
             &mut embed_dependencies,
@@ -301,20 +206,24 @@ async fn should_embed_text_from_a_file() {
 
 #[tokio::test]
 async fn should_embed_text_from_stdin() {
-    let test_directory = fresh_embed_test_directory("stdin-input");
+    let test_directory = fresh_test_directory("embed", "stdin-input");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_embed_daemon(
+    let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
-        Some("test/local-embedder".to_owned()),
-        StubEmbeddingsOutcome::Completed,
+        resident_default_stub_config(StubEmbeddingsOutcome::Completed),
     );
     let mut stdin_content = std::io::Cursor::new(b"hello from stdin".to_vec());
     let mut stdout = Vec::new();
-    let mut embed_dependencies =
-        embed_dependencies(vec![socket_path], &mut stdin_content, &mut stdout);
+    let mut stderr = Vec::new();
+    let mut embed_dependencies = embed_dependencies(
+        vec![socket_path],
+        &mut stdin_content,
+        &mut stdout,
+        &mut stderr,
+    );
 
     let embed_outcome = timeout(
-        EMBED_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
     )
     .await
@@ -334,17 +243,19 @@ async fn should_embed_text_from_stdin() {
 
 #[tokio::test]
 async fn should_report_a_missing_daemon_as_not_running_for_embed() {
-    let test_directory = fresh_embed_test_directory("not-running");
+    let test_directory = fresh_test_directory("embed", "not-running");
     let mut stdin_content = std::io::Cursor::new(Vec::new());
     let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
     let mut embed_dependencies = embed_dependencies(
         vec![test_directory.join(SOCKET_FILE_NAME)],
         &mut stdin_content,
         &mut stdout,
+        &mut stderr,
     );
 
     let embed_outcome = timeout(
-        EMBED_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_embed(
             &embed_arguments(Some("hello"), None, None),
             &mut embed_dependencies,
@@ -364,25 +275,81 @@ async fn should_report_a_missing_daemon_as_not_running_for_embed() {
 }
 
 #[tokio::test]
-async fn should_reject_embed_when_no_model_is_resident_and_none_was_requested() {
-    let test_directory = fresh_embed_test_directory("no-model");
+async fn should_reject_embed_when_no_model_is_available() {
+    let test_directory = fresh_test_directory("embed", "no-model");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task =
-        spawn_stub_embed_daemon(socket_path.clone(), None, StubEmbeddingsOutcome::Completed);
+    // Nothing installed, no configured default, and the release catalog
+    // offers no embeddings model: there is nothing to serve this request.
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            installed_models: vec![StubInstalledModel::chat("test/local-chatter", true)],
+            ..Default::default()
+        },
+    );
     let mut stdin_content = std::io::Cursor::new(b"hello".to_vec());
     let mut stdout = Vec::new();
-    let mut embed_dependencies =
-        embed_dependencies(vec![socket_path], &mut stdin_content, &mut stdout);
+    let mut stderr = Vec::new();
+    let mut embed_dependencies = embed_dependencies(
+        vec![socket_path],
+        &mut stdin_content,
+        &mut stdout,
+        &mut stderr,
+    );
 
     let embed_outcome = timeout(
-        EMBED_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
     )
     .await
     .expect("the embed journey should finish inside the test timeout");
     assert!(
-        matches!(embed_outcome, Err(EmbedError::NoModelLoaded)),
-        "no resident model and no requested model must fail with the no-model error: {embed_outcome:?}"
+        matches!(&embed_outcome, Err(EmbedError::ModelUnavailable { reason })
+            if reason.contains("astronomical models supported")),
+        "no embeddings model anywhere must fail with the pointer to the catalog: {embed_outcome:?}"
+    );
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[tokio::test]
+async fn should_refuse_a_chat_only_model_for_embed() {
+    let test_directory = fresh_test_directory("embed", "capmismatch");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    // The resident model chats but cannot embed: the capability pre-flight
+    // must reject before any embeddings request goes out.
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            installed_models: vec![StubInstalledModel::chat("test/local-chatter", true)],
+            default_model_id: Some("test/local-chatter".to_owned()),
+            ..Default::default()
+        },
+    );
+    let mut stdin_content = std::io::Cursor::new(b"hello".to_vec());
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut embed_dependencies = embed_dependencies(
+        vec![socket_path],
+        &mut stdin_content,
+        &mut stdout,
+        &mut stderr,
+    );
+
+    let embed_outcome = timeout(
+        TEST_TIMEOUT,
+        run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
+    )
+    .await
+    .expect("the embed journey should finish inside the test timeout");
+    assert!(
+        matches!(&embed_outcome, Err(EmbedError::ModelUnavailable { reason })
+            if reason.contains("not an embeddings model")),
+        "an embed request against a chat-only model must fail on capability: {embed_outcome:?}"
+    );
+    assert!(
+        stdout.is_empty(),
+        "no vector document may appear on a capability rejection"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);
@@ -390,20 +357,24 @@ async fn should_reject_embed_when_no_model_is_resident_and_none_was_requested() 
 
 #[tokio::test]
 async fn should_fail_with_the_worker_reason_when_embeddings_fail() {
-    let test_directory = fresh_embed_test_directory("worker-failure");
+    let test_directory = fresh_test_directory("embed", "worker-failure");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_embed_daemon(
+    let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
-        Some("test/local-embedder".to_owned()),
-        StubEmbeddingsOutcome::ContextLengthExceeded,
+        resident_default_stub_config(StubEmbeddingsOutcome::ContextLengthExceeded),
     );
     let mut stdin_content = std::io::Cursor::new(Vec::new());
     let mut stdout = Vec::new();
-    let mut embed_dependencies =
-        embed_dependencies(vec![socket_path], &mut stdin_content, &mut stdout);
+    let mut stderr = Vec::new();
+    let mut embed_dependencies = embed_dependencies(
+        vec![socket_path],
+        &mut stdin_content,
+        &mut stdout,
+        &mut stderr,
+    );
 
     let embed_outcome = timeout(
-        EMBED_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_embed(
             &embed_arguments(Some("a very long text"), None, None),
             &mut embed_dependencies,

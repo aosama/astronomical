@@ -6,17 +6,11 @@
 use std::path::PathBuf;
 
 use astronomical_cli::{
-    ValidateConfigArguments, ValidateConfigDependencies, ValidateConfigError, parse_command,
-    run_validate_config,
+    ValidateConfigArguments, ValidateConfigDependencies, ValidateConfigError, run_validate_config,
 };
 use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
-fn parse(arguments: &[&str]) -> Result<astronomical_cli::CliCommand, astronomical_cli::UsageError> {
-    parse_command(
-        std::iter::once(std::ffi::OsString::from("astronomical"))
-            .chain(arguments.iter().map(std::ffi::OsString::from)),
-    )
-}
+use super::test_support::parse;
 
 fn parsed_validate_config(arguments: &[&str]) -> astronomical_cli::ValidateConfigArguments {
     let mut full_arguments = vec!["validate", "config"];
@@ -117,11 +111,11 @@ fn should_report_effective_values_for_valid_config() {
     let rendered_text = rendered_report(&hermetic_state.instance_paths).expect("valid config");
     assert!(
         rendered_text.contains(
-            &hermetic_state
+            hermetic_state
                 .instance_paths
                 .config_file_path()
                 .to_string_lossy()
-                .as_ref()
+                .as_ref(),
         )
     );
     assert!(rendered_text.contains("Model directories: 1"));
@@ -155,11 +149,11 @@ fn should_fail_when_config_document_is_invalid() {
         rendered_report(&hermetic_state.instance_paths).expect_err("invalid config document");
     assert!(
         validation_error.to_string().contains(
-            &hermetic_state
+            hermetic_state
                 .instance_paths
                 .config_file_path()
                 .to_string_lossy()
-                .as_ref()
+                .as_ref(),
         )
     );
 }

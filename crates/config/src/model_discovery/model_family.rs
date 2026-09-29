@@ -45,6 +45,21 @@ impl ModelFamily {
             None
         }
     }
+
+    /// Wire label matching the model_type spelling the discovery layer recognizes.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Qwen3_5 => "qwen3_5",
+            Self::Qwen4Exp => "qwen4_exp",
+            Self::Laguna => "laguna",
+            Self::DeepSeekV4 => "deepseek_v4",
+            Self::K2HorizonMoVA => "k2_horizon_mova",
+            Self::Flux2Klein => "flux2_klein",
+            Self::QwenImage21 => "qwen_image_21",
+            Self::ModernBert => "modernbert",
+        }
+    }
 }
 
 /// Failure while reading the family marker from a selected model directory.

@@ -33,7 +33,7 @@ pub enum LaunchError {
 }
 
 /// Command-line usage failures. These exit 2.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum UsageError {
     #[error("missing command. Try: astronomical launch opencode")]
     MissingCommand,
@@ -69,21 +69,26 @@ pub enum UsageError {
     RespondPromptRequired,
     #[error("embed takes one input. Pass TEXT, --file PATH, or pipe stdin — not several.")]
     EmbedInputConflict,
+    #[error("models needs a subcommand: list, supported, default, download")]
+    ModelsSubcommandRequired,
+    #[error("unknown models subcommand: {0}. Try: list, supported, default, download")]
+    UnknownModelsSubcommand(String),
+    #[error("models download needs a MODEL_ID. Try: astronomical models download Qwen3.5-2B-4bit")]
+    ModelsDownloadModelRequired,
 }
 
 /// Failures of the one-shot `respond` journey after arguments have parsed.
-/// These exit 1.
+/// These exit 1, except `ModelUnavailable`, which exits 2 as a usage error.
 #[derive(Error)]
 pub enum RespondError {
     #[error("Astronomical isn't running — start it, then retry.")]
     DaemonNotRunning,
-    #[error("Astronomical is running but no model is loaded — load one in the app, then retry.")]
-    NoModelLoaded,
-    #[error("Model {requested_model_id} isn't loaded; {ready_model_id} is.")]
-    RequestedModelNotReady {
-        requested_model_id: String,
-        ready_model_id: String,
-    },
+    #[error("The Astronomical worker is not ready yet — retry in a moment.")]
+    WorkerNotReady,
+    #[error("{reason}")]
+    ModelUnavailable { reason: String },
+    #[error("the model download failed: {reason}")]
+    DownloadFailed { reason: String },
     #[error("The daemon declined the request: {reason}")]
     GenerationRejected { reason: String },
     #[error("The model failed to finish the response.")]
@@ -99,6 +104,29 @@ impl From<DaemonProbeError> for RespondError {
         match probe_error {
             DaemonProbeError::DaemonNotRunning => RespondError::DaemonNotRunning,
             DaemonProbeError::DaemonStoppedResponding => RespondError::DaemonStoppedResponding,
+            DaemonProbeError::DaemonRejected { reason } => RespondError::DownloadFailed { reason },
+        }
+    }
+}
+
+impl From<crate::model_lifecycle::ModelLifecycleError> for RespondError {
+    fn from(lifecycle_error: crate::model_lifecycle::ModelLifecycleError) -> Self {
+        match lifecycle_error {
+            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning => {
+                RespondError::DaemonNotRunning
+            }
+            crate::model_lifecycle::ModelLifecycleError::WorkerNotReady => {
+                RespondError::WorkerNotReady
+            }
+            crate::model_lifecycle::ModelLifecycleError::DaemonStoppedResponding => {
+                RespondError::DaemonStoppedResponding
+            }
+            crate::model_lifecycle::ModelLifecycleError::ModelUnavailable { reason } => {
+                RespondError::ModelUnavailable { reason }
+            }
+            crate::model_lifecycle::ModelLifecycleError::DownloadFailed { reason } => {
+                RespondError::DownloadFailed { reason }
+            }
         }
     }
 }
@@ -112,15 +140,17 @@ impl std::fmt::Debug for RespondError {
 }
 
 /// Failures of the one-shot `embed` journey after arguments have parsed.
-/// These exit 1.
+/// These exit 1, except `ModelUnavailable`, which exits 2 as a usage error.
 #[derive(Error)]
 pub enum EmbedError {
     #[error("Astronomical isn't running — start it, then retry.")]
     DaemonNotRunning,
-    #[error(
-        "Astronomical is running but no model is loaded — load one in the app, or pass --model, then retry."
-    )]
-    NoModelLoaded,
+    #[error("The Astronomical worker is not ready yet — retry in a moment.")]
+    WorkerNotReady,
+    #[error("{reason}")]
+    ModelUnavailable { reason: String },
+    #[error("the model download failed: {reason}")]
+    DownloadFailed { reason: String },
     #[error("The daemon declined the request: {reason}")]
     EmbeddingsRejected { reason: String },
     #[error("{}", crate::embed::embeddings_failure_reason_text(reason))]
@@ -142,6 +172,29 @@ impl From<DaemonProbeError> for EmbedError {
         match probe_error {
             DaemonProbeError::DaemonNotRunning => EmbedError::DaemonNotRunning,
             DaemonProbeError::DaemonStoppedResponding => EmbedError::DaemonStoppedResponding,
+            DaemonProbeError::DaemonRejected { reason } => EmbedError::DownloadFailed { reason },
+        }
+    }
+}
+
+impl From<crate::model_lifecycle::ModelLifecycleError> for EmbedError {
+    fn from(lifecycle_error: crate::model_lifecycle::ModelLifecycleError) -> Self {
+        match lifecycle_error {
+            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning => {
+                EmbedError::DaemonNotRunning
+            }
+            crate::model_lifecycle::ModelLifecycleError::WorkerNotReady => {
+                EmbedError::WorkerNotReady
+            }
+            crate::model_lifecycle::ModelLifecycleError::DaemonStoppedResponding => {
+                EmbedError::DaemonStoppedResponding
+            }
+            crate::model_lifecycle::ModelLifecycleError::ModelUnavailable { reason } => {
+                EmbedError::ModelUnavailable { reason }
+            }
+            crate::model_lifecycle::ModelLifecycleError::DownloadFailed { reason } => {
+                EmbedError::DownloadFailed { reason }
+            }
         }
     }
 }
@@ -149,6 +202,92 @@ impl From<DaemonProbeError> for EmbedError {
 // The debug form must carry the same user-facing guidance as the display
 // form: journeys and tests report whichever rendering they captured.
 impl std::fmt::Debug for EmbedError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.to_string())
+    }
+}
+
+/// Failures of the `models` verb after arguments have parsed. These exit 1,
+/// except `ModelUnavailable`, which exits 2 as a usage error.
+#[derive(Error)]
+pub enum ModelsError {
+    #[error("Astronomical isn't running — start it, then retry.")]
+    DaemonNotRunning,
+    #[error("The daemon stopped responding.")]
+    DaemonStoppedResponding,
+    #[error("The Astronomical worker is not ready yet — retry in a moment.")]
+    WorkerNotReady,
+    #[error("{reason}")]
+    ModelUnavailable { reason: String },
+    #[error("the model download failed: {reason}")]
+    DownloadFailed { reason: String },
+    #[error("The daemon declined the request: {reason}")]
+    DaemonRejected { reason: String },
+    #[error("Could not write the model report to standard output: {cause}")]
+    StdoutUnwritable { cause: String },
+}
+
+impl From<DaemonProbeError> for ModelsError {
+    fn from(probe_error: DaemonProbeError) -> Self {
+        match probe_error {
+            DaemonProbeError::DaemonNotRunning => ModelsError::DaemonNotRunning,
+            DaemonProbeError::DaemonStoppedResponding => ModelsError::DaemonStoppedResponding,
+            DaemonProbeError::DaemonRejected { reason } => ModelsError::DaemonRejected { reason },
+        }
+    }
+}
+
+impl From<crate::model_lifecycle::ModelLifecycleError> for ModelsError {
+    fn from(lifecycle_error: crate::model_lifecycle::ModelLifecycleError) -> Self {
+        match lifecycle_error {
+            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning => {
+                ModelsError::DaemonNotRunning
+            }
+            crate::model_lifecycle::ModelLifecycleError::WorkerNotReady => {
+                ModelsError::WorkerNotReady
+            }
+            crate::model_lifecycle::ModelLifecycleError::DaemonStoppedResponding => {
+                ModelsError::DaemonStoppedResponding
+            }
+            crate::model_lifecycle::ModelLifecycleError::ModelUnavailable { reason } => {
+                ModelsError::ModelUnavailable { reason }
+            }
+            crate::model_lifecycle::ModelLifecycleError::DownloadFailed { reason } => {
+                ModelsError::DownloadFailed { reason }
+            }
+        }
+    }
+}
+
+impl std::fmt::Debug for ModelsError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.to_string())
+    }
+}
+
+/// Failures of the `status` verb after arguments have parsed. These exit 1.
+#[derive(Error)]
+pub enum StatusError {
+    #[error("Astronomical isn't running — start it, then retry.")]
+    DaemonNotRunning,
+    #[error("The daemon stopped responding.")]
+    DaemonStoppedResponding,
+    #[error("Could not write the status report to standard output: {cause}")]
+    StdoutUnwritable { cause: String },
+}
+
+impl From<DaemonProbeError> for StatusError {
+    fn from(probe_error: DaemonProbeError) -> Self {
+        match probe_error {
+            DaemonProbeError::DaemonNotRunning => StatusError::DaemonNotRunning,
+            DaemonProbeError::DaemonStoppedResponding | DaemonProbeError::DaemonRejected { .. } => {
+                StatusError::DaemonStoppedResponding
+            }
+        }
+    }
+}
+
+impl std::fmt::Debug for StatusError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.to_string())
     }

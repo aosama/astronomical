@@ -1,12 +1,13 @@
 //! Shared daemon reachability for the one-shot IPC verbs: open the first
-//! candidate instance socket, perform the protocol handshake, and read the
-//! resident-model status. Both `respond` and `embed` start here, on
-//! separate connections per request, and never touch the REST surface.
+//! candidate instance socket and read status, model list, catalog, download
+//! state, or persist a default model. Both `respond` and `embed` start here,
+//! on separate connections per request, and never touch the REST surface.
 
 use std::{path::PathBuf, time::Duration};
 
 use astronomical_ipc_protocol::{
-    DAEMON_APPLICATION_NAME, DaemonIpcClient, DaemonRequest, DaemonResponse,
+    DaemonCatalogEntry, DaemonDownloadJob, DaemonIpcClient, DaemonListedModel, DaemonRequest,
+    DaemonResponse, DaemonWorkerStatus,
 };
 use tokio::time::timeout;
 
@@ -17,6 +18,19 @@ pub enum DaemonProbeError {
     DaemonNotRunning,
     #[error("The daemon stopped responding.")]
     DaemonStoppedResponding,
+    #[error("The daemon declined the request: {reason}")]
+    DaemonRejected { reason: String },
+}
+
+/// Worker state plus the daemon's effective model ids from one Status frame.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DaemonStatusSnapshot {
+    /// Whether the inference engine can serve generations right now.
+    pub worker_status: DaemonWorkerStatus,
+    /// Model currently resident in the worker, if any.
+    pub ready_model_id: Option<String>,
+    /// Effective default model: the persisted value, else the built-in.
+    pub default_model_id: Option<String>,
 }
 
 /// Socket candidates plus the per-stage bound both verbs share.
@@ -28,12 +42,95 @@ pub struct DaemonProbe {
 }
 
 impl DaemonProbe {
-    /// Connects, handshakes, and reports which model the daemon has resident.
-    /// `None` means the daemon is running with no model ready.
-    pub async fn ready_model_id(&self) -> Result<Option<String>, DaemonProbeError> {
-        self.handshake_on_fresh_connection().await?;
-        match self.status_on_fresh_connection().await? {
-            DaemonResponse::Status { ready_model_id, .. } => Ok(ready_model_id),
+    /// Worker state, resident model, and effective default model in one probe.
+    pub async fn status_snapshot(&self) -> Result<DaemonStatusSnapshot, DaemonProbeError> {
+        let status_response = self
+            .request_on_fresh_connection(&DaemonRequest::Status)
+            .await?;
+        match status_response {
+            DaemonResponse::Status {
+                worker_status,
+                ready_model_id,
+                default_model_id,
+            } => Ok(DaemonStatusSnapshot {
+                worker_status,
+                ready_model_id,
+                default_model_id,
+            }),
+            _ => Err(DaemonProbeError::DaemonStoppedResponding),
+        }
+    }
+
+    /// The models discovered on this Mac, with their resident markers.
+    pub async fn models_list(&self) -> Result<Vec<DaemonListedModel>, DaemonProbeError> {
+        match self
+            .request_on_fresh_connection(&DaemonRequest::ModelsList)
+            .await?
+        {
+            DaemonResponse::ModelsList { models } => Ok(models),
+            DaemonResponse::RequestRejected { reason } => {
+                Err(DaemonProbeError::DaemonRejected { reason })
+            }
+            _ => Err(DaemonProbeError::DaemonStoppedResponding),
+        }
+    }
+
+    /// The release download catalog with local readiness per entry.
+    pub async fn catalog(&self) -> Result<Vec<DaemonCatalogEntry>, DaemonProbeError> {
+        match self
+            .request_on_fresh_connection(&DaemonRequest::Catalog)
+            .await?
+        {
+            DaemonResponse::Catalog { entries } => Ok(entries),
+            DaemonResponse::RequestRejected { reason } => {
+                Err(DaemonProbeError::DaemonRejected { reason })
+            }
+            _ => Err(DaemonProbeError::DaemonStoppedResponding),
+        }
+    }
+
+    /// Starts (or resumes) a download; the daemon's refusal arrives as an error.
+    pub async fn download_start(&self, model_id: &str) -> Result<(), DaemonProbeError> {
+        match self
+            .request_on_fresh_connection(&DaemonRequest::DownloadStart {
+                model_id: model_id.to_owned(),
+            })
+            .await?
+        {
+            DaemonResponse::DownloadStarted { .. } => Ok(()),
+            DaemonResponse::RequestRejected { reason } => {
+                Err(DaemonProbeError::DaemonRejected { reason })
+            }
+            _ => Err(DaemonProbeError::DaemonStoppedResponding),
+        }
+    }
+
+    /// The active download job, if one runs.
+    pub async fn download_status(&self) -> Result<Option<DaemonDownloadJob>, DaemonProbeError> {
+        match self
+            .request_on_fresh_connection(&DaemonRequest::DownloadStatus)
+            .await?
+        {
+            DaemonResponse::DownloadStatus { job } => Ok(job),
+            DaemonResponse::RequestRejected { reason } => {
+                Err(DaemonProbeError::DaemonRejected { reason })
+            }
+            _ => Err(DaemonProbeError::DaemonStoppedResponding),
+        }
+    }
+
+    /// Persists a new default model id; the daemon's refusal arrives as an error.
+    pub async fn default_model_set(&self, model_id: &str) -> Result<String, DaemonProbeError> {
+        match self
+            .request_on_fresh_connection(&DaemonRequest::DefaultModelSet {
+                model_id: model_id.to_owned(),
+            })
+            .await?
+        {
+            DaemonResponse::DefaultModelSet { default_model_id } => Ok(default_model_id),
+            DaemonResponse::RequestRejected { reason } => {
+                Err(DaemonProbeError::DaemonRejected { reason })
+            }
             _ => Err(DaemonProbeError::DaemonStoppedResponding),
         }
     }
@@ -53,25 +150,6 @@ impl DaemonProbe {
         Err(DaemonProbeError::DaemonNotRunning)
     }
 
-    async fn handshake_on_fresh_connection(&self) -> Result<(), DaemonProbeError> {
-        let handshake_accepted = self
-            .request_on_fresh_connection(&DaemonRequest::Handshake)
-            .await
-            .map_err(daemon_not_running_on_handshake)?;
-        match handshake_accepted {
-            DaemonResponse::HandshakeAccepted {
-                application_name, ..
-            } if application_name == DAEMON_APPLICATION_NAME => Ok(()),
-            _ => Err(DaemonProbeError::DaemonNotRunning),
-        }
-    }
-
-    async fn status_on_fresh_connection(&self) -> Result<DaemonResponse, DaemonProbeError> {
-        self.request_on_fresh_connection(&DaemonRequest::Status)
-            .await
-            .map_err(|_probe_error| DaemonProbeError::DaemonStoppedResponding)
-    }
-
     /// One request per connection: the daemon serves each socket connection
     /// as one exchange, so the probe and the verb's real request each open
     /// their own connection.
@@ -88,15 +166,5 @@ impl DaemonProbe {
         .map_err(|_elapsed| DaemonProbeError::DaemonStoppedResponding)?
         .map_err(|_transport_error| DaemonProbeError::DaemonStoppedResponding)?
         .ok_or(DaemonProbeError::DaemonStoppedResponding)
-    }
-}
-
-/// A connect or transport failure during the handshake means no live
-/// Astronomical answered; the same failure later means a daemon that went
-/// away mid-conversation.
-fn daemon_not_running_on_handshake(probe_error: DaemonProbeError) -> DaemonProbeError {
-    match probe_error {
-        DaemonProbeError::DaemonStoppedResponding => DaemonProbeError::DaemonNotRunning,
-        already_not_running => already_not_running,
     }
 }
