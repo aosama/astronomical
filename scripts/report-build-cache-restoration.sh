@@ -96,6 +96,11 @@ main() {
         "$CACHE_OWNER" "$CACHE_OPERATION" "$cache_classification" "$elapsed_seconds" \
         "$CACHE_PRIMARY_KEY" "$matched_key"
 
+    if [ -n "${ASTRONOMICAL_CI_TIMING_FILE:-}" ]; then
+        printf '%s,%s\n' "${CACHE_OWNER}-${CACHE_OPERATION}" "$elapsed_seconds" \
+            >> "$ASTRONOMICAL_CI_TIMING_FILE"
+    fi
+
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
         {
             printf '### Build cache: %s %s\n\n' "$CACHE_OWNER" "$CACHE_OPERATION"
