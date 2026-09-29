@@ -8,6 +8,7 @@ mod flux_operations;
 mod metal_kernel;
 mod mlx_runtime;
 mod nvfp4_quantized_operations;
+mod qmm_nax_tile_benchmark;
 mod quantized_operations;
 mod safetensors_reader;
 mod safetensors_writer;
