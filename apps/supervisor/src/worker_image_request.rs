@@ -6,7 +6,9 @@ use std::{
     time::Duration,
 };
 
-use astronomical_ipc_protocol::{ImageGenerationCommand, ProtocolError};
+use astronomical_ipc_protocol::{
+    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, ProtocolError,
+};
 use tokio::time::{Instant, timeout};
 
 use crate::{
@@ -66,6 +68,10 @@ pub(super) async fn handle_generate_image_command(
     let mut swap_load_elapsed = Duration::ZERO;
     if loaded_model_id.as_deref() != Some(requested_model) {
         let Some(model_policy) = model_policy_catalog.get(requested_model) else {
+            tracing::error!(
+                requested_model = %requested_model,
+                "no runtime model policy maps the requested image model"
+            );
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
             return Ok(());
         };
@@ -136,43 +142,43 @@ pub(super) async fn handle_generate_image_command(
             }
         }
         if client_disconnected_during_swap {
+            tracing::info!(
+                requested_model = %requested_model,
+                "client disconnected during the image model swap"
+            );
             return Ok(());
         }
     }
     if image_result_sender.is_closed() {
+        tracing::info!(
+            requested_model = %requested_model,
+            "client disconnected before the image generation could start"
+        );
         return Ok(());
     }
-    let supports_request = health_snapshot.read().ok().is_some_and(|snapshot| {
-        snapshot
-            .ready_model_capabilities
-            .as_ref()
-            .and_then(|capabilities| capabilities.image_generation.as_ref())
-            .is_some_and(|capabilities| {
-                generation_command.settings.width_pixels >= capabilities.minimum_width_pixels
-                    && generation_command.settings.width_pixels <= capabilities.maximum_width_pixels
-                    && generation_command.settings.height_pixels
-                        >= capabilities.minimum_height_pixels
-                    && generation_command.settings.height_pixels
-                        <= capabilities.maximum_height_pixels
-                    && capabilities.dimension_multiple_pixels > 0
-                    && generation_command
-                        .settings
-                        .width_pixels
-                        .is_multiple_of(capabilities.dimension_multiple_pixels)
-                    && generation_command
-                        .settings
-                        .height_pixels
-                        .is_multiple_of(capabilities.dimension_multiple_pixels)
-                    && generation_command.settings.steps <= capabilities.maximum_steps
-                    && generation_command.settings.guidance_thousandths
-                        <= capabilities.maximum_guidance_thousandths
-                    && capabilities
-                        .output_mime_types
-                        .iter()
-                        .any(|mime_type| mime_type == "image/png")
-            })
-    });
-    if !supports_request {
+    let envelope_rejection_reason = health_snapshot
+        .read()
+        .ok()
+        .and_then(|snapshot| {
+            snapshot
+                .ready_model_capabilities
+                .as_ref()
+                .and_then(|capabilities| capabilities.image_generation.as_ref())
+                .map(|capabilities| {
+                    image_envelope_rejection_reason(&generation_command.settings, capabilities)
+                })
+        })
+        .unwrap_or_else(|| {
+            // A missing advertisement rejects exactly like the previous boolean check:
+            // without an advertised envelope this request cannot be proven servable.
+            Some("the loaded model does not advertise image-generation capabilities".to_owned())
+        });
+    if let Some(rejection_reason) = envelope_rejection_reason {
+        tracing::error!(
+            requested_model = %generation_command.model,
+            reason = %rejection_reason,
+            "the loaded image model capabilities reject this admitted request"
+        );
         let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
         return Ok(());
     }
@@ -238,4 +244,68 @@ pub(super) async fn handle_generate_image_command(
         .await;
     }
     Ok(())
+}
+
+/// Names the first advertised capability an image request violates, if any.
+///
+/// The public endpoint already validates dimensions against the discovery-time envelope,
+/// so a rejection here means the loaded advertisement disagrees with what was admitted —
+/// logged at error level because that disagreement is a supervisor/worker contract break.
+fn image_envelope_rejection_reason(
+    settings: &ImageGenerationSettings,
+    capabilities: &ImageGenerationCapabilities,
+) -> Option<String> {
+    for (parameter_name, actual_pixels, minimum_pixels, maximum_pixels) in [
+        (
+            "width",
+            settings.width_pixels,
+            capabilities.minimum_width_pixels,
+            capabilities.maximum_width_pixels,
+        ),
+        (
+            "height",
+            settings.height_pixels,
+            capabilities.minimum_height_pixels,
+            capabilities.maximum_height_pixels,
+        ),
+    ] {
+        if actual_pixels < minimum_pixels || actual_pixels > maximum_pixels {
+            return Some(format!(
+                "{parameter_name} {actual_pixels} is outside the {minimum_pixels}..={maximum_pixels} pixel envelope"
+            ));
+        }
+    }
+    if capabilities.dimension_multiple_pixels == 0
+        || !settings
+            .width_pixels
+            .is_multiple_of(capabilities.dimension_multiple_pixels)
+        || !settings
+            .height_pixels
+            .is_multiple_of(capabilities.dimension_multiple_pixels)
+    {
+        return Some(format!(
+            "dimensions {}x{} are not multiples of {} pixels",
+            settings.width_pixels, settings.height_pixels, capabilities.dimension_multiple_pixels
+        ));
+    }
+    if settings.steps > capabilities.maximum_steps {
+        return Some(format!(
+            "steps {} exceed the advertised maximum of {}",
+            settings.steps, capabilities.maximum_steps
+        ));
+    }
+    if settings.guidance_thousandths > capabilities.maximum_guidance_thousandths {
+        return Some(format!(
+            "guidance {} thousandths exceed the advertised maximum of {}",
+            settings.guidance_thousandths, capabilities.maximum_guidance_thousandths
+        ));
+    }
+    if !capabilities
+        .output_mime_types
+        .iter()
+        .any(|mime_type| mime_type == "image/png")
+    {
+        return Some("the loaded model does not advertise image/png output".to_owned());
+    }
+    None
 }
