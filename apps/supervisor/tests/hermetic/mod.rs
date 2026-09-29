@@ -12,6 +12,7 @@ mod download_catalog_laguna;
 mod download_catalog_ornith_6bit;
 mod download_catalog_qwen3_6;
 mod download_catalog_qwen3_8;
+mod download_catalog_qwen3_8_distill_4bit;
 mod download_catalog_qwen_image_21;
 mod download_disk_preflight;
 mod download_executable_preflight;
