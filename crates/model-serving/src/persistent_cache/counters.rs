@@ -19,6 +19,7 @@ pub struct PersistentPromptCacheCounters {
     persistent_prompt_cache_hits: u64,
     persistent_prompt_cache_misses: u64,
     persistent_prompt_cache_tokens_saved: u64,
+    persistent_prompt_cache_partial_tail_hits: u64,
     persistent_prompt_cache_visual_embedding_hits: u64,
     persistent_prompt_cache_visual_embedding_misses: u64,
     persistent_prompt_cache_visual_embedding_rows_loaded: u64,
@@ -39,6 +40,14 @@ impl PersistentPromptCacheCounters {
     /// Records one persistent prompt-cache miss (cold prefill fallback).
     pub fn record_cache_miss(&mut self) {
         self.persistent_prompt_cache_misses = self.persistent_prompt_cache_misses.saturating_add(1);
+    }
+
+    /// Records that one successful restore reused a partial tail block from a
+    /// previous turn, so the request only prefilled the uncached suffix.
+    pub fn record_partial_tail_hit(&mut self) {
+        self.persistent_prompt_cache_partial_tail_hits = self
+            .persistent_prompt_cache_partial_tail_hits
+            .saturating_add(1);
     }
 
     /// Records one successful persistent visual-embedding file restore.
@@ -77,6 +86,12 @@ impl PersistentPromptCacheCounters {
     #[must_use]
     pub const fn persistent_prompt_cache_tokens_saved(&self) -> u64 {
         self.persistent_prompt_cache_tokens_saved
+    }
+
+    /// Returns how many restores reused a partial tail block from a previous turn.
+    #[must_use]
+    pub const fn persistent_prompt_cache_partial_tail_hits(&self) -> u64 {
+        self.persistent_prompt_cache_partial_tail_hits
     }
 
     /// Returns how many visual embedding files were loaded from the persistent prompt cache.
@@ -138,6 +153,8 @@ pub fn build_persistent_prompt_cache_stats_event(
             .persistent_prompt_cache_misses(),
         persistent_prompt_cache_tokens_saved: persistent_prompt_cache_counters
             .persistent_prompt_cache_tokens_saved(),
+        persistent_prompt_cache_partial_tail_hits: persistent_prompt_cache_counters
+            .persistent_prompt_cache_partial_tail_hits(),
         persistent_prompt_cache_block_token_count,
         persistent_prompt_cache_sequence_state_block_count,
         persistent_prompt_cache_boundary_state_snapshot_count,

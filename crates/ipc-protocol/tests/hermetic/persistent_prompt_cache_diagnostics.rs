@@ -21,6 +21,7 @@ fn should_round_trip_bounded_persistent_prompt_cache_request_diagnostics_on_comp
             maximum_restorable_block_count: 19,
             matched_sequence_state_block_count: 0,
             restored_block_count: 0,
+            partial_tail_block_token_count: None,
             first_missing_sequence_state_block_index: Some(0),
             miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
             expected_block_hash_prefix: Some(

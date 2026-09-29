@@ -8,8 +8,11 @@
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
-    PersistentPromptCachePublicationOutcome, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    PersistentPromptCacheDiskStoreError, PersistentPromptCachePublicationOutcome,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
 };
+use astronomical_runtime_integration::MlxArray;
+use std::collections::HashMap;
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::speculative_prefill::configured_speculative_prefill_failure;
@@ -317,75 +320,15 @@ impl Qwen3_5EngineState {
                     .last_restored_persistent_prompt_cache_block_key
                     .clone(),
             };
-            let mut request_performance_attribution = std::mem::replace(
-                &mut active_request.performance_attribution,
-                PerformanceAttribution::disabled(),
-            );
-            let save_outcome = persistent_prompt_cache.publish_block_with_performance_attribution(
-                model.runtime(),
+            let save_outcome = self.publish_block_with_reclamation_retry(
+                model,
+                active_request,
+                persistent_prompt_cache,
                 &persistent_prompt_cache_block_key,
                 parent_block_key.as_ref(),
                 &kv_block_tensors,
                 &boundary_checkpoint.recurrent_snapshot_tensors,
-                &mut request_performance_attribution,
             );
-            active_request.performance_attribution = request_performance_attribution;
-            // Retry exactly once and only for the typed MLX active-memory limit.
-            // Reusing `kv_block_tensors` and the checkpoint tensors is essential:
-            // this is resource reclamation, not a second logical capture.
-            let save_outcome = match save_outcome {
-                Err(publication_error)
-                    if publication_error.active_memory_deficit_bytes().is_some() =>
-                {
-                    let active_memory_deficit_bytes =
-                        publication_error.active_memory_deficit_bytes().unwrap_or(0);
-                    let expert_payload_bytes_before_reclamation = model
-                        .expert_weight_memory_cache_statistics()
-                        .resident_payload_byte_count;
-                    active_request.performance_attribution.measure_operation(
-                        PerformanceOperation::ExpertRetentionReclamation,
-                        |_performance_attribution| {
-                            reclaim_retained_experts_for_request_memory_pressure(
-                                model,
-                                active_memory_deficit_bytes,
-                            )
-                        },
-                    )?;
-                    let expert_payload_bytes_after_reclamation = model
-                        .expert_weight_memory_cache_statistics()
-                        .resident_payload_byte_count;
-                    if let Some(persistent_prompt_cache_diagnostics) =
-                        active_request.persistent_prompt_cache_diagnostics.as_mut()
-                    {
-                        persistent_prompt_cache_diagnostics
-                            .expert_bytes_reclaimed_for_publication =
-                            persistent_prompt_cache_diagnostics
-                                .expert_bytes_reclaimed_for_publication
-                                .saturating_add(
-                                    expert_payload_bytes_before_reclamation
-                                        .saturating_sub(expert_payload_bytes_after_reclamation),
-                                );
-                    }
-                    // Expert eviction is measured separately from serialization
-                    // so performance reports can attribute why publication paused.
-                    let mut retry_performance_attribution = std::mem::replace(
-                        &mut active_request.performance_attribution,
-                        PerformanceAttribution::disabled(),
-                    );
-                    let retry_outcome = persistent_prompt_cache
-                        .publish_block_with_performance_attribution(
-                            model.runtime(),
-                            &persistent_prompt_cache_block_key,
-                            parent_block_key.as_ref(),
-                            &kv_block_tensors,
-                            &boundary_checkpoint.recurrent_snapshot_tensors,
-                            &mut retry_performance_attribution,
-                        );
-                    active_request.performance_attribution = retry_performance_attribution;
-                    retry_outcome
-                }
-                save_outcome => save_outcome,
-            };
             match save_outcome {
                 Ok(publication_outcome) => {
                     if publication_outcome == PersistentPromptCachePublicationOutcome::Published
@@ -408,7 +351,8 @@ impl Qwen3_5EngineState {
                         }
                     }
                 }
-                Err(error) => {
+                Err(PromptBlockPublicationFailure::Reclamation(error)) => return Err(error),
+                Err(PromptBlockPublicationFailure::Publication(error)) => {
                     tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");
                     return Err(required_prompt_state_persistence_failure(
                         prompt_state_persistence_owner,
@@ -421,6 +365,105 @@ impl Qwen3_5EngineState {
         }
         Ok(())
     }
+
+    /// Publishes one block, retrying once after expert reclamation when the
+    /// typed MLX active-memory limit blocked serialization. Reusing the
+    /// caller's extracted tensors is essential: this is resource reclamation,
+    /// not a second logical capture.
+    pub(super) fn publish_block_with_reclamation_retry(
+        &self,
+        model: &Qwen3_5Model,
+        active_request: &mut Qwen3_5EngineRequest,
+        persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+        block_key: &PersistentPromptCacheBlockKey,
+        parent_block_key: Option<&PersistentPromptCacheBlockKey>,
+        kv_block_tensors: &HashMap<String, MlxArray>,
+        recurrent_snapshot_tensors: &HashMap<String, MlxArray>,
+    ) -> Result<PersistentPromptCachePublicationOutcome, PromptBlockPublicationFailure> {
+        // The disk-store API needs mutable attribution while the request also
+        // remains mutably borrowed. Move the owner out temporarily and put it
+        // back on every return path before interpreting publication outcome.
+        let mut request_performance_attribution = std::mem::replace(
+            &mut active_request.performance_attribution,
+            PerformanceAttribution::disabled(),
+        );
+        let save_outcome = persistent_prompt_cache.publish_block_with_performance_attribution(
+            model.runtime(),
+            block_key,
+            parent_block_key,
+            kv_block_tensors,
+            recurrent_snapshot_tensors,
+            &mut request_performance_attribution,
+        );
+        active_request.performance_attribution = request_performance_attribution;
+        // Retry exactly once and only for the typed MLX active-memory limit.
+        let save_outcome = match save_outcome {
+            Err(publication_error) if publication_error.active_memory_deficit_bytes().is_some() => {
+                let active_memory_deficit_bytes =
+                    publication_error.active_memory_deficit_bytes().unwrap_or(0);
+                let expert_payload_bytes_before_reclamation = model
+                    .expert_weight_memory_cache_statistics()
+                    .resident_payload_byte_count;
+                if let Err(reclamation_error) =
+                    active_request.performance_attribution.measure_operation(
+                        PerformanceOperation::ExpertRetentionReclamation,
+                        |_performance_attribution| {
+                            reclaim_retained_experts_for_request_memory_pressure(
+                                model,
+                                active_memory_deficit_bytes,
+                            )
+                        },
+                    )
+                {
+                    return Err(PromptBlockPublicationFailure::Reclamation(
+                        reclamation_error,
+                    ));
+                }
+                let expert_payload_bytes_after_reclamation = model
+                    .expert_weight_memory_cache_statistics()
+                    .resident_payload_byte_count;
+                if let Some(persistent_prompt_cache_diagnostics) =
+                    active_request.persistent_prompt_cache_diagnostics.as_mut()
+                {
+                    persistent_prompt_cache_diagnostics.expert_bytes_reclaimed_for_publication =
+                        persistent_prompt_cache_diagnostics
+                            .expert_bytes_reclaimed_for_publication
+                            .saturating_add(
+                                expert_payload_bytes_before_reclamation
+                                    .saturating_sub(expert_payload_bytes_after_reclamation),
+                            );
+                }
+                // Expert eviction is measured separately from serialization
+                // so performance reports can attribute why publication paused.
+                let mut retry_performance_attribution = std::mem::replace(
+                    &mut active_request.performance_attribution,
+                    PerformanceAttribution::disabled(),
+                );
+                let retry_outcome = persistent_prompt_cache
+                    .publish_block_with_performance_attribution(
+                        model.runtime(),
+                        block_key,
+                        parent_block_key,
+                        kv_block_tensors,
+                        recurrent_snapshot_tensors,
+                        &mut retry_performance_attribution,
+                    );
+                active_request.performance_attribution = retry_performance_attribution;
+                retry_outcome
+            }
+            save_outcome => save_outcome,
+        };
+        save_outcome.map_err(PromptBlockPublicationFailure::Publication)
+    }
+}
+
+/// Distinguishes the two failure owners of a publication with reclamation
+/// retry: a failed reclamation propagates as its own engine error, while a
+/// failed publication is translated by the persistence owner upstream.
+#[derive(Debug)]
+pub(super) enum PromptBlockPublicationFailure {
+    Reclamation(InferenceEngineError),
+    Publication(PersistentPromptCacheDiskStoreError),
 }
 
 #[must_use]

@@ -15,6 +15,7 @@ mod persistent_prompt_cache_disk_store_scan;
 mod persistent_prompt_cache_disk_store_support;
 mod persistent_prompt_cache_global_quota_topology;
 mod persistent_prompt_cache_layout_topology;
+mod persistent_prompt_cache_partial_tail_disk_store;
 mod persistent_prompt_cache_publication_retry;
 mod persistent_prompt_cache_startup_cleanup_evidence;
 mod persistent_prompt_cache_state_bridge;

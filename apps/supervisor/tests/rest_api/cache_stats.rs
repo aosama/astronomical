@@ -24,6 +24,7 @@ const POPULATED_PERSISTENT_PROMPT_CACHE_STATS_EVENT: WorkerEvent =
         persistent_prompt_cache_visual_embedding_hits: 4,
         persistent_prompt_cache_visual_embedding_misses: 2,
         persistent_prompt_cache_visual_embedding_rows_loaded: 256,
+        persistent_prompt_cache_partial_tail_hits: 7,
     };
 
 #[tokio::test]
@@ -106,6 +107,10 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
         status_document["persistent_prompt_cache_visual_embedding_rows_loaded"],
         256
     );
+    assert_eq!(
+        status_document["persistent_prompt_cache_partial_tail_hits"],
+        7
+    );
 }
 
 #[tokio::test]
@@ -167,6 +172,10 @@ async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
         status_document["persistent_prompt_cache_visual_embedding_rows_loaded"],
         0
     );
+    assert_eq!(
+        status_document["persistent_prompt_cache_partial_tail_hits"],
+        0
+    );
 }
 
 #[tokio::test]
@@ -225,6 +234,7 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
         persistent_prompt_cache_visual_embedding_hits: 0,
         persistent_prompt_cache_visual_embedding_misses: 0,
         persistent_prompt_cache_visual_embedding_rows_loaded: 0,
+        persistent_prompt_cache_partial_tail_hits: 0,
     });
     let application = build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application

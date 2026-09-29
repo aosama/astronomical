@@ -205,7 +205,13 @@ fn validate_metadata(
             expected_format_version: PERSISTENT_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
         });
     }
-    if metadata.block_token_count != persistent_prompt_cache_model_contract.block_token_count() {
+    // Partial blocks (prefix-cache tails) store fewer tokens than a full block
+    // while remaining valid restorable state, so the header only has to prove
+    // the count fits the contract's block geometry. Tensor layouts are validated
+    // against this same header count, keeping each file self-consistent.
+    if metadata.block_token_count == 0
+        || metadata.block_token_count > persistent_prompt_cache_model_contract.block_token_count()
+    {
         return Err(PersistentPromptCacheBlockError::BlockTokenCountMismatch {
             actual_block_token_count: metadata.block_token_count,
             expected_block_token_count: persistent_prompt_cache_model_contract.block_token_count(),

@@ -93,3 +93,20 @@ fn should_increment_visual_embedding_misses_without_rows_loaded() {
         0
     );
 }
+
+#[test]
+fn should_count_partial_tail_hits_separately_from_full_block_hits() {
+    let mut persistent_prompt_cache_counters = PersistentPromptCacheCounters::default();
+    persistent_prompt_cache_counters.record_cache_hit(2_048);
+    persistent_prompt_cache_counters.record_partial_tail_hit();
+    persistent_prompt_cache_counters.record_partial_tail_hit();
+
+    assert_eq!(
+        persistent_prompt_cache_counters.persistent_prompt_cache_hits(),
+        1
+    );
+    assert_eq!(
+        persistent_prompt_cache_counters.persistent_prompt_cache_partial_tail_hits(),
+        2
+    );
+}

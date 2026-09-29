@@ -16,6 +16,7 @@ mod model_loading_finalization;
 mod mtp_decode_attempt;
 mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
+mod persistent_prompt_cache_tail_capture;
 mod persistent_prompt_cache_visual_identity;
 mod prefill_advance;
 mod prefill_capacity_recovery;
