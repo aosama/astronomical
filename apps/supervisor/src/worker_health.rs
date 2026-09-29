@@ -157,6 +157,7 @@ pub struct PersistentPromptCacheSummary {
     pub visual_embedding_hits: u64,
     pub visual_embedding_misses: u64,
     pub visual_embedding_rows_loaded: u64,
+    pub partial_tail_hits: u64,
 }
 
 /// Scope of the newest cache clear waiting for generation to become idle.
@@ -181,6 +182,7 @@ impl PersistentPromptCacheSummary {
             persistent_prompt_cache_visual_embedding_hits,
             persistent_prompt_cache_visual_embedding_misses,
             persistent_prompt_cache_visual_embedding_rows_loaded,
+            persistent_prompt_cache_partial_tail_hits,
         }) = persistent_prompt_cache_stats
         else {
             return Self::default();
@@ -200,6 +202,7 @@ impl PersistentPromptCacheSummary {
             visual_embedding_hits: *persistent_prompt_cache_visual_embedding_hits,
             visual_embedding_misses: *persistent_prompt_cache_visual_embedding_misses,
             visual_embedding_rows_loaded: *persistent_prompt_cache_visual_embedding_rows_loaded,
+            partial_tail_hits: *persistent_prompt_cache_partial_tail_hits,
         }
     }
 
