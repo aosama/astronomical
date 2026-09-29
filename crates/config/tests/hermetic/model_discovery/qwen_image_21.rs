@@ -45,6 +45,10 @@ fn should_verify_complete_qwen_image_21_profile_evidence() {
     );
     assert!(evidence.capabilities.supports_text_to_image);
     assert!(!evidence.capabilities.supports_image_editing);
+    assert_eq!(evidence.capabilities.default_steps, 40);
+    assert_eq!(evidence.capabilities.minimum_dimension_pixels, 256);
+    assert_eq!(evidence.capabilities.maximum_dimension_pixels, 1_024);
+    assert_eq!(evidence.capabilities.dimension_multiple_pixels, 32);
     assert_eq!(evidence.model_size_bytes, fixture_weight_file_size_bytes());
 }
 
