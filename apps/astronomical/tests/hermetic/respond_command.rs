@@ -2,47 +2,20 @@
 //! out, process exits. The daemon side is a stub speaking the real framed
 //! protocol over a real unix socket.
 
-use std::{
-    ffi::OsString,
-    io::Write,
-    path::PathBuf,
-    process,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{io::Write, path::PathBuf};
 
-use astronomical_cli::errors::{RespondError, UsageError};
+use astronomical_cli::errors::RespondError;
 use astronomical_cli::{
-    CliCommand, RespondArguments, RespondDependencies, parse_command, run_respond,
-};
-use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION,
-    DaemonRequest, DaemonResponse, DaemonWorkerStatus, ProtocolReader, ProtocolWriter,
+    CliCommand, RespondArguments, RespondDependencies, UsageError, run_respond,
 };
 use tokio::time::timeout;
 
-const RESPOND_TEST_TIMEOUT: Duration = Duration::from_secs(10);
-const SOCKET_FILE_NAME: &str = "ipc.sock";
-
-fn parse(arguments: &[&str]) -> Result<CliCommand, UsageError> {
-    let process_arguments =
-        std::iter::once(OsString::from("astronomical")).chain(arguments.iter().map(OsString::from));
-    parse_command(process_arguments)
-}
-
-fn fresh_respond_test_directory(test_name: &str) -> PathBuf {
-    let nanos_since_epoch = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock should provide time after the epoch")
-        .as_nanos();
-    let test_directory = std::env::temp_dir().join(format!(
-        "ast-respond-{}-{}-{test_name}",
-        process::id(),
-        nanos_since_epoch % 1_000_000_000
-    ));
-    std::fs::create_dir_all(&test_directory)
-        .expect("the respond test directory should be creatable");
-    test_directory
-}
+use super::stub_daemon::{
+    StubCatalogEntry, StubDaemonConfig, StubInstalledModel, spawn_stub_daemon, stub_download_job,
+};
+use super::test_support::{
+    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, parse,
+};
 
 fn respond_arguments(prompt: &str, model_id: Option<&str>, no_stream: bool) -> RespondArguments {
     RespondArguments {
@@ -61,93 +34,10 @@ fn respond_dependencies<'a>(
         candidate_socket_paths,
         stdout: stdout as &mut dyn Write,
         stderr: stderr as &mut dyn Write,
-        request_timeout: RESPOND_TEST_TIMEOUT,
+        request_timeout: TEST_TIMEOUT,
+        download_stage_bound: TEST_TIMEOUT,
+        download_poll_interval: DOWNLOAD_POLL_INTERVAL,
     }
-}
-
-/// Stub daemon answering the real framed protocol: handshake, status, and one
-/// scripted chat generation whose terminal frame closes the connection.
-fn spawn_stub_respond_daemon(
-    socket_path: PathBuf,
-    ready_model_id: Option<String>,
-    answer_fragments: Vec<String>,
-) -> tokio::task::JoinHandle<()> {
-    let ready_model_id = std::sync::Arc::new(ready_model_id);
-    let answer_fragments = std::sync::Arc::new(answer_fragments);
-    // Bind before spawning so the client can never race an unbound socket.
-    let std_listener = std::os::unix::net::UnixListener::bind(&socket_path)
-        .expect("the stub daemon should bind the test socket");
-    std_listener
-        .set_nonblocking(true)
-        .expect("the stub listener should accept non-blocking mode");
-    let unix_listener = tokio::net::UnixListener::from_std(std_listener)
-        .expect("the stub listener should register with the runtime");
-    tokio::spawn(async move {
-        loop {
-            let Ok((connection_stream, _peer_address)) = unix_listener.accept().await else {
-                return;
-            };
-            let ready_model_id = std::sync::Arc::clone(&ready_model_id);
-            let answer_fragments = std::sync::Arc::clone(&answer_fragments);
-            tokio::spawn(async move {
-                let (read_half, write_half) = connection_stream.into_split();
-                let mut protocol_reader = ProtocolReader::new(read_half);
-                let mut protocol_writer = ProtocolWriter::new(write_half);
-                loop {
-                    let Some(daemon_request) = protocol_reader.next_daemon_request().await.expect(
-                        "the stub daemon request read should not fail at the transport layer",
-                    ) else {
-                        return;
-                    };
-                    match daemon_request {
-                        DaemonRequest::Handshake => {
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::HandshakeAccepted {
-                                    protocol_version: DAEMON_PROTOCOL_VERSION,
-                                    application_name: DAEMON_APPLICATION_NAME.to_owned(),
-                                })
-                                .await
-                                .expect("the stub handshake should transmit");
-                        }
-                        DaemonRequest::Status => {
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::Status {
-                                    worker_status: DaemonWorkerStatus::Ready,
-                                    ready_model_id: ready_model_id.as_ref().clone(),
-                                })
-                                .await
-                                .expect("the stub status should transmit");
-                        }
-                        DaemonRequest::ChatGenerate { .. } => {
-                            for answer_fragment in answer_fragments.iter() {
-                                protocol_writer
-                                    .send_daemon_response(&DaemonResponse::ChatGenerationText {
-                                        text: answer_fragment.clone(),
-                                    })
-                                    .await
-                                    .expect("the stub fragment should transmit");
-                            }
-                            protocol_writer
-                                .send_daemon_response(&DaemonResponse::ChatGenerationCompleted {
-                                    prompt_token_count: 7,
-                                    generated_token_count: 2,
-                                    reasoning_token_count: 0,
-                                    cached_token_count: 0,
-                                    reason: ChatGenerationCompletionReason::EndOfSequence,
-                                })
-                                .await
-                                .expect("the stub completion frame should transmit");
-                            let _ = protocol_writer.close().await;
-                            return;
-                        }
-                        DaemonRequest::EmbedGenerate { .. } => {
-                            panic!("the respond stub daemon must not receive embeddings requests");
-                        }
-                    }
-                }
-            });
-        }
-    })
 }
 
 #[test]
@@ -194,7 +84,7 @@ fn should_reject_respond_with_an_unknown_argument_as_a_usage_error() {
 
 #[tokio::test]
 async fn should_report_a_missing_daemon_as_not_running() {
-    let test_directory = fresh_respond_test_directory("not-running");
+    let test_directory = fresh_test_directory("respond", "not-running");
     let missing_socket_path = test_directory.join(SOCKET_FILE_NAME);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
@@ -202,7 +92,7 @@ async fn should_report_a_missing_daemon_as_not_running() {
         respond_dependencies(vec![missing_socket_path], &mut stdout, &mut stderr);
 
     let respond_outcome = timeout(
-        RESPOND_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_respond(
             &respond_arguments("Say hello", None, false),
             &mut respond_dependencies,
@@ -221,22 +111,29 @@ async fn should_report_a_missing_daemon_as_not_running() {
     let _ = std::fs::remove_dir_all(&test_directory);
 }
 
+/// Stub that has one resident chat model and names it as the effective
+/// default: the no-flag resolution path.
+fn resident_default_stub_config() -> StubDaemonConfig {
+    StubDaemonConfig {
+        installed_models: vec![StubInstalledModel::chat("test/local-chatter", true)],
+        default_model_id: Some("test/local-chatter".to_owned()),
+        chat_fragments: vec!["Hello".to_owned(), " world".to_owned()],
+        ..Default::default()
+    }
+}
+
 #[tokio::test]
 async fn should_stream_generated_text_to_stdout() {
-    let test_directory = fresh_respond_test_directory("stream-text");
+    let test_directory = fresh_test_directory("respond", "stream-text");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_respond_daemon(
-        socket_path.clone(),
-        Some("test/local-chatter".to_owned()),
-        vec!["Hello".to_owned(), " world".to_owned()],
-    );
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), resident_default_stub_config());
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let mut respond_dependencies =
         respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
 
     let respond_outcome = timeout(
-        RESPOND_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_respond(
             &respond_arguments("Say hello", None, false),
             &mut respond_dependencies,
@@ -256,20 +153,16 @@ async fn should_stream_generated_text_to_stdout() {
 
 #[tokio::test]
 async fn should_print_the_finished_answer_once_with_no_stream() {
-    let test_directory = fresh_respond_test_directory("no-stream");
+    let test_directory = fresh_test_directory("respond", "no-stream");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_respond_daemon(
-        socket_path.clone(),
-        Some("test/local-chatter".to_owned()),
-        vec!["Hello".to_owned(), " world".to_owned()],
-    );
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), resident_default_stub_config());
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let mut respond_dependencies =
         respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
 
     let respond_outcome = timeout(
-        RESPOND_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_respond(
             &respond_arguments("Say hello", None, true),
             &mut respond_dependencies,
@@ -288,13 +181,15 @@ async fn should_print_the_finished_answer_once_with_no_stream() {
 }
 
 #[tokio::test]
-async fn should_fail_when_the_requested_model_is_not_loaded() {
-    let test_directory = fresh_respond_test_directory("wrong-model");
+async fn should_fail_when_the_requested_model_is_unknown() {
+    let test_directory = fresh_test_directory("respond", "unknown-model");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_respond_daemon(
+    let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
-        Some("test/other-model".to_owned()),
-        vec![],
+        StubDaemonConfig {
+            installed_models: vec![StubInstalledModel::chat("test/other-model", true)],
+            ..Default::default()
+        },
     );
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
@@ -302,7 +197,7 @@ async fn should_fail_when_the_requested_model_is_not_loaded() {
         respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
 
     let respond_outcome = timeout(
-        RESPOND_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_respond(
             &respond_arguments("Say hello", Some("test/wanted-model"), false),
             &mut respond_dependencies,
@@ -313,30 +208,45 @@ async fn should_fail_when_the_requested_model_is_not_loaded() {
     assert!(
         matches!(
             &respond_outcome,
-            Err(RespondError::RequestedModelNotReady {
-                requested_model_id,
-                ready_model_id,
-            }) if requested_model_id == "test/wanted-model"
-                && ready_model_id == "test/other-model"
+            Err(RespondError::ModelUnavailable { reason })
+                if reason.contains("test/wanted-model")
         ),
-        "requesting a model that is not loaded must fail with both identities: {respond_outcome:?}"
+        "requesting a model the machine cannot serve must fail with the model id: {respond_outcome:?}"
+    );
+    let rendered_outcome = format!("{respond_outcome:?}");
+    assert!(
+        rendered_outcome.contains("did you mean: test/other-model"),
+        "the rejection should list the near match the machine actually has: {rendered_outcome}"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);
 }
 
 #[tokio::test]
-async fn should_fail_when_no_model_is_loaded() {
-    let test_directory = fresh_respond_test_directory("no-model");
+async fn should_auto_load_the_builtin_default_when_nothing_is_resident() {
+    let test_directory = fresh_test_directory("respond", "auto-load-default");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
-    let stub_daemon_task = spawn_stub_respond_daemon(socket_path.clone(), None, vec![]);
+    // Cold daemon: nothing installed or resident, but the built-in default
+    // is on this Mac in the catalog, so the request must simply stream.
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            catalog_entries: vec![StubCatalogEntry::chat(
+                "mlx-community/Qwen3.5-2B-4bit",
+                "Qwen3.5-2B-4bit",
+                true,
+            )],
+            chat_fragments: vec!["Loaded".to_owned(), " fine".to_owned()],
+            ..Default::default()
+        },
+    );
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let mut respond_dependencies =
         respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
 
     let respond_outcome = timeout(
-        RESPOND_TEST_TIMEOUT,
+        TEST_TIMEOUT,
         run_respond(
             &respond_arguments("Say hello", None, false),
             &mut respond_dependencies,
@@ -344,9 +254,120 @@ async fn should_fail_when_no_model_is_loaded() {
     )
     .await
     .expect("the respond journey should finish inside the test timeout");
+    respond_outcome
+        .expect("a cold daemon with the built-in default on disk must serve the request");
+    assert_eq!(
+        String::from_utf8_lossy(&stdout),
+        "Loaded fine",
+        "the daemon loads the resident model itself; the CLI just streams"
+    );
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[tokio::test]
+async fn should_download_a_missing_model_before_streaming() {
+    let test_directory = fresh_test_directory("respond", "auto-download");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    // The requested model is not on this Mac: the lifecycle starts the
+    // download, waits for the catalog to flip to ready, then streams.
+    let missing_entry = StubCatalogEntry::chat("test/downloaded-model", "downloaded-model", false);
+    let ready_entry = StubCatalogEntry::chat("test/downloaded-model", "downloaded-model", true);
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            catalog_entries: vec![missing_entry.clone()],
+            catalog_entries_after_download: Some(vec![ready_entry]),
+            download_jobs: vec![
+                Some(stub_download_job(
+                    "test/downloaded-model",
+                    "downloading",
+                    1_000_000_000,
+                    2_000_000_000,
+                    None,
+                )),
+                None,
+            ],
+            chat_fragments: vec!["Downloaded".to_owned()],
+            ..Default::default()
+        },
+    );
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+
+    let respond_outcome = timeout(
+        TEST_TIMEOUT,
+        run_respond(
+            &respond_arguments("Say hello", Some("test/downloaded-model"), false),
+            &mut respond_dependencies,
+        ),
+    )
+    .await
+    .expect("the respond journey should finish inside the test timeout");
+    respond_outcome.expect("an auto-download must complete before the stream");
+    assert_eq!(
+        String::from_utf8_lossy(&stdout),
+        "Downloaded",
+        "the answer must stream only after the download finished"
+    );
+    let rendered_stderr = String::from_utf8_lossy(&stderr);
     assert!(
-        matches!(respond_outcome, Err(RespondError::NoModelLoaded)),
-        "a ready daemon with no resident model must fail with the no-model error: {respond_outcome:?}"
+        rendered_stderr.contains("1 GB / 2 GB"),
+        "the live progress should report decimal GB to stderr: {rendered_stderr:?}"
+    );
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[tokio::test]
+async fn should_reject_a_chat_request_for_an_embeddings_only_model_before_downloading() {
+    let test_directory = fresh_test_directory("respond", "capmismatch");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    // An embeddings-only catalog model that is not on this Mac yet: the
+    // capability check must reject before any download work starts.
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            catalog_entries: vec![StubCatalogEntry::embeddings(
+                "test/only-embeddings",
+                "only-embeddings",
+                false,
+            )],
+            ..Default::default()
+        },
+    );
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+
+    let respond_outcome = timeout(
+        TEST_TIMEOUT,
+        run_respond(
+            &respond_arguments("Say hello", Some("test/only-embeddings"), false),
+            &mut respond_dependencies,
+        ),
+    )
+    .await
+    .expect("the respond journey should finish inside the test timeout");
+    assert!(
+        matches!(
+            &respond_outcome,
+            Err(RespondError::ModelUnavailable { reason })
+                if reason.contains("not a chat model")
+        ),
+        "a chat request against an embeddings-only model must fail on capability: {respond_outcome:?}"
+    );
+    assert!(
+        stdout.is_empty(),
+        "no answer may stream on a capability rejection"
+    );
+    let rendered_stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        !rendered_stderr.contains("downloading"),
+        "no download may start for a capability mismatch: {rendered_stderr:?}"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);

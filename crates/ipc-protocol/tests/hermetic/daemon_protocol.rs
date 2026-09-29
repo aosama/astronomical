@@ -4,8 +4,9 @@
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationSettings,
-    ChatMessage, DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason,
-    decode_daemon_request, decode_daemon_response, encode_daemon_request, encode_daemon_response,
+    ChatMessage, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonRequest,
+    DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, decode_daemon_request,
+    decode_daemon_response, encode_daemon_request, encode_daemon_response,
 };
 
 fn chat_generate_request() -> DaemonRequest {
@@ -46,6 +47,15 @@ fn should_round_trip_daemon_requests_through_the_wire_codec() {
             inputs: vec!["embed whatever is resident".to_owned()],
             dimensions: None,
         },
+        DaemonRequest::ModelsList,
+        DaemonRequest::Catalog,
+        DaemonRequest::DownloadStart {
+            model_id: "Qwen3.5-2B-4bit".to_owned(),
+        },
+        DaemonRequest::DownloadStatus,
+        DaemonRequest::DefaultModelSet {
+            model_id: "Qwen3.5-2B-4bit".to_owned(),
+        },
     ];
     for daemon_request in daemon_requests {
         let encoded_request = encode_daemon_request(&daemon_request)
@@ -69,14 +79,63 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Ready,
             ready_model_id: Some("example/local-model".to_owned()),
+            default_model_id: Some("Qwen3.5-2B-4bit".to_owned()),
         },
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Loading,
             ready_model_id: None,
+            default_model_id: None,
         },
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Unavailable,
             ready_model_id: None,
+            default_model_id: None,
+        },
+        DaemonResponse::ModelsList {
+            models: vec![DaemonListedModel {
+                model_id: "example/local-model".to_owned(),
+                family: "qwen".to_owned(),
+                context_window: Some(32_768),
+                supports_embeddings: false,
+                is_resident: true,
+                size_bytes: 1_750_000_000,
+            }],
+        },
+        DaemonResponse::Catalog {
+            entries: vec![DaemonCatalogEntry {
+                huggingface_id: "example/local-model".to_owned(),
+                display_name: "Example Local Model".to_owned(),
+                family: "qwen".to_owned(),
+                approximate_size_bytes: 1_750_000_000,
+                ready_on_this_mac: true,
+                requestable_model_id: Some("local-model".to_owned()),
+                download_state: None,
+                context_window: Some(32_768),
+                supports_reasoning: true,
+                supports_vision: false,
+                supports_tool_calls: true,
+                supports_image_generation: false,
+                supports_embeddings: false,
+            }],
+        },
+        DaemonResponse::DownloadStarted {
+            huggingface_id: "example/local-model".to_owned(),
+        },
+        DaemonResponse::DownloadStatus {
+            job: Some(DaemonDownloadJob {
+                huggingface_id: "example/local-model".to_owned(),
+                state: "downloading".to_owned(),
+                bytes_completed: 123,
+                bytes_total: 456,
+                error: None,
+            }),
+        },
+        DaemonResponse::DownloadStatus { job: None },
+        DaemonResponse::DefaultModelSet {
+            default_model_id: "Qwen3.5-2B-4bit".to_owned(),
+        },
+        DaemonResponse::RequestRejected {
+            reason: "the model is not in the catalog".to_owned(),
         },
         DaemonResponse::ChatGenerationText {
             text: "Hello".to_owned(),

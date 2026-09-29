@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, LogLevel, LoggingConfig, PromptCacheConfig,
-    write_maximum_mlx_memory_gb,
+    write_default_model, write_maximum_mlx_memory_gb,
 };
 
 use super::write_config;
 
 mod chunking;
+mod default_model;
 mod local_api_base_urls;
 mod logging;
 mod maximum_mlx_memory;

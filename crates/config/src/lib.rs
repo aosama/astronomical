@@ -8,6 +8,7 @@ mod config_document;
 mod config_error;
 mod config_file;
 mod configuration_generation;
+mod default_model;
 mod duplicate_key_json;
 mod laguna_template_source;
 mod legacy_config_migration;
@@ -33,6 +34,10 @@ pub use chunking_config::{
     DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
 };
 pub use config_error::AstronomicalConfigError;
+pub use default_model::{
+    BUILTIN_DEFAULT_MODEL_ID, DefaultModelConfigUpdate, commit_default_model_update,
+    prepare_default_model_update, write_default_model,
+};
 pub use laguna_template_source::{
     LagunaRootChatTemplateSelectionError, LagunaRootChatTemplateSource,
     LagunaStandaloneChatTemplateState, select_laguna_root_chat_template,
@@ -59,7 +64,7 @@ pub use model_discovery::{
     verify_qwen_image_21_model_directory,
 };
 pub use model_identity::{
-    decode_huggingface_cache_directory_name, leaf_model_id, resolve_model_id,
+    decode_huggingface_cache_directory_name, leaf_model_id, near_model_matches, resolve_model_id,
 };
 pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
@@ -247,7 +252,6 @@ impl AstronomicalConfig {
     }
 
     /// Returns the authored decimal-SI cache capacity without applying its default.
-    #[must_use]
     pub fn configured_prompt_cache_maximum_size_bytes(
         &self,
     ) -> Result<Option<u64>, AstronomicalConfigError> {
@@ -354,6 +358,14 @@ impl AstronomicalConfig {
             .maximum_mlx_memory_gb
             .map(maximum_mlx_memory_gb_to_bytes)
             .transpose()
+    }
+
+    /// Returns the persisted default model id used by one-shot CLI verbs.
+    ///
+    /// `None` means the caller should fall back to its built-in default.
+    #[must_use]
+    pub fn default_model(&self) -> Option<&str> {
+        self.user_config_file.runtime.default_model.as_deref()
     }
 }
 

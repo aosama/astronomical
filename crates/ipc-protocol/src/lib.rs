@@ -31,8 +31,8 @@ pub use chat_generation_validation::ChatGenerationValidationError;
 pub use daemon_client::DaemonIpcClient;
 pub use daemon_listener::{DaemonIpcListener, StreamingResponseWriter};
 pub use daemon_protocol::{
-    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonRequest, DaemonResponse,
-    DaemonWorkerStatus,
+    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob,
+    DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus,
 };
 pub use daemon_transport_error::DaemonTransportError;
 pub use embeddings::{

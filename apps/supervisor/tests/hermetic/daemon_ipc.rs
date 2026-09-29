@@ -1,7 +1,7 @@
 //! Daemon IPC chat and status journeys: status probes report the resident
 //! model identity, chat requests stream frames, and rejections carry reasons.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage, DaemonIpcClient,
@@ -12,7 +12,8 @@ use tokio::time::timeout;
 
 use crate::common::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
-    ready_stub_executor, start_stub_daemon_ipc_service, text_only_chat_generate_request,
+    ipc_runtime_config, ready_stub_executor, start_stub_daemon_ipc_service,
+    start_stub_daemon_ipc_service_with_runtime_config, text_only_chat_generate_request,
 };
 
 #[tokio::test]
@@ -66,6 +67,7 @@ async fn should_report_the_loaded_model_identity_for_status_requests() {
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Ready,
             ready_model_id: Some("test/local-chatter".to_owned()),
+            default_model_id: Some("Qwen3.5-2B-4bit".to_owned()),
         }
     );
 
@@ -165,8 +167,12 @@ async fn should_stream_chat_generation_frames_to_the_cli_client() {
 }
 
 #[tokio::test]
-async fn should_reject_chat_generation_when_no_model_is_loaded() {
-    let state_directory = fresh_instance_state_directory("reject-no-model");
+async fn should_admit_chat_generation_for_a_model_the_worker_has_not_loaded_yet() {
+    // Core fix for CLI auto-load: a model the daemon knows but has not loaded
+    // yet must be admitted, not rejected — the worker loop swaps or loads it
+    // on demand. The stub's empty stream yields a failure terminal, which is
+    // the proof the request passed the gate and reached the executor.
+    let state_directory = fresh_instance_state_directory("admit-not-loaded");
     let stub_executor = Arc::new(StubGenerationExecutor {
         health_snapshot: WorkerHealthSnapshot::ready_without_model(0),
         stream_events: vec![],
@@ -174,7 +180,16 @@ async fn should_reject_chat_generation_when_no_model_is_loaded() {
         embeddings_output: None,
         received_embeddings_commands: Mutex::new(Vec::new()),
     });
-    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
+        Vec::new(),
+        &["test/local-chatter"],
+    )));
+    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+        &state_directory,
+        Arc::clone(&stub_executor),
+        Some(reloadable_config),
+    )
+    .await;
 
     let mut daemon_client =
         DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
@@ -187,6 +202,66 @@ async fn should_reject_chat_generation_when_no_model_is_loaded() {
     .await
     .expect("the chat generate send should finish inside the test timeout")
     .expect("the chat generate request should transmit");
+    let terminal_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
+        .await
+        .expect("the terminal frame should arrive inside the test timeout")
+        .expect("the terminal frame read should not fail at the transport layer")
+        .expect("the daemon should answer the admitted request");
+    assert!(
+        matches!(&terminal_frame, DaemonResponse::ChatGenerationFailed { .. }),
+        "a known model the worker has not loaded yet must be admitted to the \
+         executor (the empty stub stream ends in failure, not rejection): {terminal_frame:?}"
+    );
+    let received_commands = stub_executor
+        .received_commands
+        .lock()
+        .expect("the stub command log lock should not be poisoned");
+    assert_eq!(
+        received_commands.len(),
+        1,
+        "the daemon should dispatch the generation to the worker"
+    );
+    assert_eq!(received_commands[0].model, "test/local-chatter");
+
+    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
+        .await
+        .expect("the daemon IPC service shutdown should finish inside the test timeout")
+        .expect("the daemon IPC service should shut down cleanly");
+    let _ = std::fs::remove_dir_all(&state_directory);
+}
+
+#[tokio::test]
+async fn should_reject_chat_generation_for_a_model_unknown_to_the_policy_catalog() {
+    let state_directory = fresh_instance_state_directory("reject-unknown-model");
+    let stub_executor = Arc::new(StubGenerationExecutor {
+        health_snapshot: WorkerHealthSnapshot::ready_without_model(0),
+        stream_events: vec![],
+        received_commands: Mutex::new(Vec::new()),
+        embeddings_output: None,
+        received_embeddings_commands: Mutex::new(Vec::new()),
+    });
+    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
+        Vec::new(),
+        &["test/local-chatter"],
+    )));
+    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+        &state_directory,
+        Arc::clone(&stub_executor),
+        Some(reloadable_config),
+    )
+    .await;
+
+    let mut daemon_client =
+        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
+            .await
+            .expect("the client should connect to the running daemon IPC service");
+    timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        daemon_client.send_request(&text_only_chat_generate_request("nope/unknown-model")),
+    )
+    .await
+    .expect("the chat generate send should finish inside the test timeout")
+    .expect("the chat generate request should transmit");
     let rejection_frame = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
         .await
         .expect("the rejection frame should arrive inside the test timeout")
@@ -195,9 +270,18 @@ async fn should_reject_chat_generation_when_no_model_is_loaded() {
     assert!(
         matches!(
             &rejection_frame,
-            DaemonResponse::GenerationRejected { reason } if !reason.is_empty()
+            DaemonResponse::GenerationRejected { reason }
+                if reason.contains("nope/unknown-model is unknown")
         ),
-        "a chat request with no loaded model must be rejected: {rejection_frame:?}"
+        "a model unknown to the policy catalog must be rejected with its id named: {rejection_frame:?}"
+    );
+    let received_commands = stub_executor
+        .received_commands
+        .lock()
+        .expect("the stub command log lock should not be poisoned");
+    assert!(
+        received_commands.is_empty(),
+        "a rejected request must not reach the worker"
     );
 
     timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())

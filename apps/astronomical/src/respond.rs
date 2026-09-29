@@ -1,17 +1,21 @@
 //! The one-shot `respond` journey: prompt in, streamed answer out, exit.
 //!
 //! The CLI never touches the REST surface. It speaks the framed daemon IPC
-//! protocol over the instance's unix socket: the shared probe establishes
-//! which model is resident, then one connection carries the streamed
-//! generation.
+//! protocol over the instance's unix socket: the shared model lifecycle
+//! resolves which model to use (flag, daemon default, or built-in) and
+//! downloads it when the Mac lacks it, then one connection carries the
+//! streamed generation — the daemon loads or swaps the resident model
+//! itself.
 
-use std::io::Write;
+use std::{io::Write, time::Duration};
 
 use astronomical_ipc_protocol::{
     ChatGenerationSettings, ChatMessage, DaemonIpcClient, DaemonRequest, DaemonResponse,
 };
 
-use crate::{DaemonProbe, RespondArguments, errors::RespondError};
+use crate::{
+    DaemonProbe, ModelLifecycle, RequiredCapability, RespondArguments, errors::RespondError,
+};
 
 /// Collaborators the respond journey needs, injected so tests can stub them.
 pub struct RespondDependencies<'a> {
@@ -22,10 +26,16 @@ pub struct RespondDependencies<'a> {
     /// Where progress, reasoning, and errors go.
     pub stderr: &'a mut dyn Write,
     /// Bound for each protocol stage of the journey.
-    pub request_timeout: std::time::Duration,
+    pub request_timeout: Duration,
+    /// Bound for the whole download-wait stage, if the model must download.
+    pub download_stage_bound: Duration,
+    /// Wait between download status polls.
+    pub download_poll_interval: Duration,
 }
 
-/// Runs the whole respond journey against the resident daemon.
+/// Runs the whole respond journey against the resident daemon: resolve the
+/// model (flag, daemon default, or built-in), let the lifecycle download it
+/// when the Mac does not have it yet, then stream the answer.
 pub async fn run_respond(
     respond_arguments: &RespondArguments,
     respond_dependencies: &mut RespondDependencies<'_>,
@@ -34,22 +44,30 @@ pub async fn run_respond(
         candidate_socket_paths: respond_dependencies.candidate_socket_paths.clone(),
         request_timeout: respond_dependencies.request_timeout,
     };
-    let ready_model_id = match daemon_probe.ready_model_id().await? {
-        Some(ready_model_id) => ready_model_id,
-        None => return Err(RespondError::NoModelLoaded),
+    let model_lifecycle = ModelLifecycle {
+        daemon_probe,
+        download_stage_bound: respond_dependencies.download_stage_bound,
+        download_poll_interval: respond_dependencies.download_poll_interval,
     };
-    let chat_model_id = match &respond_arguments.model_id {
-        Some(requested_model_id) if requested_model_id != &ready_model_id => {
-            return Err(RespondError::RequestedModelNotReady {
-                requested_model_id: requested_model_id.clone(),
-                ready_model_id,
-            });
-        }
-        _ => ready_model_id,
-    };
+    let mut progress_started = false;
+    let chat_model_id = model_lifecycle
+        .prepare_model_id(
+            respond_arguments.model_id.as_deref(),
+            RequiredCapability::Chat,
+            &mut |progress_line| {
+                progress_started = true;
+                let _ = write!(respond_dependencies.stderr, "\r{progress_line}");
+                let _ = respond_dependencies.stderr.flush();
+            },
+        )
+        .await?;
+    if progress_started {
+        // Finalize the live progress line before the answer owns stderr.
+        let _ = writeln!(respond_dependencies.stderr);
+    }
     stream_answer(
         respond_arguments,
-        &daemon_probe,
+        &model_lifecycle.daemon_probe,
         respond_dependencies,
         &chat_model_id,
     )
@@ -89,20 +107,13 @@ async fn stream_answer(
     .map_err(|_transport_error| RespondError::DaemonStoppedResponding)?;
 
     let mut buffered_answer = String::new();
-    let generation_outcome = tokio::time::timeout(
-        respond_dependencies.request_timeout,
-        relay_generation_frames(
-            respond_arguments,
-            respond_dependencies,
-            &mut daemon_client,
-            &mut buffered_answer,
-        ),
+    relay_generation_frames(
+        respond_arguments,
+        respond_dependencies,
+        &mut daemon_client,
+        &mut buffered_answer,
     )
-    .await;
-    match generation_outcome {
-        Ok(journey_result) => journey_result,
-        Err(_elapsed) => Err(RespondError::DaemonStoppedResponding),
-    }
+    .await
 }
 
 /// Relays frames until a terminal frame; writes the answer per stream mode.
@@ -112,11 +123,21 @@ async fn relay_generation_frames(
     daemon_client: &mut DaemonIpcClient,
     buffered_answer: &mut String,
 ) -> Result<(), RespondError> {
-    while let Some(daemon_response) = daemon_client
-        .next_response()
+    loop {
+        // The timeout is an idle guard per frame, not a cap on the whole
+        // generation: a healthy stream may run arbitrarily long, but silence
+        // beyond the window means the daemon is gone.
+        let next_daemon_response = tokio::time::timeout(
+            respond_dependencies.request_timeout,
+            daemon_client.next_response(),
+        )
         .await
-        .map_err(|_transport_error| RespondError::DaemonStoppedResponding)?
-    {
+        .map_err(|_elapsed| RespondError::DaemonStoppedResponding)?
+        .map_err(|_transport_error| RespondError::DaemonStoppedResponding)?;
+        let Some(daemon_response) = next_daemon_response else {
+            // EOF before a terminal frame: the daemon went away mid-answer.
+            return Err(RespondError::DaemonStoppedResponding);
+        };
         match daemon_response {
             DaemonResponse::ChatGenerationText { text } => {
                 if respond_arguments.no_stream {
@@ -126,7 +147,9 @@ async fn relay_generation_frames(
                 }
             }
             DaemonResponse::ChatGenerationReasoning { text } => {
-                write_and_flush(respond_dependencies.stderr, &text)?;
+                // Reasoning is progress on stderr, never the payload; a
+                // closed stderr must not abort the answer stream.
+                let _ = write_and_flush_plain(respond_dependencies.stderr, &text);
             }
             DaemonResponse::ChatGenerationToolCall {
                 function_name,
@@ -157,8 +180,6 @@ async fn relay_generation_frames(
             _ => return Err(RespondError::DaemonStoppedResponding),
         }
     }
-    // EOF before a terminal frame: the daemon went away mid-answer.
-    Err(RespondError::DaemonStoppedResponding)
 }
 
 fn write_and_flush(output: &mut dyn Write, text: &str) -> Result<(), RespondError> {
@@ -168,4 +189,10 @@ fn write_and_flush(output: &mut dyn Write, text: &str) -> Result<(), RespondErro
         .map_err(|output_error| RespondError::StdoutUnwritable {
             cause: output_error.to_string(),
         })
+}
+
+fn write_and_flush_plain(output: &mut dyn Write, text: &str) -> std::io::Result<()> {
+    output
+        .write_all(text.as_bytes())
+        .and_then(|()| output.flush())
 }
