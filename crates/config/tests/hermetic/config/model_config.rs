@@ -80,7 +80,7 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     write_config(
         temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096,"prompt_cache_block_tokens":1024},"models":{"target":{"chunking":{"full_attention_key_value_growth_tokens":512,"prompt_cache_block_tokens":null}}}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":6144,"prompt_cache_block_tokens":1024},"models":{"target":{"chunking":{"full_attention_key_value_growth_tokens":512,"prompt_cache_block_tokens":null}}}}"#,
     );
     let astronomical_config =
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
@@ -100,7 +100,7 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
         configured_model
             .chunking()
             .fixed_prompt_processing_chunk_size_tokens(),
-        4_096
+        6_144
     );
     assert_eq!(
         configured_model
