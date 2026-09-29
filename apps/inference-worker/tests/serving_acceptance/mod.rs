@@ -6,5 +6,6 @@ pub(crate) mod k2_horizon_mova;
 pub(crate) mod laguna;
 pub(crate) mod ornith_35b;
 pub(crate) mod qwen3_6;
+pub(crate) mod qwen3_8;
 pub(crate) mod speculative_prefill;
 pub(crate) mod vision;
