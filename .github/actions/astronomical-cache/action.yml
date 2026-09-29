@@ -1,0 +1,69 @@
+name: 'Astronomical cache with restoration report'
+description: 'Restores or saves one named Astronomical CI cache and immediately reports duration, key classification, and outcome so every cache operation stays attributable in the hosted action log.'
+
+inputs:
+  operation:
+    description: 'Whether to restore or save this cache.'
+    required: true
+  owner:
+    description: 'Lowercase hyphenated cache owner used in the restoration report.'
+    required: true
+  path:
+    description: 'Paths to cache or restore.'
+    required: true
+  key:
+    description: 'Primary cache key.'
+    required: true
+  restore-keys:
+    description: 'Fallback restore-key prefixes.'
+    required: false
+    default: ''
+
+outputs:
+  cache-hit:
+    description: 'Whether the restore operation hit a cache key.'
+    value: ${{ steps.restore.outputs.cache-hit }}
+  cache-matched-key:
+    description: 'Exact cache key matched by the restore operation.'
+    value: ${{ steps.restore.outputs.cache-matched-key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Start cache operation timer
+      id: timer
+      shell: bash
+      run: printf 'started_at=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+    - name: Restore cache
+      id: restore
+      if: ${{ inputs.operation == 'restore' }}
+      continue-on-error: true
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs['restore-keys'] }}
+    - name: Save cache
+      id: save
+      if: ${{ inputs.operation == 'save' }}
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+    - name: Report cache operation
+      id: report
+      # Skip the report when the operation step was skipped (a save gated on a
+      # prior cache hit), matching the inline timer/save/report triplets this
+      # action replaces: no report for operations that never ran.
+      if: ${{ inputs.operation == 'restore' && steps.restore.outcome != 'skipped' || inputs.operation == 'save' && steps.save.outcome != 'skipped' }}
+      shell: bash
+      env:
+        CACHE_OWNER: ${{ inputs.owner }}
+        CACHE_OPERATION: ${{ inputs.operation }}
+        CACHE_STEP_OUTCOME: ${{ inputs.operation == 'restore' && steps.restore.outcome || steps.save.outcome }}
+        CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+        CACHE_MATCHED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+        CACHE_PRIMARY_KEY: ${{ inputs.key }}
+        CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.timer.outputs.started_at }}
+      run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" "$GITHUB_WORKSPACE/scripts/report-build-cache-restoration.sh"
