@@ -4,32 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.58</title>
-            <pubDate>Mon, 28 Sep 2026 18:10:38 -0400</pubDate>
-            <sparkle:version>704</sparkle:version>
-            <sparkle:shortVersionString>0.2.58</sparkle:shortVersionString>
+            <title>0.2.59</title>
+            <pubDate>Mon, 28 Sep 2026 23:18:42 -0400</pubDate>
+            <sparkle:version>717</sparkle:version>
+            <sparkle:shortVersionString>0.2.59</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.58
+            <description sparkle:format="markdown"><![CDATA[## Highlights
 
-### Added
+- The CLI now owns the full model lifecycle: automatic loading, downloading, defaults, and streaming.
+- Prompt prefill pipelines the GDN recurrence across chunks, and the default prefill chunk size is now 4,096 tokens, improving long-prompt throughput.
+- Prefill selects NAX quantized-matmul tile variants per shape, improving short-prompt prompt-processing throughput with parity on long prompts.
+- Continuous integration is split into parallel macOS jobs with a shared build cache, shortening feedback loops.
 
-- The `astronomical` command-line interface now ships inside the macOS app bundle. After installing or updating, the app installs and automatically repairs the `/usr/local/bin/astronomical` symlink on launch, so the CLI works in your terminal without any separate setup. You can also install or remove the link anytime from the menu bar popover.
+## Compatibility
 
-### Fixed
+- Configuration documents remain compatible; the 4,096-token chunk default is materialized for existing configurations without requiring manual edits.
+- Existing model directories, prompt caches, and user state are preserved.
 
-- Chat streaming no longer drops trailing text deltas when a response finishes between stream polls. This fix also removes an intermittent failure in the conversation canvas test contracts.
+## Distribution
 
-### Notes
-
-- Requires macOS 14.0 or later on Apple silicon.
-- Your existing settings, models, and state are preserved by this update.
-- This release is signed, notarized, and distributed as a disk image through the public download and the signed Sparkle update feed.
+This release is signed with the Developer ID Application identity, notarized by Apple, and distributed as a stapled DMG through the GitHub release and the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.58/Astronomical-0.2.58-macOS-arm64.dmg" length="20353098" type="application/octet-stream" sparkle:edSignature="YDYYSfh18NQAeWUTuIU5+T+JZEsclFxOaXZFdicFdYKuT5rMi4SwFezg+3E6V2vypHHSGkFv/YUnXt5aLEcMDw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.59/Astronomical-0.2.59-macOS-arm64.dmg" length="20642566" type="application/octet-stream" sparkle:edSignature="L3UXSNSq9FBI+BHS45zx9Zb+g2jWBaYaj7vEnFNQ4XpXVTQWVu9J+oun6Jv8V5yHa8ijtKbcjJvOTFl42B6UDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: IqWIsE3JT5zT5/bOImIG8X7BVIr4MsG+d8P9Asgm4xZH4Frk4iDjwY7Zq9Je0Ymk87FzXxp4jnExSv3fvAGnCQ==
-length: 2078
+edSignature: 7F/zJBoFaI9RpdIwnLSt46P3/rOS0TAqR9vUne1kEbjZS0obDmwoOAAS4sMq0eFpqn+QTqvd4Bn8UW6XOxUPAA==
+length: 2199
 -->
