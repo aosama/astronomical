@@ -14,7 +14,7 @@ readonly DIRECT_MLX_TIMEOUT_SECONDS=600
 # contracts run in a web view, so it needs the compilation timeout class rather
 # than the 120-second test bound.
 readonly THIN_TALK_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=21
+readonly TOTAL_STEP_COUNT=22
 
 COMPLETED_STEP_COUNT=0
 
@@ -130,6 +130,10 @@ main() {
         apps/supervisor/console/library-fetch.test.js \
         apps/supervisor/console/connect.test.js \
         apps/supervisor/console/playground.test.js
+    # The native CMake build runs alone before any Rust compilation so the
+    # two never compete for cores; every later Cargo step reuses the store.
+    run_step prewarm-native-build "$COMPILE_TIMEOUT_SECONDS" \
+        scripts/prewarm-native-build.sh --profile core
     run_step compile-rust "$COMPILE_TIMEOUT_SECONDS" cargo verify-commit-rust \
         --timings --no-run --jobs "$logical_cpu_count"
     run_step run-rust "$TEST_TIMEOUT_SECONDS" cargo verify-commit-rust \

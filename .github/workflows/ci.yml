@@ -234,6 +234,30 @@ jobs:
           # the CMake MLX build, so the native build reserves one core instead
           # of competing for all of them on the small hosted runners.
           printf 'ASTRONOMICAL_NATIVE_BUILD_JOBS=%s\n' "$(( $(sysctl -n hw.logicalcpu) > 1 ? $(sysctl -n hw.logicalcpu) - 1 : 1 ))" >> "$GITHUB_ENV"
+      - name: Build native library
+        id: native-build-prewarm
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'scripts/ci-step-timing.sh end native-build-prewarm' EXIT
+          scripts/ci-step-timing.sh begin native-build-prewarm
+          # The native CMake build runs alone in this step at the full core
+          # count. Every later Cargo step finds the native build store warm
+          # and skips CMake, so native and Rust compilation never overlap on
+          # the small hosted runners.
+          scripts/prewarm-native-build.sh --profile core
+          [ -f "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE" ] || {
+            printf '%s\n' 'Error: native build status was not published' >&2
+            exit 1
+          }
+          native_build_status="$(tr -d '[:space:]' < "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE")"
+          case "$native_build_status" in
+            built) printf 'was_built=true\n' >> "$GITHUB_OUTPUT" ;;
+            reused) printf 'was_built=false\n' >> "$GITHUB_OUTPUT" ;;
+            *) printf '%s\n' 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
+          esac
+          printf '[native-build-prewarm] status=%s\n' "$native_build_status"
+        timeout-minutes: 12
       - name: Compile hermetic tests
         shell: bash
         run: |
@@ -247,7 +271,7 @@ jobs:
           progress_tail_pid=$!
           trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci-step-timing.sh end compile-hermetic-tests' EXIT
           scripts/ci-step-timing.sh begin compile-hermetic-tests
-          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-supervisor --test rest_api_tests
         timeout-minutes: 12
       - name: Classify native build result
@@ -274,7 +298,7 @@ jobs:
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
+          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
         run: |
@@ -329,7 +353,7 @@ jobs:
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
       - name: Save native-build-cache
         id: native-build-cache-save
-        if: ${{ !cancelled() && steps.native-build-result.outputs.was_built == 'true' }}
+        if: ${{ !cancelled() && (steps.native-build-result.outputs.was_built == 'true' || steps.native-build-prewarm.outputs.was_built == 'true') }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save

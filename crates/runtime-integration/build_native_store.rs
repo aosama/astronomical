@@ -68,6 +68,20 @@ impl NativeBuildProfile {
             (true, true) => "core+memory-contract+experimental-aligned-expert-packs",
         }
     }
+
+    // The standalone native-build tool resolves profiles from CLI identity
+    // names; the Cargo build script only ever constructs profiles directly,
+    // so this parser is dead code from the build script's point of view.
+    #[allow(dead_code)]
+    pub fn from_identity_name(identity_name: &str) -> Option<Self> {
+        match identity_name {
+            "core" => Some(Self::core()),
+            "core+memory-contract" => Some(Self::new(true, false)),
+            "core+experimental-aligned-expert-packs" => Some(Self::new(false, true)),
+            "core+memory-contract+experimental-aligned-expert-packs" => Some(Self::new(true, true)),
+            _ => None,
+        }
+    }
 }
 
 pub struct NativeBuildStore {
