@@ -418,6 +418,9 @@ fn remove_uncontrolled_native_environment(command: &mut Command) {
 
 fn native_parallel_job_count() -> String {
     build_parallelism::resolve_native_parallel_job_count(
+        env::var(build_parallelism::NATIVE_BUILD_JOBS_VARIABLE)
+            .ok()
+            .as_deref(),
         env::var("CARGO_BUILD_JOBS").ok().as_deref(),
         env::var("NUM_JOBS").ok().as_deref(),
         std::thread::available_parallelism()

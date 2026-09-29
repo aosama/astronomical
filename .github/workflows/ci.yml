@@ -228,7 +228,12 @@ jobs:
           scripts/ci-step-timing.sh begin provision-native-dependencies
           scripts/bootstrap-native-dependencies.sh
       - name: Set maximum parallel build jobs
-        run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
+        run: |
+          printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
+          # Cargo compiles Rust crates concurrently while the build script runs
+          # the CMake MLX build, so the native build reserves one core instead
+          # of competing for all of them on the small hosted runners.
+          printf 'ASTRONOMICAL_NATIVE_BUILD_JOBS=%s\n' "$(( $(sysctl -n hw.logicalcpu) > 1 ? $(sysctl -n hw.logicalcpu) - 1 : 1 ))" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
         shell: bash
         run: |
