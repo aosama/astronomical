@@ -38,6 +38,9 @@ impl UserConfigFile {
             },
             prompt_cache: None,
             chunking: Some(ChunkingConfigFile {
+                fixed_prompt_processing_chunk_size_tokens: Some(
+                    crate::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+                ),
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(
                     crate::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
                 ),

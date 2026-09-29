@@ -23,7 +23,7 @@ pub(super) struct GatedDeltaSequenceShape {
     pub(super) value_head_count: i32,
     /// Fixed key dimension required by the blocked kernel implementation.
     pub(super) key_head_dimension: i32,
-    /// Value dimension partitioned into 32-element blocks by the kernel.
+    /// Value dimension partitioned into 16-element blocks by the kernel.
     pub(super) value_head_dimension: i32,
 }
 
@@ -110,10 +110,10 @@ pub(super) fn validate_gated_delta_sequence_shapes(
         || value_head_dimension <= 0
         || value_head_count % key_head_count != 0
         || key_head_dimension != 128
-        || value_head_dimension % 32 != 0
+        || value_head_dimension % 16 != 0
     {
         return Err(gated_delta_sequence_error(
-            "blocked gated-delta dimensions must be positive, value heads must be a multiple of key heads, key dimension must be 128, and value dimension must divide by 32",
+            "pipelined gated-delta dimensions must be positive, value heads must be a multiple of key heads, key dimension must be 128, and value dimension must divide by 16",
         ));
     }
     if value_shape[0] != batch_size

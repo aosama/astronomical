@@ -27,6 +27,7 @@ mod gated_delta;
 #[cfg(feature = "direct-mlx")]
 mod gated_delta_boundary_checkpoints;
 #[cfg(feature = "direct-mlx")]
+mod gated_delta_pipelined_kernel;
 mod gated_delta_sequence;
 mod gated_delta_sequence_contract;
 #[cfg(feature = "direct-mlx")]
