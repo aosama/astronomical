@@ -18,6 +18,7 @@
 
 set -eu
 # pipefail is Bash/Zsh; the subshell probe keeps this script POSIX-runnable.
+# shellcheck disable=SC3040
 if (set -o pipefail) 2>/dev/null; then
     set -o pipefail
 fi
@@ -31,8 +32,8 @@ readonly DIRECT_MLX_TIMEOUT_SECONDS=600
 # contracts run in a web view, so it needs the compilation timeout class rather
 # than the 120-second test bound.
 readonly THIN_TALK_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=21
-readonly REPOSITORY_CONTRACT_STEP_COUNT=12
+readonly TOTAL_STEP_COUNT=22
+readonly REPOSITORY_CONTRACT_STEP_COUNT=13
 readonly SWIFT_NODE_CONTRACT_STEP_COUNT=5
 readonly CARGO_CORE_STEP_COUNT=4
 readonly PHASE_PROGRESS_INTERVAL_SECONDS=2
@@ -164,6 +165,7 @@ phase_repository_contracts() {
     run_step thin-talk-canvas-assets "$TEST_TIMEOUT_SECONDS" scripts/vendor-thin-talk-canvas-assets.sh --verify-only || return $?
     run_step commit-release-isolation "$TEST_TIMEOUT_SECONDS" scripts/test-commit-release-isolation.sh || return $?
     run_step ci-native-cache-contract "$TEST_TIMEOUT_SECONDS" scripts/test-ci-native-cache-coordination.sh || return $?
+    run_step cache-prune-contract "$TEST_TIMEOUT_SECONDS" scripts/test-prune-ci-github-caches.sh || return $?
     run_step cargo-artifact-lifecycle-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-lifecycle-contract.sh || return $?
     run_step bounded-cargo-test-lock-contract "$TEST_TIMEOUT_SECONDS" scripts/test-bounded-cargo-test-lock-contract.sh || return $?
     run_step cargo-artifact-cleanup-signal-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-cleanup-signal-contract.sh || return $?
