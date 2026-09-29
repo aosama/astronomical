@@ -33,58 +33,11 @@ pub(super) fn romeo_and_juliet_prompt() -> String {
     )
 }
 
-/// Reads per-request generation attribution reports from an isolated home's
-/// worker attribution log. Each report carries the engine-measured decode
-/// span statistics, so decode tokens per second come from the owner of the
-/// work rather than a client wall clock.
-pub(super) fn read_generation_attribution_reports(isolated_home: &Path) -> Vec<serde_json::Value> {
-    let attribution_log_path = isolated_home
-        .join(".astronomical-dev")
-        .join("logs")
-        .join("performance-attribution.jsonl");
-    let attribution_log_bytes = std::fs::read(attribution_log_path)
-        .expect("worker attribution log should be readable after the journey");
-    attribution_log_bytes
-        .split(|byte| *byte == b'\n')
-        .filter_map(|line_bytes| {
-            let line = std::str::from_utf8(line_bytes).ok()?;
-            let report: serde_json::Value = serde_json::from_str(line).ok()?;
-            (report.get("report_kind")? == "generation").then_some(report)
-        })
-        .collect()
-}
-
-/// Summarizes one generation report's engine-side decode span. Prefill rates
-/// deliberately do not come from here: `prompt_prefill_advance_span` counts
-/// chunk spans, not tokens, so its derived rate is meaningless and prefill is
-/// measured from the supervisor's per-request counters instead.
-pub(super) fn decode_span_from_report(report: &serde_json::Value) -> (u64, f64) {
-    let operations = report
-        .get("operations")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let decode_operation = operations
-        .iter()
-        .find(|operation| operation["operation"] == "decode_advance_span")
-        .cloned()
-        .unwrap_or(serde_json::json!({}));
-    let decode_token_count = decode_operation
-        .get("occurrence_count")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0);
-    let decode_elapsed_seconds = decode_operation
-        .get("total_elapsed_nanoseconds")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(0.0)
-        / 1_000_000_000.0;
-    (decode_token_count, decode_elapsed_seconds)
-}
-
-/// Builds an isolated Development home with per-request attribution enabled
-/// and stage-split decode attribution disabled: the stage attribution's
-/// engine work roughly doubles decode time and would poison the baseline.
-pub(super) fn isolated_home_with_attribution(model_directory: &Path) -> tempfile::TempDir {
+/// Builds an isolated Development home pinned to the production measurement
+/// conditions: performance attribution and stage-split decode attribution are
+/// both explicitly disabled, so the baseline measures the path users run and
+/// a developer's local diagnostics settings cannot leak into the numbers.
+pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile::TempDir {
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()
             .expect("Development configuration should load");
@@ -99,7 +52,7 @@ pub(super) fn isolated_home_with_attribution(model_directory: &Path) -> tempfile
         serde_json::from_slice(&config_bytes).expect("Development config should parse");
     config_document["runtime"]["model_directories"] =
         serde_json::json!([model_directory.to_string_lossy()]);
-    config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(true);
+    config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(false);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
     std::fs::write(
@@ -114,7 +67,7 @@ pub(super) async fn launch_resident_rest_server() -> (tempfile::TempDir, Serving
     let model_id = resident_model_id();
     let model_directory = model_directory();
     eprintln!("[ornith-35b] phase=launch model={model_id}");
-    let isolated_development_home = isolated_home_with_attribution(&model_directory);
+    let isolated_development_home = isolated_home_for_measurement(&model_directory);
     let rest_server = launch_serving_rest_server_for_model(
         model_id,
         model_directory,

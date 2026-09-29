@@ -8,11 +8,12 @@
 //! compilation (its prefill sits an order of magnitude low and must never
 //! enter the comparison), then seven cache-warm completions over the
 //! identical full Romeo and Juliet prompt feed the medians. All rates are
-//! server-attributed, never client wall clock: decode comes from the
-//! worker's per-request generation attribution reports, prefill from the
-//! supervisor's per-request counters, which `/v1/status` only exposes as a
-//! rolling average and this journey recovers exactly by differencing
-//! consecutive snapshots.
+//! server-attributed, never client wall clock: prefill and decode both come
+//! from the supervisor's per-request counters, which `/v1/status` only
+//! exposes as a rolling average and this journey recovers exactly by
+//! differencing consecutive snapshots. Decode deliberately does not come
+//! from attribution reports: their `decode_advance_span` counts chunk spans
+//! rather than wall-clock decode time and under-reports the rate.
 
 use serde_json::Value;
 use serde_json::json;
@@ -23,8 +24,7 @@ use crate::serving_acceptance::chat::openai_rest::{
 };
 
 use super::support::{
-    JOURNEY_TIMEOUT, decode_span_from_report, launch_resident_rest_server,
-    read_generation_attribution_reports, resident_model_id, romeo_and_juliet_prompt,
+    JOURNEY_TIMEOUT, launch_resident_rest_server, resident_model_id, romeo_and_juliet_prompt,
     status_document, stop_resident_rest_server,
 };
 
@@ -41,7 +41,7 @@ async fn should_measure_resident_sparse_moe_prompt_processing_and_decode_through
 
 async fn run_throughput_journey() {
     let model_id = resident_model_id();
-    let (isolated_home, rest_server) = launch_resident_rest_server().await;
+    let (_isolated_home, rest_server) = launch_resident_rest_server().await;
     let server_address = rest_server.server_address;
 
     eprintln!("[ornith-35b] phase=jit-warmup model={model_id}");
@@ -70,6 +70,7 @@ async fn run_throughput_journey() {
     );
 
     let mut prefill_tokens_per_second_samples = Vec::new();
+    let mut decode_tokens_per_second_samples = Vec::new();
     for completion_index in 1..=MEASURED_COMPLETION_COUNT {
         eprintln!(
             "[ornith-35b] phase=measured completion={completion_index}/{} model={model_id}",
@@ -104,32 +105,15 @@ async fn run_throughput_journey() {
             completion_measurement.reused_prompt_token_count,
         );
         prefill_tokens_per_second_samples.push(completion_measurement.prefill_tok_per_second);
+        decode_tokens_per_second_samples.push(completion_measurement.decode_tok_per_second);
         previous_session_sample = current_session_sample;
-    }
-
-    let generation_reports = read_generation_attribution_reports(isolated_home.path());
-    assert_eq!(
-        generation_reports.len(),
-        MEASURED_COMPLETION_COUNT + 1,
-        "every completion must produce one attributed generation report"
-    );
-    let mut report_decode_tokens_per_second_samples = Vec::new();
-    for (report_index, report) in generation_reports.iter().enumerate().skip(1) {
-        let (decode_token_count, decode_elapsed_seconds) = decode_span_from_report(report);
-        assert!(
-            decode_token_count > 0 && decode_elapsed_seconds > 0.0,
-            "measured completion {report_index} must carry a positive engine decode span: {report}"
-        );
-        report_decode_tokens_per_second_samples
-            .push(decode_token_count as f64 / decode_elapsed_seconds);
     }
 
     let final_session_sample = previous_session_sample;
     let median_prefill_tokens_per_second = median(&mut prefill_tokens_per_second_samples);
-    let median_report_decode_tokens_per_second =
-        median(&mut report_decode_tokens_per_second_samples);
+    let median_decode_tokens_per_second = median(&mut decode_tokens_per_second_samples);
     eprintln!(
-        "[ornith-35b] BASELINE model={model_id} median_prefill_tok_per_second={median_prefill_tokens_per_second:.2} median_decode_tok_per_second={median_report_decode_tokens_per_second:.2} completions={MEASURED_COMPLETION_COUNT} completed_request_count={}",
+        "[ornith-35b] BASELINE model={model_id} median_prefill_tok_per_second={median_prefill_tokens_per_second:.2} median_decode_tok_per_second={median_decode_tokens_per_second:.2} completions={MEASURED_COMPLETION_COUNT} completed_request_count={}",
         final_session_sample.completed_request_count,
     );
     assert!(
@@ -137,8 +121,7 @@ async fn run_throughput_journey() {
         "prompt-processing throughput must be a positive measurement"
     );
     assert!(
-        median_report_decode_tokens_per_second.is_finite()
-            && median_report_decode_tokens_per_second > 0.0,
+        median_decode_tokens_per_second.is_finite() && median_decode_tokens_per_second > 0.0,
         "decode throughput must be a positive measurement"
     );
 
