@@ -4,32 +4,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.59</title>
-            <pubDate>Mon, 28 Sep 2026 23:18:42 -0400</pubDate>
-            <sparkle:version>717</sparkle:version>
-            <sparkle:shortVersionString>0.2.59</sparkle:shortVersionString>
+            <title>0.2.60</title>
+            <pubDate>Tue, 29 Sep 2026 09:57:08 -0400</pubDate>
+            <sparkle:version>745</sparkle:version>
+            <sparkle:shortVersionString>0.2.60</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Highlights
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.60
 
-- The CLI now owns the full model lifecycle: automatic loading, downloading, defaults, and streaming.
-- Prompt prefill pipelines the GDN recurrence across chunks, and the default prefill chunk size is now 4,096 tokens, improving long-prompt throughput.
-- Prefill selects NAX quantized-matmul tile variants per shape, improving short-prompt prompt-processing throughput with parity on long prompts.
-- Continuous integration is split into parallel macOS jobs with a shared build cache, shortening feedback loops.
+A signed, notarized Stable release distributed through the GitHub release download and the Sparkle update feed.
+
+## What changed
+
+- The prompt cache persists and reuses the previous turn's partial tail block, improving throughput for repeated and follow-up prompts.
+- Qwen3.8-35B-A3B-Distill-oQ6e-mtp is onboarded, with corrected journey decode measurement.
+- The native MLX build streams live progress into CI, and cache eviction no longer forces CMake rebuilds.
+- Native and Rust compilation are fully separated: a prewarm step builds the native runtime before cargo starts, so the two never compete for cores and warm-cache compiles drop from minutes to seconds.
+- The commit gate runs checks in parallel with per-step timing instrumentation.
+- Image requests with out-of-envelope dimensions are rejected before queue admission, failing fast with a clear error instead of failing later in the pipeline.
 
 ## Compatibility
 
-- Configuration documents remain compatible; the 4,096-token chunk default is materialized for existing configurations without requiring manual edits.
 - Existing model directories, prompt caches, and user state are preserved.
+- Image requests that previously progressed with unsupported dimensions now fail fast at admission; resubmitting with supported dimensions works unchanged.
 
 ## Distribution
 
-This release is signed with the Developer ID Application identity, notarized by Apple, and distributed as a stapled DMG through the GitHub release and the signed Sparkle update feed.
+- The app bundle and nested Sparkle code are signed with the Developer ID Application identity and Hardened Runtime with secure timestamps.
+- The DMG is notarized by Apple and stapled; the ticket is validated before publication.
+- The Sparkle appcast is signed with the release feed key, and the feed envelope signature is validated after activation.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.59/Astronomical-0.2.59-macOS-arm64.dmg" length="20642566" type="application/octet-stream" sparkle:edSignature="L3UXSNSq9FBI+BHS45zx9Zb+g2jWBaYaj7vEnFNQ4XpXVTQWVu9J+oun6Jv8V5yHa8ijtKbcjJvOTFl42B6UDg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.60/Astronomical-0.2.60-macOS-arm64.dmg" length="20658526" type="application/octet-stream" sparkle:edSignature="NjP8rs6yqkEeKP3pmPR36X7IYkI8esmVwBmUHVZSIP16/pMxLYdYsRweBCo2PlnbFN1Ao9kfHue1YsDn1IFmAw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 7F/zJBoFaI9RpdIwnLSt46P3/rOS0TAqR9vUne1kEbjZS0obDmwoOAAS4sMq0eFpqn+QTqvd4Bn8UW6XOxUPAA==
-length: 2199
+edSignature: xiVCH/plwwqjVO0Z7l0t3YDxyNUkK9obbu3mM+vTjtKwfs05AtcZnw1+xJKu3li+mlVSzTdTrgRGbRhVE2zoCA==
+length: 2775
 -->
