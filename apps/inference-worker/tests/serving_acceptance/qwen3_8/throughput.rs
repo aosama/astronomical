@@ -1,19 +1,20 @@
-//! Ornith-1.5-35B serving throughput baseline for the pinned MLX runtime.
+//! Qwen3.8-35B-A3B-Distill-oQ6e-mtp serving throughput onboarding journey.
 //!
-//! This journey is the measurement half of the paired A/B that gates a
-//! pinned-MLX bump: run it unchanged on the old pin and the new pin, then
-//! compare the printed medians. The method follows the documented previous
-//! bump recipe in docs/performance-optimizations-lessons.md: one warmup
-//! completion absorbs the model load plus the first-use JIT kernel
-//! compilation (its prefill sits an order of magnitude low and must never
-//! enter the comparison), then seven cache-warm completions over the
-//! identical full Romeo and Juliet prompt feed the medians. All rates are
-//! server-attributed, never client wall clock: prefill and decode both come
-//! from the supervisor's per-request counters, which `/v1/status` only
-//! exposes as a rolling average and this journey recovers exactly by
-//! differencing consecutive snapshots. Decode deliberately does not come
-//! from attribution reports: their `decode_advance_span` counts chunk spans
-//! rather than wall-clock decode time and under-reports the rate.
+//! This journey proves the funnygeeker artifact — whose MTP block and vision
+//! tower ship inside the main shards with no sidecar keys — serves end to
+//! end, and records the onboarding throughput baseline: one warmup completion
+//! absorbs the model load plus first-use JIT kernel compilation, then seven
+//! cache-warm completions over the identical full Romeo and Juliet prompt
+//! feed the medians. All rates are server-attributed, never client wall
+//! clock: prefill and decode both come from the supervisor's per-request
+//! counters, which `/v1/status` only exposes as a rolling average and this
+//! journey recovers exactly by differencing consecutive snapshots. Decode
+//! deliberately does not come from attribution reports: their
+//! `decode_advance_span` counts chunk spans rather than wall-clock decode
+//! time and under-reports the rate (measured 44.9 versus 60+ tok/s on the
+//! identical prompt and build). The MTP runtime state is echoed so the
+//! onboarding record shows whether the text_config-declared MTP block was
+//! picked up without a sidecar.
 
 use serde_json::Value;
 use serde_json::json;
@@ -24,31 +25,30 @@ use crate::serving_acceptance::chat::openai_rest::{
 };
 
 use super::support::{
-    JOURNEY_TIMEOUT, launch_resident_rest_server, resident_model_id, romeo_and_juliet_prompt,
-    status_document, stop_resident_rest_server,
+    JOURNEY_TIMEOUT, QWEN3_8_MODEL_ID, launch_rest_server, romeo_and_juliet_prompt,
+    status_document, stop_rest_server,
 };
 
 const MEASURED_COMPLETION_COUNT: usize = 7;
 const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 128;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput"]
-async fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() {
+#[ignore = "loads the resident 30 GB Qwen3.8 sparse-MoE artifact and measures serving prompt-processing and decode throughput"]
+async fn should_measure_qwen3_8_distill_prompt_processing_and_decode_throughput() {
     timeout(JOURNEY_TIMEOUT, run_throughput_journey())
         .await
-        .expect("the Ornith-35B throughput journey must finish within 115 seconds");
+        .expect("the Qwen3.8 throughput journey must finish within 115 seconds");
 }
 
 async fn run_throughput_journey() {
-    let model_id = resident_model_id();
-    let (_isolated_home, rest_server) = launch_resident_rest_server().await;
+    let (_isolated_home, rest_server) = launch_rest_server().await;
     let server_address = rest_server.server_address;
 
-    eprintln!("[ornith-35b] phase=jit-warmup model={model_id}");
+    eprintln!("[qwen3-8] phase=jit-warmup model={QWEN3_8_MODEL_ID}");
     let warmup_response = post_chat_completion(
         server_address,
         json!({
-            "model": model_id,
+            "model": QWEN3_8_MODEL_ID,
             "messages": [{
                 "role": "user",
                 "content": romeo_and_juliet_prompt(),
@@ -73,13 +73,13 @@ async fn run_throughput_journey() {
     let mut decode_tokens_per_second_samples = Vec::new();
     for completion_index in 1..=MEASURED_COMPLETION_COUNT {
         eprintln!(
-            "[ornith-35b] phase=measured completion={completion_index}/{} model={model_id}",
+            "[qwen3-8] phase=measured completion={completion_index}/{} model={QWEN3_8_MODEL_ID}",
             MEASURED_COMPLETION_COUNT
         );
         let chat_response = post_chat_completion(
             server_address,
             json!({
-                "model": model_id,
+                "model": QWEN3_8_MODEL_ID,
                 "messages": [{
                     "role": "user",
                     "content": romeo_and_juliet_prompt(),
@@ -98,7 +98,7 @@ async fn run_throughput_journey() {
         let completion_measurement =
             current_session_sample.recover_request_measurement(&previous_session_sample);
         eprintln!(
-            "[ornith-35b] completion={completion_index} prefill_tok_per_second={:.2} decode_tok_per_second={:.2} prompt_tokens={} reused_prompt_tokens={}",
+            "[qwen3-8] completion={completion_index} prefill_tok_per_second={:.2} decode_tok_per_second={:.2} prompt_tokens={} reused_prompt_tokens={}",
             completion_measurement.prefill_tok_per_second,
             completion_measurement.decode_tok_per_second,
             completion_measurement.prompt_token_count,
@@ -113,7 +113,7 @@ async fn run_throughput_journey() {
     let median_prefill_tokens_per_second = median(&mut prefill_tokens_per_second_samples);
     let median_decode_tokens_per_second = median(&mut decode_tokens_per_second_samples);
     eprintln!(
-        "[ornith-35b] BASELINE model={model_id} median_prefill_tok_per_second={median_prefill_tokens_per_second:.2} median_decode_tok_per_second={median_decode_tokens_per_second:.2} completions={MEASURED_COMPLETION_COUNT} completed_request_count={}",
+        "[qwen3-8] BASELINE model={QWEN3_8_MODEL_ID} median_prefill_tok_per_second={median_prefill_tokens_per_second:.2} median_decode_tok_per_second={median_decode_tokens_per_second:.2} completions={MEASURED_COMPLETION_COUNT} completed_request_count={}",
         final_session_sample.completed_request_count,
     );
     assert!(
@@ -125,7 +125,7 @@ async fn run_throughput_journey() {
         "decode throughput must be a positive measurement"
     );
 
-    stop_resident_rest_server(rest_server).await;
+    stop_rest_server(rest_server).await;
 }
 
 /// One `/v1/status` serving-session snapshot. The supervisor folds each
