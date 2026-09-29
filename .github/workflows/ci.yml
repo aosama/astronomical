@@ -52,6 +52,11 @@ jobs:
     # this repo) if you ever change it.
     name: macOS hermetic verification
     runs-on: macos-26
+    # Job permissions replace the workflow-level set: pruning surplus caches
+    # needs actions:write while everything else stays read-only.
+    permissions:
+      contents: read
+      actions: write
     concurrency:
       group: macos-hermetic-${{ github.event_name }}-${{ github.ref }}
       # Never cancel an in-flight required check. A cancelled run with this job
@@ -225,8 +230,17 @@ jobs:
       - name: Set maximum parallel build jobs
         run: printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
       - name: Compile hermetic tests
+        shell: bash
         run: |
-          trap 'scripts/ci-step-timing.sh end compile-hermetic-tests' EXIT
+          set -euo pipefail
+          # Cargo captures build-script stderr, so the native CMake rebuild would
+          # otherwise be a silent multi-minute gap in this step's log. The build
+          # script appends progress lines to this file and tail streams them live.
+          export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="$RUNNER_TEMP/astronomical-native-build-progress"
+          : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
+          tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
+          progress_tail_pid=$!
+          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci-step-timing.sh end compile-hermetic-tests' EXIT
           scripts/ci-step-timing.sh begin compile-hermetic-tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-supervisor --test rest_api_tests
@@ -326,6 +340,20 @@ jobs:
           owner: sccache
           path: ~/Library/Caches/Astronomical/sccache
           key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+      - name: Prune surplus CI caches
+        # Multiple sccache generations exceed the 10 GB repository cache limit,
+        # which makes GitHub evict the small native-build cache and forces the
+        # next run into a silent multi-minute CMake rebuild. Tolerated failures
+        # keep read-only fork-PR tokens from failing the job.
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          trap 'scripts/ci-step-timing.sh end prune-ci-caches' EXIT
+          scripts/ci-step-timing.sh begin prune-ci-caches
+          scripts/prune-ci-caches.sh
+        timeout-minutes: 3
       - name: Upload Cargo timing report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
