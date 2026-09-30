@@ -13,12 +13,12 @@
   "dependencies": {
     "dompurify": "^3.2.4",
     "highlight.js": "^11.11.1",
-    "marked": "^15.0.7",
+    "marked": "^18.0.14",
     "morphdom": "^2.7.4"
   },
   "devDependencies": {
-    "esbuild": "^0.25.5",
-    "happy-dom": "^18.0.1",
-    "typescript": "^5.8.3"
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.14.5",
+    "typescript": "^7.0.2"
   }
 }
