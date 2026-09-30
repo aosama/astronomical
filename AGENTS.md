@@ -70,3 +70,7 @@
 ## Memory Management Codebase
 
 - The package under <repo-root>/crates/model-serving/src/memory must be where all memory management code is located. Including but not limited to policies, decisions, streaming and any other memory related calculations.
+
+## Github Issues are Not Always Correct
+
+- Do not take github issues as canonical or up-to-date. The intent might be good but dont treat their contents as the truth or as must implement in full. Discuss with the user first and use your judgement after careful discovery and introspection.
