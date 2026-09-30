@@ -20,6 +20,7 @@ use super::test_support::{
 fn respond_arguments(prompt: &str, model_id: Option<&str>, no_stream: bool) -> RespondArguments {
     RespondArguments {
         prompt: prompt.to_owned(),
+        images: Vec::new(),
         model_id: model_id.map(str::to_owned),
         no_stream,
     }
@@ -79,6 +80,59 @@ fn should_reject_respond_with_an_unknown_argument_as_a_usage_error() {
     assert!(matches!(
         parse(&["respond", "Hi", "--bogus"]),
         Err(UsageError::UnknownArgument(argument)) if argument == "--bogus"
+    ));
+}
+
+#[test]
+fn should_parse_repeatable_image_arguments_after_the_prompt() {
+    let parsed_command = parse(&[
+        "respond",
+        "Describe this",
+        "--image",
+        "snapshot.png",
+        "--image",
+        "photo.jpg",
+    ])
+    .expect("respond with repeatable --image should parse");
+    assert_eq!(
+        parsed_command,
+        CliCommand::Respond(RespondArguments {
+            prompt: "Describe this".to_owned(),
+            images: vec![PathBuf::from("snapshot.png"), PathBuf::from("photo.jpg")],
+            model_id: None,
+            no_stream: false,
+        })
+    );
+}
+
+#[test]
+fn should_parse_image_arguments_before_the_prompt() {
+    let parsed_command = parse(&["respond", "--image", "a.png", "Hello there", "--no-stream"])
+        .expect("respond with --image before the prompt should parse");
+    assert_eq!(
+        parsed_command,
+        CliCommand::Respond(RespondArguments {
+            prompt: "Hello there".to_owned(),
+            images: vec![PathBuf::from("a.png")],
+            model_id: None,
+            no_stream: true,
+        })
+    );
+}
+
+#[test]
+fn should_reject_an_image_flag_missing_a_value_as_a_usage_error() {
+    assert!(matches!(
+        parse(&["respond", "Hello", "--image"]),
+        Err(UsageError::MissingValue("--image"))
+    ));
+}
+
+#[test]
+fn should_reject_an_image_flag_with_a_flag_shaped_value_as_a_usage_error() {
+    assert!(matches!(
+        parse(&["respond", "Hello", "--image", "--no-stream"]),
+        Err(UsageError::MissingValue("--image"))
     ));
 }
 
@@ -369,6 +423,57 @@ async fn should_reject_a_chat_request_for_an_embeddings_only_model_before_downlo
         !rendered_stderr.contains("downloading"),
         "no download may start for a capability mismatch: {rendered_stderr:?}"
     );
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+/// The CLI reads a supplied image and attaches it to the single chat message
+/// the daemon receives, so a vision model sees the bytes the user pointed at.
+#[tokio::test]
+async fn should_send_supplied_image_bytes_to_the_daemon() {
+    use std::sync::{Arc, Mutex};
+    let test_directory = fresh_test_directory("respond", "with-image");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let image_capture = Arc::new(Mutex::new(None));
+    let image_path = test_directory.join("picture.png");
+    std::fs::write(&image_path, b"\x89PNG\r\n\x1a\npayload-bytes")
+        .expect("the fixture image should be writable");
+    let mut stub_config = resident_default_stub_config();
+    stub_config.image_capture = image_capture.clone();
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), stub_config);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+
+    let mut arguments = respond_arguments("Describe this", None, false);
+    arguments.images = vec![image_path.clone()];
+    let respond_outcome = timeout(
+        TEST_TIMEOUT,
+        run_respond(&arguments, &mut respond_dependencies),
+    )
+    .await
+    .expect("the respond journey should finish inside the test timeout");
+    respond_outcome.expect("the respond journey should complete against the stub daemon");
+
+    let captured = image_capture
+        .lock()
+        .expect("the image capture lock should stay live")
+        .take();
+    let Some(captured_images) = captured else {
+        panic!("the stub daemon should have captured the image the CLI sent");
+    };
+    assert_eq!(
+        captured_images.len(),
+        1,
+        "exactly one image should cross the boundary"
+    );
+    assert_eq!(captured_images[0].mime_type, "image/png");
+    assert_eq!(
+        captured_images[0].decoded_bytes, b"\x89PNG\r\n\x1a\npayload-bytes",
+        "the exact image bytes the user supplied should reach the daemon"
+    );
+
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);
 }
