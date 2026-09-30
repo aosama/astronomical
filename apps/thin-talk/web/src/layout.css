@@ -1,0 +1,82 @@
+/*
+ * App layout: a sidebar of sessions beside the conversation surface. The
+ * conversation column (surface, banner, composer) keeps the exact structure the
+ * transcript and composer styles were written against.
+ */
+#app {
+  display: flex;
+  height: 100%;
+}
+
+#main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * The transcript scrolls inside this wrapper so the empty state can centre on
+ * the conversation area without covering the composer below it.
+ */
+#surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+#transcript {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px 0 34px;
+}
+
+.transcript__inner {
+  max-width: var(--reading-column);
+  margin: 0 auto;
+  padding: 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  text-align: center;
+}
+
+/*
+ * `display: flex` above outranks the user-agent rule for the `hidden` attribute,
+ * so the class has to honour `hidden` explicitly or the empty state keeps drawing
+ * over a conversation that already has messages.
+ */
+.empty-state[hidden] {
+  display: none;
+}
+
+.empty-state__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.empty-state__subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.empty-state__notice {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  opacity: 0.85;
+}

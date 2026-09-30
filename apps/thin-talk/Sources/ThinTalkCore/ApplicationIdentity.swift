@@ -90,10 +90,10 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   /// supervisor. Public endpoints need no authentication.
   public func endpointURL(path: String) throws -> URL {
     guard path.hasPrefix("/") else {
-      throw ThinTalkClientError.invalidEndpoint
+      throw ThinTalkEndpointError.invalidEndpoint
     }
     guard let endpointURL = URL(string: "http://127.0.0.1:\(supervisorPort)\(path)") else {
-      throw ThinTalkClientError.invalidEndpoint
+      throw ThinTalkEndpointError.invalidEndpoint
     }
     return endpointURL
   }
@@ -101,4 +101,9 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   /// A privacy-safe, home-relative label for the connected channel's state
   /// directory, never the caller's absolute home directory.
   public var expectedServerStateDirectory: String { "~/\(stateDirectoryName)" }
+}
+
+/// An endpoint path the identity cannot turn into a supervisor URL.
+public enum ThinTalkEndpointError: Error, Equatable, Sendable {
+  case invalidEndpoint
 }

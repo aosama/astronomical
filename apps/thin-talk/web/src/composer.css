@@ -1,0 +1,215 @@
+/*
+ * Composer and failure banner.
+ *
+ * These are the app's own chrome, drawn on the same surface as the answers so
+ * the whole window shares one type scale and one set of tokens. The ask field
+ * scales with the user's font-size preference via --composer-font-size.
+ */
+.composer {
+  flex: 0 0 auto;
+  margin: 4px 24px 14px;
+  padding: 0 4px 8px;
+  border-radius: 22px;
+  background: var(--panel);
+  border: 1px solid rgb(89 102 242 / 45%);
+}
+
+#composer-input {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  padding: 14px 14px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--composer-font-size, 14px);
+  line-height: 1.62;
+  resize: none;
+  outline: none;
+  /* A wrapping ask never scrolls sideways. Under a zoomed page WebKit reports
+     the field's own overflow as scrollable and paints a phantom scrollbar bar,
+     so horizontal panning is refused outright; growField owns the vertical axis. */
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+#composer-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+#composer-input:disabled {
+  opacity: 0.55;
+}
+
+.composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 0;
+}
+
+.composer__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer__icon,
+.composer__pill,
+.composer__send {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--panel-alt);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
+}
+
+.composer__icon {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.composer__icon:disabled,
+.composer__pill:disabled {
+  opacity: 0.45;
+}
+
+.composer__icon svg,
+.composer__pill svg,
+.composer__send svg {
+  width: 14px;
+  height: 14px;
+}
+
+.composer__chevron {
+  color: var(--text-secondary);
+}
+
+.composer__menu-anchor {
+  position: relative;
+}
+
+.composer__menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  min-width: 180px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+}
+
+.composer__menu[hidden] {
+  display: none;
+}
+
+.composer__menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.composer__menu button:hover {
+  background: rgb(89 102 242 / 18%);
+}
+
+.composer__menu button[aria-checked="true"] {
+  color: var(--accent);
+}
+
+.composer__send {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.composer__send:disabled {
+  /* Keep the arrow at full white so the idle button still reads as "send";
+     dim only the fill so it reads as off, not active. */
+  background: #3d47b8;
+  color: #ffffff;
+}
+
+.composer__send--stop {
+  background: rgb(242 115 115 / 80%);
+}
+
+/* The class's display rule would beat the browser's own [hidden] style and paint
+   the idle stop (or a streaming send) as a phantom circle, so hide it explicitly. */
+.composer__send[hidden] {
+  display: none;
+}
+
+#failure-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 24px 8px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgb(242 115 115 / 8%);
+  border: 1px solid rgb(242 115 115 / 35%);
+}
+
+#failure-banner[hidden] {
+  display: none;
+}
+
+.failure-banner__text {
+  min-width: 0;
+}
+
+.failure-banner__message {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failure-banner__next {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.failure-banner__retry {
+  flex: 0 0 auto;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
+}

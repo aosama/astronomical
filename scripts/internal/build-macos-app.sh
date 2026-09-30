@@ -311,6 +311,16 @@ main() {
         -p astronomical-supervisor --bin astronomicald \
         -p astronomical-cli --bin astronomical \
         $supervisor_cargo_features
+    # The Thin Talk offline shell is generated from tracked TypeScript by
+    # apps/thin-talk/web/build-web.mjs. SwiftPM copies Resources/web verbatim, so
+    # npm produces bundle.js/bundle.css before it builds astronomical-menu; without
+    # them the conversation canvas serves a blank page.
+    if ! command -v npm >/dev/null 2>&1; then
+        print_error "npm is required to build the Thin Talk web assets"
+        exit 1
+    fi
+    printf '  building Thin Talk web assets (bundle.js/bundle.css)\n'
+    (cd "${repository_root}/apps/thin-talk/web" && npm ci && npm run build)
     swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu" \
         --product "$menu_swift_product"
     finish_phase "success"
