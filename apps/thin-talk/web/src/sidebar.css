@@ -1,0 +1,91 @@
+/*
+ * Sidebar: the session list and the new-chat control. It reads as quiet chrome —
+ * panel tones, no heavy borders — so the conversation stays the loudest thing on
+ * screen.
+ */
+#sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 var(--sidebar-width);
+  min-width: 0;
+  background: var(--panel);
+  border-right: 1px solid rgb(56 64 82 / 55%);
+}
+
+.sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 10px;
+}
+
+.sidebar__app-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.sidebar__new-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: default;
+}
+
+.sidebar__new-chat:disabled {
+  opacity: 0.45;
+}
+
+#session-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 8px 12px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar__session-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__session-item:hover {
+  background: rgb(89 102 242 / 12%);
+  color: var(--text-primary);
+}
+
+.sidebar__session-item--active {
+  background: rgb(89 102 242 / 20%);
+  color: var(--text-primary);
+}
+
+.sidebar__session-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -476,6 +476,17 @@ jobs:
           printf '[swiftpm-timestamps] status=success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
+      - name: Set up Node for Thin Talk web assets
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+      - name: Build Thin Talk web assets
+        run: |
+          set -euo pipefail
+          trap 'scripts/ci-step-timing.sh end thin-talk-web-assets' EXIT
+          scripts/ci-step-timing.sh begin thin-talk-web-assets
+          (cd apps/thin-talk/web && npm ci && npm run build)
+        timeout-minutes: 4
       - name: Run macOS menu status contracts
         id: macos-menu-contracts
         run: |

@@ -1,242 +1,299 @@
-import AppKit
-import SwiftUI
+import Foundation
 import ThinTalkCore
 import WebKit
 
-/// One interaction the canvas reported back to the application.
+/// The conversation canvas: one web view rendering the bundled HTML client.
 ///
-/// The canvas owns no behaviour: it renders and it reports. Copying text,
-/// regenerating an answer, and opening a link all happen in Swift, where the same
-/// code path runs whether the reader used the canvas or a keyboard shortcut.
-public struct CanvasAction: Sendable, Equatable {
-  public enum Kind: String, Sendable {
-    case ready
-    case copy
-    case openExternal
-    case send
-    case stop
-    case setEffort
-    case retry
-  }
-
-  public let kind: Kind
-  public let messageID: UUID?
-  public let externalURL: URL?
-  /// The free-form payload an action carries: the draft for a send, the chosen
-  /// level for an effort change. Everything here is app-owned input, never model
-  /// output, so it needs no sanitisation.
-  public let detail: String?
+/// This is a dumb host, deliberately. The page owns the conversation state, the
+/// transcript rendering, and the supervisor conversation; Swift owns only what a
+/// web page cannot do for itself: reading and writing session files, the system
+/// pasteboard, opening external links, and injecting the runtime configuration.
+/// Everything else crosses the bridge as data.
+///
+/// The bridge contract lives in the web client (`SessionBridge.ts`): the page
+/// posts `{kind: "sessionCall", callId, op, payload}` envelopes and Swift answers
+/// through `window.__thintalkBridge.resolve/reject`. A call the host fails to
+/// answer rejects on the page after its own timeout, so the page never hangs on
+/// a silent host.
+@MainActor
+public final class ConversationCanvasView: NSView {
+  private let webDirectory: URL
+  private let assetRegistry: TranscriptAssetRegistry
+  private let sessionFileStore: SessionFileStore
+  private let runtimeConfig: CanvasRuntimeConfig
+  private var webView: WKWebView?
+  // WebKit does not retain scheme handlers, so the view owns this one for as
+  // long as the web view lives.
+  private var assetSchemeHandler: CanvasAssetSchemeHandler?
 
   public init(
-    kind: Kind, messageID: UUID? = nil, externalURL: URL? = nil, detail: String? = nil
+    webDirectory: URL,
+    assetRegistry: TranscriptAssetRegistry,
+    sessionFileStore: SessionFileStore,
+    runtimeConfig: CanvasRuntimeConfig
   ) {
-    self.kind = kind
-    self.messageID = messageID
-    self.externalURL = externalURL
-    self.detail = detail
+    self.webDirectory = webDirectory
+    self.assetRegistry = assetRegistry
+    self.sessionFileStore = sessionFileStore
+    self.runtimeConfig = runtimeConfig
+    super.init(frame: NSRect(x: 0, y: 0, width: 1080, height: 720))
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("ConversationCanvasView is created in code, not from a nib.")
+  }
+
+  public override var acceptsFirstResponder: Bool { true }
+
+  public override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    guard window != nil, webView == nil else { return }
+    installWebView()
+  }
+
+  private func installWebView() {
+    let configuration = WKWebViewConfiguration()
+    // The page persists nothing itself: sessions and preferences cross the
+    // bridge into SessionFileStore, so an ephemeral data store keeps the web
+    // view from writing a second, divergent copy of the same state.
+    configuration.websiteDataStore = .nonPersistent()
+    // The shell loads from the private scheme; the handler serves it straight
+    // from the bundled web directory. `loadFileURL` cannot be used here
+    // because it throws on any URL that is not a `file://` URL.
+    let assetSchemeHandler = CanvasAssetSchemeHandler(
+      webDirectory: webDirectory, assetRegistry: assetRegistry)
+    configuration.setURLSchemeHandler(
+      assetSchemeHandler, forURLScheme: CanvasSecurityPolicy.shellScheme)
+    let coordinator = CanvasCoordinator(
+      sessionFileStore: sessionFileStore,
+      assetRegistry: assetRegistry,
+      webViewProvider: { [weak self] in self?.webView }
+    )
+    configuration.userContentController.add(coordinator, name: CanvasCoordinator.messageHandlerName)
+    do {
+      let configScript = try runtimeConfig.userScriptSource()
+      configuration.userContentController.addUserScript(
+        WKUserScript(source: configScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    } catch {
+      // Without the configuration the page refuses to boot by design; surface
+      // the reason instead of a silent blank window.
+      NSLog("ThinTalk canvas: runtime configuration could not be encoded: \(error)")
+    }
+    let pagePreferences = WKWebpagePreferences()
+    pagePreferences.allowsContentJavaScript = true
+    configuration.defaultWebpagePreferences = pagePreferences
+
+    let webview = WKWebView(frame: bounds, configuration: configuration)
+    webview.navigationDelegate = coordinator
+    webview.autoresizingMask = [.width, .height]
+    addSubview(webview)
+    webView = webview
+
+    let shellURL = CanvasSecurityPolicy.shellDocumentURL()
+    guard let shellURL else {
+      NSLog("ThinTalk canvas: the bundled shell document could not be located")
+      return
+    }
+    self.assetSchemeHandler = assetSchemeHandler
+    _ = webview.load(URLRequest(url: shellURL))
   }
 }
 
-/// The conversation canvas: one web surface that renders the transcript, the
-/// composer, and the failure banner, while Swift keeps every behaviour.
-public struct ConversationCanvasView: NSViewRepresentable {
-  private let snapshot: TranscriptSnapshot
-  private let isDarkAppearance: Bool
-  private let composerState: CanvasComposerState
-  private let webDirectory: URL
+/// The bridge and navigation policy for the canvas web view.
+@MainActor
+final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+  static let messageHandlerName = "thintalk"
+
+  private let sessionFileStore: SessionFileStore
   private let assetRegistry: TranscriptAssetRegistry
-  private let pageZoom: CGFloat
-  private let onAction: (CanvasAction) -> Void
+  private let webViewProvider: () -> WKWebView?
+  private let storeQueue = DispatchQueue(label: "astronomical.thintalk.canvas.store", qos: .userInitiated)
 
-  public init(
-    snapshot: TranscriptSnapshot,
-    isDarkAppearance: Bool,
-    composerState: CanvasComposerState,
-    webDirectory: URL,
+  init(
+    sessionFileStore: SessionFileStore,
     assetRegistry: TranscriptAssetRegistry,
-    pageZoom: CGFloat = 1.0,
-    onAction: @escaping (CanvasAction) -> Void
+    webViewProvider: @escaping () -> WKWebView?
   ) {
-    self.snapshot = snapshot
-    self.isDarkAppearance = isDarkAppearance
-    self.composerState = composerState
-    self.webDirectory = webDirectory
+    self.sessionFileStore = sessionFileStore
     self.assetRegistry = assetRegistry
-    self.pageZoom = pageZoom
-    self.onAction = onAction
+    self.webViewProvider = webViewProvider
   }
 
-  public func makeCoordinator() -> Coordinator {
-    Coordinator(onAction: onAction)
+  // MARK: - WKScriptMessageHandler
+
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    guard let envelope = message.body as? [String: Any], let kind = envelope["kind"] as? String else {
+      NSLog("ThinTalk canvas: ignoring message without a kind: \(String(describing: message.body))")
+      return
+    }
+    switch kind {
+    case "sessionCall":
+      handleSessionCall(envelope)
+    case "action":
+      handleAction(envelope)
+    case "error":
+      NSLog("ThinTalk canvas page error: \(envelope["detail"] as? String ?? "unknown")")
+    default:
+      NSLog("ThinTalk canvas: ignoring unknown message kind: \(kind)")
+    }
   }
 
-  public func makeNSView(context: Context) -> WKWebView {
-    let configuration = WKWebViewConfiguration()
-    // Nothing the canvas renders should survive the session: no cookies, no
-    // caches, no storage a later answer could read back.
-    configuration.websiteDataStore = .nonPersistent()
-    configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-    configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-    configuration.userContentController.add(context.coordinator, name: Coordinator.messageHandlerName)
-    configuration.setURLSchemeHandler(
-      CanvasAssetSchemeHandler(webDirectory: webDirectory, assetRegistry: assetRegistry),
-      forURLScheme: CanvasSecurityPolicy.shellScheme
-    )
-
-    let webView = WKWebView(frame: .zero, configuration: configuration)
-    webView.navigationDelegate = context.coordinator
-    webView.allowsMagnification = false
-    // The GUI zoom control must resize the transcript too, so the web content
-    // follows the same scale factor the SwiftUI surface uses.
-    webView.pageZoom = pageZoom
-    webView.setValue(false, forKey: "drawsBackground")
-    // The window colour sits behind the page so the first paint does not flash
-    // white between the SwiftUI background and the canvas background.
-    webView.underPageBackgroundColor = NSColor(srgbRed: 0.06, green: 0.07, blue: 0.10, alpha: 1)
-    #if DEBUG
-      if #available(macOS 13.2, *) {
-        webView.isInspectable = true
-      }
-    #endif
-
-    context.coordinator.webView = webView
-    context.coordinator.sendAppearance(isDarkAppearance)
-    context.coordinator.send(snapshot: snapshot)
-    context.coordinator.sendComposer(composerState)
-    if let documentURL = CanvasSecurityPolicy.shellDocumentURL() {
-      webView.load(URLRequest(url: documentURL))
+  private func handleSessionCall(_ envelope: [String: Any]) {
+    guard let callID = envelope["callId"] as? String, let op = envelope["op"] as? String else {
+      NSLog("ThinTalk canvas: sessionCall missing callId or op")
+      return
     }
-    return webView
-  }
-
-  public func updateNSView(_ webView: WKWebView, context: Context) {
-    context.coordinator.onAction = onAction
-    webView.pageZoom = pageZoom
-    context.coordinator.sendAppearance(isDarkAppearance)
-    context.coordinator.send(snapshot: snapshot)
-    context.coordinator.sendComposer(composerState)
-  }
-
-  public static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
-    webView.configuration.userContentController.removeScriptMessageHandler(
-      forName: Coordinator.messageHandlerName)
-  }
-
-  @MainActor
-  public final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-    static let messageHandlerName = "thintalk"
-
-    var onAction: (CanvasAction) -> Void
-    weak var webView: WKWebView?
-
-    private var lastSentSnapshot: TranscriptSnapshot?
-    private var lastSentAppearance: Bool?
-    private var lastSentComposer: CanvasComposerState?
-    private var queuedCommands: [TranscriptCommand] = []
-    private var isReady = false
-
-    init(onAction: @escaping (CanvasAction) -> Void) {
-      self.onAction = onAction
-    }
-
-    // MARK: - Swift to canvas
-
-    func send(snapshot: TranscriptSnapshot) {
-      let commands = TranscriptCommandPlanner.plan(previous: lastSentSnapshot, next: snapshot)
-      lastSentSnapshot = snapshot
-      commands.forEach { push($0) }
-    }
-
-    func sendAppearance(_ isDark: Bool) {
-      guard lastSentAppearance != isDark else { return }
-      lastSentAppearance = isDark
-      push(.appearance(dark: isDark))
-    }
-
-    func sendComposer(_ composer: CanvasComposerState) {
-      guard lastSentComposer != composer else { return }
-      lastSentComposer = composer
-      push(.composer(composer))
-    }
-
-    private func push(_ command: TranscriptCommand) {
-      guard isReady, let webView, let script = try? TranscriptCommandCodec.invocation(for: command)
-      else {
-        queuedCommands.append(command)
+    // The payload is serialized to JSON on the main thread so only Sendable
+    // data crosses into the store queue.
+    let payloadData: Data?
+    if let payload = envelope["payload"], !(payload is NSNull) {
+      do {
+        payloadData = try JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed])
+      } catch {
+        settleSessionCall(
+          callID: callID,
+          outcome: .failure(.init(message: "\(op) payload is not JSON: \(error)")))
         return
       }
-      webView.evaluateJavaScript(script)
+    } else {
+      payloadData = nil
     }
-
-    private func flushQueuedCommands() {
-      let queued = queuedCommands
-      queuedCommands = []
-      queued.forEach { push($0) }
+    storeQueue.async { [weak self] in
+      guard let self else { return }
+      let outcome = self.performSessionCall(op: op, payloadData: payloadData)
+      DispatchQueue.main.async { [weak self] in
+        self?.settleSessionCall(callID: callID, outcome: outcome)
+      }
     }
+  }
 
-    // MARK: - Canvas to Swift
-
-    public func userContentController(
-      _ userContentController: WKUserContentController,
-      didReceive message: WKScriptMessage
-    ) {
-      guard message.name == Self.messageHandlerName,
-        let body = message.body as? [String: Any],
-        let rawKind = body["kind"] as? String
-      else { return }
-      switch rawKind {
-      case "action":
-        handleReportedAction(body)
-      case "ready":
-        isReady = true
-        flushQueuedCommands()
-        onAction(CanvasAction(kind: .ready))
+  private nonisolated func performSessionCall(op: String, payloadData: Data?) -> Result<String?, SessionBridgeFailure> {
+    let payloadObject: [String: Any]?
+    if let payloadData {
+      guard let parsed = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any] else {
+        return .failure(.init(message: "\(op) payload is not an object"))
+      }
+      payloadObject = parsed
+    } else {
+      payloadObject = nil
+    }
+    do {
+      switch op {
+      case "list":
+        let summaries = try sessionFileStore.list()
+        let payloadJSON: [[String: String]] = summaries.map { summary in
+          ["id": summary.id, "title": summary.title, "updatedAt": summary.updatedAt]
+        }
+        return .success(try encodedJSONString(payloadJSON))
+      case "load":
+        guard let documentID = payloadObject?["id"] as? String else {
+          return .failure(.init(message: "load requires an id"))
+        }
+        guard let documentData = try sessionFileStore.load(id: documentID) else { return .success("null") }
+        return .success(String(decoding: documentData, as: UTF8.self))
+      case "save":
+        guard let document = payloadObject, let documentID = document["id"] as? String else {
+          return .failure(.init(message: "save requires a document with an id"))
+        }
+        let documentData = try JSONSerialization.data(withJSONObject: document)
+        try sessionFileStore.save(id: documentID, documentData: documentData)
+        return .success("null")
+      case "delete":
+        guard let documentID = payloadObject?["id"] as? String else {
+          return .failure(.init(message: "delete requires an id"))
+        }
+        try sessionFileStore.delete(id: documentID)
+        return .success("null")
+      case "rename":
+        guard let renameRequest = payloadObject, let documentID = renameRequest["id"] as? String,
+              let newTitle = renameRequest["title"] as? String
+        else {
+          return .failure(.init(message: "rename requires an id and a title"))
+        }
+        try sessionFileStore.rename(id: documentID, title: newTitle)
+        return .success("null")
+      case "loadPrefs":
+        guard let preferencesData = try sessionFileStore.loadPreferences() else { return .success("null") }
+        return .success(String(decoding: preferencesData, as: UTF8.self))
+      case "savePrefs":
+        guard let preferences = payloadObject else {
+          return .failure(.init(message: "savePrefs requires a preferences object"))
+        }
+        try sessionFileStore.savePreferences(JSONSerialization.data(withJSONObject: preferences))
+        return .success("null")
       default:
-        return
+        return .failure(.init(message: "unknown session op: \(op)"))
       }
-    }
-
-    private func handleReportedAction(_ body: [String: Any]) {
-      guard let rawAction = body["action"] as? String,
-        let kind = CanvasAction.Kind(rawValue: rawAction)
-      else { return }
-      let rawMessageID = body["messageId"] as? String ?? ""
-      let messageID = UUID(uuidString: rawMessageID)
-      let detail = body["detail"] as? String
-      switch kind {
-      case .openExternal:
-        let rawURL = body["detail"] as? String ?? ""
-        guard let externalURL = CanvasSecurityPolicy.externalURL(fromRawValue: rawURL) else { return }
-        onAction(CanvasAction(kind: .openExternal, externalURL: externalURL))
-      case .copy:
-        onAction(CanvasAction(kind: kind, messageID: messageID))
-      case .send, .setEffort:
-        onAction(CanvasAction(kind: kind, detail: detail))
-      case .stop, .retry:
-        onAction(CanvasAction(kind: kind))
-      case .ready:
-        return
-      }
-    }
-
-    // MARK: - Navigation
-
-    public func webView(
-      _ webView: WKWebView,
-      decidePolicyFor navigationAction: WKNavigationAction
-    ) async -> WKNavigationActionPolicy {
-      guard let url = navigationAction.request.url else { return .cancel }
-      if CanvasSecurityPolicy.isShellDocument(url) {
-        return .allow
-      }
-      // Links inside an answer may open in the reader's browser, but nothing may
-      // navigate the canvas itself, and internal schemes never leave the app.
-      if navigationAction.navigationType == .linkActivated,
-        let externalURL = CanvasSecurityPolicy.externalURL(fromRawValue: url.absoluteString)
-      {
-        onAction(CanvasAction(kind: .openExternal, externalURL: externalURL))
-      }
-      return .cancel
+    } catch {
+      return .failure(.init(message: "\(op) failed: \(error)"))
     }
   }
+
+  private func settleSessionCall(callID: String, outcome: Result<String?, SessionBridgeFailure>) {
+    guard let webView = webViewProvider() else { return }
+    let script: String
+    switch outcome {
+    case .success(let payloadJSON):
+      script = "window.__thintalkBridge.resolve(\(javaScriptString(callID)), \(payloadJSON ?? "null"));"
+    case .failure(let failure):
+      script = "window.__thintalkBridge.reject(\(javaScriptString(callID)), \(javaScriptString(failure.message)));"
+    }
+    webView.evaluateJavaScript(script, completionHandler: nil)
+  }
+
+  private func handleAction(_ envelope: [String: Any]) {
+    guard let action = envelope["action"] as? String else { return }
+    switch action {
+    case "copy":
+      let detail = envelope["detail"] as? String ?? ""
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(detail, forType: .string)
+    case "openExternal":
+      guard let rawURL = envelope["detail"] as? String,
+            let externalURL = CanvasSecurityPolicy.externalURL(fromRawValue: rawURL)
+      else {
+        NSLog("ThinTalk canvas: refusing to open unapproved external URL")
+        return
+      }
+      NSWorkspace.shared.open(externalURL)
+    default:
+      NSLog("ThinTalk canvas: ignoring unknown action: \(action)")
+    }
+  }
+
+  // MARK: - WKNavigationDelegate
+
+  func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+    guard let requestURL = navigationAction.request.url else { return .cancel }
+    if CanvasSecurityPolicy.isShellDocument(requestURL) || CanvasSecurityPolicy.isInternalAsset(requestURL) {
+      return .allow
+    }
+    NSLog("ThinTalk canvas: blocking navigation to \(requestURL.absoluteString)")
+    return .cancel
+  }
+
+  // MARK: - JSON helpers
+
+  private nonisolated func encodedJSONString(_ object: some Encodable) throws -> String {
+    let data = try JSONSerialization.data(withJSONObject: object)
+    return String(decoding: data, as: UTF8.self)
+  }
+
+  /// A JSON string literal for embedding in generated JavaScript. JSON escaping
+  /// is also valid JavaScript string escaping for every character this bridge
+  /// can produce.
+  private func javaScriptString(_ value: String) -> String {
+    guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
+          let literal = String(data: data, encoding: .utf8)
+    else {
+      return "\"\""
+    }
+    return literal
+  }
+}
+
+/// A bridge call the host could not complete.
+struct SessionBridgeFailure: Error {
+  let message: String
 }

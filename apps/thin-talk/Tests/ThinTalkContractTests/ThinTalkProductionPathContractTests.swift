@@ -30,7 +30,7 @@ final class ThinTalkProductionPathContractTests: XCTestCase {
       )
     }
     XCTAssertTrue(
-      source.contains("RootView()"),
+      source.contains("RootView(applicationIdentity:"),
       "ThinTalkApp.swift must render RootView in the shipped WindowGroup (issue #713)."
     )
   }

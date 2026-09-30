@@ -1,0 +1,24 @@
+{
+  "name": "thin-talk-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin Talk conversation client: TypeScript sources compiled into the SwiftPM canvas resources.",
+  "type": "module",
+  "scripts": {
+    "build": "node build-web.mjs",
+    "typecheck": "tsc --noEmit",
+    "clean": "node build-web.mjs --clean",
+    "test": "node run-tests.mjs"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.4",
+    "highlight.js": "^11.11.1",
+    "marked": "^15.0.7",
+    "morphdom": "^2.7.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.5",
+    "happy-dom": "^18.0.1",
+    "typescript": "^5.8.3"
+  }
+}
