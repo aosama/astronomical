@@ -15,7 +15,6 @@ import ThinTalkUI
 @MainActor
 final class ChatWindowController: NSObject, NSWindowDelegate {
   private var chatWindow: NSWindow?
-  private var chatViewModel: ThinTalkUI.ChatViewModel?
   private let thinTalkIdentity: ThinTalkCore.ThinTalkApplicationIdentity
   private var handleClose: (() -> Void)?
 
@@ -42,18 +41,12 @@ final class ChatWindowController: NSObject, NSWindowDelegate {
     window.title = "Thin Talk"
     window.isReleasedWhenClosed = false
     window.delegate = self
+    // The chat surface is the HTML client hosted by ThinTalkCanvas; the window
+    // only supplies chrome and the channel identity the client configures
+    // itself from.
     window.contentView = NSHostingView(
-      rootView: ThinTalkUI.RootView(viewModel: makeChatViewModel()))
+      rootView: ThinTalkUI.RootView(applicationIdentity: thinTalkIdentity))
     return window
-  }
-
-  private func makeChatViewModel() -> ThinTalkUI.ChatViewModel {
-    let reusedViewModel = chatViewModel
-    guard reusedViewModel == nil else { return reusedViewModel! }
-    let newViewModel = ThinTalkUI.ChatViewModel(
-      client: ThinTalkCore.ThinTalkClient(applicationIdentity: thinTalkIdentity))
-    chatViewModel = newViewModel
-    return newViewModel
   }
 
   func windowWillClose(_ notification: Notification) {

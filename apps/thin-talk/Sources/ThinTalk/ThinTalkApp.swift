@@ -29,7 +29,7 @@ struct ThinTalkApp: App {
     // preview and offscreen PNG exporter are development-only and no longer
     // reachable from the shipped app entry.
     WindowGroup {
-      RootView()
+      RootView(applicationIdentity: .current())
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
     .windowStyle(.hiddenTitleBar)

@@ -1,0 +1,54 @@
+/*
+ * Design tokens — the single source of the app's look. The sidebar, composer,
+ * and failure banner draw from the same tokens as the transcript.
+ */
+:root {
+  --window-background: #0f121a;
+  --panel: #1a1f29;
+  --panel-alt: #242933;
+  --border: #384052;
+  --accent: #5966f2;
+  --text-primary: #f2f2f5;
+  --text-secondary: #b8bdcc;
+  --link: #7394ff;
+  --danger: #f27373;
+  --code-background: #12161f;
+  --reading-column: 820px;
+  --sidebar-width: 248px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--window-background);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgb(56 64 82 / 85%);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

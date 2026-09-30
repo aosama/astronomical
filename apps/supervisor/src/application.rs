@@ -15,7 +15,7 @@ use astronomical_config::DiscoveredModel;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
-    http::StatusCode,
+    http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
@@ -25,9 +25,10 @@ use std::{
         Arc, RwLock,
         atomic::{AtomicU64, Ordering},
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::Mutex as AsyncMutex;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 /// Maximum JSON body accepted by the bounded OpenAI-compatible chat endpoint.
 pub const MAX_OPENAI_CHAT_REQUEST_BODY_BYTES: usize = 32 * 1024 * 1024;
 // Request counters restart with each Router. A process/time/instance namespace
@@ -494,5 +495,31 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     } else {
         router
     };
-    router.with_state(application_state)
+    // The Thin Talk canvas runs inside a WKWebView served from the
+    // thintalk-asset:// shell scheme and calls this REST API directly with
+    // fetch, so the browser enforces CORS against that exact origin. Only the
+    // shell origin, the loopback origins the page may also target, and the
+    // methods/headers the client uses are allowed.
+    let canvas_origins = [
+        "thintalk-asset://shell".to_string(),
+        "http://127.0.0.1".to_string(),
+        "http://localhost".to_string(),
+    ];
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(move |origin, _| {
+            canvas_origins.iter().any(|allowed| {
+                origin
+                    .to_str()
+                    .map(|origin_value| {
+                        origin_value == allowed
+                            || (allowed.starts_with("http://")
+                                && origin_value.starts_with(&format!("{allowed}:")))
+                    })
+                    .unwrap_or(false)
+            })
+        }))
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_headers([header::CONTENT_TYPE])
+        .max_age(Duration::from_secs(3600));
+    router.layer(cors).with_state(application_state)
 }
