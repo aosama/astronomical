@@ -20,6 +20,7 @@ pub mod opencode;
 pub mod prompt;
 pub mod respond;
 pub mod respond_arguments;
+pub mod respond_image;
 pub mod schema;
 pub mod schema_arguments;
 pub mod status_command;

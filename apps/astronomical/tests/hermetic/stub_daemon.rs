@@ -12,9 +12,9 @@ use std::{
 };
 
 use astronomical_ipc_protocol::{
-    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob,
-    DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason,
-    ProtocolReader, ProtocolWriter,
+    ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION,
+    DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonRequest, DaemonResponse,
+    DaemonWorkerStatus, EmbeddingsFailureReason, ProtocolReader, ProtocolWriter,
 };
 
 /// One installed model the stub reports for `ModelsList`.
@@ -106,6 +106,9 @@ pub struct StubDaemonConfig {
     pub chat_fragments: Vec<String>,
     pub embeddings_outcome: StubEmbeddingsOutcome,
     pub embedding_vector: Vec<f32>,
+    /// Captures the images the CLI attached to the most recent `ChatGenerate`,
+    /// when a test supplies one. Shared across connections by the Arc clone.
+    pub image_capture: Arc<std::sync::Mutex<Option<Vec<ChatImageInput>>>>,
     /// FIFO of jobs for `DownloadStatus` requests; the last entry repeats
     /// once the scripted list is exhausted. `None` means no active job.
     pub download_jobs: Vec<Option<DaemonDownloadJob>>,
@@ -123,6 +126,7 @@ impl Default for StubDaemonConfig {
             embeddings_outcome: StubEmbeddingsOutcome::Completed,
             embedding_vector: vec![0.25, -0.5],
             download_jobs: Vec::new(),
+            image_capture: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
@@ -308,7 +312,14 @@ pub fn spawn_stub_daemon(
                                 .await
                                 .expect("the stub default set should transmit");
                         }
-                        DaemonRequest::ChatGenerate { .. } => {
+                        DaemonRequest::ChatGenerate { messages, .. } => {
+                            // Record the images the CLI attached so a journey test
+                            // can assert image bytes actually crossed the boundary.
+                            if let Some(ChatMessage::User { images, .. }) = messages.first() {
+                                if let Ok(mut guard) = config.image_capture.lock() {
+                                    *guard = Some(images.clone());
+                                }
+                            }
                             for chat_fragment in config.chat_fragments.iter() {
                                 protocol_writer
                                     .send_daemon_response(&DaemonResponse::ChatGenerationText {

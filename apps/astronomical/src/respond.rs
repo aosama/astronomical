@@ -15,6 +15,7 @@ use astronomical_ipc_protocol::{
 
 use crate::{
     DaemonProbe, ModelLifecycle, RequiredCapability, RespondArguments, errors::RespondError,
+    respond_image::read_image_inputs,
 };
 
 /// Collaborators the respond journey needs, injected so tests can stub them.
@@ -82,11 +83,12 @@ async fn stream_answer(
     chat_model_id: &str,
 ) -> Result<(), RespondError> {
     let mut daemon_client = daemon_probe.connect().await?;
+    let images = read_image_inputs(&respond_arguments.images)?;
     let chat_generate_request = DaemonRequest::ChatGenerate {
         model: chat_model_id.to_owned(),
         messages: vec![ChatMessage::User {
             content: respond_arguments.prompt.clone(),
-            images: vec![],
+            images,
         }],
         // Zero is the sentinel for "no CLI opinion": the daemon fills the
         // policy default, then the worker-advertised capability limit.
