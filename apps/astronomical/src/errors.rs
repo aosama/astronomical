@@ -97,6 +97,18 @@ pub enum RespondError {
     DaemonStoppedResponding,
     #[error("Could not write the answer to standard output: {cause}")]
     StdoutUnwritable { cause: String },
+    #[error("could not read image {path}: {cause}")]
+    ImageReadFailed { path: PathBuf, cause: String },
+    #[error("{path} is not a supported image; supported formats: {supported}")]
+    UnsupportedImage { path: PathBuf, supported: String },
+    #[error(
+        "the combined image size is {actual_bytes} bytes, over the {maximum_bytes}-byte limit; \
+         send smaller or fewer --image files"
+    )]
+    ImageTooLarge {
+        actual_bytes: usize,
+        maximum_bytes: usize,
+    },
 }
 
 impl From<DaemonProbeError> for RespondError {

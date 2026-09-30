@@ -14,7 +14,7 @@ const HELP_TEXT: &str = concat!(
     "Astronomical\n\n",
     "Usage: astronomical launch [tool]\n",
     "       astronomical launch opencode [--model MODEL_ID]\n",
-    "       astronomical respond PROMPT [--model MODEL_ID] [--no-stream]\n",
+    "       astronomical respond PROMPT [--image PATH]... [--model MODEL_ID] [--no-stream]\n",
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
     "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
     "       astronomical status\n",
@@ -27,7 +27,8 @@ const HELP_TEXT: &str = concat!(
     "utilities against the instance configuration.\n\n",
     "Commands:\n",
     "  launch [tool]    Start a supported harness (OpenCode in this release)\n",
-    "  respond PROMPT   One-shot chat answer; the daemon loads or downloads the\n",
+    "  respond PROMPT   One-shot chat answer; add --image PATH to send a raster\n",
+    "                   image with the prompt; the daemon loads or downloads the\n",
     "                   model automatically when it is not resident yet\n",
     "  embed [TEXT]     One-shot embedding vector as one JSON document; the daemon\n",
     "                   loads or downloads the model automatically when needed\n",
@@ -42,6 +43,7 @@ const HELP_TEXT: &str = concat!(
     "Options:\n",
     "  --model MODEL_ID   Model to use (default: the daemon's effective default model)\n",
     "  --no-stream        Print the finished respond answer once instead of streaming\n",
+    "  --image PATH       Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
     "  --file PATH        Embed the file's contents instead of TEXT or stdin\n",
     "  --instance NAME    Which instance to inspect for validate config (default: development)\n",
     "  --json             Render the validate config report as JSON\n",
@@ -291,9 +293,16 @@ fn parse_respond_arguments(
     let mut prompt = None;
     let mut model_id = None;
     let mut no_stream = false;
+    let mut images = Vec::new();
     let mut argument_index = 0;
     while argument_index < remaining_arguments.len() {
         let argument = &remaining_arguments[argument_index];
+        if argument == "--image" {
+            let image_value = flag_value(remaining_arguments, argument_index + 1, "--image")?;
+            images.push(PathBuf::from(image_value));
+            argument_index += 2;
+            continue;
+        }
         if argument == "--model" {
             if model_id.is_some() {
                 return Err(UsageError::RepeatedArgument("--model"));
@@ -333,6 +342,7 @@ fn parse_respond_arguments(
 
     Ok(RespondArguments {
         prompt: prompt.ok_or(UsageError::RespondPromptRequired)?,
+        images,
         model_id,
         no_stream,
     })

@@ -1,10 +1,14 @@
 //! Arguments for the ephemeral one-shot `astronomical respond` verb.
 
+use std::path::PathBuf;
+
 /// Parsed `astronomical respond` invocation before any IPC work.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RespondArguments {
     /// The user's prompt, exactly as supplied on the command line.
     pub prompt: String,
+    /// Raster images to attach to the prompt, in the order the user supplied them.
+    pub images: Vec<PathBuf>,
     /// Exact model identity to demand from the resident daemon, when given.
     pub model_id: Option<String>,
     /// Buffer the answer and print it once instead of streaming fragments.
