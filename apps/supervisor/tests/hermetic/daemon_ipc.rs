@@ -405,6 +405,7 @@ async fn should_fill_zero_max_output_tokens_from_the_worker_capabilities() {
             seed: None,
             thinking_budget: None,
         },
+        schema_json: None,
     };
     timeout(
         HANDSHAKE_TEST_TIMEOUT,

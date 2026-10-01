@@ -26,7 +26,7 @@ pub struct OpenAiStructuredOutputs {
 /// Validated extra-body constraint that the worker can compile into a token mask.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EnforcedStructuredGeneration {
-    /// Any JSON value.
+    /// One JSON object.
     JsonObject,
     /// JSON matching a bounded object schema.
     JsonSchema { schema: Value },
@@ -110,14 +110,24 @@ impl OpenAiStructuredOutputs {
             return Ok(EnforcedStructuredGeneration::Choice { choices });
         }
         let schema = self.json_schema.expect("json field counted as set");
-        if schema.as_object().is_some_and(|fields| fields.is_empty()) {
-            return Ok(EnforcedStructuredGeneration::JsonObject);
-        }
-        if !schema.is_object() {
-            return Err(OpenAiStructuredOutputsValidationError::JsonSchemaMustBeObject);
-        }
-        Ok(EnforcedStructuredGeneration::JsonSchema { schema })
+        enforced_generation_from_json_schema(schema)
     }
+}
+
+/// Compiles one parsed JSON-schema value into the enforced generation. This
+/// is the single home of the object-schema rule (an empty object means any
+/// JSON object; a non-object schema is not enforceable) so the REST surface
+/// and any other schema-carrying surface cannot drift apart.
+pub fn enforced_generation_from_json_schema(
+    schema: Value,
+) -> Result<EnforcedStructuredGeneration, OpenAiStructuredOutputsValidationError> {
+    if schema.as_object().is_some_and(|fields| fields.is_empty()) {
+        return Ok(EnforcedStructuredGeneration::JsonObject);
+    }
+    if !schema.is_object() {
+        return Err(OpenAiStructuredOutputsValidationError::JsonSchemaMustBeObject);
+    }
+    Ok(EnforcedStructuredGeneration::JsonSchema { schema })
 }
 
 /// Compiles extra-body `structured_outputs` or `guided_grammar`, never both.

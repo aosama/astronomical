@@ -5,6 +5,12 @@ use crate::RequestId;
 /// Bounds request-local memory before template escaping can expand user-authored seed text.
 pub const MAX_QWEN_THINKING_CHANNEL_SEED_BYTES: usize = 1_000_000;
 
+/// Bounds the raw JSON schema text one chat request may carry. Schema DFA
+/// compilation cost grows with schema size, so a fixed ceiling keeps worker
+/// compilation predictable; the value sits far above any schema the
+/// `astronomical schema object` verb emits and far below the IPC frame cap.
+pub const MAXIMUM_CHAT_SCHEMA_JSON_BYTES: usize = 65_536;
+
 /// One bounded structured chat-generation command for the local inference worker.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
