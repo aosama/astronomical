@@ -28,6 +28,7 @@ fn chat_generate_request() -> DaemonRequest {
             seed: None,
             thinking_budget: None,
         },
+        schema_json: None,
     }
 }
 

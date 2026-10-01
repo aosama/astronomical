@@ -59,6 +59,7 @@ pub fn respond_arguments(
         model_id: model_id.map(str::to_owned),
         instructions: None,
         thinking_budget: None,
+        schema_path: None,
         no_stream,
     }
 }
@@ -76,6 +77,23 @@ pub fn respond_arguments_with(
         model_id: None,
         instructions: instructions.map(str::to_owned),
         thinking_budget,
+        schema_path: None,
+        no_stream: false,
+    }
+}
+
+/// Builds `respond` arguments with the structured-output schema file set.
+pub fn respond_arguments_with_schema(
+    prompt: &str,
+    schema_path: Option<PathBuf>,
+) -> RespondArguments {
+    RespondArguments {
+        prompt: prompt.to_owned(),
+        images: Vec::new(),
+        model_id: None,
+        instructions: None,
+        thinking_budget: None,
+        schema_path,
         no_stream: false,
     }
 }

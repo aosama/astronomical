@@ -15,7 +15,8 @@ const HELP_TEXT: &str = concat!(
     "Usage: astronomical launch [tool]\n",
     "       astronomical launch opencode [--model MODEL_ID]\n",
     "       astronomical respond PROMPT [--text TEXT] [--image PATH]... [--model MODEL_ID]\n",
-    "                                   [--instructions TEXT] [--thinking-budget N] [--no-stream]\n",
+    "                                   [--instructions TEXT] [--thinking-budget N] [--schema FILE]\n",
+    "                                   [--no-stream]\n",
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
     "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
     "       astronomical status\n",
@@ -29,7 +30,8 @@ const HELP_TEXT: &str = concat!(
     "Commands:\n",
     "  launch [tool]    Start a supported harness (OpenCode in this release)\n",
     "  respond PROMPT   One-shot chat answer; add --image PATH to send a raster\n",
-    "                   image with the prompt; the daemon loads or downloads the\n",
+    "                   image with the prompt; add --schema FILE to force one\n",
+    "                   JSON object reply; the daemon loads or downloads the\n",
     "                   model automatically when it is not resident yet\n",
     "  embed [TEXT]     One-shot embedding vector as one JSON document; the daemon\n",
     "                   loads or downloads the model automatically when needed\n",
@@ -48,6 +50,7 @@ const HELP_TEXT: &str = concat!(
     "  --instructions TEXT  System-prompt-style guidance applied to the respond reply\n",
     "  --thinking-budget N  Cap the tokens a thinking model may spend reasoning (0-65535; default: think freely)\n",
     "  --image PATH         Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
+    "  --schema FILE        Force the respond reply to be one JSON object matching the JSON schema in FILE\n",
     "  --file PATH          Embed the file's contents instead of TEXT or stdin\n",
     "  --instance NAME      Which instance to inspect for validate config (default: development)\n",
     "  --json               Render the validate config report as JSON\n",
@@ -301,9 +304,22 @@ fn parse_respond_arguments(
     let mut thinking_budget = None;
     let mut no_stream = false;
     let mut images = Vec::new();
+    let mut schema_path = None;
     let mut argument_index = 0;
     while argument_index < remaining_arguments.len() {
         let argument = &remaining_arguments[argument_index];
+        if argument == "--schema" {
+            if schema_path.is_some() {
+                return Err(UsageError::RepeatedArgument("--schema"));
+            }
+            schema_path = Some(PathBuf::from(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--schema",
+            )?));
+            argument_index += 2;
+            continue;
+        }
         if argument == "--image" {
             let image_value = flag_value(remaining_arguments, argument_index + 1, "--image")?;
             images.push(PathBuf::from(image_value));
@@ -388,6 +404,7 @@ fn parse_respond_arguments(
         model_id,
         instructions,
         thinking_budget,
+        schema_path,
         no_stream,
     })
 }

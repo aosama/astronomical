@@ -116,6 +116,9 @@ pub struct StubDaemonConfig {
     /// Captures the generation settings the CLI sent on the most recent
     /// `ChatGenerate`, so a test can assert a thinking budget was carried.
     pub settings_capture: Arc<std::sync::Mutex<Option<ChatGenerationSettings>>>,
+    /// Captures the raw schema text the CLI sent on the most recent
+    /// `ChatGenerate`, so a test can assert the schema crossed the boundary.
+    pub schema_capture: Arc<std::sync::Mutex<Option<String>>>,
     /// FIFO of jobs for `DownloadStatus` requests; the last entry repeats
     /// once the scripted list is exhausted. `None` means no active job.
     pub download_jobs: Vec<Option<DaemonDownloadJob>>,
@@ -136,6 +139,7 @@ impl Default for StubDaemonConfig {
             image_capture: Arc::new(std::sync::Mutex::new(None)),
             messages_capture: Arc::new(std::sync::Mutex::new(None)),
             settings_capture: Arc::new(std::sync::Mutex::new(None)),
+            schema_capture: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
@@ -322,7 +326,10 @@ pub fn spawn_stub_daemon(
                                 .expect("the stub default set should transmit");
                         }
                         DaemonRequest::ChatGenerate {
-                            messages, settings, ..
+                            messages,
+                            settings,
+                            schema_json,
+                            ..
                         } => {
                             // Record the messages and settings the CLI sent so a journey
                             // test can assert they crossed the boundary.
@@ -331,6 +338,9 @@ pub fn spawn_stub_daemon(
                             }
                             if let Ok(mut guard) = config.settings_capture.lock() {
                                 *guard = Some(settings.clone());
+                            }
+                            if let Ok(mut guard) = config.schema_capture.lock() {
+                                *guard = schema_json.clone();
                             }
                             // The user's images may sit after a system message, so find
                             // the first user message rather than assuming it is first.

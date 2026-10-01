@@ -7,7 +7,13 @@ use axum::{
     response::Response,
 };
 
-fn insert_json_output_instruction(
+/// Inserts the JSON-output prompt instruction ahead of the chat messages,
+/// reusing the template convention that the first system message is the root
+/// instruction. Enforcement pairs with this hint: the token mask clamps the
+/// visible channel, and without the hint the model does not plan a JSON
+/// object answer (observed live: the mask forced a brace and the model
+/// answered `{"error": "Invalid JSON"}`).
+pub(crate) fn insert_json_output_instruction(
     chat_messages: &mut Vec<ChatMessage>,
     json_output_instruction: String,
 ) {
@@ -30,7 +36,13 @@ fn insert_json_output_instruction(
 pub(crate) fn ipc_constraint_from_enforced(
     enforced_structured_generation: Option<EnforcedStructuredGeneration>,
 ) -> Option<StructuredGenerationConstraint> {
-    Some(match enforced_structured_generation? {
+    enforced_structured_generation.map(constraint_from_enforced_generation)
+}
+
+pub(crate) fn constraint_from_enforced_generation(
+    enforced_structured_generation: EnforcedStructuredGeneration,
+) -> StructuredGenerationConstraint {
+    match enforced_structured_generation {
         EnforcedStructuredGeneration::JsonObject => StructuredGenerationConstraint::JsonObject,
         EnforcedStructuredGeneration::JsonSchema { schema } => {
             StructuredGenerationConstraint::JsonSchema {
@@ -43,7 +55,17 @@ pub(crate) fn ipc_constraint_from_enforced(
         EnforcedStructuredGeneration::Regex { pattern } => {
             StructuredGenerationConstraint::Regex { pattern }
         }
-    })
+    }
+}
+
+/// Prompt instruction paired with an enforced IPC schema constraint. The CLI
+/// sends a bare schema file, so there is no schema name or description to
+/// include; the wording mirrors the enforced REST instruction otherwise.
+pub(crate) fn enforced_schema_output_instruction(schema_json: &str) -> String {
+    format!(
+        "Output a single JSON object matching this schema and nothing else after any \
+         reasoning: no markdown fences and no prose. Schema: {schema_json}"
+    )
 }
 
 pub(crate) fn apply_structured_output_instruction(

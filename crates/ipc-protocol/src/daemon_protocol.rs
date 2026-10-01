@@ -32,8 +32,11 @@ pub enum DaemonRequest {
     /// Reports the daemon's current availability and resident model.
     Status,
     /// Streams one chat completion from the resident model. The daemon
-    /// fills tools, tool choice, the Qwen thinking seed, and structured
-    /// generation itself: the CLI surface never leases those capabilities.
+    /// fills tools, tool choice, and the Qwen thinking seed itself: the
+    /// CLI surface never leases those capabilities. Structured generation
+    /// is the exception the caller owns: the CLI sends raw schema JSON
+    /// here and the daemon validates it into the enforced worker
+    /// constraint before the worker ever sees it.
     ChatGenerate {
         /// Exact worker-advertised model ID the request targets.
         model: String,
@@ -41,6 +44,10 @@ pub enum DaemonRequest {
         messages: Vec<ChatMessage>,
         /// Bounded sampling and output settings from the CLI.
         settings: ChatGenerationSettings,
+        /// Raw JSON schema text the reply must satisfy, when the caller
+        /// supplied `--schema`. The CLI forwards the file's text; the
+        /// daemon parses, bounds, and rejects invalid schemas.
+        schema_json: Option<String>,
     },
     /// Computes one embedding batch. A `None` model means "use whatever is
     /// resident"; the daemon swaps models itself when the requested model

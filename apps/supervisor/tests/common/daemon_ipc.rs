@@ -355,5 +355,6 @@ pub(crate) fn text_only_chat_generate_request(model: &str) -> DaemonRequest {
             seed: None,
             thinking_budget: None,
         },
+        schema_json: None,
     }
 }

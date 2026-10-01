@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use astronomical_cli::errors::UsageError;
 use astronomical_cli::{CliCommand, LaunchArguments, RespondArguments};
 
-use super::test_support::{parse, respond_arguments, respond_arguments_with};
+use super::test_support::{
+    parse, respond_arguments, respond_arguments_with, respond_arguments_with_schema,
+};
 
 #[test]
 fn should_print_help_for_help_flag() {
@@ -164,6 +166,7 @@ fn should_parse_repeatable_image_arguments_after_the_prompt() {
             model_id: None,
             instructions: None,
             thinking_budget: None,
+            schema_path: None,
             no_stream: false,
         })
     );
@@ -181,6 +184,7 @@ fn should_parse_image_arguments_before_the_prompt() {
             model_id: None,
             instructions: None,
             thinking_budget: None,
+            schema_path: None,
             no_stream: true,
         })
     );
@@ -239,6 +243,27 @@ fn should_parse_respond_thinking_budget_flag() {
         parsed_command,
         CliCommand::Respond(respond_arguments_with("Hello there", None, Some(512)))
     );
+}
+
+#[test]
+fn should_parse_the_schema_flag_value_as_a_path() {
+    let parsed_command = parse(&["respond", "Hello there", "--schema", "answer-schema.json"])
+        .expect("respond with --schema should parse");
+    assert_eq!(
+        parsed_command,
+        CliCommand::Respond(RespondArguments {
+            schema_path: Some(PathBuf::from("answer-schema.json")),
+            ..respond_arguments_with_schema("Hello there", None)
+        })
+    );
+}
+
+#[test]
+fn should_reject_a_repeated_schema_flag_as_a_repeated_argument() {
+    assert!(matches!(
+        parse(&["respond", "--schema", "a.json", "--schema", "b.json"]),
+        Err(UsageError::RepeatedArgument("--schema"))
+    ));
 }
 
 #[test]
@@ -328,6 +353,7 @@ fn should_parse_all_new_respond_flags_together() {
             model_id: None,
             instructions: Some("Answer in one word".to_owned()),
             thinking_budget: Some(512),
+            schema_path: None,
             no_stream: true,
         })
     );

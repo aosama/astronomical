@@ -14,6 +14,8 @@ mod configuration_status;
 mod console_assets;
 mod console_render_assets;
 mod daemon_ipc;
+mod daemon_ipc_chat;
+pub mod daemon_ipc_chat_schema;
 mod daemon_ipc_embeddings;
 mod daemon_ipc_models;
 mod embeddings_executor;

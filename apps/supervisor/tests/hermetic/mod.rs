@@ -6,6 +6,7 @@ mod daemon_ipc;
 mod daemon_ipc_embeddings;
 mod daemon_ipc_lifecycle;
 mod daemon_ipc_models;
+mod daemon_ipc_schema;
 mod download_catalog;
 mod download_catalog_k2_horizon_mova;
 mod download_catalog_laguna;

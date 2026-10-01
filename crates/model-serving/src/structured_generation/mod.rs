@@ -148,6 +148,18 @@ impl StructuredTokenConstraint {
                 if normalized_piece.is_empty() {
                     return true;
                 }
+                // The worker only ever receives object-shaped JSON
+                // constraints: REST and the IPC schema validator both reject
+                // non-object schemas. The plain JSON-prefix mask would
+                // otherwise admit a number, boolean, string, or array as the
+                // first token, and a numeric prefix never completes, so the
+                // model can river digits until the output cap (observed
+                // live). Forcing the object brace cannot deadlock: some
+                // vocabulary piece must start with "{" for a valid object
+                // reply, and the zero-mass fail-open below still exposes EOS.
+                if decoded_text.is_empty() && !normalized_piece.starts_with('{') {
+                    return false;
+                }
                 let mut candidate =
                     String::with_capacity(decoded_text.len() + normalized_piece.len());
                 candidate.push_str(decoded_text);
@@ -330,5 +342,55 @@ mod tests {
             compiled.is_err(),
             "an unparseable regex must fail request-scoped"
         );
+    }
+
+    #[test]
+    fn should_force_an_object_brace_piece_as_the_first_json_token() {
+        let mut constraint = super::StructuredTokenConstraint::compile(
+            &StructuredGenerationConstraint::JsonSchema {
+                schema_json: r#"{"type":"object"}"#.to_owned(),
+            },
+            vec![
+                "3".to_owned(),
+                "true".to_owned(),
+                " ".to_owned(),
+                "{\"play\"".to_owned(),
+            ],
+            vec![99],
+            Vec::new(),
+        )
+        .expect("json schema compiles");
+        let first_round_biases = constraint.logit_bias_values();
+        assert_eq!(first_round_biases[0], f32::NEG_INFINITY);
+        assert_eq!(first_round_biases[1], f32::NEG_INFINITY);
+        assert_eq!(first_round_biases[2], f32::NEG_INFINITY);
+        assert_eq!(first_round_biases[3], 0.0);
+    }
+
+    #[test]
+    fn should_allow_digits_inside_a_json_object_string_after_the_first_token() {
+        let mut constraint = super::StructuredTokenConstraint::compile(
+            &StructuredGenerationConstraint::JsonObject,
+            vec![
+                "{".to_owned(),
+                "\"".to_owned(),
+                "3".to_owned(),
+                "Two".to_owned(),
+            ],
+            vec![99],
+            Vec::new(),
+        )
+        .expect("json object compiles");
+        // Before any token is accepted the object brace is forced even for
+        // the bare JsonObject kind: a digit prefix would river.
+        assert_eq!(constraint.logit_bias_values()[2], f32::NEG_INFINITY);
+        constraint.accept_visible_token(0);
+        let biases_after_open = constraint.logit_bias_values();
+        assert_eq!(biases_after_open[1], 0.0);
+        constraint.accept_visible_token(1);
+        // Inside a string value a digit is a legal continuation, and it must
+        // not be masked: only the very first token is brace-forced.
+        assert_eq!(constraint.logit_bias_values()[2], 0.0);
+        assert_eq!(constraint.logit_bias_values()[3], 0.0);
     }
 }
