@@ -24,8 +24,8 @@ pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatImageInput, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    ChatToolDefinition, MAX_QWEN_THINKING_CHANNEL_SEED_BYTES, StructuredGenerationConstraint,
-    structured_regex_dfa_pattern,
+    ChatToolDefinition, MAX_QWEN_THINKING_CHANNEL_SEED_BYTES, MAXIMUM_CHAT_SCHEMA_JSON_BYTES,
+    StructuredGenerationConstraint, structured_regex_dfa_pattern,
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
 pub use daemon_client::DaemonIpcClient;

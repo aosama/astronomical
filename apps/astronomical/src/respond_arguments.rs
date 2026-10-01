@@ -16,6 +16,8 @@ pub struct RespondArguments {
     /// Cap on the tokens a thinking model may spend reasoning, when given.
     /// `None` lets the model think freely up to the output budget.
     pub thinking_budget: Option<u16>,
+    /// Path to the JSON schema file the reply must satisfy, when given.
+    pub schema_path: Option<PathBuf>,
     /// Buffer the answer and print it once instead of streaming fragments.
     pub no_stream: bool,
 }

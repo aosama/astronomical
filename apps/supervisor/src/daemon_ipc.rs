@@ -6,29 +6,21 @@ use std::{
     sync::{Arc, RwLock, atomic::AtomicU64},
 };
 
-use astronomical_config::{
-    AstronomicalConfig, AstronomicalInstancePaths, leaf_model_id, near_model_matches,
-};
+use astronomical_config::{AstronomicalConfig, AstronomicalInstancePaths};
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationSettings, ChatMessage,
-    ChatToolChoice, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcListener,
-    DaemonRequest, DaemonResponse, DaemonTransportError, RequestId, StreamingResponseWriter,
+    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcListener, DaemonRequest,
+    DaemonResponse, DaemonTransportError, StreamingResponseWriter,
 };
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 
 use crate::{
-    ChatGenerationStreamErrorCode, ChatGenerationStreamEvent, GenerationStartError,
-    ImageGenerationExecutor,
-    application::allocate_chat_request_id,
+    GenerationStartError, ImageGenerationExecutor,
     config_reload::ResolvedRuntimeConfig,
     library::{DownloadCatalog, LibraryDownloadCoordinator},
-    load_configured_qwen_thinking_channel_seed,
-    request_generation_defaults::{RequestGenerationSettingsPresence, apply_generation_defaults},
     supervisor_performance_attribution::{
         SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
         SupervisorPerformanceOperation,
     },
-    worker_health::{WorkerHealthSnapshot, WorkerHealthStatus},
 };
 
 /// Built-in chat model used when the client sends no model and the user has
@@ -188,18 +180,22 @@ async fn handle_streaming_daemon_request(
             model,
             messages,
             settings,
+            schema_json,
         } => {
             supervisor_attribution_log
                 .measure_async_operation_best_effort(
                     SupervisorPerformanceOperation::DaemonIpcChatGenerate,
                     || {
-                        stream_chat_generation(
+                        super::daemon_ipc_chat::stream_chat_generation(
                             &generation_context,
                             &seed_instance_paths,
                             &supervisor_attribution_log,
-                            model,
-                            messages,
-                            settings,
+                            super::daemon_ipc_chat::DaemonIpcChatRequest {
+                                model,
+                                messages,
+                                settings,
+                                schema_json,
+                            },
                             streaming_response_writer,
                         )
                     },
@@ -304,113 +300,6 @@ async fn send_attributed_streaming_response(
         .await
 }
 
-/// Runs one IPC chat generation: gates on worker readiness, fills defaults,
-/// and streams events to the client until a terminal frame.
-async fn stream_chat_generation(
-    generation_context: &DaemonIpcGenerationContext,
-    seed_instance_paths: &AstronomicalInstancePaths,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
-    model: String,
-    messages: Vec<ChatMessage>,
-    settings: ChatGenerationSettings,
-    streaming_response_writer: StreamingResponseWriter,
-) -> Result<(), DaemonTransportError> {
-    let health_snapshot = generation_context.executor.worker_health_snapshot();
-    if let Some(rejection_reason) = ipc_generation_rejection_reason(
-        &health_snapshot,
-        &generation_context.reloadable_config,
-        &model,
-    ) {
-        let rejection_response = DaemonResponse::GenerationRejected {
-            reason: rejection_reason,
-        };
-        return send_terminal_streaming_response(streaming_response_writer, &rejection_response)
-            .await;
-    }
-    let Some(request_id_raw) = allocate_chat_request_id(&generation_context.next_chat_request_id)
-    else {
-        let rejection_response = DaemonResponse::GenerationRejected {
-            reason: "the local request identifier space is exhausted".to_owned(),
-        };
-        return send_terminal_streaming_response(streaming_response_writer, &rejection_response)
-            .await;
-    };
-    let mut settings = settings;
-    apply_ipc_generation_defaults(generation_context, &health_snapshot, &model, &mut settings);
-    let generation_command = ChatGenerationCommand {
-        request_id: RequestId::new(request_id_raw),
-        model: model.clone(),
-        messages,
-        tools: vec![],
-        tool_choice: ChatToolChoice::Auto,
-        settings,
-        qwen_thinking_channel_seed: load_configured_qwen_thinking_channel_seed(
-            generation_context.reloadable_config.as_ref(),
-            Some(seed_instance_paths),
-            supervisor_attribution_log,
-            &model,
-        )
-        .await,
-        structured_generation: None,
-    };
-    let stream_event_receiver = match generation_context
-        .executor
-        .start_chat_generation(generation_command)
-        .await
-    {
-        Ok(stream_event_receiver) => stream_event_receiver,
-        Err(start_error) => {
-            let rejection_response = DaemonResponse::GenerationRejected {
-                reason: generation_start_rejection_reason(start_error),
-            };
-            return send_terminal_streaming_response(
-                streaming_response_writer,
-                &rejection_response,
-            )
-            .await;
-        }
-    };
-    relay_stream_events(stream_event_receiver, streaming_response_writer).await
-}
-
-/// Rejects a generation the daemon cannot serve: an unavailable worker, or a
-/// requested model that is unknown to the live model policy catalog (checked
-/// as either a full catalog key or a leaf alias). A known model that is not
-/// resident is admitted on purpose: the worker loop swaps or loads it on
-/// demand, which is how the CLI auto-loads from a cold daemon.
-fn ipc_generation_rejection_reason(
-    health_snapshot: &WorkerHealthSnapshot,
-    reloadable_config: &Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
-    requested_model_id: &str,
-) -> Option<String> {
-    if health_snapshot.status == WorkerHealthStatus::Unavailable {
-        return Some("the daemon worker is not ready to serve chat generation".to_owned());
-    }
-    let Some(reloadable_config) = reloadable_config else {
-        // No policy catalog wired: the worker loop applies its own unknown-model guard.
-        return None;
-    };
-    let Ok(live_config) = reloadable_config.read() else {
-        return Some("the daemon configuration is temporarily unavailable".to_owned());
-    };
-    let known_model_ids: Vec<&str> = live_config
-        .model_policy_catalog
-        .keys()
-        .map(String::as_str)
-        .collect();
-    let requested_is_known = known_model_ids.contains(&requested_model_id)
-        || known_model_ids.contains(&leaf_model_id(requested_model_id));
-    if !requested_is_known {
-        let suggested_model_ids = near_model_matches(requested_model_id, &known_model_ids);
-        return Some(unknown_model_rejection_reason(
-            requested_model_id,
-            &suggested_model_ids,
-            "the daemon knows no such model; run `astronomical models list` to see installed models or `astronomical models supported` to see downloadable ones",
-        ));
-    }
-    None
-}
-
 /// Builds the shared unknown-model rejection text with near-match suggestions.
 pub(crate) fn unknown_model_rejection_reason(
     requested_model_id: &str,
@@ -424,36 +313,6 @@ pub(crate) fn unknown_model_rejection_reason(
             "the model {requested_model_id} is unknown — {base_message}; did you mean: {}",
             suggested_model_ids.join(", ")
         )
-    }
-}
-
-/// Fills generation settings the CLI does not send: model policy defaults,
-/// then the worker's advertised output ceiling when nothing else filled the
-/// `max_output_tokens = 0` sentinel.
-fn apply_ipc_generation_defaults(
-    generation_context: &DaemonIpcGenerationContext,
-    health_snapshot: &WorkerHealthSnapshot,
-    model_id: &str,
-    generation_settings: &mut ChatGenerationSettings,
-) {
-    let settings_presence = RequestGenerationSettingsPresence {
-        maximum_output_tokens: generation_settings.max_output_tokens != 0,
-        temperature: generation_settings.temperature_thousandths.is_some(),
-        top_p: generation_settings.top_p_thousandths.is_some(),
-    };
-    apply_generation_defaults(
-        generation_context.reloadable_config.as_ref(),
-        model_id,
-        settings_presence,
-        generation_settings,
-    );
-    if generation_settings.max_output_tokens == 0
-        && let Some(ready_model_capabilities) = &health_snapshot.ready_model_capabilities
-        && let Some(chat_capabilities) = &ready_model_capabilities.chat
-    {
-        // The worker advertises u32 token counts; the wire settings field is u16.
-        generation_settings.max_output_tokens =
-            u16::try_from(chat_capabilities.max_output_tokens).unwrap_or(u16::MAX);
     }
 }
 
@@ -473,93 +332,6 @@ pub(crate) fn generation_start_rejection_reason(start_error: GenerationStartErro
              {maximum_ipc_message_bytes} bytes"
         ),
         GenerationStartError::WorkerUnavailable => "the worker is unavailable".to_owned(),
-    }
-}
-
-/// Sends stream frames to the client until a terminal frame, then closes the
-/// connection. A stream that ends without a terminal frame is a failure.
-async fn relay_stream_events(
-    mut stream_event_receiver: mpsc::Receiver<ChatGenerationStreamEvent>,
-    mut streaming_response_writer: StreamingResponseWriter,
-) -> Result<(), DaemonTransportError> {
-    while let Some(stream_event) = stream_event_receiver.recv().await {
-        let Some(daemon_response) = stream_event_to_daemon_response(stream_event) else {
-            // PrefillProgress is worker-internal progress with no CLI presentation.
-            continue;
-        };
-        streaming_response_writer
-            .send_response(&daemon_response)
-            .await?;
-        let is_terminal_frame = matches!(
-            daemon_response,
-            DaemonResponse::ChatGenerationCompleted { .. }
-                | DaemonResponse::ChatGenerationFailed { .. }
-                | DaemonResponse::GenerationRejected { .. }
-        );
-        if is_terminal_frame {
-            streaming_response_writer.close().await?;
-            return Ok(());
-        }
-    }
-    let eof_failure_response = DaemonResponse::ChatGenerationFailed {
-        reason: ChatGenerationFailureReason::FatalExecution {
-            reason: "the worker stream ended before completing the generation".to_owned(),
-        },
-    };
-    send_terminal_streaming_response(streaming_response_writer, &eof_failure_response).await
-}
-
-fn stream_event_to_daemon_response(
-    stream_event: ChatGenerationStreamEvent,
-) -> Option<DaemonResponse> {
-    match stream_event {
-        ChatGenerationStreamEvent::TextFragment(text) => {
-            Some(DaemonResponse::ChatGenerationText { text })
-        }
-        ChatGenerationStreamEvent::ReasoningFragment(text) => {
-            Some(DaemonResponse::ChatGenerationReasoning { text })
-        }
-        ChatGenerationStreamEvent::ToolCall {
-            tool_call_index,
-            function_name,
-            arguments_json,
-        } => Some(DaemonResponse::ChatGenerationToolCall {
-            tool_call_index,
-            function_name,
-            arguments_json,
-        }),
-        ChatGenerationStreamEvent::PrefillProgress { .. } => None,
-        ChatGenerationStreamEvent::Completed {
-            prompt_token_count,
-            generated_token_count,
-            reasoning_token_count,
-            cached_token_count,
-            reason,
-        } => Some(DaemonResponse::ChatGenerationCompleted {
-            prompt_token_count,
-            generated_token_count,
-            reasoning_token_count,
-            cached_token_count,
-            reason,
-        }),
-        ChatGenerationStreamEvent::Failed { reason } => {
-            Some(DaemonResponse::ChatGenerationFailed { reason })
-        }
-        ChatGenerationStreamEvent::Error(stream_error_code) => {
-            Some(DaemonResponse::ChatGenerationFailed {
-                reason: ChatGenerationFailureReason::FatalExecution {
-                    reason: stream_error_code_to_failure_reason(stream_error_code),
-                },
-            })
-        }
-    }
-}
-
-fn stream_error_code_to_failure_reason(stream_error_code: ChatGenerationStreamErrorCode) -> String {
-    match stream_error_code {
-        ChatGenerationStreamErrorCode::WorkerUnavailable => {
-            "the worker became unavailable during the generation".to_owned()
-        }
     }
 }
 

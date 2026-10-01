@@ -248,6 +248,7 @@ async fn should_stream_multiple_responses_for_one_request() {
             seed: None,
             thinking_budget: None,
         },
+        schema_json: None,
     };
     timeout(
         HANDSHAKE_TEST_TIMEOUT,
@@ -359,6 +360,7 @@ async fn should_survive_a_client_disconnect_mid_stream() {
                 seed: None,
                 thinking_budget: None,
             },
+            schema_json: None,
         }),
     )
     .await

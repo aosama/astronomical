@@ -95,8 +95,8 @@ pub enum RespondError {
     DownloadFailed { reason: String },
     #[error("The daemon declined the request: {reason}")]
     GenerationRejected { reason: String },
-    #[error("The model failed to finish the response.")]
-    GenerationFailed,
+    #[error("The model failed to finish the response: {reason}")]
+    GenerationFailed { reason: String },
     #[error("The daemon stopped responding.")]
     DaemonStoppedResponding,
     #[error("Could not write the answer to standard output: {cause}")]
@@ -110,6 +110,18 @@ pub enum RespondError {
          send smaller or fewer --image files"
     )]
     ImageTooLarge {
+        actual_bytes: usize,
+        maximum_bytes: usize,
+    },
+    #[error("could not read schema {path}: {cause}")]
+    SchemaReadFailed { path: PathBuf, cause: String },
+    #[error("{path} is not valid UTF-8 text: {cause}")]
+    SchemaNotUtf8 { path: PathBuf, cause: String },
+    #[error(
+        "the schema file is {actual_bytes} bytes, over the {maximum_bytes}-byte limit; \
+         send a smaller --schema file"
+    )]
+    SchemaTooLarge {
         actual_bytes: usize,
         maximum_bytes: usize,
     },
