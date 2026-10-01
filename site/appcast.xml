@@ -4,40 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.60</title>
-            <pubDate>Tue, 29 Sep 2026 09:57:08 -0400</pubDate>
-            <sparkle:version>745</sparkle:version>
-            <sparkle:shortVersionString>0.2.60</sparkle:shortVersionString>
+            <title>0.2.61</title>
+            <pubDate>Wed, 30 Sep 2026 20:23:06 -0400</pubDate>
+            <sparkle:version>763</sparkle:version>
+            <sparkle:shortVersionString>0.2.61</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.60
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.61
 
-A signed, notarized Stable release distributed through the GitHub release download and the Sparkle update feed.
+Astronomical Stable v0.2.61 ships new user-facing capabilities and model catalog updates.
 
-## What changed
+## What is new
 
-- The prompt cache persists and reuses the previous turn's partial tail block, improving throughput for repeated and follow-up prompts.
-- Qwen3.8-35B-A3B-Distill-oQ6e-mtp is onboarded, with corrected journey decode measurement.
-- The native MLX build streams live progress into CI, and cache eviction no longer forces CMake rebuilds.
-- Native and Rust compilation are fully separated: a prewarm step builds the native runtime before cargo starts, so the two never compete for cores and warm-cache compiles drop from minutes to seconds.
-- The commit gate runs checks in parallel with per-step timing instrumentation.
-- Image requests with out-of-envelope dimensions are rejected before queue admission, failing fast with a clear error instead of failing later in the pipeline.
+- **Respond with images.** `astronomical respond PROMPT --image PATH` is repeatable and attaches raster images (PNG, JPEG, WebP) to the prompt so it can drive vision models. Unsupported, missing, or oversized inputs fail with a clear message.
+- **Thin Talk.** In-app HTML/TypeScript conversation with a sidebar and sessions.
+- **Model catalog.** Added Qwen3.8 35B A3B Distill 4-bit; removed Qwen 3.8 35B A3B Distill oQ6e MTP 6-bit.
+- **Menu.** Reports expert memory mode at worker ready.
 
 ## Compatibility
 
-- Existing model directories, prompt caches, and user state are preserved.
-- Image requests that previously progressed with unsupported dimensions now fail fast at admission; resubmitting with supported dimensions works unchanged.
+macOS 14.0 and above, arm64. Existing libraries, conversations, and instance configuration are preserved; no migration is required.
 
 ## Distribution
 
-- The app bundle and nested Sparkle code are signed with the Developer ID Application identity and Hardened Runtime with secure timestamps.
-- The DMG is notarized by Apple and stapled; the ticket is validated before publication.
-- The Sparkle appcast is signed with the release feed key, and the feed envelope signature is validated after activation.
+Distributed as a Developer-ID-signed, Hardened Runtime, notarized DMG. Automatic updates are delivered through a Sparkle signed feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.60/Astronomical-0.2.60-macOS-arm64.dmg" length="20658526" type="application/octet-stream" sparkle:edSignature="NjP8rs6yqkEeKP3pmPR36X7IYkI8esmVwBmUHVZSIP16/pMxLYdYsRweBCo2PlnbFN1Ao9kfHue1YsDn1IFmAw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.61/Astronomical-0.2.61-macOS-arm64.dmg" length="20693246" type="application/octet-stream" sparkle:edSignature="Whe3lFOTFkcGuKcy1tAkleXaUa1ZVIOxEGNVSdB4SHBxsHAFwGgi1V6U/GJiQVdhKl37ORXo17TBj0tNufn4AQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: xiVCH/plwwqjVO0Z7l0t3YDxyNUkK9obbu3mM+vTjtKwfs05AtcZnw1+xJKu3li+mlVSzTdTrgRGbRhVE2zoCA==
-length: 2775
+edSignature: Jj56DyCas8qsH0YGDVo7NKjmBw5gI4oRslAxW5C7qFPXRfSZAgHiKA/E/7Xf2JVPz7bONO51P4YRmo7VOGmzBQ==
+length: 2148
 -->
