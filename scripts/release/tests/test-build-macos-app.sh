@@ -136,6 +136,7 @@ main() {
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
         "${sandbox_repository}/apps/astronomical-menu/.build/checkouts/Sparkle" \
+        "${sandbox_repository}/apps/thin-talk/web" \
         "${sandbox_repository}/third-party"
     cp "${repository_root}/scripts/internal/build-macos-app.sh" \
         "${sandbox_internal_scripts_directory}/build-macos-app.sh"
@@ -280,6 +281,9 @@ JQ
     for command_name in cmake xcrun install_name_tool plutil; do
         write_successful_command "${fake_command_directory}/${command_name}"
     done
+    # build-macos-app.sh runs `npm ci && npm run build` for the Thin Talk web
+    # assets; stub it so the sandbox never performs a real install.
+    write_successful_command "${fake_command_directory}/npm"
     cat > "${fake_command_directory}/codesign" <<'CODESIGN'
 #!/usr/bin/env sh
 printf '%s\n' "$*" >> "${FAKE_CODESIGN_LOG:?}"
