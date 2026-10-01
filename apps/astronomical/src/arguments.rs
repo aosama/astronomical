@@ -14,7 +14,8 @@ const HELP_TEXT: &str = concat!(
     "Astronomical\n\n",
     "Usage: astronomical launch [tool]\n",
     "       astronomical launch opencode [--model MODEL_ID]\n",
-    "       astronomical respond PROMPT [--image PATH]... [--model MODEL_ID] [--no-stream]\n",
+    "       astronomical respond PROMPT [--text TEXT] [--image PATH]... [--model MODEL_ID]\n",
+    "                                   [--instructions TEXT] [--thinking-budget N] [--no-stream]\n",
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
     "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
     "       astronomical status\n",
@@ -41,15 +42,18 @@ const HELP_TEXT: &str = concat!(
     "  schema object    Build a strict JSON object schema for structured output\n",
     "  validate config  Report effective values of an instance configuration\n\n",
     "Options:\n",
-    "  --model MODEL_ID   Model to use (default: the daemon's effective default model)\n",
-    "  --no-stream        Print the finished respond answer once instead of streaming\n",
-    "  --image PATH       Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
-    "  --file PATH        Embed the file's contents instead of TEXT or stdin\n",
-    "  --instance NAME    Which instance to inspect for validate config (default: development)\n",
-    "  --json             Render the validate config report as JSON\n",
-    "  -v, --verbose      Print launch timings on stderr\n",
-    "  -h, --help         Show this help\n",
-    "  --version          Show the CLI version\n",
+    "  --model MODEL_ID     Model to use (default: the daemon's effective default model)\n",
+    "  --no-stream          Print the finished respond answer once instead of streaming\n",
+    "  --text TEXT          Provide the respond prompt as a flag value instead of the positional PROMPT\n",
+    "  --instructions TEXT  System-prompt-style guidance applied to the respond reply\n",
+    "  --thinking-budget N  Cap the tokens a thinking model may spend reasoning (0-65535; default: think freely)\n",
+    "  --image PATH         Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
+    "  --file PATH          Embed the file's contents instead of TEXT or stdin\n",
+    "  --instance NAME      Which instance to inspect for validate config (default: development)\n",
+    "  --json               Render the validate config report as JSON\n",
+    "  -v, --verbose        Print launch timings on stderr\n",
+    "  -h, --help           Show this help\n",
+    "  --version            Show the CLI version\n",
 );
 
 /// Parsed CLI invocation before any loopback work.
@@ -291,7 +295,10 @@ fn parse_respond_arguments(
     remaining_arguments: &[OsString],
 ) -> Result<RespondArguments, UsageError> {
     let mut prompt = None;
+    let mut prompt_from_text = false;
     let mut model_id = None;
+    let mut instructions = None;
+    let mut thinking_budget = None;
     let mut no_stream = false;
     let mut images = Vec::new();
     let mut argument_index = 0;
@@ -315,6 +322,43 @@ fn parse_respond_arguments(
             argument_index += 2;
             continue;
         }
+        if argument == "--text" {
+            // An alternative to the positional prompt; the two are exclusive.
+            if prompt_from_text {
+                return Err(UsageError::RepeatedArgument("--text"));
+            }
+            if prompt.is_some() {
+                return Err(UsageError::RespondPromptConflict);
+            }
+            prompt = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--text",
+            )?);
+            prompt_from_text = true;
+            argument_index += 2;
+            continue;
+        }
+        if argument == "--instructions" {
+            if instructions.is_some() {
+                return Err(UsageError::RepeatedArgument("--instructions"));
+            }
+            instructions = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--instructions",
+            )?);
+            argument_index += 2;
+            continue;
+        }
+        if argument == "--thinking-budget" {
+            if thinking_budget.is_some() {
+                return Err(UsageError::RepeatedArgument("--thinking-budget"));
+            }
+            thinking_budget = Some(parse_thinking_budget(remaining_arguments, argument_index)?);
+            argument_index += 2;
+            continue;
+        }
         if argument == "--no-stream" {
             if no_stream {
                 return Err(UsageError::RepeatedArgument("--no-stream"));
@@ -329,9 +373,7 @@ fn parse_respond_arguments(
             ));
         }
         if prompt.is_some() {
-            return Err(UsageError::UnknownArgument(
-                argument.to_string_lossy().into_owned(),
-            ));
+            return Err(UsageError::RespondPromptConflict);
         }
         let raw_prompt = argument
             .to_str()
@@ -344,8 +386,25 @@ fn parse_respond_arguments(
         prompt: prompt.ok_or(UsageError::RespondPromptRequired)?,
         images,
         model_id,
+        instructions,
+        thinking_budget,
         no_stream,
     })
+}
+
+/// Parses `--thinking-budget`'s value as a bounded token count. Missing,
+/// empty, flag-shaped, or non-UTF-8 values fail as `MissingValue` through the
+/// shared `flag_value` guard, like every other value-taking flag; a non-numeric
+/// or out-of-`u16` value names the offending text. `0` is valid and means the
+/// model may spend no tokens reasoning.
+fn parse_thinking_budget(
+    remaining_arguments: &[OsString],
+    flag_index: usize,
+) -> Result<u16, UsageError> {
+    let raw_value = flag_value(remaining_arguments, flag_index + 1, "--thinking-budget")?;
+    raw_value
+        .parse::<u16>()
+        .map_err(|_parse_error| UsageError::InvalidThinkingBudget(raw_value))
 }
 
 fn parse_embed_arguments(remaining_arguments: &[OsString]) -> Result<EmbedArguments, UsageError> {

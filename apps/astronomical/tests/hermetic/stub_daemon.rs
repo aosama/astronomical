@@ -12,9 +12,10 @@ use std::{
 };
 
 use astronomical_ipc_protocol::{
-    ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION,
-    DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonRequest, DaemonResponse,
-    DaemonWorkerStatus, EmbeddingsFailureReason, ProtocolReader, ProtocolWriter,
+    ChatGenerationSettings, ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME,
+    DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel,
+    DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, ProtocolReader,
+    ProtocolWriter,
 };
 
 /// One installed model the stub reports for `ModelsList`.
@@ -109,6 +110,12 @@ pub struct StubDaemonConfig {
     /// Captures the images the CLI attached to the most recent `ChatGenerate`,
     /// when a test supplies one. Shared across connections by the Arc clone.
     pub image_capture: Arc<std::sync::Mutex<Option<Vec<ChatImageInput>>>>,
+    /// Captures the full ordered message list the CLI sent on the most recent
+    /// `ChatGenerate`, so a test can assert a system message was prepended.
+    pub messages_capture: Arc<std::sync::Mutex<Option<Vec<ChatMessage>>>>,
+    /// Captures the generation settings the CLI sent on the most recent
+    /// `ChatGenerate`, so a test can assert a thinking budget was carried.
+    pub settings_capture: Arc<std::sync::Mutex<Option<ChatGenerationSettings>>>,
     /// FIFO of jobs for `DownloadStatus` requests; the last entry repeats
     /// once the scripted list is exhausted. `None` means no active job.
     pub download_jobs: Vec<Option<DaemonDownloadJob>>,
@@ -127,6 +134,8 @@ impl Default for StubDaemonConfig {
             embedding_vector: vec![0.25, -0.5],
             download_jobs: Vec::new(),
             image_capture: Arc::new(std::sync::Mutex::new(None)),
+            messages_capture: Arc::new(std::sync::Mutex::new(None)),
+            settings_capture: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
@@ -312,12 +321,27 @@ pub fn spawn_stub_daemon(
                                 .await
                                 .expect("the stub default set should transmit");
                         }
-                        DaemonRequest::ChatGenerate { messages, .. } => {
-                            // Record the images the CLI attached so a journey test
-                            // can assert image bytes actually crossed the boundary.
-                            if let Some(ChatMessage::User { images, .. }) = messages.first() {
+                        DaemonRequest::ChatGenerate {
+                            messages, settings, ..
+                        } => {
+                            // Record the messages and settings the CLI sent so a journey
+                            // test can assert they crossed the boundary.
+                            if let Ok(mut guard) = config.messages_capture.lock() {
+                                *guard = Some(messages.clone());
+                            }
+                            if let Ok(mut guard) = config.settings_capture.lock() {
+                                *guard = Some(settings.clone());
+                            }
+                            // The user's images may sit after a system message, so find
+                            // the first user message rather than assuming it is first.
+                            if let Some(user_images) =
+                                messages.iter().find_map(|message| match message {
+                                    ChatMessage::User { images, .. } => Some(images.clone()),
+                                    _ => None,
+                                })
+                            {
                                 if let Ok(mut guard) = config.image_capture.lock() {
-                                    *guard = Some(images.clone());
+                                    *guard = Some(user_images);
                                 }
                             }
                             for chat_fragment in config.chat_fragments.iter() {

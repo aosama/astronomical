@@ -84,12 +84,22 @@ async fn stream_answer(
 ) -> Result<(), RespondError> {
     let mut daemon_client = daemon_probe.connect().await?;
     let images = read_image_inputs(&respond_arguments.images)?;
+    // The instructions, when given, become the initial system message the
+    // worker renders before the user's prompt; the daemon forwards messages
+    // to the worker unchanged.
+    let mut messages = Vec::new();
+    if let Some(instructions) = &respond_arguments.instructions {
+        messages.push(ChatMessage::System {
+            content: instructions.clone(),
+        });
+    }
+    messages.push(ChatMessage::User {
+        content: respond_arguments.prompt.clone(),
+        images,
+    });
     let chat_generate_request = DaemonRequest::ChatGenerate {
         model: chat_model_id.to_owned(),
-        messages: vec![ChatMessage::User {
-            content: respond_arguments.prompt.clone(),
-            images,
-        }],
+        messages,
         // Zero is the sentinel for "no CLI opinion": the daemon fills the
         // policy default, then the worker-advertised capability limit.
         settings: ChatGenerationSettings {
@@ -97,7 +107,7 @@ async fn stream_answer(
             temperature_thousandths: None,
             top_p_thousandths: None,
             seed: None,
-            thinking_budget: None,
+            thinking_budget: respond_arguments.thinking_budget,
         },
     };
     tokio::time::timeout(
