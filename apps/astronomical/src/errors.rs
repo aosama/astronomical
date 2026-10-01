@@ -67,6 +67,10 @@ pub enum UsageError {
     UnknownInstance(String),
     #[error("respond needs a prompt. Try: astronomical respond 'Hello'")]
     RespondPromptRequired,
+    #[error("respond takes one prompt. Use either the positional PROMPT or --text, not both.")]
+    RespondPromptConflict,
+    #[error("--thinking-budget must be a whole number of tokens from 0 to 65535: {0}")]
+    InvalidThinkingBudget(String),
     #[error("embed takes one input. Pass TEXT, --file PATH, or pipe stdin — not several.")]
     EmbedInputConflict,
     #[error("models needs a subcommand: list, supported, default, download")]
