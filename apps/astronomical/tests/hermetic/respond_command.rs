@@ -5,26 +5,17 @@
 use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::errors::RespondError;
-use astronomical_cli::{
-    CliCommand, RespondArguments, RespondDependencies, UsageError, run_respond,
-};
+use astronomical_cli::{RespondDependencies, run_respond};
+use astronomical_ipc_protocol::{ChatImageInput, ChatMessage};
 use tokio::time::timeout;
 
 use super::stub_daemon::{
     StubCatalogEntry, StubDaemonConfig, StubInstalledModel, spawn_stub_daemon, stub_download_job,
 };
 use super::test_support::{
-    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, parse,
+    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory,
+    respond_arguments, respond_arguments_with,
 };
-
-fn respond_arguments(prompt: &str, model_id: Option<&str>, no_stream: bool) -> RespondArguments {
-    RespondArguments {
-        prompt: prompt.to_owned(),
-        images: Vec::new(),
-        model_id: model_id.map(str::to_owned),
-        no_stream,
-    }
-}
 
 fn respond_dependencies<'a>(
     candidate_socket_paths: Vec<PathBuf>,
@@ -39,101 +30,6 @@ fn respond_dependencies<'a>(
         download_stage_bound: TEST_TIMEOUT,
         download_poll_interval: DOWNLOAD_POLL_INTERVAL,
     }
-}
-
-#[test]
-fn should_parse_respond_with_a_bare_prompt() {
-    let parsed_command =
-        parse(&["respond", "Hello there"]).expect("a bare respond prompt should parse");
-    assert_eq!(
-        parsed_command,
-        CliCommand::Respond(respond_arguments("Hello there", None, false))
-    );
-}
-
-#[test]
-fn should_parse_respond_prompt_with_model_and_no_stream() {
-    let parsed_command = parse(&[
-        "respond",
-        "Hello there",
-        "--model",
-        "test/model",
-        "--no-stream",
-    ])
-    .expect("respond with --model and --no-stream should parse");
-    assert_eq!(
-        parsed_command,
-        CliCommand::Respond(respond_arguments("Hello there", Some("test/model"), true))
-    );
-}
-
-#[test]
-fn should_reject_respond_without_a_prompt_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["respond"]),
-        Err(UsageError::RespondPromptRequired)
-    ));
-}
-
-#[test]
-fn should_reject_respond_with_an_unknown_argument_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["respond", "Hi", "--bogus"]),
-        Err(UsageError::UnknownArgument(argument)) if argument == "--bogus"
-    ));
-}
-
-#[test]
-fn should_parse_repeatable_image_arguments_after_the_prompt() {
-    let parsed_command = parse(&[
-        "respond",
-        "Describe this",
-        "--image",
-        "snapshot.png",
-        "--image",
-        "photo.jpg",
-    ])
-    .expect("respond with repeatable --image should parse");
-    assert_eq!(
-        parsed_command,
-        CliCommand::Respond(RespondArguments {
-            prompt: "Describe this".to_owned(),
-            images: vec![PathBuf::from("snapshot.png"), PathBuf::from("photo.jpg")],
-            model_id: None,
-            no_stream: false,
-        })
-    );
-}
-
-#[test]
-fn should_parse_image_arguments_before_the_prompt() {
-    let parsed_command = parse(&["respond", "--image", "a.png", "Hello there", "--no-stream"])
-        .expect("respond with --image before the prompt should parse");
-    assert_eq!(
-        parsed_command,
-        CliCommand::Respond(RespondArguments {
-            prompt: "Hello there".to_owned(),
-            images: vec![PathBuf::from("a.png")],
-            model_id: None,
-            no_stream: true,
-        })
-    );
-}
-
-#[test]
-fn should_reject_an_image_flag_missing_a_value_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["respond", "Hello", "--image"]),
-        Err(UsageError::MissingValue("--image"))
-    ));
-}
-
-#[test]
-fn should_reject_an_image_flag_with_a_flag_shaped_value_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["respond", "Hello", "--image", "--no-stream"]),
-        Err(UsageError::MissingValue("--image"))
-    ));
 }
 
 #[tokio::test]
@@ -472,6 +368,169 @@ async fn should_send_supplied_image_bytes_to_the_daemon() {
     assert_eq!(
         captured_images[0].decoded_bytes, b"\x89PNG\r\n\x1a\npayload-bytes",
         "the exact image bytes the user supplied should reach the daemon"
+    );
+
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+/// `--instructions` becomes the initial system message the daemon receives,
+/// ordered before the user's prompt.
+#[tokio::test]
+async fn should_send_instructions_as_the_initial_system_message() {
+    use std::sync::{Arc, Mutex};
+    let test_directory = fresh_test_directory("respond", "instructions");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let messages_capture = Arc::new(Mutex::new(None));
+    let mut stub_config = resident_default_stub_config();
+    stub_config.messages_capture = messages_capture.clone();
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), stub_config);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+
+    let respond_outcome = timeout(
+        TEST_TIMEOUT,
+        run_respond(
+            &respond_arguments_with("Say hello", Some("Be terse"), None),
+            &mut respond_dependencies,
+        ),
+    )
+    .await
+    .expect("the respond journey should finish inside the test timeout");
+    respond_outcome.expect("the respond journey should complete against the stub daemon");
+
+    let captured = messages_capture
+        .lock()
+        .expect("the messages capture lock should stay live")
+        .take();
+    let Some(captured_messages) = captured else {
+        panic!("the stub daemon should have captured the messages the CLI sent");
+    };
+    assert_eq!(
+        captured_messages,
+        vec![
+            ChatMessage::System {
+                content: "Be terse".to_owned(),
+            },
+            ChatMessage::User {
+                content: "Say hello".to_owned(),
+                images: vec![],
+            },
+        ],
+        "the instructions must be the initial system message, ordered before the user prompt"
+    );
+
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+/// A system message and an image travel together: the instructions lead, and
+/// the user's image is still attached even though it no longer sits first.
+#[tokio::test]
+async fn should_send_instructions_and_image_together() {
+    use std::sync::{Arc, Mutex};
+    // "instr-image", not "instructions-image": the longer name pushes the
+    // socket path past the sockaddr_un limit once the pid/nanos grow.
+    let test_directory = fresh_test_directory("respond", "instr-image");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let messages_capture = Arc::new(Mutex::new(None));
+    let image_capture = Arc::new(Mutex::new(None));
+    let image_path = test_directory.join("picture.png");
+    std::fs::write(&image_path, b"\x89PNG\r\n\x1a\npayload-bytes")
+        .expect("the fixture image should be writable");
+    let mut stub_config = resident_default_stub_config();
+    stub_config.messages_capture = messages_capture.clone();
+    stub_config.image_capture = image_capture.clone();
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), stub_config);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+
+    let mut arguments = respond_arguments_with("Describe this", Some("Only list the colors"), None);
+    arguments.images = vec![image_path.clone()];
+    let respond_outcome = timeout(
+        TEST_TIMEOUT,
+        run_respond(&arguments, &mut respond_dependencies),
+    )
+    .await
+    .expect("the respond journey should finish inside the test timeout");
+    respond_outcome.expect("the respond journey should complete against the stub daemon");
+
+    let captured_messages = messages_capture
+        .lock()
+        .expect("the messages capture lock should stay live")
+        .take()
+        .expect("the stub daemon should have captured the messages the CLI sent");
+    assert!(
+        matches!(captured_messages.first(), Some(ChatMessage::System { .. })),
+        "the system message must lead when an image is also attached"
+    );
+    assert!(
+        matches!(captured_messages.last(), Some(ChatMessage::User { .. })),
+        "the user message carrying the image must follow the system message"
+    );
+    let captured_images = image_capture
+        .lock()
+        .expect("the image capture lock should stay live")
+        .take();
+    assert_eq!(
+        captured_images,
+        Some(vec![ChatImageInput {
+            mime_type: "image/png".to_owned(),
+            decoded_bytes: b"\x89PNG\r\n\x1a\npayload-bytes".to_vec(),
+        }]),
+        "the image must still cross the boundary even though a system message precedes it"
+    );
+
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+/// `--thinking-budget` is carried to the daemon in the generation settings,
+/// while the CLI keeps the no-opinion sentinel for the output budget.
+#[tokio::test]
+async fn should_send_the_thinking_budget_in_the_generation_settings() {
+    use std::sync::{Arc, Mutex};
+    let test_directory = fresh_test_directory("respond", "thinking-budget");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let settings_capture = Arc::new(Mutex::new(None));
+    let mut stub_config = resident_default_stub_config();
+    stub_config.settings_capture = settings_capture.clone();
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), stub_config);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut respond_dependencies =
+        respond_dependencies(vec![socket_path], &mut stdout, &mut stderr);
+
+    let respond_outcome = timeout(
+        TEST_TIMEOUT,
+        run_respond(
+            &respond_arguments_with("Say hello", None, Some(512)),
+            &mut respond_dependencies,
+        ),
+    )
+    .await
+    .expect("the respond journey should finish inside the test timeout");
+    respond_outcome.expect("the respond journey should complete against the stub daemon");
+
+    let captured = settings_capture
+        .lock()
+        .expect("the settings capture lock should stay live")
+        .take();
+    let Some(captured_settings) = captured else {
+        panic!("the stub daemon should have captured the settings the CLI sent");
+    };
+    assert_eq!(
+        captured_settings.thinking_budget,
+        Some(512),
+        "the thinking budget the user supplied must reach the daemon"
+    );
+    assert_eq!(
+        captured_settings.max_output_tokens, 0,
+        "the CLI keeps the no-opinion sentinel for the output budget"
     );
 
     stub_daemon_task.abort();
