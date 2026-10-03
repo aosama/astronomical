@@ -21,6 +21,8 @@ pub use image_processor::{
     Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
     Qwen3_5ProcessedImage,
 };
+#[cfg(feature = "direct-mlx")]
+pub use vision_attention::Qwen3_5VisionPaddingZeroCache;
 pub use vision_config::Qwen3_5VisionConfig;
 pub use vision_input_plan::{Qwen3_5VisionInputPlan, Qwen3_5VisionInputPlanError};
 #[cfg(feature = "direct-mlx")]

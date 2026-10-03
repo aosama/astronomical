@@ -14,7 +14,7 @@
 use astronomical_runtime_integration::{MlxArray, MlxCompiledElementwiseGraphs, MlxRuntime};
 use std::cell::Cell;
 
-use super::vision_attention::qwen3_5_vision_self_attention;
+use super::vision_attention::{Qwen3_5VisionPaddingZeroCache, qwen3_5_vision_self_attention};
 use super::vision_rotary_embedding::Qwen3_5VisionRotaryEmbedding;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
@@ -29,6 +29,7 @@ pub struct Qwen3_5VisionModel {
     config: Qwen3_5VisionConfig,
     weights: Qwen3_5VisionWeights,
     weights_have_been_used: Cell<bool>,
+    padding_zero_cache: Qwen3_5VisionPaddingZeroCache,
 }
 
 impl Qwen3_5VisionModel {
@@ -59,6 +60,7 @@ impl Qwen3_5VisionModel {
             config,
             weights,
             weights_have_been_used: Cell::new(false),
+            padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
         }))
     }
 
@@ -77,6 +79,7 @@ impl Qwen3_5VisionModel {
             config: vision_config.clone(),
             weights,
             weights_have_been_used: Cell::new(false),
+            padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
         })
     }
 
@@ -288,6 +291,7 @@ impl Qwen3_5VisionModel {
             attention_sequence_boundaries,
             rotary_cosines,
             rotary_sines,
+            &self.padding_zero_cache,
         )?;
         // Pre-normalization transformer block:
         // x = x + Attention(LayerNorm(x)); x = x + MLP(LayerNorm(x)).
