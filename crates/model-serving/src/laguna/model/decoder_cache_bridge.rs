@@ -72,27 +72,74 @@ impl LagunaDecoderState {
         Ok((sequence_state_tensors, boundary_state_tensors))
     }
 
-    /// Restores append-only layers from concatenated blocks and rotating layers from the newest snapshot.
-    pub fn restore_from_cache_blocks(
+    /// Begins the incremental restore: allocates each append-only layer's
+    /// final-length destination from the first block and writes it. Rotating
+    /// layers ignore sequence blocks; they restore from the boundary snapshot
+    /// at finish time.
+    pub fn begin_incremental_cache_block_restore(
         &mut self,
         runtime: &MlxRuntime,
-        sequence_blocks: &mut [HashMap<String, MlxArray>],
+        first_block_tensors: &mut HashMap<String, MlxArray>,
+        restored_token_count: usize,
+    ) -> Result<(), LagunaExecutionError> {
+        let restored_token_count = restored_token_count_i32(restored_token_count)?;
+        for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
+            if let LagunaLayerCacheState::AppendOnly(attention) = layer_state {
+                let first_block_keys = take_block_tensor(first_block_tensors, layer_index, "keys")?;
+                let first_block_values =
+                    take_block_tensor(first_block_tensors, layer_index, "values")?;
+                // Headroom stays zero: Laguna restores exact-length slabs.
+                attention.begin_incremental_block_restore(
+                    runtime,
+                    first_block_keys,
+                    first_block_values,
+                    restored_token_count,
+                    0,
+                )?;
+                evaluate_restored_pair(runtime, attention.keys_state(), attention.values_state())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Writes one sequence block into every append-only layer's
+    /// preallocated destination at the block's token range.
+    pub fn absorb_incremental_cache_block(
+        &mut self,
+        runtime: &MlxRuntime,
+        block_tensors: &mut HashMap<String, MlxArray>,
+        block_start_tokens: usize,
+    ) -> Result<(), LagunaExecutionError> {
+        let block_start_tokens = restored_token_count_i32(block_start_tokens)?;
+        for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
+            if let LagunaLayerCacheState::AppendOnly(attention) = layer_state {
+                let block_keys = take_block_tensor(block_tensors, layer_index, "keys")?;
+                let block_values = take_block_tensor(block_tensors, layer_index, "values")?;
+                attention.absorb_incremental_restore_block(
+                    runtime,
+                    block_keys,
+                    block_values,
+                    block_start_tokens,
+                )?;
+                evaluate_restored_pair(runtime, attention.keys_state(), attention.values_state())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Completes the restore: append-only layers record the restored offset,
+    /// and rotating layers restore from the newest boundary snapshot.
+    pub fn finish_incremental_cache_block_restore(
+        &mut self,
+        runtime: &MlxRuntime,
+        restored_token_count: usize,
         boundary_snapshot: &mut HashMap<String, MlxArray>,
     ) -> Result<(), LagunaExecutionError> {
+        let restored_token_count = restored_token_count_i32(restored_token_count)?;
         for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
             match layer_state {
                 LagunaLayerCacheState::AppendOnly(attention) => {
-                    let restored_keys = concatenate_taken_blocks(
-                        runtime,
-                        sequence_blocks,
-                        &format!("layer_{layer_index}_attention.keys"),
-                    )?;
-                    let restored_values = concatenate_taken_blocks(
-                        runtime,
-                        sequence_blocks,
-                        &format!("layer_{layer_index}_attention.values"),
-                    )?;
-                    attention.restore_from_blocks(restored_keys, restored_values)?;
+                    attention.finish_incremental_block_restore(restored_token_count)?;
                     evaluate_restored_pair(
                         runtime,
                         attention.keys_state(),
@@ -135,6 +182,25 @@ impl LagunaDecoderState {
         }
         Ok(())
     }
+}
+
+fn restored_token_count_i32(token_count: usize) -> Result<i32, LagunaExecutionError> {
+    i32::try_from(token_count).map_err(|_| {
+        LagunaExecutionError::invalid_geometry("restored token count exceeds the i32 range")
+    })
+}
+
+fn take_block_tensor(
+    block_tensors: &mut HashMap<String, MlxArray>,
+    layer_index: usize,
+    tensor_role: &'static str,
+) -> Result<MlxArray, LagunaExecutionError> {
+    let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
+    block_tensors
+        .remove(&tensor_name)
+        .ok_or_else(|| LagunaExecutionError::RuntimeOperation {
+            description: format!("a sequence cache block is missing a tensor: {tensor_name}"),
+        })
 }
 
 fn slice_token_range(
@@ -210,27 +276,6 @@ fn slice_leading_tokens(
         &[shape[0], shape[1], live_token_count, shape[3]],
         &[1, 1, 1, 1],
     )?)
-}
-
-fn concatenate_taken_blocks(
-    runtime: &MlxRuntime,
-    sequence_blocks: &mut [HashMap<String, MlxArray>],
-    tensor_name: &str,
-) -> Result<MlxArray, LagunaExecutionError> {
-    let mut block_tensors = Vec::new();
-    for sequence_block in sequence_blocks {
-        let block_tensor = sequence_block.remove(tensor_name).ok_or_else(|| {
-            LagunaExecutionError::invalid_geometry("a sequence cache block is missing a tensor")
-        })?;
-        block_tensors.push(block_tensor);
-    }
-    if block_tensors.len() == 1 {
-        return block_tensors.pop().ok_or_else(|| {
-            LagunaExecutionError::invalid_geometry("a sequence cache block is missing a tensor")
-        });
-    }
-    let block_tensor_refs = block_tensors.iter().collect::<Vec<_>>();
-    Ok(runtime.concatenate_axis(&block_tensor_refs, 2)?)
 }
 
 fn take_scalar_counter(

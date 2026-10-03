@@ -41,8 +41,8 @@ pub use text::{
 pub use engine::{K2HorizonMoVAEngine, K2HorizonMoVAInferenceExecution};
 #[cfg(feature = "direct-mlx")]
 pub use model::{
-    FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, gathered_fused_swiglu,
-    gathered_value_experts,
+    FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, K2HorizonMoVAKvState,
+    gathered_fused_swiglu, gathered_value_experts,
 };
 pub use serving_settings::K2HorizonMoVAServingSettings;
 #[cfg(feature = "direct-mlx")]

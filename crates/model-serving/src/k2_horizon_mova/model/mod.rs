@@ -4,6 +4,7 @@ mod affine;
 mod decoder;
 mod error;
 mod fused_expert_decode;
+mod kv_state_restore;
 mod model;
 mod ops;
 mod quantized_attention;

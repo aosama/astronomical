@@ -151,7 +151,16 @@ pub(super) fn restore_prompt_prefix(
     }
     let block_token_count = persistent_prompt_cache.model_contract.block_token_count();
     let complete_block_count = restored_token_count / block_token_count;
-    let mut sequence_blocks = Vec::with_capacity(complete_block_count);
+    if complete_block_count == 0 {
+        return Err(InferenceEngineError::Fatal {
+            reason: "Laguna prompt-cache restore found no complete block for a nonzero restored token count".to_owned(),
+        });
+    }
+    let restored_sequence_token_count = complete_block_count * block_token_count;
+
+    // Lookup already proved every block exists. Load and absorb one block at
+    // a time so the restore peak stays at the final destination plus one
+    // block instead of pinning the complete prefix beside seated experts.
     let mut last_restored_block_key = None;
     for block_index in 0..complete_block_count {
         let block_start = block_index * block_token_count;
@@ -161,7 +170,7 @@ pub(super) fn restore_prompt_prefix(
             &prompt_token_ids[block_start..block_end],
             last_restored_block_key.as_ref(),
         )?;
-        let loaded_sequence_block = performance_attribution
+        let mut loaded_sequence_block = performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheKvBlockRead,
                 |attribution| {
@@ -179,7 +188,30 @@ pub(super) fn restore_prompt_prefix(
                 reason: "Laguna prompt-cache sequence block was reported present but missing"
                     .to_owned(),
             })?;
-        sequence_blocks.push(loaded_sequence_block);
+        let is_first_block = block_index == 0;
+        performance_attribution
+            .measure_operation(
+                PerformanceOperation::PersistentPromptCacheStateReconstruction,
+                |_performance_attribution| {
+                    if is_first_block {
+                        decoder_state.begin_incremental_cache_block_restore(
+                            runtime,
+                            &mut loaded_sequence_block,
+                            restored_sequence_token_count,
+                        )
+                    } else {
+                        decoder_state.absorb_incremental_cache_block(
+                            runtime,
+                            &mut loaded_sequence_block,
+                            block_start,
+                        )
+                    }
+                },
+            )
+            .map_err(|restore_error| InferenceEngineError::Fatal {
+                reason: format!("Laguna prompt-cache restore failed: {restore_error:?}"),
+            })?;
+        drop(loaded_sequence_block);
         last_restored_block_key = Some(block_key);
     }
     let snapshot_key =
@@ -220,9 +252,9 @@ pub(super) fn restore_prompt_prefix(
         .measure_operation(
             PerformanceOperation::PersistentPromptCacheStateReconstruction,
             |_performance_attribution| {
-                decoder_state.restore_from_cache_blocks(
+                decoder_state.finish_incremental_cache_block_restore(
                     runtime,
-                    &mut sequence_blocks,
+                    restored_sequence_token_count,
                     &mut boundary_snapshot,
                 )
             },
@@ -230,7 +262,6 @@ pub(super) fn restore_prompt_prefix(
         .map_err(|restore_error| InferenceEngineError::Fatal {
             reason: format!("Laguna prompt-cache restore failed: {restore_error:?}"),
         })?;
-    drop(sequence_blocks);
     Ok((
         last_restored_block_key,
         u32::try_from(restored_token_count).unwrap_or(u32::MAX),
