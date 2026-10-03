@@ -248,7 +248,112 @@ impl std::error::Error for LocalOpenAiClientError {}
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use futures_util::StreamExt;
+    use serde_json::json;
+    use tokio::{net::TcpListener, time::timeout};
+
     use super::*;
+
+    /// Serves one scripted HTTP response over loopback and returns the bound address.
+    ///
+    /// The server accepts a single connection and writes the response without
+    /// draining the request body; the test requests are small enough to fit in
+    /// the loopback socket buffer, so the client's write cannot block.
+    async fn serve_one_response(response_text: &str) -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("the loopback listener should bind");
+        let server_address = listener
+            .local_addr()
+            .expect("the loopback listener should report its address");
+        // The spawned server task outlives this function, so the scripted
+        // response must be owned rather than borrowed.
+        let owned_response_text = response_text.to_owned();
+        tokio::spawn(async move {
+            let Ok((mut connection, _)) = listener.accept().await else {
+                return;
+            };
+            let _ = connection.write_all(owned_response_text.as_bytes()).await;
+        });
+        server_address
+    }
+
+    #[tokio::test]
+    async fn should_stream_sse_chunks_over_loopback_until_the_done_sentinel() {
+        let response_text = [
+            "HTTP/1.1 200 OK\r\n",
+            "Content-Type: text/event-stream\r\n",
+            "\r\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\n",
+            "data: [DONE]\n\n",
+        ]
+        .concat();
+        let server_address = serve_one_response(&response_text).await;
+        let client = LocalOpenAiClient::new(server_address, "test-api-key");
+        let request = json!({ "model": "test-model", "messages": [], "stream": true });
+        let collected_chunks = timeout(Duration::from_secs(30), async {
+            let mut chunk_stream = client
+                .create_streaming_chat_completion(&request)
+                .await
+                .expect("the loopback stream should start");
+            let mut collected = Vec::new();
+            while let Some(chunk) = chunk_stream.next().await {
+                collected.push(chunk.expect("the loopback chunk should succeed"));
+            }
+            collected
+        })
+        .await
+        .expect("the loopback stream should finish within the timeout");
+        assert_eq!(
+            collected_chunks.len(),
+            2,
+            "the stream should yield exactly two content chunks"
+        );
+        assert_eq!(
+            collected_chunks[0]["choices"][0]["delta"]["content"],
+            "hello"
+        );
+        assert_eq!(
+            collected_chunks[1]["choices"][0]["delta"]["content"],
+            " world"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_bound_an_oversized_non_success_body_to_the_error_limit() {
+        let oversized_body = "x".repeat(ERROR_BODY_BOUND_BYTES as usize * 2);
+        let response_text = format!(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\n{oversized_body}"
+        );
+        let server_address = serve_one_response(&response_text).await;
+        let client = LocalOpenAiClient::new(server_address, "test-api-key");
+        let request = json!({ "model": "test-model", "messages": [], "stream": true });
+        let request_outcome = timeout(
+            Duration::from_secs(30),
+            client.create_streaming_chat_completion(&request),
+        )
+        .await
+        .expect("the loopback error response should arrive within the timeout");
+        let request_error = match request_outcome {
+            Ok(_) => panic!("a non-2xx status should fail the request"),
+            Err(request_error) => request_error,
+        };
+        let LocalOpenAiClientError::HttpStatus { status, body } = request_error else {
+            panic!("the non-2xx response should surface an HttpStatus error");
+        };
+        assert!(
+            status.starts_with("HTTP/1.1 500"),
+            "the status line should carry the 500 status: {status}"
+        );
+        assert_eq!(
+            body.len(),
+            ERROR_BODY_BOUND_BYTES as usize,
+            "the error body should be bounded to the limit"
+        );
+    }
 
     #[test]
     fn should_parse_a_data_payload_line_into_a_chunk() {
