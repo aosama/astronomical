@@ -37,43 +37,52 @@ async fn should_generate_identical_continuation_regardless_of_prefill_chunking()
         "[k2-prefill-causality] status=start timeout_seconds={}",
         ACCEPTANCE_TIMEOUT.as_secs()
     );
-    timeout(ACCEPTANCE_TIMEOUT, run_prefill_chunk_causality_acceptance())
-        .await
-        .expect("the prefill chunk causality acceptance should finish within 115 seconds");
-}
-
-async fn run_prefill_chunk_causality_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_installed_model_directory_by_id(
         crate::common::k2_horizon_mova_model_id(),
     );
     let memory_limits = crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
-    let prompt_token_ids = romeo_and_juliet_prompt_token_ids(&model_directory);
-    eprintln!(
-        "[k2-prefill-causality] status=prompt-ready prompt_tokens={}",
-        prompt_token_ids.len()
-    );
+    // The journey body is synchronous GPU work that Tokio cannot interrupt
+    // mid-call, so it runs as one blocking task and the deadline fails the
+    // journey on an overrun; the bounded runner's process-tree kill stays the
+    // hard backstop against a wedged MLX call.
+    let blocking_journey = tokio::task::spawn_blocking(move || {
+        let prompt_token_ids = romeo_and_juliet_prompt_token_ids(&model_directory);
+        eprintln!(
+            "[k2-prefill-causality] status=prompt-ready prompt_tokens={}",
+            prompt_token_ids.len()
+        );
+        run_prefill_chunk_causality_acceptance(&model_directory, &memory_limits, &prompt_token_ids)
+    });
+    timeout(ACCEPTANCE_TIMEOUT, blocking_journey)
+        .await
+        .expect("the prefill chunk causality acceptance should finish within 115 seconds")
+        .expect("the blocking journey should join");
+}
 
+fn run_prefill_chunk_causality_acceptance(
+    model_directory: &std::path::Path,
+    memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
+    prompt_token_ids: &[u32],
+) {
     // One prefill chunk spanning the whole prompt is causally correct by
     // construction: the causal kernel aligns its mask diagonal when the cache
     // is empty, so this leg is the reference any chunked prefill must
     // reproduce with the same seed.
     let single_chunk_continuation = generate_continuation(
-        &model_directory,
-        &memory_limits,
-        &prompt_token_ids,
+        model_directory,
+        memory_limits,
+        prompt_token_ids,
         SINGLE_CHUNK_TOKEN_COUNT,
-    )
-    .await;
+    );
     eprintln!("[k2-prefill-causality] single_chunk_continuation={single_chunk_continuation:?}");
 
     let multi_chunk_continuation = generate_continuation(
-        &model_directory,
-        &memory_limits,
-        &prompt_token_ids,
+        model_directory,
+        memory_limits,
+        prompt_token_ids,
         MULTI_CHUNK_TOKEN_COUNT,
-    )
-    .await;
+    );
     eprintln!("[k2-prefill-causality] multi_chunk_continuation={multi_chunk_continuation:?}");
     assert_eq!(
         single_chunk_continuation, multi_chunk_continuation,
@@ -84,7 +93,7 @@ async fn run_prefill_chunk_causality_acceptance() {
     eprintln!("[k2-prefill-causality] status=success");
 }
 
-async fn generate_continuation(
+fn generate_continuation(
     model_directory: &std::path::Path,
     memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
     prompt_token_ids: &[u32],

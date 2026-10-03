@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{ChatMessage, ChatToolChoice};
@@ -33,10 +34,22 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(concat!(
 ));
 const PROMPT_TOKEN_COUNT: usize = 200;
 const KV_STATE_GROWTH_TOKENS: u32 = 256;
+/// The probe deadline. The synchronous MLX work cannot be interrupted, so the
+/// timeout fails the journey when the blocking task overruns and the bounded
+/// runner's process-tree kill remains the hard backstop.
+const PROBE_DEADLINE: Duration = Duration::from_secs(115);
 
-#[test]
+#[tokio::test]
 #[ignore = "requires model_directories to discover a stacked affine K2 Horizon MoVA artifact"]
-fn should_prefill_chunking_preserve_single_chunk_logits() {
+async fn should_prefill_chunking_preserve_single_chunk_logits() {
+    let probe_journey = tokio::task::spawn_blocking(probe_body);
+    tokio::time::timeout(PROBE_DEADLINE, probe_journey)
+        .await
+        .expect("the causality probe should finish within 115 seconds")
+        .expect("the causality probe blocking task should join");
+}
+
+fn probe_body() {
     let runtime = probe_runtime();
     let model = load_probe_model(runtime);
     let prompt_token_ids = romeo_and_juliet_prompt_token_ids(&model);
@@ -70,8 +83,21 @@ fn should_prefill_chunking_preserve_single_chunk_logits() {
     );
     eprintln!("[k2-prefill-causality-probe] chunked divergence={chunked_divergence:?}");
 
-    let (noise_baseline_maximum, _, _) = noise_baseline_divergence;
-    let (chunked_maximum, _, _) = chunked_divergence;
+    let (noise_baseline_maximum, _, noise_baseline_exceedance_count_two) =
+        noise_baseline_divergence;
+    let (chunked_maximum, _, chunked_exceedance_count_two) = chunked_divergence;
+    // The stated acceptance bound: no logit may move by more than 2.0. The
+    // clean-by-construction baseline enforces the same bound on the noise
+    // floor itself, so a noisy environment fails loudly instead of widening.
+    assert_eq!(
+        noise_baseline_exceedance_count_two, 0,
+        "the noise-floor split must not move any logit by more than 2.0"
+    );
+    assert_eq!(
+        chunked_exceedance_count_two, 0,
+        "chunked prefill must not move any logit by more than 2.0 from the \
+         single-chunk reference: chunked_exceedance_count_two={chunked_exceedance_count_two}"
+    );
     assert!(
         chunked_maximum <= noise_baseline_maximum * 4.0 + 0.5,
         "chunked prefill diverged from the single-chunk reference beyond the \
