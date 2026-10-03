@@ -4,33 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.62</title>
-            <pubDate>Sat, 03 Oct 2026 01:03:21 -0400</pubDate>
-            <sparkle:version>771</sparkle:version>
-            <sparkle:shortVersionString>0.2.62</sparkle:shortVersionString>
+            <title>0.2.63</title>
+            <pubDate>Sat, 03 Oct 2026 09:54:32 -0400</pubDate>
+            <sparkle:version>776</sparkle:version>
+            <sparkle:shortVersionString>0.2.63</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.62
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.63
 
 ## What's new
 
-- `astronomical respond` adds `--text`, `--instructions`, and `--thinking-budget` controls.
-- REST structured-output requests now receive the schema-derived instruction alongside JSON Schema enforcement, matching the CLI behavior.
-- Qwen3.5 A3B uses a fused Metal GDN decode-prework kernel on eligible bf16 workers; other configurations retain the composed implementation.
-- The retired draft-assisted prefill feature is removed. Dense full-prompt processing, persistent prompt caching, and native multi-token prediction remain.
+- Persistent prompt-cache restoration for Qwen3.5, K2 Horizon MoVA, and Laguna now loads, evaluates, and releases one source block at a time into a final-size destination, reducing peak memory during cache hits.
+- Laguna cache-hit admission now budgets for one restore block or boundary snapshot instead of the complete restored prefix.
+- Unused Rust dependencies were removed from runtime and test dependency graphs without changing application behavior.
 
 ## Compatibility
 
-Startup removes obsolete settings and feature-specific cache artifacts from the retired prefill feature. Model files, unrelated user settings, and the remaining prompt-cache behavior are preserved.
+No REST API, configuration, model artifact, or prompt-cache format change is intended. Existing model files, user settings, and saved prompt-cache data remain in place.
 
 ## Distribution
 
 The macOS disk image is Developer ID signed and notarized, and the Sparkle update feed is signed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.62/Astronomical-0.2.62-macOS-arm64.dmg" length="20464536" type="application/octet-stream" sparkle:edSignature="2gGGAjPPZZsha9BUoZBAp4kXXHxOItu6DP8uHMzAOcrD7bCd9jtiUc6iRSrH52JDK6p72+eOMlTO6kmFv+lYBQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.63/Astronomical-0.2.63-macOS-arm64.dmg" length="20475889" type="application/octet-stream" sparkle:edSignature="1Qf18S879hL0BlZ0Zzz50Qi0rGb8W6ilXetq1aD7zQY6CNQPfdQrMSyhiTGUdpnySridPHKnzapeoxInjQTQAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: BZ3pBJZiPciFp2JDqBITeh7pIz3Fn4EevsYlgDuiaWyu5BE54QwOBZ42KzqEwHDb+XrjUnHoWwc+oLgiD3AbDg==
-length: 2127
+edSignature: 69WGvvO6ztLJzEpzmeo0agdn2KurIThfaWzrkjRnsr61dkvLL7e7GJiFaBzqJaupvd13cMgD0EhXm4RRn+0RCA==
+length: 2025
 -->
