@@ -49,6 +49,40 @@ impl DecoderCacheLayout {
         )
     }
 
+    /// Returns the largest source payload live during one incremental cache restore step.
+    ///
+    /// Sequence blocks and the boundary snapshot load at separate times, so admission needs the
+    /// larger source rather than the sum of both.
+    pub fn incremental_restore_source_workspace_byte_count(
+        &self,
+        sequence_block_token_count: usize,
+    ) -> Result<usize, DecoderCacheLayoutError> {
+        let sequence_source_pair_bytes = self
+            .maximum_sequence_tensor_payload_byte_count(sequence_block_token_count)?
+            .checked_mul(2)
+            .ok_or(DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?;
+        let maximum_boundary_tensor_bytes = self.boundary_tensor_layouts().iter().try_fold(
+            0_usize,
+            |maximum_tensor_bytes, persisted_tensor_layout| {
+                persisted_tensor_layout
+                    .tensor_layout()
+                    .fixed_payload_byte_count()
+                    .map(|tensor_bytes| maximum_tensor_bytes.max(tensor_bytes))
+            },
+        )?;
+        let paired_boundary_tensor_bytes = maximum_boundary_tensor_bytes
+            .checked_mul(2)
+            .and_then(|paired_tensor_bytes| {
+                std::mem::size_of::<f32>()
+                    .checked_mul(2)
+                    .and_then(|boundary_metadata_bytes| {
+                        paired_tensor_bytes.checked_add(boundary_metadata_bytes)
+                    })
+            })
+            .ok_or(DecoderCacheLayoutError::BoundarySnapshotPayloadByteCountOverflow)?;
+        Ok(sequence_source_pair_bytes.max(paired_boundary_tensor_bytes))
+    }
+
     /// Returns payload bytes for one complete boundary snapshot.
     pub fn boundary_snapshot_payload_byte_count(&self) -> Result<usize, DecoderCacheLayoutError> {
         self.boundary_tensor_layouts().iter().try_fold(

@@ -165,12 +165,16 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
         let restored_prompt_prefix_token_count = prompt_cache_lookup
             .as_ref()
             .map_or(0, |lookup_result| lookup_result.restored_token_count());
+        let prompt_cache_block_token_count = persistent_prompt_cache
+            .as_ref()
+            .map_or(0, |store| store.model_contract.block_token_count());
         self.admit_generation_context(
             prompt_token_ids.len(),
             maximum_forward_token_count,
             // Boundary snapshot bytes exist only when this request may publish cache.
             persistent_prompt_cache.is_some(),
             restored_prompt_prefix_token_count,
+            prompt_cache_block_token_count,
             &mut performance_attribution,
         )?;
         let Some(runtime) = self.runtime.as_ref() else {
@@ -218,6 +222,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                     .saturating_sub(restored_prompt_prefix_token_count as usize),
                 maximum_forward_token_count,
                 false,
+                0,
                 0,
                 &mut performance_attribution,
             )?;
