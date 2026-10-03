@@ -126,8 +126,8 @@ fn should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot(
         decoder_cache_layout
             .incremental_restore_source_workspace_byte_count(2)
             .expect("the boundary snapshot source should fit"),
-        264,
-        "the boundary source must remain budgeted when larger than one sequence block"
+        176,
+        "the complete boundary snapshot must remain budgeted when larger than one sequence block"
     );
     assert_eq!(
         decoder_cache_layout
