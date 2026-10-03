@@ -111,6 +111,30 @@ impl K2HorizonMoVAConfig {
                 description: "mova_num_experts_per_tok cannot exceed mova_num_experts".to_owned(),
             });
         }
+        // These knobs would change attention or FFN math this family does not
+        // implement yet; serving a member that declares them silently wrong is
+        // worse than refusing the artifact, so each one fails closed here.
+        if document.attention_bias {
+            return Err(K2HorizonMoVAConfigError::InvalidConfigValue {
+                description: "attention_bias is declared but attention biases are not bound yet"
+                    .to_owned(),
+            });
+        }
+        if document.query_key_norm {
+            return Err(K2HorizonMoVAConfigError::InvalidConfigValue {
+                description:
+                    "query_key_norm is declared but query/key normalization is not implemented yet"
+                        .to_owned(),
+            });
+        }
+        if document.num_shared_experts > 1 {
+            return Err(K2HorizonMoVAConfigError::InvalidConfigValue {
+                description: format!(
+                    "num_shared_experts {} exceeds the one shared expert the serving path binds",
+                    document.num_shared_experts
+                ),
+            });
+        }
         let attention_gate_func = match document.attention_gate_func.as_deref() {
             None => None,
             Some("silu") => Some(K2HorizonMoVAAttentionGateFunc::Silu),
@@ -131,12 +155,18 @@ impl K2HorizonMoVAConfig {
                 description: format!("unsupported rope_type '{rope_type}'"),
             });
         }
+        // A silent rope default would bake one artifact's geometry into the
+        // family and rotate every position for a member that omits the field,
+        // so the theta must be declared in either accepted location.
         let rope_theta = document
             .rope_parameters
             .as_ref()
             .and_then(|parameters| parameters.rope_theta)
             .or(document.rope_theta)
-            .unwrap_or(10_000_000.0);
+            .ok_or(K2HorizonMoVAConfigError::InvalidConfigValue {
+                description: "rope_theta must be declared in rope_parameters or at the top level"
+                    .to_owned(),
+            })?;
         let quantization_document = document
             .quantization
             .as_ref()

@@ -103,6 +103,8 @@ impl K2HorizonMoVAInferenceExecution {
         let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
         let expert_payload_bytes = model.weights.expert_payload_bytes();
         let model_core_payload_bytes = model.weights.model_core_payload_bytes();
+        // The breakdown reconciles against the physical slabs, so context
+        // state counts over-allocated growth capacity, not just logical tokens.
         let context_state_payload_bytes = self.active.as_ref().map_or(0, |active_generation| {
             context_state_payload_bytes(&active_generation.caches)
         });

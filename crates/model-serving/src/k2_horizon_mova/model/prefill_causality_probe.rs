@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{ChatMessage, ChatToolChoice};
 use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledSwiGlu, MlxDtype, MlxMemoryLimits, MlxRuntime,
-    maximum_recommended_gpu_working_set_size_bytes,
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxMemoryLimits,
+    MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
 
 use crate::PerformanceAttribution;
@@ -157,6 +157,8 @@ fn load_probe_model(runtime: MlxRuntime) -> K2HorizonMoVAModel {
         config: validated_artifact.config().clone(),
         weights,
         compiled_swiglu: MlxCompiledSwiGlu::new().expect("probe SwiGLU should compile"),
+        compiled_elementwise_graphs: MlxCompiledElementwiseGraphs::new()
+            .expect("probe elementwise graphs should compile"),
         sorted_expert_reduction_kernel: None,
         fused_expert_decode_kernels: None,
     }

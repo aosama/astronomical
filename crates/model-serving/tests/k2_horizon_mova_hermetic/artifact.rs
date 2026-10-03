@@ -26,6 +26,30 @@ fn should_validate_a_tiny_stacked_affine_family_member() {
 }
 
 #[test]
+fn should_prefer_the_provenance_revision_over_the_config_hash() {
+    let temporary_directory = tempfile::tempdir().expect("temp dir");
+    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let without_provenance = K2HorizonMoVAArtifactValidator::new()
+        .validate(&model_directory)
+        .expect("the fixture should validate without a provenance file");
+    let config_hash_revision = without_provenance.revision().to_owned();
+    fs::write(
+        model_directory.join(".astronomical-library-provenance.json"),
+        r#"{"provider_model_id":"example/model","revision":"0c576733b69e","schema_version":1}"#,
+    )
+    .expect("provenance file should be written");
+    let with_provenance = K2HorizonMoVAArtifactValidator::new()
+        .validate(&model_directory)
+        .expect("the fixture should validate with a provenance file");
+    assert_eq!(with_provenance.revision(), "0c576733b69e");
+    assert_ne!(
+        config_hash_revision,
+        with_provenance.revision(),
+        "the provenance revision must take precedence over the config hash"
+    );
+}
+
+#[test]
 fn should_reject_unstacked_per_expert_tensors() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
     let model_directory = write_stacked_affine_fixture(temporary_directory.path());
@@ -80,5 +104,23 @@ fn should_reject_wrong_model_type_directories() {
         K2HorizonMoVAArtifactValidator::new()
             .validate(&model_directory)
             .is_err()
+    );
+}
+
+#[test]
+fn should_reject_sparse_feed_forward_members_as_not_executable_yet() {
+    let temporary_directory = tempfile::tempdir().expect("temp dir");
+    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    fs::write(
+        model_directory.join("config.json"),
+        family_member_config_json(2, &[0], 4, 0),
+    )
+    .expect("sparse feed-forward config should be written");
+    let validation_error = K2HorizonMoVAArtifactValidator::new()
+        .validate(&model_directory)
+        .expect_err("a sparse feed-forward member has no executable serving path yet");
+    assert!(
+        validation_error.to_string().contains("not executable yet"),
+        "the rejection must say the member is not executable: {validation_error}"
     );
 }

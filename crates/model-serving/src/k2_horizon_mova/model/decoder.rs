@@ -1,6 +1,8 @@
 //! Dense GQA, MoVA attention, and dense/sparse FFN for one decoder layer.
 
-use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::{
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
+};
 
 use crate::PerformanceAttribution;
 use crate::decoder_cache::{FullAttentionKeyValueState, QuantizedFullAttentionKeyValueState};
@@ -71,6 +73,7 @@ pub fn forward_layer(
     rope_offset: i32,
     is_causal: bool,
     compiled_swiglu: &MlxCompiledSwiGlu,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
     performance_attribution: &mut PerformanceAttribution,
@@ -98,6 +101,7 @@ pub fn forward_layer(
                 cache,
                 rope_offset,
                 is_causal,
+                compiled_elementwise_graphs,
                 performance_attribution,
                 stage_attribution,
             )?;
@@ -140,6 +144,7 @@ pub fn forward_layer(
                 cache,
                 rope_offset,
                 is_causal,
+                compiled_elementwise_graphs,
                 fused_expert_decode,
                 performance_attribution,
                 stage_attribution,
@@ -176,6 +181,7 @@ fn dense_attention(
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
     is_causal: bool,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
@@ -221,6 +227,7 @@ fn dense_attention(
         cache,
         rope_offset,
         is_causal,
+        compiled_elementwise_graphs,
         performance_attribution,
         stage_attribution,
     )
@@ -234,6 +241,7 @@ fn mova_attention(
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
     is_causal: bool,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
@@ -322,6 +330,7 @@ fn mova_attention(
         cache,
         rope_offset,
         is_causal,
+        compiled_elementwise_graphs,
         performance_attribution,
         stage_attribution,
     )
@@ -339,6 +348,7 @@ fn finish_attention(
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
     is_causal: bool,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
@@ -400,6 +410,7 @@ fn finish_attention(
         attention,
         o_proj,
         gate_proj,
+        compiled_elementwise_graphs,
         performance_attribution,
         stage_attribution,
     )
@@ -414,6 +425,7 @@ fn apply_attention_tail(
     attention: MlxArray,
     o_proj: &super::affine::K2HorizonMoVAAffineLinear,
     gate_proj: Option<&super::affine::K2HorizonMoVAAffineLinear>,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
@@ -421,6 +433,7 @@ fn apply_attention_tail(
     if let (Some(gate_proj), Some(gate_func)) = (gate_proj, config.attention_gate_func()) {
         let gate = attention_gate(
             runtime,
+            compiled_elementwise_graphs,
             hidden_states,
             gate_proj,
             gate_func,
