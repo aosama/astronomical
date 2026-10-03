@@ -4,32 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.63</title>
-            <pubDate>Sat, 03 Oct 2026 09:54:32 -0400</pubDate>
-            <sparkle:version>776</sparkle:version>
-            <sparkle:shortVersionString>0.2.63</sparkle:shortVersionString>
+            <title>0.2.64</title>
+            <pubDate>Sat, 03 Oct 2026 13:27:20 -0400</pubDate>
+            <sparkle:version>781</sparkle:version>
+            <sparkle:shortVersionString>0.2.64</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.63
+            <description sparkle:format="markdown"><![CDATA[# Release Astronomical 0.2.64
+
+Astronomical 0.2.64 is a maintenance release for the Stable channel that improves session restore performance and hardens the K2 Horizon MoVA model.
 
 ## What's new
-
-- Persistent prompt-cache restoration for Qwen3.5, K2 Horizon MoVA, and Laguna now loads, evaluates, and releases one source block at a time into a final-size destination, reducing peak memory during cache hits.
-- Laguna cache-hit admission now budgets for one restore block or boundary snapshot instead of the complete restored prefix.
-- Unused Rust dependencies were removed from runtime and test dependency graphs without changing application behavior.
+- **Faster prompt-cache restore.** Restoring a saved conversation no longer rebuilds the cached context one block at a time. Restoring long sessions — the ones that cache the most — completes noticeably faster, with fewer GPU stalls during the restore handshake.
+- **K2 Horizon MoVA prefill fix.** Chunked generation no longer attends over tokens it should not, so token probabilities stay stable no matter how a long prompt is split into chunks.
+- **K2 Horizon MoVA hardening.** Unsupported or misconfigured model artifacts are now rejected early with a clear message instead of failing later, and the model's tool-call JSON parsing is more robust.
 
 ## Compatibility
+This release requires the existing public model artifacts. No configuration or model files changed.
 
-No REST API, configuration, model artifact, or prompt-cache format change is intended. Existing model files, user settings, and saved prompt-cache data remain in place.
+## Your data is preserved
+Existing saved sessions and prompt caches remain valid and unchanged; no action is required on your part.
 
 ## Distribution
-
-The macOS disk image is Developer ID signed and notarized, and the Sparkle update feed is signed.
+This build is code-signed, notarized, and distributed as a DMG from the standard public download link and via the Sparkle signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.63/Astronomical-0.2.63-macOS-arm64.dmg" length="20475889" type="application/octet-stream" sparkle:edSignature="1Qf18S879hL0BlZ0Zzz50Qi0rGb8W6ilXetq1aD7zQY6CNQPfdQrMSyhiTGUdpnySridPHKnzapeoxInjQTQAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.64/Astronomical-0.2.64-macOS-arm64.dmg" length="20469035" type="application/octet-stream" sparkle:edSignature="P2R4/Ko0DAsKgDYwDtqm9XhaO/z4oAHYwotfRNqx8YhWtN9okW8+19r2pjjkMXL2I0iO7Rl2g7rpP/FWP84wCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 69WGvvO6ztLJzEpzmeo0agdn2KurIThfaWzrkjRnsr61dkvLL7e7GJiFaBzqJaupvd13cMgD0EhXm4RRn+0RCA==
-length: 2025
+edSignature: 4PpD6Ff5/NemTuig7dT8bKMxnE+O1+VsSnu66Ud5PWfjBpHGhLA2cK4kehVGlb4dKbl1fmvXJlBM7/Ngy94UDQ==
+length: 2486
 -->
