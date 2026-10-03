@@ -21,17 +21,30 @@ const DEFAULT_HISTORY_RELATIVE_PATH: &str = "tests/performance_throughput/throug
 const HISTORY_ENV_VAR: &str = "ASTRONOMICAL_PERF_HISTORY";
 const GIT_COMMIT_ENV_VAR: &str = "ASTRONOMICAL_PERF_COMMIT";
 
+/// The journey family one throughput record came from. Every line of the
+/// shared history log carries this field so text and vision measurements
+/// delineate themselves without separate files; lines written before the
+/// field existed are text-journey measurements.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThroughputJourneyKind {
+    Text,
+    Vision,
+}
+
 /// One throughput measurement captured from the measured completion of a
 /// journey, recorded against the host and the wall-clock time it was taken on.
 ///
-/// The first columns are ordered for human reading: the time, the model, then
-/// the prefill and decode tokens-per-second as whole numbers. The remaining
-/// fields carry the host, the git commit, and the input, output, and cached
-/// token counts plus prefill and decode latencies from the measured completion.
+/// The first columns are ordered for human reading: the time, the model, the
+/// journey family, then the prefill and decode tokens-per-second as whole
+/// numbers. The remaining fields carry the host, the git commit, and the
+/// input, output, and cached token counts plus prefill and decode latencies
+/// from the measured completion.
 #[derive(Clone, Debug, Serialize)]
 pub struct ThroughputRecord {
     pub timestamp: String,
     pub model_id: String,
+    pub journey: ThroughputJourneyKind,
     pub prefill_tokens_per_second: u32,
     pub decode_tokens_per_second: u32,
     pub git_commit: Option<String>,
@@ -80,7 +93,7 @@ pub fn format_utc_timestamp(millis_since_unix_epoch: u64) -> String {
 /// can print the record to stdout regardless of whether the history log is
 /// writable.
 pub fn throughput_record_json(record: &ThroughputRecord) -> Value {
-    serde_json::to_value(record).unwrap_or_else(|_| Value::Null)
+    serde_json::to_value(record).unwrap_or(Value::Null)
 }
 
 /// Resolves the history log path from the environment or the default target
