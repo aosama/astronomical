@@ -93,7 +93,7 @@ pub fn format_utc_timestamp(millis_since_unix_epoch: u64) -> String {
 /// can print the record to stdout regardless of whether the history log is
 /// writable.
 pub fn throughput_record_json(record: &ThroughputRecord) -> Value {
-    serde_json::to_value(record).unwrap_or_else(|_| Value::Null)
+    serde_json::to_value(record).unwrap_or(Value::Null)
 }
 
 /// Resolves the history log path from the environment or the default target

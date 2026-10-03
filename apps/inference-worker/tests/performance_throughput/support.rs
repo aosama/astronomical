@@ -141,7 +141,7 @@ async fn drive_completion(
     temperature_thousandths: u16,
 ) {
     let command = ChatGenerationCommand {
-        request_id: request_id.clone(),
+        request_id,
         model: model_id.to_owned(),
         messages: vec![ChatMessage::User {
             content: prompt.to_owned(),
