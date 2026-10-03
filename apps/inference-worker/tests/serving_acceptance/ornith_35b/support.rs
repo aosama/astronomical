@@ -33,11 +33,53 @@ pub(super) fn romeo_and_juliet_prompt() -> String {
     )
 }
 
+/// Four repetitions of the full source (~31k tokens), for long-context
+/// attribution where per-token attention and KV growth costs dominate.
+pub(super) fn romeo_and_juliet_long_context_prompt() -> String {
+    format!(
+        "Use the supplied Romeo and Juliet source. Name the two households in one short sentence.\n\n{}{}{}{}",
+        ROMEO_AND_JULIET_SOURCE,
+        ROMEO_AND_JULIET_SOURCE,
+        ROMEO_AND_JULIET_SOURCE,
+        ROMEO_AND_JULIET_SOURCE
+    )
+}
+
+/// A short Romeo and Juliet excerpt that absorbs the model load and first-use
+/// JIT kernel compilation without caching the full measurement prompt, so the
+/// measured completion's prefill runs against a cold prompt cache.
+pub(super) fn prefill_attribution_warmup_prompt() -> String {
+    let excerpt: String = ROMEO_AND_JULIET_SOURCE.chars().take(400).collect();
+    format!(
+        "Use the supplied Romeo and Juliet excerpt. Name the two households in one short sentence.\n\n{excerpt}"
+    )
+}
+
 /// Builds an isolated Development home pinned to the production measurement
 /// conditions: performance attribution and stage-split decode attribution are
 /// both explicitly disabled, so the baseline measures the path users run and
 /// a developer's local diagnostics settings cannot leak into the numbers.
 pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile::TempDir {
+    isolated_home(model_directory, "ornith-35b-throughput-journey", false)
+}
+
+/// Builds the isolated Development home for the prefill attribution journey:
+/// identical to the measurement home except performance attribution is
+/// enabled, so the per-family prefill graphics-processor completion waits are
+/// recorded for the measured completion.
+pub(super) fn isolated_home_for_prefill_attribution(model_directory: &Path) -> tempfile::TempDir {
+    isolated_home(
+        model_directory,
+        "ornith-35b-prefill-attribution-journey",
+        true,
+    )
+}
+
+fn isolated_home(
+    model_directory: &Path,
+    home_prefix: &str,
+    performance_attribution_enabled: bool,
+) -> tempfile::TempDir {
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()
             .expect("Development configuration should load");
@@ -47,13 +89,13 @@ pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile:
         .map(|value| value != "0")
         .unwrap_or(false);
     let mut isolated_home_builder = tempfile::Builder::new();
-    isolated_home_builder.prefix("ornith-35b-throughput-journey");
+    isolated_home_builder.prefix(home_prefix);
     isolated_home_builder.disable_cleanup(keep_isolated_home);
     let isolated_development_home = isolated_home_builder
         .tempdir()
         .expect("isolated Development home should be created");
     eprintln!(
-        "[ornith-35b] isolated_home={}",
+        "[ornith-35b] isolated_home={} performance_attribution_enabled={performance_attribution_enabled}",
         isolated_development_home.path().display()
     );
     let isolated_state_directory = isolated_development_home.path().join(".astronomical-dev");
@@ -65,7 +107,8 @@ pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile:
         serde_json::from_slice(&config_bytes).expect("Development config should parse");
     config_document["runtime"]["model_directories"] =
         serde_json::json!([model_directory.to_string_lossy()]);
-    config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(false);
+    config_document["diagnostics"]["performance_attribution_enabled"] =
+        serde_json::json!(performance_attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
     if let Ok(chunk_override) = std::env::var("STREAMING_JOURNEY_CHUNK_TOKENS") {
@@ -88,6 +131,23 @@ pub(super) async fn launch_resident_rest_server() -> (tempfile::TempDir, Serving
     let model_directory = model_directory();
     eprintln!("[ornith-35b] phase=launch model={model_id}");
     let isolated_development_home = isolated_home_for_measurement(&model_directory);
+    launch_rest_server_with_home(model_id, model_directory, isolated_development_home).await
+}
+
+pub(super) async fn launch_resident_rest_server_with_prefill_attribution()
+-> (tempfile::TempDir, ServingRestServer) {
+    let model_id = resident_model_id();
+    let model_directory = model_directory();
+    eprintln!("[ornith-35b-attribution] phase=launch model={model_id}");
+    let isolated_development_home = isolated_home_for_prefill_attribution(&model_directory);
+    launch_rest_server_with_home(model_id, model_directory, isolated_development_home).await
+}
+
+async fn launch_rest_server_with_home(
+    model_id: &str,
+    model_directory: PathBuf,
+    isolated_development_home: tempfile::TempDir,
+) -> (tempfile::TempDir, ServingRestServer) {
     let rest_server = launch_serving_rest_server_for_model(
         model_id,
         model_directory,

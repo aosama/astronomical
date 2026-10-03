@@ -7,10 +7,31 @@ use super::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 use super::model::Qwen3_5Model;
 use super::tensor_slicing::slice_last_dimension;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
+use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 
 const GATED_DELTA_STEP_OPERATION: &str = "apply one Qwen3.5 gated-delta recurrent step";
+
+/// Forces one gated-delta section's graphics-processor work so its GPU time is
+/// attributed to its own operation instead of folding into the family wait or
+/// the chunk-terminal wait. Multi-token prefill only: one-token decode keeps
+/// the latency-sensitive step free of host synchronization.
+fn evaluate_linear_attention_section(
+    runtime: &MlxRuntime,
+    performance_attribution: &mut PerformanceAttribution,
+    operation: PerformanceOperation,
+    arrays: &[&MlxArray],
+    token_count: i32,
+) -> Result<(), Qwen3_5ExecutionError> {
+    if !performance_attribution.is_enabled() || token_count <= 1 {
+        return Ok(());
+    }
+    performance_attribution.measure_operation(operation, |_performance_attribution| {
+        runtime.evaluate_arrays(arrays)
+    })?;
+    Ok(())
+}
 
 /// Applies one ops-based Qwen3.5 gated-delta recurrence while retaining state in float32.
 pub fn qwen3_5_gated_delta_step(
@@ -156,6 +177,7 @@ impl Qwen3_5Model {
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
@@ -193,6 +215,18 @@ impl Qwen3_5Model {
             &linear_attention_weights.decay_interval_projection,
             paged_prefill_execution_mode,
         )?;
+        evaluate_linear_attention_section(
+            &self.runtime,
+            performance_attribution,
+            PerformanceOperation::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
+            &[
+                &mixed_queries_keys_values,
+                &output_gate,
+                &update_logits,
+                &decay_inputs,
+            ],
+            token_count,
+        )?;
         let completed_prefill_chunk_tokens = boundary_checkpoint_collector
             .as_ref()
             .map(|collector| collector.completed_prefill_chunk_tokens().to_vec());
@@ -224,7 +258,19 @@ impl Qwen3_5Model {
             1,
             linear_convolution_dimension,
         )?;
-        let convolution_output = self.runtime.silu(&convolution_output)?;
+        // The shapeless fused-silu compilation matches stock MLX `nn.silu`:
+        // one kernel reading the input once, instead of a sigmoid kernel plus
+        // a multiply kernel with roughly 2.5x the memory traffic.
+        let convolution_output = self
+            .runtime
+            .apply_compiled_silu(&self.compiled_elementwise_graphs, &convolution_output)?;
+        evaluate_linear_attention_section(
+            &self.runtime,
+            performance_attribution,
+            PerformanceOperation::PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait,
+            &[&convolution_output],
+            token_count,
+        )?;
         let queries =
             slice_last_dimension(&self.runtime, &convolution_output, 0, linear_key_dimension)?;
         let queries = self.runtime.reshape(
@@ -289,6 +335,13 @@ impl Qwen3_5Model {
             let decay_products = self.runtime.multiply(&decay_rates, &decay_intervals)?;
             self.runtime.exp(&self.runtime.negative(&decay_products)?)?
         };
+        evaluate_linear_attention_section(
+            &self.runtime,
+            performance_attribution,
+            PerformanceOperation::PrefillLinearAttentionNormalizationGraphicsProcessorCompletionWait,
+            &[&queries, &keys, &values, &decays, &update_rates],
+            token_count,
+        )?;
         let current_recurrent_state = recurrent_state.current_or_zero(&self.runtime)?;
         // Each dispatch entry owns its capability routing: a retained kernel
         // takes the fused Metal route; a demoted kernel falls back to the
@@ -335,6 +388,13 @@ impl Qwen3_5Model {
                     (recurrent_output, next_recurrent_state, Vec::new())
                 }
             };
+        evaluate_linear_attention_section(
+            &self.runtime,
+            performance_attribution,
+            PerformanceOperation::PrefillLinearAttentionRecurrenceGraphicsProcessorCompletionWait,
+            &[&recurrent_output, &next_recurrent_state],
+            token_count,
+        )?;
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector.as_deref_mut() {
             boundary_checkpoint_collector.record_linear_attention_layer(
                 decoder_layer_index,
@@ -356,10 +416,18 @@ impl Qwen3_5Model {
             .runtime
             .reshape(&gated_output, &[1, token_count, linear_value_dimension])?;
         recurrent_state.set_next(next_recurrent_state);
-        self.quantized_linear_for_paged_prefill_execution_mode(
+        let projected_output = self.quantized_linear_for_paged_prefill_execution_mode(
             &gated_output,
             &linear_attention_weights.output_projection,
             paged_prefill_execution_mode,
-        )
+        )?;
+        evaluate_linear_attention_section(
+            &self.runtime,
+            performance_attribution,
+            PerformanceOperation::PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait,
+            &[&projected_output],
+            token_count,
+        )?;
+        Ok(projected_output)
     }
 }

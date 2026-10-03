@@ -34,6 +34,8 @@ mod mlx_descriptor_file_reader;
 #[cfg(feature = "mlx")]
 mod mlx_elementwise_math_operations;
 #[cfg(feature = "mlx")]
+mod mlx_metal_capture;
+#[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
 mod mlx_metallib_path;
 #[cfg(feature = "mlx")]

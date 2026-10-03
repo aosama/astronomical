@@ -1,6 +1,9 @@
 mod allocation_checkpoint;
+mod attention_prefill_performance;
 mod context_memory_admission;
+mod convolution_prefill_performance;
 mod convolution_state;
+mod elementwise_fusion_probe;
 mod error_logging;
 mod full_attention;
 mod gated_delta;
@@ -11,6 +14,7 @@ mod mtp_verified_emission_queue;
 mod persistent_prompt_cache_boundary_checkpoint;
 mod persistent_prompt_cache_capture;
 mod quantized_matmul_partition_parity;
+mod quantized_matmul_prefill_performance;
 mod request_decoder_state;
 mod sampler;
 mod speculative_prefill;

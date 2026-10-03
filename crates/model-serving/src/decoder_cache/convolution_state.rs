@@ -154,7 +154,7 @@ impl ConvolutionState {
         let mut boundary_convolution_states =
             Vec::with_capacity(completed_prefill_chunk_tokens.len());
         for current_completed_prefill_chunk_tokens in completed_prefill_chunk_tokens {
-            boundary_convolution_states.push(runtime.slice(
+            let boundary_state_view = runtime.slice(
                 &convolution_input,
                 &[0, *current_completed_prefill_chunk_tokens, 0],
                 &[
@@ -163,10 +163,12 @@ impl ConvolutionState {
                     self.linear_convolution_dimension,
                 ],
                 &[1, 1, 1],
-            )?);
+            )?;
+            boundary_convolution_states
+                .push(runtime.build_contiguous_row_major_copy(&boundary_state_view)?);
         }
 
-        let next_state = runtime.slice(
+        let next_state_view = runtime.slice(
             &convolution_input,
             &[0, token_count, 0],
             &[
@@ -176,6 +178,13 @@ impl ConvolutionState {
             ],
             &[1, 1, 1],
         )?;
+        // Materialize the rolling window as a contiguous buffer, matching the
+        // oMLX cache `update_window` (`mx.contiguous`). A strided slice view
+        // would pin the full previous convolution input alive between chunks
+        // (~1 GB across the gated-delta layers) and hand the next chunk's
+        // concatenate a strided operand, which the server's small-kernel
+        // prefill section pays for but a clean-process bench does not.
+        let next_state = runtime.build_contiguous_row_major_copy(&next_state_view)?;
         self.state = Some(next_state);
         Ok(ConvolutionStateBoundaryCheckpointUpdate {
             convolution_input,
