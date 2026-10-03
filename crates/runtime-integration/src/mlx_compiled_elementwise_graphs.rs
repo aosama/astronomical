@@ -26,8 +26,10 @@ const COMPILE_GATED_DELTA_DECAY_OPERATION: &str =
     "compile the shapeless MLX gated-delta decay arithmetic";
 const APPLY_FUSED_SILU_OPERATION: &str = "apply the compiled MLX fused SiLU graph";
 const COMPILE_FUSED_SILU_OPERATION: &str = "compile the shapeless MLX fused SiLU graph";
+const APPLY_FUSED_SOFTPLUS_OPERATION: &str = "apply the compiled MLX fused K2 softplus graph";
+const COMPILE_FUSED_SOFTPLUS_OPERATION: &str = "compile the shapeless MLX fused K2 softplus graph";
 
-/// Retained shapeless compilations for elementwise Qwen3.5-MoE graph composites.
+/// Retained shapeless compilations for elementwise model graph composites.
 #[derive(Debug)]
 pub struct MlxCompiledElementwiseGraphs {
     attention_output_gate: MlxCompiledGraph,
@@ -35,6 +37,7 @@ pub struct MlxCompiledElementwiseGraphs {
     precise_swiglu: MlxCompiledGraph,
     sparse_shared_expert_combination: MlxCompiledGraph,
     fused_silu: MlxCompiledGraph,
+    fused_softplus: MlxCompiledGraph,
 }
 
 impl MlxCompiledElementwiseGraphs {
@@ -60,6 +63,10 @@ impl MlxCompiledElementwiseGraphs {
             fused_silu: MlxCompiledGraph::new(
                 build_fused_silu_graph,
                 COMPILE_FUSED_SILU_OPERATION,
+            )?,
+            fused_softplus: MlxCompiledGraph::new(
+                build_fused_softplus_graph,
+                COMPILE_FUSED_SOFTPLUS_OPERATION,
             )?,
         })
     }
@@ -144,6 +151,23 @@ impl MlxRuntime {
         compiled_elementwise_graphs
             .fused_silu
             .apply(&[input], APPLY_FUSED_SILU_OPERATION)
+    }
+
+    /// Applies the K2 Horizon MoVA softplus gate as one compiled composite.
+    ///
+    /// The gate formula is `log1p(exp(input * ln2)) / ln2` — the reference
+    /// implementation's beta-scaled softplus, which is NOT the standard
+    /// `logaddexp(input, 0)` softplus and must not be "simplified" to it.
+    /// Compiling collapses the four hand-composed dispatches into one launch
+    /// without changing the arithmetic.
+    pub fn apply_compiled_softplus(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        input: &MlxArray,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        compiled_elementwise_graphs
+            .fused_softplus
+            .apply(&[input], APPLY_FUSED_SOFTPLUS_OPERATION)
     }
 }
 
@@ -420,4 +444,95 @@ unsafe extern "C" fn build_fused_silu_graph(
     };
     // SAFETY: The output vector is unique and live for this callback.
     unsafe { set_graph_output(output_vector, &silu_output) }
+}
+
+unsafe extern "C" fn build_fused_softplus_graph(
+    output_vector: *mut raw::mlx_vector_array,
+    input_vector: raw::mlx_vector_array,
+) -> c_int {
+    if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 1 {
+        return 1;
+    }
+    let input = match array_from_vector(input_vector, 0) {
+        Ok(input) => input,
+        Err(get_status) => return get_status,
+    };
+    let gpu_stream = match MlxStream::default_gpu() {
+        Ok(gpu_stream) => gpu_stream,
+        Err(_) => return 1,
+    };
+    let ln2 = std::f32::consts::LN_2;
+    let ln2_scalar = match MlxArray::from_f32(&[ln2], &[]) {
+        Ok(ln2_scalar) => ln2_scalar,
+        Err(_) => return 1,
+    };
+    let typed_ln2 = match graph_output_array(|output_array| {
+        // SAFETY: The scalar and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                ln2_scalar.raw(),
+                raw::mlx_array_dtype(input.raw()),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(typed_ln2) => typed_ln2,
+        Err(build_status) => return build_status,
+    };
+    let scaled_input = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_multiply(output_array, input.raw(), typed_ln2.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(scaled_input) => scaled_input,
+        Err(build_status) => return build_status,
+    };
+    let exponent = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_exp(output_array, scaled_input.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(exponent) => exponent,
+        Err(build_status) => return build_status,
+    };
+    let logarithm = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_log1p(output_array, exponent.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(logarithm) => logarithm,
+        Err(build_status) => return build_status,
+    };
+    let inverse_ln2_scalar = match MlxArray::from_f32(&[1.0 / ln2], &[]) {
+        Ok(inverse_ln2_scalar) => inverse_ln2_scalar,
+        Err(_) => return 1,
+    };
+    let typed_inverse_ln2 = match graph_output_array(|output_array| {
+        // SAFETY: The scalar and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                inverse_ln2_scalar.raw(),
+                raw::mlx_array_dtype(input.raw()),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(typed_inverse_ln2) => typed_inverse_ln2,
+        Err(build_status) => return build_status,
+    };
+    let softplus_output = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                logarithm.raw(),
+                typed_inverse_ln2.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(softplus_output) => softplus_output,
+        Err(build_status) => return build_status,
+    };
+    // SAFETY: The output vector is unique and live for this callback.
+    unsafe { set_graph_output(output_vector, &softplus_output) }
 }

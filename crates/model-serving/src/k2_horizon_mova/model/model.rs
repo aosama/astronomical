@@ -1,6 +1,8 @@
 //! Resident K2 Horizon MoVA forward pass.
 
-use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::{
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
+};
 
 use crate::PerformanceAttribution;
 use crate::gpu_token_sampling::build_sampled_token;
@@ -19,6 +21,7 @@ pub struct K2HorizonMoVAModel {
     pub config: K2HorizonMoVAConfig,
     pub weights: K2HorizonMoVAWeights,
     pub compiled_swiglu: MlxCompiledSwiGlu,
+    pub compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
     pub sorted_expert_reduction_kernel: Option<MlxMetalKernel>,
     pub fused_expert_decode_kernels: Option<FusedExpertDecodeKernels>,
 }
@@ -86,6 +89,7 @@ impl K2HorizonMoVAModel {
                 rope_offset,
                 is_causal,
                 &self.compiled_swiglu,
+                &self.compiled_elementwise_graphs,
                 self.sorted_expert_reduction_kernel.as_ref(),
                 self.fused_expert_decode_kernels.as_ref(),
                 performance_attribution,

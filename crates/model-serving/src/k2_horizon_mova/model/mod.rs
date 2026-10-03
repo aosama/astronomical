@@ -10,6 +10,7 @@ mod ops;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod prefill_causality_probe;
 mod quantized_attention;
+mod weight_binding;
 mod weights;
 
 pub use affine::K2HorizonMoVAAffineLinear;

@@ -120,6 +120,9 @@ impl ModelGenerationProcessor for K2HorizonMoVAGenerationProcessor {
                 "request exceeds the configured context limit; serving anyway because it fits the model artifact context window"
             );
         }
+        // A temperature of zero is treated as "unset" rather than greedy: the
+        // family samples from the trained distribution, and zero would
+        // collapse every request onto the argmax channel.
         let temperature_thousandths = chat_generation_command
             .settings
             .temperature_thousandths

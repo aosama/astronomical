@@ -391,9 +391,26 @@ fn parse_json_object_at(source: &str) -> Option<(Value, usize)> {
     if !source.starts_with('{') {
         return None;
     }
+    // Brace counting alone ends the object early or never whenever a JSON
+    // string holds an unbalanced brace, which coding-tool arguments do all the
+    // time, so quotes and backslash escapes gate the depth arithmetic.
     let mut depth = 0_i32;
+    let mut inside_string = false;
+    let mut previous_character_was_backslash = false;
     for (index, character) in source.char_indices() {
+        if inside_string {
+            match character {
+                '\\' => previous_character_was_backslash = !previous_character_was_backslash,
+                '"' if previous_character_was_backslash => {
+                    previous_character_was_backslash = false;
+                }
+                '"' => inside_string = false,
+                _ => previous_character_was_backslash = false,
+            }
+            continue;
+        }
         match character {
+            '"' => inside_string = true,
             '{' => depth += 1,
             '}' => {
                 depth -= 1;

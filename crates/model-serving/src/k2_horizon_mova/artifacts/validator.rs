@@ -116,8 +116,21 @@ impl K2HorizonMoVAArtifactValidator {
         let index_bytes = read_bounded_required_file_bytes(index_file, MAXIMUM_INDEX_BYTES)?;
         let shard_index = K2HorizonMoVAShardIndex::from_json_bytes(&index_bytes)?;
         let dialect = K2HorizonMoVAWeightDialect::from_tensor_names(shard_index.tensor_names());
-        let has_sparse_layer = config
-            .layer_kinds()
+        let layer_kinds = config.layer_kinds();
+        if layer_kinds
+            .iter()
+            .any(|layer_kind| *layer_kind == K2HorizonMoVALayerKind::SparseFeedForward)
+        {
+            // The weight binder and decoder only enact dense and
+            // mixture-of-values layers, so a sparse-FFN member must be
+            // refused here rather than failing later with a misleading
+            // missing-tensor error from the dense binding path.
+            return Err(K2HorizonMoVAArtifactValidationError::InvalidArtifact {
+                description: "sparse feed-forward layers without mixture-of-values experts are not executable yet"
+                    .to_owned(),
+            });
+        }
+        let has_sparse_layer = layer_kinds
             .iter()
             .any(|layer_kind| *layer_kind != K2HorizonMoVALayerKind::Dense);
         match dialect {
@@ -190,12 +203,53 @@ impl K2HorizonMoVAArtifactValidator {
             shard_index,
             model_directory: model_directory.to_path_buf(),
             model_id,
-            revision: derive_revision_from_config_bytes(config_bytes),
+            revision: resolve_artifact_revision(model_directory, config_bytes),
             tokenizer_bytes,
             chat_template_bytes,
             total_payload_bytes,
         })
     }
+}
+
+/// Maximum provenance-document size; the download flow writes a few hundred bytes.
+const MAXIMUM_PROVENANCE_BYTES: u64 = 64 * 1024;
+
+/// Reads the library provenance revision when present so cache scoping and
+/// attribution identify the exact published revision, and falls back to a
+/// config-content hash for artifacts that never carried a provenance file.
+fn resolve_artifact_revision(model_directory: &Path, config_bytes: &[u8]) -> String {
+    let provenance_path = model_directory.join(".astronomical-library-provenance.json");
+    let is_small_regular_file = fs::metadata(&provenance_path)
+        .map(|provenance_metadata| {
+            provenance_metadata.is_file() && provenance_metadata.len() <= MAXIMUM_PROVENANCE_BYTES
+        })
+        .unwrap_or(false);
+    if is_small_regular_file
+        && let Ok(provenance_bytes) = fs::read(&provenance_path)
+        && let Ok(provenance_document) =
+            serde_json::from_slice::<K2HorizonMoVAProvenanceDocument>(&provenance_bytes)
+        && is_immutable_revision_format(&provenance_document.revision)
+    {
+        return provenance_document.revision;
+    }
+    derive_revision_from_config_bytes(config_bytes)
+}
+
+/// The provenance revision must be an immutable 40-character lowercase
+/// hexadecimal commit SHA, matching the repository's provenance contract in
+/// `crates/config/src/model_discovery/classified_artifacts.rs`; truncated or
+/// mutable labels would scope prompt-cache entries and attribution under an
+/// identity that no longer pins the exact published revision.
+fn is_immutable_revision_format(revision: &str) -> bool {
+    revision.len() == 40
+        && revision.bytes().all(|revision_byte| {
+            revision_byte.is_ascii_digit() || (b'a'..=b'f').contains(&revision_byte)
+        })
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct K2HorizonMoVAProvenanceDocument {
+    revision: String,
 }
 
 fn required_file(file_name: &str) -> RequiredFileProfile {

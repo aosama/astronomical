@@ -33,20 +33,44 @@ pub fn assert_bfloat16_arrays_match(
 ) {
     assert_eq!(actual_array.dtype(), MlxDtype::BFloat16);
     assert_eq!(expected_array.dtype(), MlxDtype::BFloat16);
+    // BFloat16 widens exactly into float32 (top 16 bits, zero padding), so
+    // comparing float32 bit patterns compares every bfloat16 bit. A tolerance
+    // would accept an incorrect zero for values near the denormal range, where
+    // a compiled-versus-reference divergence as large as the value itself
+    // measures below any absolute threshold.
     let float32_actual_array = runtime
         .astype(actual_array, MlxDtype::Float32)
         .expect("the actual bfloat16 array should cast to float32");
     let float32_expected_array = runtime
         .astype(expected_array, MlxDtype::Float32)
         .expect("the expected bfloat16 array should cast to float32");
-    assert_f32_close(
-        &float32_actual_array
-            .to_vec_f32()
-            .expect("the actual array should evaluate"),
-        &float32_expected_array
-            .to_vec_f32()
-            .expect("the expected array should evaluate"),
+    let actual_bit_patterns: Vec<u32> = float32_actual_array
+        .to_vec_f32()
+        .expect("the actual array should evaluate")
+        .iter()
+        .map(|actual_float| actual_float.to_bits())
+        .collect();
+    let expected_bit_patterns: Vec<u32> = float32_expected_array
+        .to_vec_f32()
+        .expect("the expected array should evaluate")
+        .iter()
+        .map(|expected_float| expected_float.to_bits())
+        .collect();
+    assert_eq!(
+        actual_bit_patterns.len(),
+        expected_bit_patterns.len(),
+        "the compared bfloat16 arrays must have the same element count"
     );
+    for (element_index, (actual_bits, expected_bits)) in actual_bit_patterns
+        .iter()
+        .zip(expected_bit_patterns.iter())
+        .enumerate()
+    {
+        assert_eq!(
+            actual_bits, expected_bits,
+            "bfloat16 element {element_index} must match the reference bit for bit"
+        );
+    }
 }
 
 /// Independent stable-softplus oracle retained to detect accidental changes in

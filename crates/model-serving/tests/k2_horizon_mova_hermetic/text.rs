@@ -180,6 +180,33 @@ fn should_salvage_json_declared_tool_calls_from_the_think_channel() {
 }
 
 #[test]
+fn should_parse_json_tool_calls_whose_strings_contain_braces() {
+    let mut parser =
+        K2HorizonMoVAOutputParser::with_declared_tool_names(vec!["edit_file".to_owned()]);
+    let mut outputs = parser.push_text(
+        r#"{"name":"edit_file","arguments":{"path":"main.rs","content":"fn main() { g(); }"}}"#,
+    );
+    outputs.extend(parser.finish());
+    assert!(outputs.iter().any(|output| matches!(
+        output,
+        ChatGenerationOutput::ToolCall { function_name, arguments_json, .. }
+            if function_name == "edit_file" && arguments_json.contains("fn main()")
+    )));
+
+    let mut unbalanced_parser =
+        K2HorizonMoVAOutputParser::with_declared_tool_names(vec!["edit_file".to_owned()]);
+    let mut unbalanced_outputs = unbalanced_parser.push_text(
+        r#"{"name":"edit_file","arguments":{"path":"main.rs","content":"fn main() {"}}"#,
+    );
+    unbalanced_outputs.extend(unbalanced_parser.finish());
+    assert!(unbalanced_outputs.iter().any(|output| matches!(
+        output,
+        ChatGenerationOutput::ToolCall { function_name, arguments_json, .. }
+            if function_name == "edit_file" && arguments_json.contains("fn main()")
+    )));
+}
+
+#[test]
 fn should_force_think_close_after_the_family_output_budget() {
     let close_token_id = 250030_u32;
     let thinking_budget = resolve_k2_horizon_mova_thinking_budget(None, 96, 1)

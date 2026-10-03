@@ -409,3 +409,33 @@ fn measure_warmed_one_token_precise_swiglu_path(
     }
     measurement_started_at.elapsed()
 }
+
+/// The K2 Horizon MoVA gate softplus is the reference implementation's
+/// beta-scaled form, NOT the standard logaddexp softplus; this pins the
+/// compiled graph to the hand-composed reference chain within bf16 rounding.
+#[test]
+fn should_match_the_reference_beta_softplus_chain_within_bf16_rounding() {
+    let runtime = runtime();
+    let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()
+        .expect("the shapeless elementwise graphs should compile");
+    let probe_values: [f32; 12] = [
+        -40.0, -12.5, -3.0, -0.5, -0.01, 0.0, 0.01, 0.5, 1.5, 3.0, 12.5, 40.0,
+    ];
+    let input = runtime
+        .array_from_f32(&probe_values, &[probe_values.len() as i32])
+        .and_then(|float32_input| runtime.astype(&float32_input, MlxDtype::BFloat16))
+        .expect("probe input should build");
+
+    let compiled = runtime
+        .apply_compiled_softplus(&compiled_elementwise_graphs, &input)
+        .expect("the compiled softplus should apply");
+    let beta = 2.0_f32.ln();
+    let scaled = runtime.multiply_scalar(&input, beta).expect("scale");
+    let exponent = runtime.exp(&scaled).expect("exp");
+    let logarithm = runtime.log1p(&exponent).expect("log1p");
+    let reference_chain = runtime
+        .multiply_scalar(&logarithm, 1.0 / beta)
+        .expect("unscale");
+
+    assert_bfloat16_arrays_match(&runtime, &compiled, &reference_chain);
+}
