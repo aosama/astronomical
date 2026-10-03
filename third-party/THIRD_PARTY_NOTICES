@@ -35,15 +35,20 @@ SOFTWARE.
 OMLX
 Source: https://github.com/ml-explore/omlx
 Used as the upstream source of Qwen 3.5 Metal kernels that Astronomical
-incorporates into its vendored MLX runtime. The Metal sources under
-crates/runtime-integration/native were adapted from the oMLX project's Qwen
-3.5 prefill kernels (omlx/custom_kernels/qwen35_prefill/csrc, Apache-2.0):
-the transposed quantized-matmul tile selection (qwen35_qmm_nax.metal), the
-fa256 steel attention (qwen35_attention.metal), and the MoE gather
-(qwen35_moe_gather_nax.metal). These kernels are Apple MIT-licensed as part of
-MLX and Apache-2.0 licensed by oMLX for the additions. The inline attribution
-comments in the corresponding MLX patches and their benchmark tests preserve
-that provenance for every line ported from oMLX.
+incorporates. The Metal sources under crates/runtime-integration/native were
+adapted from the oMLX project's Qwen 3.5 prefill kernels
+(omlx/custom_kernels/qwen35_prefill/csrc, Apache-2.0): the transposed
+quantized-matmul tile selection (qwen35_qmm_nax.metal), the fa256 steel
+attention (qwen35_attention.metal), and the MoE gather
+(qwen35_moe_gather_nax.metal). The gated-delta decode prework
+(crates/model-serving/src/qwen3_5/model/gdn_decode_prework_kernel.rs) and the
+software-pipelined gated-delta prefill recurrence
+(crates/model-serving/src/qwen3_5/model/gated_delta_pipelined_kernel.rs) are
+likewise adapted from oMLX and compiled just in time from Rust source. These
+kernels are Apple MIT-licensed as part of MLX and Apache-2.0 licensed by oMLX
+for the additions. The adapted kernels point back to this notice, and the
+inline attribution comments in the corresponding MLX patches preserve that
+provenance for every line ported from oMLX.
 
 OMLX source translations
 Copyright © 2023-2025 oMLX contributors

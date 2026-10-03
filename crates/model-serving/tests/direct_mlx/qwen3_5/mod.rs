@@ -8,6 +8,7 @@ mod error_logging;
 mod full_attention;
 mod gated_delta;
 mod gated_delta_checkpoints;
+mod gdn_decode_prework_numerics;
 mod mtp_request_state;
 mod mtp_runtime;
 mod mtp_verified_emission_queue;

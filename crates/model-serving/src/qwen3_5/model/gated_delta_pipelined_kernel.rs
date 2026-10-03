@@ -4,10 +4,11 @@
 //! The kernel stages twelve tokens per block in threadgroup memory and
 //! prefetches the next block's keys, values, decays, and update rates into
 //! registers while the current block computes, hiding global-memory latency
-//! behind the recurrence arithmetic. The algorithm mirrors OMLX's production
-//! `gated_delta_pipelined` kernel; naming follows this repository and the
-//! boundary-checkpoint write is injected at a fixed point inside every step
-//! body.
+//! behind the recurrence arithmetic. The algorithm mirrors an upstream
+//! open-source software-pipelined gated-delta kernel (see
+//! third-party/THIRD_PARTY_NOTICES for the provenance and license); naming
+//! follows this repository and the boundary-checkpoint write is injected at a
+//! fixed point inside every step body.
 
 /// Placeholder inside the checkpoint write template for the block-local
 /// token expression of each injection site: the literal step index in

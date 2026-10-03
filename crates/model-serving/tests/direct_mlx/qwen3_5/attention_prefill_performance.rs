@@ -1,11 +1,11 @@
 //! Attention and matmul kernel parity at Ornith-1.5-35B-A3B prefill/decode shapes.
 //!
-//! The 30k REST parity report shows Astronomical slower not only on prefill
+//! The 30k-token REST baseline shows Astronomical slower not only on prefill
 //! (~11%) but on decode (~13%) and first-token latency (~11%) too — a broad,
 //! roughly uniform gap rather than a single op family. A uniform gap points at
 //! the kernels/build rather than model composition. This bench measures the
-//! dominant shared kernels under Astronomical's MLX build so they can be
-//! compared one-for-one against the same shapes in the oMLX Python MLX build.
+//! dominant shared kernels under Astronomical's MLX build for isolated
+//! kernel-level comparison at the same shapes.
 
 use std::time::{Duration, Instant};
 

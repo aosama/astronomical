@@ -1,6 +1,6 @@
 //! Elementwise-chain fusion probe at scaled prefill shapes.
 //!
-//! The oMLX parity gap concentrates in small elementwise chains (the GDN
+//! The prefill gap concentrates in small elementwise chains (the GDN
 //! convolution section). Sub-0.3 millisecond probes at 2,048-token shapes sit
 //! inside run-to-run noise, so this probe scales the workload four-fold and
 //! reports the median of interleaved per-iteration timings. Interleaving makes

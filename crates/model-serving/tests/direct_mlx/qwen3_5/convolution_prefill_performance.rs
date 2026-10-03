@@ -1,10 +1,10 @@
 //! Isolated convolution-chain costs at gated-delta prefill shapes.
 //!
-//! The oMLX-parity attribution journey located Astronomical's linear-attention
+//! The prefill attribution journey located Astronomical's linear-attention
 //! prefill excess in the convolution section (rolling-state concat, depthwise
 //! conv1d, SiLU). This bench runs that exact chain in isolation at the
-//! production shapes so its op-level cost can be compared against the oMLX
-//! Python microbenches without attribution synchronization or model-serving
+//! production shapes so its op-level cost can be compared against Python
+//! microbenches without attribution synchronization or model-serving
 //! context in the way.
 
 use std::time::{Duration, Instant};
@@ -123,10 +123,10 @@ async fn measure_convolution_chain_costs() {
         section_millis * 1000.0 / f64::from(TOKEN_COUNT)
     );
 
-    // The exact oMLX conv-section composite: fresh zero rolling buffer, lazy
-    // concat, depthwise conv1d, SiLU, one evaluation. The oMLX Python
-    // microbench measures precisely this chain, so this is the matched
-    // apples-to-apples comparison for the convolution section.
+    // The exact conv-section composite: fresh zero rolling buffer, lazy
+    // concat, depthwise conv1d, SiLU, one evaluation. The Python microbench
+    // measures precisely this chain, so this is the matched apples-to-apples
+    // comparison for the convolution section.
     let zero_rolling_buffer = runtime
         .zeros(
             &[1, CONVOLUTION_KERNEL_DIMENSION - 1, CONVOLUTION_DIMENSION],
@@ -328,9 +328,9 @@ async fn measure_convolution_chain_costs() {
     eprintln!("[gdn-conv-bench] eval floor {floor_millis:.3} ms/call");
 
     // Production rolling-state shape: the state operand is a strided slice of
-    // the previous chunk's wider buffer, not a contiguous array. oMLX's cache
-    // API materializes its window instead; if concat on the strided view is
-    // slower, that difference is the convolution-section excess.
+    // the previous chunk's wider buffer, not a contiguous array. A reference
+    // cache API materializes its window instead; if concat on the strided view
+    // is slower, that difference is the convolution-section excess.
     let production_state = runtime
         .slice(
             &convolution_input,

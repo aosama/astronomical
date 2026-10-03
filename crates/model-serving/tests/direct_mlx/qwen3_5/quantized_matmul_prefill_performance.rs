@@ -1,12 +1,11 @@
 //! Affine quantized-matmul kernel parity at Ornith-1.5-35B-A3B shapes.
 //!
-//! Prefill and decode are both roughly 11-13% slower in the 30k REST parity,
-//! and the fused attention kernels match one-for-one in isolation. The remaining
-//! large shared component is the affine quantized matmul that backs every
-//! projection and every routed/shared expert. This bench measures the dense
-//! quantized matmul and the gather form at production shapes under
-//! Astronomical's MLX build for one-for-one comparison with the oMLX Python
-//! MLX build.
+//! Prefill and decode both run roughly 11-13% below the 30k-token REST
+//! baseline, and the fused attention kernels match one-for-one in isolation.
+//! The remaining large shared component is the affine quantized matmul that
+//! backs every projection and every routed/shared expert. This bench measures
+//! the dense quantized matmul and the gather form at production shapes under
+//! Astronomical's MLX build for isolated kernel-level comparison.
 
 use std::time::{Duration, Instant};
 
