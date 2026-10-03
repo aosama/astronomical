@@ -21,6 +21,8 @@ mod quantized_matmul_prefill_performance;
 mod request_decoder_state;
 mod sampler;
 mod target_verification_quantized_linear;
+mod vision_padding_cache;
+mod vision_padding_fusion_probe;
 mod vision_rope;
 mod vision_rope_fusion_probe;
 mod visual_embedding_injection;

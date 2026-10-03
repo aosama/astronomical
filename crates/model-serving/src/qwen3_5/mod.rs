@@ -89,4 +89,7 @@ pub use vision::{
     qwen3_5_vision_tensor_profiles,
 };
 #[cfg(feature = "direct-mlx")]
-pub use vision::{Qwen3_5VisionModel, Qwen3_5VisionWeights, qwen3_5_inject_visual_embeddings};
+pub use vision::{
+    Qwen3_5VisionModel, Qwen3_5VisionPaddingZeroCache, Qwen3_5VisionWeights,
+    qwen3_5_inject_visual_embeddings,
+};
