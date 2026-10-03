@@ -2,9 +2,9 @@
 //!
 //! This is intentionally CPU arithmetic: it computes small integer indices and
 //! interpolation coefficients once per image, then MLX performs all large tensor
-//! gathers and arithmetic. Source lineage: Rust translation of the MLX-VLM
-//! Qwen3-VL rotary-position and position-interpolation routines (MIT License;
-//! see third-party license notices).
+//! gathers and arithmetic. Source lineage: Rust translation of an upstream
+//! open-source Qwen3-VL rotary-position and position-interpolation routine
+//! (see third-party/THIRD_PARTY_NOTICES).
 //!
 //! The critical invariant is *block-major patch order*:
 //! `[merged_row, merged_column, intra_merge_row, intra_merge_column]`. The image

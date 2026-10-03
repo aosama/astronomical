@@ -66,7 +66,7 @@ impl Qwen3_5Model {
                 },
             ) => performance_attribution.measure_operation(
                 PerformanceOperation::LinearAttentionGraphConstruction,
-                |_performance_attribution| {
+                |performance_attribution| {
                     self.forward_linear_attention(
                         &normalized_input,
                         token_count,
@@ -76,6 +76,7 @@ impl Qwen3_5Model {
                         recurrent,
                         boundary_checkpoint_collector,
                         paged_prefill_execution_mode,
+                        performance_attribution,
                     )
                 },
             ),
@@ -107,6 +108,30 @@ impl Qwen3_5Model {
             PerformanceOperation::AttentionForwardSpan,
             attention_forward_span_started_at,
         );
+        // Multi-token prefill only: force one evaluation boundary per attention
+        // family so the per-family graphics-processor time is isolated from the
+        // chunk-terminal wait. The terminal wait then owns only the residual
+        // work (route observations, final logits), keeping the attributed sum
+        // honest. One-token decode skips the boundary so stage attribution never
+        // serializes the latency-sensitive decode step.
+        let attention_family_gpu_wait_operation = match &decoder_layer_weights.attention_weights {
+            Qwen3_5AttentionWeights::Linear(_) => {
+                PerformanceOperation::PrefillLinearAttentionGraphicsProcessorCompletionWait
+            }
+            Qwen3_5AttentionWeights::Full(_) => {
+                PerformanceOperation::PrefillFullAttentionGraphicsProcessorCompletionWait
+            }
+        };
+        let attention_output = match attention_output {
+            Ok(attention_output) if performance_attribution.is_enabled() && token_count > 1 => {
+                performance_attribution.measure_operation(
+                    attention_family_gpu_wait_operation,
+                    |_performance_attribution| self.runtime.evaluate_arrays(&[&attention_output]),
+                )?;
+                Ok(attention_output)
+            }
+            attention_output => attention_output,
+        };
         // Delay `?` until after closing the attribution span so failed graph
         // construction is measured rather than silently leaving an open interval.
         let attention_residual = self.runtime.add(hidden_states, &attention_output?)?;
@@ -168,6 +193,20 @@ impl Qwen3_5Model {
             PerformanceOperation::MlpForwardSpan,
             mlp_forward_span_started_at,
         );
+        // Multi-token prefill only: the feed-forward family (routed experts,
+        // weighted reduction, shared expert) owns its own evaluation boundary so
+        // its graphics-processor time is attributed separately from the chunk
+        // terminal wait. See the attention boundary above for the rationale.
+        let mlp_output = match mlp_output {
+            Ok(mlp_output) if performance_attribution.is_enabled() && token_count > 1 => {
+                performance_attribution.measure_operation(
+                    PerformanceOperation::PrefillFeedForwardGraphicsProcessorCompletionWait,
+                    |_performance_attribution| self.runtime.evaluate_arrays(&[&mlp_output]),
+                )?;
+                Ok(mlp_output)
+            }
+            mlp_output => mlp_output,
+        };
         Ok(self
             .runtime
             .add(&attention_output.attention_residual, &mlp_output?)?)

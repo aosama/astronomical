@@ -1,10 +1,10 @@
 //! Direct Qwen3.5 vision execution for the pinned Qwen3.5 artifact.
 //!
-//! Source lineage: Rust translation of MLX-VLM's Qwen3-VL vision implementation
-//! (MIT License). MLX-VLM reuses that vision implementation for Qwen3.5. Keep
-//! the operation graph, tensor layouts, dtypes, and addition order aligned with
-//! that source: BF16 makes algebraically equivalent rewrites observably different.
-//! See third-party license notices for complete attribution.
+//! Source lineage: Rust translation of an upstream open-source Qwen3-VL vision
+//! implementation, reused for Qwen3.5 (see third-party/THIRD_PARTY_NOTICES).
+//! Keep the operation graph, tensor layouts, dtypes, and addition order aligned
+//! with that source: BF16 makes algebraically equivalent rewrites observably
+//! different. See third-party/THIRD_PARTY_NOTICES for complete attribution.
 //!
 //! This module does not implement convolution, normalization, matrix
 //! multiplication, trigonometry, or attention kernels. Those operations end at

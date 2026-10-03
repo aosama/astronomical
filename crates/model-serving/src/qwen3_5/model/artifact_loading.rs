@@ -342,6 +342,33 @@ impl Qwen3_5Model {
             );
             None
         };
+        // The fused decode prework kernel removes roughly thirteen
+        // launch-bound dispatches per gated-delta layer at decode shapes.
+        // `ASTRONOMICAL_GDN_DECODE_PREWORK=0` forces the composed fallback so
+        // the same binary can A/B measure the fusion; every other value (and
+        // the unset default) leaves the capability verdict in charge.
+        let gdn_decode_prework_kernel = if std::env::var("ASTRONOMICAL_GDN_DECODE_PREWORK")
+            .map(|value| value == "0")
+            .unwrap_or(false)
+        {
+            tracing::info!(
+                "fused decode prework kernel disabled by environment for this worker process"
+            );
+            None
+        } else if worker_process_kernel_capabilities(&runtime, performance_attribution)
+            .is_custom_kernel_supported(CustomMetalKernelFamily::GdnDecodePrework)
+        {
+            Some(
+                super::gdn_decode_prework_kernel::qwen3_5_gdn_decode_prework_kernel(
+                    f32::from_bits(config.rms_norm_epsilon_bits()),
+                )?,
+            )
+        } else {
+            tracing::info!(
+                "fused decode prework kernel demoted to the MLX ops fallback for this worker process"
+            );
+            None
+        };
         // Each target-verification kernel is an independent capability family:
         // a GPU may retain one while demoting the other. A demoted kernel is
         // None and the projection dispatch falls back to the token-local MLX
@@ -462,6 +489,7 @@ impl Qwen3_5Model {
 
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
+            gdn_decode_prework_kernel,
             sorted_expert_weighted_sum_kernel,
             target_verification_quantized_linear_kernel,
             target_verification_four_row_quantized_linear_kernel,

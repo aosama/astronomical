@@ -25,7 +25,9 @@ pub mod target_verification_probes;
 #[cfg(feature = "direct-mlx")]
 pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
 #[cfg(feature = "direct-mlx")]
-pub use gated_delta_probes::{GatedDeltaBoundaryCheckpointProbe, GatedDeltaSequenceProbe};
+pub use gated_delta_probes::{
+    GatedDeltaBoundaryCheckpointProbe, GatedDeltaSequenceProbe, GdnDecodePreworkProbe,
+};
 #[cfg(feature = "direct-mlx")]
 pub use sorted_expert_weighted_sum_probe::SortedExpertWeightedSumProbe;
 #[cfg(feature = "direct-mlx")]
@@ -46,6 +48,9 @@ pub enum CustomMetalKernelFamily {
     GatedDeltaSequence,
     /// Boundary-checkpoint variant of the fused gated-delta recurrence.
     GatedDeltaBoundaryCheckpoint,
+    /// Fused gated-delta decode prework: convolution window, conv1d, SiLU,
+    /// q/k/v split, RMS norms, and scalar scales in one launch.
+    GdnDecodePrework,
     /// One-row target-verification quantized projection.
     TargetVerificationQuantizedLinear,
     /// Four-row split-K target-verification quantized projection.
@@ -257,6 +262,7 @@ pub fn worker_process_kernel_capabilities(
         let target_verification_four_row_probe = TargetVerificationFourRowProbe::new(runtime);
         let gated_delta_probe = GatedDeltaSequenceProbe::new(runtime);
         let gated_delta_checkpoint_probe = GatedDeltaBoundaryCheckpointProbe::new(runtime);
+        let gdn_decode_prework_probe = GdnDecodePreworkProbe::new(runtime);
         WorkerKernelCapabilities::probe_custom_kernels(
             &[
                 &sorted_expert_weighted_sum_probe,
@@ -265,6 +271,7 @@ pub fn worker_process_kernel_capabilities(
                 &target_verification_four_row_probe,
                 &gated_delta_probe,
                 &gated_delta_checkpoint_probe,
+                &gdn_decode_prework_probe,
             ],
             performance_attribution,
         )
