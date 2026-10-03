@@ -82,10 +82,6 @@ pub(super) fn handle_worker_event(
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status,
-            speculative_prefill_runtime_state,
-            speculative_prefill_unavailable_reason,
-            speculative_prefill_draft_model_id,
-            speculative_prefill_draft_model_revision,
         } => {
             if *is_ready || active_request.is_some() {
                 return Err(protocol_violation("duplicate worker readiness"));
@@ -101,13 +97,7 @@ pub(super) fn handle_worker_event(
                     mtp_runtime_state,
                     mtp_unavailable_reason,
                 )
-                .with_mtp_depth_status(mtp_depth_status)
-                .with_speculative_prefill_runtime(
-                    speculative_prefill_runtime_state,
-                    speculative_prefill_unavailable_reason,
-                    speculative_prefill_draft_model_id,
-                    speculative_prefill_draft_model_revision,
-                ),
+                .with_mtp_depth_status(mtp_depth_status),
             );
         }
         WorkerEvent::Idle {

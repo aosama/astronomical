@@ -27,7 +27,6 @@ print_journeys() {
         accept-modernbert-reference-similarity \
         accept-kernel-fallback-qwen \
         accept-kernel-fallback-k2 \
-        accept-speculative-prefill \
         accept-prompt-cache \
         test-model-ssd-streaming-support \
         test-persistent-prompt-cache-performance-support \
@@ -127,10 +126,6 @@ main() {
         accept-kernel-fallback-k2)
             lane_name="kernel-fallback-k2-serving"
             set -- cargo test --release -p astronomical-model-serving --test serving_acceptance_tests --features astronomical-model-serving/direct-mlx should_serve_romeo_and_juliet_on_k2_horizon_mova_when_both_kernels_are_unsupported -- --ignored --nocapture
-            ;;
-        accept-speculative-prefill)
-            lane_name="speculative-prefill-rest"
-            set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_complete_the_cold_tool_journey_through_real_config_worker_and_rest_boundaries -- --ignored --nocapture
             ;;
         accept-prompt-cache)
             lane_name="persistent-prompt-cache-acceptance"

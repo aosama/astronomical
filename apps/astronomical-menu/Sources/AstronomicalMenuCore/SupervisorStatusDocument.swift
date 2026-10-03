@@ -28,7 +28,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let expertPayloadByteCount: UInt64
     let modelCorePayloadByteCount: UInt64
     let contextStatePayloadByteCount: UInt64
-    let speculativePrefillDraftMemoryByteCount: UInt64
     let runtimeWorkByteCount: UInt64
     let availableByteCount: UInt64
   }
@@ -40,7 +39,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let expertPayloadBytes: UInt64
     let modelCorePayloadBytes: UInt64
     let contextStatePayloadBytes: UInt64
-    let speculativePrefillDraftMemoryBytes: UInt64
     let memoryCeilingUtilization: MlxMemoryCeilingUtilization?
 
     enum CodingKeys: String, CodingKey {
@@ -51,7 +49,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       case expertPayloadBytes = "expert_payload_bytes"
       case modelCorePayloadBytes = "model_core_payload_bytes"
       case contextStatePayloadBytes = "context_state_payload_bytes"
-      case speculativePrefillDraftMemoryBytes = "speculative_prefill_draft_memory_bytes"
       case memoryCeilingUtilization = "memory_ceiling_utilization"
     }
 
@@ -66,8 +63,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       modelCorePayloadBytes = try container.decode(UInt64.self, forKey: .modelCorePayloadBytes)
       contextStatePayloadBytes =
         try container.decode(UInt64.self, forKey: .contextStatePayloadBytes)
-      speculativePrefillDraftMemoryBytes =
-        try container.decodeIfPresent(UInt64.self, forKey: .speculativePrefillDraftMemoryBytes) ?? 0
       memoryCeilingUtilization =
         try container.decodeIfPresent(
           MlxMemoryCeilingUtilization.self, forKey: .memoryCeilingUtilization)
@@ -79,8 +74,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     let totalReusedPromptTokenCount: UInt64
     let targetPromptWorkTokenCount: UInt64
     let targetReusedPromptWorkTokenCount: UInt64
-    let drafterPromptWorkTokenCount: UInt64
-    let drafterReusedPromptWorkTokenCount: UInt64
     let averagePrefillTokensPerSecond: Double
     let averageGenerationTokensPerSecond: Double
 
@@ -90,8 +83,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       totalReusedPromptTokenCount: 0,
       targetPromptWorkTokenCount: 0,
       targetReusedPromptWorkTokenCount: 0,
-      drafterPromptWorkTokenCount: 0,
-      drafterReusedPromptWorkTokenCount: 0,
       averagePrefillTokensPerSecond: 0,
       averageGenerationTokensPerSecond: 0
     )
@@ -102,8 +93,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       case totalReusedPromptTokenCount = "total_reused_prompt_token_count"
       case targetPromptWorkTokenCount = "target_prompt_work_token_count"
       case targetReusedPromptWorkTokenCount = "target_reused_prompt_work_token_count"
-      case drafterPromptWorkTokenCount = "drafter_prompt_work_token_count"
-      case drafterReusedPromptWorkTokenCount = "drafter_reused_prompt_work_token_count"
       case averagePrefillTokensPerSecond = "average_prefill_tok_per_second"
       case averageGenerationTokensPerSecond = "average_generation_tok_per_second"
     }
@@ -114,8 +103,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       totalReusedPromptTokenCount: UInt64,
       targetPromptWorkTokenCount: UInt64,
       targetReusedPromptWorkTokenCount: UInt64,
-      drafterPromptWorkTokenCount: UInt64,
-      drafterReusedPromptWorkTokenCount: UInt64,
       averagePrefillTokensPerSecond: Double,
       averageGenerationTokensPerSecond: Double
     ) {
@@ -124,8 +111,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       self.totalReusedPromptTokenCount = totalReusedPromptTokenCount
       self.targetPromptWorkTokenCount = targetPromptWorkTokenCount
       self.targetReusedPromptWorkTokenCount = targetReusedPromptWorkTokenCount
-      self.drafterPromptWorkTokenCount = drafterPromptWorkTokenCount
-      self.drafterReusedPromptWorkTokenCount = drafterReusedPromptWorkTokenCount
       self.averagePrefillTokensPerSecond = averagePrefillTokensPerSecond
       self.averageGenerationTokensPerSecond = averageGenerationTokensPerSecond
     }
@@ -137,8 +122,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
       totalReusedPromptTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .totalReusedPromptTokenCount) ?? 0
       targetPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .targetPromptWorkTokenCount) ?? 0
       targetReusedPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .targetReusedPromptWorkTokenCount) ?? 0
-      drafterPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .drafterPromptWorkTokenCount) ?? 0
-      drafterReusedPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .drafterReusedPromptWorkTokenCount) ?? 0
       averagePrefillTokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .averagePrefillTokensPerSecond) ?? 0
       averageGenerationTokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .averageGenerationTokensPerSecond) ?? 0
     }
@@ -163,8 +146,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let mtpDepthResolutionReason: String?
   let mtpRuntimeState: String
   let mtpUnavailableReason: String?
-  let configuredSpeculativePrefillEnabled: Bool
-  let speculativePrefillEnabled: Bool
   // True only when the current worker has emitted its runtime configuration event; configuration
   // intent alone is insufficient because a replacement worker can still fail before applying it.
   let workerRuntimeFeatureConfigurationApplied: Bool
@@ -196,8 +177,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case mtpDepthResolutionReason = "mtp_depth_resolution_reason"
     case mtpRuntimeState = "mtp_runtime_state"
     case mtpUnavailableReason = "mtp_unavailable_reason"
-    case configuredSpeculativePrefillEnabled = "configured_speculative_prefill_enabled"
-    case speculativePrefillEnabled = "speculative_prefill_enabled"
     case workerRuntimeFeatureConfigurationApplied = "worker_runtime_feature_configuration_applied"
     case workerRuntimeFeatureConfiguration = "worker_runtime_feature_configuration"
     case mlxMemorySnapshot = "mlx_memory_snapshot"
@@ -235,9 +214,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mtpDepthResolutionReason = try container.decodeIfPresent(String.self, forKey: .mtpDepthResolutionReason)
     mtpRuntimeState = try container.decodeIfPresent(String.self, forKey: .mtpRuntimeState) ?? "disabled"
     mtpUnavailableReason = try container.decodeIfPresent(String.self, forKey: .mtpUnavailableReason)
-    configuredSpeculativePrefillEnabled = try container.decodeIfPresent(
-      Bool.self, forKey: .configuredSpeculativePrefillEnabled) ?? false
-    speculativePrefillEnabled = try container.decodeIfPresent(Bool.self, forKey: .speculativePrefillEnabled) ?? false
     workerRuntimeFeatureConfigurationApplied = try container.decodeIfPresent(
       Bool.self, forKey: .workerRuntimeFeatureConfigurationApplied) ?? false
     workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
@@ -278,8 +254,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     mtpDepthResolutionReason: String? = nil,
     mtpRuntimeState: String = "disabled",
     mtpUnavailableReason: String? = nil,
-    configuredSpeculativePrefillEnabled: Bool = false,
-    speculativePrefillEnabled: Bool = false,
     workerRuntimeFeatureConfigurationApplied: Bool = false,
     workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil,
     mlxMemorySnapshot: MlxMemorySnapshot? = nil,
@@ -310,8 +284,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.mtpDepthResolutionReason = mtpDepthResolutionReason
     self.mtpRuntimeState = mtpRuntimeState
     self.mtpUnavailableReason = mtpUnavailableReason
-    self.configuredSpeculativePrefillEnabled = configuredSpeculativePrefillEnabled
-    self.speculativePrefillEnabled = speculativePrefillEnabled
     self.workerRuntimeFeatureConfigurationApplied = workerRuntimeFeatureConfigurationApplied
     self.workerRuntimeFeatureConfiguration = workerRuntimeFeatureConfiguration
     self.mlxMemorySnapshot = mlxMemorySnapshot
@@ -336,7 +308,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     switch mlxMemorySnapshot?.source {
     case "model_loaded": "Model loaded"
     case "prefill": "Prompt snapshot"
-    case "speculative_prefill_draft_scoring": "Live drafter scoring"
     case "decode_submitted": "Live decode"
     case "finalized": "After cleanup"
     case "idle_poll": "Idle sample"
@@ -364,18 +335,11 @@ struct SupervisorStatusDocument: Codable, Equatable {
     )
     let activeBytesAfterContextState = activeBytesAfterModelCore.saturatingSubtracting(
       reconciledContextStatePayloadByteCount)
-    let reconciledSpeculativePrefillDraftMemoryByteCount = min(
-      mlxMemorySnapshot?.speculativePrefillDraftMemoryBytes ?? 0,
-      activeBytesAfterContextState
-    )
-    let reconciledRuntimeWorkByteCount = activeBytesAfterContextState.saturatingSubtracting(
-      reconciledSpeculativePrefillDraftMemoryByteCount)
+    let reconciledRuntimeWorkByteCount = activeBytesAfterContextState
     return MlxMemoryBreakdown(
       expertPayloadByteCount: reconciledExpertPayloadByteCount,
       modelCorePayloadByteCount: reconciledModelCorePayloadByteCount,
       contextStatePayloadByteCount: reconciledContextStatePayloadByteCount,
-      speculativePrefillDraftMemoryByteCount:
-        reconciledSpeculativePrefillDraftMemoryByteCount,
       runtimeWorkByteCount: reconciledRuntimeWorkByteCount,
       availableByteCount: mlxMemoryCeilingBytes.saturatingSubtracting(
         mlxMemoryActiveBytes)
@@ -397,19 +361,14 @@ struct SupervisorStatusDocument: Codable, Equatable {
       reusedPromptTokenCount: UInt64, newPromptTokenCount: UInt64
     )?
   {
-    let combinedPromptWorkTokenCount = servingSession.targetPromptWorkTokenCount.saturatingAdding(
-      servingSession.drafterPromptWorkTokenCount
-    )
-    let combinedReusedPromptWorkTokenCount = servingSession.targetReusedPromptWorkTokenCount.saturatingAdding(
-      servingSession.drafterReusedPromptWorkTokenCount
-    )
-    let promptTokenCount = combinedPromptWorkTokenCount > 0
-      ? combinedPromptWorkTokenCount
+    let targetPromptWorkTokenCount = servingSession.targetPromptWorkTokenCount
+    let promptTokenCount = targetPromptWorkTokenCount > 0
+      ? targetPromptWorkTokenCount
       : servingSession.totalPromptTokenCount
     guard promptTokenCount > 0 else { return nil }
     let reusedPromptTokenCount = min(
-      combinedPromptWorkTokenCount > 0
-        ? combinedReusedPromptWorkTokenCount
+      targetPromptWorkTokenCount > 0
+        ? servingSession.targetReusedPromptWorkTokenCount
         : servingSession.totalReusedPromptTokenCount,
       promptTokenCount
     )

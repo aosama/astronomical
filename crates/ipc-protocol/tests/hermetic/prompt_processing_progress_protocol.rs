@@ -24,24 +24,12 @@ async fn should_round_trip_prefill_progress_event() {
             expert_payload_bytes: 4_000,
             model_core_payload_bytes: 3_000,
             context_state_payload_bytes: 2_000,
-            speculative_prefill_draft_memory_bytes: 0,
             memory_ceiling_utilization: None,
         }),
         expert_residency: Some(WorkerExpertResidencySnapshot {
             total_layer_count: 40,
             resident_expert_count: 40,
             resident_expert_payload_bytes: 3_375_366_144,
-        }),
-        speculative_prefill_draft_memory_snapshot: Some(WorkerMlxMemorySnapshot {
-            source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
-            active_memory_bytes: 20_000,
-            allocator_cache_memory_bytes: 1_000,
-            peak_memory_bytes: 22_000,
-            expert_payload_bytes: 2_000,
-            model_core_payload_bytes: 3_000,
-            context_state_payload_bytes: 1_000,
-            speculative_prefill_draft_memory_bytes: 14_000,
-            memory_ceiling_utilization: None,
         }),
     };
 
@@ -52,7 +40,7 @@ async fn should_round_trip_prefill_progress_event() {
 async fn should_round_trip_prefill_progress_before_the_first_completed_forward() {
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(82),
-        prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
+        prompt_processing_phase: WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 4_096,
         elapsed_millis: 0,
@@ -60,7 +48,6 @@ async fn should_round_trip_prefill_progress_before_the_first_completed_forward()
         completed_prefill_chunk_tokens: None,
         mlx_memory_snapshot: None,
         expert_residency: None,
-        speculative_prefill_draft_memory_snapshot: None,
     };
 
     assert_round_tripped_worker_event(worker_event).await;

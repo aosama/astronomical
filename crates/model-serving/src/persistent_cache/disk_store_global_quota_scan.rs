@@ -203,7 +203,10 @@ fn scan_standalone_file(
     // blocks, so startup may reclaim them before current-format content.
     let is_obsolete_format_artifact = file_path.ancestors().any(|ancestor_path| {
         ancestor_path.file_name().is_some_and(|directory_name| {
-            directory_name == "kv_blocks" || directory_name == "recurrent_snapshots"
+            directory_name == "kv_blocks"
+                || directory_name == "recurrent_snapshots"
+                || directory_name == "speculative_prefill_selections"
+                || directory_name == "speculative_prefill_target_states"
         })
     });
     let cleanup_classification = if file_path
@@ -403,7 +406,7 @@ fn collect_subtree_block_identities(
     }
 }
 
-fn directory_file_size_and_paths(
+pub(super) fn directory_file_size_and_paths(
     directory_path: &Path,
 ) -> Result<(u64, Vec<PathBuf>), PersistentPromptCacheDiskStoreError> {
     let mut pending_directories = vec![directory_path.to_path_buf()];

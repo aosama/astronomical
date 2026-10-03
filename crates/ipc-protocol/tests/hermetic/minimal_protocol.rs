@@ -1,8 +1,8 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader,
-    ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, decode_command,
+    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, decode_command,
 };
 use futures_util::StreamExt;
 use tokio::io::duplex;
@@ -37,15 +37,6 @@ fn should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing() {
         panic!("the chat command variant should survive transport");
     };
     assert!(chat_command.validate().is_err());
-}
-
-#[test]
-fn should_serialize_speculative_prefill_runtime_state_as_snake_case() {
-    assert_eq!(
-        serde_json::to_string(&SpeculativePrefillRuntimeState::Unavailable)
-            .expect("speculative-prefill state should serialize"),
-        "\"unavailable\""
-    );
 }
 
 #[tokio::test]
@@ -237,7 +228,6 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
             expert_payload_bytes: 18_000_000_000,
             model_core_payload_bytes: 8_000_000_000,
             context_state_payload_bytes: 0,
-            speculative_prefill_draft_memory_bytes: 0,
             memory_ceiling_utilization: None,
         }),
         expert_residency: None,

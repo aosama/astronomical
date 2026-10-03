@@ -12,8 +12,6 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) full_attention_key_value_growth_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) speculative_prefill_draft_forward_tokens: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: Option<u32>,
@@ -41,7 +39,6 @@ pub struct ConfiguredChunkingFields {
     pub fixed_prompt_processing_chunk_size_tokens: bool,
     pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: bool,
     pub full_attention_key_value_growth_tokens: bool,
-    pub speculative_prefill_draft_forward_tokens: bool,
     pub prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
@@ -72,9 +69,6 @@ impl ChunkingConfigFile {
                 .is_some(),
             full_attention_key_value_growth_tokens: self
                 .full_attention_key_value_growth_tokens
-                .is_some(),
-            speculative_prefill_draft_forward_tokens: self
-                .speculative_prefill_draft_forward_tokens
                 .is_some(),
             prefill_graph_submission_layer_interval: self
                 .prefill_graph_submission_layer_interval
@@ -115,9 +109,6 @@ impl ChunkingConfigFile {
             full_attention_key_value_growth_tokens: model
                 .full_attention_key_value_growth_tokens
                 .or(global.full_attention_key_value_growth_tokens),
-            speculative_prefill_draft_forward_tokens: model
-                .speculative_prefill_draft_forward_tokens
-                .or(global.speculative_prefill_draft_forward_tokens),
             prefill_graph_submission_layer_interval: model
                 .prefill_graph_submission_layer_interval
                 .or(global.prefill_graph_submission_layer_interval),
@@ -157,7 +148,6 @@ pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// Independent SSD-paged prompt chunk. Owned separately from the resident chunk.
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
-pub const DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS: u32 = 2_048;
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
 /// Resident multi-token prefill keeps one lazy tape unless the user raises this.
@@ -174,7 +164,6 @@ pub struct ChunkingConfig {
     fixed_prompt_processing_chunk_size_tokens: u32,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     full_attention_key_value_growth_tokens: u32,
-    speculative_prefill_draft_forward_tokens: u32,
     prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
@@ -203,9 +192,6 @@ impl ChunkingConfig {
             full_attention_key_value_growth_tokens: configured
                 .full_attention_key_value_growth_tokens
                 .unwrap_or(DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS),
-            speculative_prefill_draft_forward_tokens: configured
-                .speculative_prefill_draft_forward_tokens
-                .unwrap_or(DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS),
             prefill_graph_submission_layer_interval: configured
                 .prefill_graph_submission_layer_interval
                 .unwrap_or(DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
@@ -244,10 +230,6 @@ impl ChunkingConfig {
             (
                 "chunking.full_attention_key_value_growth_tokens",
                 self.full_attention_key_value_growth_tokens,
-            ),
-            (
-                "chunking.speculative_prefill_draft_forward_tokens",
-                self.speculative_prefill_draft_forward_tokens,
             ),
             (
                 "chunking.prompt_cache_common_prefix_stride_blocks",
@@ -298,11 +280,6 @@ impl ChunkingConfig {
     #[must_use]
     pub const fn full_attention_key_value_growth_tokens(&self) -> u32 {
         self.full_attention_key_value_growth_tokens
-    }
-
-    #[must_use]
-    pub const fn speculative_prefill_draft_forward_tokens(&self) -> u32 {
-        self.speculative_prefill_draft_forward_tokens
     }
 
     #[must_use]
@@ -365,8 +342,6 @@ impl Default for ChunkingConfig {
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
                 DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             full_attention_key_value_growth_tokens: DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
-            speculative_prefill_draft_forward_tokens:
-                DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
             prefill_graph_submission_layer_interval:
                 DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             experimental_ssd_paging_prefill_graph_submission_layer_interval:

@@ -58,7 +58,6 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                     fixed_prompt_processing_chunk_size_tokens: 4_096,
                     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
                     full_attention_key_value_growth_tokens: 256,
-                    speculative_prefill_draft_forward_tokens: 2_048,
                     prefill_graph_submission_layer_interval: 0,
                     experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
                     experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
@@ -70,7 +69,6 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                 },
                 mtp_enabled: true,
                 mtp_draft_depth: Some(2),
-                speculative_prefill: None,
             },
         ),
     };
@@ -103,7 +101,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                 fixed_prompt_processing_chunk_size_tokens: 4_096,
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
                 full_attention_key_value_growth_tokens: 256,
-                speculative_prefill_draft_forward_tokens: 2_048,
                 prefill_graph_submission_layer_interval: 0,
                 experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
                 experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
@@ -115,7 +112,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
             },
             mtp_enabled: true,
             mtp_draft_depth: Some(2),
-            speculative_prefill: None,
         });
 
     let serialized_configuration =
@@ -133,7 +129,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                     "fixed_prompt_processing_chunk_size_tokens": 4_096,
                     "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2_048,
                     "full_attention_key_value_growth_tokens": 256,
-                    "speculative_prefill_draft_forward_tokens": 2_048,
                     "prefill_graph_submission_layer_interval": 0,
                     "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
                     "experimental_ssd_paging_generation_graph_submission_layer_interval": 3,
@@ -144,8 +139,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                     "experimental_fused_moe_decode_enabled": false
                 },
                 "mtp_enabled": true,
-                "mtp_draft_depth": 2,
-                "speculative_prefill": null
+                "mtp_draft_depth": 2
             }
         })
     );

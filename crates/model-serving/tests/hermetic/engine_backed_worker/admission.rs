@@ -3,8 +3,8 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    MAX_IPC_FRAME_BYTES, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
+    MAX_IPC_FRAME_BYTES, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand,
+    WorkerEvent,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
@@ -233,10 +233,6 @@ impl ModelGenerationProcessor for PassthroughProcessor {
         _mtp_runtime_state: MtpRuntimeState,
         _mtp_unavailable_reason: Option<String>,
         _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-        _speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        _speculative_prefill_unavailable_reason: Option<String>,
-        _speculative_prefill_draft_model_id: Option<String>,
-        _speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
         WorkerEvent::Ready {
             model_id: "example/rejecting-engine".to_owned(),
@@ -252,10 +248,6 @@ impl ModelGenerationProcessor for PassthroughProcessor {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: Default::default(),
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
         }
     }
 
@@ -301,10 +293,6 @@ impl ModelGenerationProcessor for FeedbackProcessor {
         _mtp_runtime_state: MtpRuntimeState,
         _mtp_unavailable_reason: Option<String>,
         _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-        _speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        _speculative_prefill_unavailable_reason: Option<String>,
-        _speculative_prefill_draft_model_id: Option<String>,
-        _speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
         WorkerEvent::Ready {
             model_id: "example/feedback-engine".to_owned(),
@@ -320,10 +308,6 @@ impl ModelGenerationProcessor for FeedbackProcessor {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: Default::default(),
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
         }
     }
 

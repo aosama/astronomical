@@ -48,7 +48,6 @@ async fn run_romeo_continuation() {
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
         false,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the dense engine settings should be valid");
     qwen3_5_engine
@@ -138,7 +137,6 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
         false,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine

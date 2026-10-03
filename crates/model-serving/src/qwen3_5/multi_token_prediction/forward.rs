@@ -315,8 +315,6 @@ impl Qwen3_5Model {
             mtp_full_attention_state.offset_tokens(),
             full_attention_weights,
             mtp_full_attention_state,
-            0,
-            None,
             None,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
         )

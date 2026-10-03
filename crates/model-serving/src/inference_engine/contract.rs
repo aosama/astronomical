@@ -329,8 +329,6 @@ pub enum GeneratedToken {
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         /// Current retained-expert ownership after this chunk.
         expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
-        /// Active MLX telemetry captured during request-scoped draft scoring.
-        speculative_prefill_draft_memory_telemetry: Option<MlxMemoryTelemetry>,
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
         persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,

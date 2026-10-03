@@ -4,8 +4,7 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use crate::MlxInferenceEngine;
 
 use super::{
-    Qwen3_5EngineState, Qwen3_5InferenceExecution, Qwen3_5SpeculativePrefillFailureStageForTests,
-    fatal_engine_error, qwen3_5_runtime_error,
+    Qwen3_5EngineState, Qwen3_5InferenceExecution, fatal_engine_error, qwen3_5_runtime_error,
 };
 
 const TEST_MTP_FULL_ATTENTION_GROWTH_TOKENS: i32 = 1;
@@ -111,25 +110,6 @@ impl Qwen3_5EngineState {
         Ok(active_request.prompt_work_reuse.clone())
     }
 
-    fn speculative_prefill_selected_token_positions_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<Option<Vec<usize>>, InferenceEngineError> {
-        let active_request = self.active_request.as_ref().ok_or_else(|| {
-            fatal_engine_error(
-                "cannot inspect speculative-prefill selected positions without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot inspect speculative-prefill selected positions for a different request",
-            ));
-        }
-        Ok(active_request
-            .speculative_prefill_selected_token_positions
-            .clone())
-    }
-
     fn force_next_prefill_capacity_rejection_for_tests(
         &mut self,
         request_id: RequestId,
@@ -143,43 +123,6 @@ impl Qwen3_5EngineState {
             ));
         }
         active_request.force_next_prefill_capacity_rejection_for_tests = true;
-        Ok(())
-    }
-
-    fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error(
-                "cannot force speculative-prefill draft-prefix restore failure without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force speculative-prefill draft-prefix restore failure for a different request",
-            ));
-        }
-        active_request.force_next_speculative_prefill_draft_prefix_restore_failure_for_tests = true;
-        Ok(())
-    }
-
-    fn force_next_speculative_prefill_failure_for_tests(
-        &mut self,
-        request_id: RequestId,
-        failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error(
-                "cannot force a speculative-prefill failure without an active request",
-            )
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force a speculative-prefill failure for a different request",
-            ));
-        }
-        active_request.forced_speculative_prefill_failure_stage_for_tests = Some(failure_stage);
         Ok(())
     }
 
@@ -320,33 +263,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
-    /// Returns the target conversation positions selected for an active acceptance request.
-    #[doc(hidden)]
-    pub async fn speculative_prefill_selected_token_positions_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<Option<Vec<usize>>, InferenceEngineError> {
-        let (selected_token_positions_sender, selected_token_positions_receiver) =
-            std::sync::mpsc::sync_channel(1);
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            let selected_token_positions = qwen_inference_execution
-                .speculative_prefill_selected_token_positions_for_tests(request_id)?;
-            selected_token_positions_sender
-                .send(selected_token_positions)
-                .map_err(|_| {
-                    fatal_engine_error(
-                        "selected speculative-prefill positions receiver stopped unexpectedly",
-                    )
-                })
-        })
-        .await?;
-        selected_token_positions_receiver.recv().map_err(|_| {
-            fatal_engine_error(
-                "selected speculative-prefill positions owner operation returned no response",
-            )
-        })
-    }
-
     /// Rejects one completed prefill attempt so acceptance can verify full retry rollback.
     pub async fn force_next_prefill_capacity_rejection_for_tests(
         &self,
@@ -354,32 +270,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     ) -> Result<(), InferenceEngineError> {
         self.run_owner_test_operation(move |qwen_inference_execution| {
             qwen_inference_execution.force_next_prefill_capacity_rejection_for_tests(request_id)
-        })
-        .await
-    }
-
-    /// Forces one draft-prefix restore failure so acceptance can verify uncached retry.
-    pub async fn force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            qwen_inference_execution
-                .force_next_speculative_prefill_draft_prefix_restore_failure_for_tests(request_id)
-        })
-        .await
-    }
-
-    /// Forces one configured SpecPrefill stage to fail through its production error boundary.
-    #[doc(hidden)]
-    pub async fn force_next_speculative_prefill_failure_for_tests(
-        &self,
-        request_id: RequestId,
-        failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            qwen_inference_execution
-                .force_next_speculative_prefill_failure_for_tests(request_id, failure_stage)
         })
         .await
     }

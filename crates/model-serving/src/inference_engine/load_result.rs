@@ -1,6 +1,4 @@
-use astronomical_ipc_protocol::{
-    ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, SpeculativePrefillRuntimeState,
-};
+use astronomical_ipc_protocol::{ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState};
 
 /// Immutable readiness metadata captured after all engine load transitions.
 ///
@@ -12,10 +10,6 @@ pub struct EngineLoadResult {
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
     mtp_depth_status: MtpDepthStatus,
-    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-    speculative_prefill_unavailable_reason: Option<String>,
-    speculative_prefill_draft_model_id: Option<String>,
-    speculative_prefill_draft_model_revision: Option<String>,
     minimum_mlx_memory_ceiling_bytes: u64,
 }
 
@@ -28,10 +22,6 @@ impl EngineLoadResult {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: MtpDepthStatus::default(),
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
             minimum_mlx_memory_ceiling_bytes: 1,
         }
     }
@@ -66,22 +56,6 @@ impl EngineLoadResult {
         self
     }
 
-    /// Sets optional draft-assisted speculative-prefill load metadata.
-    #[must_use]
-    pub fn with_speculative_prefill_runtime(
-        mut self,
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        speculative_prefill_unavailable_reason: Option<String>,
-        speculative_prefill_draft_model_id: Option<String>,
-        speculative_prefill_draft_model_revision: Option<String>,
-    ) -> Self {
-        self.speculative_prefill_runtime_state = speculative_prefill_runtime_state;
-        self.speculative_prefill_unavailable_reason = speculative_prefill_unavailable_reason;
-        self.speculative_prefill_draft_model_id = speculative_prefill_draft_model_id;
-        self.speculative_prefill_draft_model_revision = speculative_prefill_draft_model_revision;
-        self
-    }
-
     /// Sets the loaded model's safe idle MLX minimum in exact bytes.
     #[must_use]
     pub const fn with_minimum_mlx_memory_ceiling_bytes(
@@ -113,30 +87,6 @@ impl EngineLoadResult {
     #[must_use]
     pub const fn mtp_depth_status(&self) -> MtpDepthStatus {
         self.mtp_depth_status
-    }
-
-    /// Returns the optional draft-assisted speculative-prefill runtime state.
-    #[must_use]
-    pub const fn speculative_prefill_runtime_state(&self) -> SpeculativePrefillRuntimeState {
-        self.speculative_prefill_runtime_state
-    }
-
-    /// Returns the optional draft-assisted speculative-prefill load failure reason.
-    #[must_use]
-    pub fn speculative_prefill_unavailable_reason(&self) -> Option<&str> {
-        self.speculative_prefill_unavailable_reason.as_deref()
-    }
-
-    /// Returns the configured draft model identity, when present.
-    #[must_use]
-    pub fn speculative_prefill_draft_model_id(&self) -> Option<&str> {
-        self.speculative_prefill_draft_model_id.as_deref()
-    }
-
-    /// Returns the validated request-scoped draft model revision, when active.
-    #[must_use]
-    pub fn speculative_prefill_draft_model_revision(&self) -> Option<&str> {
-        self.speculative_prefill_draft_model_revision.as_deref()
     }
 
     /// Returns the exact safe idle MLX minimum for the loaded engine.

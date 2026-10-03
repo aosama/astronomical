@@ -95,14 +95,6 @@ impl Qwen3_5EngineState {
             republish_prefill_residency_plan_after_demotion(self, active_request)?;
         }
 
-        if active_request.should_use_speculative_prefill {
-            active_request.performance_attribution.record_counter(
-                PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-                retained_payload_before_reclamation
-                    .saturating_sub(retained_payload_after_reclamation),
-            );
-        }
-
         let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,

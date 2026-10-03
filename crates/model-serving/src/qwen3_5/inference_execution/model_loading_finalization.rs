@@ -31,13 +31,7 @@ impl Qwen3_5EngineState {
                     .map(|loaded_model| loaded_model.expert_memory_mode()),
             )
             .with_mtp_runtime_state(mtp_runtime_state)
-            .with_mtp_depth_status(self.mtp_depth_status)
-            .with_speculative_prefill_runtime(
-                self.speculative_prefill_runtime_state,
-                self.speculative_prefill_unavailable_reason.clone(),
-                self.speculative_prefill.draft_model_id.clone(),
-                self.speculative_prefill_draft_model_revision.clone(),
-            );
+            .with_mtp_depth_status(self.mtp_depth_status);
         if self.mtp_runtime_state == Qwen3_5MtpRuntimeState::Unavailable {
             if let Some(mtp_unavailable_reason) = self.mtp_unavailable_reason.as_ref() {
                 engine_load_result =

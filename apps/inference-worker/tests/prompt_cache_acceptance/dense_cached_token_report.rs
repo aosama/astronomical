@@ -9,11 +9,8 @@ use super::rest_support::{
 use crate::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
 use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
 
-// Issue #657 guard for the dense-only reporting path: the usage surface must keep
-// reporting exactly the block-aligned dense restore when SpecPrefill is not
-// configured. The SpecPrefill reuse-report journey pins the combined dense plus
-// sparse total; this journey pins the dense-only value so a future reporting
-// change cannot silently double-count or drop the dense component.
+// Issue #657 guard: report the block-aligned dense restore without double-counting
+// or dropping its contribution from the public usage surface.
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]

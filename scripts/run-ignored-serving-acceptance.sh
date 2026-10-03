@@ -35,30 +35,8 @@ acceptance_skip_reason() {
         *prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell)
             printf '%s\n' "requires-explicit-selected-cache-cell"
             ;;
-        *speculative_prefill_tool_process_restart::should_run_one_speculative_prefill_tool_process_pass)
-            printf '%s\n' "subprocess-helper"
-            ;;
         *)
             return 1
-            ;;
-    esac
-}
-
-# Per-test execution boundary. Visual SpecPrefill journeys load the large sparse
-# MoE target once per leg and prefill visual prompts above the eligibility floor,
-# which legitimately exceeds the repository's 120-second default. The drafter
-# cache journey is the same class of work: it streams the large sparse MoE target
-# and then populates drafter state for an 8192-token prompt, whose own progress
-# line estimates 115 seconds for that single phase before the follow-up turn runs.
-# Every other acceptance test keeps the default boundary.
-acceptance_test_timeout_seconds() {
-    acceptance_test_name="$1"
-    case "$acceptance_test_name" in
-        *speculative_prefill::visual_tool::* | *speculative_prefill::persistent_cache::*)
-            printf '%s\n' "300"
-            ;;
-        *)
-            printf '%s\n' "120"
             ;;
     esac
 }
@@ -130,7 +108,7 @@ run_selected_suite() {
         fi
         test_started_at_seconds="$(date +%s)"
         printf '%s\n' "[ignored-acceptance-suite] suite=${selected_suite} test=${completed_test_count}/${acceptance_test_count} status=start name=${acceptance_test_name} started_at=$(date '+%Y-%m-%dT%H:%M:%S%z')"
-        if TEST_TIMEOUT_SECONDS="$(acceptance_test_timeout_seconds "$acceptance_test_name")" \
+        if TEST_TIMEOUT_SECONDS=120 \
             "$bounded_test_runner" cargo test "$@" "$acceptance_test_name" -- --ignored --nocapture --exact --test-threads 1; then
             test_status="success"
         else

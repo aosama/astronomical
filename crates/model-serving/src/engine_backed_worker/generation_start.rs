@@ -132,7 +132,6 @@ where
                     completed_prefill_chunk_tokens: None,
                     mlx_memory_snapshot: None,
                     expert_residency: None,
-                    speculative_prefill_draft_memory_snapshot: None,
                 })
                 .await?;
         }

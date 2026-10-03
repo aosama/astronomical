@@ -57,7 +57,6 @@ async fn should_round_trip_an_image_generation_journey() {
                 expert_payload_bytes: 0,
                 model_core_payload_bytes: 0,
                 context_state_payload_bytes: 0,
-                speculative_prefill_draft_memory_bytes: 0,
                 memory_ceiling_utilization: None,
             }),
         },
@@ -312,7 +311,6 @@ fn finalized_image_memory_snapshot() -> WorkerMlxMemorySnapshot {
         expert_payload_bytes: 0,
         model_core_payload_bytes: 0,
         context_state_payload_bytes: 0,
-        speculative_prefill_draft_memory_bytes: 0,
         memory_ceiling_utilization: None,
     }
 }
@@ -429,9 +427,5 @@ fn model_swapped_event_json(capabilities: serde_json::Value) -> serde_json::Valu
             "effective_execution_draft_depth": null,
             "resolution_reason": null
         },
-        "speculative_prefill_runtime_state": "disabled",
-        "speculative_prefill_unavailable_reason": null,
-        "speculative_prefill_draft_model_id": null,
-        "speculative_prefill_draft_model_revision": null
     })
 }

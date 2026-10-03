@@ -439,7 +439,6 @@ fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguratio
             fixed_prompt_processing_chunk_size_tokens: 256,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
             full_attention_key_value_growth_tokens: 256,
-            speculative_prefill_draft_forward_tokens: 256,
             prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
@@ -451,7 +450,6 @@ fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguratio
         },
         mtp_enabled: true,
         mtp_draft_depth: None,
-        speculative_prefill: None,
     })
 }
 

@@ -247,8 +247,6 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
             prompt_work_reuse: WorkerPromptWorkReuse {
                 target_eligible_token_count: prompt_token_count,
                 target_restored_token_count: u64::from(restored_prompt_prefix_token_count),
-                drafter_eligible_token_count: 0,
-                drafter_restored_token_count: 0,
             },
             sampling_strategy,
             random_state,

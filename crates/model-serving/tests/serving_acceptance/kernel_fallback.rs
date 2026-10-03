@@ -95,7 +95,6 @@ async fn run_forced_fallback_romeo_continuation() {
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
         false,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the demoted-kernel engine settings should be valid");
     qwen3_5_engine

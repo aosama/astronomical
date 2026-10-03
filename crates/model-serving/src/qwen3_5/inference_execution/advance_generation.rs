@@ -231,7 +231,6 @@ impl Qwen3_5EngineState {
                         admitted_baseline.retained_expert_payload_bytes;
                     let streamed_expert_page_bytes_before_growth =
                         admitted_baseline.streamed_expert_page_bytes;
-                    self.save_speculative_prefill_target_prefix(active_request)?;
                     let model = self.model.as_ref().ok_or_else(|| {
                         fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;

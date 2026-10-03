@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{WorkerEvent, WorkerPromptProcessingPhase};
+use astronomical_ipc_protocol::WorkerEvent;
 
 use crate::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthSnapshot,
@@ -24,7 +24,6 @@ pub(super) fn handle_worker_prefill_progress(
         completed_prefill_chunk_tokens,
         mlx_memory_snapshot,
         expert_residency,
-        speculative_prefill_draft_memory_snapshot,
     } = worker_prefill_progress_event
     else {
         return Err(WorkerControlError::WorkerProtocolViolation {
@@ -48,10 +47,8 @@ pub(super) fn handle_worker_prefill_progress(
         );
         active_request.last_mlx_active_memory_bytes = Some(mlx_memory_snapshot.active_memory_bytes);
     }
-    let latest_mlx_memory_snapshot =
-        speculative_prefill_draft_memory_snapshot.or(mlx_memory_snapshot);
-    if let Some(latest_mlx_memory_snapshot) = latest_mlx_memory_snapshot {
-        publish_latest_mlx_memory_snapshot(health_snapshot, latest_mlx_memory_snapshot);
+    if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+        publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
     }
     if let Some(expert_residency) = expert_residency {
         crate::worker_health::publish_worker_expert_residency(health_snapshot, expert_residency);
@@ -71,15 +68,11 @@ pub(super) fn handle_worker_prefill_progress(
             mlx_peak_memory_bytes: mlx_memory_snapshot.map(|snapshot| snapshot.peak_memory_bytes),
         },
     )?;
-    let published_target_processed_tokens = match prompt_processing_phase {
-        WorkerPromptProcessingPhase::Drafter => 0,
-        WorkerPromptProcessingPhase::Target => processed_tokens,
-    };
     publish_active_request_progress(
         health_snapshot,
         ActiveRequestProgress::Prefill {
             prompt_processing_phase,
-            processed_tokens: published_target_processed_tokens,
+            processed_tokens,
             total_tokens,
             request_started_at: active_request.request_started_at,
             elapsed_millis,

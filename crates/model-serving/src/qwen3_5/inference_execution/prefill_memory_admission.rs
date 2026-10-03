@@ -14,7 +14,6 @@ pub(super) struct AdmissionOutcome {
     pub(super) active_memory_bytes_before_growth: usize,
     pub(super) retained_expert_payload_bytes_before_growth: u64,
     pub(super) streamed_expert_page_bytes_before_growth: u64,
-    pub(super) target_expert_payload_bytes_reclaimed_during_context_admission: u64,
     /// This admission demoted a complete resident expert owner into paged
     /// streaming.
     ///
@@ -30,10 +29,10 @@ pub(super) struct AdmissionOutcome {
 }
 
 impl Qwen3_5EngineState {
-    /// Run adaptive RAM growth admission and record reclaimed-expert diagnostics.
+    /// Run adaptive RAM growth admission and record residency diagnostics.
     ///
-    /// Returns the memory snapshot before growth and the expert bytes reclaimed
-    /// during context admission. The model is reborrowed after admission because
+    /// Returns the memory snapshot before growth. The model is reborrowed after
+    /// admission because
     /// the mutable admission call can trigger a Resident → Paged transition.
     pub(super) fn execute_prefill_memory_admission(
         &mut self,
@@ -104,7 +103,6 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             streamed_expert_page_bytes_before_growth: admitted_baseline.streamed_expert_page_bytes,
-            target_expert_payload_bytes_reclaimed_during_context_admission,
             demoted_complete_resident_expert_owner,
         })
     }

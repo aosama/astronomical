@@ -43,18 +43,6 @@ pub(crate) mod model;
 #[cfg(feature = "direct-mlx")]
 mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
-mod speculative_prefill;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_attention_capture;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_draft_forward;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_selection;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_sparse_target;
-#[cfg(feature = "direct-mlx")]
-mod speculative_prefill_visual_forward;
-#[cfg(feature = "direct-mlx")]
 mod target_verification_four_row_quantized_linear;
 #[cfg(feature = "direct-mlx")]
 mod target_verification_quantized_linear;
@@ -97,16 +85,6 @@ pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use speculative_prefill::{
-    Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlock,
-    Qwen3_5SpeculativePrefillDraftPersistentPromptCacheBlockConsumer,
-    Qwen3_5SpeculativePrefillDraftScoringOutcome,
-};
-#[cfg(feature = "direct-mlx")]
-pub use speculative_prefill_attention_capture::qwen3_5_aggregate_speculative_prefill_attention_weights;
-#[cfg(feature = "direct-mlx")]
-pub use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions_on_gpu;
-#[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel;
 #[cfg(feature = "direct-mlx")]
@@ -128,5 +106,3 @@ pub(crate) use super::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchitect
 pub(crate) use super::decoder::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use super::vision::{Qwen3_5VisionModel, visual_embedding_injection};
-#[cfg(feature = "direct-mlx")]
-pub(crate) use speculative_prefill_attention_capture::Qwen3_5AttentionCapture;

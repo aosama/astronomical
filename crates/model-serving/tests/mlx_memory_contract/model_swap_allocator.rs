@@ -187,7 +187,7 @@ fn create_engine(
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, VALIDATION_MAXIMUM_OUTPUT_TOKENS)
         .expect("the selected Qwen3.5-MoE artifact should validate before loading");
-    Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -201,7 +201,6 @@ fn create_engine(
         crate::common::standard_worker_chunking_configuration(),
         true,
         false,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
         model_loading_performance_attribution,
         performance_attribution_log,
     )

@@ -347,19 +347,6 @@ pub(super) fn retain_layer_tensor(
         },
     )
 }
-pub(super) fn retain_block_tensor(
-    layer_index: usize,
-    tensor_name: &str,
-    tensor: &MlxArray,
-) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
-    tensor.retain().map_err(
-        |source| PersistentPromptCacheStateBridgeError::RetainBlockTensor {
-            layer_index,
-            tensor_name: tensor_name.to_owned(),
-            source,
-        },
-    )
-}
 /// Persistent prompt-cache block extraction or restoration could not bridge
 /// to the live in-memory request decoder state.
 #[derive(Debug, thiserror::Error)]
@@ -426,15 +413,6 @@ pub enum PersistentPromptCacheStateBridgeError {
         source: MlxRuntimeError,
     },
     #[error(
-        "failed to retain qwen3.5-moe persistent prompt-cache block tensor {tensor_name} for layer {layer_index}"
-    )]
-    RetainBlockTensor {
-        layer_index: usize,
-        tensor_name: String,
-        #[source]
-        source: MlxRuntimeError,
-    },
-    #[error(
         "qwen3.5-moe persistent prompt-cache KV restore destination token count {restored_token_count} is invalid"
     )]
     InvalidRestoredSequenceTokenCount { restored_token_count: usize },
@@ -476,14 +454,6 @@ pub enum PersistentPromptCacheStateBridgeError {
         layer_index: usize,
         #[source]
         source: MlxRuntimeError,
-    },
-    #[error(
-        "restored sparse target state layer {layer_index} has {actual_token_count} rows; expected {expected_token_count}"
-    )]
-    InconsistentSpeculativePrefillTargetTokenCount {
-        layer_index: usize,
-        expected_token_count: usize,
-        actual_token_count: i32,
     },
     #[error("failed to materialize restored qwen3.5-moe persistent prompt-cache state")]
     EvaluateRestoredPersistentPromptCacheState(#[source] MlxRuntimeError),

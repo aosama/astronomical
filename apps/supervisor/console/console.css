@@ -661,7 +661,6 @@ body[data-application-channel="development"] .application-build-identity { color
 .mlx-segment { height: 100%; transition: width 300ms ease; }
 .mlx-segment-experts { background: #0a84ff; }
 .mlx-segment-model-core { background: #56b4e9; }
-.mlx-segment-drafter { background: #e69f00; }
 .mlx-segment-context-state { background: #f0e442; }
 .mlx-segment-runtime-work { background: #a78bfa; }
 .mlx-segment-available { background: rgba(155, 157, 168, 0.25); }

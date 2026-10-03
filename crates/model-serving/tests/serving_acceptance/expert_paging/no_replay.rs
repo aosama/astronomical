@@ -7,7 +7,6 @@ use astronomical_model_serving::Qwen3_5ArtifactValidator;
 use astronomical_runtime_integration::MlxMemoryLimits;
 use tokio::time::timeout;
 
-use crate::serving_acceptance::speculative_prefill::support::prepare_romeo_and_juliet_three_paragraph_summary_prompt;
 use crate::serving_acceptance::support::performance_attribution::{
     counter_amount, create_attributed_engine, generation_report_for_request,
     load_engine_with_progress, read_attribution_report_documents, run_attributed_generation,
@@ -35,7 +34,7 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
             .validate(&model_directory, u32::from(OUTPUT_TOKEN_COUNT))
             .expect("the large sparse MoE e2e fixture should validate");
         let sparse_layer_count = u64::from(validated_artifact.config().layer_count());
-        let prompt = prepare_romeo_and_juliet_three_paragraph_summary_prompt(
+        let prompt = crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
             &model_directory,
             model_id(),
             REQUEST_ID,
@@ -68,7 +67,7 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
         let generated_token_ids = run_attributed_generation(
             &mut engine,
             REQUEST_ID,
-            &prompt.prompt_token_ids,
+            &prompt,
             "paged_prefill_no_replay_generation",
             OUTPUT_TOKEN_COUNT,
             &end_of_sequence_token_ids,

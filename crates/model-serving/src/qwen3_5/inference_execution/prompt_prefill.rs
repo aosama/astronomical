@@ -3,20 +3,15 @@
 //! Calls the three phases in order:
 //! 1. `plan_prompt_prefill_chunk` — pure decision logic (no side effects).
 //! 2. `execute_prefill_memory_admission` — adaptive RAM growth.
-//! 3. `dispatch_prefill_forward` — GPU forward dispatch (speculative / visual /
-//!    history capture / plain text).
+//! 3. `dispatch_prefill_forward` — GPU forward dispatch for visual, history,
+//!    or plain-text input.
 //!
 //! Collects results into `PromptPrefillChunkOutcome` for the caller in
 //! `prefill_advance.rs`.
 
-use astronomical_ipc_protocol::RequestId;
-
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_forward_dispatch::PrefillForwardError;
-use super::prompt_prefill_errors::{
-    PromptPrefillChunkAttemptError, configured_speculative_prefill_execution_error,
-    prefill_execution_error,
-};
+use super::prompt_prefill_errors::{PromptPrefillChunkAttemptError, prefill_execution_error};
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 
 use crate::{PerformanceCounter, Qwen3_5PersistentPromptCacheBoundaryCheckpoint};
@@ -36,7 +31,6 @@ impl Qwen3_5EngineState {
     /// Execute one prompt-processing chunk: plan → admit → forward.
     pub(super) fn execute_prompt_prefill_chunk(
         &mut self,
-        request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
@@ -55,13 +49,6 @@ impl Qwen3_5EngineState {
             plan.exact_temporary_workspace_bytes,
             plan.direct_publication_workspace_bytes,
         )?;
-
-        if plan.speculative_prefill_target_is_active {
-            active_request.performance_attribution.record_counter(
-                PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-                admission_outcome.target_expert_payload_bytes_reclaimed_during_context_admission,
-            );
-        }
 
         // Admission can demote a complete resident expert owner into paged
         // streaming. The Prefill plan published before admission described the
@@ -92,10 +79,9 @@ impl Qwen3_5EngineState {
             .prefill_request_checkpoint()
             .map_err(qwen3_5_runtime_error)?;
 
-        // Phase 3: forward dispatch (speculative / visual / history / text).
+        // Phase 3: dispatch the target model's prompt forward.
         let forward_started_at = std::time::Instant::now();
         let dispatch_outcome = match self.dispatch_prefill_forward(
-            request_id,
             active_request,
             prefill_start,
             prefill_end,
@@ -103,20 +89,9 @@ impl Qwen3_5EngineState {
         ) {
             Ok(dispatch_outcome) => dispatch_outcome,
             Err(PrefillForwardError::Execution(execution_error)) => {
-                return Err(if plan.speculative_prefill_target_is_active {
-                    configured_speculative_prefill_execution_error(
-                        request_id,
-                        "sparse target execution",
-                        execution_error,
-                        prefill_request_checkpoint,
-                    )
-                } else {
-                    prefill_execution_error(execution_error, prefill_request_checkpoint)
-                });
-            }
-            Err(PrefillForwardError::Engine(inference_engine_error)) => {
-                return Err(PromptPrefillChunkAttemptError::Engine(
-                    inference_engine_error,
+                return Err(prefill_execution_error(
+                    execution_error,
+                    prefill_request_checkpoint,
                 ));
             }
         };
@@ -131,22 +106,17 @@ impl Qwen3_5EngineState {
             );
         }
 
+        let mut boundary_checkpoints = dispatch_outcome.boundary_checkpoints;
+        super::prompt_prefill_counters::record_persistent_prompt_cache_boundary_checkpoint(
+            active_request,
+            plan.prefill_token_count,
+            &plan.all_completed_prefill_chunk_tokens,
+            &mut boundary_checkpoints,
+        )?;
         let model = self
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let mut boundary_checkpoints = dispatch_outcome.boundary_checkpoints;
-        super::prompt_prefill_counters::record_sparse_target_and_mode_counters(
-            active_request,
-            model,
-            plan.speculative_prefill_target_is_active,
-            plan.speculative_prefill_target_token_count,
-            plan.speculative_prefill_chunk_mode,
-            plan.prefill_token_count,
-            &plan.all_completed_prefill_chunk_tokens,
-            dispatch_outcome.terminal_history_token_count,
-            &mut boundary_checkpoints,
-        )?;
 
         // Test-only: force a capacity rejection after the forward succeeds.
         if std::mem::take(&mut active_request.force_next_prefill_capacity_rejection_for_tests) {

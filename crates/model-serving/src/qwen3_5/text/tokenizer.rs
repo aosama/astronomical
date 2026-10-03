@@ -408,13 +408,15 @@ impl Qwen3_5Tokenizer {
                 },
             )
             .map_err(Qwen3_5TokenizerError::RenderPrompt)?;
-        let (input_token_ids, ordinary_target_prefill_control_span_token_count) =
-            performance_attribution.measure_operation(
-                PerformanceOperation::PromptTokenization,
-                |_performance_attribution| {
-                    self.encode_rendered_prompt_with_control_span(&rendered_prompt)
-                },
-            )?;
+        let input_token_ids = performance_attribution.measure_operation(
+            PerformanceOperation::PromptTokenization,
+            |_performance_attribution| {
+                self.tokenizer
+                    .encode(rendered_prompt.as_str(), false)
+                    .map(|encoding| encoding.get_ids().to_vec())
+                    .map_err(|source| Qwen3_5TokenizerError::EncodePrompt { source })
+            },
+        )?;
         validate_context_token_count(
             input_token_ids.len(),
             usize::from(chat_generation_command.settings.max_output_tokens),
@@ -439,9 +441,6 @@ impl Qwen3_5Tokenizer {
                 .top_p_thousandths
                 .unwrap_or(self.model_sampler_config.top_p_thousandths),
             chat_generation_command.settings.seed,
-        )
-        .with_ordinary_target_prefill_control_span_token_count(
-            ordinary_target_prefill_control_span_token_count,
         )
         .with_image_pad_token_id(self.image_pad_token_id())
         .with_thinking_configuration(
@@ -471,21 +470,5 @@ impl Qwen3_5Tokenizer {
                 .with_processed_visual_images(prepared_chat_images.processed_visual_images);
         }
         Ok(inference_request)
-    }
-
-    /// Encodes one rendered prompt while converting its system-and-tool byte
-    /// boundary into the exact corresponding token count.
-    pub fn encode_rendered_prompt_with_control_span(
-        &self,
-        rendered_prompt: &super::Qwen3_5RenderedPrompt,
-    ) -> Result<(Vec<u32>, usize), Qwen3_5TokenizerError> {
-        let encoding = self
-            .tokenizer
-            .encode(rendered_prompt.as_str(), false)
-            .map_err(|source| Qwen3_5TokenizerError::EncodePrompt { source })?;
-        super::prompt::ordinary_target_prefill_control_span_token_count(
-            &encoding,
-            rendered_prompt.ordinary_target_prefill_control_span_byte_count(),
-        )
     }
 }

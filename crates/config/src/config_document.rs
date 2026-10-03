@@ -165,7 +165,7 @@ impl ModelConfigFile {
             ChunkingConfigFile::merged(global_chunking, self.chunking.as_ref());
         crate::ChunkingConfig::resolve(&effective_chunking)?;
         if let Some(acceleration) = &self.acceleration {
-            acceleration.validate(model_id)?;
+            acceleration.validate()?;
         }
         Ok(())
     }
@@ -261,16 +261,11 @@ fn is_representable_in_thousandths(sampling_parameter: f32) -> bool {
 #[serde(deny_unknown_fields)]
 pub(crate) struct AccelerationConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) speculative_prefill: Option<SpeculativePrefillConfigFile>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) mtp: Option<MtpConfigFile>,
 }
 
 impl AccelerationConfigFile {
-    fn validate(&self, model_id: &str) -> Result<(), AstronomicalConfigError> {
-        if let Some(speculative_prefill) = &self.speculative_prefill {
-            speculative_prefill.validate(model_id)?;
-        }
+    fn validate(&self) -> Result<(), AstronomicalConfigError> {
         if self
             .mtp
             .as_ref()
@@ -278,47 +273,6 @@ impl AccelerationConfigFile {
             .is_some_and(|draft_depth| !(1..=3).contains(&draft_depth))
         {
             return Err(AstronomicalConfigError::InvalidMtpDraftDepth);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SpeculativePrefillConfigFile {
-    pub(crate) draft_model_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) keep_percentage: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) minimum_prompt_tokens: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) mandatory_trailing_token_count: Option<u32>,
-}
-
-impl SpeculativePrefillConfigFile {
-    fn validate(&self, model_id: &str) -> Result<(), AstronomicalConfigError> {
-        if !is_valid_model_identity(&self.draft_model_id) {
-            return Err(invalid_model_value(
-                model_id,
-                "acceleration.speculative_prefill.draft_model_id",
-                "must be nonempty and contain no surrounding whitespace or control characters",
-            ));
-        }
-        if self
-            .keep_percentage
-            .is_some_and(|keep_percentage| !(1..=100).contains(&keep_percentage))
-        {
-            return Err(AstronomicalConfigError::SpeculativePrefillKeepPercentageOutOfRange);
-        }
-        if self.minimum_prompt_tokens == Some(0) {
-            return Err(
-                AstronomicalConfigError::SpeculativePrefillMinimumPromptTokensMustBePositive,
-            );
-        }
-        if self.mandatory_trailing_token_count == Some(0) {
-            return Err(
-                AstronomicalConfigError::SpeculativePrefillMandatoryTrailingTokenCountMustBePositive,
-            );
         }
         Ok(())
     }

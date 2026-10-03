@@ -220,10 +220,6 @@ fn publish_staged_model_swap(
         mtp_runtime_state,
         mtp_unavailable_reason,
         mtp_depth_status,
-        speculative_prefill_runtime_state,
-        speculative_prefill_unavailable_reason,
-        speculative_prefill_draft_model_id,
-        speculative_prefill_draft_model_revision,
     } = model_swap_event
     else {
         return Err(WorkerControlError::WorkerProtocolViolation {
@@ -243,13 +239,7 @@ fn publish_staged_model_swap(
         mtp_unavailable_reason,
         &current_health_snapshot,
     )
-    .with_mtp_depth_status(mtp_depth_status)
-    .with_speculative_prefill_runtime(
-        speculative_prefill_runtime_state,
-        speculative_prefill_unavailable_reason,
-        speculative_prefill_draft_model_id,
-        speculative_prefill_draft_model_revision,
-    );
+    .with_mtp_depth_status(mtp_depth_status);
     replacement_health_snapshot.expert_memory_mode = expert_memory_mode;
     if let Some(runtime_configuration) = runtime_configuration {
         replacement_health_snapshot.worker_runtime_feature_configuration =

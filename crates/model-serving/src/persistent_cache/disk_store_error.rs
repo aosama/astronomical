@@ -207,11 +207,9 @@ impl From<PersistentPromptCacheModelContractError> for PersistentPromptCacheDisk
 }
 
 impl PersistentPromptCacheDiskStoreError {
-    // Fail-open boundary for the SpecPrefill sparse cache (issue 617): the sparse load path
-    // trusts the in-memory index, so a file removed out-of-band or a corrupted model-bound
-    // header must surface as a lookup miss instead of an error. Payload corruption
-    // (LoadSafetensors) is deliberately excluded: by then materialization has begun and a
-    // miss would silently hand the drafter a state that never fully loaded.
+    // A cache file can disappear or its model-bound header can fail validation after lookup.
+    // Treat those pre-materialization failures as misses; payload corruption remains fatal
+    // because array restoration may already have started.
     #[must_use]
     pub fn is_treatable_as_cache_miss(&self) -> bool {
         match self {

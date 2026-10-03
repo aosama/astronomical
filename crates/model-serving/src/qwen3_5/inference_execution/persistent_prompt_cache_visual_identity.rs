@@ -13,7 +13,6 @@ use super::super::model::memory_admission::invalid_request_error;
 use super::fatal_engine_error;
 
 pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentity {
-    pub(super) ordered_image_sha256_digests: Vec<[u8; 32]>,
     pub(super) ordered_image_visual_embedding_row_counts: Vec<usize>,
     pub(super) block_causal_inputs: Vec<PersistentPromptCacheBlockCausalInput>,
 }
@@ -25,7 +24,6 @@ pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentityInput<'a> {
     pub(super) image_pad_token_id: u32,
     pub(super) persistent_prompt_cache: Option<&'a PersistentPromptCacheDiskStore>,
     pub(super) can_use_persistent_prompt_cache: bool,
-    pub(super) speculative_prefill_is_enabled: bool,
 }
 
 impl Qwen3_5PersistentPromptCacheVisualIdentity {
@@ -36,8 +34,7 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
     ) -> Result<Self, InferenceEngineError> {
         let has_processed_visual_images = inference_request.has_processed_visual_images();
         let ordered_image_sha256_digests = if has_processed_visual_images
-            && (visual_identity_input.persistent_prompt_cache.is_some()
-                || visual_identity_input.speculative_prefill_is_enabled)
+            && visual_identity_input.persistent_prompt_cache.is_some()
         {
             inference_request
                 .processed_visual_images()
@@ -107,7 +104,6 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
             Vec::new()
         };
         Ok(Self {
-            ordered_image_sha256_digests,
             ordered_image_visual_embedding_row_counts,
             block_causal_inputs,
         })

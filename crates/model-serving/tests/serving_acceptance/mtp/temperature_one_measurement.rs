@@ -248,24 +248,22 @@ async fn load_measurement_engine(
     let _ = std::fs::remove_file(&attribution_log_path);
     let performance_attribution_log = PerformanceAttributionLog::open(&attribution_log_path, true)
         .expect("the measurement should open its attribution log");
-    let measurement_engine =
-        Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
-            validated_artifact,
-            mlx_memory_limits.active_memory_limit_bytes(),
-            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
-            None,
-            Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
-                .expect("the measurement prefill chunk should be valid"),
-            think_end_token_id,
-            artifact_directory.to_path_buf(),
-            crate::common::standard_worker_chunking_configuration(),
-            true,
-            mtp_enabled,
-            crate::common::disabled_worker_speculative_prefill_configuration(),
-            PerformanceAttribution::enabled(),
-            performance_attribution_log,
-        )
-        .expect("the measured engine settings should be valid");
+    let measurement_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
+        validated_artifact,
+        mlx_memory_limits.active_memory_limit_bytes(),
+        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        None,
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
+            .expect("the measurement prefill chunk should be valid"),
+        think_end_token_id,
+        artifact_directory.to_path_buf(),
+        crate::common::standard_worker_chunking_configuration(),
+        true,
+        mtp_enabled,
+        PerformanceAttribution::enabled(),
+        performance_attribution_log,
+    )
+    .expect("the measured engine settings should be valid");
     measurement_engine
 }
 

@@ -13,7 +13,6 @@ function reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingByte
             expertBytes: 0,
             modelCoreBytes: 0,
             contextStateBytes: 0,
-            drafterBytes: 0,
             runtimeWorkBytes: 0,
             availableBytes: Math.max(0, mlxMemoryCeilingBytes || 0)
         };
@@ -22,26 +21,19 @@ function reconciledMlxMemorySegmentBytes(mlxMemorySnapshot, mlxMemoryCeilingByte
     const expertPayloadBytes = mlxMemorySnapshot.expert_payload_bytes || 0;
     const modelCorePayloadBytes = mlxMemorySnapshot.model_core_payload_bytes || 0;
     const contextStatePayloadBytes = mlxMemorySnapshot.context_state_payload_bytes || 0;
-    const speculativePrefillDraftMemoryBytes =
-        mlxMemorySnapshot.speculative_prefill_draft_memory_bytes || 0;
     const reconciledExpertBytes = Math.min(expertPayloadBytes, activeMemoryBytes);
     const activeAfterExperts = Math.max(0, activeMemoryBytes - reconciledExpertBytes);
     const reconciledModelCoreBytes = Math.min(modelCorePayloadBytes, activeAfterExperts);
     const activeAfterModelCore = Math.max(0, activeAfterExperts - reconciledModelCoreBytes);
     const reconciledContextStateBytes = Math.min(contextStatePayloadBytes, activeAfterModelCore);
     const activeAfterContextState = Math.max(0, activeAfterModelCore - reconciledContextStateBytes);
-    const reconciledDrafterBytes = Math.min(
-        speculativePrefillDraftMemoryBytes,
-        activeAfterContextState
-    );
-    const reconciledRuntimeWorkBytes = Math.max(0, activeAfterContextState - reconciledDrafterBytes);
+    const reconciledRuntimeWorkBytes = activeAfterContextState;
     const availableBytes = Math.max(0, mlxMemoryCeilingBytes - activeMemoryBytes);
     return {
         activeMemoryBytes,
         expertBytes: reconciledExpertBytes,
         modelCoreBytes: reconciledModelCoreBytes,
         contextStateBytes: reconciledContextStateBytes,
-        drafterBytes: reconciledDrafterBytes,
         runtimeWorkBytes: reconciledRuntimeWorkBytes,
         availableBytes
     };
@@ -61,7 +53,6 @@ function renderCompactMlxMemory(statusDocument) {
     setCompactMlxSegmentWidths(
         reconciledMemorySegments.expertBytes,
         reconciledMemorySegments.modelCoreBytes,
-        reconciledMemorySegments.drafterBytes,
         reconciledMemorySegments.contextStateBytes,
         reconciledMemorySegments.runtimeWorkBytes,
         reconciledMemorySegments.availableBytes,
@@ -89,25 +80,21 @@ function renderCompactMemoryPressure(memoryPressureState) {
     pressureStateElement.dataset.pressureState = pressurePresentation.state;
 }
 
-function setCompactMlxSegmentWidths(expertBytes, modelCoreBytes, drafterBytes, contextStateBytes, runtimeWorkBytes, availableBytes, ceilingBytes) {
+function setCompactMlxSegmentWidths(expertBytes, modelCoreBytes, contextStateBytes, runtimeWorkBytes, availableBytes, ceilingBytes) {
     setMlxSegmentWidth("compact-mem-seg-experts", expertBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-model-core", modelCoreBytes, ceilingBytes);
-    setMlxSegmentWidth("compact-mem-seg-drafter", drafterBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-context-state", contextStateBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-runtime-work", runtimeWorkBytes, ceilingBytes);
     setMlxSegmentWidth("compact-mem-seg-available", availableBytes, ceilingBytes);
 }
 
 function renderCompactCachePanel(cacheStatsDocument) {
-    renderSpeculativePrefillCacheEfficacy(cacheStatsDocument);
-    const cacheEfficacyDocument = cacheStatsDocument.speculative_prefill_cache_efficacy || {};
-    const combinedCacheEfficacy = cacheEfficacyDocument.combined || {};
-    const hitRate = combinedCacheEfficacy.reuse_rate || 0;
+    const hitRate = cacheStatsDocument.persistent_prompt_cache_hit_rate || 0;
     document.getElementById("compact-cache-hit-rate").textContent =
         (hitRate * 100).toFixed(1) + "%";
-    const savedPromptTokenCount = combinedCacheEfficacy.restored_token_count || 0;
+    const savedPromptTokenCount = cacheStatsDocument.persistent_prompt_cache_tokens_saved || 0;
     document.getElementById("compact-cache-tokens-saved").textContent =
-        savedPromptTokenCount.toLocaleString() + " model rows reused";
+        savedPromptTokenCount.toLocaleString() + " prompt tokens reused";
     const persistentPromptCacheTotalSizeBytes =
         cacheStatsDocument.persistent_prompt_cache_total_size_bytes || 0;
     const persistentPromptCacheMaximumSizeBytes =
@@ -120,20 +107,4 @@ function renderCompactCachePanel(cacheStatsDocument) {
     document.getElementById("compact-cache-disk-label").textContent =
         formatGigabytes(persistentPromptCacheTotalSizeBytes) + " / " +
         formatGigabytes(persistentPromptCacheMaximumSizeBytes);
-}
-
-function renderSpeculativePrefillCacheEfficacy(cacheStatsDocument) {
-    const cacheEfficacyDocument = cacheStatsDocument.speculative_prefill_cache_efficacy || {};
-    renderModelCacheEfficacy("compact-cache-target-efficacy", cacheEfficacyDocument.target);
-    renderModelCacheEfficacy("compact-cache-drafter-efficacy", cacheEfficacyDocument.drafter);
-}
-
-function renderModelCacheEfficacy(elementIdentifier, modelCacheEfficacy) {
-    const boundedModelCacheEfficacy = modelCacheEfficacy || {};
-    const reuseRate = boundedModelCacheEfficacy.reuse_rate || 0;
-    const restoredTokenCount = boundedModelCacheEfficacy.restored_token_count || 0;
-    const eligibleTokenCount = boundedModelCacheEfficacy.eligible_token_count || 0;
-    document.getElementById(elementIdentifier).textContent =
-        (reuseRate * 100).toFixed(1) + "% · " +
-        restoredTokenCount.toLocaleString() + " / " + eligibleTokenCount.toLocaleString();
 }

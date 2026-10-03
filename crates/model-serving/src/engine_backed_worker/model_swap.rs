@@ -2,8 +2,7 @@
 
 use astronomical_ipc_protocol::{
     ImageGenerationFailureReason, MlxMemorySnapshotSource, MtpRuntimeState, ProtocolWriter,
-    SpeculativePrefillRuntimeState, WorkerEvent, WorkerLoadedModelRuntimeConfiguration,
-    WorkerModelCapabilities, WorkerModelConfiguration,
+    WorkerEvent, WorkerModelCapabilities, WorkerModelConfiguration,
 };
 use tokio::io::AsyncWrite;
 
@@ -80,32 +79,11 @@ where
                             .mtp_unavailable_reason()
                             .map(String::from),
                         engine_load_result.mtp_depth_status(),
-                        engine_load_result.speculative_prefill_runtime_state(),
-                        engine_load_result
-                            .speculative_prefill_unavailable_reason()
-                            .map(String::from),
-                        engine_load_result
-                            .speculative_prefill_draft_model_id()
-                            .map(String::from),
-                        engine_load_result
-                            .speculative_prefill_draft_model_revision()
-                            .map(String::from),
                     ),
                     engine_load_result.expert_memory_mode(),
                     minimum,
                 )?;
-                let mut runtime_configuration = model_configuration.runtime_configuration();
-                if let WorkerLoadedModelRuntimeConfiguration::Autoregressive(configuration) =
-                    &mut runtime_configuration
-                {
-                    configuration.speculative_prefill_enabled = !matches!(
-                        engine_load_result.speculative_prefill_runtime_state(),
-                        SpeculativePrefillRuntimeState::Disabled
-                    );
-                    if !configuration.speculative_prefill_enabled {
-                        configuration.speculative_prefill = None;
-                    }
-                }
+                let runtime_configuration = model_configuration.runtime_configuration();
                 (
                     LoadedRuntime::Autoregressive(replacement_model),
                     event,
@@ -139,10 +117,6 @@ where
                     mtp_runtime_state: MtpRuntimeState::Disabled,
                     mtp_unavailable_reason: None,
                     mtp_depth_status: Default::default(),
-                    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-                    speculative_prefill_unavailable_reason: None,
-                    speculative_prefill_draft_model_id: None,
-                    speculative_prefill_draft_model_revision: None,
                 };
                 (
                     LoadedRuntime::Image(image_engine),
@@ -177,10 +151,6 @@ where
                     mtp_runtime_state: MtpRuntimeState::Disabled,
                     mtp_unavailable_reason: None,
                     mtp_depth_status: Default::default(),
-                    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-                    speculative_prefill_unavailable_reason: None,
-                    speculative_prefill_draft_model_id: None,
-                    speculative_prefill_draft_model_revision: None,
                 };
                 (
                     LoadedRuntime::Embeddings(embedding_engine),
@@ -288,10 +258,6 @@ fn model_swapped_from_ready_event(
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status,
-            speculative_prefill_runtime_state,
-            speculative_prefill_unavailable_reason,
-            speculative_prefill_draft_model_id,
-            speculative_prefill_draft_model_revision,
         } => Ok(WorkerEvent::ModelSwapped {
             model_id,
             capabilities,
@@ -300,10 +266,6 @@ fn model_swapped_from_ready_event(
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status,
-            speculative_prefill_runtime_state,
-            speculative_prefill_unavailable_reason,
-            speculative_prefill_draft_model_id,
-            speculative_prefill_draft_model_revision,
         }),
         other_event => {
             tracing::error!(

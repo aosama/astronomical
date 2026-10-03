@@ -9,9 +9,8 @@ use astronomical_ipc_protocol::{
     ChatGenerationOutput, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
     ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    SpeculativePrefillRuntimeState, WorkerAutoregressiveModelConfiguration,
-    WorkerChunkingConfiguration, WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerModelConfiguration, WorkerPromptProcessingPhase,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerCommand,
+    WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelConfiguration,
     WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_model_serving::{
@@ -65,6 +64,6 @@ use scripted_model_factory_test_doubles::{
 };
 use support::{
     chat_command, close_worker_transport, next_event, ready_event, ready_event_with_load_details,
-    ready_event_with_speculative_prefill_load_details, worker_model_configuration,
+    worker_model_configuration,
 };
 use tracking_chat_engine::TrackingChatEngine;

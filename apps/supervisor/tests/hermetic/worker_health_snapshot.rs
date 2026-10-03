@@ -118,8 +118,6 @@ fn should_average_only_requests_that_report_each_throughput_measurement() {
     serving_session_snapshot.record_prompt_work_reuse(WorkerPromptWorkReuse {
         target_eligible_token_count: 10_000,
         target_restored_token_count: 8_000,
-        drafter_eligible_token_count: 50_000,
-        drafter_restored_token_count: 40_000,
     });
     serving_session_snapshot.record_completed_request(3_000, 300, Some(30.0), Some(40.0));
 
@@ -144,14 +142,6 @@ fn should_average_only_requests_that_report_each_throughput_measurement() {
     assert_eq!(
         serving_session_snapshot.target_reused_prompt_work_token_count,
         8_000
-    );
-    assert_eq!(
-        serving_session_snapshot.drafter_prompt_work_token_count,
-        50_000
-    );
-    assert_eq!(
-        serving_session_snapshot.drafter_reused_prompt_work_token_count,
-        40_000
     );
 }
 

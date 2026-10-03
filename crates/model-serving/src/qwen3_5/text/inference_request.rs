@@ -8,7 +8,6 @@ use super::Qwen3_5ProcessedImage;
 #[derive(Clone, Debug)]
 pub struct Qwen3_5InferenceRequest {
     input_token_ids: Vec<u32>,
-    ordinary_target_prefill_control_span_token_count: usize,
     visual_embeddings: Option<Vec<f32>>,
     visual_embedding_row_count: usize,
     processed_visual_images: Vec<Qwen3_5ProcessedImage>,
@@ -89,7 +88,6 @@ impl Qwen3_5InferenceRequest {
         };
         Self {
             input_token_ids,
-            ordinary_target_prefill_control_span_token_count: 0,
             visual_embeddings: None,
             visual_embedding_row_count: 0,
             processed_visual_images: Vec::new(),
@@ -135,18 +133,6 @@ impl Qwen3_5InferenceRequest {
     #[must_use]
     pub const fn with_image_pad_token_id(mut self, image_pad_token_id: u32) -> Self {
         self.image_pad_token_id = Some(image_pad_token_id);
-        self
-    }
-
-    /// Attaches the complete leading system-and-tool token count that must use
-    /// ordinary full target prefill before SpecPrefill conversation selection.
-    #[must_use]
-    pub const fn with_ordinary_target_prefill_control_span_token_count(
-        mut self,
-        ordinary_target_prefill_control_span_token_count: usize,
-    ) -> Self {
-        self.ordinary_target_prefill_control_span_token_count =
-            ordinary_target_prefill_control_span_token_count;
         self
     }
 
@@ -272,10 +258,6 @@ impl Qwen3_5InferenceRequest {
 
     /// Transfers processed images into request-owned inference state without copying pixels.
     #[cfg(feature = "direct-mlx")]
-    pub(crate) fn take_processed_visual_images(&mut self) -> Vec<Qwen3_5ProcessedImage> {
-        std::mem::take(&mut self.processed_visual_images)
-    }
-
     /// Returns the tokenizer-validated image-pad token identifier, if attached.
     #[must_use]
     pub const fn image_pad_token_id(&self) -> Option<u32> {
@@ -292,13 +274,6 @@ impl Qwen3_5InferenceRequest {
     #[must_use]
     pub fn input_token_ids(&self) -> &[u32] {
         &self.input_token_ids
-    }
-
-    /// Returns the complete leading system-and-tool token count that bypasses
-    /// sparse target selection.
-    #[must_use]
-    pub const fn ordinary_target_prefill_control_span_token_count(&self) -> usize {
-        self.ordinary_target_prefill_control_span_token_count
     }
 
     /// Returns the accepted output-token budget.

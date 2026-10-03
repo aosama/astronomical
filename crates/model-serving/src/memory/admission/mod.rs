@@ -14,7 +14,6 @@ mod context_logging;
 mod mtp;
 mod mtp_draft_depth;
 mod rotating;
-mod speculative_prefill;
 
 pub use allocation::{
     AllocationAdmissionDecision, AllocationAdmissionObservation,
@@ -40,4 +39,3 @@ pub use mtp_draft_depth::{MtpDraftDepth, MtpDraftDepthError};
 pub use rotating::{
     RotatingAdmissionError, rotating_committed_token_count, rotating_prefill_transient_token_count,
 };
-pub use speculative_prefill::SpeculativePrefillAdmission;

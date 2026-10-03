@@ -1,8 +1,6 @@
 //! Builds the path-free configured, resolved, and worker-effective status contract.
 
-use astronomical_ipc_protocol::{
-    WorkerLoadedModelRuntimeConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
-};
+use astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration;
 use serde::Serialize;
 
 use crate::application::ApplicationState;
@@ -55,16 +53,6 @@ struct ReadyModelConfigurationSummary {
     chunking: ChunkingConfigurationSummary,
     mtp_enabled: ConfigurationValue<bool>,
     mtp_draft_depth: ConfigurationValue<u8>,
-    speculative_prefill: SpeculativePrefillConfigurationSummary,
-    speculative_prefill_unavailable_reason: Option<String>,
-}
-
-#[derive(Serialize)]
-struct SpeculativePrefillConfigurationSummary {
-    enabled: ConfigurationValue<bool>,
-    draft_model_id: ConfigurationValue<String>,
-    keep_percentage: ConfigurationValue<u32>,
-    minimum_prompt_tokens: ConfigurationValue<u32>,
 }
 
 #[derive(Serialize)]
@@ -72,7 +60,6 @@ struct ChunkingConfigurationSummary {
     fixed_prompt_processing_chunk_size_tokens: ConfigurationValue<u32>,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: ConfigurationValue<u32>,
     full_attention_key_value_growth_tokens: ConfigurationValue<u32>,
-    speculative_prefill_draft_forward_tokens: ConfigurationValue<u32>,
     prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
     experimental_ssd_paging_prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
     experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue<u32>,
@@ -199,14 +186,6 @@ fn ready_model_summary(
     let effective_autoregressive_model = effective_model.and_then(|model| model.autoregressive());
     let configured_autoregressive_model =
         configured_worker_model.and_then(|model| model.autoregressive());
-    let configured_speculative_prefill = configured_policy.and_then(|policy| {
-        policy
-            .acceleration_availability
-            .configured_speculative_prefill
-            .as_ref()
-    });
-    let effective_speculative_prefill =
-        effective_autoregressive_model.and_then(|model| model.speculative_prefill.as_ref());
     Some(ReadyModelConfigurationSummary {
         model_id: ready_model_id.to_owned(),
         maximum_context_tokens: ConfigurationValue {
@@ -253,16 +232,6 @@ fn ready_model_summary(
             default: None,
             effective: effective_mtp_draft_depth,
         },
-        speculative_prefill: speculative_prefill_summary(
-            configured_speculative_prefill,
-            effective_speculative_prefill,
-        ),
-        speculative_prefill_unavailable_reason: configured_policy.and_then(|policy| {
-            policy
-                .acceleration_availability
-                .speculative_prefill_unavailable_reason
-                .clone()
-        }),
     })
 }
 
@@ -320,20 +289,6 @@ fn chunking_summary(
             default: Some(astronomical_config::DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS),
             effective: effective_chunking
                 .map(|chunking| chunking.full_attention_key_value_growth_tokens),
-        },
-        speculative_prefill_draft_forward_tokens: ConfigurationValue {
-            configured: configured_fields
-                .speculative_prefill_draft_forward_tokens
-                .then(|| {
-                    configured_chunking
-                        .map(|chunking| chunking.speculative_prefill_draft_forward_tokens)
-                })
-                .flatten(),
-            default: Some(
-                astronomical_config::DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
-            ),
-            effective: effective_chunking
-                .map(|chunking| chunking.speculative_prefill_draft_forward_tokens),
         },
         prefill_graph_submission_layer_interval: ConfigurationValue {
             configured: configured_fields
@@ -415,34 +370,6 @@ fn sampling_value(
         configured,
         default: None,
         effective: effective_thousandths.map(|value| f64::from(value) / 1_000.0),
-    }
-}
-
-fn speculative_prefill_summary(
-    configured: Option<&crate::ConfiguredSpeculativePrefillPolicy>,
-    effective: Option<&WorkerSpeculativePrefillRuntimeConfiguration>,
-) -> SpeculativePrefillConfigurationSummary {
-    SpeculativePrefillConfigurationSummary {
-        enabled: ConfigurationValue {
-            configured: Some(configured.is_some()),
-            default: Some(false),
-            effective: Some(effective.is_some()),
-        },
-        draft_model_id: ConfigurationValue {
-            configured: configured.map(|configuration| configuration.draft_model_id.clone()),
-            default: None,
-            effective: effective.map(|configuration| configuration.draft_model_id.clone()),
-        },
-        keep_percentage: ConfigurationValue {
-            configured: configured.map(|configuration| configuration.keep_percentage),
-            default: Some(20),
-            effective: effective.map(|configuration| configuration.keep_percentage),
-        },
-        minimum_prompt_tokens: ConfigurationValue {
-            configured: configured.map(|configuration| configuration.minimum_prompt_tokens),
-            default: Some(8_192),
-            effective: effective.map(|configuration| configuration.minimum_prompt_tokens),
-        },
     }
 }
 

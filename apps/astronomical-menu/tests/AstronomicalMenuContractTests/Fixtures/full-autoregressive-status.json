@@ -69,11 +69,6 @@
           "default": 4,
           "effective": 4
         },
-        "speculative_prefill_draft_forward_tokens": {
-          "configured": null,
-          "default": 2048,
-          "effective": 2048
-        },
         "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
           "configured": null,
           "default": 1,
@@ -101,29 +96,6 @@
         "default": null,
         "effective": null
       },
-      "speculative_prefill": {
-        "draft_model_id": {
-          "configured": null,
-          "default": null,
-          "effective": null
-        },
-        "enabled": {
-          "configured": false,
-          "default": false,
-          "effective": false
-        },
-        "keep_percentage": {
-          "configured": null,
-          "default": 20,
-          "effective": null
-        },
-        "minimum_prompt_tokens": {
-          "configured": null,
-          "default": 8192,
-          "effective": null
-        }
-      },
-      "speculative_prefill_unavailable_reason": null,
       "temperature": {
         "configured": null,
         "default": null,
@@ -143,7 +115,6 @@
   },
   "configured_generation": null,
   "configured_maximum_mlx_memory_gb": null,
-  "configured_speculative_prefill_enabled": false,
   "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "expert_memory_mode": null,
   "expert_residency": null,
@@ -176,19 +147,11 @@
     "average_generation_tok_per_second": 0.0,
     "average_prefill_tok_per_second": 0.0,
     "completed_request_count": 0,
-    "drafter_prompt_work_token_count": 0,
-    "drafter_reused_prompt_work_token_count": 0,
     "target_prompt_work_token_count": 0,
     "target_reused_prompt_work_token_count": 0,
     "total_prompt_token_count": 0,
     "total_reused_prompt_token_count": 0
   },
-  "speculative_prefill_draft_model_id": null,
-  "speculative_prefill_draft_model_revision": null,
-  "speculative_prefill_enabled": false,
-  "speculative_prefill_runtime_state": "disabled",
-  "speculative_prefill_target_model_id": null,
-  "speculative_prefill_unavailable_reason": null,
   "status": "ready",
   "worker_runtime_feature_configuration": {
     "configuration_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -202,7 +165,6 @@
           "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
           "prompt_cache_block_tokens": null,
           "prompt_cache_common_prefix_stride_blocks": 4,
-          "speculative_prefill_draft_forward_tokens": 2048,
           "experimental_decode_stage_attribution_enabled": false,
           "experimental_quantized_kv_cache_enabled": false,
           "experimental_fused_moe_decode_enabled": false,
@@ -212,9 +174,7 @@
         "maximum_output_tokens": 8192,
         "model_id": "fictional/autoregressive-model",
         "mtp_enabled": true,
-        "mtp_draft_depth": null,
-        "speculative_prefill": null,
-        "speculative_prefill_enabled": false
+        "mtp_draft_depth": null
       },
       "kind": "autoregressive"
     },

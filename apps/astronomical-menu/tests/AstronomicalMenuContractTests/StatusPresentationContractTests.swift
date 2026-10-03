@@ -17,18 +17,18 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(usageBarFillFraction(.nan), 0)
   }
 
-  func test_should_present_combined_target_and_drafter_avoided_prompt_work() throws {
+  func test_should_present_target_prompt_cache_reuse() throws {
     let statusDocument = try JSONDecoder().decode(
       SupervisorStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","serving_session":{"completed_request_count":2,"total_prompt_token_count":90000,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":10000,"target_reused_prompt_work_token_count":8000,"drafter_prompt_work_token_count":50000,"drafter_reused_prompt_work_token_count":40000,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":20}}
+        {"status":"ready","activity":"idle","serving_session":{"completed_request_count":2,"total_prompt_token_count":90000,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":10000,"target_reused_prompt_work_token_count":8000,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":20}}
         """.utf8)
     )
 
     XCTAssertEqual(statusDocument.sessionPromptReusePercentageTitle, "80%")
     XCTAssertEqual(statusDocument.sessionPromptReuseFraction, 0.8, accuracy: 0.0001)
-    XCTAssertEqual(statusDocument.sessionPromptReuseBreakdownTitle, "48,000 reused · 12,000 new")
+    XCTAssertEqual(statusDocument.sessionPromptReuseBreakdownTitle, "8,000 reused · 2,000 new")
   }
 
   func test_should_present_every_system_memory_pressure_state_with_explicit_text() {
@@ -137,7 +137,6 @@ final class StatusPresentationContractTests: XCTestCase {
   func test_should_name_each_mlx_memory_explanation_control() {
     XCTAssertEqual(MlxMemoryLegendItem.experts.infoButtonAccessibilityLabel, "Explain Experts")
     XCTAssertEqual(MlxMemoryLegendItem.modelCore.infoButtonAccessibilityLabel, "Explain Model core")
-    XCTAssertEqual(MlxMemoryLegendItem.drafter.infoButtonAccessibilityLabel, "Explain Drafter")
     XCTAssertEqual(MlxMemoryLegendItem.contextState.infoButtonAccessibilityLabel, "Explain Live context state")
     XCTAssertEqual(MlxMemoryLegendItem.runtimeWork.infoButtonAccessibilityLabel, "Explain Runtime work")
     XCTAssertEqual(
@@ -258,7 +257,7 @@ final class StatusPresentationContractTests: XCTestCase {
       SupervisorStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000,"speculative_prefill_draft_memory_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
+        {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
         """.utf8)
     )
 
@@ -274,17 +273,12 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.sessionTitle, "4 requests · 27 tok/s avg")
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "18.42 GB")
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.expertPayloadByteCount, 5_000_000_000)
-    XCTAssertEqual(
-      statusDocument.mlxMemoryBreakdown.speculativePrefillDraftMemoryByteCount,
-      1_000_000_000
-    )
-    XCTAssertEqual(statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount, 1_000_000_000)
+    XCTAssertEqual(statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount, 2_000_000_000)
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.availableByteCount, 28_000_000_000)
     XCTAssertEqual(
       statusDocument.mlxMemoryBreakdown.expertPayloadByteCount
         + statusDocument.mlxMemoryBreakdown.modelCorePayloadByteCount
         + statusDocument.mlxMemoryBreakdown.contextStatePayloadByteCount
-        + statusDocument.mlxMemoryBreakdown.speculativePrefillDraftMemoryByteCount
         + statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount,
       statusDocument.mlxMemoryActiveBytes
     )
@@ -392,7 +386,6 @@ final class StatusPresentationContractTests: XCTestCase {
     let expectedSourceTitles = [
       "model_loaded": "Model loaded",
       "prefill": "Prompt snapshot",
-      "speculative_prefill_draft_scoring": "Live drafter scoring",
       "decode_submitted": "Live decode",
       "finalized": "After cleanup",
       "idle_poll": "Idle sample",
@@ -473,23 +466,6 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.flightTitle, "Prompt processing · 7% · 1076 avg tok/s")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed / ETA")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s / 12.4 s")
-  }
-
-  func test_should_present_only_the_active_drafter_phase_without_inventing_progress() throws {
-    let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
-      from: Data(
-        #"{"status":"ready","activity":"prompt_processing","progress":{"phase":"drafter","processed_tokens":0,"total_tokens":14412,"elapsed_ms":250}}"#.utf8
-      )
-    )
-
-    XCTAssertEqual(statusDocument.menuBarTitle, "Drafting…")
-    XCTAssertEqual(statusDocument.phaseTitle, "Drafting…")
-    XCTAssertEqual(statusDocument.flightTitle, "Drafting…")
-    XCTAssertEqual(statusDocument.progressTitle, "Drafting…")
-    XCTAssertEqual(statusDocument.progressCompletedUnitCount, 0)
-    XCTAssertEqual(statusDocument.progressTotalUnitCount, 14_412)
-    XCTAssertEqual(statusDocument.elapsedTimeTitle, "0.2 s / Calculating")
   }
 
   func test_should_use_singular_request_grammar_for_one_completed_request() throws {

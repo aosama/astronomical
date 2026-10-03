@@ -2,12 +2,10 @@
 //!
 //! Format-11 decoder state takes the direct writer path: MLX serializes tensors
 //! through one retained file descriptor without constructing a second complete
-//! Rust byte payload. Smaller non-decoder artifacts retain the serialized-byte
-//! helper below. Both paths use no-follow opens and temporary-name publication.
+//! Rust byte payload. Publication uses no-follow opens and temporary-name replacement.
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -25,30 +23,6 @@ pub(crate) enum PersistentPromptCacheFileKind {
     SequenceStateBlock,
     BoundaryStateSnapshot,
     VisualEmbedding,
-    SpeculativePrefillSelection,
-    SpeculativePrefillTargetState,
-}
-
-pub(crate) trait PersistentPromptCacheSerializedFileWriter: Send + Sync {
-    fn write_serialized_file(
-        &self,
-        output_file: &mut File,
-        serialized_safetensors_bytes: &[u8],
-    ) -> std::io::Result<()>;
-}
-
-pub(crate) struct ImmediatePersistentPromptCacheSerializedFileWriter;
-
-impl PersistentPromptCacheSerializedFileWriter
-    for ImmediatePersistentPromptCacheSerializedFileWriter
-{
-    fn write_serialized_file(
-        &self,
-        output_file: &mut File,
-        serialized_safetensors_bytes: &[u8],
-    ) -> std::io::Result<()> {
-        output_file.write_all(serialized_safetensors_bytes)
-    }
 }
 
 pub(super) fn save_direct_safetensors_file_with_name(
@@ -241,61 +215,6 @@ pub(crate) fn remove_cache_owned_directory_or_confirm_absent(
     })
 }
 
-pub(crate) fn save_serialized_safetensors_file(
-    directory: &Path,
-    persistent_prompt_cache_file_hash: [u8; 32],
-    serialized_safetensors_bytes: &[u8],
-    serialized_file_writer: &dyn PersistentPromptCacheSerializedFileWriter,
-) -> Result<PathBuf, PersistentPromptCacheDiskStoreError> {
-    // This helper is intentionally limited to small already-serialized cache
-    // artifacts. Decoder-state publication must use the direct MLX writer above.
-    let file_name = format!(
-        "{}.safetensors",
-        hex_encode(persistent_prompt_cache_file_hash)
-    );
-    let file_path = directory.join(&file_name);
-    let temp_file_path = directory.join(format!("{file_name}.tmp"));
-    remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
-    let mut temp_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(&temp_file_path)
-        .map_err(|source| PersistentPromptCacheDiskStoreError::OpenTempFile {
-            temp_file_path: temp_file_path.clone(),
-            source,
-        })?;
-    if let Err(source) =
-        serialized_file_writer.write_serialized_file(&mut temp_file, serialized_safetensors_bytes)
-    {
-        remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
-        return Err(PersistentPromptCacheDiskStoreError::WriteTempFile {
-            temp_file_path,
-            source,
-        });
-    }
-    if let Err(source) = temp_file.sync_all() {
-        remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
-        return Err(PersistentPromptCacheDiskStoreError::SynchronizeTempFile {
-            temp_file_path,
-            source,
-        });
-    }
-    drop(temp_file);
-    fs::rename(&temp_file_path, &file_path).map_err(|rename_error| {
-        let temp_cleanup_result = remove_cache_owned_file_or_confirm_absent(&temp_file_path);
-        if let Err(temp_cleanup_error) = temp_cleanup_result {
-            return temp_cleanup_error;
-        }
-        PersistentPromptCacheDiskStoreError::RenameTempFile {
-            temp_file_path,
-            block_file_path: file_path.clone(),
-            source: rename_error,
-        }
-    })?;
-    Ok(file_path)
-}
-
 /// Returns the parsed header's block token count for state-bearing file kinds,
 /// or `None` for kinds without a block-token axis. Callers that load by block
 /// key use the count to fail closed when a file's stored token count disagrees
@@ -326,30 +245,6 @@ pub(super) fn validate_current_file_header(
             Ok(Some(block_header.block_token_count()))
         }
         PersistentPromptCacheFileKind::VisualEmbedding => return Ok(None),
-        PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
-            super::speculative_prefill_selection::PersistentSpeculativePrefillSelectionFileHeader::read_model_bound_from_file(
-                file,
-                file_path,
-                persistent_prompt_cache_model_contract,
-            )
-            .map_err(|source| PersistentPromptCacheBlockError::InvalidModelSpecificArtifact {
-                persistent_prompt_cache_block_path: file_path.to_path_buf(),
-                description: source.to_string(),
-            })?;
-            Ok(None)
-        }
-        PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {
-            super::speculative_prefill_target_state::PersistentSpeculativePrefillTargetStateFileHeader::read_model_bound_from_file(
-                file,
-                file_path,
-                persistent_prompt_cache_model_contract,
-            )
-            .map_err(|description| PersistentPromptCacheBlockError::InvalidModelSpecificArtifact {
-                persistent_prompt_cache_block_path: file_path.to_path_buf(),
-                description,
-            })?;
-            Ok(None)
-        }
     }
 }
 
@@ -372,9 +267,7 @@ pub(super) fn expected_tensor_names(
                         .decoder_cache_layout()
                         .boundary_tensor_layouts()
                 }
-                PersistentPromptCacheFileKind::VisualEmbedding
-                | PersistentPromptCacheFileKind::SpeculativePrefillSelection
-                | PersistentPromptCacheFileKind::SpeculativePrefillTargetState => Vec::new(),
+                PersistentPromptCacheFileKind::VisualEmbedding => Vec::new(),
             };
             tensor_names.extend(
                 expected_tensor_layouts
@@ -383,10 +276,6 @@ pub(super) fn expected_tensor_names(
             );
         }
         PersistentPromptCacheFileKind::VisualEmbedding => {}
-        PersistentPromptCacheFileKind::SpeculativePrefillSelection => {
-            tensor_names.push("selected_token_positions".to_owned());
-        }
-        PersistentPromptCacheFileKind::SpeculativePrefillTargetState => {}
     }
     tensor_names
 }

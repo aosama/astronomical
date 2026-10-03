@@ -3,8 +3,8 @@ use std::{error::Error, process::ExitCode, time::Duration};
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, MtpRuntimeState,
-    ProtocolReader, ProtocolWriter, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
-    WorkerEvent, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
+    ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerPromptProcessingPhase,
 };
 
 mod scripted_worker_chat;
@@ -52,10 +52,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: Default::default(),
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
             model_id: ready_model_id,
             capabilities: astronomical_ipc_protocol::WorkerModelCapabilities::chat_and_image(
                 ChatModelCapabilities {
@@ -339,11 +335,9 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     expert_payload_bytes: 4_000,
                                     model_core_payload_bytes: 3_000,
                                     context_state_payload_bytes: 2_000,
-                                    speculative_prefill_draft_memory_bytes: 0,
                                     memory_ceiling_utilization: None,
                                 }),
                                 expert_residency: None,
-                                speculative_prefill_draft_memory_snapshot: None,
                             })
                             .await?;
                         event_writer
@@ -377,7 +371,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                     expert_payload_bytes: 19_000,
                                     model_core_payload_bytes: 3_000,
                                     context_state_payload_bytes: 0,
-                                    speculative_prefill_draft_memory_bytes: 0,
                                     memory_ceiling_utilization: None,
                                 }),
                             })
@@ -528,7 +521,6 @@ fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMlxMemorySnap
         expert_payload_bytes: 20_000,
         model_core_payload_bytes: 10_000,
         context_state_payload_bytes: 5_000,
-        speculative_prefill_draft_memory_bytes: 0,
         memory_ceiling_utilization: None,
     }
 }

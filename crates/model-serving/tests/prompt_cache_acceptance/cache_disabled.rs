@@ -42,7 +42,6 @@ async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
         model_directory.to_path_buf(),
         cache_disabled_chunking_configuration,
         true,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine

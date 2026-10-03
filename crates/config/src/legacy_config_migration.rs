@@ -12,14 +12,14 @@ use serde::Deserialize;
 use crate::chunking_config::ChunkingConfigFile;
 use crate::config_document::{
     AccelerationConfigFile, DiagnosticsConfigFile, GenerationDefaultsConfigFile, ModelConfigFile,
-    MtpConfigFile, PromptCacheConfigFile, RuntimeConfigFile, SpeculativePrefillConfigFile,
-    UserConfigFile,
+    MtpConfigFile, PromptCacheConfigFile, RuntimeConfigFile, UserConfigFile,
 };
 use crate::config_file::{
-    parse_and_validate_v1, read_existing_config_file_bytes, write_adjacent_schema,
+    parse_and_validate_v1, read_existing_config_file_bytes,
+    strip_retired_speculative_prefill_config, write_adjacent_schema,
     write_config_file_bytes_atomically,
 };
-use crate::{AstronomicalConfigError, LogLevel, SpeculativePrefillConfig, discover_models};
+use crate::{AstronomicalConfigError, LogLevel, discover_models};
 
 const LEGACY_CONFIG_BACKUP_FILE_NAME: &str = "config.legacy-v0.json";
 
@@ -139,8 +139,9 @@ fn accept_matching_existing_backup(
 /// Resolves legacy intent without writing so compare-and-commit callers retain ownership.
 pub(crate) fn prepare_legacy_config_migration(
     config_file_path: &Path,
-    legacy_json: serde_json::Value,
+    mut legacy_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
+    strip_retired_speculative_prefill_config(&mut legacy_json);
     let legacy_config: LegacyConfigFile =
         serde_json::from_value(legacy_json).map_err(|source| {
             AstronomicalConfigError::ParseConfigFile {
@@ -213,7 +214,6 @@ fn build_migrated_config(
             });
         }
     }
-    migrate_speculative_prefill(&legacy_config.speculative_prefill, &mut models);
     UserConfigFile {
         schema: "./astronomical-config.schema.json".to_owned(),
         schema_version: 1,
@@ -238,31 +238,6 @@ fn build_migrated_config(
                 .and_then(|logging| logging.retained_files),
         }),
     }
-}
-
-fn migrate_speculative_prefill(
-    legacy_speculative_prefill: &LegacySpeculativePrefillConfigFile,
-    models: &mut BTreeMap<String, ModelConfigFile>,
-) {
-    if legacy_speculative_prefill.enabled != Some(true) {
-        return;
-    }
-    let Some(target_model_id) = legacy_speculative_prefill.target_model_id.as_ref() else {
-        return;
-    };
-    let Some(draft_model_id) = legacy_speculative_prefill.draft_model_id.as_ref() else {
-        return;
-    };
-    let model_config = models.entry(target_model_id.trim().to_owned()).or_default();
-    let acceleration = model_config
-        .acceleration
-        .get_or_insert_with(AccelerationConfigFile::default);
-    acceleration.speculative_prefill = Some(SpeculativePrefillConfigFile {
-        draft_model_id: draft_model_id.trim().to_owned(),
-        keep_percentage: legacy_speculative_prefill.keep_percentage,
-        minimum_prompt_tokens: legacy_speculative_prefill.minimum_prompt_tokens,
-        mandatory_trailing_token_count: legacy_speculative_prefill.mandatory_trailing_token_count,
-    });
 }
 
 fn validate_legacy_config(legacy_config: &LegacyConfigFile) -> Result<(), AstronomicalConfigError> {
@@ -297,71 +272,6 @@ fn validate_legacy_config(legacy_config: &LegacyConfigFile) -> Result<(), Astron
     {
         return Err(AstronomicalConfigError::InvalidMtpDraftDepth);
     }
-    validate_legacy_speculative_prefill(&legacy_config.speculative_prefill)
-}
-
-fn validate_legacy_speculative_prefill(
-    speculative_prefill: &LegacySpeculativePrefillConfigFile,
-) -> Result<(), AstronomicalConfigError> {
-    if speculative_prefill
-        .target_model_id
-        .as_deref()
-        .is_some_and(|model_id| model_id.trim().is_empty())
-    {
-        return Err(AstronomicalConfigError::SpeculativePrefillTargetModelIdMustNotBeEmpty);
-    }
-    if speculative_prefill
-        .draft_model_id
-        .as_deref()
-        .is_some_and(|model_id| model_id.trim().is_empty())
-    {
-        return Err(AstronomicalConfigError::SpeculativePrefillDraftModelIdMustNotBeEmpty);
-    }
-    if speculative_prefill.enabled == Some(true) {
-        if speculative_prefill.target_model_id.is_none() {
-            return Err(AstronomicalConfigError::SpeculativePrefillTargetModelRequired);
-        }
-        if speculative_prefill.draft_model_id.is_none() {
-            return Err(AstronomicalConfigError::SpeculativePrefillDraftModelRequired);
-        }
-        if speculative_prefill.keep_percentage.is_none() {
-            return Err(AstronomicalConfigError::SpeculativePrefillKeepPercentageRequired);
-        }
-    }
-    if speculative_prefill
-        .keep_percentage
-        .is_some_and(|keep_percentage| !(1..=100).contains(&keep_percentage))
-    {
-        return Err(AstronomicalConfigError::SpeculativePrefillKeepPercentageOutOfRange);
-    }
-    if speculative_prefill.minimum_prompt_tokens == Some(0) {
-        return Err(AstronomicalConfigError::SpeculativePrefillMinimumPromptTokensMustBePositive);
-    }
-    for (configured_value, retired_field_name, v1_value) in [
-        (
-            speculative_prefill.selection_chunck_token_count,
-            "selection_chunck_token_count",
-            SpeculativePrefillConfig::DEFAULT_SELECTION_CHUNK_TOKEN_COUNT,
-        ),
-        (
-            speculative_prefill.lookahead_token_count,
-            "lookahead_token_count",
-            SpeculativePrefillConfig::DEFAULT_LOOKAHEAD_TOKEN_COUNT,
-        ),
-        (
-            speculative_prefill.importance_pooling_kernel_token_count,
-            "importance_pooling_kernel_token_count",
-            SpeculativePrefillConfig::DEFAULT_IMPORTANCE_POOLING_KERNEL_TOKEN_COUNT,
-        ),
-    ] {
-        if configured_value.is_some_and(|configured_value| configured_value != v1_value) {
-            return Err(AstronomicalConfigError::LegacyMigration {
-                description: format!(
-                    "legacy speculative_prefill.{retired_field_name} differs from the fixed v1 execution policy and cannot be migrated without changing behavior"
-                ),
-            });
-        }
-    }
     Ok(())
 }
 
@@ -381,29 +291,12 @@ struct LegacyConfigFile {
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     mtp_enabled: Option<bool>,
     mtp_draft_depth: Option<u8>,
-    #[serde(default)]
-    speculative_prefill: LegacySpeculativePrefillConfigFile,
     supervisor: Option<LegacySupervisorConfigFile>,
     prompt_cache_max_size_gb: Option<u64>,
     logging: Option<LegacyLoggingConfigFile>,
 }
 
 type LegacyChunkingConfigFile = ChunkingConfigFile;
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct LegacySpeculativePrefillConfigFile {
-    #[serde(default, deserialize_with = "deserialize_present_boolean")]
-    enabled: Option<bool>,
-    target_model_id: Option<String>,
-    draft_model_id: Option<String>,
-    minimum_prompt_tokens: Option<u32>,
-    keep_percentage: Option<u32>,
-    selection_chunck_token_count: Option<u32>,
-    mandatory_trailing_token_count: Option<u32>,
-    lookahead_token_count: Option<u32>,
-    importance_pooling_kernel_token_count: Option<u32>,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

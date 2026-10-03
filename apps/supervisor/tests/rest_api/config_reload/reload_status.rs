@@ -83,17 +83,8 @@ async fn should_apply_prompt_cache_policy_after_config_file_reload() {
     let status_document: serde_json::Value =
         serde_json::from_slice(&status_body).expect("the status response should contain JSON");
     assert_eq!(
-        status_document["configured_speculative_prefill_enabled"],
-        false
-    );
-    assert_eq!(status_document["speculative_prefill_enabled"], false);
-    assert_eq!(
         status_document["configured_generation"],
         status_document["effective_generation"]
-    );
-    assert_eq!(
-        status_document["speculative_prefill_draft_model_id"],
-        serde_json::Value::Null
     );
     assert_eq!(
         status_document["worker_runtime_feature_configuration_applied"],

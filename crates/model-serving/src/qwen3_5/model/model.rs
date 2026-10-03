@@ -20,8 +20,8 @@ use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeig
 use super::forward_contract::validate_forward_input;
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use super::{
-    Qwen3_5AttentionCapture, Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel,
-    Qwen3_5Weights, RequestDecoderStateStack,
+    Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel, Qwen3_5Weights,
+    RequestDecoderStateStack,
 };
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpWeights;
@@ -376,7 +376,6 @@ impl Qwen3_5Model {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut DecoderCacheState,
         token_position_offsets: Option<&MlxArray>,
-        attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
@@ -391,7 +390,6 @@ impl Qwen3_5Model {
             decoder_layer_weights,
             layer_model_state,
             token_position_offsets,
-            attention_capture,
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,

@@ -334,7 +334,6 @@ test("clamps memory segments so they never exceed active memory", () => {
             expertBytes: 80,
             modelCoreBytes: 20,
             contextStateBytes: 0,
-            drafterBytes: 0,
             runtimeWorkBytes: 0,
             availableBytes: 100
         }
@@ -363,7 +362,6 @@ test("computes available bytes as ceiling minus active when nothing is clamped",
             expertBytes: 30,
             modelCoreBytes: 5,
             contextStateBytes: 2,
-            drafterBytes: 0,
             runtimeWorkBytes: 3,
             availableBytes: 160
         }
@@ -385,21 +383,52 @@ test("reports a null memory snapshot as all zero segments with full available he
             expertBytes: 0,
             modelCoreBytes: 0,
             contextStateBytes: 0,
-            drafterBytes: 0,
             runtimeWorkBytes: 0,
             availableBytes: 200
         }
     );
 });
 
-test("keeps drafter memory separate from model core and runtime work", () => {
+test("renders shared prompt-cache statistics", () => {
+    const scriptContext = createConsoleContext();
+    const cachePanelElements = new Map([
+        ["compact-cache-hit-rate", { textContent: "" }],
+        ["compact-cache-tokens-saved", { textContent: "" }],
+        ["compact-cache-disk-fill", { style: { width: "" } }],
+        ["compact-cache-disk-label", { textContent: "" }]
+    ]);
+    scriptContext.document = {
+        getElementById(elementIdentifier) {
+            return cachePanelElements.get(elementIdentifier);
+        }
+    };
+
+    vm.runInContext(
+        `renderCompactCachePanel({
+            persistent_prompt_cache_hit_rate: 0.25,
+            persistent_prompt_cache_tokens_saved: 12,
+            persistent_prompt_cache_total_size_bytes: 500000000,
+            persistent_prompt_cache_maximum_size_bytes: 1000000000
+        })`,
+        scriptContext
+    );
+
+    assert.equal(cachePanelElements.get("compact-cache-hit-rate").textContent, "25.0%");
+    assert.equal(cachePanelElements.get("compact-cache-tokens-saved").textContent, "12 prompt tokens reused");
+    assert.equal(cachePanelElements.get("compact-cache-disk-fill").style.width, "50.0%");
+    assert.equal(
+        cachePanelElements.get("compact-cache-disk-label").textContent,
+        "0.50 GB / 1.00 GB"
+    );
+});
+
+test("attributes unowned active memory to runtime work", () => {
     const scriptContext = createConsoleContext();
     scriptContext.mlxMemorySnapshot = {
         active_memory_bytes: 100,
         expert_payload_bytes: 20,
         model_core_payload_bytes: 30,
-        context_state_payload_bytes: 10,
-        speculative_prefill_draft_memory_bytes: 25
+        context_state_payload_bytes: 10
     };
     scriptContext.mlxMemoryCeilingBytes = 200;
 
@@ -415,8 +444,7 @@ test("keeps drafter memory separate from model core and runtime work", () => {
             expertBytes: 20,
             modelCoreBytes: 30,
             contextStateBytes: 10,
-            drafterBytes: 25,
-            runtimeWorkBytes: 15,
+            runtimeWorkBytes: 40,
             availableBytes: 100
         }
     );

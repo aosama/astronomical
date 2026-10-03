@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
-use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration,
-};
+use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 use astronomical_model_serving::{
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
     PerformanceOperation, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
@@ -24,7 +22,6 @@ pub(crate) fn initialize_qwen3_5_model(
     max_output_tokens: u32,
     mtp_enabled: bool,
     mtp_draft_depth: Option<u8>,
-    speculative_prefill: WorkerSpeculativePrefillConfiguration,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
@@ -74,7 +71,6 @@ pub(crate) fn initialize_qwen3_5_model(
         }
     };
     let artifact_model_id = validated_artifact.model_id().to_owned();
-    let loaded_model_speculative_prefill_configuration = speculative_prefill;
     let artifact_model_revision = validated_artifact.revision().to_owned();
     let artifact_payload_bytes = validated_artifact.total_payload_bytes();
     let artifact_shard_count = validated_artifact.shard_count();
@@ -149,7 +145,7 @@ pub(crate) fn initialize_qwen3_5_model(
             ));
         }
     };
-    let qwen3_5_engine = Qwen3_5Engine::new_with_effective_context_runtime_chunking_speculative_prefill_mtp_depth_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_effective_context_runtime_chunking_mtp_depth_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
@@ -162,7 +158,6 @@ pub(crate) fn initialize_qwen3_5_model(
         true,
         mtp_enabled,
         mtp_draft_depth,
-        loaded_model_speculative_prefill_configuration,
         model_loading_performance_attribution,
         performance_attribution_log,
     )

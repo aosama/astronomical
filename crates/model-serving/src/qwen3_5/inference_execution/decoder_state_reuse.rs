@@ -176,13 +176,11 @@ impl Qwen3_5EngineState {
                     usize::try_from(recurrent_snapshot_file_size_bytes).unwrap_or(usize::MAX),
                 );
         }
-        let additional_maximum_expert_page_reservation_bytes =
-            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
         let target_expert_payload_bytes_reclaimed_before_restore = self
             .validate_context_memory_admission_with_resident_expert_demotion(
                 total_context_tokens,
                 persistent_prompt_cache_restore_temporary_workspace_bytes,
-                additional_maximum_expert_page_reservation_bytes,
+                0,
                 performance_attribution,
             )?;
         let model = self
@@ -340,7 +338,7 @@ impl Qwen3_5EngineState {
             .validate_context_memory_admission_with_resident_expert_demotion(
                 remaining_context_token_count,
                 0,
-                additional_maximum_expert_page_reservation_bytes,
+                0,
                 performance_attribution,
             )?;
         let target_expert_payload_bytes_reclaimed_during_restore =

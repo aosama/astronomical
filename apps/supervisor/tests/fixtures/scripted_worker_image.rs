@@ -117,7 +117,6 @@ where
                         expert_payload_bytes: 0,
                         model_core_payload_bytes: 0,
                         context_state_payload_bytes: 0,
-                        speculative_prefill_draft_memory_bytes: 0,
                         memory_ceiling_utilization: None,
                     }),
                 })
@@ -363,7 +362,6 @@ where
                 expert_payload_bytes: 0,
                 model_core_payload_bytes: 96_000_000,
                 context_state_payload_bytes: 0,
-                speculative_prefill_draft_memory_bytes: 0,
                 memory_ceiling_utilization: None,
             }),
         })

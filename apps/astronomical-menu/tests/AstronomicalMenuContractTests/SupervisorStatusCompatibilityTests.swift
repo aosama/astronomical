@@ -46,7 +46,6 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
     XCTAssertNil(statusDocument.mlxMemorySnapshot)
     XCTAssertNil(statusDocument.application)
     XCTAssertEqual(statusDocument.mlxMemoryCeilingBytes, 0)
-    XCTAssertEqual(statusDocument.mlxMemoryBreakdown.speculativePrefillDraftMemoryByteCount, 0)
     XCTAssertEqual(statusDocument.servingSession.completedRequestCount, 0)
   }
 

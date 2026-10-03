@@ -40,7 +40,7 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     let performance_attribution_log =
         PerformanceAttributionLog::open(performance_attribution_log_path, true)
             .expect("the benchmark should open its JSON Lines log");
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -55,7 +55,6 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
         crate::common::standard_worker_chunking_configuration(),
         true,
         false,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
         PerformanceAttribution::enabled(),
         performance_attribution_log,
     )

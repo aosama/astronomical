@@ -34,13 +34,11 @@ impl RequestId {
     }
 }
 
-/// Per-request model-row work that was eligible for and restored from reusable prompt state.
+/// Per-request target-model work that was eligible for and restored from reusable prompt state.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerPromptWorkReuse {
     pub target_eligible_token_count: u64,
     pub target_restored_token_count: u64,
-    pub drafter_eligible_token_count: u64,
-    pub drafter_restored_token_count: u64,
 }
 
 /// Current sparse-expert weight residency exposed by the local worker.
@@ -124,19 +122,6 @@ impl MtpDepthStatus {
     };
 }
 
-/// Runtime execution state of optional draft-assisted speculative prefill.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SpeculativePrefillRuntimeState {
-    /// The user preference is disabled.
-    #[default]
-    Disabled,
-    /// A validated request-scoped draft model is available for scoring.
-    Active,
-    /// The preference is enabled but the draft model could not be used.
-    Unavailable,
-}
-
 /// Model currently processing the active prompt phase.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -144,8 +129,6 @@ pub enum WorkerPromptProcessingPhase {
     /// The target model is processing protected or selected prompt work.
     #[default]
     Target,
-    /// The request-scoped SpecPrefill drafter is preparing importance scores.
-    Drafter,
 }
 
 /// Lifecycle point at which the worker observed MLX allocator memory.
@@ -156,8 +139,6 @@ pub enum MlxMemorySnapshotSource {
     ModelLoaded,
     /// A prompt-processing chunk completed.
     Prefill,
-    /// A complete active-memory observation captured while request-scoped draft scoring ran.
-    SpeculativePrefillDraftScoring,
     /// One-token-ahead decode work was submitted to MLX.
     DecodeSubmitted,
     /// Request state and reclaimable allocator memory were released.
@@ -180,8 +161,6 @@ pub struct WorkerMlxMemorySnapshot {
     pub expert_payload_bytes: u64,
     pub model_core_payload_bytes: u64,
     pub context_state_payload_bytes: u64,
-    /// Complete active MLX memory attributed to the request-scoped drafter phase.
-    pub speculative_prefill_draft_memory_bytes: u64,
     /// Reason-tagged split of the ceiling's unused headroom at this instant
     /// (issue #510), composed by the same budget owner the engine acts on.
     /// `None` from engines without a composed RAM budget.
@@ -197,7 +176,6 @@ pub struct WorkerMemoryCeilingUtilizationSnapshot {
     pub reserved_context_growth_bytes: u64,
     pub reserved_activation_and_workspace_bytes: u64,
     pub unseated_expert_entitlement_bytes: u64,
-    pub speculative_draft_payload_bytes: u64,
     pub unexplained_headroom_bytes: u64,
     pub owner_overrun_bytes: u64,
 }
@@ -253,7 +231,7 @@ pub enum WorkerEvent {
     /// Confirms the feature settings applied by the currently running worker.
     ///
     /// A fresh idle worker emits this after its Idle event. A loaded model emits
-    /// it again after target binding determines its actual SpecPrefill state.
+    /// it again after applying the selected model's runtime configuration.
     RuntimeFeatureConfigurationApplied {
         worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
     },
@@ -366,14 +344,6 @@ pub enum WorkerEvent {
         /// Present when MTP is unavailable despite the preference being enabled.
         mtp_unavailable_reason: Option<String>,
         mtp_depth_status: MtpDepthStatus,
-        /// Actual optional speculative-prefill state reported after model load.
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        /// Present when speculative prefill is enabled but the draft model is unavailable.
-        speculative_prefill_unavailable_reason: Option<String>,
-        /// Configured draft model identity when speculative prefill is enabled.
-        speculative_prefill_draft_model_id: Option<String>,
-        /// Validated request-scoped draft revision when speculative prefill is active.
-        speculative_prefill_draft_model_revision: Option<String>,
     },
     /// Delivers one or more ordered model outputs in a single frame.
     Output {
@@ -401,8 +371,6 @@ pub enum WorkerEvent {
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
         /// Current retained-expert ownership after this prompt-processing boundary.
         expert_residency: Option<WorkerExpertResidencySnapshot>,
-        /// Snapshot captured while the request-scoped SpecPrefill drafter was scoring.
-        speculative_prefill_draft_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Reports the explicit barrier between final prompt processing and first decode.
     GenerationPreparationStarted {
@@ -429,7 +397,7 @@ pub enum WorkerEvent {
         request_id: RequestId,
         elapsed_millis: u64,
     },
-    /// Reports model-row work avoided through exact or SpecPrefill-specific reusable state.
+    /// Reports model-row work avoided through exact reusable prompt state.
     PromptWorkReuse {
         request_id: RequestId,
         prompt_work_reuse: WorkerPromptWorkReuse,
@@ -463,14 +431,6 @@ pub enum WorkerEvent {
         /// Present when MTP is unavailable despite the preference being enabled.
         mtp_unavailable_reason: Option<String>,
         mtp_depth_status: MtpDepthStatus,
-        /// Actual optional speculative-prefill state reported after the swap.
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        /// Present when speculative prefill is enabled but the draft model is unavailable.
-        speculative_prefill_unavailable_reason: Option<String>,
-        /// Configured draft model identity when speculative prefill is enabled.
-        speculative_prefill_draft_model_id: Option<String>,
-        /// Validated request-scoped draft revision when speculative prefill is active.
-        speculative_prefill_draft_model_revision: Option<String>,
     },
     /// Reports that a model swap failed while the worker process remained responsive.
     ModelSwapFailed {

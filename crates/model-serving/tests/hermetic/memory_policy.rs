@@ -2,8 +2,8 @@ use astronomical_model_serving::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
     CompleteResidencyRequirements, ContextAdmissionRequirements, ExpertMemoryMode,
     ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryAdmissionDecision, MemoryBoundary,
-    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, SpeculativePrefillAdmission,
-    classify_expert_memory_mode, complete_residency_exceeds_ceiling_with_activation_headroom,
+    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, classify_expert_memory_mode,
+    complete_residency_exceeds_ceiling_with_activation_headroom,
     persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,
     seated_complete_expert_request_temporary_workspace_bytes,
@@ -380,22 +380,6 @@ fn should_admit_complete_residency_without_prefill_three_layer_weight_headroom()
         ACTIVE_MEMORY_CEILING_BYTES,
         PREFILL_THREE_LAYER_WEIGHT_HEADROOM_BYTES,
     ));
-}
-
-#[test]
-fn should_fail_speculative_prefill_closed_when_combined_owners_overflow() {
-    assert_eq!(
-        SpeculativePrefillAdmission::draft_scoring_reservation_bytes(usize::MAX, 1, 0, 0, 0,),
-        None
-    );
-    assert_eq!(
-        SpeculativePrefillAdmission::required_target_expert_reclamation_bytes(
-            usize::MAX,
-            1,
-            usize::MAX,
-        ),
-        usize::MAX
-    );
 }
 
 #[test]

@@ -14,11 +14,11 @@ use super::disk_store_file::{
     PersistentPromptCacheFileKind, expected_tensor_names, open_without_following_symlinks,
     remove_cache_owned_file_or_confirm_absent, validate_current_file_header,
 };
-use super::disk_store_global_quota::prepare_prompt_cache_directory_tree;
-use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
-use super::disk_store_scan::{
-    scan_current_format_block_directories, scan_current_format_directory,
+use super::disk_store_global_quota::{
+    prepare_prompt_cache_directory_tree, remove_retired_speculative_prefill_cache_directories,
 };
+use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
+use super::disk_store_scan::scan_current_format_block_directories;
 use super::model_contract::PersistentPromptCacheModelContract;
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 use astronomical_runtime_integration::{MlxArray, MlxRuntime, PositionalFileReadMetrics};
@@ -26,8 +26,6 @@ use std::collections::HashMap;
 
 const BLOCKS_DIRECTORY_NAME: &str = "blocks";
 const VISUAL_EMBEDDINGS_DIRECTORY_NAME: &str = "visual_embeddings";
-const SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME: &str = "speculative_prefill_selections";
-const SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME: &str = "speculative_prefill_target_states";
 
 /// Valid enabled prompt-cache filesystem state for one active model under one global quota.
 #[derive(Clone, Debug)]
@@ -74,8 +72,6 @@ pub struct PersistentPromptCacheDiskStore {
     pub(super) active_model_prompt_cache_directory: PathBuf,
     pub(super) blocks_directory: PathBuf,
     pub(crate) visual_embeddings_directory: PathBuf,
-    pub(crate) speculative_prefill_selections_directory: PathBuf,
-    pub(crate) speculative_prefill_target_states_directory: PathBuf,
     pub(crate) global_prompt_cache_root_directory: PathBuf,
     pub(crate) global_prompt_cache_maximum_size_bytes: u64,
     pub(crate) global_prompt_cache_total_size_bytes: AtomicU64,
@@ -101,10 +97,6 @@ impl PersistentPromptCacheDiskStore {
         let blocks_directory = persistent_prompt_cache_directory.join(BLOCKS_DIRECTORY_NAME);
         let visual_embeddings_directory =
             persistent_prompt_cache_directory.join(VISUAL_EMBEDDINGS_DIRECTORY_NAME);
-        let speculative_prefill_selections_directory =
-            persistent_prompt_cache_directory.join(SPECULATIVE_PREFILL_SELECTIONS_DIRECTORY_NAME);
-        let speculative_prefill_target_states_directory = persistent_prompt_cache_directory
-            .join(SPECULATIVE_PREFILL_TARGET_STATES_DIRECTORY_NAME);
         let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         // Open order is a recovery protocol: establish trusted directories,
         // rebuild the active-model index from valid committed artifacts, remove
@@ -112,12 +104,11 @@ impl PersistentPromptCacheDiskStore {
         prepare_prompt_cache_directory_tree(
             &global_prompt_cache_root_directory,
             &persistent_prompt_cache_directory,
-            &[
-                &blocks_directory,
-                &visual_embeddings_directory,
-                &speculative_prefill_selections_directory,
-                &speculative_prefill_target_states_directory,
-            ],
+            &[&blocks_directory, &visual_embeddings_directory],
+        )?;
+        remove_retired_speculative_prefill_cache_directories(
+            &persistent_prompt_cache_directory,
+            &mut startup_cleanup_evidence,
         )?;
         let mut tracked_files = PersistentPromptCacheDiskStoreIndex::default();
         scan_current_format_block_directories(
@@ -126,42 +117,10 @@ impl PersistentPromptCacheDiskStore {
             &model_contract,
             &mut startup_cleanup_evidence,
         )?;
-        scan_current_format_directory(
-            &speculative_prefill_selections_directory,
-            PersistentPromptCacheFileKind::SpeculativePrefillSelection,
-            &mut tracked_files,
-            &mut startup_cleanup_evidence,
-            |file, file_path| {
-                validate_current_file_header(
-                    PersistentPromptCacheFileKind::SpeculativePrefillSelection,
-                    file,
-                    file_path,
-                    &model_contract,
-                )
-                .is_ok()
-            },
-        )?;
-        scan_current_format_directory(
-            &speculative_prefill_target_states_directory,
-            PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
-            &mut tracked_files,
-            &mut startup_cleanup_evidence,
-            |file, file_path| {
-                validate_current_file_header(
-                    PersistentPromptCacheFileKind::SpeculativePrefillTargetState,
-                    file,
-                    file_path,
-                    &model_contract,
-                )
-                .is_ok()
-            },
-        )?;
         let disk_store = Self {
             active_model_prompt_cache_directory: persistent_prompt_cache_directory,
             blocks_directory,
             visual_embeddings_directory,
-            speculative_prefill_selections_directory,
-            speculative_prefill_target_states_directory,
             global_prompt_cache_root_directory,
             global_prompt_cache_maximum_size_bytes,
             global_prompt_cache_total_size_bytes: AtomicU64::new(0),
@@ -193,11 +152,6 @@ impl PersistentPromptCacheDiskStore {
 
     pub fn visual_embedding_count(&self) -> usize {
         self.lock_tracked_files().visual_embedding_count()
-    }
-
-    pub fn speculative_prefill_selection_count(&self) -> usize {
-        self.lock_tracked_files()
-            .speculative_prefill_selection_count()
     }
 
     /// Returns the tracked on-disk size of one sequence-state block file.
@@ -334,12 +288,7 @@ impl PersistentPromptCacheDiskStore {
         prepare_prompt_cache_directory_tree(
             &self.global_prompt_cache_root_directory,
             &self.active_model_prompt_cache_directory,
-            &[
-                &self.blocks_directory,
-                &self.visual_embeddings_directory,
-                &self.speculative_prefill_selections_directory,
-                &self.speculative_prefill_target_states_directory,
-            ],
+            &[&self.blocks_directory, &self.visual_embeddings_directory],
         )
     }
 

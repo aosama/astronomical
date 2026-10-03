@@ -1,6 +1,5 @@
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MlxMemorySnapshotSource, MtpRuntimeState,
-    SpeculativePrefillRuntimeState, WorkerMlxMemorySnapshot,
+    ChatModelCapabilities, MlxMemorySnapshotSource, MtpRuntimeState, WorkerMlxMemorySnapshot,
 };
 use astronomical_supervisor::{
     ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
@@ -58,11 +57,6 @@ async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_a
         status_document["ready_model_id"],
         OBSERVATORY_CONTRACT_MODEL_ID
     );
-    assert_eq!(status_document["speculative_prefill_enabled"], false);
-    assert_eq!(
-        status_document["speculative_prefill_runtime_state"],
-        "disabled"
-    );
     // The Observatory UI must never assume progress is present while idle.
     assert!(
         status_document.get("progress").is_none() || status_document["progress"].is_null(),
@@ -73,75 +67,6 @@ async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_a
     assert!(
         status_document.get("predictor").is_none(),
         "the retired predictor surface must never publish a status object (#594)"
-    );
-}
-
-#[tokio::test]
-async fn should_expose_active_speculative_prefill_identity_in_status() {
-    let mut health_snapshot = ready_health_snapshot_with_model();
-    health_snapshot.speculative_prefill_runtime_state = SpeculativePrefillRuntimeState::Active;
-    health_snapshot.speculative_prefill_draft_model_id =
-        Some("astronomical/speculative-draft".to_owned());
-    health_snapshot.speculative_prefill_draft_model_revision = Some("draft-revision-1".to_owned());
-    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the status body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
-
-    assert_eq!(
-        status_document["speculative_prefill_runtime_state"],
-        "active"
-    );
-    assert_eq!(
-        status_document["speculative_prefill_draft_model_id"],
-        "astronomical/speculative-draft"
-    );
-    assert_eq!(
-        status_document["speculative_prefill_draft_model_revision"],
-        "draft-revision-1"
-    );
-}
-
-#[tokio::test]
-async fn should_expose_unavailable_speculative_prefill_reason_in_status() {
-    let mut health_snapshot = ready_health_snapshot_with_model();
-    health_snapshot.speculative_prefill_runtime_state = SpeculativePrefillRuntimeState::Unavailable;
-    health_snapshot.speculative_prefill_unavailable_reason =
-        Some("draft model could not be materialized".to_owned());
-    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the status body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
-
-    assert_eq!(
-        status_document["speculative_prefill_runtime_state"],
-        "unavailable"
-    );
-    assert_eq!(
-        status_document["speculative_prefill_unavailable_reason"],
-        "draft model could not be materialized"
     );
 }
 
@@ -189,7 +114,7 @@ async fn should_advance_live_prefill_elapsed_time_before_the_first_completed_for
     let mut health_snapshot = ready_health_snapshot_with_model();
     health_snapshot.activity = WorkerActivity::PromptProcessing;
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
-        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Drafter,
+        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
         processed_tokens: 0,
         total_tokens: 8_192,
         elapsed_millis: 0,
@@ -213,7 +138,7 @@ async fn should_advance_live_prefill_elapsed_time_before_the_first_completed_for
     let status_document: serde_json::Value =
         serde_json::from_slice(&response_body).expect("the status body should contain JSON");
 
-    assert_eq!(status_document["progress"]["phase"], "drafter");
+    assert_eq!(status_document["progress"]["phase"], "target");
     assert_eq!(status_document["progress"]["processed_tokens"], 0);
     assert!(
         status_document["progress"]["elapsed_ms"]
@@ -349,34 +274,6 @@ async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_m
     // Every field the Observatory cache panel reads must be present.
     assert!(cache_document["persistent_prompt_cache_sequence_state_block_count"].is_u64());
     assert!(cache_document["persistent_prompt_cache_boundary_state_snapshot_count"].is_u64());
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["target"]["eligible_token_count"],
-        0
-    );
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["target"]["restored_token_count"],
-        0
-    );
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["target"]["reuse_rate"],
-        0.0
-    );
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["drafter"]["eligible_token_count"],
-        0
-    );
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["drafter"]["restored_token_count"],
-        0
-    );
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["drafter"]["reuse_rate"],
-        0.0
-    );
-    assert_eq!(
-        cache_document["speculative_prefill_cache_efficacy"]["combined"]["reuse_rate"],
-        0.0
-    );
 }
 
 #[tokio::test]
@@ -449,14 +346,13 @@ fn should_parse_macos_memory_pressure_bitmasks_without_treating_unknown_values_a
 async fn should_expose_mlx_memory_snapshot_and_serving_session_in_status_for_the_memory_panel() {
     let mut health_snapshot = ready_health_snapshot_with_model();
     health_snapshot.latest_mlx_memory_snapshot = Some(WorkerMlxMemorySnapshot {
-        source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
+        source: MlxMemorySnapshotSource::DecodeSubmitted,
         active_memory_bytes: 12_000,
         allocator_cache_memory_bytes: 500,
         peak_memory_bytes: 13_000,
         expert_payload_bytes: 2_000,
         model_core_payload_bytes: 4_000,
         context_state_payload_bytes: 1_000,
-        speculative_prefill_draft_memory_bytes: 5_000,
         memory_ceiling_utilization: None,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
@@ -477,10 +373,6 @@ async fn should_expose_mlx_memory_snapshot_and_serving_session_in_status_for_the
     // MLX memory snapshot is optional (None when no worker observation yet)
     // but the ceiling must always be present.
     assert!(status_document["mlx_memory_ceiling_bytes"].is_u64());
-    assert_eq!(
-        status_document["mlx_memory_snapshot"]["speculative_prefill_draft_memory_bytes"],
-        5_000
-    );
     // serving_session must always be present for the session panel.
     assert!(status_document["serving_session"].is_object());
     assert!(status_document["serving_session"]["completed_request_count"].is_u64());

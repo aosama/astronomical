@@ -288,8 +288,7 @@ async function pollCacheStats() {
         if (!response.ok) { return; }
         const data = await response.json();
         renderCompactCachePanel(data);
-        const cacheEfficacyDocument = data.speculative_prefill_cache_efficacy || {};
-        const hitRate = (cacheEfficacyDocument.combined || {}).reuse_rate || 0;
+        const hitRate = data.persistent_prompt_cache_hit_rate || 0;
         pushSparklineSample(hitRate);
         renderSparkline();
     } catch (fetchError) {
