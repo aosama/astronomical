@@ -1,7 +1,8 @@
 //! Family-owned grouped RMSNorm, K2 router, and attention-gate math.
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledSwiGlu, MlxDtype, MlxMetalKernel, MlxRuntime, MlxRuntimeError,
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxMetalKernel,
+    MlxRuntime, MlxRuntimeError,
 };
 
 use crate::PerformanceAttribution;
@@ -45,6 +46,7 @@ pub fn grouped_rms_norm(
 
 pub fn attention_gate(
     runtime: &MlxRuntime,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     hidden_states: &MlxArray,
     projection: &K2HorizonMoVAAffineLinear,
     gate_func: K2HorizonMoVAAttentionGateFunc,
@@ -57,14 +59,16 @@ pub fn attention_gate(
     gated_shape.push(num_heads as i32);
     gated_shape.push(head_dim as i32);
     let reshaped = runtime.reshape(&projected, &gated_shape)?;
+    // Both activations run as one compiled elementwise kernel: the softplus
+    // graph reproduces the reference beta-scaled formula exactly (it is NOT
+    // the standard logaddexp softplus), and silu rides the fused graph instead
+    // of a hand-composed sigmoid-plus-multiply kernel pair.
     let activated = match gate_func {
-        K2HorizonMoVAAttentionGateFunc::Silu => runtime.silu(&reshaped)?,
+        K2HorizonMoVAAttentionGateFunc::Silu => {
+            runtime.apply_compiled_silu(compiled_elementwise_graphs, &reshaped)?
+        }
         K2HorizonMoVAAttentionGateFunc::Softplus => {
-            let ln2 = 2.0_f32.ln();
-            let scaled = runtime.multiply_scalar(&reshaped, ln2)?;
-            let exponent = runtime.exp(&scaled)?;
-            let log = runtime.log1p(&exponent)?;
-            runtime.multiply_scalar(&log, 1.0 / ln2)?
+            runtime.apply_compiled_softplus(compiled_elementwise_graphs, &reshaped)?
         }
     };
     Ok(runtime.transpose_axes(&activated, &[0, 2, 1, 3])?)
@@ -75,6 +79,10 @@ pub struct K2HorizonMoVARouterSelection {
     pub indices: MlxArray,
 }
 
+/// Selects each token's experts the K2 router way: sigmoid scores plus the
+/// router's dense bias, `argpartition` top-k, optional top-k renormalization,
+/// then the family's `router_scaling_factor` multiplier so routed
+/// contributions keep the trained magnitude.
 pub fn route_k2_experts(
     runtime: &MlxRuntime,
     hidden_states: &MlxArray,

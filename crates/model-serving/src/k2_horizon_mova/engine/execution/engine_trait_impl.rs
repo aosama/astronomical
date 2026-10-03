@@ -8,7 +8,9 @@
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerEvent};
-use astronomical_runtime_integration::{MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{
+    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime,
+};
 
 use super::{K2HorizonMoVAActiveGeneration, K2HorizonMoVAInferenceExecution};
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
@@ -58,6 +60,16 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             MlxCompiledSwiGlu::new().map_err(|error| InferenceEngineError::Fatal {
                 reason: format!("K2 Horizon MoVA SwiGLU compilation failed: {error}"),
             })?;
+        let compiled_elementwise_graphs = performance_attribution.measure_operation(
+            PerformanceOperation::CompiledElementwiseGraphConstruction,
+            |_| {
+                MlxCompiledElementwiseGraphs::new().map_err(|error| InferenceEngineError::Fatal {
+                    reason: format!(
+                        "K2 Horizon MoVA elementwise graph compilation failed: {error}"
+                    ),
+                })
+            },
+        )?;
         let kernel_capabilities =
             worker_process_kernel_capabilities(&runtime, &mut performance_attribution);
         let sorted_expert_reduction_kernel = if kernel_capabilities
@@ -90,6 +102,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             config,
             weights,
             compiled_swiglu,
+            compiled_elementwise_graphs,
             sorted_expert_reduction_kernel,
             fused_expert_decode_kernels,
         });
