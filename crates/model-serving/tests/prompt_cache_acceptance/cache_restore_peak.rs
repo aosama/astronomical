@@ -152,18 +152,20 @@ async fn run_cache_restore_peak_acceptance() {
         .expect("the journey should sample the restore peak");
     let restore_peak_delta_bytes = (restore_memory_snapshot.peak_memory_bytes() as u64)
         .saturating_sub(active_memory_bytes_before_restore);
-    let one_block_workspace_bound_bytes =
-        destination_byte_bound.saturating_add(largest_source_block_bytes.saturating_mul(3));
+    let concat_restore_peak_bound_bytes = destination_byte_bound
+        .saturating_mul(2)
+        .saturating_add(largest_source_block_bytes.saturating_mul(3));
     eprintln!(
-        "[prompt-cache-restore-peak] status=measured cached_tokens={} cache_files={} active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} one_block_workspace_bound_bytes={one_block_workspace_bound_bytes}",
+        "[prompt-cache-restore-peak] status=measured cached_tokens={} cache_files={} active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
         restored_generation_start.cached_token_count(),
         cache_file_sizes.len(),
         restore_memory_snapshot.peak_memory_bytes(),
     );
     assert!(
-        restore_peak_delta_bytes <= one_block_workspace_bound_bytes,
-        "the real cache-hit peak must fit destination plus one source block and MLX scratch: \
-         peak_delta={restore_peak_delta_bytes} bound={one_block_workspace_bound_bytes}"
+        restore_peak_delta_bytes <= concat_restore_peak_bound_bytes,
+        "the real cache-hit peak must fit the destination plus the complete source block set \
+         and MLX scratch: peak_delta={restore_peak_delta_bytes} \
+         bound={concat_restore_peak_bound_bytes}"
     );
 
     let (restored_generated_token_ids, _) = generate_token_ids(

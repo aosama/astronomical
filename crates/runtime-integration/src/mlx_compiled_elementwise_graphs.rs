@@ -2,6 +2,7 @@ use std::os::raw::c_int;
 
 use crate::mlx_compiled_attention_output_gate::build_attention_output_gate_graph;
 use crate::mlx_compiled_sparse_shared_expert_combination::build_sparse_shared_expert_combination_graph;
+use crate::mlx_compiled_vision_rope::build_vision_rope_graph;
 use crate::{
     MlxArray, MlxRuntime, MlxRuntimeError,
     mlx_compiled_graph::{
@@ -28,6 +29,10 @@ const APPLY_FUSED_SILU_OPERATION: &str = "apply the compiled MLX fused SiLU grap
 const COMPILE_FUSED_SILU_OPERATION: &str = "compile the shapeless MLX fused SiLU graph";
 const APPLY_FUSED_SOFTPLUS_OPERATION: &str = "apply the compiled MLX fused K2 softplus graph";
 const COMPILE_FUSED_SOFTPLUS_OPERATION: &str = "compile the shapeless MLX fused K2 softplus graph";
+const APPLY_VISION_ROPE_OPERATION: &str =
+    "apply the compiled MLX vision rotate-half rotary embedding";
+const COMPILE_VISION_ROPE_OPERATION: &str =
+    "compile the shapeless MLX vision rotate-half rotary embedding";
 
 /// Retained shapeless compilations for elementwise model graph composites.
 #[derive(Debug)]
@@ -38,6 +43,7 @@ pub struct MlxCompiledElementwiseGraphs {
     sparse_shared_expert_combination: MlxCompiledGraph,
     fused_silu: MlxCompiledGraph,
     fused_softplus: MlxCompiledGraph,
+    vision_rope: MlxCompiledGraph,
 }
 
 impl MlxCompiledElementwiseGraphs {
@@ -67,6 +73,10 @@ impl MlxCompiledElementwiseGraphs {
             fused_softplus: MlxCompiledGraph::new(
                 build_fused_softplus_graph,
                 COMPILE_FUSED_SOFTPLUS_OPERATION,
+            )?,
+            vision_rope: MlxCompiledGraph::new(
+                build_vision_rope_graph,
+                COMPILE_VISION_ROPE_OPERATION,
             )?,
         })
     }
@@ -168,6 +178,35 @@ impl MlxRuntime {
         compiled_elementwise_graphs
             .fused_softplus
             .apply(&[input], APPLY_FUSED_SOFTPLUS_OPERATION)
+    }
+
+    /// Applies Qwen3-VL rotate-half rotary embedding as one compiled composite.
+    ///
+    /// `first_half` and `second_half` are the pre-sliced head halves of
+    /// `attention_states` (the last axis split at `head_dim / 2`); the head-half
+    /// slices stay outside the compiled graph because the pinned MLX `Slice`
+    /// primitive cannot be shapeless-compiled. The remaining composite fuses the
+    /// elementwise tail into one kernel and keeps the rotate-half concat as one
+    /// shape kernel, replacing the eight separate dispatches.
+    pub fn apply_compiled_vision_rope(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        attention_states: &MlxArray,
+        rotary_cosines: &MlxArray,
+        rotary_sines: &MlxArray,
+        first_half: &MlxArray,
+        second_half: &MlxArray,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        compiled_elementwise_graphs.vision_rope.apply(
+            &[
+                attention_states,
+                rotary_cosines,
+                rotary_sines,
+                first_half,
+                second_half,
+            ],
+            APPLY_VISION_ROPE_OPERATION,
+        )
     }
 }
 

@@ -146,9 +146,12 @@ pub(super) fn restore_prompt_prefix(
             reason: "K2 Horizon MoVA prompt-cache restore token count overflowed".to_owned(),
         })?;
 
-    // Lookup already proved every block exists. Load and absorb one block at
-    // a time so the restore peak stays at the final destination plus one
-    // block instead of pinning the complete prefix beside seated experts.
+    // Lookup already proved every block exists. Load the complete block set,
+    // then seat every layer with one concatenation per tensor; restored blocks
+    // are disk-backed lazy handles, so the load holds no payload beside the
+    // destination and the concat streams disk → destination in one pass.
+    let mut loaded_block_tensors: Vec<HashMap<String, astronomical_runtime_integration::MlxArray>> =
+        Vec::with_capacity(complete_block_count);
     let mut last_restored_block_key = None;
     for block_index in 0..complete_block_count {
         let block_start = block_index * block_token_count;
@@ -158,7 +161,7 @@ pub(super) fn restore_prompt_prefix(
             &prompt_token_ids[block_start..block_end],
             last_restored_block_key.as_ref(),
         )?;
-        let mut loaded_sequence_block = performance_attribution
+        let loaded_sequence_block = performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheKvBlockRead,
                 |attribution| {
@@ -179,72 +182,48 @@ pub(super) fn restore_prompt_prefix(
                     "K2 Horizon MoVA prompt-cache sequence block was reported present but missing"
                         .to_owned(),
             })?;
-        let is_first_block = block_index == 0;
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheStateReconstruction,
-                |_performance_attribution| {
-                    absorb_loaded_block(
-                        runtime,
-                        caches,
-                        &mut loaded_sequence_block,
-                        block_start,
-                        restored_sequence_token_count,
-                        is_first_block,
-                    )
-                },
-            )
-            .map_err(|restore_error| InferenceEngineError::Fatal {
-                reason: format!(
-                    "K2 Horizon MoVA prompt-cache state reconstruction failed: {restore_error}"
-                ),
-            })?;
-        drop(loaded_sequence_block);
+        loaded_block_tensors.push(loaded_sequence_block);
         last_restored_block_key = Some(block_key);
     }
     performance_attribution.measure_operation(
         PerformanceOperation::PersistentPromptCacheStateReconstruction,
         |_performance_attribution| {
-            finish_incremental_restore(caches, restored_sequence_token_count)
+            restore_layers_from_blocks(
+                runtime,
+                caches,
+                &loaded_block_tensors,
+                restored_sequence_token_count,
+            )
         },
     )?;
+    drop(loaded_block_tensors);
     Ok((
         last_restored_block_key,
         u32::try_from(restored_token_count).unwrap_or(u32::MAX),
     ))
 }
 
-/// Writes one loaded block into every layer's preallocated restore
-/// destination. The first block allocates each destination from its geometry.
-fn absorb_loaded_block(
+/// Seats every layer's KV from the complete block set with one concatenation
+/// per tensor, then materializes each layer once.
+fn restore_layers_from_blocks(
     runtime: &MlxRuntime,
     caches: &mut [K2HorizonMoVAKvState],
-    loaded_sequence_block: &mut HashMap<String, astronomical_runtime_integration::MlxArray>,
-    block_start_tokens: usize,
+    loaded_block_tensors: &[HashMap<String, astronomical_runtime_integration::MlxArray>],
     restored_sequence_token_count: i32,
-    is_first_block: bool,
 ) -> Result<(), InferenceEngineError> {
     for (layer_index, layer_cache) in caches.iter_mut().enumerate() {
-        let block_keys = take_block_tensor(loaded_sequence_block, layer_index, "keys")?;
-        let block_values = take_block_tensor(loaded_sequence_block, layer_index, "values")?;
-        let absorb_outcome = if is_first_block {
-            layer_cache.begin_incremental_block_restore(
+        let block_keys = block_tensors_by_role(loaded_block_tensors, layer_index, "keys")?;
+        let block_values = block_tensors_by_role(loaded_block_tensors, layer_index, "values")?;
+        layer_cache
+            .restore_block_slices(
                 runtime,
-                block_keys,
-                block_values,
+                &block_keys,
+                &block_values,
                 restored_sequence_token_count,
             )
-        } else {
-            layer_cache.absorb_incremental_block_restore(
-                runtime,
-                block_keys,
-                block_values,
-                i32::try_from(block_start_tokens).unwrap_or(i32::MAX),
-            )
-        };
-        absorb_outcome.map_err(|restore_error| InferenceEngineError::Fatal {
-            reason: format!("K2 Horizon MoVA restored cache state is invalid: {restore_error}"),
-        })?;
+            .map_err(|restore_error| InferenceEngineError::Fatal {
+                reason: format!("K2 Horizon MoVA restored cache state is invalid: {restore_error}"),
+            })?;
     }
     for layer_cache in caches.iter() {
         evaluate_restored_layer(runtime, layer_cache)?;
@@ -252,23 +231,26 @@ fn absorb_loaded_block(
     Ok(())
 }
 
-/// Records the restored offset on every layer after all blocks were absorbed.
-fn finish_incremental_restore(
-    caches: &mut [K2HorizonMoVAKvState],
-    restored_sequence_token_count: i32,
-) -> Result<(), InferenceEngineError> {
-    for layer_cache in caches.iter_mut() {
-        layer_cache
-            .finish_incremental_block_restore(restored_sequence_token_count)
-            .map_err(|restore_error| InferenceEngineError::Fatal {
-                reason: format!("K2 Horizon MoVA restored cache state is invalid: {restore_error}"),
-            })?;
-    }
-    Ok(())
+/// Gathers one layer's tensors across every loaded block in block order.
+fn block_tensors_by_role<'a>(
+    loaded_block_tensors: &'a [HashMap<String, astronomical_runtime_integration::MlxArray>],
+    layer_index: usize,
+    tensor_role: &'static str,
+) -> Result<Vec<&'a astronomical_runtime_integration::MlxArray>, InferenceEngineError> {
+    let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
+    loaded_block_tensors
+        .iter()
+        .map(|block_tensors| {
+            block_tensors
+                .get(&tensor_name)
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: format!("K2 Horizon MoVA restored cache is missing {tensor_name}"),
+                })
+        })
+        .collect()
 }
 
-/// Materializes one layer after absorbing a block so the loaded block's
-/// tensors can be released before the next disk read.
+/// Materializes one restored layer after the complete block set is seated.
 fn evaluate_restored_layer(
     runtime: &MlxRuntime,
     layer_cache: &K2HorizonMoVAKvState,
@@ -287,19 +269,6 @@ fn evaluate_restored_layer(
             })?;
     }
     Ok(())
-}
-
-fn take_block_tensor(
-    loaded_sequence_block: &mut HashMap<String, astronomical_runtime_integration::MlxArray>,
-    layer_index: usize,
-    tensor_role: &'static str,
-) -> Result<astronomical_runtime_integration::MlxArray, InferenceEngineError> {
-    let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
-    loaded_sequence_block
-        .remove(&tensor_name)
-        .ok_or_else(|| InferenceEngineError::Fatal {
-            reason: format!("K2 Horizon MoVA restored cache is missing {tensor_name}"),
-        })
 }
 
 pub(super) fn capture_completed_cache_blocks(

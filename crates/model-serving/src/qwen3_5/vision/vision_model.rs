@@ -11,7 +11,7 @@
 //! MLX-C entry points in `mlx-c/mlx/c/ops.h` or `mlx-c/mlx/c/fast.h`; this code
 //! owns only model-specific graph assembly and image-boundary segmentation.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::{MlxArray, MlxCompiledElementwiseGraphs, MlxRuntime};
 use std::cell::Cell;
 
 use super::vision_attention::qwen3_5_vision_self_attention;
@@ -89,6 +89,7 @@ impl Qwen3_5VisionModel {
     pub fn forward(
         &self,
         runtime: &MlxRuntime,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
         processed_images: &[Qwen3_5ProcessedImage],
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let image_grids = processed_images
@@ -116,6 +117,7 @@ impl Qwen3_5VisionModel {
         for vision_block_index in 0..self.config.depth() {
             hidden_states = self.forward_vision_block(
                 runtime,
+                compiled_elementwise_graphs,
                 &hidden_states,
                 vision_block_index,
                 vision_input_plan.attention_sequence_boundaries(),
@@ -266,6 +268,7 @@ impl Qwen3_5VisionModel {
     fn forward_vision_block(
         &self,
         runtime: &MlxRuntime,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
         hidden_states: &MlxArray,
         vision_block_index: u32,
         attention_sequence_boundaries: &[u32],
@@ -277,6 +280,7 @@ impl Qwen3_5VisionModel {
             self.layer_norm(runtime, hidden_states, &vision_block_prefix, "norm1")?;
         let attention_output = qwen3_5_vision_self_attention(
             runtime,
+            compiled_elementwise_graphs,
             &self.config,
             &self.weights,
             &norm1_output,
