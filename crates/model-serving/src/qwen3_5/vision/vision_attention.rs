@@ -5,9 +5,89 @@
 //! delegated to MLX-C `mlx_fast_scaled_dot_product_attention` declared in
 //! `mlx-c/mlx/c/fast.h`.
 
-use astronomical_runtime_integration::{MlxArray, MlxCompiledElementwiseGraphs, MlxRuntime};
+use std::cell::RefCell;
+
+use astronomical_runtime_integration::{
+    MlxArray, MlxCompiledElementwiseGraphs, MlxDtype, MlxRuntime,
+};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionWeights};
+
+/// Retains the attention head-dimension padding zeros so the 27 vision blocks
+/// stop re-allocating an identical zero tensor three times per block per image
+/// forward (issue #915 item 4i): 81 zero-tensor allocations and writes become
+/// one retained array. One slot keyed by the full zeros shape and dtype —
+/// the patch count is constant within a request, so a request with a
+/// different patch count replaces the retained array and the old one drops,
+/// keeping the retained memory bounded to a single padding tensor.
+#[derive(Debug, Default)]
+pub struct Qwen3_5VisionPaddingZeroCache {
+    retained: RefCell<Option<RetainedPaddingZeros>>,
+}
+
+#[derive(Debug)]
+struct RetainedPaddingZeros {
+    zeros_shape: [i32; 4],
+    dtype: MlxDtype,
+    zeros: MlxArray,
+}
+
+impl RetainedPaddingZeros {
+    fn matches(&self, zeros_shape: [i32; 4], dtype: MlxDtype) -> bool {
+        self.zeros_shape == zeros_shape && self.dtype == dtype
+    }
+}
+
+impl Qwen3_5VisionPaddingZeroCache {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            retained: RefCell::new(None),
+        }
+    }
+
+    /// Pads the last (head) dimension to the fused SDPA width, reusing the
+    /// retained zeros when the requested padding shape and dtype match.
+    pub fn pad_attention_head_dimension(
+        &self,
+        runtime: &MlxRuntime,
+        attention_states: &MlxArray,
+        head_count: i32,
+        patch_count: i32,
+        fused_head_dimension: i32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let head_dimension = attention_states.shape()[3];
+        if head_dimension == fused_head_dimension {
+            return Ok(runtime.reshape(attention_states, &attention_states.shape())?);
+        }
+        // Appended Q/K zeros add nothing to QK^T; appended V zeros produce zero
+        // output coordinates. Slicing after SDPA therefore recovers original math.
+        let zeros_shape = [
+            1,
+            head_count,
+            patch_count,
+            fused_head_dimension - head_dimension,
+        ];
+        let dtype = attention_states.dtype();
+        let mut retained_slot = self.retained.borrow_mut();
+        if !retained_slot
+            .as_ref()
+            .is_some_and(|retained| retained.matches(zeros_shape, dtype))
+        {
+            retained_slot.replace(RetainedPaddingZeros {
+                zeros_shape,
+                dtype,
+                zeros: runtime.zeros(&zeros_shape, dtype)?,
+            });
+        }
+        let Some(retained) = retained_slot.as_ref() else {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "vision padding zeros must be retained before reuse",
+            });
+        };
+        Ok(runtime.concatenate_axis(&[attention_states, &retained.zeros], 3)?)
+    }
+}
 
 /// Runs one unmasked, image-segmented vision attention layer.
 #[allow(clippy::too_many_arguments)]
@@ -21,6 +101,7 @@ pub(super) fn qwen3_5_vision_self_attention(
     attention_sequence_boundaries: &[u32],
     rotary_cosines: &MlxArray,
     rotary_sines: &MlxArray,
+    padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
     let patch_count = normalized_hidden_states.shape()[0];
     let head_count = u32_to_i32(vision_config.head_count())?;
@@ -71,21 +152,21 @@ pub(super) fn qwen3_5_vision_self_attention(
         .into_iter()
         .find(|supported_head_dimension| *supported_head_dimension >= head_dimension)
         .unwrap_or(head_dimension);
-    let query_states = pad_attention_head_dimension(
+    let query_states = padding_zero_cache.pad_attention_head_dimension(
         runtime,
         &query_states,
         head_count,
         patch_count,
         fused_head_dimension,
     )?;
-    let key_states = pad_attention_head_dimension(
+    let key_states = padding_zero_cache.pad_attention_head_dimension(
         runtime,
         &key_states,
         head_count,
         patch_count,
         fused_head_dimension,
     )?;
-    let value_states = pad_attention_head_dimension(
+    let value_states = padding_zero_cache.pad_attention_head_dimension(
         runtime,
         &value_states,
         head_count,
@@ -208,31 +289,6 @@ fn apply_rotary_embedding(
         &first_half,
         &second_half,
     )?)
-}
-
-fn pad_attention_head_dimension(
-    runtime: &MlxRuntime,
-    attention_states: &MlxArray,
-    head_count: i32,
-    patch_count: i32,
-    fused_head_dimension: i32,
-) -> Result<MlxArray, Qwen3_5ExecutionError> {
-    let head_dimension = attention_states.shape()[3];
-    if head_dimension == fused_head_dimension {
-        return Ok(runtime.reshape(attention_states, &attention_states.shape())?);
-    }
-    // Appended Q/K zeros add nothing to QK^T; appended V zeros produce zero
-    // output coordinates. Slicing after SDPA therefore recovers original math.
-    let padding_states = runtime.zeros(
-        &[
-            1,
-            head_count,
-            patch_count,
-            fused_head_dimension - head_dimension,
-        ],
-        attention_states.dtype(),
-    )?;
-    Ok(runtime.concatenate_axis(&[attention_states, &padding_states], 3)?)
 }
 
 fn linear(
