@@ -65,16 +65,14 @@ impl Qwen3_5EngineState {
         model.clear_phase_aware_expert_residency_plan();
         let decoder_cache_layout = model.decoder_cache_layout().clone();
         let model_has_optional_prediction_head = model.mtp_weights();
-        let initial_publication_expert_reclaimed_bytes = self
-            .admit_initial_generation_context_or_record_rejection(
-                request_id,
-                configured_maximum_output_tokens,
-                total_context_tokens,
-                inference_request.input_token_ids().len(),
-                self.persistent_prompt_cache.is_some()
-                    && !inference_request.has_visual_embeddings(),
-                &mut performance_attribution,
-            )?;
+        self.admit_initial_generation_context_or_record_rejection(
+            request_id,
+            configured_maximum_output_tokens,
+            total_context_tokens,
+            inference_request.input_token_ids().len(),
+            self.persistent_prompt_cache.is_some() && !inference_request.has_visual_embeddings(),
+            &mut performance_attribution,
+        )?;
         let admitted_generation_start = (|| {
             let sampling_strategy = inference_request.sampling_strategy();
             let random_state = match sampling_strategy {
@@ -237,17 +235,6 @@ impl Qwen3_5EngineState {
                     next_position_tokens = 0;
                     last_restored_persistent_prompt_cache_block_key = None;
                 }
-            }
-            if let Some(persistent_prompt_cache_diagnostics) =
-                persistent_prompt_cache_diagnostics.as_mut()
-            {
-                // Initial admission can evict experts before lookup diagnostics
-                // exist. Merge those bytes now so the final per-request record
-                // accounts for all publication-related reclamation.
-                persistent_prompt_cache_diagnostics.expert_bytes_reclaimed_for_publication =
-                    persistent_prompt_cache_diagnostics
-                        .expert_bytes_reclaimed_for_publication
-                        .saturating_add(initial_publication_expert_reclaimed_bytes);
             }
             let visual_embeddings = if let Some(precomputed_visual_embeddings) =
                 precomputed_visual_embeddings

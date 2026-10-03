@@ -14,6 +14,10 @@
 mod cache_disabled;
 #[cfg(feature = "direct-mlx")]
 mod cache_interaction_matrix;
+#[cfg(feature = "direct-mlx")]
+mod cache_miss_memory;
+#[cfg(feature = "direct-mlx")]
+mod cache_restore_peak;
 mod engine_prompt_cache;
 mod large_prefill_prompt;
 mod partial_tail_reuse;
