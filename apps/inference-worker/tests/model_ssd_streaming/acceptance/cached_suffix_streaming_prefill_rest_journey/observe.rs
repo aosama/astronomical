@@ -6,11 +6,11 @@
 use std::net::SocketAddr;
 use std::path::Path;
 
-use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep};
 
+use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::get_json_endpoint;
 
 use super::reports::InteractionReports;
@@ -41,7 +41,7 @@ pub(super) fn completion_request(model_id: &str, messages: Value) -> Value {
 }
 
 pub(super) async fn execute_observed_request(
-    openai_client: &Client<OpenAIConfig>,
+    openai_client: &LocalOpenAiClient,
     server_address: SocketAddr,
     logging_directory: &Path,
     request_label: &'static str,
@@ -51,9 +51,8 @@ pub(super) async fn execute_observed_request(
         "{LOG_MARKER} request={request_label} status=start max_output_tokens={MAXIMUM_OUTPUT_TOKEN_COUNT} eta_seconds=unknown"
     );
     let request_started_at = Instant::now();
-    let streamed_completion: StreamResponse<Value> = openai_client
-        .chat()
-        .create_stream_byot(completion_request)
+    let streamed_completion: ChatCompletionStream = openai_client
+        .create_streaming_chat_completion(&completion_request)
         .await
         .expect("the public interaction request should start");
     let (completed_stream, live_evidence) = tokio::join!(
@@ -101,7 +100,7 @@ pub(super) async fn execute_observed_request(
 async fn consume_stream(
     request_label: &'static str,
     request_started_at: Instant,
-    mut streamed_completion: StreamResponse<Value>,
+    mut streamed_completion: ChatCompletionStream,
 ) -> CompletedStream {
     let mut model_text = String::new();
     let mut finish_reason = None;

@@ -1,4 +1,3 @@
-use async_openai::{Client, config::OpenAIConfig};
 use serde_json::Value;
 use tokio::time::timeout;
 
@@ -9,6 +8,7 @@ use super::rest_support::{
     write_cache_pressure_worker_config,
 };
 use crate::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
+use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
 
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
@@ -41,11 +41,7 @@ async fn run_append_only_rest_journey() {
     )
     .await;
     let server_address = model_artifact_rest_server.server_address;
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-acceptance-client"),
-    );
+    let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
 
     eprintln!(
         "{acceptance_log_prefix} status=progress phase=cold_request prompt_tokens={} maximum_output_tokens={MAXIMUM_OUTPUT_TOKEN_COUNT}",

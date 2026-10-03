@@ -8,11 +8,11 @@
 
 use std::{fs, path::Path};
 
-use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, timeout};
 
+use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
     JOURNEY_TIMEOUT, launch_real_model_rest_server_for_models, stop_real_model_rest_server,
 };
@@ -63,11 +63,7 @@ async fn run_cached_reverse_swap_journey() {
     )
     .await;
     let server_address = real_model_rest_server.server_address;
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-acceptance-client"),
-    );
+    let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
 
     complete_request(
         &openai_client,
@@ -134,7 +130,7 @@ async fn run_cached_reverse_swap_journey() {
 }
 
 async fn complete_request(
-    openai_client: &Client<OpenAIConfig>,
+    openai_client: &LocalOpenAiClient,
     model_id: &str,
     user_message: &str,
     request_timeout: Duration,
@@ -151,9 +147,8 @@ async fn complete_request(
         "max_tokens": 1,
     });
     let request_completion = async {
-        let mut streamed_completion: StreamResponse<Value> = openai_client
-            .chat()
-            .create_stream_byot(completion_request)
+        let mut streamed_completion: ChatCompletionStream = openai_client
+            .create_streaming_chat_completion(&completion_request)
             .await
             .unwrap_or_else(|request_error| panic!("{phase} should start: {request_error}"));
         let mut streamed_model_text = String::new();

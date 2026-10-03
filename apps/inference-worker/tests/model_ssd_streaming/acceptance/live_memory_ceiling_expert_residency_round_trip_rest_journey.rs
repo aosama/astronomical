@@ -14,11 +14,11 @@ use std::{
     time::Instant,
 };
 
-use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use tokio::time::{Duration, interval, timeout};
 
+use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
     JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
     stop_real_model_rest_server,
@@ -118,11 +118,7 @@ async fn run_mid_streaming_raise_settlement() {
     let server_address = real_model_rest_server.server_address;
     let initial_status = wait_for_idle_status(server_address, "initial_idle").await;
     assert_machine_supports_round_trip(&initial_status, raised_ceiling_bytes);
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-mid-streaming-raise-client"),
-    );
+    let openai_client = LocalOpenAiClient::new(server_address, "local-mid-streaming-raise-client");
 
     let first_assistant_response = execute_conversation_request(
         &openai_client,
@@ -336,11 +332,8 @@ async fn run_residency_round_trip() {
     let server_address = real_model_rest_server.server_address;
     let initial_status = wait_for_idle_status(server_address, "initial_idle").await;
     assert_machine_supports_round_trip(&initial_status, RESIDENT_MLX_MEMORY_CEILING_BYTES);
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-live-memory-round-trip-client"),
-    );
+    let openai_client =
+        LocalOpenAiClient::new(server_address, "local-live-memory-round-trip-client");
 
     let first_assistant_response = execute_conversation_request(
         &openai_client,
@@ -440,7 +433,7 @@ async fn run_residency_round_trip() {
 }
 
 async fn execute_conversation_request(
-    openai_client: &Client<OpenAIConfig>,
+    openai_client: &LocalOpenAiClient,
     conversation_messages: Value,
     request_label: &str,
 ) -> String {
@@ -454,9 +447,8 @@ async fn execute_conversation_request(
         "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
     });
-    let mut stream: StreamResponse<Value> = openai_client
-        .chat()
-        .create_stream_byot(request_document)
+    let mut stream: ChatCompletionStream = openai_client
+        .create_streaming_chat_completion(&request_document)
         .await
         .unwrap_or_else(|request_error| panic!("{request_label} should start: {request_error}"));
     let mut assistant_text = String::new();

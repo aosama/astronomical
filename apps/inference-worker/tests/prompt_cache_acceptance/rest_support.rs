@@ -4,11 +4,11 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
-use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 
 use crate::openai_rest::get_endpoint;
+use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 
 pub(crate) fn cache_pressure_model_id() -> &'static str {
     crate::support::large_sparse_moe_model_id()
@@ -112,7 +112,7 @@ fn prepare_romeo_and_juliet_prompt_with_instruction(
 }
 
 pub(crate) async fn send_streaming_chat_request(
-    openai_client: &Client<OpenAIConfig>,
+    openai_client: &LocalOpenAiClient,
     messages: Vec<Value>,
     prepared_romeo_and_juliet_prompt: &PreparedRomeoAndJulietPrompt,
     acceptance_log_prefix: &str,
@@ -131,9 +131,8 @@ pub(crate) async fn send_streaming_chat_request(
         "seed": ACCEPTANCE_SAMPLING_SEED,
         "thinking_budget": thinking_budget_token_count,
     });
-    let mut streamed_chat_completion: StreamResponse<Value> = openai_client
-        .chat()
-        .create_stream_byot(request_document)
+    let mut streamed_chat_completion: ChatCompletionStream = openai_client
+        .create_streaming_chat_completion(&request_document)
         .await
         .unwrap_or_else(|stream_start_error| {
             panic!("the {request_phase_name} REST request should start: {stream_start_error}")

@@ -12,10 +12,10 @@ mod support;
 
 use std::fs;
 
-use async_openai::{Client, config::OpenAIConfig};
 use serde_json::json;
 use tokio::time::timeout;
 
+use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest::{
     JOURNEY_TIMEOUT, launch_real_model_rest_server, stop_real_model_rest_server,
 };
@@ -195,11 +195,8 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     )
     .await;
     let server_address = real_model_rest_server.server_address;
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-residency-interaction-client"),
-    );
+    let openai_client =
+        LocalOpenAiClient::new(server_address, "local-residency-interaction-client");
 
     let cold_request = completion_request(
         model_id,
