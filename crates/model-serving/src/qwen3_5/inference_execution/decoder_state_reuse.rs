@@ -4,6 +4,8 @@
 //! blocks and the newest required boundary are loaded, reconstructed, synchronized,
 //! and released before memory admission is repeated for only the remaining context.
 
+use std::collections::HashMap;
+
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
     WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
@@ -11,6 +13,7 @@ use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
+use astronomical_runtime_integration::MlxArray;
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
@@ -122,11 +125,10 @@ impl Qwen3_5EngineState {
             complete_block_count + usize::from(restored_partial_tail_block_key.is_some()),
         );
         let mut last_restored_persistent_prompt_cache_block_key = None;
-        // The restore loop loads, absorbs, and drops one block at a time, so the
-        // temporary workspace is the largest single source tensor, not the sum
-        // of every block. Summing them stacked a bulk-restore paper peak that
-        // reclaimed expert pages the incremental restore never held.
-        let mut largest_sequence_block_file_size_bytes = 0_u64;
+        // The concat restore holds the complete source block set beside the
+        // final-length destination, so the transient workspace is the sum of
+        // every block, not one in-flight block.
+        let mut total_sequence_block_file_size_bytes = 0_u64;
         for block_index in 0..complete_block_count {
             let block_start = block_index * persistent_prompt_cache_block_token_count;
             let block_end = block_start + persistent_prompt_cache_block_token_count;
@@ -144,8 +146,8 @@ impl Qwen3_5EngineState {
                     &persistent_prompt_cache_block_key.block_hash(),
                 )
                 .unwrap_or(0);
-            largest_sequence_block_file_size_bytes =
-                largest_sequence_block_file_size_bytes.max(sequence_state_block_file_size_bytes);
+            total_sequence_block_file_size_bytes = total_sequence_block_file_size_bytes
+                .saturating_add(sequence_state_block_file_size_bytes);
             last_restored_persistent_prompt_cache_block_key =
                 Some(persistent_prompt_cache_block_key.clone());
             restored_persistent_prompt_cache_block_keys.push(persistent_prompt_cache_block_key);
@@ -156,8 +158,8 @@ impl Qwen3_5EngineState {
             let sequence_state_block_file_size_bytes = persistent_prompt_cache
                 .sequence_state_block_file_size_bytes(&restored_partial_tail_block_key.block_hash())
                 .unwrap_or(0);
-            largest_sequence_block_file_size_bytes =
-                largest_sequence_block_file_size_bytes.max(sequence_state_block_file_size_bytes);
+            total_sequence_block_file_size_bytes = total_sequence_block_file_size_bytes
+                .saturating_add(sequence_state_block_file_size_bytes);
             restored_persistent_prompt_cache_block_keys
                 .push(restored_partial_tail_block_key.clone());
         }
@@ -167,9 +169,9 @@ impl Qwen3_5EngineState {
         let recurrent_snapshot_source_block_key = restored_partial_tail_block_key
             .as_ref()
             .or(last_restored_persistent_prompt_cache_block_key.as_ref());
-        // The snapshot is loaded after every KV block is dropped, so it never
-        // coexists with one; the workspace is the larger of the two exclusive
-        // source tensors.
+        // The snapshot loads only after the concatenated KV materializes and
+        // releases the source blocks, so the two phases never hold both at
+        // once; the workspace is the larger of the two.
         let recurrent_snapshot_file_size_bytes = recurrent_snapshot_source_block_key
             .map(|recurrent_snapshot_block_key| {
                 persistent_prompt_cache
@@ -178,7 +180,7 @@ impl Qwen3_5EngineState {
             })
             .unwrap_or(0);
         let persistent_prompt_cache_restore_temporary_workspace_bytes = usize::try_from(
-            largest_sequence_block_file_size_bytes.max(recurrent_snapshot_file_size_bytes),
+            total_sequence_block_file_size_bytes.max(recurrent_snapshot_file_size_bytes),
         )
         .unwrap_or(usize::MAX);
         let target_expert_payload_bytes_reclaimed_before_restore = self
@@ -193,15 +195,19 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
 
-        // Lookup already proved every block exists. Load and absorb one block at
-        // a time so a later read failure can drop this attempt without pinning
-        // the complete prefix beside seated experts.
+        // Lookup already proved every block exists. Load the complete block
+        // set, then reconstruct each full-attention layer with one
+        // concatenation, O(restored tokens); a per-block slice_update into the
+        // growing final-length destination recopied the whole prefix per block
+        // and forced a GPU synchronization per block.
+        let mut restored_persistent_prompt_cache_kv_block_tensors: Vec<HashMap<String, MlxArray>> =
+            Vec::with_capacity(restored_persistent_prompt_cache_block_keys.len());
         for (block_index, persistent_prompt_cache_block_key) in
             restored_persistent_prompt_cache_block_keys
                 .into_iter()
                 .enumerate()
         {
-            let mut loaded_kv_block_tensors = performance_attribution
+            let loaded_kv_block_tensors = performance_attribution
                 .measure_operation(
                     PerformanceOperation::PersistentPromptCacheKvBlockRead,
                     |performance_attribution| {
@@ -224,30 +230,7 @@ impl Qwen3_5EngineState {
                          but load returned None",
                     )
                 })?;
-            let sequence_start_tokens = block_index
-                .checked_mul(persistent_prompt_cache_block_token_count)
-                .ok_or_else(|| {
-                    fatal_engine_error("persistent prompt-cache restore sequence offset overflowed")
-                })?;
-            performance_attribution
-                .measure_operation(
-                    PerformanceOperation::PersistentPromptCacheStateReconstruction,
-                    |_performance_attribution| {
-                        request_decoder_state.absorb_persistent_prompt_cache_kv_block(
-                            model.runtime(),
-                            &mut loaded_kv_block_tensors,
-                            sequence_start_tokens,
-                            restored_token_count,
-                        )
-                    },
-                )
-                .map_err(|persistent_prompt_cache_error| {
-                    fatal_engine_error(format!(
-                        "failed to absorb persistent prompt-cache KV block {block_index}: \
-                         {persistent_prompt_cache_error}"
-                    ))
-                })?;
-            drop(loaded_kv_block_tensors);
+            restored_persistent_prompt_cache_kv_block_tensors.push(loaded_kv_block_tensors);
             // The tail occupies the slot after the complete blocks; only
             // complete blocks extend the capture-parent chain.
             if block_index < complete_block_count {
@@ -255,6 +238,24 @@ impl Qwen3_5EngineState {
                     Some(persistent_prompt_cache_block_key);
             }
         }
+        performance_attribution
+            .measure_operation(
+                PerformanceOperation::PersistentPromptCacheStateReconstruction,
+                |_performance_attribution| {
+                    request_decoder_state.restore_full_attention_kv_concat(
+                        model.runtime(),
+                        &restored_persistent_prompt_cache_kv_block_tensors,
+                        restored_token_count,
+                    )
+                },
+            )
+            .map_err(|persistent_prompt_cache_error| {
+                fatal_engine_error(format!(
+                    "failed to restore request decoder state from {complete_block_count} \
+                     persistent prompt-cache blocks: {persistent_prompt_cache_error}"
+                ))
+            })?;
+        drop(restored_persistent_prompt_cache_kv_block_tensors);
         // Sequence state is append-only across every matched block, but recurrent
         // state needs only the newest boundary corresponding to the restored end.
         let recurrent_snapshot_block_key = restored_partial_tail_block_key

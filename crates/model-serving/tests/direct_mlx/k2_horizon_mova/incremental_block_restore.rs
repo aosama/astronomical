@@ -1,9 +1,10 @@
-//! Incremental SSD block-restore journeys for K2 Horizon MoVA KV states.
+//! SSD block-restore journeys for K2 Horizon MoVA KV states, one
+//! concatenation per tensor.
 //!
-//! Proves the restore peak stays at the final destination plus one block:
-//! active memory must not accumulate loaded blocks across absorbs, and the
-//! seated slabs must match a bulk concatenation reference bit-for-bit (full
-//! precision) or within the affine quantization tolerance (quantized).
+//! Proves the concat restore seats slabs matching a bulk concatenation
+//! reference bit-for-bit (full precision) or within the affine quantization
+//! tolerance (quantized), keeps exactly one growth step of headroom, and
+//! holds the restore peak at the destination plus the complete block set.
 
 use astronomical_model_serving::K2HorizonMoVAKvState;
 use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
@@ -19,6 +20,9 @@ const KEY_VALUE_HEAD_COUNT: i32 = 8;
 const HEAD_DIMENSION: i32 = 128;
 const GROWTH_TOKENS: i32 = 128;
 const DEQUANTIZE_TOLERANCE: f32 = 0.15;
+/// Tiny fixtures round through MLX allocation granularity, so byte-bound
+/// asserts carry explicit headroom instead of exact equality.
+const ALLOCATION_GRANULARITY_HEADROOM_BYTES: u64 = 2 * 1024 * 1024;
 
 fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
@@ -32,7 +36,7 @@ fn test_runtime() -> MlxRuntime {
 }
 
 /// Builds one distinct bfloat16 sequence block; the phase offset makes every
-/// block's payload unique so absorb-order mistakes cannot cancel out.
+/// block's payload unique so ordering mistakes cannot cancel out.
 fn bf16_block(runtime: &MlxRuntime, block_index: usize) -> (MlxArray, MlxArray) {
     let element_count = (KEY_VALUE_HEAD_COUNT * BLOCK_TOKEN_COUNT * HEAD_DIMENSION) as usize;
     let key_values: Vec<f32> = (0..element_count)
@@ -69,32 +73,19 @@ fn quantized_cache() -> K2HorizonMoVAKvState {
 }
 
 fn restore_all_blocks(runtime: &MlxRuntime, cache: &mut K2HorizonMoVAKvState) {
-    for block_index in 0..COMPLETE_BLOCK_COUNT {
-        let (block_keys, block_values) = bf16_block(runtime, block_index);
-        let block_start_tokens = block_index as i32 * BLOCK_TOKEN_COUNT;
-        if block_index == 0 {
-            cache
-                .begin_incremental_block_restore(
-                    runtime,
-                    block_keys,
-                    block_values,
-                    RESTORED_TOKEN_COUNT,
-                )
-                .expect("the first block should begin the incremental restore");
-        } else {
-            cache
-                .absorb_incremental_block_restore(
-                    runtime,
-                    block_keys,
-                    block_values,
-                    block_start_tokens,
-                )
-                .expect("each later block should absorb at its token range");
-        }
-    }
+    let block_arrays: Vec<(MlxArray, MlxArray)> = (0..COMPLETE_BLOCK_COUNT)
+        .map(|block_index| bf16_block(runtime, block_index))
+        .collect();
+    let key_references: Vec<&MlxArray> = block_arrays.iter().map(|(keys, _)| keys).collect();
+    let value_references: Vec<&MlxArray> = block_arrays.iter().map(|(_, values)| values).collect();
     cache
-        .finish_incremental_block_restore(RESTORED_TOKEN_COUNT)
-        .expect("the restore should finish at the restored token count");
+        .restore_block_slices(
+            runtime,
+            &key_references,
+            &value_references,
+            RESTORED_TOKEN_COUNT,
+        )
+        .expect("the complete block set should restore in one concat per tensor");
 }
 
 fn active_memory_bytes(runtime: &MlxRuntime) -> u64 {
@@ -104,18 +95,11 @@ fn active_memory_bytes(runtime: &MlxRuntime) -> u64 {
         .active_memory_bytes() as u64
 }
 
-fn evaluate_seated_slabs(runtime: &MlxRuntime, cache: &K2HorizonMoVAKvState) {
-    let (seated_keys, seated_values) = match cache {
-        K2HorizonMoVAKvState::FullPrecision(state) => (state.keys_state(), state.values_state()),
-        K2HorizonMoVAKvState::Quantized(state) => {
-            (state.quantized_keys_state(), state.quantized_values_state())
-        }
-    };
-    if let (Some(seated_keys), Some(seated_values)) = (seated_keys, seated_values) {
-        runtime
-            .evaluate_arrays(&[seated_keys, seated_values])
-            .expect("the seated slabs should materialize");
-    }
+fn peak_memory_bytes(runtime: &MlxRuntime) -> u64 {
+    runtime
+        .memory_snapshot()
+        .expect("the MLX memory snapshot should sample")
+        .peak_memory_bytes() as u64
 }
 
 fn bf16_reference_vec(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
@@ -152,7 +136,7 @@ fn seated_reference_vec(
 }
 
 #[tokio::test]
-async fn should_seat_incrementally_restored_full_precision_slabs_matching_the_bulk_reference() {
+async fn should_seat_full_precision_restored_slabs_matching_the_bulk_reference() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
 
@@ -204,7 +188,7 @@ async fn should_seat_incrementally_restored_full_precision_slabs_matching_the_bu
 }
 
 #[tokio::test]
-async fn should_keep_incremental_restore_active_memory_at_one_block_above_the_destination() {
+async fn should_keep_concat_restore_peak_within_destination_plus_the_complete_block_set() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
 
@@ -213,60 +197,49 @@ async fn should_keep_incremental_restore_active_memory_at_one_block_above_the_de
         * (BLOCK_TOKEN_COUNT as u64)
         * (HEAD_DIMENSION as u64)
         * 2;
+    let complete_block_set_bytes = block_byte_count * COMPLETE_BLOCK_COUNT as u64;
+    let destination_byte_count = 2_u64
+        * (KEY_VALUE_HEAD_COUNT as u64)
+        * (RESTORED_TOKEN_COUNT + GROWTH_TOKENS) as u64
+        * (HEAD_DIMENSION as u64)
+        * 2;
+
     let mut cache = full_precision_cache();
+    let baseline_active_bytes = active_memory_bytes(&runtime);
     runtime
         .reset_peak_memory()
         .expect("the MLX peak counter should reset so earlier tests do not inflate it");
-    let (first_block_keys, first_block_values) = bf16_block(&runtime, 0);
-    cache
-        .begin_incremental_block_restore(
-            &runtime,
-            first_block_keys,
-            first_block_values,
-            RESTORED_TOKEN_COUNT,
-        )
-        .expect("the first block should begin the incremental restore");
-    evaluate_seated_slabs(&runtime, &cache);
-    let destination_active_bytes = active_memory_bytes(&runtime);
+    restore_all_blocks(&runtime, &mut cache);
 
-    for block_index in 1..COMPLETE_BLOCK_COUNT {
-        let (block_keys, block_values) = bf16_block(&runtime, block_index);
-        cache
-            .absorb_incremental_block_restore(
-                &runtime,
-                block_keys,
-                block_values,
-                block_index as i32 * BLOCK_TOKEN_COUNT,
-            )
-            .expect("each later block should absorb at its token range");
-        evaluate_seated_slabs(&runtime, &cache);
-        let after_absorb_bytes = active_memory_bytes(&runtime);
-        assert!(
-            after_absorb_bytes
-                <= destination_active_bytes + block_byte_count + block_byte_count / 2,
-            "absorbing block {block_index} must not accumulate loaded blocks: \
-             destination={destination_active_bytes} after_absorb={after_absorb_bytes} \
-             block_bytes={block_byte_count}"
-        );
-    }
-    cache
-        .finish_incremental_block_restore(RESTORED_TOKEN_COUNT)
-        .expect("the restore should finish at the restored token count");
-
-    let peak_bytes = runtime
-        .memory_snapshot()
-        .expect("the MLX memory snapshot should sample")
-        .peak_memory_bytes() as u64;
-    let bulk_restore_bound_bytes = destination_active_bytes + 3 * block_byte_count;
+    // The concat restore materializes the destination while the complete
+    // source block set is consumed in one pass; the peak must stay inside
+    // destination plus the complete block set plus concat scratch headroom.
+    let peak_bytes = peak_memory_bytes(&runtime);
+    let concat_restore_bound_bytes =
+        destination_byte_count + complete_block_set_bytes + 3 * block_byte_count;
     assert!(
-        peak_bytes <= bulk_restore_bound_bytes,
-        "the incremental restore peak must stay below the bulk all-blocks bound: \
-         peak={peak_bytes} bulk_bound={bulk_restore_bound_bytes}"
+        peak_bytes <= concat_restore_bound_bytes,
+        "the concat restore peak must stay within destination plus the complete \
+         block set: peak={peak_bytes} bound={concat_restore_bound_bytes} \
+         destination={destination_byte_count} blocks={complete_block_set_bytes}"
+    );
+    // The transient block set must release back to the destination. Tiny
+    // fixtures round through MLX allocation granularity, so the bound carries
+    // an explicit headroom instead of asserting exact byte equality.
+    let after_restore_active_bytes = active_memory_bytes(&runtime);
+    assert!(
+        after_restore_active_bytes
+            <= baseline_active_bytes
+                + destination_byte_count
+                + ALLOCATION_GRANULARITY_HEADROOM_BYTES,
+        "after the restore only the destination slabs stay resident: \
+         baseline={baseline_active_bytes} after={after_restore_active_bytes} \
+         destination={destination_byte_count}"
     );
 }
 
 #[tokio::test]
-async fn should_seat_incrementally_restored_quantized_slabs_within_affine_tolerance() {
+async fn should_seat_quantized_restored_slabs_within_affine_tolerance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
 
@@ -282,8 +255,8 @@ async fn should_seat_incrementally_restored_quantized_slabs_within_affine_tolera
         "the restored slabs must hold exactly the restored prefix"
     );
 
-    // Block-wise quantization must match whole-prefix quantization within the
-    // affine dequantization tolerance.
+    // Whole-prefix quantization must match a bulk dequantization reference
+    // within the affine dequantization tolerance.
     let block_arrays: Vec<(MlxArray, MlxArray)> = (0..COMPLETE_BLOCK_COUNT)
         .map(|block_index| bf16_block(&runtime, block_index))
         .collect();
@@ -321,6 +294,6 @@ fn assert_within_tolerance(reference_values: &[f32], restored_values: &[f32], la
         .fold(0.0_f32, f32::max);
     assert!(
         maximum_error < DEQUANTIZE_TOLERANCE,
-        "the {label} incremental quantized restore must stay within a bounded tolerance, got {maximum_error}"
+        "the {label} quantized restore must stay within a bounded tolerance, got {maximum_error}"
     );
 }

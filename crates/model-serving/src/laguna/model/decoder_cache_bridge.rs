@@ -72,80 +72,52 @@ impl LagunaDecoderState {
         Ok((sequence_state_tensors, boundary_state_tensors))
     }
 
-    /// Begins the incremental restore: allocates each append-only layer's
-    /// final-length destination from the first block and writes it. Rotating
-    /// layers ignore sequence blocks; they restore from the boundary snapshot
-    /// at finish time.
-    pub fn begin_incremental_cache_block_restore(
+    /// Seats every append-only layer's KV by concatenating the complete block
+    /// set once per tensor, then materializes each layer. Restored blocks are
+    /// disk-backed lazy handles, so the load holds no payload beside the
+    /// destination. Rotating layers are untouched; they restore from the
+    /// boundary snapshot afterwards.
+    pub fn restore_sequence_blocks_from_concat(
         &mut self,
         runtime: &MlxRuntime,
-        first_block_tensors: &mut HashMap<String, MlxArray>,
+        sequence_block_tensors: &[HashMap<String, MlxArray>],
         restored_token_count: usize,
     ) -> Result<(), LagunaExecutionError> {
         let restored_token_count = restored_token_count_i32(restored_token_count)?;
         for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
             if let LagunaLayerCacheState::AppendOnly(attention) = layer_state {
-                let first_block_keys = take_block_tensor(first_block_tensors, layer_index, "keys")?;
-                let first_block_values =
-                    take_block_tensor(first_block_tensors, layer_index, "values")?;
+                let block_keys =
+                    block_tensors_by_role(sequence_block_tensors, layer_index, "keys")?;
+                let block_values =
+                    block_tensors_by_role(sequence_block_tensors, layer_index, "values")?;
                 // Headroom stays zero: Laguna restores exact-length slabs.
-                attention.begin_incremental_block_restore(
+                attention.restore_from_block_slices(
                     runtime,
-                    first_block_keys,
-                    first_block_values,
+                    &block_keys,
+                    &block_values,
                     restored_token_count,
                     0,
                 )?;
-                evaluate_restored_pair(runtime, attention.keys_state(), attention.values_state())?;
             }
         }
-        Ok(())
-    }
-
-    /// Writes one sequence block into every append-only layer's
-    /// preallocated destination at the block's token range.
-    pub fn absorb_incremental_cache_block(
-        &mut self,
-        runtime: &MlxRuntime,
-        block_tensors: &mut HashMap<String, MlxArray>,
-        block_start_tokens: usize,
-    ) -> Result<(), LagunaExecutionError> {
-        let block_start_tokens = restored_token_count_i32(block_start_tokens)?;
-        for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
+        for layer_state in self.layers.iter() {
             if let LagunaLayerCacheState::AppendOnly(attention) = layer_state {
-                let block_keys = take_block_tensor(block_tensors, layer_index, "keys")?;
-                let block_values = take_block_tensor(block_tensors, layer_index, "values")?;
-                attention.absorb_incremental_restore_block(
-                    runtime,
-                    block_keys,
-                    block_values,
-                    block_start_tokens,
-                )?;
                 evaluate_restored_pair(runtime, attention.keys_state(), attention.values_state())?;
             }
         }
         Ok(())
     }
 
-    /// Completes the restore: append-only layers record the restored offset,
-    /// and rotating layers restore from the newest boundary snapshot.
-    pub fn finish_incremental_cache_block_restore(
+    /// Restores rotating layers from the newest boundary snapshot after the
+    /// append-only layers are seated.
+    pub fn restore_boundary_snapshot(
         &mut self,
         runtime: &MlxRuntime,
-        restored_token_count: usize,
         boundary_snapshot: &mut HashMap<String, MlxArray>,
     ) -> Result<(), LagunaExecutionError> {
-        let restored_token_count = restored_token_count_i32(restored_token_count)?;
         for (layer_index, layer_state) in self.layers.iter_mut().enumerate() {
             match layer_state {
-                LagunaLayerCacheState::AppendOnly(attention) => {
-                    attention.finish_incremental_block_restore(restored_token_count)?;
-                    evaluate_restored_pair(
-                        runtime,
-                        attention.keys_state(),
-                        attention.values_state(),
-                    )?;
-                }
+                LagunaLayerCacheState::AppendOnly(..) => {}
                 LagunaLayerCacheState::Rotating(attention) => {
                     let persisted_keys = boundary_snapshot
                         .remove(&format!("layer_{layer_index}_attention.keys"))
@@ -190,17 +162,25 @@ fn restored_token_count_i32(token_count: usize) -> Result<i32, LagunaExecutionEr
     })
 }
 
-fn take_block_tensor(
-    block_tensors: &mut HashMap<String, MlxArray>,
+/// Gathers one layer's tensors across every loaded block in block order.
+fn block_tensors_by_role<'a>(
+    sequence_block_tensors: &'a [HashMap<String, MlxArray>],
     layer_index: usize,
     tensor_role: &'static str,
-) -> Result<MlxArray, LagunaExecutionError> {
+) -> Result<Vec<&'a MlxArray>, LagunaExecutionError> {
     let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
-    block_tensors
-        .remove(&tensor_name)
-        .ok_or_else(|| LagunaExecutionError::RuntimeOperation {
-            description: format!("a sequence cache block is missing a tensor: {tensor_name}"),
+    sequence_block_tensors
+        .iter()
+        .map(|block_tensors| {
+            block_tensors
+                .get(&tensor_name)
+                .ok_or_else(|| LagunaExecutionError::RuntimeOperation {
+                    description: format!(
+                        "a sequence cache block is missing a tensor: {tensor_name}"
+                    ),
+                })
         })
+        .collect()
 }
 
 fn slice_token_range(

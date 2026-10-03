@@ -373,13 +373,6 @@ pub enum PersistentPromptCacheStateBridgeError {
         tensor_name: String,
     },
     #[error(
-        "qwen3.5-moe request decoder layer {layer_index} has unknown attention tensor role {tensor_role}"
-    )]
-    UnknownAttentionTensorRole {
-        layer_index: usize,
-        tensor_role: &'static str,
-    },
-    #[error(
         "qwen3.5-moe request decoder layer {layer_index} {tensor_role} tensor has invalid shape {actual_shape:?}"
     )]
     InvalidLayerTensorShape {
@@ -413,37 +406,21 @@ pub enum PersistentPromptCacheStateBridgeError {
         source: MlxRuntimeError,
     },
     #[error(
-        "qwen3.5-moe persistent prompt-cache KV restore destination token count {restored_token_count} is invalid"
+        "qwen3.5-moe persistent prompt-cache KV restore token count {restored_token_count} is invalid"
     )]
     InvalidRestoredSequenceTokenCount { restored_token_count: usize },
     #[error(
-        "qwen3.5-moe persistent prompt-cache KV block at token offset {sequence_start_tokens} does not fit the restored destination of {destination_token_count} tokens"
+        "qwen3.5-moe persistent prompt-cache blocks concatenated to {concatenated_token_count} tokens for layer {layer_index}, expected the restored {restored_token_count}"
     )]
-    KvBlockDoesNotFitRestoreDestination {
-        sequence_start_tokens: usize,
-        destination_token_count: usize,
-    },
-    #[error(
-        "qwen3.5-moe persistent prompt-cache KV block layer {layer_index} {tensor_role} shape {actual_shape:?} does not match restore destination {expected_shape:?}"
-    )]
-    KvBlockShapeDoesNotMatchRestoreDestination {
+    ConcatenatedTokenCountMismatch {
         layer_index: usize,
-        tensor_role: &'static str,
-        actual_shape: Vec<i32>,
-        expected_shape: Vec<i32>,
+        concatenated_token_count: usize,
+        restored_token_count: usize,
     },
     #[error(
-        "failed to allocate the qwen3.5-moe persistent prompt-cache KV restore destination for layer {layer_index}"
+        "failed to concatenate qwen3.5-moe persistent prompt-cache block tensors {tensor_name} into the restored destination for layer {layer_index}"
     )]
-    AllocateRestoreDestination {
-        layer_index: usize,
-        #[source]
-        source: MlxRuntimeError,
-    },
-    #[error(
-        "failed to write qwen3.5-moe persistent prompt-cache block tensor {tensor_name} into the restore destination for layer {layer_index}"
-    )]
-    WriteRestoreDestination {
+    ConcatenateRestoreDestination {
         layer_index: usize,
         tensor_name: String,
         #[source]

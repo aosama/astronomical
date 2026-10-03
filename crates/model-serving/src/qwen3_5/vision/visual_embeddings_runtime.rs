@@ -142,7 +142,11 @@ impl Qwen3_5EngineState {
                 .measure_operation(
                     PerformanceOperation::VisionEmbeddingGraphConstruction,
                     |_performance_attribution| {
-                        vision_model.forward(runtime, &missing_processed_visual_images)
+                        vision_model.forward(
+                            runtime,
+                            &model.compiled_elementwise_graphs,
+                            &missing_processed_visual_images,
+                        )
                     },
                 )
                 .map_err(qwen3_5_runtime_error)?;

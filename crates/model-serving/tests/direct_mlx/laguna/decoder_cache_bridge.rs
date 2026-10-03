@@ -19,6 +19,9 @@ use crate::common::{
 };
 
 const BLOCK_TOKEN_COUNT: usize = 2;
+/// Tiny fixtures round through MLX allocation granularity, so memory-bound
+/// asserts carry explicit headroom instead of exact equality.
+const ALLOCATION_GRANULARITY_HEADROOM_BYTES: u64 = 2 * 1024 * 1024;
 
 type TensorMap = HashMap<String, MlxArray>;
 
@@ -128,24 +131,13 @@ async fn should_round_trip_a_synthetic_mixed_layer_ordering_through_capture_and_
     );
 
     let mut restored_state = fresh_state(&model);
-    let mut sequence_blocks = vec![first_sequence_block, second_sequence_block];
+    let sequence_blocks = vec![first_sequence_block, second_sequence_block];
     restored_state
-        .begin_incremental_cache_block_restore(
-            &runtime,
-            &mut sequence_blocks[0],
-            2 * BLOCK_TOKEN_COUNT,
-        )
-        .expect("the first captured block should begin the restore");
-    restored_state
-        .absorb_incremental_cache_block(&runtime, &mut sequence_blocks[1], BLOCK_TOKEN_COUNT)
-        .expect("the second captured block should absorb");
-    restored_state
-        .finish_incremental_cache_block_restore(
-            &runtime,
-            2 * BLOCK_TOKEN_COUNT,
-            &mut boundary_snapshot,
-        )
+        .restore_sequence_blocks_from_concat(&runtime, &sequence_blocks, 2 * BLOCK_TOKEN_COUNT)
         .expect("the captured blocks should restore into a fresh state");
+    restored_state
+        .restore_boundary_snapshot(&runtime, &mut boundary_snapshot)
+        .expect("the newest rotating snapshot should restore");
 
     // The synthetic mixed ordering must round-trip with exact per-layer state:
     // the append-only layer at the block boundary, and the rotating layer with
@@ -195,7 +187,7 @@ async fn should_round_trip_a_synthetic_mixed_layer_ordering_through_capture_and_
 }
 
 #[tokio::test]
-async fn should_release_each_incremental_block_after_absorption() {
+async fn should_restore_from_concat_within_destination_plus_source_bound() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
     let model = mixed_model(&runtime);
@@ -208,40 +200,45 @@ async fn should_release_each_incremental_block_after_absorption() {
         &mut original_state,
         &mut performance_attribution,
     );
-    let transient_payload_bound = tensor_map_byte_count(&second_sequence_block)
-        .saturating_add(tensor_map_byte_count(&boundary_snapshot));
+    let sequence_payload_bytes = tensor_map_byte_count(&first_sequence_block)
+        .saturating_add(tensor_map_byte_count(&second_sequence_block));
+    let snapshot_payload_bytes = tensor_map_byte_count(&boundary_snapshot);
 
     let mut restored_state = fresh_state(&model);
-    let mut first_block = first_sequence_block;
-    restored_state
-        .begin_incremental_cache_block_restore(&runtime, &mut first_block, 2 * BLOCK_TOKEN_COUNT)
-        .expect("the first block should begin the restore");
-    let destination_active_bytes = runtime
+    let baseline_active_bytes = runtime
         .memory_snapshot()
-        .expect("active memory should be sampled after destination allocation")
+        .expect("active memory should be sampled before the restore")
         .active_memory_bytes() as u64;
-    let mut second_block = second_sequence_block;
+    runtime
+        .reset_peak_memory()
+        .expect("the MLX peak counter should reset so the restore peak is measured alone");
+    let sequence_blocks = vec![first_sequence_block, second_sequence_block];
     restored_state
-        .absorb_incremental_cache_block(&runtime, &mut second_block, BLOCK_TOKEN_COUNT)
-        .expect("the second block should absorb at its token range");
-    let after_absorb_bytes = runtime
-        .memory_snapshot()
-        .expect("active memory should be sampled after block absorption")
-        .active_memory_bytes() as u64;
-    assert!(
-        after_absorb_bytes <= destination_active_bytes,
-        "absorbing a block must release its source before the next read: \
-         destination={destination_active_bytes} after_absorb={after_absorb_bytes} \
-         one_block_plus_snapshot={transient_payload_bound}"
-    );
-
+        .restore_sequence_blocks_from_concat(&runtime, &sequence_blocks, 2 * BLOCK_TOKEN_COUNT)
+        .expect("the captured blocks should restore in one concat per tensor");
     restored_state
-        .finish_incremental_cache_block_restore(
-            &runtime,
-            2 * BLOCK_TOKEN_COUNT,
-            &mut boundary_snapshot,
-        )
+        .restore_boundary_snapshot(&runtime, &mut boundary_snapshot)
         .expect("the newest rotating snapshot should complete the restore");
+
+    // The concat restore must release its transient back to the baseline:
+    // baseline plus the seated destination plus the restored snapshot. Tiny
+    // fixtures round through MLX allocation granularity, so the bound carries
+    // explicit headroom instead of exact byte equality.
+    let after_restore_active_bytes = runtime
+        .memory_snapshot()
+        .expect("active memory should be sampled after the restore")
+        .active_memory_bytes() as u64;
+    let return_to_baseline_bound_bytes = baseline_active_bytes
+        .saturating_add(sequence_payload_bytes.saturating_mul(2))
+        .saturating_add(snapshot_payload_bytes)
+        .saturating_add(ALLOCATION_GRANULARITY_HEADROOM_BYTES);
+    assert!(
+        after_restore_active_bytes <= return_to_baseline_bound_bytes,
+        "the concat restore must release its transient back to the baseline: \
+         after={after_restore_active_bytes} bound={return_to_baseline_bound_bytes} \
+         baseline={baseline_active_bytes} sequence={sequence_payload_bytes} \
+         snapshot={snapshot_payload_bytes}"
+    );
 }
 
 #[tokio::test]
@@ -267,9 +264,9 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
     incomplete_first_block
         .remove("layer_0_attention.keys")
         .expect("the captured keys tensor should be present");
-    let mut sequence_blocks = vec![incomplete_first_block];
+    let sequence_blocks = vec![incomplete_first_block];
     let missing_tensor_rejection = fresh_state(&model)
-        .begin_incremental_cache_block_restore(&runtime, &mut sequence_blocks[0], BLOCK_TOKEN_COUNT)
+        .restore_sequence_blocks_from_concat(&runtime, &sequence_blocks, BLOCK_TOKEN_COUNT)
         .expect_err("a sequence block missing a tensor must fail");
     assert!(
         format!("{missing_tensor_rejection:?}").contains("missing a tensor"),
@@ -283,21 +280,16 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         .remove("layer_1_attention.keys")
         .expect("the rotating keys should be present");
     let mut snapshot_only_state = fresh_state(&model);
-    let mut snapshot_only_block =
-        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    let snapshot_only_block = vec![fresh_captured_sequence_block(
+        &runtime,
+        &model,
+        &mut performance_attribution,
+    )];
     snapshot_only_state
-        .begin_incremental_cache_block_restore(
-            &runtime,
-            &mut snapshot_only_block,
-            BLOCK_TOKEN_COUNT,
-        )
-        .expect("the captured block should begin the restore");
+        .restore_sequence_blocks_from_concat(&runtime, &snapshot_only_block, BLOCK_TOKEN_COUNT)
+        .expect("the captured block should seat the append-only layers");
     let missing_keys_rejection = snapshot_only_state
-        .finish_incremental_cache_block_restore(
-            &runtime,
-            BLOCK_TOKEN_COUNT,
-            &mut keys_missing_snapshot,
-        )
+        .restore_boundary_snapshot(&runtime, &mut keys_missing_snapshot)
         .expect_err("a snapshot missing rotating keys must fail");
     assert!(
         format!("{missing_keys_rejection:?}").contains("missing keys"),
@@ -311,17 +303,16 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         .remove("layer_1_attention.absolute_position")
         .expect("the absolute position counter should be present");
     let mut counter_only_state = fresh_state(&model);
-    let mut counter_only_block =
-        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    let counter_only_block = vec![fresh_captured_sequence_block(
+        &runtime,
+        &model,
+        &mut performance_attribution,
+    )];
     counter_only_state
-        .begin_incremental_cache_block_restore(&runtime, &mut counter_only_block, BLOCK_TOKEN_COUNT)
-        .expect("the captured block should begin the restore");
+        .restore_sequence_blocks_from_concat(&runtime, &counter_only_block, BLOCK_TOKEN_COUNT)
+        .expect("the captured block should seat the append-only layers");
     let missing_counter_rejection = counter_only_state
-        .finish_incremental_cache_block_restore(
-            &runtime,
-            BLOCK_TOKEN_COUNT,
-            &mut counter_missing_snapshot,
-        )
+        .restore_boundary_snapshot(&runtime, &mut counter_missing_snapshot)
         .expect_err("a snapshot missing a rotating counter must fail");
     assert!(
         format!("{missing_counter_rejection:?}").contains("counter tensor is missing"),
@@ -342,17 +333,16 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         float16_counter,
     );
     let mut dtype_only_state = fresh_state(&model);
-    let mut dtype_only_block =
-        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    let dtype_only_block = vec![fresh_captured_sequence_block(
+        &runtime,
+        &model,
+        &mut performance_attribution,
+    )];
     dtype_only_state
-        .begin_incremental_cache_block_restore(&runtime, &mut dtype_only_block, BLOCK_TOKEN_COUNT)
-        .expect("the captured block should begin the restore");
+        .restore_sequence_blocks_from_concat(&runtime, &dtype_only_block, BLOCK_TOKEN_COUNT)
+        .expect("the captured block should seat the append-only layers");
     let foreign_dtype_rejection = dtype_only_state
-        .finish_incremental_cache_block_restore(
-            &runtime,
-            BLOCK_TOKEN_COUNT,
-            &mut foreign_dtype_snapshot,
-        )
+        .restore_boundary_snapshot(&runtime, &mut foreign_dtype_snapshot)
         .expect_err("a non-float32 rotating counter must fail");
     assert!(
         format!("{foreign_dtype_rejection:?}").contains("float32"),
@@ -370,21 +360,16 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         zero_counter,
     );
     let mut zero_position_state = fresh_state(&model);
-    let mut zero_position_block =
-        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    let zero_position_block = vec![fresh_captured_sequence_block(
+        &runtime,
+        &model,
+        &mut performance_attribution,
+    )];
     zero_position_state
-        .begin_incremental_cache_block_restore(
-            &runtime,
-            &mut zero_position_block,
-            BLOCK_TOKEN_COUNT,
-        )
-        .expect("the captured block should begin the restore");
+        .restore_sequence_blocks_from_concat(&runtime, &zero_position_block, BLOCK_TOKEN_COUNT)
+        .expect("the captured block should seat the append-only layers");
     let zero_position_rejection = zero_position_state
-        .finish_incremental_cache_block_restore(
-            &runtime,
-            BLOCK_TOKEN_COUNT,
-            &mut zero_position_snapshot,
-        )
+        .restore_boundary_snapshot(&runtime, &mut zero_position_snapshot)
         .expect_err("a restore claiming zero live tokens must fail");
     assert!(
         format!("{zero_position_rejection:?}").contains("at least one token"),

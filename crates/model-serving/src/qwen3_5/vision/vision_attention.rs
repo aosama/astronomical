@@ -5,7 +5,7 @@
 //! delegated to MLX-C `mlx_fast_scaled_dot_product_attention` declared in
 //! `mlx-c/mlx/c/fast.h`.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::{MlxArray, MlxCompiledElementwiseGraphs, MlxRuntime};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionWeights};
 
@@ -13,6 +13,7 @@ use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionWeights};
 #[allow(clippy::too_many_arguments)]
 pub(super) fn qwen3_5_vision_self_attention(
     runtime: &MlxRuntime,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     vision_config: &Qwen3_5VisionConfig,
     vision_weights: &Qwen3_5VisionWeights,
     normalized_hidden_states: &MlxArray,
@@ -41,9 +42,20 @@ pub(super) fn qwen3_5_vision_self_attention(
     let query_states = qkv_component(runtime, &qkv_by_projection, 0)?;
     let key_states = qkv_component(runtime, &qkv_by_projection, 1)?;
     let value_states = qkv_component(runtime, &qkv_by_projection, 2)?;
-    let query_states =
-        apply_rotary_embedding(runtime, &query_states, rotary_cosines, rotary_sines)?;
-    let key_states = apply_rotary_embedding(runtime, &key_states, rotary_cosines, rotary_sines)?;
+    let query_states = apply_rotary_embedding(
+        runtime,
+        compiled_elementwise_graphs,
+        &query_states,
+        rotary_cosines,
+        rotary_sines,
+    )?;
+    let key_states = apply_rotary_embedding(
+        runtime,
+        compiled_elementwise_graphs,
+        &key_states,
+        rotary_cosines,
+        rotary_sines,
+    )?;
 
     // MLX fast SDPA expects [batch, heads, sequence, head_dimension]. The vision
     // tower has one logical batch; explicit boundaries below isolate images.
@@ -164,6 +176,7 @@ fn qkv_component(
 
 fn apply_rotary_embedding(
     runtime: &MlxRuntime,
+    compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     attention_states: &MlxArray,
     rotary_cosines: &MlxArray,
     rotary_sines: &MlxArray,
@@ -172,6 +185,9 @@ fn apply_rotary_embedding(
     // `rotate_half([x1,x2])=[-x2,x1]`; then x*cos + rotate_half(x)*sin.
     // [patch,1,head_dimension] trigonometric arrays broadcast across heads.
     let half_head_dimension = attention_shape[2] / 2;
+    // The head-half slices stay outside the compiled graph: the pinned MLX Slice
+    // primitive cannot be shapeless-compiled, so the pre-sliced halves are passed
+    // in and the remaining composite fuses its elementwise tail into one kernel.
     let first_half = runtime.slice(
         attention_states,
         &[0, 0, 0],
@@ -184,14 +200,14 @@ fn apply_rotary_embedding(
         &attention_shape,
         &[1, 1, 1],
     )?;
-    let negative_second_half = runtime.negative(&second_half)?;
-    let rotated_attention_states =
-        runtime.concatenate_axis(&[&negative_second_half, &first_half], 2)?;
-    let cosine_component = runtime.multiply(attention_states, rotary_cosines)?;
-    let sine_component = runtime.multiply(&rotated_attention_states, rotary_sines)?;
-    // Reference restores the original dtype after potentially promoted arithmetic.
-    let rotated_attention_states_f32 = runtime.add(&cosine_component, &sine_component)?;
-    Ok(runtime.astype(&rotated_attention_states_f32, attention_states.dtype())?)
+    Ok(runtime.apply_compiled_vision_rope(
+        compiled_elementwise_graphs,
+        attention_states,
+        rotary_cosines,
+        rotary_sines,
+        &first_half,
+        &second_half,
+    )?)
 }
 
 fn pad_attention_head_dimension(
