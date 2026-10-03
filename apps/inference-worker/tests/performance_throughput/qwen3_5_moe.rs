@@ -31,11 +31,8 @@
 //! astronomical-inference-worker/performance_throughput --test
 //! performance_throughput_tests -- --ignored --exact`.
 
-use std::sync::mpsc::RecvTimeoutError;
-
-use crate::performance_throughput::support::{
-    JOURNEY_TIMEOUT, ThroughputJourney, run_throughput_journey,
-};
+use crate::performance_throughput::historical_record::ThroughputJourneyKind;
+use crate::performance_throughput::support::{ThroughputJourney, run_journey_with_timeout};
 use crate::support::resident_sparse_moe_model_id;
 
 /// The short warmup: a ~1,000-token Romeo and Juliet opening, continued for a
@@ -73,41 +70,18 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 #[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput over IPC"]
 fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() {
     let journey = ThroughputJourney {
+        journey_kind: ThroughputJourneyKind::Text,
         warmup_input_prompt: format!(
             "{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"
         ),
+        warmup_images: Vec::new(),
         warmup_output_tokens: WARMUP_MAXIMUM_OUTPUT_TOKENS,
         measured_input_prompt: format!(
             "{MEASURED_INPUT_INSTRUCTION}\n\n{MEASURED_ROMEO_AND_JULIET_SOURCE}"
         ),
+        measured_images: Vec::new(),
         measured_output_tokens: MEASURED_MAXIMUM_OUTPUT_TOKENS,
         temperature_thousandths: TEMPERATURE_THOUSANDTHS,
     };
-    run_with_timeout(resident_sparse_moe_model_id(), journey);
-}
-
-/// Runs one journey on a dedicated multi-thread runtime and enforces the
-/// built-in timeout so a wedged worker can never hang the test process.
-fn run_with_timeout(model_id: &'static str, journey: ThroughputJourney) {
-    let (sender, receiver) = std::sync::mpsc::channel::<()>();
-    let worker = std::thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("the throughput worker runtime should build");
-        runtime.block_on(run_throughput_journey(model_id, &journey));
-        sender.send(()).ok();
-    });
-    match receiver.recv_timeout(JOURNEY_TIMEOUT) {
-        Ok(()) => {}
-        Err(RecvTimeoutError::Timeout) => panic!(
-            "the throughput journey for {model_id} exceeded the {JOURNEY_TIMEOUT:?} deadline"
-        ),
-        Err(RecvTimeoutError::Disconnected) => {
-            panic!("the throughput worker thread terminated before completing")
-        }
-    }
-    worker
-        .join()
-        .expect("the throughput worker thread should join cleanly");
+    run_journey_with_timeout(resident_sparse_moe_model_id(), journey);
 }

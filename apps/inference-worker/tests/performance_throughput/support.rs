@@ -15,11 +15,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerStartupConfiguration,
+    ChatGenerationCommand, ChatGenerationSettings, ChatImageInput, ChatMessage, ChatToolChoice,
+    RequestId, WorkerStartupConfiguration,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
@@ -29,8 +30,8 @@ use serde::Deserialize;
 use tokio::time::sleep;
 
 use crate::performance_throughput::historical_record::{
-    ThroughputRecord, append_throughput_history, current_unix_epoch_millis, format_utc_timestamp,
-    history_log_path, recorded_git_commit, throughput_record_json,
+    ThroughputJourneyKind, ThroughputRecord, append_throughput_history, current_unix_epoch_millis,
+    format_utc_timestamp, history_log_path, recorded_git_commit, throughput_record_json,
 };
 use crate::performance_throughput::machine_specs::MachineSpecs;
 
@@ -38,15 +39,19 @@ pub(crate) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const READY_ATTEMPT_LIMIT: u8 = 70;
 
-/// The test case for one throughput journey: the short warmup completion (its
-/// prompt and output cap), the measured completion (its prompt and output cap),
-/// and the sampling temperature. The test that defines these values lives beside
-/// this driver so the test case is readable where the test is.
+/// The test case for one throughput journey: the journey family recorded in
+/// the durable history line, the short warmup completion (its prompt, images,
+/// and output cap), the measured completion (its prompt, images, and output
+/// cap), and the sampling temperature. The test that defines these values
+/// lives beside this driver so the test case is readable where the test is.
 #[derive(Clone, Debug)]
 pub(crate) struct ThroughputJourney {
+    pub(crate) journey_kind: ThroughputJourneyKind,
     pub(crate) warmup_input_prompt: String,
+    pub(crate) warmup_images: Vec<ChatImageInput>,
     pub(crate) warmup_output_tokens: u16,
     pub(crate) measured_input_prompt: String,
+    pub(crate) measured_images: Vec<ChatImageInput>,
     pub(crate) measured_output_tokens: u16,
     pub(crate) temperature_thousandths: u16,
 }
@@ -131,15 +136,16 @@ async fn drive_completion(
     request_id: RequestId,
     model_id: &str,
     prompt: &str,
+    images: Vec<ChatImageInput>,
     output_tokens: u16,
     temperature_thousandths: u16,
 ) {
     let command = ChatGenerationCommand {
-        request_id: request_id.clone(),
+        request_id,
         model: model_id.to_owned(),
         messages: vec![ChatMessage::User {
             content: prompt.to_owned(),
-            images: Vec::new(),
+            images,
         }],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
@@ -208,6 +214,32 @@ fn summarize(model_id: &str, samples: &[ThroughputSample]) -> ThroughputMeasurem
     }
 }
 
+/// Runs one journey on a dedicated multi-thread runtime and enforces the
+/// built-in timeout so a wedged worker can never hang the test process.
+pub(crate) fn run_journey_with_timeout(model_id: &'static str, journey: ThroughputJourney) {
+    let (sender, receiver) = std::sync::mpsc::channel::<()>();
+    let worker = std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("the throughput worker runtime should build");
+        runtime.block_on(run_throughput_journey(model_id, &journey));
+        sender.send(()).ok();
+    });
+    match receiver.recv_timeout(JOURNEY_TIMEOUT) {
+        Ok(()) => {}
+        Err(RecvTimeoutError::Timeout) => panic!(
+            "the throughput journey for {model_id} exceeded the {JOURNEY_TIMEOUT:?} deadline"
+        ),
+        Err(RecvTimeoutError::Disconnected) => {
+            panic!("the throughput worker thread terminated before completing")
+        }
+    }
+    worker
+        .join()
+        .expect("the throughput worker thread should join cleanly");
+}
+
 /// Runs one full throughput journey and persists a durable historical record.
 pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJourney) {
     let machine_specs = MachineSpecs::capture().await;
@@ -215,6 +247,7 @@ pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJ
     let record = ThroughputRecord {
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
+        journey: journey.journey_kind,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
@@ -273,6 +306,7 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
         RequestId::new(1),
         model_id,
         &journey.warmup_input_prompt,
+        journey.warmup_images.clone(),
         journey.warmup_output_tokens,
         journey.temperature_thousandths,
     )
@@ -283,6 +317,7 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
         RequestId::new(2),
         model_id,
         &journey.measured_input_prompt,
+        journey.measured_images.clone(),
         journey.measured_output_tokens,
         journey.temperature_thousandths,
     )

@@ -14,4 +14,7 @@ mod machine_specs;
 mod qwen3_5_moe;
 
 #[cfg(feature = "performance_throughput")]
+mod qwen3_5_moe_vision;
+
+#[cfg(feature = "performance_throughput")]
 mod support;
