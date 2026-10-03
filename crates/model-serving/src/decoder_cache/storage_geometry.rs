@@ -49,6 +49,23 @@ impl DecoderCacheLayout {
         )
     }
 
+    /// Returns the largest source payload live during one incremental cache restore step.
+    ///
+    /// A restore loads one sequence block (every sequence tensor at block length) and,
+    /// separately, the complete boundary snapshot (every boundary tensor). Because the two
+    /// load at separate times, admission needs the larger source rather than the sum of both.
+    pub fn incremental_restore_source_workspace_byte_count(
+        &self,
+        sequence_block_token_count: usize,
+    ) -> Result<usize, DecoderCacheLayoutError> {
+        let sequence_source_bytes = self
+            .sequence_state_payload_byte_count_per_token()?
+            .checked_mul(sequence_block_token_count)
+            .ok_or(DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?;
+        let boundary_source_bytes = self.boundary_snapshot_payload_byte_count()?;
+        Ok(sequence_source_bytes.max(boundary_source_bytes))
+    }
+
     /// Returns payload bytes for one complete boundary snapshot.
     pub fn boundary_snapshot_payload_byte_count(&self) -> Result<usize, DecoderCacheLayoutError> {
         self.boundary_tensor_layouts().iter().try_fold(

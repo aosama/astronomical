@@ -90,6 +90,55 @@ fn should_accept_a_mixed_architecture_neutral_decoder_cache_layout() {
 }
 
 #[test]
+fn should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot() {
+    let decoder_cache_layout = DecoderCacheLayout::new(vec![
+        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
+            "linear.convolution",
+            DecoderCacheTensorDtype::Float16,
+            vec![1, 3, 8],
+        )),
+        DecoderCacheLayerLayout::composite(vec![
+            DecoderCacheLayerLayout::append_only_attention(
+                DecoderCacheTensorLayout::sequence(
+                    "attention.keys",
+                    DecoderCacheTensorDtype::BFloat16,
+                    vec![1, 2, 0, 4],
+                    2,
+                ),
+                DecoderCacheTensorLayout::sequence(
+                    "attention.values",
+                    DecoderCacheTensorDtype::BFloat16,
+                    vec![1, 2, 0, 4],
+                    2,
+                ),
+                256,
+            ),
+            DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
+                "linear.recurrent",
+                DecoderCacheTensorDtype::Float32,
+                vec![1, 2, 4, 4],
+            )),
+        ]),
+    ])
+    .expect("the mixed cache layout should be valid");
+
+    assert_eq!(
+        decoder_cache_layout
+            .incremental_restore_source_workspace_byte_count(2)
+            .expect("the boundary snapshot source should fit"),
+        176,
+        "the complete boundary snapshot must remain budgeted when larger than one sequence block"
+    );
+    assert_eq!(
+        decoder_cache_layout
+            .incremental_restore_source_workspace_byte_count(16)
+            .expect("the sequence block source should fit"),
+        512,
+        "sequence source admission should scale with one block, not the restored prefix"
+    );
+}
+
+#[test]
 fn should_derive_the_least_common_persistence_alignment_for_mixed_attention_growth() {
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::append_only_attention(

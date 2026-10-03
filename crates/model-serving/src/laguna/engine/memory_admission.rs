@@ -18,6 +18,7 @@ impl LagunaInferenceExecution {
         maximum_forward_token_count: usize,
         include_boundary_growth: bool,
         restored_prompt_prefix_token_count: usize,
+        prompt_cache_block_token_count: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
         let (runtime, model) = match (self.runtime.as_ref(), self.model.as_mut()) {
@@ -37,6 +38,7 @@ impl LagunaInferenceExecution {
             maximum_forward_token_count,
             include_boundary_growth,
             restored_prompt_prefix_token_count,
+            prompt_cache_block_token_count,
             performance_attribution,
         )
     }
@@ -50,6 +52,7 @@ pub(super) fn admit_generation_context(
     maximum_forward_token_count: usize,
     include_boundary_growth: bool,
     restored_prompt_prefix_token_count: usize,
+    prompt_cache_block_token_count: usize,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), InferenceEngineError> {
     for _admission_attempt in 0..3 {
@@ -95,6 +98,7 @@ pub(super) fn admit_generation_context(
         let prompt_cache_restore_workspace_bytes = bounded_prompt_cache_restore_workspace_bytes(
             &decoder_cache_layout,
             restored_prompt_prefix_token_count,
+            prompt_cache_block_token_count,
         )?;
         let temporary_workspace_bytes = decoder_memory_projection
             .sliding_temporary_workspace_bytes()
@@ -135,6 +139,7 @@ pub(super) fn admit_generation_context(
             include_boundary_growth,
             context_growth_bytes,
             expert_page_reservation_bytes,
+            prompt_cache_block_token_count,
             prompt_cache_restore_workspace_bytes,
             sliding_temporary_workspace_bytes =
                 decoder_memory_projection.sliding_temporary_workspace_bytes(),
@@ -179,38 +184,19 @@ pub(super) fn admit_generation_context(
 fn bounded_prompt_cache_restore_workspace_bytes(
     decoder_cache_layout: &crate::DecoderCacheLayout,
     restored_prompt_prefix_token_count: usize,
+    prompt_cache_block_token_count: usize,
 ) -> Result<usize, InferenceEngineError> {
     if restored_prompt_prefix_token_count == 0 {
         return Ok(0);
     }
-    let sequence_layer_source_bytes = decoder_cache_layout
-        .maximum_sequence_tensor_payload_byte_count(restored_prompt_prefix_token_count)
+    if prompt_cache_block_token_count == 0 {
+        return Err(InferenceEngineError::InvalidRequest {
+            reason: "Laguna prompt-cache restore has a zero-sized cache block".to_owned(),
+        });
+    }
+    decoder_cache_layout
+        .incremental_restore_source_workspace_byte_count(prompt_cache_block_token_count)
         .map_err(|layout_error| InferenceEngineError::InvalidRequest {
-            reason: format!("Laguna prompt-cache sequence geometry is invalid: {layout_error}"),
-        })?
-        .checked_mul(2)
-        .ok_or(InferenceEngineError::InvalidRequest {
-            reason: "Laguna prompt-cache sequence restore workspace overflowed".to_owned(),
-        })?;
-    let maximum_boundary_tensor_bytes = decoder_cache_layout
-        .boundary_tensor_layouts()
-        .iter()
-        .try_fold(0_usize, |maximum_tensor_bytes, persisted_tensor_layout| {
-            persisted_tensor_layout
-                .tensor_layout()
-                .fixed_payload_byte_count()
-                .map(|tensor_bytes| maximum_tensor_bytes.max(tensor_bytes))
+            reason: format!("Laguna prompt-cache restore geometry is invalid: {layout_error}"),
         })
-        .map_err(|layout_error| InferenceEngineError::InvalidRequest {
-            reason: format!("Laguna prompt-cache boundary geometry is invalid: {layout_error}"),
-        })?;
-    let boundary_layer_source_bytes = maximum_boundary_tensor_bytes
-        .checked_mul(2)
-        .and_then(|paired_tensor_bytes| {
-            paired_tensor_bytes.checked_add(2 * std::mem::size_of::<f32>())
-        })
-        .ok_or(InferenceEngineError::InvalidRequest {
-            reason: "Laguna prompt-cache boundary restore workspace overflowed".to_owned(),
-        })?;
-    Ok(sequence_layer_source_bytes.max(boundary_layer_source_bytes))
 }
