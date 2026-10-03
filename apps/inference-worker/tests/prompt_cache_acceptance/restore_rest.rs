@@ -1,4 +1,3 @@
-use async_openai::{Client, config::OpenAIConfig};
 use serde_json::Value;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
@@ -8,6 +7,7 @@ use super::rest_support::{
     required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
 };
 use crate::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
+use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
 
 // This suite is the user-facing acceptance boundary for cache-pressure behavior: a client sends
@@ -68,11 +68,7 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
     )
     .await;
     let server_address = model_artifact_rest_server.server_address;
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-acceptance-client"),
-    );
+    let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
 
     // Cold request: publication is a synchronous requirement of successful prompt processing.
     eprintln!(

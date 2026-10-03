@@ -39,7 +39,6 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-async-openai.workspace = true
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
 astronomical-supervisor = { path = "../supervisor" }
 axum.workspace = true

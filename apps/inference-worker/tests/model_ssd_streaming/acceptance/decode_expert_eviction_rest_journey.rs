@@ -16,11 +16,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use async_openai::{Client, config::OpenAIConfig, types::stream::StreamResponse};
 use futures_util::StreamExt;
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
+use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
     get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
 };
@@ -89,11 +89,7 @@ async fn run_two_request_retention_journey(
     )
     .await;
     let server_address = real_model_rest_server.server_address;
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-acceptance-client"),
-    );
+    let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
     let completion_request = json!({
         "model": model_id(),
         "messages": [{"role": "user", "content": user_message}],
@@ -112,11 +108,9 @@ async fn run_two_request_retention_journey(
             model_id(),
             user_message.len()
         );
-        let streamed_completion: StreamResponse<Value> = timeout(
+        let streamed_completion: ChatCompletionStream = timeout(
             Duration::from_secs(60),
-            openai_client
-                .chat()
-                .create_stream_byot(completion_request.clone()),
+            openai_client.create_streaming_chat_completion(&completion_request),
         )
         .await
         .expect("the repeated decode-retention REST request must be accepted within 60 seconds")
@@ -219,11 +213,7 @@ async fn run_decode_retention_journey(maximum_mlx_memory_bytes: u64) {
     )
     .await;
     let server_address = real_model_rest_server.server_address;
-    let openai_client = Client::with_config(
-        OpenAIConfig::new()
-            .with_api_base(format!("http://{server_address}/v1"))
-            .with_api_key("local-acceptance-client"),
-    );
+    let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
     let completion_request = json!({
         "model": model_id(),
         "messages": [{"role": "user", "content": user_message}],
@@ -238,9 +228,9 @@ async fn run_decode_retention_journey(maximum_mlx_memory_bytes: u64) {
         model_id(),
         user_message.len()
     );
-    let streamed_completion: StreamResponse<Value> = timeout(
+    let streamed_completion: ChatCompletionStream = timeout(
         Duration::from_secs(60),
-        openai_client.chat().create_stream_byot(completion_request),
+        openai_client.create_streaming_chat_completion(&completion_request),
     )
     .await
     .expect("the decode-retention REST request must be accepted within 60 seconds")
@@ -386,7 +376,7 @@ struct CompletedStream {
 }
 
 async fn consume_completed_stream(
-    mut streamed_completion: StreamResponse<Value>,
+    mut streamed_completion: ChatCompletionStream,
 ) -> CompletedStream {
     let mut streamed_model_text = String::new();
     let mut finish_reason = None;
