@@ -4,35 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.61</title>
-            <pubDate>Wed, 30 Sep 2026 20:23:06 -0400</pubDate>
-            <sparkle:version>763</sparkle:version>
-            <sparkle:shortVersionString>0.2.61</sparkle:shortVersionString>
+            <title>0.2.62</title>
+            <pubDate>Sat, 03 Oct 2026 01:03:21 -0400</pubDate>
+            <sparkle:version>771</sparkle:version>
+            <sparkle:shortVersionString>0.2.62</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.61
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.62
 
-Astronomical Stable v0.2.61 ships new user-facing capabilities and model catalog updates.
+## What's new
 
-## What is new
-
-- **Respond with images.** `astronomical respond PROMPT --image PATH` is repeatable and attaches raster images (PNG, JPEG, WebP) to the prompt so it can drive vision models. Unsupported, missing, or oversized inputs fail with a clear message.
-- **Thin Talk.** In-app HTML/TypeScript conversation with a sidebar and sessions.
-- **Model catalog.** Added Qwen3.8 35B A3B Distill 4-bit; removed Qwen 3.8 35B A3B Distill oQ6e MTP 6-bit.
-- **Menu.** Reports expert memory mode at worker ready.
+- `astronomical respond` adds `--text`, `--instructions`, and `--thinking-budget` controls.
+- REST structured-output requests now receive the schema-derived instruction alongside JSON Schema enforcement, matching the CLI behavior.
+- Qwen3.5 A3B uses a fused Metal GDN decode-prework kernel on eligible bf16 workers; other configurations retain the composed implementation.
+- The retired draft-assisted prefill feature is removed. Dense full-prompt processing, persistent prompt caching, and native multi-token prediction remain.
 
 ## Compatibility
 
-macOS 14.0 and above, arm64. Existing libraries, conversations, and instance configuration are preserved; no migration is required.
+Startup removes obsolete settings and feature-specific cache artifacts from the retired prefill feature. Model files, unrelated user settings, and the remaining prompt-cache behavior are preserved.
 
 ## Distribution
 
-Distributed as a Developer-ID-signed, Hardened Runtime, notarized DMG. Automatic updates are delivered through a Sparkle signed feed.
+The macOS disk image is Developer ID signed and notarized, and the Sparkle update feed is signed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.61/Astronomical-0.2.61-macOS-arm64.dmg" length="20693246" type="application/octet-stream" sparkle:edSignature="Whe3lFOTFkcGuKcy1tAkleXaUa1ZVIOxEGNVSdB4SHBxsHAFwGgi1V6U/GJiQVdhKl37ORXo17TBj0tNufn4AQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.62/Astronomical-0.2.62-macOS-arm64.dmg" length="20464536" type="application/octet-stream" sparkle:edSignature="2gGGAjPPZZsha9BUoZBAp4kXXHxOItu6DP8uHMzAOcrD7bCd9jtiUc6iRSrH52JDK6p72+eOMlTO6kmFv+lYBQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Jj56DyCas8qsH0YGDVo7NKjmBw5gI4oRslAxW5C7qFPXRfSZAgHiKA/E/7Xf2JVPz7bONO51P4YRmo7VOGmzBQ==
-length: 2148
+edSignature: BZ3pBJZiPciFp2JDqBITeh7pIz3Fn4EevsYlgDuiaWyu5BE54QwOBZ42KzqEwHDb+XrjUnHoWwc+oLgiD3AbDg==
+length: 2127
 -->
