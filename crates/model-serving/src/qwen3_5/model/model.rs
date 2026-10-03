@@ -64,6 +64,14 @@ pub struct Qwen3_5Model {
     /// Model-owned BF16 scalar for the key normalization scale in every
     /// linear-attention forward pass.
     pub(crate) inverse_square_root_linear_head_dimension_scale: MlxArray,
+    /// Model-owned BF16 per-channel weight folding the query normalization
+    /// scale into one `fast_rms_norm` launch on the prefill composed path
+    /// (issue #915 item 5); per-channel values equal the scalar scale exactly.
+    pub(crate) query_normalization_scale_weight: MlxArray,
+    /// Model-owned BF16 per-channel weight folding the key normalization
+    /// scale into one `fast_rms_norm` launch on the prefill composed path
+    /// (issue #915 item 5); per-channel values equal the scalar scale exactly.
+    pub(crate) key_normalization_scale_weight: MlxArray,
     /// Deferred GPU missing-route roots collected during one paged forward.
     pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
     /// Warm-table slot capacity for decode-time hot-expert warming; zero
@@ -328,6 +336,8 @@ impl Qwen3_5Model {
         self.runtime.evaluate_arrays(&[
             &self.inverse_linear_head_dimension_scale,
             &self.inverse_square_root_linear_head_dimension_scale,
+            &self.query_normalization_scale_weight,
+            &self.key_normalization_scale_weight,
         ])?;
         Ok(())
     }
