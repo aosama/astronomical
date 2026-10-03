@@ -85,7 +85,7 @@ pub use openai_responses_tools::{
 pub use openai_structured_outputs::{
     EnforcedStructuredGeneration, MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES, OpenAiStructuredOutputs,
     OpenAiStructuredOutputsValidationError, enforced_generation_from_extra_body,
-    guided_grammar_to_enforced_generation,
+    enforced_generation_from_json_schema, guided_grammar_to_enforced_generation,
 };
 pub use thinking_controls::{
     ChatTemplateKwargsRequestObject, ReasoningRequestObject, ThinkingControls,
