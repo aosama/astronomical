@@ -32,6 +32,33 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+OMLX
+Source: https://github.com/ml-explore/omlx
+Used as the upstream source of Qwen 3.5 Metal kernels that Astronomical
+incorporates into its vendored MLX runtime. The Metal sources under
+crates/runtime-integration/native were adapted from the oMLX project's Qwen
+3.5 prefill kernels (omlx/custom_kernels/qwen35_prefill/csrc, Apache-2.0):
+the transposed quantized-matmul tile selection (qwen35_qmm_nax.metal), the
+fa256 steel attention (qwen35_attention.metal), and the MoE gather
+(qwen35_moe_gather_nax.metal). These kernels are Apple MIT-licensed as part of
+MLX and Apache-2.0 licensed by oMLX for the additions. The inline attribution
+comments in the corresponding MLX patches and their benchmark tests preserve
+that provenance for every line ported from oMLX.
+
+OMLX source translations
+Copyright © 2023-2025 oMLX contributors
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License. You may obtain a copy of
+the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+License for the specific language governing permissions and limitations under
+the License.
+
 MLX-C
 Source: https://github.com/ml-explore/mlx-c
 Used as a linked native runtime dependency.
