@@ -405,10 +405,11 @@ impl Qwen3_5Model {
 
     /// The composed prefill-path arithmetic the fused decode prework kernel
     /// replaces at launch-bound shapes: depthwise conv1d, SiLU, q/k/v split,
-    /// both ones-weight RMS normalizations, and both scalar scales. The fused
-    /// prework engagement check and the bit-exactness contract in the
-    /// direct-MLX numerics test keep this the fallback that must stay
-    /// identical, never a divergent second formula.
+    /// both ones-weight RMS normalizations, and both scalar scales folded
+    /// into the norms' per-channel weights. The fused prework engagement
+    /// check and the bit-exactness contract in the direct-MLX numerics test
+    /// keep this the fallback that must stay identical, never a divergent
+    /// second formula.
     fn convolution_to_normalized_heads(
         &self,
         convolution_input: &MlxArray,
@@ -474,18 +475,23 @@ impl Qwen3_5Model {
                 linear_head_dimension,
             ],
         )?;
-        let queries = self
-            .runtime
-            .rms_norm_without_weight(&queries, rms_norm_epsilon)?;
-        let queries = self
-            .runtime
-            .multiply(&queries, &self.inverse_linear_head_dimension_scale)?;
-        let keys = self
-            .runtime
-            .rms_norm_without_weight(&keys, rms_norm_epsilon)?;
-        let keys = self
-            .runtime
-            .multiply(&keys, &self.inverse_square_root_linear_head_dimension_scale)?;
+        // Each scale folds into `fast_rms_norm`'s per-channel weight: one
+        // fused launch per tensor replaces the norm kernel plus the separate
+        // broadcast-multiply kernel and drops the normalized intermediate
+        // round-trip (issue #915 item 5). MLX's own reference computes
+        // `round(normalize(x)) * weight`, identical to the former norm-then-
+        // multiply pair; the direct-MLX numerics contract pins bit-for-bit
+        // parity before this dispatch engages.
+        let queries = self.runtime.rms_norm(
+            &queries,
+            &self.query_normalization_scale_weight,
+            rms_norm_epsilon,
+        )?;
+        let keys = self.runtime.rms_norm(
+            &keys,
+            &self.key_normalization_scale_weight,
+            rms_norm_epsilon,
+        )?;
         Ok((queries, keys, values))
     }
 }
