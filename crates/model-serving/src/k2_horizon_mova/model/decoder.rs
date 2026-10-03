@@ -69,7 +69,7 @@ pub fn forward_layer(
     layer_weights: &K2HorizonMoVALayerWeights,
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
-    is_prefill: bool,
+    is_causal: bool,
     compiled_swiglu: &MlxCompiledSwiGlu,
     sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
@@ -97,7 +97,7 @@ pub fn forward_layer(
                 attention,
                 cache,
                 rope_offset,
-                is_prefill,
+                is_causal,
                 performance_attribution,
                 stage_attribution,
             )?;
@@ -139,7 +139,7 @@ pub fn forward_layer(
                 attention,
                 cache,
                 rope_offset,
-                is_prefill,
+                is_causal,
                 fused_expert_decode,
                 performance_attribution,
                 stage_attribution,
@@ -175,7 +175,7 @@ fn dense_attention(
     weights: &K2HorizonMoVADenseAttentionWeights,
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
-    is_prefill: bool,
+    is_causal: bool,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
@@ -220,7 +220,7 @@ fn dense_attention(
         weights.gate_proj.as_ref(),
         cache,
         rope_offset,
-        is_prefill,
+        is_causal,
         performance_attribution,
         stage_attribution,
     )
@@ -233,7 +233,7 @@ fn mova_attention(
     weights: &K2HorizonMoVAMoVAAttentionWeights,
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
-    is_prefill: bool,
+    is_causal: bool,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
@@ -321,7 +321,7 @@ fn mova_attention(
         weights.gate_proj.as_ref(),
         cache,
         rope_offset,
-        is_prefill,
+        is_causal,
         performance_attribution,
         stage_attribution,
     )
@@ -338,7 +338,7 @@ fn finish_attention(
     gate_proj: Option<&super::affine::K2HorizonMoVAAffineLinear>,
     cache: &mut K2HorizonMoVAKvState,
     rope_offset: i32,
-    is_prefill: bool,
+    is_causal: bool,
     performance_attribution: &mut PerformanceAttribution,
     stage_attribution: bool,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
@@ -368,7 +368,7 @@ fn finish_attention(
                     },
                 )?;
             let scale = (config.head_dim() as f32).sqrt().recip();
-            if is_prefill {
+            if is_causal {
                 runtime.causal_scaled_dot_product_attention(&queries, &keys, &values, scale)?
             } else {
                 runtime.scaled_dot_product_attention(&queries, &keys, &values, scale)?
@@ -389,7 +389,7 @@ fn finish_attention(
                 &views,
                 state.group_size(),
                 state.bits(),
-                is_prefill,
+                is_causal,
             )?
         }
     };

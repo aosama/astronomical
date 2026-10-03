@@ -7,6 +7,8 @@ mod fused_expert_decode;
 mod kv_state_restore;
 mod model;
 mod ops;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod prefill_causality_probe;
 mod quantized_attention;
 mod weights;
 
