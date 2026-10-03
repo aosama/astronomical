@@ -64,7 +64,11 @@ impl K2HorizonMoVAModel {
             .first()
             .map(K2HorizonMoVAKvState::offset_tokens)
             .unwrap_or(0);
-        let is_prefill = rope_offset == 0;
+        // Causality is a property of the query length, not of the cache
+        // offset: every multi-token chunk must mask its own future tokens
+        // whether or not a restored prefix sits before it, while a
+        // single-token decode step is causally equivalent unmasked.
+        let is_causal = token_ids.len() > 1;
         for (layer_index, layer_weights) in self.weights.layers.iter().enumerate() {
             let layer_cache = caches.get_mut(layer_index).ok_or_else(|| {
                 K2HorizonMoVAExecutionError::InvalidExecution {
@@ -80,7 +84,7 @@ impl K2HorizonMoVAModel {
                 layer_weights,
                 layer_cache,
                 rope_offset,
-                is_prefill,
+                is_causal,
                 &self.compiled_swiglu,
                 self.sorted_expert_reduction_kernel.as_ref(),
                 self.fused_expert_decode_kernels.as_ref(),
