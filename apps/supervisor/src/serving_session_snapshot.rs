@@ -8,8 +8,6 @@ pub struct ServingSessionSnapshot {
     pub total_reused_prompt_token_count: u64,
     pub target_prompt_work_token_count: u64,
     pub target_reused_prompt_work_token_count: u64,
-    pub drafter_prompt_work_token_count: u64,
-    pub drafter_reused_prompt_work_token_count: u64,
     pub average_prefill_tok_per_second: f64,
     pub average_generation_tok_per_second: f64,
     prefill_measurement_count: u64,
@@ -24,8 +22,6 @@ impl ServingSessionSnapshot {
             total_reused_prompt_token_count: 0,
             target_prompt_work_token_count: 0,
             target_reused_prompt_work_token_count: 0,
-            drafter_prompt_work_token_count: 0,
-            drafter_reused_prompt_work_token_count: 0,
             average_prefill_tok_per_second: 0.0,
             average_generation_tok_per_second: 0.0,
             prefill_measurement_count: 0,
@@ -74,15 +70,6 @@ impl ServingSessionSnapshot {
                 prompt_work_reuse
                     .target_restored_token_count
                     .min(prompt_work_reuse.target_eligible_token_count),
-            );
-        self.drafter_prompt_work_token_count = self
-            .drafter_prompt_work_token_count
-            .saturating_add(prompt_work_reuse.drafter_eligible_token_count);
-        self.drafter_reused_prompt_work_token_count =
-            self.drafter_reused_prompt_work_token_count.saturating_add(
-                prompt_work_reuse
-                    .drafter_restored_token_count
-                    .min(prompt_work_reuse.drafter_eligible_token_count),
             );
     }
 }

@@ -194,10 +194,9 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
     );
 }
 
-// Regression coverage for issue 617 (drafter side): a KV block can vanish between the
-// `has_kv_block` lookup and the open. The raw store load stays fail-closed for the dense
-// restore path, but the error must classify as a treatable cache miss so the SpecPrefill
-// drafter can re-score the prompt from scratch instead of erroring the request.
+// A block can vanish between lookup and open after filesystem cleanup. The raw store load stays
+// fail-closed, while request planning must classify the missing block as a cache miss and continue
+// with ordinary prompt processing.
 
 #[tokio::test]
 async fn should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss() {

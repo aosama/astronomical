@@ -96,13 +96,11 @@ impl Qwen3_5EngineState {
         // Injection extends the same live context as ordinary request admission.
         // Re-run binary residency admission before mutating decoder state so a
         // rejection leaves the continuation frontier unchanged.
-        let additional_maximum_expert_page_reservation_bytes =
-            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
         let target_expert_payload_bytes_reclaimed_during_injection = self
             .validate_context_memory_admission_with_resident_expert_demotion(
                 projected_context_tokens,
                 0,
-                additional_maximum_expert_page_reservation_bytes,
+                0,
                 &mut active_request.performance_attribution,
             )?;
         if target_expert_payload_bytes_reclaimed_during_injection > 0 {

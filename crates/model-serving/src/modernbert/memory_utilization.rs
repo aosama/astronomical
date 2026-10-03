@@ -49,7 +49,6 @@ pub fn compose_modernbert_memory_ceiling_utilization(
         reserved_context_growth_bytes: 0,
         reserved_activation_and_workspace_bytes: reserved_transient_bytes,
         unseated_expert_entitlement_bytes: 0,
-        speculative_draft_payload_bytes: 0,
         unexplained_headroom_bytes: 0,
         owner_overrun_bytes,
     }

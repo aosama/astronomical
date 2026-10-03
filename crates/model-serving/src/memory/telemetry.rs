@@ -19,8 +19,6 @@ pub struct MlxActiveMemoryBreakdown {
     pub model_core_payload_bytes: u64,
     /// Request context payload represented within active MLX memory.
     pub context_state_payload_bytes: u64,
-    /// Complete active MLX memory attributed to request-scoped draft scoring.
-    pub speculative_prefill_draft_memory_bytes: u64,
 }
 
 impl MlxActiveMemoryBreakdown {
@@ -45,40 +43,6 @@ impl MlxActiveMemoryBreakdown {
             expert_payload_bytes: reconciled_expert_payload_bytes,
             model_core_payload_bytes: reconciled_model_core_payload_bytes,
             context_state_payload_bytes: reconciled_context_state_payload_bytes,
-            speculative_prefill_draft_memory_bytes: 0,
-        }
-    }
-
-    #[must_use]
-    /// Reconciles target owners and assigns every remaining active byte to draft scoring.
-    pub fn reconcile_with_speculative_prefill_draft(
-        mlx_active_memory_bytes: u64,
-        expert_payload_bytes: u64,
-        model_core_payload_bytes: u64,
-        context_state_payload_bytes: u64,
-        speculative_prefill_draft_memory_bytes: u64,
-    ) -> Self {
-        let target_memory_breakdown = Self::reconcile(
-            mlx_active_memory_bytes,
-            expert_payload_bytes,
-            model_core_payload_bytes,
-            context_state_payload_bytes,
-        );
-        let target_attributed_memory_bytes = target_memory_breakdown
-            .expert_payload_bytes
-            .saturating_add(target_memory_breakdown.model_core_payload_bytes)
-            .saturating_add(target_memory_breakdown.context_state_payload_bytes);
-        let remaining_active_memory_bytes =
-            mlx_active_memory_bytes.saturating_sub(target_attributed_memory_bytes);
-        let reconciled_known_speculative_prefill_draft_memory_bytes =
-            speculative_prefill_draft_memory_bytes.min(remaining_active_memory_bytes);
-        let unclassified_speculative_prefill_draft_work_bytes = remaining_active_memory_bytes
-            .saturating_sub(reconciled_known_speculative_prefill_draft_memory_bytes);
-        Self {
-            speculative_prefill_draft_memory_bytes:
-                reconciled_known_speculative_prefill_draft_memory_bytes
-                    .saturating_add(unclassified_speculative_prefill_draft_work_bytes),
-            ..target_memory_breakdown
         }
     }
 }

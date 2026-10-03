@@ -19,7 +19,7 @@ use super::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
 };
 use super::error::invalid_request_decoder_state;
-use super::{Qwen3_5AttentionCapture, Qwen3_5ExecutionError, Qwen3_5Model};
+use super::{Qwen3_5ExecutionError, Qwen3_5Model};
 
 /// Correct attention result retained as one decoder layer's restart boundary.
 pub(crate) struct Qwen3_5DecoderLayerAttentionOutput {
@@ -40,7 +40,6 @@ impl Qwen3_5Model {
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
         layer_model_state: &mut DecoderCacheState,
         token_position_offsets: Option<&MlxArray>,
-        attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
@@ -92,9 +91,7 @@ impl Qwen3_5Model {
                         rope_offset_tokens,
                         full_attention_weights,
                         attention,
-                        layer_index,
                         token_position_offsets,
-                        attention_capture,
                         paged_prefill_execution_mode,
                     )
                 },

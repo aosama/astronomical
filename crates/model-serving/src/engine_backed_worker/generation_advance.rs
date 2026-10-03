@@ -237,7 +237,6 @@ where
                 completed_prefill_chunk_tokens,
                 mlx_memory_telemetry,
                 expert_residency_telemetry,
-                speculative_prefill_draft_memory_telemetry,
                 expert_memory_mode,
                 prompt_work_reuse,
                 persistent_prompt_cache_diagnostics,
@@ -303,15 +302,6 @@ where
                         }),
                         expert_residency: expert_residency_telemetry
                             .map(super::output::worker_expert_residency_snapshot),
-                        speculative_prefill_draft_memory_snapshot:
-                            speculative_prefill_draft_memory_telemetry.map(
-                                |speculative_prefill_draft_memory_telemetry| {
-                                    super::output::worker_memory_snapshot(
-                                        MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
-                                        speculative_prefill_draft_memory_telemetry,
-                                    )
-                                },
-                            ),
                     })
                     .await?;
                 Ok(Some(active_generation))
@@ -331,7 +321,6 @@ where
                         completed_prefill_chunk_tokens: None,
                         mlx_memory_snapshot: None,
                         expert_residency: None,
-                        speculative_prefill_draft_memory_snapshot: None,
                     })
                     .await?;
                 Ok(Some(active_generation))

@@ -12,7 +12,6 @@ struct MlxMemoryCeilingUtilization: Codable, Equatable {
   let reservedContextGrowthBytes: UInt64
   let reservedActivationAndWorkspaceBytes: UInt64
   let unseatedExpertEntitlementBytes: UInt64
-  let speculativeDraftPayloadBytes: UInt64
   let unexplainedHeadroomBytes: UInt64
   let ownerOverrunBytes: UInt64
 
@@ -22,7 +21,6 @@ struct MlxMemoryCeilingUtilization: Codable, Equatable {
     case reservedContextGrowthBytes = "reserved_context_growth_bytes"
     case reservedActivationAndWorkspaceBytes = "reserved_activation_and_workspace_bytes"
     case unseatedExpertEntitlementBytes = "unseated_expert_entitlement_bytes"
-    case speculativeDraftPayloadBytes = "speculative_draft_payload_bytes"
     case unexplainedHeadroomBytes = "unexplained_headroom_bytes"
     case ownerOverrunBytes = "owner_overrun_bytes"
   }

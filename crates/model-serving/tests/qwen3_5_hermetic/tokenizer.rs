@@ -1,18 +1,12 @@
-#[allow(dead_code)]
-#[path = "../../src/qwen3_5/inference_execution/speculative_prefill/speculative_prefill_selection.rs"]
-mod speculative_prefill_selection;
-
+use crate::common::qwen3_5_moe::frozen_ornith_1_0_image_processor;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
-    ChatToolChoice, ChatToolDefinition, RequestId,
+    ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{
     Qwen3_5PromptRenderer, Qwen3_5RequestOutput, Qwen3_5Tokenizer, Qwen3_5TokenizerError,
     validate_context_token_count,
 };
-use speculative_prefill_selection::qwen3_5_select_speculative_prefill_token_positions;
-
-use crate::common::qwen3_5_moe::frozen_ornith_1_0_image_processor;
 
 const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
 const ORNITH_MAXIMUM_POSITION_COUNT: u32 = 262_144;
@@ -98,170 +92,6 @@ fn should_serve_a_context_above_the_configured_limit_when_the_artifact_window_fi
 #[test]
 fn should_reject_a_context_above_the_artifact_window_even_below_no_configured_limit() {
     assert!(validate_context_token_count(258_049, 4_096, 262_144, 150_000).is_err());
-}
-
-#[test]
-fn should_convert_the_rendered_system_and_tool_boundary_to_an_exact_token_count() {
-    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
-        &ornith_tokenizer_json_bytes(248_056),
-        SYNTHETIC_MODEL_ID,
-        ORNITH_VOCABULARY_SIZE,
-        ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
-    )
-    .expect("the synthetic tokenizer should load");
-    let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
-        &[
-            ChatMessage::System {
-                content: "Use the declared tool.".to_owned(),
-            },
-            ChatMessage::User {
-                content: "Inspect Romeo and Juliet.".to_owned(),
-                images: Vec::new(),
-            },
-        ],
-        &[ChatToolDefinition {
-            name: "inspect_play".to_owned(),
-            description: None,
-            parameters_json: r#"{"type":"object"}"#.to_owned(),
-        }],
-        false,
-        &[],
-        None,
-    )
-    .expect("the tool-bearing prompt should render");
-
-    let (prompt_token_ids, ordinary_target_prefill_control_span_token_count) = tokenizer
-        .encode_rendered_prompt_with_control_span(&rendered_prompt)
-        .expect("the control-span byte boundary should remain a token boundary");
-
-    assert!(ordinary_target_prefill_control_span_token_count > 0);
-    assert!(ordinary_target_prefill_control_span_token_count < prompt_token_ids.len());
-}
-
-#[test]
-fn should_keep_the_complete_tool_control_span_outside_romeo_and_juliet_sparse_selection() {
-    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
-        &ornith_tokenizer_json_bytes(248_056),
-        SYNTHETIC_MODEL_ID,
-        ORNITH_VOCABULARY_SIZE,
-        ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
-    )
-    .expect("the synthetic tokenizer should load");
-    let rendered_prompt = Qwen3_5PromptRenderer::render_with_control_span(
-        &[
-            ChatMessage::System {
-                content: "Use only the declared literary-analysis tool.".to_owned(),
-            },
-            ChatMessage::User {
-                content: format!(
-                    "Identify the central conflict from this source.\n\n{ROMEO_AND_JULIET_SOURCE}"
-                ),
-                images: Vec::new(),
-            },
-        ],
-        &[ChatToolDefinition {
-            name: "record_literary_analysis".to_owned(),
-            description: Some("Record a structured literary analysis.".to_owned()),
-            parameters_json: r#"{"type":"object","properties":{"central_conflict":{"type":"string"},"outcome":{"type":"string","enum":["tragic","comic"]}},"required":["central_conflict","outcome"]}"#.to_owned(),
-        }],
-        false,
-        &[],
-        None,
-    )
-    .expect("the Romeo and Juliet tool prompt should render");
-    let independently_encoded_control_span_token_count = tokenizer
-        .encode_prompt(rendered_prompt.ordinary_target_prefill_control_span())
-        .expect("the protected control span should tokenize independently")
-        .len();
-    let (complete_prompt_token_ids, ordinary_target_prefill_control_span_token_count) = tokenizer
-        .encode_rendered_prompt_with_control_span(&rendered_prompt)
-        .expect("the complete tool prompt should tokenize with an exact control boundary");
-    let final_generation_kickoff_position = complete_prompt_token_ids
-        .len()
-        .checked_sub(1)
-        .expect("the rendered prompt should contain a generation-kickoff token");
-    let selectable_conversation_token_count = final_generation_kickoff_position
-        .checked_sub(ordinary_target_prefill_control_span_token_count)
-        .expect("conversation tokens should follow the protected control span");
-    let selection_chunk_token_count = 64_usize;
-    let keep_percentage = 20_u32;
-    let mandatory_trailing_token_count = 128_usize;
-    let selectable_conversation_chunk_count =
-        selectable_conversation_token_count.div_ceil(selection_chunk_token_count);
-    let percentage_derived_conversation_chunk_budget =
-        (selectable_conversation_chunk_count * keep_percentage as usize).div_ceil(100);
-    let importance_scores = (0..selectable_conversation_token_count)
-        .map(|conversation_token_position| (conversation_token_position % 97) as f32)
-        .collect::<Vec<_>>();
-    let selected_relative_conversation_positions =
-        qwen3_5_select_speculative_prefill_token_positions(
-            &importance_scores,
-            keep_percentage,
-            selection_chunk_token_count,
-            mandatory_trailing_token_count,
-        )
-        .expect("the selectable conversation should produce a sparse target selection");
-    let mut selected_conversation_chunk_indices = selected_relative_conversation_positions
-        .iter()
-        .map(|selected_relative_position| selected_relative_position / selection_chunk_token_count)
-        .collect::<Vec<_>>();
-    selected_conversation_chunk_indices.dedup();
-    let selected_absolute_conversation_positions = selected_relative_conversation_positions
-        .iter()
-        .map(|selected_relative_position| {
-            ordinary_target_prefill_control_span_token_count + selected_relative_position
-        })
-        .collect::<Vec<_>>();
-    let complete_ordered_target_positions = (0..ordinary_target_prefill_control_span_token_count)
-        .chain(selected_absolute_conversation_positions.iter().copied())
-        .chain(std::iter::once(final_generation_kickoff_position))
-        .collect::<Vec<_>>();
-
-    assert_eq!(
-        ordinary_target_prefill_control_span_token_count,
-        independently_encoded_control_span_token_count
-    );
-    assert_eq!(
-        ordinary_target_prefill_control_span_token_count..final_generation_kickoff_position,
-        ordinary_target_prefill_control_span_token_count
-            ..ordinary_target_prefill_control_span_token_count
-                + selectable_conversation_token_count
-    );
-    assert_eq!(
-        selected_conversation_chunk_indices.len(),
-        percentage_derived_conversation_chunk_budget
-    );
-    assert!(
-        (selectable_conversation_token_count - mandatory_trailing_token_count
-            ..selectable_conversation_token_count)
-            .all(
-                |mandatory_relative_position| selected_relative_conversation_positions
-                    .binary_search(&mandatory_relative_position)
-                    .is_ok()
-            )
-    );
-    assert_eq!(
-        &complete_ordered_target_positions[..ordinary_target_prefill_control_span_token_count],
-        (0..ordinary_target_prefill_control_span_token_count).collect::<Vec<_>>()
-    );
-    assert_eq!(
-        complete_ordered_target_positions.last().copied(),
-        Some(final_generation_kickoff_position)
-    );
-    assert!(
-        complete_ordered_target_positions
-            .windows(2)
-            .all(|positions| positions[0] < positions[1])
-    );
-    assert!(
-        selected_absolute_conversation_positions
-            .iter()
-            .all(|selected_position| *selected_position
-                >= ordinary_target_prefill_control_span_token_count
-                && *selected_position < final_generation_kickoff_position)
-    );
 }
 
 #[test]

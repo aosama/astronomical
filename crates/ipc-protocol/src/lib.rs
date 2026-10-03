@@ -57,9 +57,9 @@ pub use persistent_prompt_cache_diagnostics::{
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, MtpDepthResolutionReason,
-    MtpDepthStatus, MtpRuntimeState, RequestId, SpeculativePrefillRuntimeState, WorkerCommand,
-    WorkerEvent, WorkerExpertResidencySnapshot, WorkerMemoryCeilingUtilizationSnapshot,
-    WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    MtpDepthStatus, MtpRuntimeState, RequestId, WorkerCommand, WorkerEvent,
+    WorkerExpertResidencySnapshot, WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
@@ -71,9 +71,8 @@ pub use worker_model_configuration::{
     WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
     WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
+    WorkerQwenImage21ModelConfiguration,
 };
 pub use worker_startup_configuration::{
-    WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerSpeculativePrefillConfiguration,
-    WorkerStartupConfiguration,
+    WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };

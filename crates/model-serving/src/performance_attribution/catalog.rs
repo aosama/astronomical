@@ -54,17 +54,6 @@ pub enum PerformanceOperation {
     PagedMoeOutputMaterializationSynchronizationWait,
     ResidentMoeGraphConstruction,
     FinalLogitsGraphConstruction,
-    SpeculativePrefillRequestScopedDraftLoad,
-    SpeculativePrefillRequestScopedDraftRelease,
-    SpeculativePrefillDraftScoring,
-    SpeculativePrefillDraftMemoryAdmission,
-    SpeculativePrefillDraftVisionEmbeddingGraphConstruction,
-    SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait,
-    SpeculativePrefillSelection,
-    SpeculativePrefillSelectionDiskRead,
-    SpeculativePrefillSelectionDiskWrite,
-    SpeculativePrefillSparseInputAssembly,
-    SpeculativePrefillSparseTargetForward,
     TokenSamplingGraphConstruction,
     ForcedThinkingTransitionTokenArrayConstruction,
     MtpHeadForwardGraphConstruction,
@@ -204,17 +193,6 @@ impl PerformanceOperation {
         Self::PagedMoeOutputMaterializationSynchronizationWait,
         Self::ResidentMoeGraphConstruction,
         Self::FinalLogitsGraphConstruction,
-        Self::SpeculativePrefillRequestScopedDraftLoad,
-        Self::SpeculativePrefillRequestScopedDraftRelease,
-        Self::SpeculativePrefillDraftScoring,
-        Self::SpeculativePrefillDraftMemoryAdmission,
-        Self::SpeculativePrefillDraftVisionEmbeddingGraphConstruction,
-        Self::SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait,
-        Self::SpeculativePrefillSelection,
-        Self::SpeculativePrefillSelectionDiskRead,
-        Self::SpeculativePrefillSelectionDiskWrite,
-        Self::SpeculativePrefillSparseInputAssembly,
-        Self::SpeculativePrefillSparseTargetForward,
         Self::TokenSamplingGraphConstruction,
         Self::ForcedThinkingTransitionTokenArrayConstruction,
         Self::MtpHeadForwardGraphConstruction,
@@ -387,33 +365,6 @@ impl PerformanceOperation {
             }
             Self::ResidentMoeGraphConstruction => "resident_moe_graph_construction",
             Self::FinalLogitsGraphConstruction => "final_logits_graph_construction",
-            Self::SpeculativePrefillRequestScopedDraftLoad => {
-                "speculative_prefill_request_scoped_draft_load"
-            }
-            Self::SpeculativePrefillRequestScopedDraftRelease => {
-                "speculative_prefill_request_scoped_draft_release"
-            }
-            Self::SpeculativePrefillDraftScoring => "speculative_prefill_draft_scoring",
-            Self::SpeculativePrefillDraftMemoryAdmission => {
-                "speculative_prefill_draft_memory_admission"
-            }
-            Self::SpeculativePrefillDraftVisionEmbeddingGraphConstruction => {
-                "speculative_prefill_draft_vision_embedding_graph_construction"
-            }
-            Self::SpeculativePrefillDraftVisionEmbeddingEvaluationSynchronizationWait => {
-                "speculative_prefill_draft_vision_embedding_evaluation_synchronization_wait"
-            }
-            Self::SpeculativePrefillSelection => "speculative_prefill_selection",
-            Self::SpeculativePrefillSelectionDiskRead => "speculative_prefill_selection_disk_read",
-            Self::SpeculativePrefillSelectionDiskWrite => {
-                "speculative_prefill_selection_disk_write"
-            }
-            Self::SpeculativePrefillSparseInputAssembly => {
-                "speculative_prefill_sparse_input_assembly"
-            }
-            Self::SpeculativePrefillSparseTargetForward => {
-                "speculative_prefill_sparse_target_forward"
-            }
             Self::TokenSamplingGraphConstruction => "token_sampling_graph_construction",
             Self::ForcedThinkingTransitionTokenArrayConstruction => {
                 "forced_thinking_transition_token_array_construction"
@@ -564,8 +515,6 @@ impl PerformanceOperation {
             self,
             Self::PromptPrefillAdvanceSpan
                 | Self::DecodeAdvanceSpan
-                | Self::SpeculativePrefillDraftScoring
-                | Self::SpeculativePrefillSparseTargetForward
                 | Self::MtpPromptHistoryInitializationSpan
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan

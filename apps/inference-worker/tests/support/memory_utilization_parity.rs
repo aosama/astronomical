@@ -34,9 +34,6 @@ pub(crate) fn assert_status_memory_ceiling_utilization_closes(status_document: &
         .into_iter()
         .map(|field_name| utilization[field_name].as_u64().unwrap_or(0))
         .sum::<u64>();
-    let speculative_draft_payload_bytes = utilization["speculative_draft_payload_bytes"]
-        .as_u64()
-        .unwrap_or(0);
     let unexplained_headroom_bytes = utilization["unexplained_headroom_bytes"]
         .as_u64()
         .unwrap_or(u64::MAX);
@@ -51,11 +48,9 @@ pub(crate) fn assert_status_memory_ceiling_utilization_closes(status_document: &
         owner_overrun_bytes, 0,
         "the status-published decomposition must report no owner overrun: {utilization}"
     );
-    let explained_headroom_bytes =
-        named_headroom_bytes.saturating_sub(speculative_draft_payload_bytes);
     assert!(
-        explained_headroom_bytes <= unused_headroom_bytes,
-        "named owners must not overrun unused headroom: unused={unused_headroom_bytes} explained={explained_headroom_bytes} utilization={utilization}"
+        named_headroom_bytes <= unused_headroom_bytes,
+        "named owners must not overrun unused headroom: unused={unused_headroom_bytes} explained={named_headroom_bytes} utilization={utilization}"
     );
 }
 

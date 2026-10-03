@@ -190,23 +190,13 @@ fn publish_recovery_acknowledgement(
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status,
-            speculative_prefill_runtime_state,
-            speculative_prefill_unavailable_reason,
-            speculative_prefill_draft_model_id,
-            speculative_prefill_draft_model_revision,
         } => WorkerHealthSnapshot::ready_with_model(
             model_id,
             capabilities,
             mtp_runtime_state,
             mtp_unavailable_reason,
         )
-        .with_mtp_depth_status(mtp_depth_status)
-        .with_speculative_prefill_runtime(
-            speculative_prefill_runtime_state,
-            speculative_prefill_unavailable_reason,
-            speculative_prefill_draft_model_id,
-            speculative_prefill_draft_model_revision,
-        ),
+        .with_mtp_depth_status(mtp_depth_status),
         _ => {
             return Err(WorkerControlError::WorkerProtocolViolation {
                 description: "replacement worker acknowledgement lost readiness",

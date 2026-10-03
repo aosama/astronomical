@@ -24,8 +24,6 @@ use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
-    sparse_anchored_dense_boundary_clamped_prefill_chunk_end,
-    sparse_anchored_dense_boundary_completed_prefill_chunk_tokens,
 };
 
 use super::super::model::memory_admission::invalid_request_error;
@@ -33,10 +31,7 @@ use super::completed_forward_memory::collect_completed_forward_memory_snapshot;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
     Qwen3_5EngineState, Qwen3_5PromptProcessingChunkSizer, fatal_engine_error,
-    qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary,
-    qwen3_5_prompt_prefill_end_exclusive, qwen3_5_runtime_error,
-    qwen3_5_speculative_prefill_sparse_target_is_active,
-    speculative_prefill::SpeculativePrefillSelectionPreparation,
+    qwen3_5_runtime_error,
 };
 impl Qwen3_5EngineState {
     pub(super) fn advance_prompt_prefill_if_pending(
@@ -47,49 +42,15 @@ impl Qwen3_5EngineState {
         // Target-only prefill consumes every prompt token and samples first
         // output from the last chunk. Optional prediction reserves the last
         // prompt token for generation kickoff so predictor history can shift.
-        let final_prompt_index = active_request.input_token_ids.len() - 1;
-        let prefill_end_exclusive = qwen3_5_prompt_prefill_end_exclusive(
-            active_request.input_token_ids.len(),
-            active_request.has_optional_prediction_session(),
-        );
+        let prefill_end_exclusive =
+            active_request
+                .input_token_ids
+                .len()
+                .saturating_sub(usize::from(
+                    active_request.has_optional_prediction_session(),
+                ));
         if active_request.prefill_cursor >= prefill_end_exclusive {
             return Ok(None);
-        }
-        if qwen3_5_speculative_prefill_sparse_target_is_active(
-            active_request.should_use_speculative_prefill,
-            active_request.prefill_cursor,
-            active_request.ordinary_target_prefill_control_span_token_count,
-        ) {
-            // Preparation first attempts cheap exact selection reuse. On a miss,
-            // it becomes a two-call state machine: this call yields a stream-visible
-            // Drafter phase event and the next performs request-scoped scoring.
-            let speculative_prefill_selection_preparation = match self
-                .prepare_speculative_prefill_selection(
-                    active_request,
-                    active_request.prefill_cursor,
-                    final_prompt_index,
-                ) {
-                Ok(speculative_prefill_selection_preparation) => {
-                    speculative_prefill_selection_preparation
-                }
-                Err(speculative_prefill_failure) => {
-                    // Capture complete target/drafter/cache evidence while request
-                    // state still exists, then preserve the original error.
-                    self.log_speculative_prefill_drafter_failure_diagnostics(active_request);
-                    return Err(speculative_prefill_failure);
-                }
-            };
-            if matches!(
-                speculative_prefill_selection_preparation,
-                SpeculativePrefillSelectionPreparation::DrafterPhaseStarted
-            ) {
-                return Ok(Some(GeneratedToken::PromptProcessingPhaseStarted {
-                    prompt_processing_phase:
-                        astronomical_ipc_protocol::WorkerPromptProcessingPhase::Drafter,
-                    total_token_count: u32::try_from(active_request.input_token_ids.len())
-                        .unwrap_or(u32::MAX),
-                }));
-            }
         }
         let prefill_start = active_request.prefill_cursor;
         let sparse_experts_are_paged = self
@@ -129,24 +90,7 @@ impl Qwen3_5EngineState {
                     .maximum_successful_prefill_chunk_tokens()
                     .unwrap_or(usize::MAX),
             );
-        // The control-span boundary separates dense system-prompt prefill from
-        // sparse speculative-prefill conversation selection. When speculative
-        // prefill is disabled, both spans use the same paged execution contract
-        // and the boundary only fractures the chunk — producing a tiny stub like
-        // 351 tokens that adds a full forward overhead for almost no progress.
-        // Skip the control-span clamp when speculative prefill is off.
-        let requested_prefill_chunk_end = if active_request.should_use_speculative_prefill {
-            qwen3_5_prefill_chunk_end_at_ordinary_target_control_span_boundary(
-                prefill_start,
-                configured_prompt_processing_chunk_end,
-                active_request.ordinary_target_prefill_control_span_token_count,
-            )
-            .ok_or_else(|| fatal_engine_error("prompt-processing chunk did not advance"))?
-        } else {
-            configured_prompt_processing_chunk_end
-        };
-        // The control-span clamp guarantees this chunk is wholly dense or wholly
-        // sparse; execute_prompt_prefill_chunk never receives a mixed contract.
+        let requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
         // checkpoint, publishes it, and only then advances the request cursor.
@@ -158,11 +102,7 @@ impl Qwen3_5EngineState {
         let requested_prefill_chunk_end = if self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
             && !active_request.has_optional_prediction_session()
-            && !qwen3_5_speculative_prefill_sparse_target_is_active(
-                active_request.should_use_speculative_prefill,
-                prefill_start,
-                active_request.ordinary_target_prefill_control_span_token_count,
-            ) {
+        {
             let persistent_prompt_cache_block_token_count = self
                 .persistent_prompt_cache
                 .as_ref()
@@ -173,43 +113,20 @@ impl Qwen3_5EngineState {
                 })
                 .unwrap_or(0);
             let crossed_cache_boundary_count =
-                match active_request.sparse_anchored_dense_capture.as_ref() {
-                    // An anchored tail publishes on anchor-relative boundaries, so the
-                    // ordinary absolute-multiple boundary count would always be zero here.
-                    Some(sparse_anchored_dense_capture) => {
-                        sparse_anchored_dense_boundary_completed_prefill_chunk_tokens(
-                            prefill_start,
-                            requested_prefill_chunk_end,
-                            sparse_anchored_dense_capture.anchor_prompt_token_count,
-                            persistent_prompt_cache_block_token_count,
-                        )
-                        .len()
-                    }
-                    None => persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
-                        prefill_start,
-                        requested_prefill_chunk_end,
-                        persistent_prompt_cache_block_token_count,
-                    )
-                    .len(),
-                };
+                persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                    prefill_start,
+                    requested_prefill_chunk_end,
+                    persistent_prompt_cache_block_token_count,
+                )
+                .len();
             if crossed_cache_boundary_count <= 1 {
                 requested_prefill_chunk_end
             } else {
-                match active_request.sparse_anchored_dense_capture.as_ref() {
-                    Some(sparse_anchored_dense_capture) => {
-                        sparse_anchored_dense_boundary_clamped_prefill_chunk_end(
-                            prefill_start,
-                            requested_prefill_chunk_end,
-                            sparse_anchored_dense_capture.anchor_prompt_token_count,
-                            persistent_prompt_cache_block_token_count,
-                        )
-                    }
-                    None => persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
-                        prefill_start,
-                        requested_prefill_chunk_end,
-                        persistent_prompt_cache_block_token_count,
-                    ),
-                }
+                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+                    prefill_start,
+                    requested_prefill_chunk_end,
+                    persistent_prompt_cache_block_token_count,
+                )
             }
         } else {
             requested_prefill_chunk_end
@@ -231,12 +148,7 @@ impl Qwen3_5EngineState {
             let prefill_end = prefill_start
                 .checked_add(attempted_prefill_chunk_token_count)
                 .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
-            match self.execute_prompt_prefill_chunk(
-                request_id,
-                active_request,
-                prefill_start,
-                prefill_end,
-            ) {
+            match self.execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end) {
                 Ok(prompt_prefill_chunk_outcome) => {
                     break (prefill_end, prompt_prefill_chunk_outcome);
                 }
@@ -533,11 +445,6 @@ impl Qwen3_5EngineState {
             })?,
             mlx_memory_telemetry,
             expert_residency_telemetry: expert_residency,
-            speculative_prefill_draft_memory_telemetry: active_request
-                .speculative_prefill_draft_memory_telemetry
-                .take(),
-            // Drafter telemetry is emitted once on the next completed target
-            // progress item, then removed so later chunks cannot duplicate it.
             expert_memory_mode: Some(model.expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
             persistent_prompt_cache_diagnostics: active_request

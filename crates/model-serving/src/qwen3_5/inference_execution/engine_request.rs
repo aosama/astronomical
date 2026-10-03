@@ -7,23 +7,6 @@
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
-
-use super::sparse_anchored_dense_capture::SparseAnchoredDenseCaptureContext;
-
-/// Deterministic failure points used by isolated SpecPrefill acceptance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[doc(hidden)]
-pub enum Qwen3_5SpeculativePrefillFailureStageForTests {
-    DrafterLoading,
-    DraftScoring,
-    Selection,
-    DrafterPromptStatePersistence,
-    SelectionPersistence,
-    SparseTargetInputAssembly,
-    SparseTargetActiveMemoryLimitRejection,
-    SparseTargetExecution,
-    SparseTargetStatePersistence,
-}
 use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
 
 use crate::{
@@ -34,13 +17,11 @@ use crate::{
 
 use super::super::text::sampler::build_qwen3_5_sampled_token;
 use super::{fatal_engine_error, qwen3_5_runtime_error};
-use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 use crate::qwen3_5::multi_token_prediction::{
     MultiTokenPredictionRequestAllocationCheckpoint, Qwen3_5MultiTokenPredictionRequest,
 };
 use crate::qwen3_5::{
-    Qwen3_5Model, Qwen3_5ProcessedImage, RequestDecoderStateStack,
-    RequestDecoderStateStackAllocationCheckpoint,
+    Qwen3_5Model, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
 };
 
 /// Retained request state needed to retry one rejected prompt-processing attempt.
@@ -57,13 +38,10 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) request_decoder_state: RequestDecoderStateStack,
     pub(super) generated_token_count: u16,
     pub(super) input_token_ids: Vec<u32>,
-    /// Complete leading system-and-tool tokens that must use ordinary target prefill.
-    pub(super) ordinary_target_prefill_control_span_token_count: usize,
     pub(super) last_restored_persistent_prompt_cache_block_key:
         Option<PersistentPromptCacheBlockKey>,
     pub(super) can_use_persistent_prompt_cache: bool,
     pub(super) maximum_output_tokens: u16,
-    pub(super) ordered_image_sha256_digests: Vec<[u8; 32]>,
     /// Qwen-owned visual identity aligned to ordinary target prompt-cache blocks.
     pub(super) persistent_prompt_cache_block_causal_inputs:
         Vec<PersistentPromptCacheBlockCausalInput>,
@@ -87,39 +65,11 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     /// Token ID used for image-pad placeholders in the input prompt.
     pub(super) image_pad_token_id: u32,
     pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
-    pub(super) expert_weight_memory_cache_statistics_at_request_start:
-        ExpertWeightMemoryCacheStatistics,
     pub(super) performance_attribution: PerformanceAttribution,
     pub(super) optional_prediction_session: Option<Qwen3_5MultiTokenPredictionRequest>,
-    /// Whether this request may use draft-assisted sparse prompt prefill.
-    pub(super) should_use_speculative_prefill: bool,
-    /// Marks the one-time draft scoring attempt for this request.
-    pub(super) speculative_prefill_scoring_attempted: bool,
-    /// Whether the worker has been told that a confirmed drafter phase will begin.
-    pub(super) speculative_prefill_draft_phase_announced: bool,
-    /// Original prompt positions retained for target sparse prefill.
-    pub(super) speculative_prefill_selected_token_positions: Option<Vec<usize>>,
-    /// Complete exact target prefix processed before sparse conversation positions.
-    pub(super) speculative_prefill_dense_target_prefix_token_count: usize,
-    /// Dense tail capture/restore state for requests that restored a SpecPrefill sparse prefix.
-    /// A compact sparse slab is not token-aligned, so its tail needs an anchored block chain.
-    pub(super) sparse_anchored_dense_capture: Option<SparseAnchoredDenseCaptureContext>,
-    /// Full prompt token indices retained on the MLX device for sparse gathers.
-    pub(super) speculative_prefill_prompt_token_indices: Option<MlxArray>,
-    /// CPU-processed source images retained only while visual draft scoring needs them.
-    pub(super) speculative_prefill_processed_visual_images: Vec<Qwen3_5ProcessedImage>,
-    /// GPU-resident selected rows restored with an earlier sparse target prompt prefix.
-    pub(super) speculative_prefill_restored_target_token_positions: Option<MlxArray>,
-    /// Target expert payload retained immediately after the request-scoped draft release.
-    pub(super) speculative_prefill_target_expert_payload_bytes_after_draft_release: Option<u64>,
-    /// Active MLX telemetry captured before the request-scoped drafter is released.
-    pub(super) speculative_prefill_draft_memory_telemetry: Option<crate::MlxMemoryTelemetry>,
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
     pub(super) persistent_prompt_cache_diagnostics:
         Option<WorkerPersistentPromptCacheRequestDiagnostics>,
-    pub(super) force_next_speculative_prefill_draft_prefix_restore_failure_for_tests: bool,
-    pub(super) forced_speculative_prefill_failure_stage_for_tests:
-        Option<Qwen3_5SpeculativePrefillFailureStageForTests>,
     pub(super) force_next_prefill_capacity_rejection_for_tests: bool,
     /// One-shot guard for no-I/O prefill-to-decode residency reconciliation.
     /// Mandatory decode reads populate any remaining elastic route ownership.
@@ -133,17 +83,6 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
 }
 
 impl Qwen3_5EngineRequest {
-    pub(super) fn take_forced_speculative_prefill_failure_for_tests(
-        &mut self,
-        expected_failure_stage: Qwen3_5SpeculativePrefillFailureStageForTests,
-    ) -> bool {
-        if self.forced_speculative_prefill_failure_stage_for_tests != Some(expected_failure_stage) {
-            return false;
-        }
-        self.forced_speculative_prefill_failure_stage_for_tests = None;
-        true
-    }
-
     /// Retains mutable prompt state before an attempt that can hit MLX's hard ceiling.
     pub(super) fn prefill_request_checkpoint(
         &self,

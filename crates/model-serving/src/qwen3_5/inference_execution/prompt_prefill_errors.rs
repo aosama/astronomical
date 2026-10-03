@@ -1,11 +1,9 @@
-use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::{InferenceEngineError, Qwen3_5ExecutionError};
 
 use super::engine_request::Qwen3_5PrefillRequestCheckpoint;
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
-use super::speculative_prefill::configured_speculative_prefill_failure;
 
 pub(super) enum PromptPrefillChunkAttemptError {
     AdaptiveMemoryLimitExceeded {
@@ -109,37 +107,4 @@ pub(super) fn prefill_execution_error(
         };
     }
     PromptPrefillChunkAttemptError::Engine(qwen3_5_execution_error.into())
-}
-
-pub(super) fn configured_speculative_prefill_execution_error(
-    request_id: RequestId,
-    failure_stage: &'static str,
-    qwen3_5_execution_error: Qwen3_5ExecutionError,
-    prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
-) -> PromptPrefillChunkAttemptError {
-    // Preserve recoverable capacity errors so the outer prefill loop can restore
-    // its checkpoint, reclaim experts, and retry the unchanged chunk once. Non-capacity
-    // execution failures become fail-closed configured SpecPrefill errors.
-    match prefill_execution_error(qwen3_5_execution_error, prefill_request_checkpoint) {
-        PromptPrefillChunkAttemptError::Engine(inference_engine_error) => {
-            PromptPrefillChunkAttemptError::Engine(configured_speculative_prefill_failure(
-                request_id,
-                failure_stage,
-                inference_engine_error,
-            ))
-        }
-        active_memory_limit_error @ PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-            ..
-        } => active_memory_limit_error,
-        graphics_processor_memory_error @ PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
-            ..
-        } => graphics_processor_memory_error,
-        PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason } => {
-            PromptPrefillChunkAttemptError::Engine(configured_speculative_prefill_failure(
-                request_id,
-                failure_stage,
-                reason,
-            ))
-        }
-    }
 }

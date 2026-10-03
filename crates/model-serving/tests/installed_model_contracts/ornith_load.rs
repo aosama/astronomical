@@ -72,7 +72,7 @@ async fn load_and_generate_with_configured_ornith_artifact() {
     let performance_attribution_directory = tempfile::tempdir()
         .expect("the Ornith journey should create a performance-attribution directory");
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut ornith_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    let mut ornith_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -86,7 +86,6 @@ async fn load_and_generate_with_configured_ornith_artifact() {
         crate::common::standard_worker_chunking_configuration(),
         true,
         false,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
         PerformanceAttribution::enabled(),
         PerformanceAttributionLog::open(
             &performance_attribution_directory

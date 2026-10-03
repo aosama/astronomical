@@ -43,8 +43,8 @@ use astronomical_runtime_integration::{
 use super::Qwen3_5ExecutionError;
 use super::attention_execution::sequential_causal_attention;
 use super::decoder_layer_weights::Qwen3_5FullAttentionWeights;
+use super::model::Qwen3_5Model;
 use super::tensor_slicing::slice_last_dimension;
-use super::{Qwen3_5AttentionCapture, model::Qwen3_5Model};
 use crate::decoder_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 
@@ -278,9 +278,7 @@ impl Qwen3_5Model {
         rope_offset_tokens: i32,
         full_attention_weights: &Qwen3_5FullAttentionWeights,
         kv_state: &mut FullAttentionKeyValueState,
-        decoder_layer_index: usize,
         token_position_offsets: Option<&MlxArray>,
-        attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         // The model configuration supplies the dimensions for this layer. Qwen
@@ -464,14 +462,6 @@ impl Qwen3_5Model {
             &transposed_values,
             previous_storage_offset_tokens,
         )?;
-        if let Some(attention_capture) = attention_capture {
-            attention_capture.record_full_attention_tensors(
-                decoder_layer_index,
-                &rotated_queries,
-                &active_keys,
-            )?;
-        }
-
         // Execute the foundational attention formula against the active prefix.
         // 1 / sqrt(features_per_head) is the conventional score scale. The
         // helper uses causal mode for a multi-token prompt and unmasked mode for

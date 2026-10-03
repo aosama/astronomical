@@ -106,7 +106,7 @@ On first launch each instance creates its own versioned `config.json` and adjace
       }
     }
 
-The memory value uses decimal gigabytes. Remove `maximum_mlx_memory_gb` to use the Mac-reported MLX ceiling. Per-model entries can set a lower context ceiling, generation defaults, chunking overrides, SpecPrefill policy, and multi-token-prediction depth. Explicit request values override generation defaults. Overrides for temporarily absent models remain dormant and are reported as unmatched rather than preventing other models from serving. The eight global chunking controls remain available under `chunking` and each model may override individual values. See the [version 1 configuration schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) for the complete contract.
+The memory value uses decimal gigabytes. Remove `maximum_mlx_memory_gb` to use the Mac-reported MLX ceiling. Per-model entries can set a lower context ceiling, generation defaults, chunking overrides, and multi-token-prediction depth. Explicit request values override generation defaults. Overrides for temporarily absent models remain dormant and are reported as unmatched rather than preventing other models from serving. Global chunking controls remain available under `chunking`, and each model may override individual values. See the [version 1 configuration schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) for the complete contract.
 
 ## Build the app
 

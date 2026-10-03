@@ -151,8 +151,7 @@ pub(crate) use qwen_thinking_channel_seed::load_configured_qwen_thinking_channel
 pub use qwen_thinking_channel_seed::load_qwen_thinking_channel_seed;
 pub use resolved_configuration_generation::ResolvedConfigurationGeneration;
 pub use runtime_model_policy::{
-    ConfiguredSpeculativePrefillPolicy, RuntimeModelAccelerationAvailability,
-    RuntimeModelGenerationDefaults, RuntimeModelPolicy,
+    RuntimeModelAccelerationAvailability, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
 };
 pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;

@@ -61,8 +61,6 @@ pub(crate) enum Qwen3_5ExpertResidencyTransitionReason {
     RequestPressure,
     /// The user lowered the public memory ceiling.
     CeilingLower,
-    /// Draft-model loading needs the target to yield or reclaim expert RAM.
-    SpeculativePrefillDraftLoading,
     /// The request released its workspace; restore complete residency if it fits.
     RequestCompletion,
     /// Prefill finished; restore complete residency if generate still fits.

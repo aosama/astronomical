@@ -47,15 +47,6 @@ impl Qwen3_5EngineState {
                 )));
             }
         }
-        let ordinary_target_prefill_control_span_token_count =
-            inference_request.ordinary_target_prefill_control_span_token_count();
-        if ordinary_target_prefill_control_span_token_count
-            > inference_request.input_token_ids().len().saturating_sub(1)
-        {
-            return Err(invalid_request_error(
-                "system-and-tool control span reaches beyond selectable prompt content",
-            ));
-        }
         if inference_request
             .input_token_ids()
             .iter()

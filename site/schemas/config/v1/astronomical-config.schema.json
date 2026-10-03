@@ -128,13 +128,6 @@
           "description": "Append-only attention capacity added by each storage growth operation.",
           "x-astronomical-apply-mode": "model-reload"
         },
-        "speculative_prefill_draft_forward_tokens": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 2048,
-          "description": "Maximum prompt rows evaluated by one speculative drafter forward.",
-          "x-astronomical-apply-mode": "model-reload"
-        },
         "prefill_graph_submission_layer_interval": {
           "type": "integer",
           "minimum": 0,
@@ -262,47 +255,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "speculative_prefill": {
-          "$ref": "#/$defs/speculative_prefill"
-        },
         "mtp": {
           "$ref": "#/$defs/mtp"
         }
       }
-    },
-    "speculative_prefill": {
-      "type": "object",
-      "description": "Explicit draft-assisted prefill relationship for the containing target model.",
-      "additionalProperties": false,
-      "required": ["draft_model_id"],
-      "properties": {
-        "draft_model_id": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^[^\\s\\u0000-\\u001F\\u007F](?:[^\\u0000-\\u001F\\u007F]*[^\\s\\u0000-\\u001F\\u007F])?$",
-          "description": "Canonical discovered identity of the compatible draft model."
-        },
-        "keep_percentage": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100,
-          "default": 20,
-          "description": "Percentage of scored prompt tokens retained for target prefill."
-        },
-        "minimum_prompt_tokens": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 8192,
-          "description": "Minimum prompt length eligible for speculative prefill."
-        },
-        "mandatory_trailing_token_count": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 512,
-          "description": "Prompt-token count at the trailing end of the prompt that the target always processes densely regardless of importance ranking."
-        }
-      },
-      "x-astronomical-apply-mode": "model-reload"
     },
     "mtp": {
       "type": "object",

@@ -1,8 +1,8 @@
 //! Resolves one canonical model's inherited limits, generation defaults, chunking, and acceleration.
 
+use crate::AstronomicalConfigError;
 use crate::chunking_config::{ChunkingConfig, ChunkingConfigFile, ConfiguredChunkingFields};
 use crate::config_document::ModelConfigFile;
-use crate::{AstronomicalConfigError, SpeculativePrefillConfig};
 
 /// Internal output default used when a model has no configured preference.
 pub const DEFAULT_MAXIMUM_OUTPUT_TOKENS: u32 = 20_480;
@@ -17,7 +17,6 @@ pub struct ResolvedModelConfig {
     top_p: Option<f32>,
     chunking: ChunkingConfig,
     configured_chunking_fields: ConfiguredChunkingFields,
-    speculative_prefill: Option<SpeculativePrefillConfig>,
     configured_mtp_enabled: Option<bool>,
     mtp_draft_depth: Option<u8>,
 }
@@ -64,17 +63,6 @@ impl ResolvedModelConfig {
             configured_model.and_then(|model| model.chunking.as_ref()),
         );
         let acceleration = configured_model.and_then(|model| model.acceleration.as_ref());
-        let speculative_prefill = acceleration
-            .and_then(|acceleration| acceleration.speculative_prefill.as_ref())
-            .map(|configured| {
-                SpeculativePrefillConfig::for_target(
-                    model_id,
-                    &configured.draft_model_id,
-                    configured.minimum_prompt_tokens,
-                    configured.keep_percentage,
-                    configured.mandatory_trailing_token_count,
-                )
-            });
         Ok(Self {
             maximum_context_tokens,
             // The internal default is policy, not an explicit user demand, so tiny
@@ -88,7 +76,6 @@ impl ResolvedModelConfig {
             top_p: generation_defaults.and_then(|defaults| defaults.top_p),
             chunking: ChunkingConfig::resolve(&effective_chunking)?,
             configured_chunking_fields: effective_chunking.configured_fields(),
-            speculative_prefill,
             configured_mtp_enabled: acceleration
                 .and_then(|acceleration| acceleration.mtp.as_ref())
                 .and_then(|mtp| mtp.enabled),
@@ -143,12 +130,6 @@ impl ResolvedModelConfig {
     #[must_use]
     pub const fn configured_chunking_fields(&self) -> ConfiguredChunkingFields {
         self.configured_chunking_fields
-    }
-
-    /// Returns per-target speculative prefill only when its section is present.
-    #[must_use]
-    pub const fn speculative_prefill(&self) -> Option<&SpeculativePrefillConfig> {
-        self.speculative_prefill.as_ref()
     }
 
     /// Returns the authored MTP enablement, or `None` when the model has not opted in.

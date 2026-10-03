@@ -43,7 +43,6 @@ extension SupervisorStatusDocument {
     if isRestoringPromptCache { return "Restoring…" }
     guard activity == "prompt_processing", let progress else { return "" }
     let completionPercentageTitle = progress.completionPercentageTitle
-    if progress.phase == "drafter" { return "Drafting…" }
     guard let currentPhaseTokensPerSecond else { return "Prompt \(completionPercentageTitle)" }
     return "Prompt \(completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
   }
@@ -63,7 +62,6 @@ extension SupervisorStatusDocument {
     if activity == "generation_preparation" { return "Preparing generation…" }
     if isRestoringPromptCache { return "Restoring prompt cache" }
     guard let progress else { return phaseTitle }
-    if progress.phase == "drafter" { return "Drafting…" }
     guard let currentPhaseTokensPerSecond else {
       return "Prompt processing · \(progress.completionPercentageTitle)"
     }
@@ -75,7 +73,6 @@ extension SupervisorStatusDocument {
     case "generating": "Generating"
     case "generation_preparation": "Preparing generation"
     case "prompt_processing" where isRestoringPromptCache: "Restoring prompt cache"
-    case "prompt_processing" where progress?.phase == "drafter": "Drafting…"
     case "prompt_processing": "Prompt processing"
     case "image_generation": progress?.imagePhaseTitle ?? "Generating image"
     default:
@@ -120,7 +117,6 @@ extension SupervisorStatusDocument {
       return "\(progress.completionPercentageTitle) · \(progress.completedUnitCount) / \(progress.totalUnitCount) steps"
     }
     if progress.phase == "generation_preparation" { return "Preparing the first output" }
-    if progress.phase == "drafter" { return "Drafting…" }
     let tokenCountTitle = "\(progress.completedUnitCount) / \(progress.totalUnitCount) tokens"
     return progress.phase == "generation"
       ? tokenCountTitle

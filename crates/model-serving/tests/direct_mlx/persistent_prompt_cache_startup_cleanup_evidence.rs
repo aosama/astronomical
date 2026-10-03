@@ -101,6 +101,53 @@ fn should_classify_startup_cleanup_and_consume_evidence_once() {
 }
 
 #[test]
+fn should_remove_retired_speculative_prefill_trees_without_touching_other_cache_data() {
+    let global_prompt_cache_root =
+        tempfile::tempdir().expect("the test should create a global prompt-cache root");
+    let active_model_directory = global_prompt_cache_root
+        .path()
+        .join("fictional-model")
+        .join("fictional-revision");
+    let retired_selection_directory = active_model_directory.join("speculative_prefill_selections");
+    let retired_target_state_directory =
+        active_model_directory.join("speculative_prefill_target_states");
+    fs::create_dir_all(retired_selection_directory.join("nested"))
+        .expect("the test should create a retired selection tree");
+    fs::create_dir_all(&retired_target_state_directory)
+        .expect("the test should create a retired target-state tree");
+    fs::write(
+        retired_selection_directory.join("nested/selection.safetensors"),
+        vec![7_u8; 29],
+    )
+    .expect("the test should write retired selection bytes");
+    fs::write(
+        retired_target_state_directory.join("target.safetensors"),
+        vec![8_u8; 31],
+    )
+    .expect("the test should write retired target-state bytes");
+    let retired_byte_count = directory_file_size_bytes(&retired_selection_directory)
+        .saturating_add(directory_file_size_bytes(&retired_target_state_directory));
+    let unrelated_cache_file = active_model_directory.join("unrelated-cache-metadata");
+    fs::write(&unrelated_cache_file, b"preserve").expect("the test should write unrelated data");
+
+    let prompt_cache = open_store(
+        global_prompt_cache_root.path(),
+        active_model_directory,
+        LARGE_CACHE_LIMIT_BYTES,
+    );
+    let obsolete_format_cleanup = prompt_cache
+        .startup_cleanup_evidence()
+        .expect("retired trees should produce startup cleanup evidence")
+        .obsolete_format;
+
+    assert_eq!(obsolete_format_cleanup.artifact_count, 2);
+    assert_eq!(obsolete_format_cleanup.byte_count, retired_byte_count);
+    assert!(!retired_selection_directory.exists());
+    assert!(!retired_target_state_directory.exists());
+    assert!(unrelated_cache_file.exists());
+}
+
+#[test]
 fn should_count_startup_quota_eviction_by_artifact_and_block() {
     let global_prompt_cache_root =
         tempfile::tempdir().expect("the test should create a global prompt-cache root");

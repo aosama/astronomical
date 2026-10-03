@@ -38,18 +38,3 @@ pub(crate) fn counter_amount(generation_report: &Value, counter_identifier: &str
         })
         .unwrap_or(0)
 }
-pub(crate) fn operation_total_elapsed_nanoseconds(
-    report: &Value,
-    operation_identifier: &str,
-) -> u64 {
-    report["operations"]
-        .as_array()
-        .and_then(|reports| {
-            reports.iter().find_map(|operation| {
-                (operation["operation"] == operation_identifier)
-                    .then(|| operation["total_elapsed_nanoseconds"].as_u64())
-                    .flatten()
-            })
-        })
-        .unwrap_or(0)
-}

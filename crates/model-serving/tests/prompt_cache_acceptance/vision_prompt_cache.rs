@@ -181,7 +181,6 @@ async fn load_visual_acceptance_engine(
         model_directory,
         worker_chunking_configuration,
         true,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
     )
     .expect("the visual acceptance engine should construct");
     eprintln!("[visual-prompt-cache-acceptance] status=loading-model");

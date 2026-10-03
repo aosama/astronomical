@@ -227,7 +227,6 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
                 expert_payload_bytes: 19_000,
                 model_core_payload_bytes: 3_000,
                 context_state_payload_bytes: 0,
-                speculative_prefill_draft_memory_bytes: 0,
                 memory_ceiling_utilization: None,
             }),
             expert_residency: None,
@@ -259,7 +258,6 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
             expert_payload_bytes: 19_000,
             model_core_payload_bytes: 3_000,
             context_state_payload_bytes: 0,
-            speculative_prefill_draft_memory_bytes: 0,
         },
     );
     let mut scripted_engine = ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
@@ -324,7 +322,6 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
                 expert_payload_bytes: 19_000,
                 model_core_payload_bytes: 3_000,
                 context_state_payload_bytes: 0,
-                speculative_prefill_draft_memory_bytes: 0,
                 memory_ceiling_utilization: None,
             }),
             expert_residency: None,

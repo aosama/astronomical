@@ -26,22 +26,29 @@ pub(crate) fn read_user_config_file(
             return create_first_run_config(&config_file_path);
         }
     };
-    let config_json = parse_json_rejecting_duplicates(&config_file_path, &config_file_bytes)?;
+    let mut config_json = parse_json_rejecting_duplicates(&config_file_path, &config_file_bytes)?;
     if config_json.get("schema_version").is_none() {
         let mut migrated_user_config =
             migrate_legacy_config(&config_file_path, &config_file_bytes, config_json)?;
-        persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config)?;
+        persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config, false)?;
         return Ok(migrated_user_config);
     }
+    let removed_retired_speculative_prefill_fields =
+        strip_retired_speculative_prefill_config(&mut config_json);
     let mut user_config_file = parse_and_validate_v1(&config_file_path, config_json)?;
-    persist_mandatory_chunking_fields(&config_file_path, &mut user_config_file)?;
+    persist_mandatory_chunking_fields(
+        &config_file_path,
+        &mut user_config_file,
+        removed_retired_speculative_prefill_fields,
+    )?;
     Ok(user_config_file)
 }
 
 pub(crate) fn parse_and_validate_v1(
     config_file_path: &Path,
-    config_json: serde_json::Value,
+    mut config_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
+    strip_retired_speculative_prefill_config(&mut config_json);
     let user_config_file: UserConfigFile =
         serde_json::from_value(config_json).map_err(|source| {
             AstronomicalConfigError::ParseConfigFile {
@@ -53,14 +60,67 @@ pub(crate) fn parse_and_validate_v1(
     Ok(user_config_file)
 }
 
+pub(crate) fn strip_retired_speculative_prefill_config(
+    config_json: &mut serde_json::Value,
+) -> bool {
+    let mut removed_retired_fields = false;
+    if let Some(root_object) = config_json.as_object_mut() {
+        removed_retired_fields |= remove_field_from_object(root_object, "speculative_prefill");
+        removed_retired_fields |= remove_nested_field(
+            root_object,
+            "chunking",
+            "speculative_prefill_draft_forward_tokens",
+        );
+        if let Some(models) = root_object
+            .get_mut("models")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for model_config in models.values_mut() {
+                let Some(model_object) = model_config.as_object_mut() else {
+                    continue;
+                };
+                removed_retired_fields |= remove_nested_field(
+                    model_object,
+                    "chunking",
+                    "speculative_prefill_draft_forward_tokens",
+                );
+                removed_retired_fields |=
+                    remove_nested_field(model_object, "acceleration", "speculative_prefill");
+            }
+        }
+    }
+    removed_retired_fields
+}
+
+fn remove_nested_field(
+    parent_object: &mut serde_json::Map<String, serde_json::Value>,
+    object_field_name: &str,
+    removed_field_name: &str,
+) -> bool {
+    let Some(nested_object) = parent_object
+        .get_mut(object_field_name)
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return false;
+    };
+    remove_field_from_object(nested_object, removed_field_name)
+}
+
+fn remove_field_from_object(
+    object: &mut serde_json::Map<String, serde_json::Value>,
+    removed_field_name: &str,
+) -> bool {
+    object.remove(removed_field_name).is_some()
+}
+
 fn persist_mandatory_chunking_fields(
     config_file_path: &Path,
     user_config_file: &mut UserConfigFile,
+    mut should_persist: bool,
 ) -> Result<(), AstronomicalConfigError> {
     let chunking = user_config_file
         .chunking
         .get_or_insert_with(Default::default);
-    let mut should_persist = false;
     if chunking.fixed_prompt_processing_chunk_size_tokens.is_none()
         || chunking.fixed_prompt_processing_chunk_size_tokens
             == Some(crate::LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS)

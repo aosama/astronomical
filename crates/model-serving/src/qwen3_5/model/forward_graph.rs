@@ -5,7 +5,7 @@ use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::model::Qwen3_5Model;
-use super::{Qwen3_5AttentionCapture, Qwen3_5ExecutionError, RequestDecoderStateStack};
+use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
 /// Target-model graph outputs retained for optional specialized consumers.
@@ -116,13 +116,12 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         drop(
-            self.build_target_forward_graph_from_token_indices_with_attention_capture(
+            self.build_target_forward_graph_from_token_indices_with_position_offsets(
                 token_indices,
                 token_count,
                 starting_position_tokens,
                 None,
                 request_decoder_state,
-                None,
                 boundary_checkpoint_collector,
                 paged_prefill_execution_mode,
                 performance_attribution,
@@ -144,25 +143,23 @@ impl Qwen3_5Model {
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        self.build_target_forward_graph_with_attention_capture(
+        self.build_target_forward_graph_with_position_offsets(
             token_ids,
             starting_position_tokens,
             None,
             request_decoder_state,
-            None,
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
         )
     }
 
-    pub(super) fn build_target_forward_graph_with_attention_capture(
+    pub(super) fn build_target_forward_graph_with_position_offsets(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
@@ -189,13 +186,12 @@ impl Qwen3_5Model {
         let token_indices = self
             .runtime
             .array_from_i32(&signed_token_ids, &[1, token_count])?;
-        self.build_target_forward_graph_from_token_indices_with_attention_capture(
+        self.build_target_forward_graph_from_token_indices_with_position_offsets(
             &token_indices,
             token_count,
             starting_position_tokens,
             token_position_offsets,
             request_decoder_state,
-            attention_capture,
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
@@ -217,13 +213,12 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        self.build_target_forward_graph_from_token_indices_with_attention_capture(
+        self.build_target_forward_graph_from_token_indices_with_position_offsets(
             token_indices,
             token_count,
             starting_position_tokens,
             None,
             request_decoder_state,
-            None,
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
@@ -232,14 +227,13 @@ impl Qwen3_5Model {
         )
     }
 
-    pub(super) fn build_target_forward_graph_from_token_indices_with_attention_capture(
+    pub(super) fn build_target_forward_graph_from_token_indices_with_position_offsets(
         &self,
         token_indices: &MlxArray,
         token_count: i32,
         starting_position_tokens: u32,
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
@@ -249,13 +243,12 @@ impl Qwen3_5Model {
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         let hidden_states = self.embedding_lookup(token_indices)?;
-        self.build_target_forward_graph_from_embeddings_with_attention_capture(
+        self.build_target_forward_graph_from_embeddings_with_position_offsets(
             hidden_states,
             token_count,
             starting_position_tokens,
             token_position_offsets,
             request_decoder_state,
-            attention_capture,
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
@@ -303,13 +296,12 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
         should_retain_all_position_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        self.build_target_forward_graph_from_embeddings_with_attention_capture(
+        self.build_target_forward_graph_from_embeddings_with_position_offsets(
             hidden_states,
             token_count,
             starting_position_tokens,
             None,
             request_decoder_state,
-            None,
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
@@ -318,14 +310,13 @@ impl Qwen3_5Model {
         )
     }
 
-    pub(super) fn build_target_forward_graph_from_embeddings_with_attention_capture(
+    pub(super) fn build_target_forward_graph_from_embeddings_with_position_offsets(
         &self,
         mut hidden_states: MlxArray,
         token_count: i32,
         starting_position_tokens: u32,
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
-        mut attention_capture: Option<&mut Qwen3_5AttentionCapture>,
         mut boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
@@ -385,7 +376,6 @@ impl Qwen3_5Model {
                 decoder_layer_weights,
                 layer_model_state,
                 token_position_offsets,
-                attention_capture.as_deref_mut(),
                 boundary_checkpoint_collector.as_deref_mut(),
                 paged_prefill_execution_mode,
                 performance_attribution,

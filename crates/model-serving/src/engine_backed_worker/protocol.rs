@@ -3,8 +3,8 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, EmbeddingsFailureReason,
     ImageGenerationFailureReason, MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader,
-    ProtocolWriter, SpeculativePrefillRuntimeState, WorkerCommand, WorkerEvent,
-    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
+    ProtocolWriter, WorkerCommand, WorkerEvent, WorkerModelCapabilities,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -66,16 +66,6 @@ where
                                 .mtp_unavailable_reason()
                                 .map(String::from),
                             engine_load_result.mtp_depth_status(),
-                            engine_load_result.speculative_prefill_runtime_state(),
-                            engine_load_result
-                                .speculative_prefill_unavailable_reason()
-                                .map(String::from),
-                            engine_load_result
-                                .speculative_prefill_draft_model_id()
-                                .map(String::from),
-                            engine_load_result
-                                .speculative_prefill_draft_model_revision()
-                                .map(String::from),
                         ),
                     )
                     .await?;
@@ -121,10 +111,6 @@ where
                         mtp_runtime_state: MtpRuntimeState::Disabled,
                         mtp_unavailable_reason: None,
                         mtp_depth_status: Default::default(),
-                        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-                        speculative_prefill_unavailable_reason: None,
-                        speculative_prefill_draft_model_id: None,
-                        speculative_prefill_draft_model_revision: None,
                     })
                     .await?;
                 self.emit_mlx_memory_sample(
@@ -152,10 +138,6 @@ where
                         mtp_runtime_state: MtpRuntimeState::Disabled,
                         mtp_unavailable_reason: None,
                         mtp_depth_status: Default::default(),
-                        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-                        speculative_prefill_unavailable_reason: None,
-                        speculative_prefill_draft_model_id: None,
-                        speculative_prefill_draft_model_revision: None,
                     })
                     .await?;
                 self.emit_mlx_memory_sample(

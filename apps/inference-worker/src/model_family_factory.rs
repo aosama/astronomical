@@ -4,10 +4,7 @@ use astronomical_config::{
     ModelFamily, PromptCacheConfig, classify_model_directory, verify_flux2_klein_model_directory,
     verify_qwen_image_21_model_directory,
 };
-use astronomical_ipc_protocol::{
-    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerSpeculativePrefillConfiguration,
-};
+use astronomical_ipc_protocol::{WorkerImageGenerationModelFamily, WorkerModelConfiguration};
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
     K2HorizonMoVAServingSettings, LagunaServingSettings, ModelFactory, ModelFactoryRuntime,
@@ -57,21 +54,6 @@ impl ModelFamilyFactory {
             performance_attribution_log_path,
             persistent_prompt_cache_enabled,
         }
-    }
-}
-
-fn disabled_speculative_prefill() -> WorkerSpeculativePrefillConfiguration {
-    WorkerSpeculativePrefillConfiguration {
-        enabled: false,
-        target_model_id: None,
-        draft_model_id: None,
-        draft_model_directory: None,
-        minimum_prompt_tokens: 1,
-        keep_percentage: 1,
-        selection_chunk_token_count: 1,
-        mandatory_trailing_token_count: 1,
-        lookahead_token_count: 1,
-        importance_pooling_kernel_token_count: 1,
     }
 }
 
@@ -128,9 +110,6 @@ impl
                             model_configuration.maximum_output_tokens,
                             model_configuration.mtp_enabled,
                             model_configuration.mtp_draft_depth,
-                            model_configuration
-                                .speculative_prefill
-                                .unwrap_or_else(disabled_speculative_prefill),
                             persistent_prompt_cache_enabled,
                             performance_attribution_enabled,
                             performance_attribution_log_path,

@@ -12,7 +12,6 @@ use astronomical_runtime_integration::MlxMemoryLimits;
 use serde_json::Value;
 use tokio::time::timeout;
 
-use crate::serving_acceptance::speculative_prefill::support::prepare_romeo_and_juliet_three_paragraph_summary_prompt;
 use crate::serving_acceptance::support::performance_attribution::{
     counter_amount, create_attributed_engine, generation_report_for_request,
     load_engine_with_progress, read_attribution_report_documents, run_attributed_generation,
@@ -58,7 +57,7 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
             "[paged-decode] status=progress phase=derived_ceiling expert_bytes={} headroom_bytes={required_headroom_bytes} paging_ceiling_bytes={paging_ceiling_bytes}",
             model_geometry.complete_expert_payload_bytes
         );
-        let romeo_and_juliet_prompt = prepare_romeo_and_juliet_three_paragraph_summary_prompt(
+        let romeo_and_juliet_prompt = crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
             &model_directory,
             &model_id,
             COLD_REQUEST_ID,
@@ -96,7 +95,7 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
         let first_generated_token_ids = run_attributed_generation(
             &mut qwen3_5_engine,
             COLD_REQUEST_ID,
-            &romeo_and_juliet_prompt.prompt_token_ids,
+            &romeo_and_juliet_prompt,
             "paged_decode_first_romeo",
             OUTPUT_TOKEN_COUNT,
             &end_of_sequence_token_ids,
@@ -106,7 +105,7 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
         let second_generated_token_ids = run_attributed_generation(
             &mut qwen3_5_engine,
             WARM_REQUEST_ID,
-            &romeo_and_juliet_prompt.prompt_token_ids,
+            &romeo_and_juliet_prompt,
             "paged_decode_second_romeo",
             OUTPUT_TOKEN_COUNT,
             &end_of_sequence_token_ids,

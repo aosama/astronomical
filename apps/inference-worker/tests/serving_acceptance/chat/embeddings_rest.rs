@@ -148,7 +148,7 @@ async fn run_embeddings_gpu_journey() {
 
     // Issue #510: the finalized status must publish the unused-headroom
     // split the menu paints. The embeddings engine owns no experts, context
-    // state, or drafter, so no owner may overrun and nothing is unexplained.
+    // state, so no owner may overrun and nothing is unexplained.
     let status_response = get_endpoint(server_address, "/v1/status").await;
     assert_http_ok(&status_response);
     let status_document = http_json_body(&status_response);

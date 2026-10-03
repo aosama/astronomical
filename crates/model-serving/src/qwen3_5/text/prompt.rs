@@ -94,8 +94,6 @@ impl Qwen3_5PromptRenderer {
         } else {
             render_tool_system_preamble(&mut rendered_prompt, messages.first(), tools)?;
         }
-        let ordinary_target_prefill_control_span_byte_count = rendered_prompt.len();
-
         let mut user_message_image_index = 0usize;
         for (message_index, message) in messages.iter().enumerate() {
             match message {
@@ -151,10 +149,7 @@ impl Qwen3_5PromptRenderer {
             enable_thinking,
             thinking_channel_seed,
         );
-        Ok(Qwen3_5RenderedPrompt {
-            rendered_prompt,
-            ordinary_target_prefill_control_span_byte_count,
-        })
+        Ok(Qwen3_5RenderedPrompt { rendered_prompt })
     }
 
     /// Renders server-generated feedback after a malformed model tool call, then reopens assistant generation.
@@ -187,36 +182,17 @@ impl Qwen3_5PromptRenderer {
     }
 }
 
-/// One rendered prompt with the exact leading control-span byte boundary.
+/// One prompt rendered in the model's chat-template format.
 #[derive(Debug)]
 pub struct Qwen3_5RenderedPrompt {
     rendered_prompt: String,
-    ordinary_target_prefill_control_span_byte_count: usize,
 }
 
 impl Qwen3_5RenderedPrompt {
-    /// Returns the complete prompt text supplied to tokenization and the drafter.
+    /// Returns the complete prompt text supplied to tokenization.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.rendered_prompt
-    }
-
-    /// Returns the complete initial system prompt, tool definitions, tool
-    /// instructions, and their template delimiters.
-    #[must_use]
-    pub fn ordinary_target_prefill_control_span(&self) -> &str {
-        &self.rendered_prompt[..self.ordinary_target_prefill_control_span_byte_count]
-    }
-
-    /// Returns conversation content followed by the generation prefix.
-    #[must_use]
-    pub fn selectable_conversation_and_generation_suffix(&self) -> &str {
-        &self.rendered_prompt[self.ordinary_target_prefill_control_span_byte_count..]
-    }
-
-    #[must_use]
-    pub(crate) const fn ordinary_target_prefill_control_span_byte_count(&self) -> usize {
-        self.ordinary_target_prefill_control_span_byte_count
     }
 
     #[must_use]
@@ -457,33 +433,4 @@ pub enum Qwen3_5PromptError {
     /// One tool argument could not serialize to its template representation.
     #[error("tool argument could not serialize")]
     SerializeToolArgument(#[source] serde_json::Error),
-}
-
-/// Counts the tokens that belong to the system-and-tool control span and
-/// rejects an encoding whose token straddles the byte boundary, which would
-/// make the span boundary unrepresentable in token positions.
-pub(super) fn ordinary_target_prefill_control_span_token_count(
-    encoding: &tokenizers::Encoding,
-    ordinary_target_prefill_control_span_byte_count: usize,
-) -> Result<(Vec<u32>, usize), super::tokenizer_error::Qwen3_5TokenizerError> {
-    let mut ordinary_target_prefill_control_span_token_count = 0usize;
-    for (token_start_byte_offset, token_end_byte_offset) in encoding.get_offsets() {
-        if *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
-            && *token_end_byte_offset > ordinary_target_prefill_control_span_byte_count
-        {
-            return Err(
-                super::tokenizer_error::Qwen3_5TokenizerError::ControlSpanTokenBoundaryUnavailable,
-            );
-        }
-        if *token_end_byte_offset <= ordinary_target_prefill_control_span_byte_count
-            && *token_start_byte_offset < ordinary_target_prefill_control_span_byte_count
-        {
-            ordinary_target_prefill_control_span_token_count =
-                ordinary_target_prefill_control_span_token_count.saturating_add(1);
-        }
-    }
-    Ok((
-        encoding.get_ids().to_vec(),
-        ordinary_target_prefill_control_span_token_count,
-    ))
 }

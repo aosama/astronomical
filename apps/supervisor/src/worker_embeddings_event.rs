@@ -76,7 +76,7 @@ pub(super) fn handle_worker_embeddings_event(
 /// Publishes the cleanup observation the embeddings engine captured, so the
 /// status the menu paints carries the same unused-headroom split the journeys
 /// assert (issue #510). The embeddings engine owns no experts, context
-/// state, or drafter, so any nonzero owner there is a protocol violation.
+/// state, so any nonzero owner there is a protocol violation.
 pub(super) fn publish_embeddings_finalized_memory_snapshot(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     mlx_memory_snapshot: Option<astronomical_ipc_protocol::WorkerMlxMemorySnapshot>,
@@ -87,8 +87,7 @@ pub(super) fn publish_embeddings_finalized_memory_snapshot(
     let attributed_memory_bytes = mlx_memory_snapshot
         .expert_payload_bytes
         .saturating_add(mlx_memory_snapshot.model_core_payload_bytes)
-        .saturating_add(mlx_memory_snapshot.context_state_payload_bytes)
-        .saturating_add(mlx_memory_snapshot.speculative_prefill_draft_memory_bytes);
+        .saturating_add(mlx_memory_snapshot.context_state_payload_bytes);
     let effective_ceiling_bytes = health_snapshot
         .read()
         .ok()
@@ -100,7 +99,6 @@ pub(super) fn publish_embeddings_finalized_memory_snapshot(
         || attributed_memory_bytes > mlx_memory_snapshot.active_memory_bytes
         || mlx_memory_snapshot.expert_payload_bytes != 0
         || mlx_memory_snapshot.context_state_payload_bytes != 0
-        || mlx_memory_snapshot.speculative_prefill_draft_memory_bytes != 0
         || (effective_ceiling_bytes > 0
             && mlx_memory_snapshot.active_memory_bytes > effective_ceiling_bytes)
     {

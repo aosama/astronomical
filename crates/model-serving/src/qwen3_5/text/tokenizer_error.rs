@@ -50,8 +50,6 @@ pub enum Qwen3_5TokenizerError {
         thinking_budget: u16,
         transition_token_count: usize,
     },
-    #[error("tokenizer did not preserve the system-and-tool control-span boundary")]
-    ControlSpanTokenBoundaryUnavailable,
     #[error(
         "generated token {generated_token_id} is unavailable in model vocabulary {model_vocabulary_size}"
     )]

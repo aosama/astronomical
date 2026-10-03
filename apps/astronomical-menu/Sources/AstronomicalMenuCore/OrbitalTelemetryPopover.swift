@@ -325,7 +325,7 @@ struct PromptReuseBar: View {
       }
       HorizontalUsageBar(usageFraction: usageBarFillFraction(reusedFraction), fillColor: .cyan)
       HStack {
-        Text("Target + drafter work").foregroundStyle(.secondary)
+        Text("Target work").foregroundStyle(.secondary)
         Spacer()
         Text(breakdownTitle).font(PopoverTypography.monospacedBody)
       }

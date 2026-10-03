@@ -14,8 +14,6 @@ pub struct WorkerChunkingConfiguration {
     pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     /// Capacity added when append-only attention state outgrows its current slab.
     pub full_attention_key_value_growth_tokens: u32,
-    /// Maximum token rows evaluated by one speculative-prefill drafter forward.
-    pub speculative_prefill_draft_forward_tokens: u32,
     /// Decoder-layer interval between multi-token prefill command buffers while
     /// sparse experts are fully resident. Zero keeps one lazy tape per chunk.
     pub prefill_graph_submission_layer_interval: u32,

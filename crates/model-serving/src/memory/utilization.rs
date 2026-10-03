@@ -34,13 +34,8 @@
 //!        + reserved_context_growth
 //!        + reserved_activation_and_workspace
 //!        + unseated_expert_entitlement
-//!        - speculative_draft_payload
 //!        + unexplained
 //! ```
-//!
-//! A draft model is subtracted because it is a real consumer that the budget
-//! owner charges through `other_fixed_bytes` while the active-memory snapshot
-//! also counts it directly.
 //!
 //! This module observes. It never decides residency.
 
@@ -64,8 +59,6 @@ pub struct MemoryCeilingUtilization {
     pub reserved_activation_and_workspace_bytes: u64,
     /// Expert entitlement the budget owner granted but warming never filled.
     pub unseated_expert_entitlement_bytes: u64,
-    /// Draft-model payload that consumes ceiling the split charges elsewhere.
-    pub speculative_draft_payload_bytes: u64,
     /// Headroom not accounted for by any owner named above.
     pub unexplained_headroom_bytes: u64,
     /// Headroom an owner consumed beyond its reserve. Nonzero means a named
@@ -107,8 +100,7 @@ impl MemoryCeilingUtilization {
         let attributed_active_bytes = active_breakdown
             .expert_payload_bytes
             .saturating_add(active_breakdown.model_core_payload_bytes)
-            .saturating_add(active_breakdown.context_state_payload_bytes)
-            .saturating_add(active_breakdown.speculative_prefill_draft_memory_bytes);
+            .saturating_add(active_breakdown.context_state_payload_bytes);
         let unattributed_active_bytes = active_memory_bytes.saturating_sub(attributed_active_bytes);
         let reserved_activation_and_workspace_bytes = budget_snapshot
             .activation_headroom_bytes
@@ -118,13 +110,10 @@ impl MemoryCeilingUtilization {
         let unseated_expert_entitlement_bytes = budget_snapshot
             .retained_expert_budget_bytes
             .saturating_sub(active_breakdown.expert_payload_bytes);
-        let speculative_draft_payload_bytes =
-            active_breakdown.speculative_prefill_draft_memory_bytes;
         let named_headroom_bytes = reserved_model_core_slack_bytes
             .saturating_add(reserved_context_growth_bytes)
             .saturating_add(reserved_activation_and_workspace_bytes)
-            .saturating_add(unseated_expert_entitlement_bytes)
-            .saturating_sub(speculative_draft_payload_bytes);
+            .saturating_add(unseated_expert_entitlement_bytes);
         let unexplained_headroom_bytes = unused_headroom_bytes.saturating_sub(named_headroom_bytes);
         // Clamping a negative term to zero inflates the named total above what
         // the headroom can explain. That excess is the overrun, and reporting
@@ -138,7 +127,6 @@ impl MemoryCeilingUtilization {
             reserved_context_growth_bytes,
             reserved_activation_and_workspace_bytes,
             unseated_expert_entitlement_bytes,
-            speculative_draft_payload_bytes,
             unexplained_headroom_bytes,
             owner_overrun_bytes,
         }
@@ -205,7 +193,6 @@ mod tests {
             expert_payload_bytes: 12_900_000_000,
             model_core_payload_bytes: 2_600_000_000,
             context_state_payload_bytes: 690_000_000,
-            speculative_prefill_draft_memory_bytes: 0,
         };
         let active_memory_bytes = 16_620_000_000;
 
@@ -246,7 +233,6 @@ mod tests {
             expert_payload_bytes: 12_900_000_000,
             model_core_payload_bytes: 2_600_000_000,
             context_state_payload_bytes: 3_000_000_000,
-            speculative_prefill_draft_memory_bytes: 0,
         };
 
         let utilization = MemoryCeilingUtilization::compose(budget, 18_500_000_000, breakdown);
@@ -270,7 +256,6 @@ mod tests {
             expert_payload_bytes: 12_900_000_000,
             model_core_payload_bytes: 2_600_000_000,
             context_state_payload_bytes: 690_000_000,
-            speculative_prefill_draft_memory_bytes: 0,
         };
 
         let utilization = MemoryCeilingUtilization::compose(budget, 16_620_000_000, breakdown);
@@ -284,34 +269,6 @@ mod tests {
         assert!(
             utilization.recoverable_share_of_unused_headroom() > 0.0,
             "unseated entitlement must read as recoverable"
-        );
-    }
-
-    #[test]
-    fn should_charge_a_draft_model_against_unused_headroom() {
-        let budget = budget_snapshot(23 * GIGABYTE, 15 * GIGABYTE);
-        let breakdown = MlxActiveMemoryBreakdown {
-            expert_payload_bytes: 12_900_000_000,
-            model_core_payload_bytes: 2_600_000_000,
-            context_state_payload_bytes: 690_000_000,
-            speculative_prefill_draft_memory_bytes: 400_000_000,
-        };
-
-        let without_draft = MemoryCeilingUtilization::compose(
-            budget,
-            16_620_000_000,
-            MlxActiveMemoryBreakdown {
-                speculative_prefill_draft_memory_bytes: 0,
-                ..breakdown
-            },
-        );
-        let with_draft = MemoryCeilingUtilization::compose(budget, 17_020_000_000, breakdown);
-
-        assert_eq!(with_draft.speculative_draft_payload_bytes, 400_000_000);
-        assert_eq!(without_draft.speculative_draft_payload_bytes, 0);
-        assert!(
-            with_draft.is_fully_explained() && without_draft.is_fully_explained(),
-            "the draft charge must keep the identity closed: {with_draft:?}"
         );
     }
 }

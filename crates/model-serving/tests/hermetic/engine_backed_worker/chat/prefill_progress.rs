@@ -27,26 +27,12 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                             expert_payload_bytes: 1_000,
                             model_core_payload_bytes: 4_000,
                             context_state_payload_bytes: 2_000,
-                            speculative_prefill_draft_memory_bytes: 0,
-                        },
-                    )),
-                    speculative_prefill_draft_memory_telemetry: Some(MlxMemoryTelemetry::new(
-                        20_000,
-                        1_000,
-                        22_000,
-                        MlxActiveMemoryBreakdown {
-                            expert_payload_bytes: 2_000,
-                            model_core_payload_bytes: 3_000,
-                            context_state_payload_bytes: 1_000,
-                            speculative_prefill_draft_memory_bytes: 14_000,
                         },
                     )),
                     expert_memory_mode: None,
                     prompt_work_reuse: WorkerPromptWorkReuse {
                         target_eligible_token_count: 13,
                         target_restored_token_count: 10,
-                        drafter_eligible_token_count: 15,
-                        drafter_restored_token_count: 10,
                     },
                 },
                 GeneratedToken::PrefillProgress {
@@ -62,13 +48,10 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                         16_000,
                         MlxActiveMemoryBreakdown::default(),
                     )),
-                    speculative_prefill_draft_memory_telemetry: None,
                     expert_memory_mode: None,
                     prompt_work_reuse: WorkerPromptWorkReuse {
                         target_eligible_token_count: 13,
                         target_restored_token_count: 10,
-                        drafter_eligible_token_count: 15,
-                        drafter_restored_token_count: 10,
                     },
                 },
                 GeneratedToken::TokenId {
@@ -138,7 +121,6 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             completed_prefill_chunk_tokens,
             mlx_memory_snapshot,
             expert_residency,
-            speculative_prefill_draft_memory_snapshot,
             ..
         } => {
             assert_eq!(request_id, RequestId::new(742));
@@ -165,21 +147,6 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     expert_payload_bytes: 1_000,
                     model_core_payload_bytes: 4_000,
                     context_state_payload_bytes: 2_000,
-                    speculative_prefill_draft_memory_bytes: 0,
-                    memory_ceiling_utilization: None,
-                })
-            );
-            assert_eq!(
-                speculative_prefill_draft_memory_snapshot,
-                Some(WorkerMlxMemorySnapshot {
-                    source: MlxMemorySnapshotSource::SpeculativePrefillDraftScoring,
-                    active_memory_bytes: 20_000,
-                    allocator_cache_memory_bytes: 1_000,
-                    peak_memory_bytes: 22_000,
-                    expert_payload_bytes: 2_000,
-                    model_core_payload_bytes: 3_000,
-                    context_state_payload_bytes: 1_000,
-                    speculative_prefill_draft_memory_bytes: 14_000,
                     memory_ceiling_utilization: None,
                 })
             );
@@ -213,8 +180,6 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             prompt_work_reuse: WorkerPromptWorkReuse {
                 target_eligible_token_count: 13,
                 target_restored_token_count: 10,
-                drafter_eligible_token_count: 15,
-                drafter_restored_token_count: 10,
             },
         }
     );
@@ -227,91 +192,5 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         }
     ));
 
-    close_worker_transport(supervisor_writer, worker_task).await;
-}
-
-#[tokio::test]
-async fn should_report_only_the_confirmed_active_prompt_processing_phase() {
-    let engine_worker = EngineBackedWorker::new(
-        ScriptedChatProcessor::with_prompt_token_count(16),
-        ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
-            0,
-            vec![
-                GeneratedToken::PromptProcessingPhaseStarted {
-                    prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
-                    total_token_count: 16,
-                },
-                GeneratedToken::PrefillProgress {
-                    persistent_prompt_cache_diagnostics: None,
-                    processed_token_count: 8,
-                    elapsed_millis: 400,
-                    forward_prefill_chunk_elapsed_millis: 350,
-                    completed_prefill_chunk_tokens: 8,
-                    expert_residency_telemetry: None,
-                    mlx_memory_telemetry: None,
-                    speculative_prefill_draft_memory_telemetry: None,
-                    expert_memory_mode: None,
-                    prompt_work_reuse: WorkerPromptWorkReuse::default(),
-                },
-                GeneratedToken::TokenId {
-                    token_id: 1,
-                    is_reasoning_token: false,
-                    expert_memory_mode: None,
-                    mlx_memory_telemetry: None,
-                    first_decode_forward_elapsed_millis: None,
-                    generation_finalization: None,
-                },
-            ],
-        ),
-    );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
-
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
-    supervisor_writer
-        .send_command(&WorkerCommand::Generate(chat_command(744, 12)))
-        .await
-        .expect("the worker should receive a phase-aware chat request");
-
-    assert!(matches!(
-        next_event(&mut supervisor_reader).await,
-        WorkerEvent::PrefillProgress {
-            prompt_processing_phase: WorkerPromptProcessingPhase::Target,
-            processed_tokens: 0,
-            ..
-        }
-    ));
-    assert!(matches!(
-        next_event(&mut supervisor_reader).await,
-        WorkerEvent::PrefillProgress {
-            prompt_processing_phase: WorkerPromptProcessingPhase::Drafter,
-            processed_tokens: 0,
-            total_tokens: 16,
-            ..
-        }
-    ));
-    assert!(matches!(
-        next_event(&mut supervisor_reader).await,
-        WorkerEvent::PrefillProgress {
-            prompt_processing_phase: WorkerPromptProcessingPhase::Target,
-            processed_tokens: 8,
-            ..
-        }
-    ));
-
-    supervisor_writer
-        .send_command(&WorkerCommand::Cancel {
-            request_id: RequestId::new(744),
-        })
-        .await
-        .expect("the phase-aware request should be cancellable");
     close_worker_transport(supervisor_writer, worker_task).await;
 }
