@@ -142,10 +142,11 @@ pub enum PerformanceOperation {
     Qwen4ExpHyperConnectionInjection,
     Qwen4ExpIndexerSelection,
     Qwen4ExpSparseAttention,
+    CompiledElementwiseGraphConstruction,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::Qwen4ExpSparseAttention as usize + 1;
+    pub(super) const COUNT: usize = Self::CompiledElementwiseGraphConstruction as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -281,6 +282,7 @@ impl PerformanceOperation {
         Self::Qwen4ExpHyperConnectionInjection,
         Self::Qwen4ExpIndexerSelection,
         Self::Qwen4ExpSparseAttention,
+        Self::CompiledElementwiseGraphConstruction,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -503,6 +505,7 @@ impl PerformanceOperation {
             Self::Qwen4ExpHyperConnectionInjection => "qwen4_exp_hyper_connection_injection",
             Self::Qwen4ExpIndexerSelection => "qwen4_exp_indexer_selection",
             Self::Qwen4ExpSparseAttention => "qwen4_exp_sparse_attention",
+            Self::CompiledElementwiseGraphConstruction => "compiled_elementwise_graph_construction",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
         }
     }

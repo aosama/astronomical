@@ -127,10 +127,12 @@ impl K2HorizonMoVAConfig {
                         .to_owned(),
             });
         }
-        if document.num_shared_experts > 1 {
+        if document.num_shared_experts != 1 {
             return Err(K2HorizonMoVAConfigError::InvalidConfigValue {
                 description: format!(
-                    "num_shared_experts {} exceeds the one shared expert the serving path binds",
+                    "num_shared_experts {} is not executable: the serving path binds and \
+                     runs exactly the one shared expert, so a schedule declaring zero or \
+                     more than one shared expert would fail later with missing tensors",
                     document.num_shared_experts
                 ),
             });

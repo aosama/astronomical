@@ -67,6 +67,16 @@ fn should_reject_declared_knobs_the_serving_path_does_not_implement() {
         serde_json::from_str(&family_member_config_json(2, &[0], 4, 2)).expect("json");
     document["num_shared_experts"] = serde_json::json!(2);
     assert!(K2HorizonMoVAConfig::from_json_bytes(document.to_string().as_bytes()).is_err());
+    document["num_shared_experts"] = serde_json::json!(0);
+    let zero_error = K2HorizonMoVAConfig::from_json_bytes(document.to_string().as_bytes())
+        .expect_err(
+            "zero shared experts must fail closed because weight binding and \
+                     the decoder execute exactly one shared expert",
+        );
+    assert!(
+        zero_error.to_string().contains("num_shared_experts"),
+        "the rejection must name the offending knob: {zero_error}"
+    );
 }
 
 #[test]

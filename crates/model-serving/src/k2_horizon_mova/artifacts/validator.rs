@@ -228,11 +228,23 @@ fn resolve_artifact_revision(model_directory: &Path, config_bytes: &[u8]) -> Str
         && let Ok(provenance_bytes) = fs::read(&provenance_path)
         && let Ok(provenance_document) =
             serde_json::from_slice::<K2HorizonMoVAProvenanceDocument>(&provenance_bytes)
-        && !provenance_document.revision.is_empty()
+        && is_immutable_revision_format(&provenance_document.revision)
     {
         return provenance_document.revision;
     }
     derive_revision_from_config_bytes(config_bytes)
+}
+
+/// The provenance revision must be an immutable 40-character lowercase
+/// hexadecimal commit SHA, matching the repository's provenance contract in
+/// `crates/config/src/model_discovery/classified_artifacts.rs`; truncated or
+/// mutable labels would scope prompt-cache entries and attribution under an
+/// identity that no longer pins the exact published revision.
+fn is_immutable_revision_format(revision: &str) -> bool {
+    revision.len() == 40
+        && revision.bytes().all(|revision_byte| {
+            revision_byte.is_ascii_digit() || (b'a'..=b'f').contains(&revision_byte)
+        })
 }
 
 #[derive(Debug, serde::Deserialize)]

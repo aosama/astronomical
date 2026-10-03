@@ -26,7 +26,7 @@ fn should_validate_a_tiny_stacked_affine_family_member() {
 }
 
 #[test]
-fn should_prefer_the_provenance_revision_over_the_config_hash() {
+fn should_prefer_only_an_immutable_provenance_revision_over_the_config_hash() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
     let model_directory = write_stacked_affine_fixture(temporary_directory.path());
     let without_provenance = K2HorizonMoVAArtifactValidator::new()
@@ -37,15 +37,33 @@ fn should_prefer_the_provenance_revision_over_the_config_hash() {
         model_directory.join(".astronomical-library-provenance.json"),
         r#"{"provider_model_id":"example/model","revision":"0c576733b69e","schema_version":1}"#,
     )
-    .expect("provenance file should be written");
+    .expect("truncated provenance file should be written");
+    let with_truncated_revision = K2HorizonMoVAArtifactValidator::new()
+        .validate(&model_directory)
+        .expect("the fixture should validate with a truncated provenance file");
+    assert_eq!(
+        config_hash_revision,
+        with_truncated_revision.revision(),
+        "a truncated provenance revision is not an immutable published \
+         identity and must fall back to the config hash"
+    );
+
+    let immutable_revision = "0c576733b69e17e4f9c1b0d2a3c4d5e6f708192a";
+    fs::write(
+        model_directory.join(".astronomical-library-provenance.json"),
+        format!(
+            r#"{{"provider_model_id":"example/model","revision":"{immutable_revision}","schema_version":1}}"#
+        ),
+    )
+    .expect("immutable provenance file should be written");
     let with_provenance = K2HorizonMoVAArtifactValidator::new()
         .validate(&model_directory)
         .expect("the fixture should validate with a provenance file");
-    assert_eq!(with_provenance.revision(), "0c576733b69e");
-    assert_ne!(
-        config_hash_revision,
+    assert_eq!(
         with_provenance.revision(),
-        "the provenance revision must take precedence over the config hash"
+        immutable_revision,
+        "a 40-character lowercase hexadecimal provenance revision must take \
+         precedence over the config hash"
     );
 }
 

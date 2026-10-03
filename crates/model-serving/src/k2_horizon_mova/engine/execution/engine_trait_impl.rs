@@ -60,10 +60,16 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             MlxCompiledSwiGlu::new().map_err(|error| InferenceEngineError::Fatal {
                 reason: format!("K2 Horizon MoVA SwiGLU compilation failed: {error}"),
             })?;
-        let compiled_elementwise_graphs =
-            MlxCompiledElementwiseGraphs::new().map_err(|error| InferenceEngineError::Fatal {
-                reason: format!("K2 Horizon MoVA elementwise graph compilation failed: {error}"),
-            })?;
+        let compiled_elementwise_graphs = performance_attribution.measure_operation(
+            PerformanceOperation::CompiledElementwiseGraphConstruction,
+            |_| {
+                MlxCompiledElementwiseGraphs::new().map_err(|error| InferenceEngineError::Fatal {
+                    reason: format!(
+                        "K2 Horizon MoVA elementwise graph compilation failed: {error}"
+                    ),
+                })
+            },
+        )?;
         let kernel_capabilities =
             worker_process_kernel_capabilities(&runtime, &mut performance_attribution);
         let sorted_expert_reduction_kernel = if kernel_capabilities
