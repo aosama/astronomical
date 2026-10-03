@@ -19,6 +19,12 @@ pub(crate) mod memory_utilization_parity;
     feature = "memory-management-acceptance",
 ))]
 #[allow(dead_code)]
+pub(crate) mod openai_client;
+#[cfg(any(
+    feature = "serving-acceptance",
+    feature = "memory-management-acceptance",
+))]
+#[allow(dead_code)]
 pub(crate) mod serving_rest;
 
 #[path = "../../../../crates/model-serving/tests/common/e2e_test_model_names.rs"]

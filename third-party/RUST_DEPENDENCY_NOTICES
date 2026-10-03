@@ -447,7 +447,6 @@ Apache License 2.0
 
 Used by:
 - clang-sys 1.9.1
-- secrecy 0.10.3
 - static_assertions 1.1.0
 - utf8_iter 1.0.4
 - zeroize 1.9.0
@@ -2374,13 +2373,11 @@ Apache License 2.0
 Used by:
 - futures-channel 0.3.34
 - futures-core 0.3.34
-- futures-executor 0.3.33
 - futures-io 0.3.34
 - futures-macro 0.3.34
 - futures-sink 0.3.34
 - futures-task 0.3.34
 - futures-util 0.3.34
-- futures 0.3.33
 
                               Apache License
                         Version 2.0, January 2004
@@ -3914,7 +3911,6 @@ Used by:
 - symlink 0.1.0
 - tempfile 3.27.0
 - thread_local 1.1.10
-- unicase 2.9.0
 - unicode-normalization-alignments 0.1.12
 - unicode-segmentation 1.13.3
 - url 2.5.8
@@ -5251,7 +5247,6 @@ Used by:
 - daachorse 3.0.3
 - dary_heap 0.3.9
 - dunce 1.0.5
-- eventsource-stream 0.2.3
 - fdeflate 0.3.7
 - ident_case 1.0.1
 - image 0.25.10
@@ -6360,34 +6355,6 @@ SOFTWARE.
 MIT License
 
 Used by:
-- async-openai-macros 0.3.0
-- async-openai 0.42.0
-
-MIT License
-
-Copyright (c) <year> <copyright holders>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the "Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
-following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
-EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-===============================================================================
-MIT License
-
-Used by:
-- tokio-stream 0.1.19
 - tokio-util 0.7.19
 - tokio 1.53.1
 
@@ -6713,36 +6680,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
-===============================================================================
-MIT License
-
-Used by:
-- mime_guess 2.0.5
-
-The MIT License (MIT)
-
-Copyright (c) 2015 Austin Bonander
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
 
 
 ===============================================================================
