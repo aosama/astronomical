@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::MlxRuntime;
+use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
 use crate::laguna::{
     LagunaDecoderState, LagunaExecutionError, LagunaTargetContract, laguna_decoder_cache_layout,
@@ -158,9 +158,12 @@ pub(super) fn restore_prompt_prefix(
     }
     let restored_sequence_token_count = complete_block_count * block_token_count;
 
-    // Lookup already proved every block exists. Load and absorb one block at
-    // a time so the restore peak stays at the final destination plus one
-    // block instead of pinning the complete prefix beside seated experts.
+    // Lookup already proved every block exists. Load the complete block set,
+    // then seat every append-only layer with one concatenation per tensor;
+    // restored blocks are disk-backed lazy handles, so the load holds no
+    // payload beside the destination.
+    let mut loaded_block_tensors: Vec<HashMap<String, MlxArray>> =
+        Vec::with_capacity(complete_block_count);
     let mut last_restored_block_key = None;
     for block_index in 0..complete_block_count {
         let block_start = block_index * block_token_count;
@@ -170,7 +173,7 @@ pub(super) fn restore_prompt_prefix(
             &prompt_token_ids[block_start..block_end],
             last_restored_block_key.as_ref(),
         )?;
-        let mut loaded_sequence_block = performance_attribution
+        let loaded_sequence_block = performance_attribution
             .measure_operation(
                 PerformanceOperation::PersistentPromptCacheKvBlockRead,
                 |attribution| {
@@ -188,32 +191,24 @@ pub(super) fn restore_prompt_prefix(
                 reason: "Laguna prompt-cache sequence block was reported present but missing"
                     .to_owned(),
             })?;
-        let is_first_block = block_index == 0;
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheStateReconstruction,
-                |_performance_attribution| {
-                    if is_first_block {
-                        decoder_state.begin_incremental_cache_block_restore(
-                            runtime,
-                            &mut loaded_sequence_block,
-                            restored_sequence_token_count,
-                        )
-                    } else {
-                        decoder_state.absorb_incremental_cache_block(
-                            runtime,
-                            &mut loaded_sequence_block,
-                            block_start,
-                        )
-                    }
-                },
-            )
-            .map_err(|restore_error| InferenceEngineError::Fatal {
-                reason: format!("Laguna prompt-cache restore failed: {restore_error:?}"),
-            })?;
-        drop(loaded_sequence_block);
+        loaded_block_tensors.push(loaded_sequence_block);
         last_restored_block_key = Some(block_key);
     }
+    performance_attribution
+        .measure_operation(
+            PerformanceOperation::PersistentPromptCacheStateReconstruction,
+            |_performance_attribution| {
+                decoder_state.restore_sequence_blocks_from_concat(
+                    runtime,
+                    &loaded_block_tensors,
+                    restored_sequence_token_count,
+                )
+            },
+        )
+        .map_err(|restore_error| InferenceEngineError::Fatal {
+            reason: format!("Laguna prompt-cache restore failed: {restore_error:?}"),
+        })?;
+    drop(loaded_block_tensors);
     let snapshot_key =
         last_restored_block_key
             .as_ref()
@@ -252,11 +247,7 @@ pub(super) fn restore_prompt_prefix(
         .measure_operation(
             PerformanceOperation::PersistentPromptCacheStateReconstruction,
             |_performance_attribution| {
-                decoder_state.finish_incremental_cache_block_restore(
-                    runtime,
-                    restored_sequence_token_count,
-                    &mut boundary_snapshot,
-                )
+                decoder_state.restore_boundary_snapshot(runtime, &mut boundary_snapshot)
             },
         )
         .map_err(|restore_error| InferenceEngineError::Fatal {

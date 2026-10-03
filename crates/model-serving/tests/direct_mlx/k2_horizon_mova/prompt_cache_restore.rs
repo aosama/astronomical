@@ -21,7 +21,7 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 
 #[tokio::test]
 #[ignore = "loads K2 and measures a real multi-block prompt-cache restore"]
-async fn should_restore_k2_prompt_cache_with_one_block_beside_the_destination() {
+async fn should_restore_k2_prompt_cache_with_one_concat_per_layer() {
     eprintln!(
         "[k2-prompt-cache-restore] status=start timeout_seconds={}",
         ACCEPTANCE_TIMEOUT.as_secs()
@@ -109,18 +109,23 @@ async fn run_prompt_cache_restore_acceptance() {
         .expect("the K2 acceptance should sample the restore peak");
     let restore_peak_delta_bytes = (memory_snapshot_after_restore.peak_memory_bytes() as u64)
         .saturating_sub(active_memory_bytes_before_restore);
-    let incremental_restore_peak_bound_bytes =
-        restored_destination_bytes.saturating_add(largest_loaded_block_bytes.saturating_mul(3));
+    // The concat restore materializes the destination while the complete
+    // source block set streams through in one pass, so the honest peak is
+    // the destination plus the complete block set plus MLX scratch headroom.
+    let concat_restore_peak_bound_bytes = restored_destination_bytes
+        .saturating_mul(2)
+        .saturating_add(largest_loaded_block_bytes.saturating_mul(3));
     eprintln!(
-        "[k2-prompt-cache-restore] status=measured blocks={} cached_tokens={} active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} restore_peak_delta_bytes={restore_peak_delta_bytes} destination_bytes={restored_destination_bytes} largest_block_bytes={largest_loaded_block_bytes} one_block_bound_bytes={incremental_restore_peak_bound_bytes}",
+        "[k2-prompt-cache-restore] status=measured blocks={} cached_tokens={} active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} restore_peak_delta_bytes={restore_peak_delta_bytes} destination_bytes={restored_destination_bytes} largest_block_bytes={largest_loaded_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
         cache_block_file_sizes.len(),
         warm_generation_start.cached_token_count(),
         memory_snapshot_after_restore.peak_memory_bytes(),
     );
     assert!(
-        restore_peak_delta_bytes <= incremental_restore_peak_bound_bytes,
-        "the real K2 restore peak should remain within destination plus one-block workspace: \
-         peak_delta={restore_peak_delta_bytes} bound={incremental_restore_peak_bound_bytes}"
+        restore_peak_delta_bytes <= concat_restore_peak_bound_bytes,
+        "the real K2 restore peak should remain within destination plus the \
+         complete source block set: peak_delta={restore_peak_delta_bytes} \
+         bound={concat_restore_peak_bound_bytes}"
     );
 
     let restored_token_id = generate_first_token_to_finalization(&mut execution, RequestId::new(2));

@@ -26,6 +26,8 @@ mod mlx_compiled_sparse_shared_expert_combination;
 #[cfg(feature = "mlx")]
 mod mlx_compiled_swiglu;
 #[cfg(feature = "mlx")]
+mod mlx_compiled_vision_rope;
+#[cfg(feature = "mlx")]
 mod mlx_convolution_operations;
 #[cfg(feature = "mlx")]
 mod mlx_creation_operations;
