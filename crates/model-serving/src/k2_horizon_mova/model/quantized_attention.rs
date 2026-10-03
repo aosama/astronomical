@@ -1,9 +1,10 @@
-//! Quantized-attention passes for K2 Horizon MoVA decode.
+//! Quantized-attention passes for K2 Horizon MoVA.
 //!
-//! The score and value passes read the packed 4-bit KV slab through the
-//! quantized matmul kernel so long-context decode attention reads one bit
-//! width instead of bfloat16. Owned by the quantized KV state's views; only
-//! reachable at decode because chunked prefill keeps the fused bf16 SDPA.
+//! The score and value passes read the packed KV slab through the quantized
+//! matmul kernel so long-context attention reads one bit width instead of
+//! bfloat16. Owned by the quantized KV state's views; reachable for any
+//! forward against a quantized cache, so a multi-token prefill chunk must
+//! request the explicit causal mask here just as the fused kernel does.
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
@@ -18,7 +19,7 @@ pub(super) fn quantized_scaled_dot_product_attention(
     views: &crate::decoder_cache::QuantizedKeyValueViews,
     group_size: i32,
     bits: i32,
-    is_prefill: bool,
+    is_causal: bool,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     let scale = (config.head_dim() as f32).sqrt().recip();
     let scaled_queries = runtime.multiply_scalar(queries, scale)?;
@@ -59,7 +60,7 @@ pub(super) fn quantized_scaled_dot_product_attention(
         group_size,
         bits,
     )?;
-    if is_prefill {
+    if is_causal {
         let total_sequence_tokens = scores.shape().last().copied().unwrap_or(1);
         let query_axis = scores.shape().len().saturating_sub(2);
         let query_token_count = scores.shape().get(query_axis).copied().unwrap_or(1);
