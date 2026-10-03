@@ -40,11 +40,8 @@ pub use decoder::{
 pub use inference_execution::{
     Qwen3_5Engine, Qwen3_5MtpRuntimeState, Qwen3_5PrefillExecutionContext,
     Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
-    Qwen3_5SpeculativePrefillFailureStageForTests, Qwen3_5SpeculativePrefillSelectionError,
     persistent_prompt_cache_publication_advances_parent_chain, qwen3_5_depth_one_mtp_window_fits,
     qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
-    qwen3_5_select_speculative_prefill_token_positions,
-    qwen3_5_selected_speculative_prefill_positions_for_range,
     safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
@@ -53,13 +50,11 @@ pub use model::{
     Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput,
     Qwen3_5TargetVerificationProjection, Qwen3_5TargetVerificationProjectionDispatch,
     Qwen3_5Weights, four_row_split_k_quantized_linear_kernel, is_gdn_decode_prework_eligible,
-    qwen3_5_aggregate_speculative_prefill_attention_weights, qwen3_5_full_attention_step,
-    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    qwen3_5_full_attention_step, qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
     qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
-    qwen3_5_select_speculative_prefill_token_positions_on_gpu,
     qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
 };
 pub use multi_token_prediction::{
@@ -95,7 +90,3 @@ pub use vision::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use vision::{Qwen3_5VisionModel, Qwen3_5VisionWeights, qwen3_5_inject_visual_embeddings};
-#[cfg(feature = "direct-mlx")]
-pub(crate) use vision::{
-    qwen3_5_speculative_draft_block_causal_input, qwen3_5_speculative_draft_block_causal_inputs,
-};

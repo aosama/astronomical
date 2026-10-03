@@ -45,62 +45,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         worker_health_snapshot.mtp_runtime_state,
         astronomical_ipc_protocol::MtpRuntimeState::Disabled
     );
-    let configured_speculative_prefill_draft_model_id = application_state
-        .reloadable_config
-        .as_ref()
-        .and_then(|reloadable_config| reloadable_config.read().ok())
-        .and_then(|resolved_runtime_config| {
-            let ready_model_id = worker_health_snapshot.ready_model_id.as_ref()?;
-            Some(
-                resolved_runtime_config
-                    .model_policy_catalog
-                    .get(ready_model_id)?
-                    .acceleration_availability
-                    .configured_speculative_prefill
-                    .as_ref()?
-                    .draft_model_id
-                    .clone(),
-            )
-        })
-        .or_else(|| {
-            worker_health_snapshot
-                .speculative_prefill_draft_model_id
-                .clone()
-        });
-    let configured_speculative_prefill_enabled = configured_speculative_prefill_draft_model_id
-        .is_some()
-        || loaded_model_runtime_configuration
-            .and_then(|configuration| configuration.autoregressive())
-            .is_some_and(|configuration| configuration.speculative_prefill_enabled);
-    let configured_speculative_prefill_unavailable_reason = application_state
-        .reloadable_config
-        .as_ref()
-        .and_then(|reloadable_config| reloadable_config.read().ok())
-        .and_then(|resolved_runtime_config| {
-            let ready_model_id = worker_health_snapshot.ready_model_id.as_ref()?;
-            resolved_runtime_config
-                .model_policy_catalog
-                .get(ready_model_id)?
-                .acceleration_availability
-                .speculative_prefill_unavailable_reason
-                .clone()
-        });
-    let reported_speculative_prefill_runtime_state = if configured_speculative_prefill_enabled
-        && configured_speculative_prefill_unavailable_reason.is_some()
-        && matches!(
-            worker_health_snapshot.speculative_prefill_runtime_state,
-            astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
-        ) {
-        astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Unavailable
-    } else {
-        worker_health_snapshot.speculative_prefill_runtime_state
-    };
-    let speculative_prefill_enabled = !matches!(
-        reported_speculative_prefill_runtime_state,
-        astronomical_ipc_protocol::SpeculativePrefillRuntimeState::Disabled
-    );
-    let configured_speculative_prefill_target_model_id =
-        application_state.configured_speculative_prefill_target_model_id();
     let mut status_json = serde_json::json!({
         "application": {
             "version": build_identity.version,
@@ -127,27 +71,11 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "mtp_runtime_state": serde_json::to_value(worker_health_snapshot.mtp_runtime_state())
             .unwrap_or_else(|_| serde_json::json!("disabled")),
         "mtp_unavailable_reason": worker_health_snapshot.mtp_unavailable_reason(),
-        "speculative_prefill_enabled": speculative_prefill_enabled,
-        "configured_speculative_prefill_enabled": configured_speculative_prefill_enabled,
         "worker_runtime_feature_configuration_applied": worker_health_snapshot.worker_runtime_feature_configuration.is_some(),
         // Keep the exact worker acknowledgement available beside the derived convenience fields.
         // The menu compares this complete value with the reload response before declaring a
         // replacement applied, so a stale Ready status cannot masquerade as the new policy.
         "worker_runtime_feature_configuration": worker_health_snapshot.worker_runtime_feature_configuration.clone(),
-        "speculative_prefill_runtime_state": serde_json::to_value(
-            reported_speculative_prefill_runtime_state,
-        )
-        .unwrap_or_else(|_| serde_json::json!("disabled")),
-        "speculative_prefill_unavailable_reason": configured_speculative_prefill_unavailable_reason
-            .as_deref()
-            .or(worker_health_snapshot
-            .speculative_prefill_unavailable_reason
-            .as_deref()),
-        "speculative_prefill_draft_model_id": configured_speculative_prefill_draft_model_id,
-        "speculative_prefill_target_model_id": configured_speculative_prefill_target_model_id,
-        "speculative_prefill_draft_model_revision": worker_health_snapshot
-            .speculative_prefill_draft_model_revision
-            .as_deref(),
     });
     status_json["configuration"] = serde_json::to_value(
         crate::configuration_status::ConfigurationStatusSummary::from_application(
@@ -229,8 +157,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         "total_reused_prompt_token_count": worker_health_snapshot.serving_session.total_reused_prompt_token_count,
         "target_prompt_work_token_count": worker_health_snapshot.serving_session.target_prompt_work_token_count,
         "target_reused_prompt_work_token_count": worker_health_snapshot.serving_session.target_reused_prompt_work_token_count,
-        "drafter_prompt_work_token_count": worker_health_snapshot.serving_session.drafter_prompt_work_token_count,
-        "drafter_reused_prompt_work_token_count": worker_health_snapshot.serving_session.drafter_reused_prompt_work_token_count,
         "average_prefill_tok_per_second": worker_health_snapshot.serving_session.average_prefill_tok_per_second,
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
     });

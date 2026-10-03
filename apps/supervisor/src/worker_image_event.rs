@@ -226,8 +226,7 @@ pub(super) fn publish_image_finalized_memory_snapshot(
     let attributed_memory_bytes = mlx_memory_snapshot
         .expert_payload_bytes
         .saturating_add(mlx_memory_snapshot.model_core_payload_bytes)
-        .saturating_add(mlx_memory_snapshot.context_state_payload_bytes)
-        .saturating_add(mlx_memory_snapshot.speculative_prefill_draft_memory_bytes);
+        .saturating_add(mlx_memory_snapshot.context_state_payload_bytes);
     let effective_ceiling_bytes = health_snapshot
         .read()
         .ok()
@@ -239,7 +238,6 @@ pub(super) fn publish_image_finalized_memory_snapshot(
         || attributed_memory_bytes > mlx_memory_snapshot.active_memory_bytes
         || mlx_memory_snapshot.expert_payload_bytes != 0
         || mlx_memory_snapshot.context_state_payload_bytes != 0
-        || mlx_memory_snapshot.speculative_prefill_draft_memory_bytes != 0
         || (effective_ceiling_bytes > 0
             && mlx_memory_snapshot.active_memory_bytes > effective_ceiling_bytes)
     {

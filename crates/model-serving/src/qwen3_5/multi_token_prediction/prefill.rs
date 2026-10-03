@@ -69,16 +69,6 @@ pub(in crate::qwen3_5) fn record_prompt_history_initialization_fallback(
     );
 }
 
-pub(in crate::qwen3_5) fn record_terminal_history_token_count(
-    active_request: &mut Qwen3_5EngineRequest,
-    terminal_history_token_count: usize,
-) {
-    active_request.performance_attribution_mut().record_counter(
-        crate::PerformanceCounter::SpeculativePrefillTerminalMtpHistoryTokenCount,
-        u64::try_from(terminal_history_token_count).unwrap_or(u64::MAX),
-    );
-}
-
 pub(in crate::qwen3_5) fn initialize_prompt_history_for_prompt_range_with_performance_attribution(
     model: &Qwen3_5Model,
     target_pre_final_normalization_hidden_states: &MlxArray,

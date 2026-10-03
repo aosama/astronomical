@@ -85,25 +85,6 @@ impl ApplicationState {
             .unwrap_or_else(|| self.discovered_models.clone())
     }
 
-    pub(crate) fn configured_speculative_prefill_target_model_id(&self) -> Option<String> {
-        let ready_model_id = self
-            .generation_executor
-            .worker_health_snapshot()
-            .ready_model_id?;
-        self.reloadable_config
-            .as_ref()
-            .and_then(|reloadable_config| reloadable_config.read().ok())
-            .and_then(|resolved_runtime_config| {
-                let _configured_policy = resolved_runtime_config
-                    .model_policy_catalog
-                    .get(&ready_model_id)?
-                    .acceleration_availability
-                    .configured_speculative_prefill
-                    .as_ref()?;
-                Some(ready_model_id)
-            })
-    }
-
     pub(crate) fn resolve_available_generation_model_id(
         &self,
         requested_model_id: &str,
@@ -282,7 +263,6 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
             .persistent_prompt_cache_stats
             .as_ref(),
     );
-    let serving_session = &worker_health_snapshot.serving_session;
     let pending_cache_clear = worker_health_snapshot
         .pending_prompt_cache_clear
         .as_ref()
@@ -308,45 +288,8 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
         "persistent_prompt_cache_visual_embedding_rows_loaded": persistent_prompt_cache_summary.visual_embedding_rows_loaded,
         "persistent_prompt_cache_partial_tail_hits": persistent_prompt_cache_summary.partial_tail_hits,
         "pending_cache_clear": pending_cache_clear,
-        "speculative_prefill_cache_efficacy": {
-            "target": {
-                "eligible_token_count": serving_session.target_prompt_work_token_count,
-                "restored_token_count": serving_session.target_reused_prompt_work_token_count,
-                "reuse_rate": prompt_work_reuse_rate(
-                    serving_session.target_reused_prompt_work_token_count,
-                    serving_session.target_prompt_work_token_count,
-                ),
-            },
-            "drafter": {
-                "eligible_token_count": serving_session.drafter_prompt_work_token_count,
-                "restored_token_count": serving_session.drafter_reused_prompt_work_token_count,
-                "reuse_rate": prompt_work_reuse_rate(
-                    serving_session.drafter_reused_prompt_work_token_count,
-                    serving_session.drafter_prompt_work_token_count,
-                ),
-            },
-            "combined": {
-                "eligible_token_count": serving_session.target_prompt_work_token_count
-                    .saturating_add(serving_session.drafter_prompt_work_token_count),
-                "restored_token_count": serving_session.target_reused_prompt_work_token_count
-                    .saturating_add(serving_session.drafter_reused_prompt_work_token_count),
-                "reuse_rate": prompt_work_reuse_rate(
-                    serving_session.target_reused_prompt_work_token_count
-                        .saturating_add(serving_session.drafter_reused_prompt_work_token_count),
-                    serving_session.target_prompt_work_token_count
-                        .saturating_add(serving_session.drafter_prompt_work_token_count),
-                ),
-            },
-        },
     }))
     .into_response()
-}
-
-fn prompt_work_reuse_rate(restored_token_count: u64, eligible_token_count: u64) -> f64 {
-    if eligible_token_count == 0 {
-        return 0.0;
-    }
-    restored_token_count.min(eligible_token_count) as f64 / eligible_token_count as f64
 }
 
 fn completion_id_namespace() -> Arc<str> {

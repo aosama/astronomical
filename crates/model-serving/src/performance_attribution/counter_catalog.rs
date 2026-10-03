@@ -70,28 +70,6 @@ pub enum PerformanceCounter {
     ExpertResidencyCommitRejectionCount,
     MtpDepthSelectionFallbackCount,
     MtpAdmittedAttemptCount,
-    SpeculativePrefillTargetOnlyPrefixChunkCount,
-    SpeculativePrefillTargetOnlyPrefixTokenCount,
-    SpeculativePrefillTerminalCaptureChunkCount,
-    SpeculativePrefillTerminalMtpHistoryTokenCount,
-    SpeculativePrefillDraftScoringCount,
-    SpeculativePrefillDraftPrefixStoreHitCount,
-    SpeculativePrefillDraftPrefixStoreWriteCount,
-    SpeculativePrefillDraftPersistentPrefixHitCount,
-    SpeculativePrefillDraftPersistentPrefixRestoredTokenCount,
-    SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-    SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
-    SpeculativePrefillSelectionStoreHitCount,
-    SpeculativePrefillSelectionPersistentHitCount,
-    SpeculativePrefillMandatoryVisualTokenCount,
-    SpeculativePrefillSelectedTokenCount,
-    SpeculativePrefillSparseTargetChunkCount,
-    SpeculativePrefillDraftScoredSuffixTokenCount,
-    SpeculativePrefillTargetPersistentStateWriteCount,
-    SpeculativePrefillTargetPersistentStateRestoredTokenCount,
-    SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
-    SpeculativePrefillOrdinaryControlSpanTokenCount,
-    SpeculativePrefillFallbackCount,
     MtpPromptHistoryInitializationFallbackCount,
     MtpFeedbackHistoryReseedCount,
     MtpAcceptedDraftCount,
@@ -223,28 +201,6 @@ impl PerformanceCounter {
         Self::ExpertResidencyCommitRejectionCount,
         Self::MtpDepthSelectionFallbackCount,
         Self::MtpAdmittedAttemptCount,
-        Self::SpeculativePrefillTargetOnlyPrefixChunkCount,
-        Self::SpeculativePrefillTargetOnlyPrefixTokenCount,
-        Self::SpeculativePrefillTerminalCaptureChunkCount,
-        Self::SpeculativePrefillTerminalMtpHistoryTokenCount,
-        Self::SpeculativePrefillDraftScoringCount,
-        Self::SpeculativePrefillDraftPrefixStoreHitCount,
-        Self::SpeculativePrefillDraftPrefixStoreWriteCount,
-        Self::SpeculativePrefillDraftPersistentPrefixHitCount,
-        Self::SpeculativePrefillDraftPersistentPrefixRestoredTokenCount,
-        Self::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-        Self::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes,
-        Self::SpeculativePrefillSelectionStoreHitCount,
-        Self::SpeculativePrefillSelectionPersistentHitCount,
-        Self::SpeculativePrefillMandatoryVisualTokenCount,
-        Self::SpeculativePrefillSelectedTokenCount,
-        Self::SpeculativePrefillSparseTargetChunkCount,
-        Self::SpeculativePrefillDraftScoredSuffixTokenCount,
-        Self::SpeculativePrefillTargetPersistentStateWriteCount,
-        Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount,
-        Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes,
-        Self::SpeculativePrefillOrdinaryControlSpanTokenCount,
-        Self::SpeculativePrefillFallbackCount,
         Self::MtpPromptHistoryInitializationFallbackCount,
         Self::MtpFeedbackHistoryReseedCount,
         Self::MtpAcceptedDraftCount,
@@ -393,68 +349,6 @@ impl PerformanceCounter {
             Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
             Self::MtpDepthSelectionFallbackCount => "mtp_memory_admission_fallback_count",
             Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
-            Self::SpeculativePrefillTargetOnlyPrefixChunkCount => {
-                "speculative_prefill_target_only_prefix_chunk_count"
-            }
-            Self::SpeculativePrefillTargetOnlyPrefixTokenCount => {
-                "speculative_prefill_target_only_prefix_token_count"
-            }
-            Self::SpeculativePrefillTerminalCaptureChunkCount => {
-                "speculative_prefill_terminal_capture_chunk_count"
-            }
-            Self::SpeculativePrefillTerminalMtpHistoryTokenCount => {
-                "speculative_prefill_terminal_mtp_history_token_count"
-            }
-            Self::SpeculativePrefillDraftScoringCount => "speculative_prefill_draft_scoring_count",
-            Self::SpeculativePrefillDraftPrefixStoreHitCount => {
-                "speculative_prefill_draft_prefix_store_hit_count"
-            }
-            Self::SpeculativePrefillDraftPrefixStoreWriteCount => {
-                "speculative_prefill_draft_prefix_store_write_count"
-            }
-            Self::SpeculativePrefillDraftPersistentPrefixHitCount => {
-                "speculative_prefill_draft_persistent_prefix_hit_count"
-            }
-            Self::SpeculativePrefillDraftPersistentPrefixRestoredTokenCount => {
-                "speculative_prefill_draft_persistent_prefix_restored_token_count"
-            }
-            Self::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes => {
-                "speculative_prefill_context_target_expert_reclaimed_payload_bytes"
-            }
-            Self::SpeculativePrefillDraftTargetExpertReclaimedPayloadBytes => {
-                "speculative_prefill_draft_target_expert_reclaimed_payload_bytes"
-            }
-            Self::SpeculativePrefillSelectionStoreHitCount => {
-                "speculative_prefill_selection_store_hit_count"
-            }
-            Self::SpeculativePrefillSelectionPersistentHitCount => {
-                "speculative_prefill_selection_persistent_hit_count"
-            }
-            Self::SpeculativePrefillMandatoryVisualTokenCount => {
-                "speculative_prefill_mandatory_visual_token_count"
-            }
-            Self::SpeculativePrefillSelectedTokenCount => {
-                "speculative_prefill_selected_token_count"
-            }
-            Self::SpeculativePrefillSparseTargetChunkCount => {
-                "speculative_prefill_sparse_target_chunk_count"
-            }
-            Self::SpeculativePrefillDraftScoredSuffixTokenCount => {
-                "speculative_prefill_draft_scored_suffix_token_count"
-            }
-            Self::SpeculativePrefillTargetPersistentStateWriteCount => {
-                "speculative_prefill_target_persistent_state_write_count"
-            }
-            Self::SpeculativePrefillTargetPersistentStateRestoredTokenCount => {
-                "speculative_prefill_target_persistent_state_restored_token_count"
-            }
-            Self::SpeculativePrefillTargetExpertRepopulatedPayloadBytes => {
-                "speculative_prefill_target_expert_repopulated_payload_bytes"
-            }
-            Self::SpeculativePrefillOrdinaryControlSpanTokenCount => {
-                "speculative_prefill_ordinary_control_span_token_count"
-            }
-            Self::SpeculativePrefillFallbackCount => "speculative_prefill_fallback_count",
             Self::MtpPromptHistoryInitializationFallbackCount => {
                 "mtp_prompt_history_initialization_fallback_count"
             }

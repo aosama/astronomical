@@ -489,7 +489,6 @@ expected_journeys = {
     "accept-modernbert-reference-similarity",
     "accept-kernel-fallback-qwen",
     "accept-kernel-fallback-k2",
-    "accept-speculative-prefill",
     "accept-prompt-cache",
     "test-model-ssd-streaming-support",
     "test-persistent-prompt-cache-performance-support",

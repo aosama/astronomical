@@ -1,17 +1,17 @@
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, MtpDepthResolutionReason, MtpDepthStatus, MtpRuntimeState,
-    ProtocolReader, ProtocolWriter, SpeculativePrefillRuntimeState, WorkerEvent,
-    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
+    ProtocolReader, ProtocolWriter, WorkerEvent, WorkerModelCapabilities,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test]
-async fn should_preserve_generation_and_full_path_free_model_configuration_in_acknowledgement() {
+async fn should_preserve_generation_and_mtp_configuration_in_acknowledgement() {
     use astronomical_ipc_protocol::{
         WorkerChunkingConfiguration, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
-        WorkerLoadedModelRuntimeConfiguration, WorkerSpeculativePrefillRuntimeConfiguration,
+        WorkerLoadedModelRuntimeConfiguration,
     };
 
     let configuration_generation = "abcdef0123456789".repeat(4);
@@ -29,7 +29,6 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
                         fixed_prompt_processing_chunk_size_tokens: 2_048,
                         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
                         full_attention_key_value_growth_tokens: 256,
-                        speculative_prefill_draft_forward_tokens: 1_024,
                         prefill_graph_submission_layer_interval: 0,
                         experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
                         experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
@@ -41,12 +40,6 @@ async fn should_preserve_generation_and_full_path_free_model_configuration_in_ac
                     },
                     mtp_enabled: true,
                     mtp_draft_depth: Some(3),
-                    speculative_prefill_enabled: true,
-                    speculative_prefill: Some(WorkerSpeculativePrefillRuntimeConfiguration {
-                        draft_model_id: "fictional/draft".to_owned(),
-                        minimum_prompt_tokens: 8_192,
-                        keep_percentage: 20,
-                    }),
                 },
             )),
         },
@@ -96,10 +89,6 @@ async fn should_round_trip_loaded_model_mtp_depth_acknowledgement() {
                 MtpDepthResolutionReason::ConfiguredDepthClampedToArtifactMaximum,
             ),
         },
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-        speculative_prefill_unavailable_reason: None,
-        speculative_prefill_draft_model_id: None,
-        speculative_prefill_draft_model_revision: None,
     };
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);

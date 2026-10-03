@@ -19,7 +19,6 @@ mod model_discovery_huggingface_cache;
 mod model_identity;
 mod prompt_cache_config;
 mod resolved_model_config;
-mod speculative_prefill_config;
 
 pub use astronomical_runtime_instance::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 pub use chunking_config::{
@@ -31,7 +30,6 @@ pub use chunking_config::{
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
-    DEFAULT_SPECULATIVE_PREFILL_DRAFT_FORWARD_TOKENS,
     LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
 };
 pub use config_error::AstronomicalConfigError;
@@ -69,7 +67,6 @@ pub use model_identity::{
 };
 pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
-pub use speculative_prefill_config::SpeculativePrefillConfig;
 
 use config_document::UserConfigFile;
 use config_file::read_user_config_file;

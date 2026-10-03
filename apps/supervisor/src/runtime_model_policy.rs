@@ -14,19 +14,9 @@ pub struct RuntimeModelGenerationDefaults {
     pub top_p_thousandths: Option<u16>,
 }
 
-/// User-authored speculative-prefill relationship before auxiliary availability is applied.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ConfiguredSpeculativePrefillPolicy {
-    pub draft_model_id: String,
-    pub keep_percentage: u32,
-    pub minimum_prompt_tokens: u32,
-}
-
-/// Configured speculative-prefill intent and the bounded reason it cannot currently execute.
+/// Model acceleration settings resolved by the supervisor.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RuntimeModelAccelerationAvailability {
-    pub configured_speculative_prefill: Option<ConfiguredSpeculativePrefillPolicy>,
-    pub speculative_prefill_unavailable_reason: Option<String>,
     pub configured_mtp_enabled: Option<bool>,
 }
 
@@ -73,8 +63,6 @@ pub(crate) fn worker_chunking_configuration(
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: chunking
             .fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
         full_attention_key_value_growth_tokens: chunking.full_attention_key_value_growth_tokens(),
-        speculative_prefill_draft_forward_tokens: chunking
-            .speculative_prefill_draft_forward_tokens(),
         prefill_graph_submission_layer_interval: chunking.prefill_graph_submission_layer_interval(),
         experimental_ssd_paging_prefill_graph_submission_layer_interval: chunking
             .experimental_ssd_paging_prefill_graph_submission_layer_interval(),

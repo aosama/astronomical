@@ -26,10 +26,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         prefill_end: usize,
     ) {
-        if !active_request.can_use_persistent_prompt_cache
-            || active_request.should_use_speculative_prefill
-            || active_request.sparse_anchored_dense_capture.is_some()
-        {
+        if !active_request.can_use_persistent_prompt_cache {
             return;
         }
         let prompt_token_count = active_request.input_token_ids.len();

@@ -6,8 +6,7 @@
 use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::{
     InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceAttributionOutcome,
-    PerformanceCounter, persistent_context_restore_workspace_bytes,
-    request_context_temporary_workspace_bytes,
+    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
 };
 use astronomical_ipc_protocol::RequestId;
 
@@ -62,8 +61,6 @@ impl Qwen3_5EngineState {
         } else {
             0
         };
-        let additional_maximum_expert_page_reservation_bytes =
-            self.speculative_prefill_draft_maximum_expert_page_reservation_bytes();
         // Cache restore temporarily owns source tensors beside live decoder
         // state. Charge that overlap only for prompt tokens that may already
         // exist as cache blocks. The output budget is generated later and has
@@ -159,21 +156,15 @@ impl Qwen3_5EngineState {
             prefill_activation_workspace_bytes,
             complete_layer_scratch_bytes,
             temporary_workspace_reservation_bytes,
-            additional_maximum_expert_page_reservation_bytes,
+            0,
         );
         let target_expert_payload_bytes_reclaimed_during_context_admission = self
             .validate_context_memory_admission_with_resident_expert_demotion(
                 total_context_tokens,
                 temporary_workspace_reservation_bytes,
-                additional_maximum_expert_page_reservation_bytes,
+                0,
                 performance_attribution,
             )?;
-        if self.speculative_prefill.enabled {
-            performance_attribution.record_counter(
-                PerformanceCounter::SpeculativePrefillContextTargetExpertReclaimedPayloadBytes,
-                target_expert_payload_bytes_reclaimed_during_context_admission,
-            );
-        }
         Ok(if can_use_persistent_prompt_cache {
             target_expert_payload_bytes_reclaimed_during_context_admission
         } else {

@@ -20,8 +20,6 @@ mod persistent_prompt_cache_publication_retry;
 mod persistent_prompt_cache_startup_cleanup_evidence;
 mod persistent_prompt_cache_state_bridge;
 mod persistent_prompt_cache_visual_embeddings;
-mod persistent_speculative_prefill_selection;
-mod persistent_speculative_prefill_target_state;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod qwen4_exp;

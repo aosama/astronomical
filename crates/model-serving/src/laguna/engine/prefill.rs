@@ -208,7 +208,6 @@ impl LagunaInferenceExecution {
                 .model
                 .as_ref()
                 .map(LagunaModel::expert_residency_telemetry),
-            speculative_prefill_draft_memory_telemetry: None,
             expert_memory_mode: self.model.as_ref().map(LagunaModel::expert_memory_mode),
             prompt_work_reuse,
             persistent_prompt_cache_diagnostics: None,

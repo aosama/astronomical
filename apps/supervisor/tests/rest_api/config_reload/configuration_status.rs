@@ -41,16 +41,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
             },
             acceleration_availability:
                 astronomical_supervisor::RuntimeModelAccelerationAvailability {
-                    configured_speculative_prefill: Some(
-                        astronomical_supervisor::ConfiguredSpeculativePrefillPolicy {
-                            draft_model_id: "fictional/missing-drafter".to_owned(),
-                            keep_percentage: 50,
-                            minimum_prompt_tokens: 1_024,
-                        },
-                    ),
-                    speculative_prefill_unavailable_reason: Some(
-                        "configured drafter is not currently available".to_owned(),
-                    ),
                     configured_mtp_enabled: Some(false),
                     ..Default::default()
                 },
@@ -140,27 +130,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         0.7
     );
     assert_eq!(
-        status_document["configured_speculative_prefill_enabled"],
-        true
-    );
-    assert_eq!(status_document["speculative_prefill_enabled"], true);
-    assert_eq!(
-        status_document["speculative_prefill_runtime_state"],
-        "unavailable"
-    );
-    assert_eq!(
-        status_document["speculative_prefill_unavailable_reason"],
-        "configured drafter is not currently available"
-    );
-    assert_eq!(
-        status_document["speculative_prefill_draft_model_id"],
-        "fictional/missing-drafter"
-    );
-    assert_eq!(
-        status_document["speculative_prefill_target_model_id"],
-        crate::common::MODEL_ID
-    );
-    assert_eq!(
         status_document["configuration"]["ready_model"]["chunking"]["fixed_prompt_processing_chunk_size_tokens"]
             ["configured"],
         2_048
@@ -229,7 +198,6 @@ fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {
             fixed_prompt_processing_chunk_size_tokens: 2_048,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
             full_attention_key_value_growth_tokens: 256,
-            speculative_prefill_draft_forward_tokens: 1_024,
             prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
@@ -241,6 +209,5 @@ fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {
         },
         mtp_enabled,
         mtp_draft_depth: Some(3),
-        speculative_prefill: None,
     })
 }

@@ -7,6 +7,7 @@ use crate::{
     PersistentVisualEmbeddingModelContract,
 };
 
+use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
 use super::{
     Qwen3_5EngineState, Qwen3_5MtpRuntimeState, fatal_engine_error, qwen3_5_runtime_error,
 };
@@ -16,21 +17,9 @@ use crate::qwen3_5::multi_token_prediction::{
 };
 use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model, Qwen3_5MtpArtifactCapability};
 use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
-use astronomical_ipc_protocol::SpeculativePrefillRuntimeState;
-
-use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
-use super::speculative_prefill::configured_speculative_prefill_activation_failure;
-use super::speculative_prefill::{
-    load_speculative_prefill_draft_model, token_identifier_mapping_digest,
-};
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        tracing::info!(
-            speculative_prefill_enabled = self.speculative_prefill.enabled,
-            speculative_prefill_draft_model_id = ?self.speculative_prefill.draft_model_id,
-            "resolved Qwen3.5 speculative-prefill policy"
-        );
         if let Some(model) = self.model.as_ref() {
             return Ok(
                 self.engine_load_result_for_mtp_state(model.minimum_mlx_memory_ceiling_bytes()?)
@@ -44,7 +33,6 @@ impl Qwen3_5EngineState {
         let mut model_revision = None;
         let mut total_artifact_payload_bytes = None;
         let mut model_shard_count = None;
-        let mut target_token_identifier_mapping_digest = None;
         let mut qwen3_5_mtp_artifact_capability = Qwen3_5MtpArtifactCapability::target_only(
             crate::qwen3_5::multi_token_prediction::Qwen3_5MtpTargetOnlyReason::NoTensorInventory,
         );
@@ -52,11 +40,6 @@ impl Qwen3_5EngineState {
             let validated_artifact = self.validated_artifact.take().ok_or_else(|| {
                 fatal_engine_error("validated Qwen3.5 artifact is unavailable during MLX load")
             })?;
-            let resolved_target_token_identifier_mapping_digest =
-                token_identifier_mapping_digest(&validated_artifact)?;
-            target_token_identifier_mapping_digest =
-                Some(resolved_target_token_identifier_mapping_digest);
-            let target_max_output_tokens = validated_artifact.max_output_tokens();
             let qwen3_5_vision_config = validated_artifact.vision_config().cloned();
             qwen3_5_mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
             // A declared maximum caps execution depth; it does not invalidate compatible weights.
@@ -90,7 +73,6 @@ impl Qwen3_5EngineState {
                     .experimental_ssd_paging_prefill_graph_submission_layer_interval,
                 self.chunking
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
-                self.chunking.speculative_prefill_draft_forward_tokens,
             )
             .map_err(|configuration_error| {
                 fatal_engine_error(format!(
@@ -135,18 +117,6 @@ impl Qwen3_5EngineState {
                     );
                 }
             }
-            let (speculative_prefill_draft_model, speculative_prefill_unavailable_reason) =
-                load_speculative_prefill_draft_model(
-                    &model,
-                    &self.speculative_prefill,
-                    resolved_target_token_identifier_mapping_digest,
-                    target_max_output_tokens,
-                    self.memory_limits,
-                    &mut model_loading_performance_attribution,
-                )?;
-            // This startup drafter exists only to prove compatibility and derive
-            // its revision/storage geometry. It is dropped below before target
-            // expert residency is admitted; requests load their own temporary copy.
             let resolved_model_id = model_id.clone().ok_or_else(|| {
                 fatal_engine_error("model loading lost the validated model identifier")
             })?;
@@ -243,123 +213,12 @@ impl Qwen3_5EngineState {
             } else {
                 (None, None)
             };
-            let speculative_prefill_draft_persistent_prompt_cache = if let Some((
-                draft_model,
-                draft_model_revision,
-            )) =
-                speculative_prefill_draft_model.as_ref()
-                && let Some(persistent_prompt_cache_disk_store_config) =
-                    self.persistent_prompt_cache_disk_store_config.as_ref()
-            {
-                // Drafter dense state has different tensor geometry from target
-                // state and therefore owns a separate model/revision namespace.
-                let draft_model_id =
-                    self.speculative_prefill
-                        .draft_model_id
-                        .clone()
-                        .ok_or_else(|| {
-                            fatal_engine_error(
-                                "loaded speculative-prefill draft model has no configured model ID",
-                            )
-                        })?;
-                let draft_model_contract = PersistentPromptCacheModelContract::resolve(
-                    draft_model_id.clone(),
-                    draft_model_revision.clone(),
-                    draft_model.decoder_cache_layout().clone(),
-                    draft_model.config().maximum_position_count() as usize,
-                    draft_model
-                        .runtime()
-                        .memory_limits()
-                        .active_memory_limit_bytes() as u64,
-                    persistent_prompt_cache_disk_store_config
-                        .global_prompt_cache_maximum_size_bytes(),
-                    self.chunking
-                        .prompt_cache_block_tokens
-                        .map(|block_token_count| block_token_count as usize),
-                    self.chunking.prompt_cache_common_prefix_stride_blocks,
-                )
-                .map_err(|draft_model_contract_error| {
-                    configured_speculative_prefill_activation_failure(
-                        "drafter persistent model-state storage contract",
-                        draft_model_contract_error,
-                    )
-                })?;
-                let draft_prompt_cache_config = persistent_prompt_cache_disk_store_config
-                    .for_model(&draft_model_id, draft_model_revision);
-                let draft_prompt_cache_maximum_size_bytes =
-                    draft_prompt_cache_config.global_prompt_cache_maximum_size_bytes();
-                match model_loading_performance_attribution.measure_operation(
-                    PerformanceOperation::PersistentPromptCacheOpenAndScan,
-                    |_performance_attribution| {
-                        PersistentPromptCacheDiskStore::open(
-                            draft_prompt_cache_config,
-                            draft_model_contract,
-                        )
-                    },
-                ) {
-                    Ok(draft_persistent_prompt_cache) => {
-                        log_persistent_prompt_cache_startup_cleanup(
-                            "speculative_prefill_draft",
-                            &draft_persistent_prompt_cache,
-                        );
-                        tracing::info!(
-                            draft_model_id,
-                            draft_model_revision,
-                            sequence_state_block_count =
-                                draft_persistent_prompt_cache.sequence_state_block_count(),
-                            boundary_state_snapshot_count =
-                                draft_persistent_prompt_cache.boundary_state_snapshot_count(),
-                            total_size_bytes = draft_persistent_prompt_cache.total_size_bytes(),
-                            maximum_size_bytes = draft_prompt_cache_maximum_size_bytes,
-                            "opened speculative-prefill drafter persistent prompt cache"
-                        );
-                        Some(Arc::new(draft_persistent_prompt_cache))
-                    }
-                    Err(draft_persistent_prompt_cache_error) => {
-                        return Err(fatal_engine_error(format!(
-                            "required drafter prompt-state storage initialization failed: {draft_persistent_prompt_cache_error}"
-                        )));
-                    }
-                }
-            } else {
-                None
-            };
-            self.purge_obsolete_speculative_prefill_policy_state(
-                &resolved_model_id,
-                &resolved_model_revision,
-                speculative_prefill_draft_model
-                    .as_ref()
-                    .map(|(_draft_model, draft_model_revision)| draft_model_revision.as_str()),
-                persistent_prompt_cache.as_deref(),
-                speculative_prefill_draft_persistent_prompt_cache.as_deref(),
-            )?;
-            let speculative_prefill_draft_is_available = speculative_prefill_draft_model.is_some();
-            let speculative_prefill_draft_supports_processed_visual_images =
-                speculative_prefill_draft_model.as_ref().is_some_and(
-                    |(draft_model, _draft_model_revision)| {
-                        draft_model
-                            .vision_model()
-                            .is_some_and(|draft_vision_model| {
-                                model.vision_model().is_some_and(|target_vision_model| {
-                                    draft_vision_model
-                                        .accepts_processed_images_from(target_vision_model)
-                                })
-                            })
-                    },
-                );
-            let loaded_draft_model_revision =
-                speculative_prefill_draft_model.map(|(draft_model, draft_model_revision)| {
-                    // Release all startup drafter ownership before allocator
-                    // cleanup and exact target expert-residency admission.
-                    drop(draft_model);
-                    draft_model_revision
-                });
             model
                 .runtime()
                 .synchronize_gpu_stream_and_clear_allocator_cache()
                 .map_err(qwen3_5_runtime_error)?;
-            // Core, vision, and optional draft loading are complete. Only now is
-            // active memory a stable baseline for exact complete-expert admission.
+            // Core and vision loading are complete. Only now is active memory
+            // a stable baseline for exact complete-expert admission.
             model
                 .try_promote_experts_to_resident(
                     Qwen3_5ExpertResidencyTransitionReason::Startup,
@@ -371,11 +230,6 @@ impl Qwen3_5EngineState {
                 persistent_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
-                speculative_prefill_draft_persistent_prompt_cache,
-                speculative_prefill_draft_is_available,
-                speculative_prefill_draft_supports_processed_visual_images,
-                loaded_draft_model_revision,
-                speculative_prefill_unavailable_reason,
             ))
         })();
 
@@ -385,11 +239,6 @@ impl Qwen3_5EngineState {
                 persistent_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
                 persistent_prompt_cache,
-                speculative_prefill_draft_persistent_prompt_cache,
-                speculative_prefill_draft_is_available,
-                speculative_prefill_draft_supports_processed_visual_images,
-                loaded_draft_model_revision,
-                speculative_prefill_unavailable_reason,
             )) => {
                 self.model_id = model_id.clone();
                 self.model_revision = model_revision.clone();
@@ -398,25 +247,6 @@ impl Qwen3_5EngineState {
                 self.persistent_visual_embedding_model_contract =
                     persistent_visual_embedding_model_contract;
                 self.persistent_prompt_cache = persistent_prompt_cache;
-                self.speculative_prefill_draft_persistent_prompt_cache =
-                    speculative_prefill_draft_persistent_prompt_cache;
-                self.speculative_prefill_draft_model = None;
-                self.speculative_prefill_draft_model_revision = loaded_draft_model_revision;
-                self.speculative_prefill_draft_is_available =
-                    speculative_prefill_draft_is_available;
-                self.speculative_prefill_draft_supports_processed_visual_images =
-                    speculative_prefill_draft_supports_processed_visual_images;
-                self.speculative_prefill_token_identifier_mapping_digest =
-                    target_token_identifier_mapping_digest;
-                self.speculative_prefill_runtime_state = if !self.speculative_prefill.enabled {
-                    SpeculativePrefillRuntimeState::Disabled
-                } else if self.speculative_prefill_draft_is_available {
-                    SpeculativePrefillRuntimeState::Active
-                } else {
-                    SpeculativePrefillRuntimeState::Unavailable
-                };
-                self.speculative_prefill_unavailable_reason =
-                    speculative_prefill_unavailable_reason;
                 let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
                 let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
                 let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;

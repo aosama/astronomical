@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpDepthStatus,
-    MtpRuntimeState, SpeculativePrefillRuntimeState, WorkerEvent,
+    MtpRuntimeState, WorkerEvent,
 };
 
 use crate::{
@@ -28,48 +28,20 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
         mtp_runtime_state: MtpRuntimeState,
         mtp_unavailable_reason: Option<String>,
         mtp_depth_status: MtpDepthStatus,
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        speculative_prefill_unavailable_reason: Option<String>,
-        speculative_prefill_draft_model_id: Option<String>,
-        speculative_prefill_draft_model_revision: Option<String>,
     ) -> WorkerEvent {
         match self {
-            Self::Qwen3_5(processor) => processor.ready_event(
-                mtp_runtime_state,
-                mtp_unavailable_reason,
-                mtp_depth_status,
-                speculative_prefill_runtime_state,
-                speculative_prefill_unavailable_reason,
-                speculative_prefill_draft_model_id,
-                speculative_prefill_draft_model_revision,
-            ),
-            Self::Laguna(processor) => processor.ready_event(
-                mtp_runtime_state,
-                mtp_unavailable_reason,
-                mtp_depth_status,
-                speculative_prefill_runtime_state,
-                speculative_prefill_unavailable_reason,
-                speculative_prefill_draft_model_id,
-                speculative_prefill_draft_model_revision,
-            ),
-            Self::K2HorizonMoVA(processor) => processor.ready_event(
-                mtp_runtime_state,
-                mtp_unavailable_reason,
-                mtp_depth_status,
-                speculative_prefill_runtime_state,
-                speculative_prefill_unavailable_reason,
-                speculative_prefill_draft_model_id,
-                speculative_prefill_draft_model_revision,
-            ),
-            Self::DeepSeekV4(processor) => processor.ready_event(
-                mtp_runtime_state,
-                mtp_unavailable_reason,
-                mtp_depth_status,
-                speculative_prefill_runtime_state,
-                speculative_prefill_unavailable_reason,
-                speculative_prefill_draft_model_id,
-                speculative_prefill_draft_model_revision,
-            ),
+            Self::Qwen3_5(processor) => {
+                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
+            }
+            Self::Laguna(processor) => {
+                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
+            }
+            Self::K2HorizonMoVA(processor) => {
+                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
+            }
+            Self::DeepSeekV4(processor) => {
+                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
+            }
         }
     }
 

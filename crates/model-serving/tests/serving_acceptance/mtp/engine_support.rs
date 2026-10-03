@@ -40,7 +40,7 @@ pub(super) async fn load_mtp_test_engine(
     let performance_attribution_log =
         PerformanceAttributionLog::open(&performance_attribution_log_path, true)
             .expect("the MTP test should open its attribution log");
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -52,7 +52,6 @@ pub(super) async fn load_mtp_test_engine(
         crate::common::standard_worker_chunking_configuration(),
         true,
         mtp_enabled,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
         if attribute_model_loading {
             PerformanceAttribution::enabled()
         } else {

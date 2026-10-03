@@ -13,7 +13,7 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
           "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
           "prompt_cache":{"enabled":false,"maximum_size_gb":20},
           "chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"full_attention_key_value_growth_tokens":256},
-          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096},"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192},"mtp":{"enabled":true,"draft_depth":2}}}},
+          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096},"acceleration":{"mtp":{"enabled":true,"draft_depth":2}}}},
           "diagnostics":{"performance_attribution_enabled":true,"log_level":"debug","retained_log_files":3}
         }"#,
     );
@@ -40,13 +40,6 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
             .chunking()
             .full_attention_key_value_growth_tokens(),
         256
-    );
-    assert_eq!(
-        model_config
-            .speculative_prefill()
-            .expect("speculative prefill should be configured")
-            .draft_model_id(),
-        Some("organization/draft")
     );
     assert_eq!(model_config.mtp_draft_depth(), Some(2));
     assert_eq!(model_config.configured_mtp_enabled(), Some(true));
@@ -116,7 +109,6 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
         unconfigured_model.chunking().prompt_cache_block_tokens(),
         Some(1_024)
     );
-    assert!(configured_model.speculative_prefill().is_none());
     assert_eq!(configured_model.mtp_draft_depth(), None);
     assert_eq!(configured_model.configured_mtp_enabled(), None);
     assert!(!configured_model.mtp_enabled());
@@ -197,7 +189,6 @@ fn should_reject_invalid_model_ranges_and_unknown_nested_fields() {
         r#"{"limits":{"maximum_context_tokens":1}}"#,
         r#"{"acceleration":{"mtp":{"draft_depth":4}}}"#,
         r#"{"acceleration":{"mtp":{"enabled":"false"}}}"#,
-        r#"{"acceleration":{"speculative_prefill":{"draft_model_id":"draft","keep_percentage":0}}}"#,
         r#"{"unknown":1}"#,
         r#"{"acceleration":{"unknown":1}}"#,
         r#"{"generation_defaults":{"unknown":1}}"#,
@@ -263,10 +254,7 @@ fn should_reject_the_retired_standalone_mtp_head_configuration() {
 
 #[test]
 fn should_reject_control_characters_in_model_relationship_identities() {
-    for configured_models in [
-        serde_json::json!({"target\nmodel": {}}),
-        serde_json::json!({"target": {"acceleration": {"speculative_prefill": {"draft_model_id": "draft\nmodel"}}}}),
-    ] {
+    for configured_models in [serde_json::json!({"target\nmodel": {}})] {
         let temporary_home_directory =
             tempfile::tempdir().expect("temporary home should be created");
         write_config(
@@ -283,68 +271,6 @@ fn should_reject_control_characters_in_model_relationship_identities() {
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
             .expect_err("model relationship identities must reject control characters");
     }
-}
-
-#[test]
-fn should_apply_the_mandatory_trailing_token_count_default_when_speculative_prefill_omits_it() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":30,"minimum_prompt_tokens":8192}}}}}"#,
-    );
-
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("config without a trailing window should load");
-
-    assert_eq!(
-        astronomical_config
-            .resolved_model_config("organization/target", 65_536)
-            .expect("model policy should resolve")
-            .speculative_prefill()
-            .expect("speculative prefill should be configured")
-            .mandatory_trailing_token_count(),
-        512
-    );
-}
-
-#[test]
-fn should_apply_an_explicit_mandatory_trailing_token_count_to_the_target_policy() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","keep_percentage":100,"minimum_prompt_tokens":10000,"mandatory_trailing_token_count":1024}}}}}"#,
-    );
-
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("config with an explicit trailing window should load");
-
-    assert_eq!(
-        astronomical_config
-            .resolved_model_config("organization/target", 65_536)
-            .expect("model policy should resolve")
-            .speculative_prefill()
-            .expect("speculative prefill should be configured")
-            .mandatory_trailing_token_count(),
-        1_024
-    );
-}
-
-#[test]
-fn should_reject_a_zero_mandatory_trailing_token_count_with_a_typed_error() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"acceleration":{"speculative_prefill":{"draft_model_id":"organization/draft","mandatory_trailing_token_count":0}}}}}"#,
-    );
-
-    let load_result = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path());
-
-    assert!(matches!(
-        load_result,
-        Err(AstronomicalConfigError::SpeculativePrefillMandatoryTrailingTokenCountMustBePositive)
-    ));
 }
 
 #[test]

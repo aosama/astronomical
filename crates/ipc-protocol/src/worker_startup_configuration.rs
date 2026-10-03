@@ -15,22 +15,6 @@ pub enum WorkerLogLevel {
     Trace,
 }
 
-/// Resolved optional draft-assisted speculative-prefill settings supplied to the worker.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct WorkerSpeculativePrefillConfiguration {
-    pub enabled: bool,
-    pub target_model_id: Option<String>,
-    pub draft_model_id: Option<String>,
-    pub draft_model_directory: Option<PathBuf>,
-    pub minimum_prompt_tokens: u32,
-    pub keep_percentage: u32,
-    pub selection_chunk_token_count: u32,
-    pub mandatory_trailing_token_count: u32,
-    pub lookahead_token_count: u32,
-    pub importance_pooling_kernel_token_count: u32,
-}
-
 /// Worker-acknowledged feature settings safe to expose through local status.
 ///
 /// This intentionally excludes startup paths and model locations. It proves the

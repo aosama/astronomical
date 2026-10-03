@@ -4,25 +4,24 @@
 //! discovery, configuration generations, and worker replacement compare the
 //! same immutable execution policy.
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use astronomical_config::{
     AstronomicalConfig, AstronomicalConfigError, ChatModelCapabilities, DiscoveredModel,
-    ModelCapabilities, ModelFamily, ResolvedModelConfig, SpeculativePrefillConfig,
+    ModelCapabilities, ModelFamily, ResolvedModelConfig,
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerEmbeddingModelConfiguration,
     WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration, WorkerSpeculativePrefillConfiguration,
+    WorkerQwenImage21ModelConfiguration,
 };
 
 use crate::runtime_model_policy::{
     runtime_model_generation_defaults, worker_chunking_configuration,
 };
 use crate::{
-    ConfiguredSpeculativePrefillPolicy, RuntimeModelAccelerationAvailability,
-    RuntimeModelGenerationDefaults, RuntimeModelPolicy,
+    RuntimeModelAccelerationAvailability, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
 };
 
 /// Resolves every discovered model into the exact policy sent to the worker.
@@ -34,15 +33,6 @@ impl ResolvedModelPolicyCatalog {
         discovered_models: &[DiscoveredModel],
         artifact_context_windows: &HashMap<String, u32>,
     ) -> Result<Arc<HashMap<String, RuntimeModelPolicy>>, AstronomicalConfigError> {
-        let discovered_model_directories = discovered_models
-            .iter()
-            .map(|discovered_model| {
-                (
-                    discovered_model.model_id.clone(),
-                    discovered_model.model_directory.clone(),
-                )
-            })
-            .collect::<HashMap<_, _>>();
         let model_policies = discovered_models
             .iter()
             .map(|discovered_model| {
@@ -52,7 +42,6 @@ impl ResolvedModelPolicyCatalog {
                         discovered_model,
                         chat_capabilities,
                         artifact_context_windows,
-                        &discovered_model_directories,
                     )?,
                     ModelCapabilities::ImageGeneration(_) => Self::image_policy(discovered_model),
                     ModelCapabilities::Embeddings(embedding_capabilities) => {
@@ -71,7 +60,6 @@ impl ResolvedModelPolicyCatalog {
         discovered_model: &DiscoveredModel,
         chat_capabilities: &ChatModelCapabilities,
         artifact_context_windows: &HashMap<String, u32>,
-        discovered_model_directories: &HashMap<String, PathBuf>,
     ) -> Result<RuntimeModelPolicy, AstronomicalConfigError> {
         let resolved_model_config = user_config
             .resolved_model_config(&discovered_model.model_id, chat_capabilities.context_window)?;
@@ -80,7 +68,6 @@ impl ResolvedModelPolicyCatalog {
                 discovered_model,
                 chat_capabilities,
                 &resolved_model_config,
-                discovered_model_directories,
             );
 
         Ok(RuntimeModelPolicy {
@@ -101,44 +88,12 @@ impl ResolvedModelPolicyCatalog {
         discovered_model: &DiscoveredModel,
         chat_capabilities: &ChatModelCapabilities,
         resolved_model_config: &ResolvedModelConfig,
-        discovered_model_directories: &HashMap<String, PathBuf>,
     ) -> (
         WorkerModelConfiguration,
         RuntimeModelAccelerationAvailability,
     ) {
-        let configured_speculative_prefill = resolved_model_config.speculative_prefill();
-        let speculative_prefill =
-            configured_speculative_prefill.and_then(|speculative_prefill_config| {
-                let draft_model_id = speculative_prefill_config
-                    .draft_model_id()
-                    .unwrap_or_default();
-                discovered_model_directories
-                    .get(draft_model_id)
-                    .cloned()
-                    .map(|draft_model_directory| {
-                        speculative_prefill_configuration(
-                            speculative_prefill_config,
-                            draft_model_directory,
-                        )
-                    })
-            });
         let acceleration_availability = RuntimeModelAccelerationAvailability {
             configured_mtp_enabled: resolved_model_config.configured_mtp_enabled(),
-            configured_speculative_prefill: configured_speculative_prefill.map(|configuration| {
-                ConfiguredSpeculativePrefillPolicy {
-                    draft_model_id: configuration
-                        .draft_model_id()
-                        .unwrap_or_default()
-                        .to_owned(),
-                    keep_percentage: configuration.keep_percentage(),
-                    minimum_prompt_tokens: configuration.minimum_prompt_tokens(),
-                }
-            }),
-            speculative_prefill_unavailable_reason: configured_speculative_prefill
-                .filter(|_| speculative_prefill.is_none())
-                .map(|_| {
-                    "configured speculative-prefill drafter is not currently discovered".to_owned()
-                }),
         };
 
         (
@@ -150,7 +105,6 @@ impl ResolvedModelPolicyCatalog {
                 chunking: worker_chunking_configuration(resolved_model_config.chunking()),
                 mtp_enabled: resolved_model_config.mtp_enabled(),
                 mtp_draft_depth: resolved_model_config.mtp_draft_depth(),
-                speculative_prefill,
             }),
             acceleration_availability,
         )
@@ -232,28 +186,5 @@ impl ResolvedModelPolicyCatalog {
                 },
             ),
         }
-    }
-}
-
-fn speculative_prefill_configuration(
-    speculative_prefill_config: &SpeculativePrefillConfig,
-    draft_model_directory: PathBuf,
-) -> WorkerSpeculativePrefillConfiguration {
-    WorkerSpeculativePrefillConfiguration {
-        enabled: speculative_prefill_config.is_enabled(),
-        target_model_id: speculative_prefill_config
-            .target_model_id()
-            .map(str::to_owned),
-        draft_model_id: speculative_prefill_config
-            .draft_model_id()
-            .map(str::to_owned),
-        draft_model_directory: Some(draft_model_directory),
-        minimum_prompt_tokens: speculative_prefill_config.minimum_prompt_tokens(),
-        keep_percentage: speculative_prefill_config.keep_percentage(),
-        selection_chunk_token_count: speculative_prefill_config.selection_chunk_token_count(),
-        mandatory_trailing_token_count: speculative_prefill_config.mandatory_trailing_token_count(),
-        lookahead_token_count: speculative_prefill_config.lookahead_token_count(),
-        importance_pooling_kernel_token_count: speculative_prefill_config
-            .importance_pooling_kernel_token_count(),
     }
 }

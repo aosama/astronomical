@@ -121,8 +121,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
   let chunking: WorkerChunkingConfiguration
   let mtpEnabled: Bool
   let mtpDraftDepth: UInt8?
-  let speculativePrefillEnabled: Bool
-  let speculativePrefill: WorkerSpeculativePrefillRuntimeConfiguration?
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case modelIdentifier = "model_id"
@@ -131,8 +129,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
     case chunking
     case mtpEnabled = "mtp_enabled"
     case mtpDraftDepth = "mtp_draft_depth"
-    case speculativePrefillEnabled = "speculative_prefill_enabled"
-    case speculativePrefill = "speculative_prefill"
   }
 
   init(from decoder: Decoder) throws {
@@ -144,10 +140,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
     chunking = try container.decode(WorkerChunkingConfiguration.self, forKey: .chunking)
     mtpEnabled = try container.decode(Bool.self, forKey: .mtpEnabled)
     mtpDraftDepth = try container.decodeRequiredNullable(UInt8.self, forKey: .mtpDraftDepth)
-    speculativePrefillEnabled = try container.decode(
-      Bool.self, forKey: .speculativePrefillEnabled)
-    speculativePrefill = try container.decodeRequiredNullable(
-      WorkerSpeculativePrefillRuntimeConfiguration.self, forKey: .speculativePrefill)
   }
 }
 
@@ -226,31 +218,10 @@ enum WorkerEmbeddingModelFamily: String, Codable, Equatable {
   case modernBert = "modernbert"
 }
 
-struct WorkerSpeculativePrefillRuntimeConfiguration: Codable, Equatable {
-  let draftModelIdentifier: String
-  let minimumPromptTokens: UInt32
-  let keepPercentage: UInt32
-
-  enum CodingKeys: String, CodingKey, CaseIterable {
-    case draftModelIdentifier = "draft_model_id"
-    case minimumPromptTokens = "minimum_prompt_tokens"
-    case keepPercentage = "keep_percentage"
-  }
-
-  init(from decoder: Decoder) throws {
-    try decoder.rejectUnknownKeys(CodingKeys.self)
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    draftModelIdentifier = try container.decode(String.self, forKey: .draftModelIdentifier)
-    minimumPromptTokens = try container.decode(UInt32.self, forKey: .minimumPromptTokens)
-    keepPercentage = try container.decode(UInt32.self, forKey: .keepPercentage)
-  }
-}
-
 struct WorkerChunkingConfiguration: Codable, Equatable {
   let fixedPromptProcessingChunkSizeTokens: UInt32
   let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32
   let fullAttentionKeyValueGrowthTokens: UInt32
-  let speculativePrefillDraftForwardTokens: UInt32
   let prefillGraphSubmissionLayerInterval: UInt32
   let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32
   let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
@@ -264,7 +235,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case fixedPromptProcessingChunkSizeTokens = "fixed_prompt_processing_chunk_size_tokens"
     case fixedSsdStreamingPromptProcessingChunkSizeTokens = "fixed_ssd_streaming_prompt_processing_chunk_size_tokens"
     case fullAttentionKeyValueGrowthTokens = "full_attention_key_value_growth_tokens"
-    case speculativePrefillDraftForwardTokens = "speculative_prefill_draft_forward_tokens"
     case prefillGraphSubmissionLayerInterval = "prefill_graph_submission_layer_interval"
     case experimentalSsdPagingPrefillGraphSubmissionLayerInterval = "experimental_ssd_paging_prefill_graph_submission_layer_interval"
     case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
@@ -284,8 +254,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       UInt32.self, forKey: .fixedSsdStreamingPromptProcessingChunkSizeTokens)
     fullAttentionKeyValueGrowthTokens = try container.decode(
       UInt32.self, forKey: .fullAttentionKeyValueGrowthTokens)
-    speculativePrefillDraftForwardTokens = try container.decode(
-      UInt32.self, forKey: .speculativePrefillDraftForwardTokens)
     prefillGraphSubmissionLayerInterval = try container.decode(
       UInt32.self, forKey: .prefillGraphSubmissionLayerInterval)
     experimentalSsdPagingPrefillGraphSubmissionLayerInterval = try container.decode(

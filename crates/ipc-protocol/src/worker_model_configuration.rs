@@ -2,16 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{WorkerChunkingConfiguration, WorkerSpeculativePrefillConfiguration};
-
-/// Path-free speculative-prefill policy acknowledged after model binding.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct WorkerSpeculativePrefillRuntimeConfiguration {
-    pub draft_model_id: String,
-    pub minimum_prompt_tokens: u32,
-    pub keep_percentage: u32,
-}
+use crate::WorkerChunkingConfiguration;
 
 /// Complete autoregressive execution policy for one canonical requestable model.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -25,7 +16,6 @@ pub struct WorkerAutoregressiveModelConfiguration {
     pub chunking: WorkerChunkingConfiguration,
     pub mtp_enabled: bool,
     pub mtp_draft_depth: Option<u8>,
-    pub speculative_prefill: Option<WorkerSpeculativePrefillConfiguration>,
 }
 
 /// Path-free autoregressive policy acknowledged after model binding.
@@ -40,8 +30,6 @@ pub struct WorkerLoadedAutoregressiveModelRuntimeConfiguration {
     pub chunking: WorkerChunkingConfiguration,
     pub mtp_enabled: bool,
     pub mtp_draft_depth: Option<u8>,
-    pub speculative_prefill_enabled: bool,
-    pub speculative_prefill: Option<WorkerSpeculativePrefillRuntimeConfiguration>,
 }
 
 /// Typed image profile identifier carried without autoregressive placeholders.
@@ -165,22 +153,6 @@ impl WorkerModelConfiguration {
                         chunking: configuration.chunking.clone(),
                         mtp_enabled: configuration.mtp_enabled,
                         mtp_draft_depth: configuration.mtp_draft_depth,
-                        speculative_prefill_enabled: configuration.speculative_prefill.is_some(),
-                        speculative_prefill: configuration.speculative_prefill.as_ref().and_then(
-                            |speculative_prefill| {
-                                speculative_prefill
-                                    .draft_model_id
-                                    .as_ref()
-                                    .map(|draft_model_id| {
-                                        WorkerSpeculativePrefillRuntimeConfiguration {
-                                            draft_model_id: draft_model_id.clone(),
-                                            minimum_prompt_tokens: speculative_prefill
-                                                .minimum_prompt_tokens,
-                                            keep_percentage: speculative_prefill.keep_percentage,
-                                        }
-                                    })
-                            },
-                        ),
                     },
                 )
             }

@@ -15,8 +15,6 @@ pub struct Qwen3_5ModelChunkingConfiguration {
     pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     /// Experimental one-token layer interval used only during solid-state-drive paging.
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
-    /// Maximum prompt rows supplied to one drafter forward.
-    pub(crate) speculative_prefill_draft_forward_tokens: usize,
 }
 
 impl Qwen3_5ModelChunkingConfiguration {
@@ -25,13 +23,7 @@ impl Qwen3_5ModelChunkingConfiguration {
         prefill_graph_submission_layer_interval: u32,
         experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
         experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
-        speculative_prefill_draft_forward_tokens: u32,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        if speculative_prefill_draft_forward_tokens == 0 {
-            return Err(Qwen3_5ExecutionError::InvalidInput {
-                description: "speculative-prefill draft forward tokens must be positive",
-            });
-        }
         if full_attention_key_value_growth_tokens == 0 {
             return Err(Qwen3_5ExecutionError::InvalidInput {
                 description: "full-attention key/value growth tokens must be positive",
@@ -47,12 +39,6 @@ impl Qwen3_5ModelChunkingConfiguration {
             prefill_graph_submission_layer_interval,
             experimental_ssd_paging_prefill_graph_submission_layer_interval,
             experimental_ssd_paging_generation_graph_submission_layer_interval,
-            speculative_prefill_draft_forward_tokens: usize::try_from(
-                speculative_prefill_draft_forward_tokens,
-            )
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                description: "speculative-prefill draft forward tokens exceed the usize range",
-            })?,
         })
     }
 }

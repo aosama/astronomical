@@ -44,15 +44,14 @@ pub(super) fn construct_automatic_residency_engine(
         .expect("the tokenizer should expose validated control tokens");
     let think_end_token_id = tokenizer.think_end_token_id();
     let image_pad_token_id = tokenizer.image_pad_token_id();
-    let representative_prompt = crate::serving_acceptance::speculative_prefill::support::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
+    let prompt_token_ids = crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
         &model_directory,
         &model_id,
         request_id,
         required_prompt_token_count,
         2,
     );
-    let total_context_token_count = representative_prompt
-        .prompt_token_ids
+    let total_context_token_count = prompt_token_ids
         .len()
         .checked_add(2)
         .expect("the request context token count should fit usize");
@@ -60,7 +59,7 @@ pub(super) fn construct_automatic_residency_engine(
         .config()
         .context_memory_reservation_bytes(total_context_token_count)
         .expect("the request context memory reservation should fit usize");
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_speculative_prefill_and_performance_attribution(
+    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
@@ -72,14 +71,13 @@ pub(super) fn construct_automatic_residency_engine(
         crate::common::standard_worker_chunking_configuration(),
         false,
         true,
-        crate::common::disabled_worker_speculative_prefill_configuration(),
         astronomical_model_serving::PerformanceAttribution::disabled(),
         astronomical_model_serving::PerformanceAttributionLog::disabled(),
     )
     .expect("the automatic expert-residency engine settings should be valid");
     (
         qwen3_5_engine,
-        representative_prompt.prompt_token_ids,
+        prompt_token_ids,
         image_pad_token_id,
         context_memory_reservation_bytes,
     )

@@ -35,7 +35,6 @@ pub(crate) fn worker_model_configuration(model_id: &str) -> WorkerModelConfigura
             fixed_prompt_processing_chunk_size_tokens: 256,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
             full_attention_key_value_growth_tokens: 256,
-            speculative_prefill_draft_forward_tokens: 256,
             prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
@@ -47,7 +46,6 @@ pub(crate) fn worker_model_configuration(model_id: &str) -> WorkerModelConfigura
         },
         mtp_enabled: true,
         mtp_draft_depth: None,
-        speculative_prefill: None,
     })
 }
 
@@ -58,24 +56,6 @@ pub(super) fn ready_event() -> WorkerEvent {
 pub(super) fn ready_event_with_load_details(
     mtp_runtime_state: MtpRuntimeState,
     mtp_unavailable_reason: Option<String>,
-) -> WorkerEvent {
-    ready_event_with_speculative_prefill_load_details(
-        mtp_runtime_state,
-        mtp_unavailable_reason,
-        SpeculativePrefillRuntimeState::Disabled,
-        None,
-        None,
-        None,
-    )
-}
-
-pub(super) fn ready_event_with_speculative_prefill_load_details(
-    mtp_runtime_state: MtpRuntimeState,
-    mtp_unavailable_reason: Option<String>,
-    speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-    speculative_prefill_unavailable_reason: Option<String>,
-    speculative_prefill_draft_model_id: Option<String>,
-    speculative_prefill_draft_model_revision: Option<String>,
 ) -> WorkerEvent {
     WorkerEvent::Ready {
         model_id: "example/scripted-chat".to_owned(),
@@ -91,10 +71,6 @@ pub(super) fn ready_event_with_speculative_prefill_load_details(
         mtp_runtime_state,
         mtp_unavailable_reason,
         mtp_depth_status: Default::default(),
-        speculative_prefill_runtime_state,
-        speculative_prefill_unavailable_reason,
-        speculative_prefill_draft_model_id,
-        speculative_prefill_draft_model_revision,
     }
 }
 

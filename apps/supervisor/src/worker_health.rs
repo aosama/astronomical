@@ -1,9 +1,8 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    DaemonWorkerStatus, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState,
-    SpeculativePrefillRuntimeState, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
-    WorkerRuntimeFeatureConfiguration,
+    DaemonWorkerStatus, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, WorkerEvent,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
+    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -239,14 +238,6 @@ pub struct WorkerHealthSnapshot {
     pub mtp_unavailable_reason: Option<String>,
     /// Configured, artifact, resolved, and current execution depth metadata.
     pub mtp_depth_status: MtpDepthStatus,
-    /// Actual optional draft-assisted speculative-prefill runtime state.
-    pub speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-    /// Concise reason when speculative prefill is Unavailable.
-    pub speculative_prefill_unavailable_reason: Option<String>,
-    /// Configured draft model identity reported by the worker.
-    pub speculative_prefill_draft_model_id: Option<String>,
-    /// Validated request-scoped draft revision reported by the worker.
-    pub speculative_prefill_draft_model_revision: Option<String>,
     /// Feature settings explicitly acknowledged by the currently running worker.
     pub worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
     /// Latest persistent prompt-cache observability stats from the worker.
@@ -289,10 +280,6 @@ impl WorkerHealthSnapshot {
             mtp_runtime_state,
             mtp_unavailable_reason,
             mtp_depth_status: MtpDepthStatus::EMPTY,
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
@@ -366,10 +353,6 @@ impl WorkerHealthSnapshot {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: MtpDepthStatus::EMPTY,
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
@@ -398,10 +381,6 @@ impl WorkerHealthSnapshot {
             mtp_runtime_state: MtpRuntimeState::Disabled,
             mtp_unavailable_reason: None,
             mtp_depth_status: MtpDepthStatus::EMPTY,
-            speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-            speculative_prefill_unavailable_reason: None,
-            speculative_prefill_draft_model_id: None,
-            speculative_prefill_draft_model_revision: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
@@ -429,21 +408,6 @@ impl WorkerHealthSnapshot {
     #[must_use]
     pub const fn with_mtp_depth_status(mut self, mtp_depth_status: MtpDepthStatus) -> Self {
         self.mtp_depth_status = mtp_depth_status;
-        self
-    }
-
-    /// Adds worker-reported optional draft-assisted speculative-prefill metadata.
-    pub fn with_speculative_prefill_runtime(
-        mut self,
-        speculative_prefill_runtime_state: SpeculativePrefillRuntimeState,
-        speculative_prefill_unavailable_reason: Option<String>,
-        speculative_prefill_draft_model_id: Option<String>,
-        speculative_prefill_draft_model_revision: Option<String>,
-    ) -> Self {
-        self.speculative_prefill_runtime_state = speculative_prefill_runtime_state;
-        self.speculative_prefill_unavailable_reason = speculative_prefill_unavailable_reason;
-        self.speculative_prefill_draft_model_id = speculative_prefill_draft_model_id;
-        self.speculative_prefill_draft_model_revision = speculative_prefill_draft_model_revision;
         self
     }
 

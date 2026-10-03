@@ -108,13 +108,10 @@ pub(super) fn prefill_next_chunk(
         completed_prefill_chunk_tokens: chunk_token_ids.len() as u32,
         mlx_memory_telemetry: None,
         expert_residency_telemetry: None,
-        speculative_prefill_draft_memory_telemetry: None,
         expert_memory_mode: Some(ExpertMemoryMode::Resident),
         prompt_work_reuse: WorkerPromptWorkReuse {
             target_eligible_token_count: active.prompt_token_ids.len() as u64,
             target_restored_token_count: u64::from(active.cached_token_count),
-            drafter_eligible_token_count: 0,
-            drafter_restored_token_count: 0,
         },
         persistent_prompt_cache_diagnostics: None,
     })

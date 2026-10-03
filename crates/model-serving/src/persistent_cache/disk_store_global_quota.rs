@@ -18,8 +18,49 @@ use super::disk_store_file::{
 use super::disk_store_global_quota_candidate::{
     GlobalPromptCacheCleanupClassification, GlobalPromptCacheEvictionCandidate,
 };
-use super::disk_store_global_quota_scan::scan_global_prompt_cache_quota;
+use super::disk_store_global_quota_scan::{
+    directory_file_size_and_paths, scan_global_prompt_cache_quota,
+};
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
+
+const RETIRED_SPECULATIVE_PREFILL_CACHE_DIRECTORIES: [&str; 2] = [
+    "speculative_prefill_selections",
+    "speculative_prefill_target_states",
+];
+
+pub(super) fn remove_retired_speculative_prefill_cache_directories(
+    active_model_prompt_cache_directory: &Path,
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
+) -> Result<(), PersistentPromptCacheDiskStoreError> {
+    for retired_directory_name in RETIRED_SPECULATIVE_PREFILL_CACHE_DIRECTORIES {
+        let retired_directory_path =
+            active_model_prompt_cache_directory.join(retired_directory_name);
+        let retired_directory_metadata = match fs::symlink_metadata(&retired_directory_path) {
+            Ok(metadata) => metadata,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(source) => {
+                return Err(PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
+                    block_file_path: retired_directory_path,
+                    source,
+                });
+            }
+        };
+        let retired_bytes = if retired_directory_metadata.is_dir() {
+            directory_file_size_and_paths(&retired_directory_path)?.0
+        } else {
+            retired_directory_metadata.len()
+        };
+        if retired_directory_metadata.is_dir() {
+            remove_cache_owned_directory_or_confirm_absent(&retired_directory_path)?;
+        } else {
+            remove_cache_owned_file_or_confirm_absent(&retired_directory_path)?;
+        }
+        startup_cleanup_evidence
+            .obsolete_format
+            .record_artifact(retired_bytes);
+    }
+    Ok(())
+}
 
 pub(super) fn prepare_prompt_cache_directory_tree(
     global_prompt_cache_root_directory: &Path,

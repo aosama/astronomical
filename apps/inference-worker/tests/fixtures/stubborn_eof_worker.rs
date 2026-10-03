@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use astronomical_inference_worker::worker_process_runtime;
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MtpRuntimeState, ProtocolWriter, SpeculativePrefillRuntimeState,
-    WorkerEvent,
+    ChatModelCapabilities, MtpRuntimeState, ProtocolWriter, WorkerEvent,
 };
 use tokio::io::AsyncReadExt;
 
@@ -25,10 +24,6 @@ fn main() {
                 mtp_runtime_state: MtpRuntimeState::Disabled,
                 mtp_unavailable_reason: None,
                 mtp_depth_status: Default::default(),
-                speculative_prefill_runtime_state: SpeculativePrefillRuntimeState::Disabled,
-                speculative_prefill_unavailable_reason: None,
-                speculative_prefill_draft_model_id: None,
-                speculative_prefill_draft_model_revision: None,
                 model_id: "astronomical/stubborn-worker".to_owned(),
                 capabilities: ChatModelCapabilities {
                     supports_reasoning: false,

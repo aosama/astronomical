@@ -323,10 +323,6 @@ pub(super) fn assert_worker_reuse_state(
         required_u64(memory_snapshot, "context_state_payload_bytes"),
         0
     );
-    assert_eq!(
-        required_u64(memory_snapshot, "speculative_prefill_draft_memory_bytes"),
-        0
-    );
     let active_memory_bytes = required_u64(memory_snapshot, "active_memory_bytes");
     let peak_memory_bytes = required_u64(memory_snapshot, "peak_memory_bytes");
     let mlx_memory_ceiling_bytes = required_u64(status, "mlx_memory_ceiling_bytes");

@@ -139,13 +139,9 @@ impl RequestDecoderStateStack {
         materialize_restored_full_attention_tensors(self, runtime)
     }
 
-    /// Grows a restored full-attention destination to a longer final token count.
-    ///
-    /// A SpecPrefill sparse restore leaves a compact slab whose capacity equals the
-    /// selected row count, but the sparse-anchored dense tail that follows it must be
-    /// written at row offsets beyond that count (issue #659). Extending the slab once,
-    /// before any tail block is absorbed, keeps every tail block a single `slice_update`
-    /// into a destination that already has its final geometry.
+    /// Grows a restored full-attention destination to its complete restored-prefix size
+    /// before subsequent blocks are absorbed, so each block uses one `slice_update` into
+    /// the final geometry.
     pub fn grow_persistent_prompt_cache_kv_restore_destination(
         &mut self,
         runtime: &MlxRuntime,

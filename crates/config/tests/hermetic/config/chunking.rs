@@ -18,7 +18,6 @@ fn should_resolve_every_user_configured_chunking_boundary() {
           "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 1024,
             "full_attention_key_value_growth_tokens": 192,
-            "speculative_prefill_draft_forward_tokens": 1536,
             "prefill_graph_submission_layer_interval": 2,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
             "prompt_cache_block_tokens": 1024,
@@ -35,7 +34,6 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         .expect("chunking configuration should resolve");
 
     assert_eq!(chunking.full_attention_key_value_growth_tokens(), 192);
-    assert_eq!(chunking.speculative_prefill_draft_forward_tokens(), 1_536);
     assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
     assert_eq!(
         chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
@@ -190,7 +188,6 @@ fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
 fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
     for field_name in [
         "full_attention_key_value_growth_tokens",
-        "speculative_prefill_draft_forward_tokens",
         "prompt_cache_block_tokens",
         "prompt_cache_common_prefix_stride_blocks",
     ] {
