@@ -17,6 +17,8 @@
 .opencode/command/release-stable.md
 AGENTS.override.md
 
+private/
+
 # Local UI screenshot captures
 ScreenShots/
 

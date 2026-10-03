@@ -24,6 +24,8 @@ const APPLY_GATED_DELTA_DECAY_OPERATION: &str =
     "apply the compiled MLX gated-delta decay arithmetic";
 const COMPILE_GATED_DELTA_DECAY_OPERATION: &str =
     "compile the shapeless MLX gated-delta decay arithmetic";
+const APPLY_FUSED_SILU_OPERATION: &str = "apply the compiled MLX fused SiLU graph";
+const COMPILE_FUSED_SILU_OPERATION: &str = "compile the shapeless MLX fused SiLU graph";
 
 /// Retained shapeless compilations for elementwise Qwen3.5-MoE graph composites.
 #[derive(Debug)]
@@ -32,6 +34,7 @@ pub struct MlxCompiledElementwiseGraphs {
     gated_delta_decay: MlxCompiledGraph,
     precise_swiglu: MlxCompiledGraph,
     sparse_shared_expert_combination: MlxCompiledGraph,
+    fused_silu: MlxCompiledGraph,
 }
 
 impl MlxCompiledElementwiseGraphs {
@@ -53,6 +56,10 @@ impl MlxCompiledElementwiseGraphs {
             sparse_shared_expert_combination: MlxCompiledGraph::new(
                 build_sparse_shared_expert_combination_graph,
                 COMPILE_SPARSE_SHARED_EXPERT_COMBINATION_OPERATION,
+            )?,
+            fused_silu: MlxCompiledGraph::new(
+                build_fused_silu_graph,
+                COMPILE_FUSED_SILU_OPERATION,
             )?,
         })
     }
@@ -120,6 +127,23 @@ impl MlxRuntime {
             ],
             APPLY_GATED_DELTA_DECAY_OPERATION,
         )
+    }
+
+    /// Applies `input * sigmoid(input)` as one compiled composite.
+    ///
+    /// Stock MLX defines `nn.silu` as a shapeless `mx.compile`, which fuses the
+    /// sigmoid and the multiply into one kernel reading the input once. The raw
+    /// two-op composition runs two kernels and roughly 2.5x the memory traffic,
+    /// which the gated-delta convolution path paid on every layer of every
+    /// prefill chunk and decode step.
+    pub fn apply_compiled_silu(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        input: &MlxArray,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        compiled_elementwise_graphs
+            .fused_silu
+            .apply(&[input], APPLY_FUSED_SILU_OPERATION)
     }
 }
 
@@ -356,4 +380,44 @@ unsafe extern "C" fn build_gated_delta_decay_graph(
     };
     // SAFETY: The output vector is unique and live for this callback.
     unsafe { set_graph_output(output_vector, &decays) }
+}
+
+unsafe extern "C" fn build_fused_silu_graph(
+    output_vector: *mut raw::mlx_vector_array,
+    input_vector: raw::mlx_vector_array,
+) -> c_int {
+    if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 1 {
+        return 1;
+    }
+    let input = match array_from_vector(input_vector, 0) {
+        Ok(input) => input,
+        Err(get_status) => return get_status,
+    };
+    let gpu_stream = match MlxStream::default_gpu() {
+        Ok(gpu_stream) => gpu_stream,
+        Err(_) => return 1,
+    };
+    let sigmoid_input = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_sigmoid(output_array, input.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(sigmoid_input) => sigmoid_input,
+        Err(build_status) => return build_status,
+    };
+    let silu_output = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                input.raw(),
+                sigmoid_input.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(silu_output) => silu_output,
+        Err(build_status) => return build_status,
+    };
+    // SAFETY: The output vector is unique and live for this callback.
+    unsafe { set_graph_output(output_vector, &silu_output) }
 }

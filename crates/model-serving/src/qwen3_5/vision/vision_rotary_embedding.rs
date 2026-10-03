@@ -1,8 +1,9 @@
 //! Two-dimensional rotary-position graph for Qwen3.5 vision attention.
 //!
-//! Source lineage: Rust translation of MLX-VLM's Qwen3-VL vision rotary-position
-//! routines (MIT License; see third-party license notices). Trigonometric tensor
-//! work is delegated to MLX-C `mlx_cos` and `mlx_sin` from `mlx-c/mlx/c/ops.h`.
+//! Source lineage: Rust translation of an upstream open-source Qwen3-VL
+//! rotary-position routine (see third-party/THIRD_PARTY_NOTICES). Trigonometric
+//! tensor work is delegated to MLX-C `mlx_cos` and `mlx_sin` from
+//! `mlx-c/mlx/c/ops.h`.
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 

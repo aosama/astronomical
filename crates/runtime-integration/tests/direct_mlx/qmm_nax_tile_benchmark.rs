@@ -13,11 +13,11 @@ const BITS: i32 = 4;
 const PROJECTION_SHAPES: [(usize, usize); 3] = [(8_192, 2_048), (4_096, 2_048), (2_048, 4_096)];
 const TOKEN_COUNTS: [usize; 4] = [512, 1_024, 2_048, 4_096];
 
-/// Tile candidates ported from the OMLX Qwen3.5 prefill NAX kernels plus the
-/// stock MLX tile, swept through the ASTRONOMICAL_QMM_NAX_TILE override.
-/// Tuple order is (bm, bn, bk, wm, wn). OMLX's (64, 32, 64) variant is
-/// bk=32 in their (bm, bk, bn) macro order; bn=32 is never instantiated by
-/// OMLX and produces wrong output on the stock kernel (TN=1 NAX tile).
+/// Tile candidates for the Qwen3.5 prefill NAX path plus the stock MLX tile,
+/// swept through the ASTRONOMICAL_QMM_NAX_TILE override.
+/// Tuple order is (bm, bn, bk, wm, wn). The instantiation macro takes
+/// (bm, bk, bn), so a (64, 32, 64) label is bk=32, not bn=32; bn=32
+/// (TN=1 NAX tile) produces wrong output on the stock kernel and is not swept.
 const TILE_CANDIDATES: [(usize, usize, usize, usize, usize); 5] = [
     (64, 64, 64, 2, 2),
     (128, 64, 64, 2, 2),

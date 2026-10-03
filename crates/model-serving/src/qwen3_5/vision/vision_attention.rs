@@ -1,8 +1,9 @@
 //! Qwen3.5 vision self-attention graph assembly.
 //!
-//! Source lineage: Rust translation of the MLX-VLM Qwen3-VL attention path
-//! (MIT License; see third-party license notices). Kernel math is delegated to
-//! MLX-C `mlx_fast_scaled_dot_product_attention` declared in `mlx-c/mlx/c/fast.h`.
+//! Source lineage: Rust translation of an upstream open-source Qwen3-VL
+//! attention path (see third-party/THIRD_PARTY_NOTICES). Kernel math is
+//! delegated to MLX-C `mlx_fast_scaled_dot_product_attention` declared in
+//! `mlx-c/mlx/c/fast.h`.
 
 use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 

@@ -306,3 +306,219 @@ impl CustomMetalKernelProbe for GatedDeltaBoundaryCheckpointProbe<'_> {
         Ok(())
     }
 }
+
+/// Bounded geometry for the fused decode prework probe: one key head, one
+/// value head, the required 128 head dimension, a single decode row, and the
+/// three-row rolling window. The channel layout is the production
+/// `two key head blocks plus one value head block`.
+const PREWORK_PROBE_KEY_HEAD_COUNT: i32 = 1;
+const PREWORK_PROBE_VALUE_HEAD_COUNT: i32 = 1;
+const PREWORK_PROBE_HEAD_DIMENSION: i32 = 128;
+const PREWORK_PROBE_TOKEN_COUNT: i32 = 1;
+const PREWORK_PROBE_KEPT_STATE_ROW_COUNT: i32 = 3;
+const PREWORK_PROBE_RMS_NORM_EPSILON: f32 = 1e-6;
+
+struct PreworkProbeArrays {
+    mixed_queries_keys_values: MlxArray,
+    convolution_state: MlxArray,
+    convolution_weight: MlxArray,
+    query_scale: MlxArray,
+    key_scale: MlxArray,
+}
+
+fn prework_probe_arrays(runtime: &MlxRuntime) -> Result<PreworkProbeArrays, MlxRuntimeError> {
+    let key_block = PREWORK_PROBE_KEY_HEAD_COUNT * PREWORK_PROBE_HEAD_DIMENSION;
+    let convolution_dimension =
+        2 * key_block + PREWORK_PROBE_VALUE_HEAD_COUNT * PREWORK_PROBE_HEAD_DIMENSION;
+    let mixed_values = (0..(PREWORK_PROBE_TOKEN_COUNT * convolution_dimension) as usize)
+        .map(|value_index| ((value_index % 19) as f32 - 9.0) / 48.0)
+        .collect::<Vec<_>>();
+    let mixed_queries_keys_values = runtime
+        .array_from_f32(
+            &mixed_values,
+            &[1, PREWORK_PROBE_TOKEN_COUNT, convolution_dimension],
+        )
+        .and_then(|array| runtime.astype(&array, MlxDtype::BFloat16))?;
+    let state_values = (0..(PREWORK_PROBE_KEPT_STATE_ROW_COUNT * convolution_dimension) as usize)
+        .map(|value_index| ((value_index % 23) as f32 - 11.0) / 40.0)
+        .collect::<Vec<_>>();
+    let convolution_state = runtime
+        .array_from_f32(
+            &state_values,
+            &[1, PREWORK_PROBE_KEPT_STATE_ROW_COUNT, convolution_dimension],
+        )
+        .and_then(|array| runtime.astype(&array, MlxDtype::BFloat16))?;
+    let weight_values = (0..(convolution_dimension * 4) as usize)
+        .map(|value_index| ((value_index % 17) as f32 - 8.0) / 20.0)
+        .collect::<Vec<_>>();
+    let convolution_weight = runtime
+        .array_from_f32(&weight_values, &[convolution_dimension, 4, 1])
+        .and_then(|array| runtime.astype(&array, MlxDtype::BFloat16))?;
+    let query_scale = scale_scalar(runtime, PREWORK_PROBE_HEAD_DIMENSION as f32)?;
+    let key_scale = scale_scalar(runtime, (PREWORK_PROBE_HEAD_DIMENSION as f32).sqrt())?;
+    Ok(PreworkProbeArrays {
+        mixed_queries_keys_values,
+        convolution_state,
+        convolution_weight,
+        query_scale,
+        key_scale,
+    })
+}
+
+fn scale_scalar(runtime: &MlxRuntime, scale_divisor: f32) -> Result<MlxArray, MlxRuntimeError> {
+    runtime
+        .array_from_f32(&[scale_divisor.recip()], &[])
+        .and_then(|array| runtime.astype(&array, MlxDtype::BFloat16))
+}
+
+/// The composed public-MLX prework reference for the probe: rolling concat,
+/// depthwise conv1d, SiLU, q/k/v split, ones-weight RMS norms, and the two
+/// scalar scales — the exact production fallback the fused kernel replaces.
+fn composed_prework_probe_reference(
+    runtime: &MlxRuntime,
+    probe_arrays: &PreworkProbeArrays,
+) -> Result<(MlxArray, MlxArray, MlxArray, MlxArray), MlxRuntimeError> {
+    let key_block = PREWORK_PROBE_KEY_HEAD_COUNT * PREWORK_PROBE_HEAD_DIMENSION;
+    let convolution_dimension =
+        2 * key_block + PREWORK_PROBE_VALUE_HEAD_COUNT * PREWORK_PROBE_HEAD_DIMENSION;
+    let concatenated = runtime.concatenate_axis(
+        &[
+            &probe_arrays.convolution_state,
+            &probe_arrays.mixed_queries_keys_values,
+        ],
+        1,
+    )?;
+    let convolution_output = runtime.conv1d(
+        &concatenated,
+        &probe_arrays.convolution_weight,
+        1,
+        0,
+        1,
+        convolution_dimension,
+    )?;
+    let activated = runtime.silu(&convolution_output)?;
+    let slice_queries = runtime.slice(
+        &activated,
+        &[0, 0, 0],
+        &[1, PREWORK_PROBE_TOKEN_COUNT, key_block],
+        &[1, 1, 1],
+    )?;
+    let queries = runtime.reshape(
+        &slice_queries,
+        &[
+            1,
+            PREWORK_PROBE_TOKEN_COUNT,
+            PREWORK_PROBE_KEY_HEAD_COUNT,
+            PREWORK_PROBE_HEAD_DIMENSION,
+        ],
+    )?;
+    let slice_keys = runtime.slice(
+        &activated,
+        &[0, 0, key_block],
+        &[1, PREWORK_PROBE_TOKEN_COUNT, 2 * key_block],
+        &[1, 1, 1],
+    )?;
+    let keys = runtime.reshape(
+        &slice_keys,
+        &[
+            1,
+            PREWORK_PROBE_TOKEN_COUNT,
+            PREWORK_PROBE_KEY_HEAD_COUNT,
+            PREWORK_PROBE_HEAD_DIMENSION,
+        ],
+    )?;
+    let slice_values = runtime.slice(
+        &activated,
+        &[0, 0, 2 * key_block],
+        &[1, PREWORK_PROBE_TOKEN_COUNT, convolution_dimension],
+        &[1, 1, 1],
+    )?;
+    let values = runtime.reshape(
+        &slice_values,
+        &[
+            1,
+            PREWORK_PROBE_TOKEN_COUNT,
+            PREWORK_PROBE_VALUE_HEAD_COUNT,
+            PREWORK_PROBE_HEAD_DIMENSION,
+        ],
+    )?;
+    let normalized_queries =
+        runtime.rms_norm_without_weight(&queries, PREWORK_PROBE_RMS_NORM_EPSILON)?;
+    let normalized_keys = runtime.rms_norm_without_weight(&keys, PREWORK_PROBE_RMS_NORM_EPSILON)?;
+    let scaled_queries = runtime.multiply(&normalized_queries, &probe_arrays.query_scale)?;
+    let scaled_keys = runtime.multiply(&normalized_keys, &probe_arrays.key_scale)?;
+    let next_convolution_state = runtime.slice(
+        &concatenated,
+        &[0, PREWORK_PROBE_TOKEN_COUNT, 0],
+        &[
+            1,
+            PREWORK_PROBE_TOKEN_COUNT + PREWORK_PROBE_KEPT_STATE_ROW_COUNT,
+            convolution_dimension,
+        ],
+        &[1, 1, 1],
+    )?;
+    Ok((scaled_queries, scaled_keys, values, next_convolution_state))
+}
+
+pub struct GdnDecodePreworkProbe<'runtime> {
+    runtime: &'runtime MlxRuntime,
+}
+
+impl<'runtime> GdnDecodePreworkProbe<'runtime> {
+    #[must_use]
+    pub const fn new(runtime: &'runtime MlxRuntime) -> Self {
+        Self { runtime }
+    }
+}
+
+impl CustomMetalKernelProbe for GdnDecodePreworkProbe<'_> {
+    fn family(&self) -> CustomMetalKernelFamily {
+        CustomMetalKernelFamily::GdnDecodePrework
+    }
+
+    fn probe(&self) -> Result<(), KernelCapabilityError> {
+        let kernel =
+            crate::qwen3_5::qwen3_5_gdn_decode_prework_kernel(PREWORK_PROBE_RMS_NORM_EPSILON)
+                .map_err(|error| KernelCapabilityError::Compilation {
+                    description: error.to_string(),
+                })?;
+        let probe_arrays = prework_probe_arrays(self.runtime).map_err(execution_error)?;
+        let prework = crate::qwen3_5::qwen3_5_gdn_decode_prework(
+            self.runtime,
+            &kernel,
+            PREWORK_PROBE_KEY_HEAD_COUNT,
+            PREWORK_PROBE_VALUE_HEAD_COUNT,
+            PREWORK_PROBE_HEAD_DIMENSION,
+            &probe_arrays.mixed_queries_keys_values,
+            &probe_arrays.convolution_state,
+            &probe_arrays.convolution_weight,
+            &probe_arrays.query_scale,
+            &probe_arrays.key_scale,
+        )
+        .map_err(execution_error)?;
+        let (reference_queries, reference_keys, reference_values, reference_next_state) =
+            composed_prework_probe_reference(self.runtime, &probe_arrays)
+                .map_err(execution_error)?;
+        for (probe_array, reference_array, description) in [
+            (
+                &prework.queries,
+                &reference_queries,
+                "probe normalized queries",
+            ),
+            (&prework.keys, &reference_keys, "probe normalized keys"),
+            (&prework.values, &reference_values, "probe split values"),
+            (
+                &prework.next_convolution_state,
+                &reference_next_state,
+                "probe next convolution state",
+            ),
+        ] {
+            let probe_values =
+                float32_values(self.runtime, probe_array).map_err(execution_error)?;
+            let reference_values =
+                float32_values(self.runtime, reference_array).map_err(execution_error)?;
+            assert_probe_close(&probe_values, &reference_values, description)?;
+        }
+        Ok(())
+    }
+}

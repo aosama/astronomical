@@ -77,6 +77,14 @@ pub enum PerformanceOperation {
     MtpQueuedFrontierRestoration,
     PrefillStateAsyncEvaluationSubmission,
     PrefillStateGraphicsProcessorCompletionWait,
+    PrefillLinearAttentionGraphicsProcessorCompletionWait,
+    PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
+    PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait,
+    PrefillLinearAttentionNormalizationGraphicsProcessorCompletionWait,
+    PrefillLinearAttentionRecurrenceGraphicsProcessorCompletionWait,
+    PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait,
+    PrefillFullAttentionGraphicsProcessorCompletionWait,
+    PrefillFeedForwardGraphicsProcessorCompletionWait,
     ExpertPagingDiagnosticLogging,
     DecodeAsyncEvaluationSubmission,
     GeneratedTokenItemSynchronizationWait,
@@ -219,6 +227,14 @@ impl PerformanceOperation {
         Self::MtpQueuedFrontierRestoration,
         Self::PrefillStateAsyncEvaluationSubmission,
         Self::PrefillStateGraphicsProcessorCompletionWait,
+        Self::PrefillLinearAttentionGraphicsProcessorCompletionWait,
+        Self::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
+        Self::PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait,
+        Self::PrefillLinearAttentionNormalizationGraphicsProcessorCompletionWait,
+        Self::PrefillLinearAttentionRecurrenceGraphicsProcessorCompletionWait,
+        Self::PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait,
+        Self::PrefillFullAttentionGraphicsProcessorCompletionWait,
+        Self::PrefillFeedForwardGraphicsProcessorCompletionWait,
         Self::ExpertPagingDiagnosticLogging,
         Self::DecodeAsyncEvaluationSubmission,
         Self::GeneratedTokenItemSynchronizationWait,
@@ -419,6 +435,30 @@ impl PerformanceOperation {
             }
             Self::PrefillStateGraphicsProcessorCompletionWait => {
                 "prefill_state_graphics_processor_completion_wait"
+            }
+            Self::PrefillLinearAttentionGraphicsProcessorCompletionWait => {
+                "prefill_linear_attention_graphics_processor_completion_wait"
+            }
+            Self::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait => {
+                "prefill_linear_attention_projections_graphics_processor_completion_wait"
+            }
+            Self::PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait => {
+                "prefill_linear_attention_convolution_graphics_processor_completion_wait"
+            }
+            Self::PrefillLinearAttentionNormalizationGraphicsProcessorCompletionWait => {
+                "prefill_linear_attention_normalization_graphics_processor_completion_wait"
+            }
+            Self::PrefillLinearAttentionRecurrenceGraphicsProcessorCompletionWait => {
+                "prefill_linear_attention_recurrence_graphics_processor_completion_wait"
+            }
+            Self::PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait => {
+                "prefill_linear_attention_epilogue_graphics_processor_completion_wait"
+            }
+            Self::PrefillFullAttentionGraphicsProcessorCompletionWait => {
+                "prefill_full_attention_graphics_processor_completion_wait"
+            }
+            Self::PrefillFeedForwardGraphicsProcessorCompletionWait => {
+                "prefill_feed_forward_graphics_processor_completion_wait"
             }
             Self::ExpertPagingDiagnosticLogging => "expert_paging_diagnostic_logging",
             Self::DecodeAsyncEvaluationSubmission => "decode_async_evaluation_submission",

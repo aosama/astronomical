@@ -161,8 +161,8 @@ pub(super) fn parse_configured_tokens(
     tokenizer_config_fields: &Map<String, Value>,
     tokenizer_tokens: &BTreeMap<u32, String>,
 ) -> Result<BTreeMap<u32, String>, LagunaTextArtifactError> {
-    // mlx-vlm tokenizer_config.json is backend metadata and omits the
-    // Transformers decoder map. Special tokens still live in tokenizer.json.
+    // A backend tokenizer_config.json is metadata and omits the decoder map.
+    // Special tokens still live in tokenizer.json.
     let Some(decoder_value) = tokenizer_config_fields.get("added_tokens_decoder") else {
         return Ok(tokenizer_tokens.clone());
     };

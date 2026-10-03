@@ -19,6 +19,12 @@ use super::speculative_prefill::configured_speculative_prefill_failure;
 use super::{Qwen3_5EngineState, Qwen3_5Model, qwen3_5_runtime_error};
 use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 
+/// Comfort margin below the active-memory ceiling at which block publication
+/// stops wiping the MLX allocator cache. Publication materializes tens of MB;
+/// only a ceiling within this margin of the live active memory needs the
+/// reclaimed room.
+const PUBLICATION_COMFORT_HEADROOM_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
 /// Owns the user-visible failure contract for one required prompt-state write.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PromptStatePersistenceOwner {
@@ -270,42 +276,59 @@ impl Qwen3_5EngineState {
                     ));
                 }
             };
-            // Synchronize before clearing allocator cache because submitted GPU
-            // work may still own cached buffers. Publication needs contiguous
-            // workspace for its largest tensor materialization.
+            // Publication materializes the block's state tensors (tens of MB).
+            // Wiping the whole allocator cache for that forced the chunk after
+            // each published block to re-allocate every intermediate buffer
+            // fresh, which measured as a large hidden prefill cost on roomy
+            // ceilings. Only pay the wipe when the active-memory ceiling
+            // actually needs the room; an unreadable state keeps the old
+            // unconditional behavior.
             let memory_snapshot_before_cleanup = model.runtime().memory_snapshot().ok();
-            active_request
-                .performance_attribution
-                .measure_operation(
-                    PerformanceOperation::MlxAllocatorCacheCleanup,
-                    |_performance_attribution| {
-                        model
-                            .runtime()
-                            .synchronize_gpu_stream_and_clear_allocator_cache()
-                    },
-                )
-                .map_err(qwen3_5_runtime_error)?;
-            let memory_snapshot_after_cleanup = model.runtime().memory_snapshot().ok();
-            if let Some(persistent_prompt_cache_diagnostics) =
-                active_request.persistent_prompt_cache_diagnostics.as_mut()
-            {
-                let allocator_bytes_cleared = memory_snapshot_before_cleanup
-                    .as_ref()
-                    .map_or(0, |memory_snapshot| {
-                        u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
-                            .unwrap_or(u64::MAX)
-                    })
-                    .saturating_sub(memory_snapshot_after_cleanup.as_ref().map_or(
-                        0,
-                        |memory_snapshot| {
+            let is_publication_workspace_needed = match (
+                memory_snapshot_before_cleanup.as_ref(),
+                model.runtime().configured_memory_limit_bytes(),
+            ) {
+                (Some(memory_snapshot), Ok(active_memory_ceiling_bytes)) => {
+                    u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX)
+                        + PUBLICATION_COMFORT_HEADROOM_BYTES
+                        > u64::try_from(active_memory_ceiling_bytes).unwrap_or(u64::MAX)
+                }
+                _ => true,
+            };
+            if is_publication_workspace_needed {
+                active_request
+                    .performance_attribution
+                    .measure_operation(
+                        PerformanceOperation::MlxAllocatorCacheCleanup,
+                        |_performance_attribution| {
+                            model
+                                .runtime()
+                                .synchronize_gpu_stream_and_clear_allocator_cache()
+                        },
+                    )
+                    .map_err(qwen3_5_runtime_error)?;
+                let memory_snapshot_after_cleanup = model.runtime().memory_snapshot().ok();
+                if let Some(persistent_prompt_cache_diagnostics) =
+                    active_request.persistent_prompt_cache_diagnostics.as_mut()
+                {
+                    let allocator_bytes_cleared = memory_snapshot_before_cleanup
+                        .as_ref()
+                        .map_or(0, |memory_snapshot| {
                             u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
                                 .unwrap_or(u64::MAX)
-                        },
-                    ));
-                persistent_prompt_cache_diagnostics.allocator_bytes_cleared_for_publication =
-                    persistent_prompt_cache_diagnostics
-                        .allocator_bytes_cleared_for_publication
-                        .saturating_add(allocator_bytes_cleared);
+                        })
+                        .saturating_sub(memory_snapshot_after_cleanup.as_ref().map_or(
+                            0,
+                            |memory_snapshot| {
+                                u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
+                                    .unwrap_or(u64::MAX)
+                            },
+                        ));
+                    persistent_prompt_cache_diagnostics.allocator_bytes_cleared_for_publication =
+                        persistent_prompt_cache_diagnostics
+                            .allocator_bytes_cleared_for_publication
+                            .saturating_add(allocator_bytes_cleared);
+                }
             }
             // The disk-store API needs mutable attribution while the request also
             // remains mutably borrowed. Move the owner out temporarily and put it

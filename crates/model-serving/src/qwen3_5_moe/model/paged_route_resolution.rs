@@ -7,10 +7,53 @@
 //! that layer. The small compatibility types below keep that invariant explicit
 //! at call sites without reviving replay state.
 
-use astronomical_runtime_integration::MlxArray;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use astronomical_runtime_integration::{MlxArray, MlxRuntime};
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+
+/// Set after the first capture attempt so at most one prefill chunk is traced.
+static METAL_CAPTURE_ATTEMPTED: AtomicBool = AtomicBool::new(false);
+
+/// Starts the optional one-shot MLX Metal capture for the upcoming evaluation.
+///
+/// Returns whether a capture is active so the caller can pair it with
+/// [`end_optional_metal_capture`]. Inert unless `ASTRONOMICAL_METAL_CAPTURE_PATH`
+/// is set; if Metal's capture layer is not present the start fails, is logged,
+/// and execution continues unchanged.
+fn begin_optional_metal_capture(runtime: &MlxRuntime) -> bool {
+    let Ok(metal_capture_path) = std::env::var("ASTRONOMICAL_METAL_CAPTURE_PATH") else {
+        return false;
+    };
+    if METAL_CAPTURE_ATTEMPTED.swap(true, Ordering::SeqCst) {
+        return false;
+    }
+    match runtime.start_metal_capture(&metal_capture_path) {
+        Ok(()) => {
+            tracing::info!(metal_capture_path, "MLX Metal capture started");
+            true
+        }
+        Err(capture_error) => {
+            tracing::warn!(
+                metal_capture_path,
+                "MLX Metal capture did not start; run the worker with MTL_CAPTURE_ENABLED=1: {capture_error}"
+            );
+            false
+        }
+    }
+}
+
+/// Stops the capture started by [`begin_optional_metal_capture`] when active.
+fn end_optional_metal_capture(runtime: &MlxRuntime, is_capturing: bool) {
+    if !is_capturing {
+        return;
+    }
+    if let Err(capture_error) = runtime.stop_metal_capture() {
+        tracing::warn!("MLX Metal capture did not stop cleanly: {capture_error}");
+    }
+}
 
 #[derive(Debug, Default)]
 pub(crate) struct PagedForwardMissingRouteCollector;
@@ -58,11 +101,20 @@ impl Qwen3_5Model {
         // or any fully resident model, this single wait owns the entire
         // multi-layer multi-token tape, including first-use Metal compile and
         // any memory-pressure thrash.
+        //
+        // Optional one-shot Metal capture: when the worker runs with
+        // `MTL_CAPTURE_ENABLED=1` and `ASTRONOMICAL_METAL_CAPTURE_PATH` is set,
+        // the first chunk-terminal evaluation is captured to an Xcode
+        // `.gputrace` bundle. It is inert otherwise, so it can never change a
+        // serving request's result.
+        let is_capturing_this_eval = begin_optional_metal_capture(&self.runtime);
         let eval_started_at = std::time::Instant::now();
-        performance_attribution.measure_operation(
+        let eval_result = performance_attribution.measure_operation(
             PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
             |_performance_attribution| self.runtime.evaluate_arrays(&completion_roots),
-        )?;
+        );
+        end_optional_metal_capture(&self.runtime, is_capturing_this_eval);
+        eval_result?;
         let eval_elapsed = eval_started_at.elapsed();
         if eval_elapsed > std::time::Duration::from_millis(500) {
             tracing::info!(

@@ -56,6 +56,8 @@
 
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging and finally token generation. In short any and all operations invovled in actually serving a model request to the end user.
 
+- If you need to run performance attribution to performance profile the code with attribution logging you can do that through the e2e test cases vs. doing it throuhg a fully running development instance. If tests do not exist you can then create a new test after careful and comprehensive review of the existing journeys and/or e2e test cases.
+
 ## Test Fixtures and Their Reuse for Performance And Correctness Tests
 
 - The fixture of Romeo and Juliet MUST be used and the source test input for LLMs, there should not be radnom text or tokens used for testing.

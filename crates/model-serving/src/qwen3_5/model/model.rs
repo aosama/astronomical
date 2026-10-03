@@ -50,6 +50,8 @@ pub struct Qwen3_5Model {
 
     pub(crate) gated_delta_kernel: Option<MlxMetalKernel>,
     pub(crate) gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
+    /// Fused decode prework kernel; None when demoted or environment-disabled.
+    pub(crate) gdn_decode_prework_kernel: Option<MlxMetalKernel>,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) target_verification_quantized_linear_kernel: Option<MlxMetalKernel>,
     pub(crate) target_verification_four_row_quantized_linear_kernel: Option<MlxMetalKernel>,

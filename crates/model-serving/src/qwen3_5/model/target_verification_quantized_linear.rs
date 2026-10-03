@@ -7,7 +7,8 @@ use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 
-// Adapted from mlx-vlm's exact Qwen3.5 target-verification QMV kernel.
+// Adapted from an upstream open-source Qwen3.5 target-verification QMV
+// kernel (see third-party/THIRD_PARTY_NOTICES for the provenance and license).
 const TARGET_VERIFICATION_QUANTIZED_LINEAR_HEADER: &str = r#"
 using namespace metal;
 

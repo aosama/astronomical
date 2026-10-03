@@ -1,9 +1,9 @@
 //! CPU image decoding and Qwen3-VL patch packing for Qwen3.5.
 //!
-//! Source lineage: Rust translation of MLX-VLM's Qwen3-VL image processor
-//! (MIT License). That processor identifies Hugging Face Transformers' Qwen2-VL
-//! image processor (Apache License 2.0) as the source of its resize and packing
-//! behavior. See third-party license notices for complete attribution.
+//! Source lineage: Rust translation of an upstream open-source Qwen3-VL image
+//! processor, whose resize and packing behavior derives from the Qwen2-VL
+//! reference implementation. See third-party/THIRD_PARTY_NOTICES for complete
+//! attribution.
 //!
 //! MLX-C begins after this stage: MLX has tensor resize/convolution primitives,
 //! but not the encoded PNG/JPEG/WebP boundary needed here. This module decodes,

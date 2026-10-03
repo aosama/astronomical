@@ -3,8 +3,8 @@
 //! Uses OpenCode's documented `OPENCODE_CONFIG_CONTENT` overlay
 //! (https://opencode.ai/docs/config/) so this session does not write
 //! `~/.config/opencode`. Provider shape follows the public OpenAI-compatible
-//! custom-provider pattern used by Ollama launch and omlx integrations; this
-//! file does not copy their source.
+//! custom-provider pattern used by Ollama launch and other OpenAI-compatible
+//! local backends; this file does not copy their source.
 
 use std::net::SocketAddr;
 

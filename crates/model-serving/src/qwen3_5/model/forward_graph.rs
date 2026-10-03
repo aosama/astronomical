@@ -100,9 +100,9 @@ impl Qwen3_5Model {
 
     /// Builds decoder-state prefill without the vocabulary head.
     ///
-    /// Intermediate chunks only need cache tensors. OMLX evals cache state and
-    /// never runs `lm_head` until sampling. Building then dropping logits was
-    /// host-side waste on every 2,048-token chunk.
+    /// Intermediate chunks only need cache tensors; no `lm_head` runs until
+    /// sampling. Building then dropping logits was host-side waste on every
+    /// 2,048-token chunk.
     pub(super) fn build_prefill_decoder_state_graph(
         &self,
         token_indices: &MlxArray,

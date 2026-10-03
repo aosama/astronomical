@@ -93,8 +93,9 @@ impl Qwen3_5Config {
             .or(config_document.text_config.text_config_dtype.clone())
             .ok_or(Qwen3_5ConfigError::MissingActivationDtype)?;
         validate_exact_value("dtype", &activation_dtype, EXPECTED_TORCH_DTYPE)?;
-        // Source lineage: MLX-VLM's Qwen3.5 configuration compatibility logic
-        // (MIT License; see third-party license notices). Resolve eos_token_ids:
+        // Source lineage: an upstream open-source Qwen3.5 configuration
+        // compatibility translation (see third-party/THIRD_PARTY_NOTICES).
+        // Resolve eos_token_ids:
         // 1. Use top-level eos_token_id if present
         // 2. Otherwise fall back to text_config.eos_token_id
         // 3. Normalize single integers to arrays
