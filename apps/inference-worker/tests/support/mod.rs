@@ -38,6 +38,10 @@ pub(crate) use e2e_test_model_names::{
     small_dense_model_id,
 };
 
+// Shared across several performance-throughput and acceptance binaries; not every
+// binary invokes it, so the dead-code lint is intentionally suppressed for the
+// shared surface.
+#[allow(dead_code)]
 pub(crate) fn isolated_development_home_from_user_config() -> tempfile::TempDir {
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()

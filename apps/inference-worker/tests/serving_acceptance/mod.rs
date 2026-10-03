@@ -5,6 +5,5 @@ pub(crate) mod installed_models;
 pub(crate) mod k2_horizon_mova;
 pub(crate) mod laguna;
 pub(crate) mod ornith_35b;
-pub(crate) mod qwen3_6;
-pub(crate) mod qwen3_8;
+pub(crate) mod qwen3_5;
 pub(crate) mod vision;

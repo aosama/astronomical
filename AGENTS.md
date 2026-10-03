@@ -64,6 +64,13 @@
 
 - Assert model normalization and execution with structural validity checks derived from config (layer count matches, hidden size matches, shard count is positive, total bytes equals sum of shard sizes, affine profiles contain valid bits and group sizes, end tokens are present). Do not assert golden-master constants like exact byte counts, exact shard counts, or exact affine profile sets that couple tests to one specific quantization artifact — those change with every packaging variant and should not block swapping the reference model.
 
+## Instructions for Performance Throughput Tests Under apps/inference-worker/tests/performance_throughput
+
+- A performance measurement should at least send 10000 tokens input and acquire 1000 ouput tokens .. plus or minus 10% is acceptable.
+- A warmup run should be performed before the actual test, desired is 1000 tokens input and 100 tokens output as warmup.
+- SSD Cache must be disabled.
+- Those performance throughput tests must run through an optimized build.
+
 ## Principles to Follow While Testing SSD Model Streaming
 
 - It is a good practice while testing SSD model streaming to allocate RAM that is 50% of the model size on disk. This would be more realistic towards what RAM end users are likely to have available.
