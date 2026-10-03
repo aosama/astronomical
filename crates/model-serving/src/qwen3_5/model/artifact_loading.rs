@@ -417,6 +417,24 @@ impl Qwen3_5Model {
         let inverse_square_root_linear_head_dimension_scale = runtime
             .array_from_f32(&[linear_head_dimension.sqrt().recip()], &[])
             .and_then(|float32_scale| runtime.astype(&float32_scale, MlxDtype::BFloat16))?;
+        // The prefill composed path folds each scale into `fast_rms_norm`'s
+        // per-channel weight so one fused launch replaces the norm kernel plus
+        // the broadcast-multiply kernel (issue #915 item 5). Every channel
+        // carries the same f32 value through the same BF16 rounding as the
+        // scalar scales, which the fused decode-prework kernel still requires.
+        let head_dimension_i32 = config.linear_key_head_dimension() as i32;
+        let query_normalization_scale_weight = runtime
+            .array_from_f32(
+                &vec![linear_head_dimension.recip(); head_dimension_i32 as usize],
+                &[head_dimension_i32],
+            )
+            .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
+        let key_normalization_scale_weight = runtime
+            .array_from_f32(
+                &vec![linear_head_dimension.sqrt().recip(); head_dimension_i32 as usize],
+                &[head_dimension_i32],
+            )
+            .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
         let model_core_payload_bytes = weights
             .total_payload_bytes()
             .saturating_add(
@@ -498,6 +516,8 @@ impl Qwen3_5Model {
             chunking,
             inverse_linear_head_dimension_scale,
             inverse_square_root_linear_head_dimension_scale,
+            query_normalization_scale_weight,
+            key_normalization_scale_weight,
             paged_forward_missing_route_collector:
                 crate::qwen3_5_moe::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
