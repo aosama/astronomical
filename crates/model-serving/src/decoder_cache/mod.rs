@@ -8,6 +8,8 @@ mod append_only_attention_state_operations;
 mod convolution_state;
 #[cfg(feature = "direct-mlx")]
 mod gated_delta_recurrent_state;
+#[cfg(feature = "direct-mlx")]
+mod incremental_block_restore;
 mod layout;
 mod layout_error;
 #[cfg(feature = "direct-mlx")]

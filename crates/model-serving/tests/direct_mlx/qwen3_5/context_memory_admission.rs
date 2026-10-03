@@ -81,76 +81,46 @@ fn should_project_exact_context_growth_without_cross_context_transient_memory() 
 }
 
 #[test]
-fn should_reserve_the_loaded_kv_prefix_while_reconstructing_persistent_prompt_cache_state() {
+fn should_size_the_restore_workspace_by_one_block_for_incremental_restore() {
+    // The restore loop absorbs one block at a time into a preallocated
+    // destination, so the temporary workspace is a single source block, not
+    // the whole restored prefix. The destination is already inside
+    // context_growth; charging the full prefix would stack a bulk-restore
+    // paper peak and reclaim expert pages the incremental restore never held.
     let active_memory_bytes_after_reclamation = 23_137_777_924;
     let context_memory_reservation_bytes_per_token = 20_480;
     let total_context_tokens = 92_681;
-    let restored_persistent_prompt_cache_token_count = 71_680;
+    let restore_block_token_count = 128;
     let system_gpu_memory_limit_bytes = 25_769_803_776;
 
-    let persistent_prompt_cache_restore_temporary_workspace_bytes =
-        persistent_context_restore_workspace_bytes(
-            context_memory_reservation_bytes_per_token,
-            restored_persistent_prompt_cache_token_count,
-        );
+    let restore_workspace_bytes = persistent_context_restore_workspace_bytes(
+        context_memory_reservation_bytes_per_token,
+        restore_block_token_count,
+    )
+    .expect("the one-block restore workspace should fit usize");
 
-    assert_eq!(
-        persistent_prompt_cache_restore_temporary_workspace_bytes,
-        Some(1_468_006_400)
-    );
+    // One block is far smaller than the full restored prefix (71_680 tokens
+    // would be 1_468_006_400 bytes); the incremental restore only ever holds
+    // one source block beside the destination.
+    assert_eq!(restore_workspace_bytes, 2_621_440);
+
     let context_reservation_bytes = context_memory_reservation_bytes_per_token
         .checked_mul(total_context_tokens)
-        .expect("the reproduced context reservation should fit usize");
-    let projection_without_restore_workspace = ContextAdmissionRequirements {
+        .expect("the context reservation should fit usize");
+    let projection_with_restore_workspace = ContextAdmissionRequirements {
         current_active_memory_bytes: active_memory_bytes_after_reclamation,
         context_growth_bytes: context_reservation_bytes,
         expert_page_reservation_bytes: 0,
-        temporary_workspace_bytes: 0,
+        temporary_workspace_bytes: restore_workspace_bytes,
         retained_expert_payload_bytes: 0,
         active_memory_ceiling_bytes: system_gpu_memory_limit_bytes,
         complete_experts_are_resident: false,
     }
     .projected_active_memory_bytes()
-    .expect("the reproduced pre-restore projection should fit usize");
-    let projection_with_restore_workspace = projection_without_restore_workspace
-        .checked_add(
-            persistent_prompt_cache_restore_temporary_workspace_bytes
-                .expect("the reproduced restore workspace should fit usize"),
-        )
-        .expect("the reproduced complete projection should fit usize");
+    .expect("the projection with the one-block restore workspace should fit usize");
 
-    assert!(projection_without_restore_workspace <= system_gpu_memory_limit_bytes);
-    assert!(projection_with_restore_workspace > system_gpu_memory_limit_bytes);
-    assert_eq!(projection_with_restore_workspace, 26_503_891_204);
-
-    let active_memory_after_restored_state_replaces_loaded_blocks =
-        active_memory_bytes_after_reclamation
-            .checked_add(
-                persistent_prompt_cache_restore_temporary_workspace_bytes
-                    .expect("the restored state payload should fit usize"),
-            )
-            .expect("the post-restore active memory should fit usize");
-    let remaining_context_token_count = total_context_tokens
-        .checked_sub(restored_persistent_prompt_cache_token_count)
-        .expect("the restored prefix should fit the total context");
-    let remaining_context_reservation_bytes = context_memory_reservation_bytes_per_token
-        .checked_mul(remaining_context_token_count)
-        .expect("the remaining context reservation should fit usize");
-    let post_restore_projection = ContextAdmissionRequirements {
-        current_active_memory_bytes: active_memory_after_restored_state_replaces_loaded_blocks,
-        context_growth_bytes: remaining_context_reservation_bytes,
-        expert_page_reservation_bytes: 0,
-        temporary_workspace_bytes: 0,
-        retained_expert_payload_bytes: 0,
-        active_memory_ceiling_bytes: system_gpu_memory_limit_bytes,
-        complete_experts_are_resident: false,
-    }
-    .projected_active_memory_bytes()
-    .expect("the post-restore projection should fit usize");
-
-    assert_eq!(
-        post_restore_projection,
-        projection_without_restore_workspace
-    );
-    assert!(post_restore_projection <= system_gpu_memory_limit_bytes);
+    // The one-block workspace keeps the projection under the ceiling, so no
+    // expert reclamation is required (the old full-prefix workspace pushed it
+    // to 26_503_891_204, over the 25_769_803_776 limit).
+    assert!(projection_with_restore_workspace <= system_gpu_memory_limit_bytes);
 }

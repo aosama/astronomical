@@ -14,10 +14,10 @@ const QUANTIZED_STATE_OPERATION: &str = "update the in-memory quantized full-att
 
 /// One packed, scaled, and biased slab triple for one attention tensor.
 #[derive(Debug)]
-struct QuantizedSlab {
-    packed: MlxArray,
-    scales: MlxArray,
-    biases: MlxArray,
+pub(super) struct QuantizedSlab {
+    pub(super) packed: MlxArray,
+    pub(super) scales: MlxArray,
+    pub(super) biases: MlxArray,
 }
 
 /// Owned quantized views over the written KV prefix for one update.
@@ -38,10 +38,10 @@ pub struct QuantizedKeyValueViews {
 /// Single owner for one full-attention layer's quantized keys and values.
 #[derive(Debug)]
 pub struct QuantizedFullAttentionKeyValueState {
-    keys: Option<QuantizedSlab>,
-    values: Option<QuantizedSlab>,
-    offset_tokens: i32,
-    full_attention_kv_state_growth_tokens: i32,
+    pub(super) keys: Option<QuantizedSlab>,
+    pub(super) values: Option<QuantizedSlab>,
+    pub(super) offset_tokens: i32,
+    pub(super) full_attention_kv_state_growth_tokens: i32,
     group_size: i32,
     bits: i32,
 }
@@ -169,44 +169,6 @@ impl QuantizedFullAttentionKeyValueState {
             .fold(0_u64, u64::saturating_add)
     }
 
-    /// Replaces the storage from a restored bfloat16 prefix and reserves one
-    /// growth step of capacity so the first update after restore does not
-    /// copy the whole restored prefix. The prompt-cache SSD format is
-    /// bfloat16, so a quantized state re-quantizes on restore.
-    pub fn restore_from_bf16_blocks_with_growth_headroom(
-        &mut self,
-        runtime: &MlxRuntime,
-        restored_keys: MlxArray,
-        restored_values: MlxArray,
-    ) -> Result<(), MlxRuntimeError> {
-        let restored_keys_shape = restored_keys.shape();
-        if restored_keys_shape.len() != 4
-            || restored_keys_shape != restored_values.shape()
-            || restored_keys_shape[STATE_DIMENSION_TOKEN_AXIS] <= 0
-        {
-            return Err(quantized_state_error(
-                "restored K and V slabs must have identical rank-four nonempty shapes",
-            ));
-        }
-        let restored_token_count = restored_keys_shape[STATE_DIMENSION_TOKEN_AXIS];
-        let (keys_packed, keys_scales, keys_biases) =
-            runtime.quantize_affine(&restored_keys, self.group_size, self.bits)?;
-        let (values_packed, values_scales, values_biases) =
-            runtime.quantize_affine(&restored_values, self.group_size, self.bits)?;
-        self.keys = Some(headroom_slab(
-            runtime,
-            (keys_packed, keys_scales, keys_biases),
-            self.full_attention_kv_state_growth_tokens,
-        )?);
-        self.values = Some(headroom_slab(
-            runtime,
-            (values_packed, values_scales, values_biases),
-            self.full_attention_kv_state_growth_tokens,
-        )?);
-        self.offset_tokens = restored_token_count;
-        Ok(())
-    }
-
     /// Dequantizes one token-range slice of the stored keys or values back to
     /// the storage dtype, which keeps the SSD prompt-cache format bfloat16.
     pub fn dequantized_token_range(
@@ -313,32 +275,6 @@ fn grow_slab(
         scales,
         biases,
     })
-}
-
-/// Appends one growth step of zero capacity to a freshly quantized slab
-/// triple so the first post-restore update splices instead of copying.
-fn headroom_slab(
-    runtime: &MlxRuntime,
-    quantized: (MlxArray, MlxArray, MlxArray),
-    growth_tokens: i32,
-) -> Result<QuantizedSlab, MlxRuntimeError> {
-    let (packed, scales, biases) = quantized;
-    Ok(QuantizedSlab {
-        packed: append_zero_extension(runtime, packed, growth_tokens)?,
-        scales: append_zero_extension(runtime, scales, growth_tokens)?,
-        biases: append_zero_extension(runtime, biases, growth_tokens)?,
-    })
-}
-
-fn append_zero_extension(
-    runtime: &MlxRuntime,
-    storage: MlxArray,
-    growth_tokens: i32,
-) -> Result<MlxArray, MlxRuntimeError> {
-    let mut extension_shape = storage.shape();
-    extension_shape[STATE_DIMENSION_TOKEN_AXIS] = growth_tokens;
-    let extension = runtime.zeros(&extension_shape, storage.dtype())?;
-    runtime.concatenate_axis(&[&storage, &extension], STATE_DIMENSION_TOKEN_AXIS as i32)
 }
 
 /// Returns strided views over the written prefix of every slab component.

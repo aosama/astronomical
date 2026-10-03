@@ -138,8 +138,8 @@ pub use k2_horizon_mova::K2HorizonMoVAServingSettings;
 #[cfg(feature = "direct-mlx")]
 pub use k2_horizon_mova::{
     FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, K2HorizonMoVAEngine,
-    K2HorizonMoVAInferenceExecution, K2HorizonMoVAStartupError, gathered_fused_swiglu,
-    gathered_value_experts, initialize_k2_horizon_mova_execution,
+    K2HorizonMoVAInferenceExecution, K2HorizonMoVAKvState, K2HorizonMoVAStartupError,
+    gathered_fused_swiglu, gathered_value_experts, initialize_k2_horizon_mova_execution,
     initialize_k2_horizon_mova_execution_with_serving_settings, initialize_k2_horizon_mova_model,
     initialize_k2_horizon_mova_model_with_serving_settings,
 };

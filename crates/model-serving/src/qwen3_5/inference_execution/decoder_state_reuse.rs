@@ -122,7 +122,11 @@ impl Qwen3_5EngineState {
             complete_block_count + usize::from(restored_partial_tail_block_key.is_some()),
         );
         let mut last_restored_persistent_prompt_cache_block_key = None;
-        let mut persistent_prompt_cache_restore_temporary_workspace_bytes = 0_usize;
+        // The restore loop loads, absorbs, and drops one block at a time, so the
+        // temporary workspace is the largest single source tensor, not the sum
+        // of every block. Summing them stacked a bulk-restore paper peak that
+        // reclaimed expert pages the incremental restore never held.
+        let mut largest_sequence_block_file_size_bytes = 0_u64;
         for block_index in 0..complete_block_count {
             let block_start = block_index * persistent_prompt_cache_block_token_count;
             let block_end = block_start + persistent_prompt_cache_block_token_count;
@@ -140,10 +144,8 @@ impl Qwen3_5EngineState {
                     &persistent_prompt_cache_block_key.block_hash(),
                 )
                 .unwrap_or(0);
-            persistent_prompt_cache_restore_temporary_workspace_bytes =
-                persistent_prompt_cache_restore_temporary_workspace_bytes.saturating_add(
-                    usize::try_from(sequence_state_block_file_size_bytes).unwrap_or(usize::MAX),
-                );
+            largest_sequence_block_file_size_bytes =
+                largest_sequence_block_file_size_bytes.max(sequence_state_block_file_size_bytes);
             last_restored_persistent_prompt_cache_block_key =
                 Some(persistent_prompt_cache_block_key.clone());
             restored_persistent_prompt_cache_block_keys.push(persistent_prompt_cache_block_key);
@@ -154,10 +156,8 @@ impl Qwen3_5EngineState {
             let sequence_state_block_file_size_bytes = persistent_prompt_cache
                 .sequence_state_block_file_size_bytes(&restored_partial_tail_block_key.block_hash())
                 .unwrap_or(0);
-            persistent_prompt_cache_restore_temporary_workspace_bytes =
-                persistent_prompt_cache_restore_temporary_workspace_bytes.saturating_add(
-                    usize::try_from(sequence_state_block_file_size_bytes).unwrap_or(usize::MAX),
-                );
+            largest_sequence_block_file_size_bytes =
+                largest_sequence_block_file_size_bytes.max(sequence_state_block_file_size_bytes);
             restored_persistent_prompt_cache_block_keys
                 .push(restored_partial_tail_block_key.clone());
         }
@@ -167,15 +167,20 @@ impl Qwen3_5EngineState {
         let recurrent_snapshot_source_block_key = restored_partial_tail_block_key
             .as_ref()
             .or(last_restored_persistent_prompt_cache_block_key.as_ref());
-        if let Some(recurrent_snapshot_block_key) = recurrent_snapshot_source_block_key {
-            let recurrent_snapshot_file_size_bytes = persistent_prompt_cache
-                .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
-                .unwrap_or(0);
-            persistent_prompt_cache_restore_temporary_workspace_bytes =
-                persistent_prompt_cache_restore_temporary_workspace_bytes.saturating_add(
-                    usize::try_from(recurrent_snapshot_file_size_bytes).unwrap_or(usize::MAX),
-                );
-        }
+        // The snapshot is loaded after every KV block is dropped, so it never
+        // coexists with one; the workspace is the larger of the two exclusive
+        // source tensors.
+        let recurrent_snapshot_file_size_bytes = recurrent_snapshot_source_block_key
+            .map(|recurrent_snapshot_block_key| {
+                persistent_prompt_cache
+                    .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0);
+        let persistent_prompt_cache_restore_temporary_workspace_bytes = usize::try_from(
+            largest_sequence_block_file_size_bytes.max(recurrent_snapshot_file_size_bytes),
+        )
+        .unwrap_or(usize::MAX);
         let target_expert_payload_bytes_reclaimed_before_restore = self
             .validate_context_memory_admission_with_resident_expert_demotion(
                 total_context_tokens,

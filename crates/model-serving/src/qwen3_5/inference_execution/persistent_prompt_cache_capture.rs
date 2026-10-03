@@ -24,29 +24,12 @@ use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
 /// reclaimed room.
 const PUBLICATION_COMFORT_HEADROOM_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
-/// Owns the user-visible failure contract for one required prompt-state write.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PromptStatePersistenceOwner {
-    /// Ordinary dense prompt-cache state; failure names that user-visible feature.
-    PersistentPromptCache,
-}
-
-impl PromptStatePersistenceOwner {
-    #[must_use]
-    pub(super) const fn for_active_request(active_request: &Qwen3_5EngineRequest) -> Self {
-        let _ = active_request;
-        Self::PersistentPromptCache
-    }
-}
-
-/// Converts a required persistence failure according to the operation that owns it.
+/// Converts a required persistence failure into the user-visible engine error.
 pub(super) fn required_prompt_state_persistence_failure(
-    prompt_state_persistence_owner: PromptStatePersistenceOwner,
     active_request: &Qwen3_5EngineRequest,
     failure_stage: &'static str,
     internal_error: impl std::fmt::Display,
 ) -> InferenceEngineError {
-    let _ = prompt_state_persistence_owner;
     tracing::error!(
         request_id = active_request.request_id.value(),
         failure_stage,
@@ -69,7 +52,6 @@ impl Qwen3_5EngineState {
         successful_prefill_start: usize,
         successful_prefill_end: usize,
         boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
-        prompt_state_persistence_owner: PromptStatePersistenceOwner,
     ) -> Result<(), InferenceEngineError> {
         // Boundary checkpoints are emitted by the successful forward. Recompute
         // absolute positions here and validate them before slicing user tokens;
@@ -81,7 +63,6 @@ impl Qwen3_5EngineState {
                 .checked_add(boundary_checkpoint.completed_prefill_chunk_tokens)
             else {
                 return Err(required_prompt_state_persistence_failure(
-                    prompt_state_persistence_owner,
                     active_request,
                     "required persistent prompt-state capture",
                     "prompt-cache boundary position overflowed",
@@ -91,7 +72,6 @@ impl Qwen3_5EngineState {
                 || absolute_boundary > successful_prefill_end
             {
                 return Err(required_prompt_state_persistence_failure(
-                    prompt_state_persistence_owner,
                     active_request,
                     "required persistent prompt-state capture",
                     "prompt-cache boundary position is invalid",
@@ -101,7 +81,6 @@ impl Qwen3_5EngineState {
                 absolute_boundary.checked_sub(persistent_prompt_cache_block_token_count)
             else {
                 return Err(required_prompt_state_persistence_failure(
-                    prompt_state_persistence_owner,
                     active_request,
                     "required persistent prompt-state capture",
                     "prompt-cache block start underflowed",
@@ -122,7 +101,6 @@ impl Qwen3_5EngineState {
                     .get(block_index)
                 else {
                     return Err(required_prompt_state_persistence_failure(
-                        prompt_state_persistence_owner,
                         active_request,
                         "required persistent prompt-state capture",
                         "prompt-cache causal input plan does not cover captured block",
@@ -147,7 +125,6 @@ impl Qwen3_5EngineState {
             }
             .map_err(|_| {
                 required_prompt_state_persistence_failure(
-                    prompt_state_persistence_owner,
                     active_request,
                     "required persistent prompt-state capture",
                     "prompt-cache block identity construction failed",
@@ -175,7 +152,6 @@ impl Qwen3_5EngineState {
                 Err(error) => {
                     tracing::warn!(block_start, block_end, kv_block_start, kv_block_end, %error, "prompt-cache KV extraction failed");
                     return Err(required_prompt_state_persistence_failure(
-                        prompt_state_persistence_owner,
                         active_request,
                         "required persistent prompt-state capture",
                         error,
@@ -269,7 +245,6 @@ impl Qwen3_5EngineState {
                 Err(PromptBlockPublicationFailure::Publication(error)) => {
                     tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");
                     return Err(required_prompt_state_persistence_failure(
-                        prompt_state_persistence_owner,
                         active_request,
                         "required persistent prompt-state capture",
                         error,

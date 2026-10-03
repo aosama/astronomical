@@ -5,7 +5,7 @@
 //! already prove model/revision/ancestry mismatch rejection in the shared
 //! persistent-cache tests. This file proves what only Laguna owns: the mixed
 //! append-only plus rotating state must round-trip exactly through
-//! `extract_cache_block_tensors` and `restore_from_cache_blocks`, and every
+//! `extract_cache_block_tensors` and the incremental block restore, and every
 //! corrupted block variant must fail loudly instead of restoring stale state.
 
 use std::collections::HashMap;
@@ -105,6 +105,13 @@ fn fresh_state(model: &LagunaModel) -> LagunaDecoderState {
     LagunaDecoderState::empty(model.contract()).expect("the fresh decoder state should allocate")
 }
 
+fn tensor_map_byte_count(tensors: &TensorMap) -> u64 {
+    tensors
+        .values()
+        .map(|tensor| u64::try_from(tensor.byte_count()).unwrap_or(u64::MAX))
+        .fold(0_u64, u64::saturating_add)
+}
+
 #[tokio::test]
 async fn should_round_trip_a_synthetic_mixed_layer_ordering_through_capture_and_restore() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -123,7 +130,21 @@ async fn should_round_trip_a_synthetic_mixed_layer_ordering_through_capture_and_
     let mut restored_state = fresh_state(&model);
     let mut sequence_blocks = vec![first_sequence_block, second_sequence_block];
     restored_state
-        .restore_from_cache_blocks(&runtime, &mut sequence_blocks, &mut boundary_snapshot)
+        .begin_incremental_cache_block_restore(
+            &runtime,
+            &mut sequence_blocks[0],
+            2 * BLOCK_TOKEN_COUNT,
+        )
+        .expect("the first captured block should begin the restore");
+    restored_state
+        .absorb_incremental_cache_block(&runtime, &mut sequence_blocks[1], BLOCK_TOKEN_COUNT)
+        .expect("the second captured block should absorb");
+    restored_state
+        .finish_incremental_cache_block_restore(
+            &runtime,
+            2 * BLOCK_TOKEN_COUNT,
+            &mut boundary_snapshot,
+        )
         .expect("the captured blocks should restore into a fresh state");
 
     // The synthetic mixed ordering must round-trip with exact per-layer state:
@@ -174,6 +195,56 @@ async fn should_round_trip_a_synthetic_mixed_layer_ordering_through_capture_and_
 }
 
 #[tokio::test]
+async fn should_release_each_incremental_block_after_absorption() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+    let model = mixed_model(&runtime);
+    let mut performance_attribution = PerformanceAttribution::enabled();
+
+    let mut original_state = fresh_state(&model);
+    let (first_sequence_block, second_sequence_block, mut boundary_snapshot) = capture_two_blocks(
+        &runtime,
+        &model,
+        &mut original_state,
+        &mut performance_attribution,
+    );
+    let transient_payload_bound = tensor_map_byte_count(&second_sequence_block)
+        .saturating_add(tensor_map_byte_count(&boundary_snapshot));
+
+    let mut restored_state = fresh_state(&model);
+    let mut first_block = first_sequence_block;
+    restored_state
+        .begin_incremental_cache_block_restore(&runtime, &mut first_block, 2 * BLOCK_TOKEN_COUNT)
+        .expect("the first block should begin the restore");
+    let destination_active_bytes = runtime
+        .memory_snapshot()
+        .expect("active memory should be sampled after destination allocation")
+        .active_memory_bytes() as u64;
+    let mut second_block = second_sequence_block;
+    restored_state
+        .absorb_incremental_cache_block(&runtime, &mut second_block, BLOCK_TOKEN_COUNT)
+        .expect("the second block should absorb at its token range");
+    let after_absorb_bytes = runtime
+        .memory_snapshot()
+        .expect("active memory should be sampled after block absorption")
+        .active_memory_bytes() as u64;
+    assert!(
+        after_absorb_bytes <= destination_active_bytes,
+        "absorbing a block must release its source before the next read: \
+         destination={destination_active_bytes} after_absorb={after_absorb_bytes} \
+         one_block_plus_snapshot={transient_payload_bound}"
+    );
+
+    restored_state
+        .finish_incremental_cache_block_restore(
+            &runtime,
+            2 * BLOCK_TOKEN_COUNT,
+            &mut boundary_snapshot,
+        )
+        .expect("the newest rotating snapshot should complete the restore");
+}
+
+#[tokio::test]
 async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
@@ -197,9 +268,8 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         .remove("layer_0_attention.keys")
         .expect("the captured keys tensor should be present");
     let mut sequence_blocks = vec![incomplete_first_block];
-    let mut snapshot = fresh_boundary_snapshot(&runtime, &model, &mut performance_attribution);
     let missing_tensor_rejection = fresh_state(&model)
-        .restore_from_cache_blocks(&runtime, &mut sequence_blocks, &mut snapshot)
+        .begin_incremental_cache_block_restore(&runtime, &mut sequence_blocks[0], BLOCK_TOKEN_COUNT)
         .expect_err("a sequence block missing a tensor must fail");
     assert!(
         format!("{missing_tensor_rejection:?}").contains("missing a tensor"),
@@ -212,13 +282,22 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
     keys_missing_snapshot
         .remove("layer_1_attention.keys")
         .expect("the rotating keys should be present");
-    let mut sequence_blocks = vec![fresh_captured_sequence_block(
-        &runtime,
-        &model,
-        &mut performance_attribution,
-    )];
-    let missing_keys_rejection = fresh_state(&model)
-        .restore_from_cache_blocks(&runtime, &mut sequence_blocks, &mut keys_missing_snapshot)
+    let mut snapshot_only_state = fresh_state(&model);
+    let mut snapshot_only_block =
+        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    snapshot_only_state
+        .begin_incremental_cache_block_restore(
+            &runtime,
+            &mut snapshot_only_block,
+            BLOCK_TOKEN_COUNT,
+        )
+        .expect("the captured block should begin the restore");
+    let missing_keys_rejection = snapshot_only_state
+        .finish_incremental_cache_block_restore(
+            &runtime,
+            BLOCK_TOKEN_COUNT,
+            &mut keys_missing_snapshot,
+        )
         .expect_err("a snapshot missing rotating keys must fail");
     assert!(
         format!("{missing_keys_rejection:?}").contains("missing keys"),
@@ -231,15 +310,16 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
     counter_missing_snapshot
         .remove("layer_1_attention.absolute_position")
         .expect("the absolute position counter should be present");
-    let mut sequence_blocks = vec![fresh_captured_sequence_block(
-        &runtime,
-        &model,
-        &mut performance_attribution,
-    )];
-    let missing_counter_rejection = fresh_state(&model)
-        .restore_from_cache_blocks(
+    let mut counter_only_state = fresh_state(&model);
+    let mut counter_only_block =
+        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    counter_only_state
+        .begin_incremental_cache_block_restore(&runtime, &mut counter_only_block, BLOCK_TOKEN_COUNT)
+        .expect("the captured block should begin the restore");
+    let missing_counter_rejection = counter_only_state
+        .finish_incremental_cache_block_restore(
             &runtime,
-            &mut sequence_blocks,
+            BLOCK_TOKEN_COUNT,
             &mut counter_missing_snapshot,
         )
         .expect_err("a snapshot missing a rotating counter must fail");
@@ -261,13 +341,18 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         "layer_1_attention.ring_write_index".to_owned(),
         float16_counter,
     );
-    let mut sequence_blocks = vec![fresh_captured_sequence_block(
-        &runtime,
-        &model,
-        &mut performance_attribution,
-    )];
-    let foreign_dtype_rejection = fresh_state(&model)
-        .restore_from_cache_blocks(&runtime, &mut sequence_blocks, &mut foreign_dtype_snapshot)
+    let mut dtype_only_state = fresh_state(&model);
+    let mut dtype_only_block =
+        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    dtype_only_state
+        .begin_incremental_cache_block_restore(&runtime, &mut dtype_only_block, BLOCK_TOKEN_COUNT)
+        .expect("the captured block should begin the restore");
+    let foreign_dtype_rejection = dtype_only_state
+        .finish_incremental_cache_block_restore(
+            &runtime,
+            BLOCK_TOKEN_COUNT,
+            &mut foreign_dtype_snapshot,
+        )
         .expect_err("a non-float32 rotating counter must fail");
     assert!(
         format!("{foreign_dtype_rejection:?}").contains("float32"),
@@ -284,13 +369,22 @@ async fn should_reject_bridge_mismatches_instead_of_restoring_stale_state() {
         "layer_1_attention.absolute_position".to_owned(),
         zero_counter,
     );
-    let mut sequence_blocks = vec![fresh_captured_sequence_block(
-        &runtime,
-        &model,
-        &mut performance_attribution,
-    )];
-    let zero_position_rejection = fresh_state(&model)
-        .restore_from_cache_blocks(&runtime, &mut sequence_blocks, &mut zero_position_snapshot)
+    let mut zero_position_state = fresh_state(&model);
+    let mut zero_position_block =
+        fresh_captured_sequence_block(&runtime, &model, &mut performance_attribution);
+    zero_position_state
+        .begin_incremental_cache_block_restore(
+            &runtime,
+            &mut zero_position_block,
+            BLOCK_TOKEN_COUNT,
+        )
+        .expect("the captured block should begin the restore");
+    let zero_position_rejection = zero_position_state
+        .finish_incremental_cache_block_restore(
+            &runtime,
+            BLOCK_TOKEN_COUNT,
+            &mut zero_position_snapshot,
+        )
         .expect_err("a restore claiming zero live tokens must fail");
     assert!(
         format!("{zero_position_rejection:?}").contains("at least one token"),

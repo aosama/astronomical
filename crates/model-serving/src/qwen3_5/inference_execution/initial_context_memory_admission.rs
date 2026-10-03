@@ -6,7 +6,7 @@
 use crate::qwen3_5::model::memory_admission::invalid_request_error;
 use crate::{
     InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceAttributionOutcome,
-    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
+    request_context_temporary_workspace_bytes,
 };
 use astronomical_ipc_protocol::RequestId;
 
@@ -21,16 +21,14 @@ impl Qwen3_5EngineState {
         prompt_token_count: usize,
         can_use_persistent_prompt_cache: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<u64, InferenceEngineError> {
-        // Return reclaimed expert bytes so request diagnostics can explain work
-        // performed specifically to reserve direct cache-publication workspace.
+    ) -> Result<(), InferenceEngineError> {
         match self.validate_initial_generation_context_memory_admission(
             total_context_tokens,
             prompt_token_count,
             can_use_persistent_prompt_cache,
             performance_attribution,
         ) {
-            Ok(reclaimed_expert_payload_bytes) => Ok(reclaimed_expert_payload_bytes),
+            Ok(()) => Ok(()),
             Err(context_admission_error) => {
                 self.record_generation_performance_attribution(
                     std::mem::replace(performance_attribution, PerformanceAttribution::disabled()),
@@ -51,30 +49,7 @@ impl Qwen3_5EngineState {
         prompt_token_count: usize,
         can_use_persistent_prompt_cache: bool,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<u64, InferenceEngineError> {
-        let direct_publication_workspace_bytes = if can_use_persistent_prompt_cache {
-            self.persistent_prompt_cache_model_contract
-                .as_ref()
-                .map_or(0, |model_contract| {
-                    model_contract.direct_publication_workspace_bytes()
-                })
-        } else {
-            0
-        };
-        // Cache restore temporarily owns source tensors beside live decoder
-        // state. Charge that overlap only for prompt tokens that may already
-        // exist as cache blocks. The output budget is generated later and has
-        // no blocks; multiplying it in double-counts future KV and demotes a
-        // fitting resident model.
-        let restore_overlap_workspace_bytes = if can_use_persistent_prompt_cache {
-            persistent_context_restore_workspace_bytes(
-                self.context_memory_reservation_bytes_per_token,
-                prompt_token_count,
-            )
-            .ok_or_else(|| invalid_request_error("prompt-cache restore workspace overflowed"))?
-        } else {
-            0
-        };
+    ) -> Result<(), InferenceEngineError> {
         let context_growth_bytes = total_context_tokens
             .checked_mul(self.context_memory_reservation_bytes_per_token)
             .ok_or_else(|| {
@@ -138,8 +113,8 @@ impl Qwen3_5EngineState {
         let temporary_workspace_reservation_bytes = request_context_temporary_workspace_bytes(
             complete_experts_are_resident,
             context_growth_bytes,
-            restore_overlap_workspace_bytes,
-            direct_publication_workspace_bytes,
+            0,
+            0,
             prefill_activation_workspace_bytes,
             complete_layer_scratch_bytes,
         )
@@ -151,24 +126,19 @@ impl Qwen3_5EngineState {
             prompt_token_count,
             can_use_persistent_prompt_cache,
             self.context_memory_reservation_bytes_per_token,
-            direct_publication_workspace_bytes,
-            restore_overlap_workspace_bytes,
+            0,
+            0,
             prefill_activation_workspace_bytes,
             complete_layer_scratch_bytes,
             temporary_workspace_reservation_bytes,
             0,
         );
-        let target_expert_payload_bytes_reclaimed_during_context_admission = self
-            .validate_context_memory_admission_with_resident_expert_demotion(
-                total_context_tokens,
-                temporary_workspace_reservation_bytes,
-                0,
-                performance_attribution,
-            )?;
-        Ok(if can_use_persistent_prompt_cache {
-            target_expert_payload_bytes_reclaimed_during_context_admission
-        } else {
-            0
-        })
+        self.validate_context_memory_admission_with_resident_expert_demotion(
+            total_context_tokens,
+            temporary_workspace_reservation_bytes,
+            0,
+            performance_attribution,
+        )?;
+        Ok(())
     }
 }

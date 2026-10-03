@@ -296,7 +296,6 @@ impl Qwen3_5EngineState {
                     prefill_start,
                     prefill_end,
                     boundary_checkpoints,
-                    super::persistent_prompt_cache_capture::PromptStatePersistenceOwner::for_active_request(active_request),
                 )?;
             }
             self.capture_persistent_prompt_cache_partial_tail_block(

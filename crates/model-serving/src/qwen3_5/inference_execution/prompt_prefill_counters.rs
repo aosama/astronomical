@@ -1,9 +1,7 @@
 use crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
 
 use super::engine_request::Qwen3_5EngineRequest;
-use super::persistent_prompt_cache_capture::{
-    PromptStatePersistenceOwner, required_prompt_state_persistence_failure,
-};
+use super::persistent_prompt_cache_capture::required_prompt_state_persistence_failure;
 
 pub(super) fn record_persistent_prompt_cache_boundary_checkpoint(
     active_request: &mut Qwen3_5EngineRequest,
@@ -26,7 +24,6 @@ pub(super) fn record_persistent_prompt_cache_boundary_checkpoint(
             Ok(())
         }
         Err(error) => Err(required_prompt_state_persistence_failure(
-            PromptStatePersistenceOwner::for_active_request(active_request),
             active_request,
             "exact target prompt-state extraction",
             error,

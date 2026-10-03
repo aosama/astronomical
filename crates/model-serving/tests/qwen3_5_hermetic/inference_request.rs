@@ -56,6 +56,7 @@ fn should_select_highest_logit_when_temperature_is_zero() {
     );
 }
 
+#[cfg(feature = "direct-mlx")]
 #[test]
 fn should_carry_validated_image_pad_token_id_in_the_inference_request() {
     let inference_request = Qwen3_5InferenceRequest::new_sampling(
