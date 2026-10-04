@@ -3,8 +3,8 @@ use std::os::raw::c_int;
 use crate::{
     mlx_compiled_graph::{array_from_vector, graph_output_array, set_graph_output},
     mlx_stream::MlxStream,
-    raw,
 };
+use astronomical_mlx_c_rust::raw;
 
 pub(crate) unsafe extern "C" fn build_sparse_shared_expert_combination_graph(
     output_vector: *mut raw::mlx_vector_array,

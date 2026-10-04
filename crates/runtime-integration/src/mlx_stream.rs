@@ -1,4 +1,5 @@
-use crate::{MlxRuntimeError, raw};
+use crate::MlxRuntimeError;
+use astronomical_mlx_c_rust::raw;
 
 /// Owned MLX stream handle used to preserve runtime thread affinity.
 #[derive(Debug)]

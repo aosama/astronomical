@@ -8,7 +8,6 @@
 
 use std::{env, error::Error, path::Path, time::Instant};
 
-mod build_bindings;
 mod build_legacy_native_output;
 mod build_native_compile;
 mod build_native_linking;
@@ -16,7 +15,6 @@ mod build_native_store;
 mod build_parallelism;
 mod build_progress;
 
-use build_bindings::generate_bindings;
 use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 use build_native_compile::{
     NATIVE_ARCHIVE_VARIABLES, NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE,
@@ -78,12 +76,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         native_build_started_at.elapsed(),
     );
 
-    generate_bindings(
-        &native_build_artifacts.include_directory(),
-        &manifest_directory,
-        &output_directory,
-        native_build_profile.should_build_experimental_aligned_expert_packs(),
-    )?;
     configure_rust_linking(&native_build_artifacts, native_build_profile)?;
     emit_native_source_rerun_contracts(
         &manifest_directory,

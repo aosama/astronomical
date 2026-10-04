@@ -1,10 +1,8 @@
 use crate::{
     MlxRuntimeError,
-    mlx_runtime::{
-        check_status, classify_mlx_error, clear_captured_mlx_error, take_captured_mlx_error,
-    },
-    raw,
+    mlx_runtime::{check_status, classify_mlx_error},
 };
+use astronomical_mlx_c_rust::{clear_captured_mlx_error, raw, take_captured_mlx_error};
 
 /// MLX array element types exposed without leaking generated C declarations.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

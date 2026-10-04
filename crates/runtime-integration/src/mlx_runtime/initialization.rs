@@ -1,14 +1,15 @@
 use std::path::Path;
 
 use crate::{MlxMemoryLimits, MlxRuntimeError, mlx_stream::MlxStream};
+use astronomical_mlx_c_rust::install_non_terminating_error_handler;
 
-use super::{MlxRuntime, error_handling, memory_policy, metallib, version};
+use super::{MlxRuntime, memory_policy, metallib, version};
 
 impl MlxRuntime {
     /// Installs the non-terminating error handler before any fallible MLX call
     /// and applies the fixed allocator policy once for the worker process.
     pub fn initialize(memory_limits: MlxMemoryLimits) -> Result<Self, MlxRuntimeError> {
-        error_handling::install_non_terminating_error_handler();
+        install_non_terminating_error_handler();
         let metallib_path = metallib::configured_metallib_path()?;
         metallib::configure_metallib_path(&metallib_path)?;
         memory_policy::configure_runtime_memory_limits(memory_limits)?;

@@ -346,10 +346,6 @@ impl NativeBuildArtifacts {
         self.was_built
     }
 
-    pub fn include_directory(&self) -> PathBuf {
-        self.entry_directory.join("include")
-    }
-
     pub fn native_library_directory(&self) -> PathBuf {
         self.entry_directory.join("lib")
     }

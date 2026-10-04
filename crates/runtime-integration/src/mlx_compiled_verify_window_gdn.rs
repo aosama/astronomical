@@ -11,7 +11,8 @@ use super::trunk::{quantized_matmul, take_affine, trace_feed_forward_tail};
 use super::{VerifyWindowGdnKernelSet, VerifyWindowInputReader};
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_ops as ops;
-use crate::{MlxArray, MlxDtype, MlxStream, raw};
+use crate::{MlxArray, MlxDtype, MlxStream};
+use astronomical_mlx_c_rust::raw;
 
 #[path = "mlx_compiled_verify_window_gdn_recurrence.rs"]
 mod recurrence;

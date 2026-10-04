@@ -6,7 +6,8 @@
 //! Weights begin with output channels and end with input channels per group.
 //! These layouts differ from PyTorch.
 
-use crate::{MlxArray, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Applies MLX one-dimensional convolution over `[batch, length, channels]` inputs.

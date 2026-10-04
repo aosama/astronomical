@@ -3,7 +3,8 @@ use std::sync::Mutex;
 
 use crate::mlx_runtime::check_status;
 use crate::mlx_safetensors_writer::{OwnedMetadataMap, OwnedTensorMap, writer_error};
-use crate::{MlxArray, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 const MEMORY_WRITER_LABEL: &[u8] = b"bounded in-memory safetensors output\0";
 
