@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxRuntime,
+    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxRuntime,
 };
 
 use crate::artifact_validation::TensorDeclarationOrigin;
@@ -21,6 +21,7 @@ use super::{
     ValidatedQwen3_5Artifact,
 };
 use crate::qwen3_5::multi_token_prediction::bind_optional_weights;
+use astronomical_mlx_c_rust::MlxDtype;
 
 impl Qwen3_5Model {
     /// Loads a model without diagnostic performance attribution.

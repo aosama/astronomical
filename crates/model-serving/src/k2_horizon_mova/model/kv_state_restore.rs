@@ -1,9 +1,10 @@
 //! Persistent-cache block restoration for K2 key/value state, one
 //! concatenation per tensor.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decoder::K2HorizonMoVAKvState;
+use astronomical_mlx_c_rust::MlxArray;
 
 impl K2HorizonMoVAKvState {
     /// Seats the restored K/V by concatenating every block slice along the

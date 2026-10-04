@@ -1,6 +1,6 @@
 //! Explicit diagnostic paging modes kept outside production route orchestration.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};

@@ -11,9 +11,10 @@
 //! decision to sort assignments. This module receives already-canonical arrays
 //! and owns only the shared dense-versus-affine dispatch and ordering contract.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Tells MLX whether the supplied expert-ID array is sorted in ascending order.
 ///

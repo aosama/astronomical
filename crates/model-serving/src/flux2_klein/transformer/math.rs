@@ -1,8 +1,9 @@
 //! Precision boundaries and dense primitives matching the official reference.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) fn linear(
     runtime: &MlxRuntime,

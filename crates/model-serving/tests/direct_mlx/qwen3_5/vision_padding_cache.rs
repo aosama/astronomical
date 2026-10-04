@@ -15,12 +15,13 @@
 use std::time::Duration;
 
 use astronomical_model_serving::Qwen3_5VisionPaddingZeroCache;
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const HEAD_COUNT: i32 = 16;
 const HEAD_DIMENSION: i32 = 72;

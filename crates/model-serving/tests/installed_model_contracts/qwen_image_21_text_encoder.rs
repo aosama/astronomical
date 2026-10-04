@@ -19,10 +19,11 @@ use astronomical_model_serving::{
     QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QwenImage21TextEncoder, normalize_empty_prompt,
     render_t2i_prompt_template,
 };
-use astronomical_runtime_integration::{MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
 use crate::common::qwen_image_21::{component_weights_path, shared_journey_runtime};
+use astronomical_mlx_c_rust::MlxDtype;
 
 const ENCODER_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 

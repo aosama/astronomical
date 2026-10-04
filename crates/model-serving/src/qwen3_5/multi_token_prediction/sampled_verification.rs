@@ -18,7 +18,7 @@
 //! checkpoints, rollback, and prefix commit are shared with the greedy mode
 //! through `accepted_prefix_commit.rs`.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::gpu_token_sampling::{
     masked_logits_after_top_k_and_top_p, sample_acceptance_coins,

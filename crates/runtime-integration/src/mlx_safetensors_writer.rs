@@ -12,8 +12,8 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{MlxArray, MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, raw};
 
 const WRITER_LABEL: &[u8] = b"retained descriptor-backed safetensors output\0";
 

@@ -1,5 +1,5 @@
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Samples normal noise from one explicit request-owned PRNG key.

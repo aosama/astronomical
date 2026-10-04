@@ -5,12 +5,13 @@
 //! `(scale, gate)` pairs, so the gates are `tanh`-activated once in preparation and reused by
 //! all 32 blocks — mathematically identical to per-block `tanh` on the same values.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::{
     QuantizedLinear, apply_rope, fp32_layer_norm, fp32_rms_norm, fused_attention, masked_attention,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) const LAYER_NORM_EPSILON: f32 = 0.000_001;
 

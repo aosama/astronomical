@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::graph_submission_layer_interval;
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
@@ -7,6 +7,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::model::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Target-model graph outputs retained for optional specialized consumers.
 pub struct Qwen3_5TargetForwardOutput {

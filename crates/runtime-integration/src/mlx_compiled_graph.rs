@@ -1,9 +1,7 @@
 use std::os::raw::c_int;
 
-use crate::{
-    MlxArray, MlxRuntimeError, mlx_array_vector::MlxArrayVector, mlx_runtime::check_status,
-};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxCError, raw};
 
 /// The MLX C closure ABI every compiled-graph builder follows: it receives the
 /// output vector to populate and the input vector to read, and returns zero on
@@ -70,7 +68,9 @@ impl MlxCompiledGraph {
                 ),
             });
         }
-        output_vector.array_at(0, apply_operation)
+        output_vector
+            .array_at(0, apply_operation)
+            .map_err(MlxRuntimeError::from)
     }
 
     /// Applies the compiled graph and returns every output it produced.
@@ -103,7 +103,8 @@ impl MlxCompiledGraph {
         }
         (0..output_count)
             .map(|output_index| output_vector.array_at(output_index, apply_operation))
-            .collect()
+            .collect::<Result<Vec<_>, MlxCError>>()
+            .map_err(MlxRuntimeError::from)
     }
 }
 

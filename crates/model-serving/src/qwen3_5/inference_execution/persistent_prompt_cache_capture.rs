@@ -11,7 +11,7 @@ use crate::{
     PersistentPromptCacheDiskStoreError, PersistentPromptCachePublicationOutcome,
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
 };
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 use std::collections::HashMap;
 
 use super::engine_request::Qwen3_5EngineRequest;

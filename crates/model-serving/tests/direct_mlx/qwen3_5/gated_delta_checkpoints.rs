@@ -2,11 +2,12 @@ use astronomical_model_serving::{
     qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
 };
-use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 const CHECKPOINT_INTERVAL_TOKEN_COUNT: i32 = 2;
 const COMPLETE_TOKEN_COUNT: i32 = 8;
@@ -29,7 +30,7 @@ async fn should_checkpoint_gated_delta_state_at_every_requested_boundary() {
     let initial_recurrent_state = runtime
         .zeros(
             &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-            astronomical_runtime_integration::MlxDtype::Float32,
+            astronomical_mlx_c_rust::MlxDtype::Float32,
         )
         .expect("the initial recurrent state should be valid");
     let checkpoint_kernel = qwen3_5_gated_delta_checkpoint_kernel()
@@ -114,7 +115,7 @@ async fn should_checkpoint_reject_invalid_gated_delta_boundary_plans() {
     let initial_recurrent_state = runtime
         .zeros(
             &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-            astronomical_runtime_integration::MlxDtype::Float32,
+            astronomical_mlx_c_rust::MlxDtype::Float32,
         )
         .expect("the validation recurrent state should be valid");
     let checkpoint_kernel = qwen3_5_gated_delta_checkpoint_kernel()
@@ -212,7 +213,7 @@ async fn should_preserve_boundary_snapshots_when_the_checkpoint_kernel_is_demote
             let initial_recurrent_state = runtime
                 .zeros(
                     &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-                    astronomical_runtime_integration::MlxDtype::Float32,
+                    astronomical_mlx_c_rust::MlxDtype::Float32,
                 )
                 .expect("the initial recurrent state should be valid");
             let checkpoint_kernel = qwen3_5_gated_delta_checkpoint_kernel()
@@ -299,8 +300,12 @@ fn assert_close(actual_values: &[f32], expected_values: &[f32], description: &st
 
 fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     runtime
-        .astype(array, astronomical_runtime_integration::MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32())
+        .astype(array, astronomical_mlx_c_rust::MlxDtype::Float32)
+        .and_then(|float32_array| {
+            float32_array
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("demotion parity values should evaluate")
 }
 

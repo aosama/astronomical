@@ -7,10 +7,11 @@ use astronomical_model_serving::{
     LagunaGlobalTensorRole, LagunaLayerTensorRole, LagunaTargetContract, LagunaTensorComponent,
     LagunaTensorId,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::rows::ReferenceRow;
 use super::tensor_identity::{affine_profile, global, layer_id, with_component};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) struct ReferenceTensorInventories {
     pub(super) production_tensors: HashMap<LagunaTensorId, MlxArray>,

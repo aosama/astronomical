@@ -4,13 +4,12 @@ use crate::mlx_compiled_attention_output_gate::build_attention_output_gate_graph
 use crate::mlx_compiled_sparse_shared_expert_combination::build_sparse_shared_expert_combination_graph;
 use crate::mlx_compiled_vision_rope::build_vision_rope_graph;
 use crate::{
-    MlxArray, MlxRuntime, MlxRuntimeError,
+    MlxRuntime, MlxRuntimeError,
     mlx_compiled_graph::{
         MlxCompiledGraph, array_from_vector, graph_output_array, set_graph_output,
     },
-    mlx_stream::MlxStream,
 };
-use astronomical_mlx_c_rust::raw;
+use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
 
 const APPLY_ATTENTION_OUTPUT_GATE_OPERATION: &str = "apply the compiled MLX attention output gate";
 const COMPILE_ATTENTION_OUTPUT_GATE_OPERATION: &str =

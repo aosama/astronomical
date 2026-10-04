@@ -1,8 +1,7 @@
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
-
 use crate::{TensorDtype, TensorProfile};
 
 use super::{Qwen3_5Config, Qwen3_5ExecutionError};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Validates one bound MLX tensor against its config-derived tensor profile.
 pub(crate) fn validate_bound_tensor(

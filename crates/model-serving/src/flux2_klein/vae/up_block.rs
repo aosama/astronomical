@@ -1,8 +1,9 @@
 //! Three residual layers followed by optional nearest-neighbor upsampling and convolution.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinVaeError, Flux2KleinVaeResnetBlock};
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct Flux2KleinVaeUpBlock {

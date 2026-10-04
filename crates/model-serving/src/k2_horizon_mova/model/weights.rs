@@ -1,6 +1,6 @@
 //! Weight-owner types binding stacked affine tensors for one family member.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::PerformanceAttribution;
 use crate::k2_horizon_mova::artifacts::ValidatedK2HorizonMoVAArtifact;
@@ -9,6 +9,7 @@ use crate::k2_horizon_mova::expert_geometry::K2HorizonMoVASparseLayerExpertPaylo
 use super::affine::K2HorizonMoVAAffineLinear;
 use super::error::K2HorizonMoVAExecutionError;
 use super::weight_binding::load_weights;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub struct K2HorizonMoVADenseAttentionWeights {

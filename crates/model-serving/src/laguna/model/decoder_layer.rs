@@ -1,6 +1,6 @@
 //! One Laguna decoder layer: residual attention plus descriptor-selected FFN.
 
-use astronomical_runtime_integration::{MlxArray, MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::{MlxMetalKernel, MlxRuntime};
 
 use crate::laguna::artifacts::LagunaLayerTensorRole;
 use crate::laguna::moe::{
@@ -20,6 +20,7 @@ use super::decoder_state::LagunaDecoderState;
 use super::dense_feed_forward::dense_swiglu;
 use super::error::LagunaExecutionError;
 use super::model::LagunaModel;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn forward_decoder_layer(

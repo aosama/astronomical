@@ -84,10 +84,7 @@ async fn should_match_cpu_router_selection_for_unique_scores_with_bias_and_norma
         .to_vec_u32()
         .expect("selected ids should evaluate");
     let mut gpu_score_values = runtime
-        .astype(
-            &gpu_scores,
-            astronomical_runtime_integration::MlxDtype::Float32,
-        )
+        .astype(&gpu_scores, astronomical_mlx_c_rust::MlxDtype::Float32)
         .expect("scores should cast")
         .to_vec_f32()
         .expect("selected scores should evaluate");
@@ -137,18 +134,20 @@ async fn should_change_gathered_scores_when_positive_softcap_is_enabled() {
         route_laguna_native_experts(&runtime, &gpu_logits, None, &moe, 2.0)
             .expect("positive softcap should route");
     let uncapped = runtime
-        .astype(
-            &uncapped_scores,
-            astronomical_runtime_integration::MlxDtype::Float32,
-        )
-        .and_then(|scores| scores.to_vec_f32())
+        .astype(&uncapped_scores, astronomical_mlx_c_rust::MlxDtype::Float32)
+        .and_then(|scores| {
+            scores
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("uncapped scores should evaluate");
     let capped = runtime
-        .astype(
-            &capped_scores,
-            astronomical_runtime_integration::MlxDtype::Float32,
-        )
-        .and_then(|scores| scores.to_vec_f32())
+        .astype(&capped_scores, astronomical_mlx_c_rust::MlxDtype::Float32)
+        .and_then(|scores| {
+            scores
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("capped scores should evaluate");
     assert!(uncapped[0] > capped[0]);
 }

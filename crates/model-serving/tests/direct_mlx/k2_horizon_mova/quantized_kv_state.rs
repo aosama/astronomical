@@ -1,11 +1,12 @@
 //! Quantized KV state round-trip parity against the bfloat16 slab.
 
 use astronomical_model_serving::{FullAttentionKeyValueState, QuantizedFullAttentionKeyValueState};
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const QUERY_HEAD_COUNT: i32 = 32;
 const KEY_VALUE_HEAD_COUNT: i32 = 8;

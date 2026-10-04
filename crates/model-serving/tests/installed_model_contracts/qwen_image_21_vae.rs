@@ -37,7 +37,7 @@ const OUTPUT_CHANNEL_COUNT: usize = QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT;
 
 /// A deterministic, spatially varying latent: every position and channel differs, so a
 /// spatially constant bug in the decoder cannot hide.
-fn journey_latents(runtime: &MlxRuntime) -> astronomical_runtime_integration::MlxArray {
+fn journey_latents(runtime: &MlxRuntime) -> astronomical_mlx_c_rust::MlxArray {
     let position_count = LATENT_SIDE * LATENT_SIDE * LATENT_CHANNEL_COUNT;
     let latent_values: Vec<f32> = (0..position_count)
         .map(|index| ((index % 1024) as f32 / 1024.0 - 0.5) * 4.0)

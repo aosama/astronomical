@@ -6,9 +6,10 @@
 //! `mlx_slice` plus `mlx_slice_update` graph operation. The cursor makes the
 //! splice correct when prefill chunk boundaries split one image's pad run.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::Qwen3_5ExecutionError;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Replaces image-pad token embeddings in one prefill chunk with ordered visual embeddings.
 pub fn qwen3_5_inject_visual_embeddings(

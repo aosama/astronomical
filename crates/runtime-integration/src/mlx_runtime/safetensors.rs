@@ -2,8 +2,9 @@ use std::fs::File;
 
 use crate::{
     BoundedReadInterval, MlxRuntime, MlxRuntimeError, MlxSafetensors, PositionalFileReadMetrics,
-    SafetensorsLoadResult, mlx_stream::MlxStream,
+    SafetensorsLoadResult,
 };
+use astronomical_mlx_c_rust::MlxStream;
 
 impl MlxRuntime {
     /// Loads a safetensors map from the caller's retained read-only file

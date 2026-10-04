@@ -3,7 +3,7 @@
 //! effective-ceiling arithmetic the insert path and the residency planner
 //! share.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertReclamation};
 use crate::memory::RetainedExpertPageClass;

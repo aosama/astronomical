@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 

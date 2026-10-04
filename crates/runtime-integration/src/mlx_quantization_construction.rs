@@ -1,10 +1,7 @@
 //! Construction of deterministic affine-quantized MLX weights.
 
-use crate::{
-    MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status,
-};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Quantizes floating-point weights into MLX affine packed rows.

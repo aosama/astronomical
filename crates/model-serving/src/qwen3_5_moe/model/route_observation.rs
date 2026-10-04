@@ -12,7 +12,7 @@
 //! routes lives on the request-owned attribution, so every request starts its
 //! prediction history without cross-request state.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::expert_paging::route_observation::{

@@ -1,10 +1,7 @@
 use std::ffi::{CString, NulError};
 
-use crate::{
-    MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status, mlx_stream::MlxStream,
-};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxCError, MlxDtype, MlxStream, raw};
 
 /// Output shape and dtype requested from one custom Metal kernel launch.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -191,7 +188,8 @@ impl MlxRuntime {
         }
         (0..output_count)
             .map(|output_index| output_vector.array_at(output_index, OPERATION))
-            .collect()
+            .collect::<Result<Vec<_>, MlxCError>>()
+            .map_err(MlxRuntimeError::from)
     }
 }
 

@@ -36,9 +36,7 @@
 
 // MlxArray is an MLX tensor handle. These methods normally build a lazy MLX
 // graph; actual graphics-processor evaluation happens at a later boundary.
-use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxRuntime, MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxRuntime, MlxRuntimeError};
 
 use super::Qwen3_5ExecutionError;
 use super::attention_execution::sequential_causal_attention;
@@ -47,6 +45,7 @@ use super::model::Qwen3_5Model;
 use super::tensor_slicing::slice_last_dimension;
 use crate::decoder_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
+use astronomical_mlx_c_rust::MlxArray;
 
 const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 

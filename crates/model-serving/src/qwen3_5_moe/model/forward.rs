@@ -1,6 +1,6 @@
 //! Sparse routing selects resident experts, cached experts, or SSD streaming.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};

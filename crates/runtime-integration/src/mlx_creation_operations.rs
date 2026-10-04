@@ -1,5 +1,5 @@
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Copies float32 values into a new owned MLX array after validating shape arithmetic.
@@ -8,7 +8,7 @@ impl MlxRuntime {
         values: &[f32],
         shape: &[i32],
     ) -> Result<MlxArray, MlxRuntimeError> {
-        MlxArray::from_f32(values, shape)
+        MlxArray::from_f32(values, shape).map_err(MlxRuntimeError::from)
     }
 
     /// Copies int32 values into a new owned MLX array after validating shape arithmetic.
@@ -17,7 +17,7 @@ impl MlxRuntime {
         values: &[i32],
         shape: &[i32],
     ) -> Result<MlxArray, MlxRuntimeError> {
-        MlxArray::from_i32(values, shape)
+        MlxArray::from_i32(values, shape).map_err(MlxRuntimeError::from)
     }
 
     /// Copies uint32 values into a new owned MLX array after validating shape arithmetic.
@@ -26,7 +26,7 @@ impl MlxRuntime {
         values: &[u32],
         shape: &[i32],
     ) -> Result<MlxArray, MlxRuntimeError> {
-        MlxArray::from_u32(values, shape)
+        MlxArray::from_u32(values, shape).map_err(MlxRuntimeError::from)
     }
 
     /// Creates an int32 half-open range with unit stride.

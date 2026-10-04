@@ -1,9 +1,10 @@
 //! PyTorch-compatible GroupNorm expressed through MLX's fused non-affine LayerNorm.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::Flux2KleinVaeError;
 use super::convolution::{as_i32, validate_shape};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const GROUP_NORM_EPSILON: f32 = 1e-6;
 const GROUP_COUNT: usize = 32;

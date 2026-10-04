@@ -1,8 +1,9 @@
 //! Feature-gated MLX builder for the CPU sliding-window visibility contract.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Builds a `[1, 1, query_tokens, key_tokens]` boolean mask from absolute positions.
 pub fn build_causal_sliding_window_mask(

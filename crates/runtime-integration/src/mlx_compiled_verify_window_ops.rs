@@ -6,8 +6,8 @@
 //! and every failure path must surface as a plain status code. Helpers return
 //! the owned lazy output so the builder chains them like the eager path does.
 
-use crate::{MlxArray, MlxStream, array_from_vector, graph_output_array};
-use astronomical_mlx_c_rust::raw;
+use crate::{array_from_vector, graph_output_array};
+use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
 
 pub(super) type BuildResult = Result<MlxArray, i32>;
 

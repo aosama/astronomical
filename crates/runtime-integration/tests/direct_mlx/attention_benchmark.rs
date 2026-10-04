@@ -1,8 +1,9 @@
 use std::time::Instant;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support::runtime;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const ORNITH_BATCH_SIZE: i32 = 1;
 const ORNITH_QUERY_HEAD_COUNT: i32 = 16;

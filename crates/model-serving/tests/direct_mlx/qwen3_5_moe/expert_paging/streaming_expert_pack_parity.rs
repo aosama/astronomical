@@ -16,12 +16,13 @@ use astronomical_model_serving::{
     assemble_streaming_expert_page_tensors, build_quantized_expert_page_manifest_from_plan,
     build_streaming_expert_page_manifest, load_quantized_expert_page,
 };
-use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tempfile::TempDir;
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxDtype;
 
 const PACK_SEGMENT_ALIGNMENT_BYTES: u64 = 64 * 1024;
 const PACK_HEADER_BYTES: u64 = PACK_SEGMENT_ALIGNMENT_BYTES;

@@ -1,11 +1,12 @@
 //! GPU Laguna router: sigmoid scores, selection-only bias, original-score gather.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::normalization::LagunaMoeDescriptor;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::model::LagunaExecutionError;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Routes one token batch and returns `(selected_indices, gathered_scores)`.
 pub(super) fn route_laguna_experts(

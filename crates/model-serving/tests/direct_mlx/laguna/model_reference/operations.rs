@@ -14,9 +14,10 @@ use astronomical_model_serving::{
     PerformanceAttribution, build_causal_sliding_window_mask,
     compute_yarn_rope_frequency_denominators,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::moe_operations::reference_moe;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) struct ReferenceDecoderState {
     layers: Vec<ReferenceLayerState>,
@@ -394,7 +395,11 @@ fn append(
     current: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
     previous.map_or_else(
-        || current.retain(),
+        || {
+            current
+                .retain()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        },
         |previous| runtime.concatenate_axis(&[previous, current], 2),
     )
 }

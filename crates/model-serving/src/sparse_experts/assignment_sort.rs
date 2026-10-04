@@ -2,10 +2,11 @@
 //! contiguous expert rows. Inverse order maps original token/top-K slots back
 //! onto the sorted axis.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::error::SparseExpertError;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 const OPERATION: &str = "sort stacked expert assignments";
 

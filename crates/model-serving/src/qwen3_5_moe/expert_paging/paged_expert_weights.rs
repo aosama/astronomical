@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};

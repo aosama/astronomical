@@ -7,7 +7,7 @@
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
-use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
+use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
@@ -23,6 +23,7 @@ use crate::qwen3_5::multi_token_prediction::{
 use crate::qwen3_5::{
     Qwen3_5Model, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Retained request state needed to retry one rejected prompt-processing attempt.
 pub(super) struct Qwen3_5PrefillRequestCheckpoint {

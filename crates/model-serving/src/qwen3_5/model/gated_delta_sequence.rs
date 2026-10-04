@@ -1,5 +1,5 @@
 use astronomical_runtime_integration::{
-    MlxArray, MlxMetalKernel, MlxMetalKernelOutput, MlxRuntime, MlxRuntimeError,
+    MlxMetalKernel, MlxMetalKernelOutput, MlxRuntime, MlxRuntimeError,
 };
 
 use super::gated_delta_pipelined_kernel::{
@@ -9,6 +9,7 @@ use super::gated_delta_sequence_contract::{
     GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
     validate_gated_delta_sequence_shapes,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Builds the fused Qwen3.5 gated-delta sequence kernel.
 pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
@@ -186,10 +187,8 @@ pub(super) fn ops_gated_delta_sequence_loop(
     // MLX arrays are immutable, so carrying the state as an owned handle per
     // step is safe; the initial float32 cast is an aliasing no-op for an
     // already-float32 state.
-    let mut current_recurrent_state = runtime.astype(
-        recurrent_state,
-        astronomical_runtime_integration::MlxDtype::Float32,
-    )?;
+    let mut current_recurrent_state =
+        runtime.astype(recurrent_state, astronomical_mlx_c_rust::MlxDtype::Float32)?;
     for token_index in 0..token_count {
         let token_queries = slice_rank_four_token(
             runtime,

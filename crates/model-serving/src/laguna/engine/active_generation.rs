@@ -1,7 +1,7 @@
 //! Request-owned Laguna state retained between bounded engine advances.
 
 use astronomical_ipc_protocol::{RequestId, WorkerPromptWorkReuse};
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::laguna::{
     LagunaDecoderState, LagunaDecoderStateAllocationCheckpoint, LagunaExecutionError,

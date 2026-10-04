@@ -1,6 +1,6 @@
 //! Direct GPU correctness contracts for MLX's native NVFP4 representation.
 
-use astronomical_runtime_integration::MlxDtype;
+use astronomical_mlx_c_rust::MlxDtype;
 
 use crate::common::runtime_test_support::runtime;
 

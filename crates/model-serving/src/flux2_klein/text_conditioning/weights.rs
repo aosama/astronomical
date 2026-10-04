@@ -3,12 +3,13 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::{PerformanceAttribution, PerformanceOperation, ValidatedWeightsFile};
 
 use super::super::Flux2KleinResidencyMode;
 use super::error::Flux2KleinTextConditioningError;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) const HIDDEN_WIDTH: i32 = 2_560;
 pub(super) const INTERMEDIATE_WIDTH: i32 = 9_728;

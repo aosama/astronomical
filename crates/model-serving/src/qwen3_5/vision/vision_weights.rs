@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::{TensorDtype, TensorProfile};
 
 use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact, qwen3_5_vision_tensor_profiles};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Strict tensor binding for the Qwen3.5 vision tower.
 ///

@@ -1,7 +1,7 @@
 //! Validated normalization wrappers over MLX's fused kernels.
 
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Applies fused LayerNorm without affine weight or bias arrays.

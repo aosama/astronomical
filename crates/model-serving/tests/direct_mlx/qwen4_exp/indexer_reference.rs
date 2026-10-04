@@ -11,9 +11,10 @@
 //! against host `f64` math, and host top-k against MLX `topk` on the same
 //! scores, including tie handling and the budget-larger-than-context case.
 
-use astronomical_runtime_integration::{MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::{DeterministicValues, assert_f32_close, f32_array, oracle_test_runtime};
+use astronomical_mlx_c_rust::MlxDtype;
 
 /// Scoring geometry for one reference row.
 pub(crate) struct IndexerGeometry {
@@ -48,7 +49,9 @@ pub(crate) fn explicit_scores(
         MlxDtype::Float32,
         "the reference must score in f32, not in a narrowed accumulator"
     );
-    scores.to_vec_f32()
+    scores
+        .to_vec_f32()
+        .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 /// Host-side `f64` reference for the same scores.

@@ -4,9 +4,8 @@ use std::fs::File;
 use std::time::Duration;
 
 use super::error::Flux2KleinTextConditioningError;
-use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime, MlxSafetensors,
-};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
@@ -18,7 +17,7 @@ mod layer;
 
 #[allow(dead_code)]
 mod weights {
-    use super::MlxArray;
+    use astronomical_mlx_c_rust::MlxArray;
 
     pub(super) const HEAD_WIDTH: i32 = 128;
     pub(super) const HIDDEN_WIDTH: i32 = 2_560;

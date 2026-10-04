@@ -10,11 +10,12 @@ use astronomical_model_serving::{
     gather_expert_projection, restore_expert_assignment_order, sort_expert_assignments,
     sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 fn test_runtime() -> MlxRuntime {
     // Use the same bounded runtime configuration as the rest of direct-MLX tests.
@@ -47,7 +48,11 @@ fn values_as_float32(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     // in f32. This cast is test-only and occurs after the operation under test.
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32())
+        .and_then(|float32_array| {
+            float32_array
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("the operation result should evaluate as float32")
 }
 

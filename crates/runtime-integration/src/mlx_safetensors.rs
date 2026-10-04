@@ -2,17 +2,15 @@ use std::{ffi::CString, fs::File, sync::Arc};
 
 use crate::{
     MlxRuntimeError,
-    mlx_array::MlxArray,
     mlx_bounded_safetensors_reader::{
         BoundedMultiRangeReaderState, OwnedBoundedMultiRangeReader,
         OwnedBoundedMultiRangeReaderHolder,
     },
     mlx_descriptor_file_reader::OwnedFileReader,
     mlx_runtime::check_status,
-    mlx_stream::MlxStream,
     positional_file_read_metrics::PositionalFileReadMetrics,
 };
-use astronomical_mlx_c_rust::raw;
+use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
 
 /// One virtual interval mapping payload offsets to source file reads.
 #[derive(Clone, Debug)]

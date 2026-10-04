@@ -7,7 +7,8 @@ mod version;
 
 use std::path::PathBuf;
 
-use crate::{MlxMemoryLimits, mlx_stream::MlxStream};
+use crate::MlxMemoryLimits;
+use astronomical_mlx_c_rust::MlxStream;
 
 pub(crate) use error_handling::check_status;
 pub use error_handling::classify_mlx_error;

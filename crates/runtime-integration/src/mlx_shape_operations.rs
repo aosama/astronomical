@@ -1,5 +1,5 @@
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Reorders array dimensions using an explicit complete permutation.
@@ -118,7 +118,7 @@ impl MlxRuntime {
     /// zero-copy view for arrays that are already contiguous.
     pub fn array_to_vec_f32(&self, array: &MlxArray) -> Result<Vec<f32>, MlxRuntimeError> {
         let flat = self.reshape(array, &[-1])?;
-        flat.to_vec_f32()
+        flat.to_vec_f32().map_err(MlxRuntimeError::from)
     }
 
     /// Slices an array with one static start, stop, and stride per axis.

@@ -183,8 +183,8 @@ fn continuation_logits(
 }
 
 fn assert_window_parity(
-    eager_logits: &astronomical_runtime_integration::MlxArray,
-    compiled_logits: &astronomical_runtime_integration::MlxArray,
+    eager_logits: &astronomical_mlx_c_rust::MlxArray,
+    compiled_logits: &astronomical_mlx_c_rust::MlxArray,
     label: &str,
 ) {
     assert_eq!(

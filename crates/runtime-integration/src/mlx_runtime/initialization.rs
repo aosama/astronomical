@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use crate::{MlxMemoryLimits, MlxRuntimeError, mlx_stream::MlxStream};
-use astronomical_mlx_c_rust::install_non_terminating_error_handler;
+use crate::{MlxMemoryLimits, MlxRuntimeError};
+use astronomical_mlx_c_rust::{MlxStream, install_non_terminating_error_handler};
 
 use super::{MlxRuntime, memory_policy, metallib, version};
 

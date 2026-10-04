@@ -1,6 +1,6 @@
 //! One Laguna projection: unquantized rows or MLX affine packed rows.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::performance_attribution::PerformanceAttribution;
 use crate::sparse_experts::{
@@ -8,6 +8,7 @@ use crate::sparse_experts::{
 };
 
 use super::error::LagunaExecutionError;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Resident projection weights for one canonical linear module.
 #[derive(Debug)]
