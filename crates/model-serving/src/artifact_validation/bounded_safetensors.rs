@@ -400,7 +400,12 @@ fn validate_tensor_shape(
     tensor_profile: &TensorProfile,
     tensor_view: &SafetensorsTensorView,
 ) -> Result<(), ArtifactValidationError> {
-    if tensor_view.shape != tensor_profile.shape {
+    let shape_matches = tensor_view.shape == tensor_profile.shape
+        || tensor_profile
+            .equivalent_published_shapes
+            .iter()
+            .any(|equivalent_shape| *equivalent_shape == tensor_view.shape);
+    if !shape_matches {
         return Err(ArtifactValidationError::TensorShapeMismatch {
             tensor_name: tensor_profile.name.clone(),
             expected_shape: tensor_profile.shape.clone(),

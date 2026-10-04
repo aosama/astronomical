@@ -29,6 +29,12 @@ pub struct TensorProfile {
     pub name: String,
     /// Expected tensor dtype.
     pub dtype: TensorDtype,
-    /// Expected tensor shape.
+    /// Expected tensor shape in the engine's execution layout.
     pub shape: Vec<usize>,
+    /// Additional shapes the tensor may publish in when publishers store a
+    /// pure axis permutation of the execution layout. Validation accepts
+    /// them, and the loader normalizes the stored tensor into `shape` before
+    /// execution; a permutation reorders the same values, so numerics are
+    /// unchanged. Empty for tensors with one published form.
+    pub equivalent_published_shapes: Vec<Vec<usize>>,
 }

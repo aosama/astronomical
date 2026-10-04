@@ -176,6 +176,7 @@ impl Qwen3_5Model {
                     let vision_tensor_name_to_shard_index =
                         build_vision_tensor_shard_map(&shard_index);
                     Some(Qwen3_5VisionModel::load_from_model_shards(
+                        &runtime,
                         vision_config,
                         &model_shards,
                         &vision_tensor_name_to_shard_index,

@@ -11,6 +11,7 @@ fn should_validate_profiled_tensors_and_accepted_extras_with_partial_profiles() 
         name: "language_model.weight".to_owned(),
         dtype: TensorDtype::Float32,
         shape: vec![2, 2],
+        equivalent_published_shapes: Vec::new(),
     };
     let accepted_extra_names: HashSet<&str> = ["vision_tower.weight"].into_iter().collect();
     let weights_bytes = safetensors_bytes_with_multiple_tensors(&[
@@ -36,6 +37,7 @@ fn should_allow_a_recognized_unowned_tensor_to_be_absent_from_a_shard() {
         name: "language_model.weight".to_owned(),
         dtype: TensorDtype::Float32,
         shape: vec![2, 2],
+        equivalent_published_shapes: Vec::new(),
     };
     let recognized_tensor_names: HashSet<&str> =
         ["language_model.mtp.fc.weight"].into_iter().collect();
@@ -62,6 +64,7 @@ fn should_reject_a_profiled_tensor_with_the_wrong_dtype_using_partial_profiles()
         name: "language_model.weight".to_owned(),
         dtype: TensorDtype::Float32,
         shape: vec![2, 2],
+        equivalent_published_shapes: Vec::new(),
     };
     let accepted_extra_names: HashSet<&str> = HashSet::new();
     let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
@@ -94,6 +97,7 @@ fn should_accept_every_mlx_affine_parameter_float_dtype() {
             name: "language_model.projection.scales".to_owned(),
             dtype: TensorDtype::AffineQuantizationFloat,
             shape: vec![2, 2],
+            equivalent_published_shapes: Vec::new(),
         };
         let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
             "language_model.projection.scales",
@@ -128,6 +132,7 @@ fn should_accept_every_supported_stored_model_float_dtype_without_conversion() {
             name: "language_model.normalization.weight".to_owned(),
             dtype: TensorDtype::ModelFloat,
             shape: vec![2, 2],
+            equivalent_published_shapes: Vec::new(),
         };
         let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
             "language_model.normalization.weight",
@@ -155,6 +160,7 @@ fn should_reject_a_profiled_tensor_with_the_wrong_shape_using_partial_profiles()
         name: "language_model.weight".to_owned(),
         dtype: TensorDtype::Float32,
         shape: vec![2, 2],
+        equivalent_published_shapes: Vec::new(),
     };
     let accepted_extra_names: HashSet<&str> = HashSet::new();
     let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
@@ -177,11 +183,66 @@ fn should_reject_a_profiled_tensor_with_the_wrong_shape_using_partial_profiles()
 }
 
 #[test]
+fn should_accept_a_declared_equivalent_published_tensor_shape() {
+    let profiled_tensor = TensorProfile {
+        name: "vision_tower.patch_embed.proj.weight".to_owned(),
+        dtype: TensorDtype::Float32,
+        shape: vec![2, 2, 1, 1, 3],
+        equivalent_published_shapes: vec![vec![2, 3, 2, 1, 1]],
+    };
+    let published_tensor_bytes = [0_u8; 48];
+    let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
+        "vision_tower.patch_embed.proj.weight",
+        "F32",
+        "[2,3,2,1,1]",
+        &published_tensor_bytes,
+    )]);
+
+    validate_bounded_safetensors_with_partial_profiles(
+        &file_from_bytes(&weights_bytes),
+        weights_bytes.len() as u64,
+        "vision.safetensors",
+        &[profiled_tensor],
+        &HashSet::new(),
+    )
+    .expect("a declared equivalent published shape should pass artifact validation");
+}
+
+#[test]
+fn should_reject_an_undeclared_published_tensor_shape() {
+    let profiled_tensor = TensorProfile {
+        name: "vision_tower.patch_embed.proj.weight".to_owned(),
+        dtype: TensorDtype::Float32,
+        shape: vec![2, 2, 1, 1, 3],
+        equivalent_published_shapes: vec![vec![2, 3, 2, 1, 1]],
+    };
+    let wrong_shape_tensor_bytes = [0_u8; 48];
+    let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
+        "vision_tower.patch_embed.proj.weight",
+        "F32",
+        "[2,2,3,1,1]",
+        &wrong_shape_tensor_bytes,
+    )]);
+
+    let validation_error = validate_bounded_safetensors_with_partial_profiles(
+        &file_from_bytes(&weights_bytes),
+        weights_bytes.len() as u64,
+        "vision.safetensors",
+        &[profiled_tensor],
+        &HashSet::new(),
+    )
+    .expect_err("an undeclared shape must remain rejected");
+
+    assert!(validation_error.to_string().contains("shape"));
+}
+
+#[test]
 fn should_reject_an_unexpected_tensor_that_is_neither_profiled_nor_accepted() {
     let profiled_tensor = TensorProfile {
         name: "language_model.weight".to_owned(),
         dtype: TensorDtype::Float32,
         shape: vec![2, 2],
+        equivalent_published_shapes: Vec::new(),
     };
     let accepted_extra_names: HashSet<&str> = ["vision_tower.weight"].into_iter().collect();
     let weights_bytes = safetensors_bytes_with_multiple_tensors(&[
@@ -211,6 +272,7 @@ fn should_reject_a_missing_profiled_tensor_using_partial_profiles() {
         name: "language_model.missing.weight".to_owned(),
         dtype: TensorDtype::Float32,
         shape: vec![2, 2],
+        equivalent_published_shapes: Vec::new(),
     };
     let accepted_extra_names: HashSet<&str> = ["vision_tower.weight"].into_iter().collect();
     let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(

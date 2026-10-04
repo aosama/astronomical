@@ -160,11 +160,13 @@ fn should_preserve_required_target_profiles_when_embedded_optional_mtp_has_the_w
             name: "language_model.target.weight".to_owned(),
             dtype: TensorDtype::BFloat16,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
         TensorProfile {
             name: "language_model.mtp.proj.weight".to_owned(),
             dtype: TensorDtype::UInt32,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
     ];
 
@@ -222,11 +224,13 @@ fn should_preserve_required_target_when_optional_mtp_uses_a_known_unsupported_dt
             name: "language_model.target.weight".to_owned(),
             dtype: TensorDtype::BFloat16,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
         TensorProfile {
             name: "language_model.mtp.proj.weight".to_owned(),
             dtype: TensorDtype::UInt32,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
     ];
 
@@ -240,4 +244,49 @@ fn should_preserve_required_target_when_optional_mtp_uses_a_known_unsupported_dt
     .expect("the required target profile should remain valid");
 
     assert!(!optional_mtp_profiles_are_valid);
+}
+
+#[test]
+fn should_accept_a_declared_published_shape_through_the_retained_source_validator() {
+    let model_directory = tempfile::tempdir().expect("the synthetic model directory should exist");
+    let source_id = TensorSourceId::new(1);
+    let mut inventory = TensorInventory::new();
+    inventory
+        .insert(TensorLocation::new(
+            "vision_tower.patch_embed.proj.weight",
+            "vision_tower.patch_embed.proj.weight",
+            source_id,
+            TensorSemanticRole::Vision,
+            TensorDeclarationOrigin::MainIndex,
+            None,
+        ))
+        .expect("the vision patch embedding should enter the source inventory");
+
+    let header = r#"{"vision_tower.patch_embed.proj.weight":{"dtype":"F32","shape":[2,3,2,1,1],"data_offsets":[0,48]}}"#;
+    let mut source_bytes = Vec::new();
+    source_bytes.extend_from_slice(&(header.len() as u64).to_le_bytes());
+    source_bytes.extend_from_slice(header.as_bytes());
+    source_bytes.extend_from_slice(&[0_u8; 48]);
+    fs::write(
+        model_directory.path().join("vision.safetensors"),
+        source_bytes,
+    )
+    .expect("the synthetic vision source should be written");
+
+    let profiles = [TensorProfile {
+        name: "vision_tower.patch_embed.proj.weight".to_owned(),
+        dtype: TensorDtype::Float32,
+        shape: vec![2, 2, 1, 1, 3],
+        equivalent_published_shapes: vec![vec![2, 3, 2, 1, 1]],
+    }];
+    let optional_mtp_profiles_are_valid = validate_safetensors_profile_partitions_for_tests(
+        model_directory.path(),
+        "vision.safetensors",
+        &inventory,
+        &profiles,
+        TensorFeature::MultiTokenPrediction,
+    )
+    .expect("the retained source validator should accept the declared published permutation");
+
+    assert!(optional_mtp_profiles_are_valid);
 }

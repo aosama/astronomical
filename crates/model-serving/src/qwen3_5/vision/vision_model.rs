@@ -66,11 +66,13 @@ impl Qwen3_5VisionModel {
 
     /// Loads vision weights from model shards with embedded vision tensors.
     pub fn load_from_model_shards(
+        runtime: &astronomical_runtime_integration::MlxRuntime,
         vision_config: &Qwen3_5VisionConfig,
         model_shards: &[astronomical_runtime_integration::MlxSafetensors],
         vision_tensor_name_to_shard_index: &std::collections::HashMap<String, usize>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let weights = Qwen3_5VisionWeights::load_from_model_shards(
+            runtime,
             vision_config,
             model_shards,
             vision_tensor_name_to_shard_index,

@@ -381,7 +381,12 @@ fn validate_profile(
             tensor_name: profile.name.clone(),
         });
     }
-    if metadata.shape != profile.shape {
+    let shape_matches = metadata.shape == profile.shape
+        || profile
+            .equivalent_published_shapes
+            .iter()
+            .any(|equivalent_shape| *equivalent_shape == metadata.shape);
+    if !shape_matches {
         return Err(ArtifactValidationError::TensorShapeMismatch {
             tensor_name: profile.name.clone(),
             expected_shape: profile.shape.clone(),

@@ -293,5 +293,6 @@ pub(crate) fn qwen3_5_tensor_profile(
         name: tensor_name,
         dtype: tensor_dtype,
         shape: tensor_shape,
+        equivalent_published_shapes: Vec::new(),
     }
 }
