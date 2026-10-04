@@ -13,16 +13,19 @@ fn mtp_profiles() -> Vec<TensorProfile> {
             name: "language_model.mtp.proj.weight".to_owned(),
             dtype: TensorDtype::UInt32,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
         TensorProfile {
             name: "language_model.mtp.proj.scales".to_owned(),
             dtype: TensorDtype::AffineQuantizationFloat,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
         TensorProfile {
             name: "language_model.mtp.proj.biases".to_owned(),
             dtype: TensorDtype::AffineQuantizationFloat,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         },
     ]
 }

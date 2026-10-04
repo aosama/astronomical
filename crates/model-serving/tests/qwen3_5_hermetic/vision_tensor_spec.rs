@@ -74,10 +74,16 @@ fn should_generate_the_complete_ornith_vision_tensor_profile() {
     let patch_weight = &vision_tensor_profiles[0];
     assert_eq!(patch_weight.name, "vision_tower.patch_embed.proj.weight");
     assert_eq!(patch_weight.shape, vec![1152, 2, 16, 16, 3]);
+    assert_eq!(
+        patch_weight.equivalent_published_shapes,
+        vec![vec![1152, 3, 2, 16, 16]],
+        "the upstream PyTorch Conv3d order must be accepted and normalized to ODHWI"
+    );
 
     let patch_bias = &vision_tensor_profiles[1];
     assert_eq!(patch_bias.name, "vision_tower.patch_embed.proj.bias");
     assert_eq!(patch_bias.shape, vec![1152]);
+    assert!(patch_bias.equivalent_published_shapes.is_empty());
 
     // Positional embedding
     let pos_embed = &vision_tensor_profiles[2];
