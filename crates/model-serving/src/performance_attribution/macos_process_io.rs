@@ -4,6 +4,15 @@
 //! XNU accounting. They are wider than expert paging: any worker disk activity
 //! between two snapshots can contribute to a delta.
 
+// The workspace confines unsafe code to runtime-integration's MLX-C boundary,
+// and this module is model-serving's single documented exception, mirroring the
+// supervisor's system-telemetry module: sampling evidence is inseparable from
+// the accounting syscall and C layout that produce it, and splitting the
+// snapshot from its syscall would put an FFI seam through the evidence path.
+// The unsafe surface never escapes this file — one extern declaration, one
+// synchronous call into a uniquely writable local buffer.
+#![allow(unsafe_code)]
+
 use thiserror::Error;
 
 // Keep the flavor and Rust layout together. Version 4 is old enough for every

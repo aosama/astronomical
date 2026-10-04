@@ -11,6 +11,7 @@ mod engine_backed_worker;
 mod expert_memory_admission;
 mod expert_residency_policy;
 mod kernel_capability;
+mod macos_process_io;
 mod memory_policy;
 mod mlx_ram_budget;
 // The #596 reproduction exercises the feature-gated ModernBERT tokenizer, so it runs in the
