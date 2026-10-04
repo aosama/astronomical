@@ -116,9 +116,9 @@ unsafe extern "C" fn reader_tell(descriptor: *mut c_void) -> usize {
     .unwrap_or(0)
 }
 
-unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c_int) {
-    // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
-    unsafe {
+unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c_int) -> c_int {
+    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    let seek_succeeded = unsafe {
         with_reader_cursor(descriptor, |reader_state, reader_cursor| {
             let base_position_bytes = match whence {
                 libc::SEEK_SET => 0_i128,
@@ -127,28 +127,36 @@ unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c
                     Ok(metadata) => i128::from(metadata.len()),
                     Err(_) => {
                         reader_state.is_good.store(false, Ordering::Release);
-                        return;
+                        return false;
                     }
                 },
                 _ => {
                     reader_state.is_good.store(false, Ordering::Release);
-                    return;
+                    return false;
                 }
             };
             let requested_position_bytes = base_position_bytes + i128::from(offset);
             match u64::try_from(requested_position_bytes) {
-                Ok(position_bytes) => reader_cursor.position_bytes = position_bytes,
-                Err(_) => reader_state.is_good.store(false, Ordering::Release),
+                Ok(position_bytes) => {
+                    reader_cursor.position_bytes = position_bytes;
+                    true
+                }
+                Err(_) => {
+                    reader_state.is_good.store(false, Ordering::Release);
+                    false
+                }
             }
-        });
+        })
     }
+    .unwrap_or(false);
+    if seek_succeeded { 0 } else { -1 }
 }
 
 unsafe extern "C" fn reader_read(
     descriptor: *mut c_void,
     destination: *mut c_char,
     byte_count: usize,
-) {
+) -> usize {
     // SAFETY: Sequential reads share cursor state and remain serialized.
     unsafe {
         with_reader_cursor(descriptor, |reader_state, reader_cursor| {
@@ -161,21 +169,30 @@ unsafe extern "C" fn reader_read(
             .is_err()
             {
                 reader_state.is_good.store(false, Ordering::Release);
-                return;
+                return 0;
             }
             let Ok(consumed_byte_count) = u64::try_from(byte_count) else {
                 reader_state.is_good.store(false, Ordering::Release);
-                return;
+                return 0;
             };
             match reader_cursor
                 .position_bytes
                 .checked_add(consumed_byte_count)
             {
-                Some(position_bytes) => reader_cursor.position_bytes = position_bytes,
-                None => reader_state.is_good.store(false, Ordering::Release),
+                Some(position_bytes) => {
+                    reader_cursor.position_bytes = position_bytes;
+                    // The v0.7.0 wrapper compares the returned count against
+                    // the request; an exact read reports the full count.
+                    byte_count
+                }
+                None => {
+                    reader_state.is_good.store(false, Ordering::Release);
+                    0
+                }
             }
-        });
+        })
     }
+    .unwrap_or(0)
 }
 
 unsafe extern "C" fn reader_read_at_offset(
@@ -183,7 +200,7 @@ unsafe extern "C" fn reader_read_at_offset(
     destination: *mut c_char,
     byte_count: usize,
     offset_bytes: usize,
-) {
+) -> usize {
     let Ok(offset_bytes) = u64::try_from(offset_bytes) else {
         // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
         unsafe {
@@ -191,7 +208,7 @@ unsafe extern "C" fn reader_read_at_offset(
                 reader_state.is_good.store(false, Ordering::Release);
             });
         }
-        return;
+        return 0;
     };
     // SAFETY: Representative model loading regressed with concurrent reads, so
     // positional reads deliberately share the cursor's file-read mutex.
@@ -205,24 +222,30 @@ unsafe extern "C" fn reader_read_at_offset(
                 }
                 None => read_operation(),
             };
-            if !read_succeeded {
+            if read_succeeded {
+                byte_count
+            } else {
                 reader_state.is_good.store(false, Ordering::Release);
+                0
             }
-        });
+        })
     }
+    .unwrap_or(0)
 }
 
 unsafe extern "C" fn reader_write_is_unsupported(
     descriptor: *mut c_void,
     _source: *const c_char,
     _byte_count: usize,
-) {
+) -> usize {
     // SAFETY: MLX calls this vtable only while it owns the boxed descriptor.
     unsafe {
         with_reader_state(descriptor, |reader_state| {
             reader_state.is_good.store(false, Ordering::Release);
         });
     }
+    // Zero processed bytes makes the v0.7.0 C++ wrapper reject the write.
+    0
 }
 
 unsafe extern "C" fn reader_label(_descriptor: *mut c_void) -> *const c_char {

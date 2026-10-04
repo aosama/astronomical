@@ -1,11 +1,13 @@
+diff --git a/mlx/c/ops.cpp b/mlx/c/ops.cpp
 --- a/mlx/c/ops.cpp
 +++ b/mlx/c/ops.cpp
-@@ -1501,6 +1501,9 @@
+@@ -1708,6 +1708,10 @@
              (bits.has_value ? std::make_optional<int>(bits.value)
                              : std::nullopt),
              std::string(mode),
-+            // MLX 0.32.3 inserts global_scale before sorted_indices; the C
-+            // API does not expose it, so forward the upstream default.
++            // The pinned MLX 0.32.3 development source inserts global_scale
++            // before sorted_indices; the C API does not expose it, so forward
++            // the upstream default.
 +            std::nullopt,
              sorted_indices,
              mlx_stream_get_(s)));

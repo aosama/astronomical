@@ -284,8 +284,25 @@ impl MlxRuntime {
         inclusive: bool,
     ) -> Result<MlxArray, MlxRuntimeError> {
         self.output_array("compute MLX cumulative sum", |output, stream| {
+            // mlx-c v0.7.0 splits the axis-taking variant into mlx_cumsum_axis;
+            // the dtype stays absent, preserving the previous float-identity
+            // behavior of the axis-taking overload.
+            let absent_cumulative_dtype = raw::mlx_optional_dtype {
+                value: raw::mlx_dtype__MLX_FLOAT32,
+                has_value: false,
+            };
             // SAFETY: Input and stream are live and output is uniquely writable.
-            unsafe { raw::mlx_cumsum(output, input.raw(), axis, reverse, inclusive, stream) }
+            unsafe {
+                raw::mlx_cumsum_axis(
+                    output,
+                    input.raw(),
+                    axis,
+                    reverse,
+                    inclusive,
+                    absent_cumulative_dtype,
+                    stream,
+                )
+            }
         })
     }
 

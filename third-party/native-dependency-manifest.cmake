@@ -8,7 +8,7 @@ if(NOT IS_ABSOLUTE "${ASTRONOMICAL_NATIVE_DEPENDENCY_MANIFEST_PATH}")
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-v0.32.3.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-c-v0.6.0.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-c-v0.7.0.cmake")
 
 function(append_native_dependency_manifest_entry archive_file_name archive_url archive_sha256 dependency_description)
     file(

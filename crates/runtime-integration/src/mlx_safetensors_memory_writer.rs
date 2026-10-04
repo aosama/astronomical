@@ -146,8 +146,13 @@ unsafe extern "C" fn memory_writer_tell(descriptor: *mut c_void) -> usize {
         .unwrap_or(0)
 }
 
-unsafe extern "C" fn memory_writer_seek(descriptor: *mut c_void, offset: i64, whence: c_int) {
-    unsafe {
+unsafe extern "C" fn memory_writer_seek(
+    descriptor: *mut c_void,
+    offset: i64,
+    whence: c_int,
+) -> c_int {
+    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    let seek_succeeded = unsafe {
         with_memory_writer_state(descriptor, |writer_state| {
             let base_position_bytes = match whence {
                 libc::SEEK_SET => 0_i128,
@@ -155,25 +160,35 @@ unsafe extern "C" fn memory_writer_seek(descriptor: *mut c_void, offset: i64, wh
                 libc::SEEK_END => writer_state.output_bytes.len() as i128,
                 _ => {
                     writer_state.is_good = false;
-                    return;
+                    return false;
                 }
             };
             match usize::try_from(base_position_bytes + i128::from(offset)) {
-                Ok(position_bytes) => writer_state.position_bytes = position_bytes,
-                Err(_) => writer_state.is_good = false,
+                Ok(position_bytes) => {
+                    writer_state.position_bytes = position_bytes;
+                    true
+                }
+                Err(_) => {
+                    writer_state.is_good = false;
+                    false
+                }
             }
-        });
+        })
     }
+    .unwrap_or(false);
+    if seek_succeeded { 0 } else { -1 }
 }
 
 unsafe extern "C" fn memory_writer_read_is_unsupported(
     descriptor: *mut c_void,
     _destination: *mut c_char,
     _byte_count: usize,
-) {
+) -> usize {
     unsafe {
         with_memory_writer_state(descriptor, |writer_state| writer_state.is_good = false);
     }
+    // Zero processed bytes makes the v0.7.0 C++ wrapper reject the read.
+    0
 }
 
 unsafe extern "C" fn memory_writer_read_at_offset_is_unsupported(
@@ -181,34 +196,39 @@ unsafe extern "C" fn memory_writer_read_at_offset_is_unsupported(
     _destination: *mut c_char,
     _byte_count: usize,
     _offset_bytes: usize,
-) {
+) -> usize {
     unsafe {
         with_memory_writer_state(descriptor, |writer_state| writer_state.is_good = false);
     }
+    0
 }
 
 unsafe extern "C" fn memory_writer_write(
     descriptor: *mut c_void,
     source: *const c_char,
     byte_count: usize,
-) {
+) -> usize {
     unsafe {
         with_memory_writer_state(descriptor, |writer_state| {
             if byte_count == 0 {
-                return;
+                return Some(byte_count);
             }
             if source.is_null() {
                 writer_state.is_good = false;
-                return;
+                return None;
             }
             let Some(write_end_bytes) = writer_state.position_bytes.checked_add(byte_count) else {
                 writer_state.is_good = false;
-                return;
+                return None;
             };
             if write_end_bytes > writer_state.maximum_serialized_byte_count {
+                // The limit is reported through `into_bytes` as the typed
+                // serialization-limit error, so the callback acknowledges the
+                // count to keep native serialization deterministic while the
+                // latched state fails the final result.
                 writer_state.attempted_serialized_byte_count = Some(write_end_bytes);
                 writer_state.is_good = false;
-                return;
+                return Some(byte_count);
             }
             if write_end_bytes > writer_state.output_bytes.len() {
                 writer_state.output_bytes.resize(write_end_bytes, 0);
@@ -217,8 +237,11 @@ unsafe extern "C" fn memory_writer_write(
             writer_state.output_bytes[writer_state.position_bytes..write_end_bytes]
                 .copy_from_slice(source_bytes);
             writer_state.position_bytes = write_end_bytes;
-        });
+            Some(byte_count)
+        })
     }
+    .flatten()
+    .unwrap_or(0)
 }
 
 unsafe extern "C" fn memory_writer_label(_descriptor: *mut c_void) -> *const c_char {
