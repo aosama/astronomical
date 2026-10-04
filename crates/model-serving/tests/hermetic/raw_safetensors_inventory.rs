@@ -241,6 +241,7 @@ fn should_continue_excluding_metadata_from_existing_profile_validation() {
             name: "tensor".to_owned(),
             dtype: TensorDtype::Float32,
             shape: vec![1],
+            equivalent_published_shapes: Vec::new(),
         }],
         &HashSet::new(),
     )
