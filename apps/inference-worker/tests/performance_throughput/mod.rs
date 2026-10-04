@@ -17,4 +17,7 @@ mod qwen3_5_moe;
 mod qwen3_5_moe_vision;
 
 #[cfg(feature = "performance_throughput")]
+mod qwen3_8_dense_mtp;
+
+#[cfg(feature = "performance_throughput")]
 mod support;

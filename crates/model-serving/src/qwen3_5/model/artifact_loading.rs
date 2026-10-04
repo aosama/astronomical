@@ -522,6 +522,8 @@ impl Qwen3_5Model {
             paged_forward_missing_route_collector:
                 crate::qwen3_5_moe::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
+            mtp_verify_lane:
+                crate::qwen3_5::mtp_verify::compiled_window::MtpVerifyWindowLane::default(),
         })
     }
 }

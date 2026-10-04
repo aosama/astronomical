@@ -22,9 +22,17 @@ mod mlx_compiled_elementwise_graphs;
 #[cfg(feature = "mlx")]
 mod mlx_compiled_graph;
 #[cfg(feature = "mlx")]
+mod mlx_compiled_multi_output_graph;
+#[cfg(feature = "mlx")]
 mod mlx_compiled_sparse_shared_expert_combination;
 #[cfg(feature = "mlx")]
 mod mlx_compiled_swiglu;
+#[cfg(feature = "mlx")]
+mod mlx_compiled_verify_window_geometry;
+#[cfg(feature = "mlx")]
+mod mlx_compiled_verify_window_graph;
+#[cfg(feature = "mlx")]
+mod mlx_compiled_verify_window_ops;
 #[cfg(feature = "mlx")]
 mod mlx_compiled_vision_rope;
 #[cfg(feature = "mlx")]
@@ -74,7 +82,7 @@ mod mlx_stream;
 #[cfg(feature = "mlx")]
 mod positional_file_read_metrics;
 #[cfg(feature = "mlx")]
-mod raw;
+pub mod raw;
 
 #[cfg(feature = "experimental-aligned-expert-packs")]
 pub use experimental::{
@@ -90,11 +98,33 @@ pub use mlx_array::{MlxArray, MlxDtype};
 #[cfg(feature = "mlx")]
 pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
 #[cfg(feature = "mlx")]
+pub use mlx_compiled_graph::{
+    MlxGraphBuilder, array_from_vector, graph_output_array, set_graph_output,
+    set_graph_output_vector,
+};
+#[cfg(feature = "mlx")]
+pub use mlx_compiled_multi_output_graph::MlxCompiledMultiOutputGraph;
+#[cfg(feature = "mlx")]
 pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
 #[cfg(feature = "mlx")]
-pub use mlx_metal_kernel::{MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
-pub use mlx_metallib_path::resolve_mlx_metallib_path;
+pub use mlx_compiled_verify_window_geometry::{
+    VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
+    VerifyWindowFullAttentionQuantization, VerifyWindowFullAttentionWeightSlot,
+    VerifyWindowGatedDeltaQuantization, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
+    VerifyWindowInputSlot, VerifyWindowLayerKind, VerifyWindowLayerQuantization,
+    VerifyWindowLayerWeightSlot, VerifyWindowQuantizationPair, VerifyWindowTrunkQuantization,
+    VerifyWindowTrunkWeightSlot, verify_window_input_slots,
+};
 #[cfg(feature = "mlx")]
+pub use mlx_compiled_verify_window_graph::MlxCompiledVerifyWindowGraph;
+#[cfg(feature = "mlx")]
+pub use mlx_compiled_verify_window_graph::VerifyWindowGdnKernelSet;
+#[cfg(feature = "mlx")]
+pub use mlx_metal_kernel::{
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
+    apply_metal_kernel_in_graph,
+};
+pub use mlx_metallib_path::resolve_mlx_metallib_path;
 #[cfg(feature = "mlx")]
 pub use mlx_runtime::{
     MlxRuntime, classify_mlx_error, compiled_metallib_path, validate_metallib_path,
@@ -109,6 +139,8 @@ pub use mlx_runtime_types::{
 pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadResult};
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
+#[cfg(feature = "mlx")]
+pub use mlx_stream::MlxStream;
 #[cfg(feature = "mlx")]
 pub use positional_file_read_metrics::{
     PositionalFileReadMetrics, PositionalFileReadMetricsSnapshot,

@@ -16,6 +16,29 @@ pub struct Qwen3_5TargetForwardOutput {
 }
 
 impl Qwen3_5TargetForwardOutput {
+    /// Assembles one target forward output from an all-position logits tensor
+    /// and its pre-final-normalization hidden rows — the compiled
+    /// verification window's outputs, which slice their final row here.
+    pub(crate) fn from_all_position_logits(
+        runtime: &MlxRuntime,
+        all_position_logits: MlxArray,
+        pre_final_normalization_hidden_states: MlxArray,
+        token_count: i32,
+        vocabulary_size: i32,
+    ) -> Result<Self, MlxRuntimeError> {
+        let final_logits = runtime.slice(
+            &all_position_logits,
+            &[0, token_count - 1, 0],
+            &[1, token_count, vocabulary_size],
+            &[1, 1, 1],
+        )?;
+        Ok(Self {
+            final_logits,
+            all_position_logits: Some(all_position_logits),
+            pre_final_normalization_hidden_states,
+        })
+    }
+
     /// Returns float32 logits for the final target position.
     #[must_use]
     pub fn final_logits(&self) -> &MlxArray {

@@ -191,17 +191,43 @@ impl Qwen3_5Model {
         random_state: &mut MlxArray,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<SampledMtpVerificationOutput, Qwen3_5ExecutionError> {
+        // The compiled window replays a fixed-shape trace of the whole
+        // verification trunk; any decline (unsupported artifact, missing
+        // state, capability refusal) falls back to the eager window.
+        let compiled_started = std::time::Instant::now();
+        let compiled_window =
+            super::target_verification::compiled_mtp_verification_window_with_performance_attribution(
+                self,
+                verifier_input_token_ids,
+                starting_position_tokens,
+                request_decoder_state,
+            );
         let MtpVerificationWindow {
             target_forward_output,
             boundary_collector,
             completed_verifier_prefix_rows,
-        } = forward_mtp_verification_window_with_performance_attribution(
-            self,
-            verifier_input_token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-        )?;
+        } = match compiled_window {
+            Ok(compiled_window) => {
+                crate::qwen3_5::multi_token_prediction::decode::log_first_compiled_window_engagement_for_tests(
+                    "applied",
+                    compiled_started.elapsed().as_secs_f32() * 1_000.0,
+                );
+                compiled_window
+            }
+            Err(_) => {
+                crate::qwen3_5::multi_token_prediction::decode::log_first_compiled_window_engagement_for_tests(
+                    "declined",
+                    0.0,
+                );
+                forward_mtp_verification_window_with_performance_attribution(
+                    self,
+                    verifier_input_token_ids,
+                    starting_position_tokens,
+                    request_decoder_state,
+                    performance_attribution,
+                )?
+            }
+        };
         let all_position_logits = target_forward_output.all_position_logits().ok_or(
             Qwen3_5ExecutionError::InvalidInput {
                 description: "target verification forward did not retain all-position logits",
