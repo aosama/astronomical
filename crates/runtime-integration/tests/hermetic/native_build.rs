@@ -9,7 +9,7 @@ use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build_native_compile.rs");
-const BINDGEN_CONFIGURATION: &str = include_str!("../../build_bindings.rs");
+const BINDGEN_CONFIGURATION: &str = include_str!("../../../mlx-c-rust/build.rs");
 
 #[test]
 fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {

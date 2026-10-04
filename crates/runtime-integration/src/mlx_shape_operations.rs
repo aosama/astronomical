@@ -1,6 +1,5 @@
-use crate::{
-    MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector, raw,
-};
+use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector};
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Reorders array dimensions using an explicit complete permutation.

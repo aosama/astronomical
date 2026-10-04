@@ -1,4 +1,5 @@
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Copies float32 values into a new owned MLX array after validating shape arithmetic.

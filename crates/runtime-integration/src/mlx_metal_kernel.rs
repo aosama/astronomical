@@ -2,8 +2,9 @@ use std::ffi::{CString, NulError};
 
 use crate::{
     MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status, mlx_stream::MlxStream, raw,
+    mlx_runtime::check_status, mlx_stream::MlxStream,
 };
+use astronomical_mlx_c_rust::raw;
 
 /// Output shape and dtype requested from one custom Metal kernel launch.
 #[derive(Clone, Debug, Eq, PartialEq)]

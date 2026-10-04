@@ -2,8 +2,9 @@
 
 use crate::{
     MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status, raw,
+    mlx_runtime::check_status,
 };
+use astronomical_mlx_c_rust::raw;
 
 const NVFP4_GROUP_SIZE: i32 = 16;
 const NVFP4_BITS: i32 = 4;

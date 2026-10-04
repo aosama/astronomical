@@ -9,7 +9,8 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-use crate::{MlxRuntimeError, raw};
+use crate::MlxRuntimeError;
+use astronomical_mlx_c_rust::raw;
 
 use super::{check_status, error_handling::lock_unpoisoned};
 

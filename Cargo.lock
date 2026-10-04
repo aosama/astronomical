@@ -123,6 +123,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-mlx-c-rust"
+version = "0.2.64"
+dependencies = [
+ "bindgen",
+ "thiserror",
+]
+
+[[package]]
 name = "astronomical-model-serving"
 version = "0.2.64"
 dependencies = [
@@ -169,7 +177,7 @@ dependencies = [
 name = "astronomical-runtime-integration"
 version = "0.2.64"
 dependencies = [
- "bindgen",
+ "astronomical-mlx-c-rust",
  "fs4",
  "libc",
  "sha2",

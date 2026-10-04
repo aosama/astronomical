@@ -1,4 +1,5 @@
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Applies the nontraditional Llama rotary embedding.

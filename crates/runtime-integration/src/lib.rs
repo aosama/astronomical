@@ -81,8 +81,6 @@ mod mlx_shape_operations;
 mod mlx_stream;
 #[cfg(feature = "mlx")]
 mod positional_file_read_metrics;
-#[cfg(feature = "mlx")]
-pub mod raw;
 
 #[cfg(feature = "experimental-aligned-expert-packs")]
 pub use experimental::{

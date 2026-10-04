@@ -149,6 +149,18 @@ pub enum MlxRuntimeError {
     },
 }
 
+#[cfg(feature = "mlx")]
+impl From<astronomical_mlx_c_rust::MlxCError> for MlxRuntimeError {
+    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+        // Classification happens at this conversion so every captured MLX-C
+        // failure crossing into the runtime boundary — regardless of which
+        // layer observed it — is tested against the allocator patch's active
+        // memory ceiling marker before falling back to a plain operation
+        // failure.
+        crate::mlx_runtime::classify_mlx_error(captured_error.operation, captured_error.description)
+    }
+}
+
 impl MlxRuntimeError {
     /// Returns whether Metal completed a command buffer after exhausting GPU memory.
     #[must_use]

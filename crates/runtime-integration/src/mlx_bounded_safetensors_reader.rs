@@ -12,8 +12,9 @@ use std::{
 use crate::{
     MlxRuntimeError, PositionalFileReadMetrics,
     mlx_bounded_safetensors_read_concurrency::read_source_interval,
-    mlx_safetensors::BoundedReadInterval, raw,
+    mlx_safetensors::BoundedReadInterval,
 };
+use astronomical_mlx_c_rust::raw;
 
 const BOUNDED_READER_LABEL: &[u8] = b"bounded multi-range expert page reader\0";
 

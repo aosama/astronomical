@@ -4,8 +4,8 @@ use crate::{
     mlx_array_vector::MlxArrayVector,
     mlx_compiled_graph::{array_from_vector, graph_output_array, set_graph_output},
     mlx_stream::MlxStream,
-    raw,
 };
+use astronomical_mlx_c_rust::raw;
 
 /// Builds the shapeless compiled graph for Qwen3-VL rotate-half rotary embedding.
 ///

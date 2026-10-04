@@ -145,10 +145,9 @@ To bump a pinned dependency:
    wide-head-dimension test there exercises the JIT generator paths in
    seconds.
 4. Reconcile the Rust FFI surface: bindings are bindgen-generated at build
-   time from the pinned headers via the allowlist in
-   `crates/runtime-integration/build_bindings.rs`. Diff the generated
-   surface, update the allowlist and call sites, and leave zero compiler
-   warnings. Before the first native build of the new pin, diff the C header
+   time from the provisioned headers via the allowlist in
+   `crates/mlx-c-rust/build.rs`. Diff the generated surface, update the
+   allowlist and call sites, and leave zero compiler warnings. Before the first native build of the new pin, diff the C header
    surface itself with the bindgen header provisioning (see the next
    section); header-level differences found there explain almost every
    binding-level difference before any compile runs.
