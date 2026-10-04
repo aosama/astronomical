@@ -168,9 +168,9 @@ fn resolve_extraction_identity(repository_root: &Path) -> Result<String, Box<dyn
     let identity = String::from_utf8(identity_output.stdout)?;
     let identity = identity.trim();
     if identity.len() != 64
-        || !identity.bytes().all(|byte| {
-            byte.is_ascii_digit() || (byte.is_ascii_lowercase() && byte.is_ascii_hexdigit())
-        })
+        || !identity
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
     {
         return Err(format!(
             "native source identity fingerprint returned an invalid identity: {identity}"
