@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MacosProcessIoError, MacosProcessIoSnapshot};
+use astronomical_model_serving::{MacosProcessIoError, MacosProcessIoSnapshot};
 
 #[test]
 fn should_calculate_monotonic_process_io_deltas() {
@@ -35,7 +35,7 @@ fn should_reject_a_regressed_process_io_counter() {
 #[cfg(target_os = "macos")]
 #[test]
 fn should_sample_current_macos_process_io() {
-    let process_io_snapshot = astronomical_runtime_integration::sample_current_process_io()
+    let process_io_snapshot = astronomical_model_serving::sample_current_process_io()
         .expect("the current macOS process should expose resource usage");
 
     let unchanged_delta = process_io_snapshot
