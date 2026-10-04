@@ -106,7 +106,7 @@ classify_native_input_changes() {
     # is added because it also participates in full hosted compatibility.
     if git -C "$repository_root" diff --quiet --no-renames "$base_sha" "$head_sha" -- \
         crates/runtime-integration/build.rs \
-        crates/runtime-integration/build_bindings.rs \
+        crates/mlx-c-rust/build.rs \
         crates/runtime-integration/build_native_linking.rs \
         crates/runtime-integration/build_native_store.rs \
         crates/runtime-integration/build_native_store_manifest.rs \
