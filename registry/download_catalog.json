@@ -406,6 +406,24 @@
             "architecture_summary": "Qwen3.5 dense VLM, 27B params, 64 layers mixed linear-attention/full-attention, hidden 5120, bf16 vision tower, int4 MTP head"
         },
         {
+            "huggingface_id": "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed",
+            "revision": "1d5087d2062c02b279180a53e4016cf9cd7a3d7e",
+            "display_name": "Qwen 3.8 27B MTPLX Optimized Speed",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 20703486926,
+            "public": true,
+            "description": "A large, capable model that sees pictures and text and gives thoughtful answers, with a bundled multi-token head that drafts several tokens per step for faster responses. Great for harder writing, coding, and reasoning where speed matters, taking about 20.7 GB on disk.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 32), 8-bit embed and MTP modules",
+            "architecture_summary": "Qwen3.5 dense VLM, 27B params, 64 layers mixed linear-attention/full-attention (48 linear), hidden 5120, bf16 vision tower, MTPLX multi-token head with bundled MLX runtime",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "nvythong/Qwen3.8-35B-A3B-Distill-mlx-4Bit",
             "revision": "220dfec3e716bbae93bd66b643e36b2ffe6853ff",
             "display_name": "Qwen 3.8 35B A3B Distill 4-bit",
