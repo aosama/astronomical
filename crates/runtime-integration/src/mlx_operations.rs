@@ -1,7 +1,8 @@
 use crate::{
     MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status, raw,
+    mlx_runtime::check_status,
 };
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Builds lazy matrix multiplication on the runtime's GPU stream.

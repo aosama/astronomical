@@ -1,6 +1,7 @@
 //! Validated elementwise math wrappers over the pinned MLX-C operations.
 
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Applies the elementwise square root while preserving lazy evaluation.

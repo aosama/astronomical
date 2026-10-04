@@ -1,0 +1,22 @@
+[package]
+name = "astronomical-mlx-c-rust"
+build = "build.rs"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[dependencies]
+thiserror.workspace = true
+
+[build-dependencies]
+bindgen = "0.73"

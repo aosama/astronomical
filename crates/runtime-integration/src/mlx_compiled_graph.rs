@@ -1,8 +1,9 @@
 use std::os::raw::c_int;
 
 use crate::{
-    MlxArray, MlxRuntimeError, mlx_array_vector::MlxArrayVector, mlx_runtime::check_status, raw,
+    MlxArray, MlxRuntimeError, mlx_array_vector::MlxArrayVector, mlx_runtime::check_status,
 };
+use astronomical_mlx_c_rust::raw;
 
 /// The MLX C closure ABI every compiled-graph builder follows: it receives the
 /// output vector to populate and the input vector to read, and returns zero on

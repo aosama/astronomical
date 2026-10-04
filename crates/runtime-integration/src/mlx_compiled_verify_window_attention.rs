@@ -2,7 +2,8 @@ use super::VerifyWindowInputReader;
 use super::trunk::{quantized_matmul, take_affine, trace_feed_forward_tail};
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_ops as ops;
-use crate::{MlxArray, MlxStream, raw};
+use crate::{MlxArray, MlxStream};
+use astronomical_mlx_c_rust::raw;
 
 pub(super) fn trace_full_attention_layer(
     gpu_stream: &MlxStream,

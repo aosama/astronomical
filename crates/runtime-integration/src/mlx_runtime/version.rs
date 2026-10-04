@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 
-use crate::{MlxRuntimeError, raw};
+use crate::MlxRuntimeError;
+use astronomical_mlx_c_rust::raw;
 
 use super::check_status;
 

@@ -8,7 +8,8 @@ use std::{
     },
 };
 
-use crate::{MlxRuntimeError, PositionalFileReadMetrics, raw};
+use crate::{MlxRuntimeError, PositionalFileReadMetrics};
+use astronomical_mlx_c_rust::raw;
 
 const READER_LABEL: &[u8] = b"validated descriptor-backed weights\0";
 

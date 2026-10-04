@@ -31,8 +31,9 @@ use crate::mlx_compiled_verify_window_geometry::{
 use crate::mlx_compiled_verify_window_ops as ops;
 use crate::{
     MlxArray, MlxCompiledMultiOutputGraph, MlxMetalKernel, MlxRuntime, MlxRuntimeError, MlxStream,
-    raw, set_graph_output_vector,
+    set_graph_output_vector,
 };
+use astronomical_mlx_c_rust::raw;
 #[path = "mlx_compiled_verify_window_attention.rs"]
 mod attention;
 #[path = "mlx_compiled_verify_window_gdn.rs"]
