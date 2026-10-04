@@ -87,6 +87,9 @@ option(
 FetchContent_Declare(metal_cpp URL "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_SHA256}")
 FetchContent_Declare(json URL "${ASTRONOMICAL_JSON_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_SHA256}")
 FetchContent_Declare(fmt URL "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
+# Every patch in the two PATCH_COMMAND lists below is documented with its
+# purpose and retirement condition in the patch registry of
+# third-party/README.md.
 FetchContent_Declare(
     mlx
     URL "${ASTRONOMICAL_MLX_SOURCE_ARCHIVE}"
@@ -106,6 +109,10 @@ FetchContent_Declare(
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-jit-sdpa-dsplit-template-arity.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-astronomical-active-memory-ceiling.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
@@ -116,8 +123,8 @@ FetchContent_Declare(
 # The pinned mlx-c v0.7.0 release absorbed the four MLX 0.32.x version-gap
 # compatibility bridges and the app-bundle Metal library path override
 # (mlx_metal_set_metallib_path) that our v0.6.0 pin carried as local patch
-# files. One bridge remains: upstream v0.7.0 targets MLX v0.32.2, while the
-# pinned MLX 0.32.3 development source inserts a global_scale parameter into
+# files. One bridge remains: mlx-c v0.7.0 was authored against MLX v0.32.2,
+# while the pinned MLX v0.32.3 release inserts a global_scale parameter into
 # gather_qmm that the v0.7.0 C API does not expose.
 FetchContent_Declare(
     mlx_c
