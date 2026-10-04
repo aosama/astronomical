@@ -98,6 +98,9 @@ impl MlxRuntime {
                     mask_mode,
                     mask_array,
                     MlxArray::empty_raw(),
+                    // mlx-c v0.7.0 exposes the fused-attention selection; keep
+                    // the eager path on the reference implementation.
+                    false,
                     stream,
                 )
             }
