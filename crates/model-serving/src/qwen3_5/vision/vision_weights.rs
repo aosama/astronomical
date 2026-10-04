@@ -33,13 +33,15 @@ impl Qwen3_5VisionWeights {
         runtime: &MlxRuntime,
         validated_artifact: &mut ValidatedQwen3_5Artifact,
     ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
-        let vision_config =
-            validated_artifact
-                .vision_config()
-                .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "validated visual sidecar has no vision configuration",
-                })?;
-        let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(vision_config);
+        // The config is cloned so the artifact's mutable source-handoff below
+        // never conflicts with the bound-tensor loop's config reads.
+        let vision_config = validated_artifact
+            .vision_config()
+            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "validated visual sidecar has no vision configuration",
+            })?
+            .clone();
+        let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(&vision_config);
         let vision_sidecar_file_names = validated_artifact
             .shard_index()
             .vision_sidecar_file_names()
@@ -81,6 +83,7 @@ impl Qwen3_5VisionWeights {
                 }
             })?;
             let tensor = vision_sidecar.tensor(&tensor_profile.name)?;
+            let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
             validate_bound_vision_tensor(tensor_profile, &tensor)?;
             let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidTensor {
@@ -121,6 +124,7 @@ impl Qwen3_5VisionWeights {
     /// The `vision_tensor_name_to_shard_index` maps each vision tensor name
     /// to its shard index in `model_shards`.
     pub fn load_from_model_shards(
+        runtime: &MlxRuntime,
         vision_config: &super::Qwen3_5VisionConfig,
         model_shards: &[MlxSafetensors],
         vision_tensor_name_to_shard_index: &HashMap<String, usize>,
@@ -141,6 +145,7 @@ impl Qwen3_5VisionWeights {
                 }
             })?;
             let tensor = model_shard.tensor(&tensor_profile.name)?;
+            let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
             validate_bound_vision_tensor(tensor_profile, &tensor)?;
             let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidTensor {
@@ -198,6 +203,48 @@ impl Qwen3_5VisionWeights {
         let bound_tensor_references = self.bound_tensors.values().collect::<Vec<_>>();
         Ok(runtime.evaluate_arrays(&bound_tensor_references)?)
     }
+}
+
+/// Normalizes the patch-embed Conv3d weight into the MLX ODHWI execution
+/// layout when a checkpoint published it in the upstream PyTorch order
+/// `[output, in_channels, kernel_depth, kernel_height, kernel_width]`. The
+/// two forms are pure axis permutations of the same stored values, so the
+/// normalization changes no numerics; tensors already in the execution
+/// layout (and any other shape, which the profile validation then judges)
+/// pass through untouched.
+fn normalize_published_patch_embed_layout(
+    runtime: &MlxRuntime,
+    tensor_profile: &TensorProfile,
+    tensor: MlxArray,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let is_patch_embed_weight = tensor_profile.name == "vision_tower.patch_embed.proj.weight";
+    if !is_patch_embed_weight {
+        return Ok(tensor);
+    }
+    let execution_shape: Vec<i32> = tensor_profile
+        .shape
+        .iter()
+        .map(|dimension| *dimension as i32)
+        .collect();
+    if tensor.shape() == execution_shape {
+        return Ok(tensor);
+    }
+    let published_matches_pytorch_layout =
+        tensor_profile
+            .equivalent_published_shapes
+            .iter()
+            .any(|equivalent_shape| {
+                let equivalent_shape: Vec<i32> = equivalent_shape
+                    .iter()
+                    .map(|dimension| *dimension as i32)
+                    .collect();
+                tensor.shape() == equivalent_shape
+            });
+    if !published_matches_pytorch_layout {
+        return Ok(tensor);
+    }
+    // [output, in, kT, kH, kW] -> [output, kT, kH, kW, in].
+    Ok(runtime.transpose_axes(&tensor, &[0, 2, 3, 4, 1])?)
 }
 
 fn validate_bound_vision_tensor(

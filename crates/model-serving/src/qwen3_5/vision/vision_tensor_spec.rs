@@ -35,17 +35,30 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
     let mut tensor_profiles = Vec::new();
 
     // Patch embedding: [hidden_size, temporal_patch_size, patch_size, patch_size, in_channels]
-    tensor_profiles.push(tensor_profile(
-        "vision_tower.patch_embed.proj.weight".to_owned(),
-        TensorDtype::ModelFloat,
-        vec![
+    //
+    // MLX Conv3d consumes ODHWI weights, and the converted artifacts store that
+    // order. Some published checkpoints keep the upstream PyTorch Conv3d order
+    // [hidden_size, in_channels, temporal_patch_size, patch_size, patch_size]
+    // instead — a pure axis permutation of the same values — so the profile
+    // accepts it and the vision weights loader normalizes it at load.
+    tensor_profiles.push(TensorProfile {
+        name: "vision_tower.patch_embed.proj.weight".to_owned(),
+        dtype: TensorDtype::ModelFloat,
+        shape: vec![
             hidden_size,
             temporal_patch_size,
             patch_size,
             patch_size,
             in_channels,
         ],
-    ));
+        equivalent_published_shapes: vec![vec![
+            hidden_size,
+            in_channels,
+            temporal_patch_size,
+            patch_size,
+            patch_size,
+        ]],
+    });
     tensor_profiles.push(tensor_profile(
         "vision_tower.patch_embed.proj.bias".to_owned(),
         TensorDtype::ModelFloat,
@@ -182,5 +195,6 @@ fn tensor_profile(
         name: tensor_name,
         dtype: tensor_dtype,
         shape: tensor_shape,
+        equivalent_published_shapes: Vec::new(),
     }
 }
