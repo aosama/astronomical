@@ -5,9 +5,10 @@ use std::collections::HashMap;
 use astronomical_model_serving::{
     LagunaExpertProjection, LagunaLayerTensorRole, LagunaMoeDescriptor, LagunaTensorId,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::tensor_identity::layer_id;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) fn reference_moe(
     runtime: &MlxRuntime,
@@ -117,7 +118,11 @@ fn select_experts(
     };
     let original_scores = runtime.sigmoid(&bounded_logits)?;
     let ranking_scores = correction_bias.map_or_else(
-        || original_scores.retain(),
+        || {
+            original_scores
+                .retain()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        },
         |bias| runtime.add(&original_scores, bias),
     )?;
     // Stable argsort is intentionally different from production's argpartition.

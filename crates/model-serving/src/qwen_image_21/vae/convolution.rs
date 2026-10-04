@@ -4,10 +4,11 @@
 //! (`mlx_format: true`), which is exactly the OHWI order MLX conv2d consumes, so no PyTorch
 //! OIHW transpose is needed here (unlike the FLUX.2 Klein loader).
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::tensor_shape::validate_shape;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// A spatial (or pointwise) convolution over `NHWC` activations with `OHWI` weights.
 #[derive(Debug)]

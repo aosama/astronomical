@@ -7,7 +7,7 @@
 //! the arithmetic identical to the single-page path, so mixed serving cannot
 //! change generated tokens through floating-point reassociation.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::paged_execution::RoutedExpertAssignmentOutputs;
 use crate::expert_paging::ExpertPageRoutePartition;
@@ -20,6 +20,7 @@ use crate::qwen3_5_moe::model::cached_plus_streamed_page_route::Qwen3_5MoECached
 use crate::qwen3_5_moe::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_moe::model::routing::qwen3_5_moe_unsorted_expert_weighted_sum;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Reshapes one partial route side to the batched assignment layout the gather
 /// consumes. The route builder emits compact one-dimensional arrays; the

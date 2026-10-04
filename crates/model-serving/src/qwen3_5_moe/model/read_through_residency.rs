@@ -1,6 +1,6 @@
 //! Streams missing experts, stores each one, and runs this forward from the cache.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::expert_paging::expert_pager::{

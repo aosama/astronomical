@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAConfig;
 use crate::{PerformanceAttribution, PerformanceOperation};
@@ -21,6 +21,7 @@ use super::weights::{
 use crate::k2_horizon_mova::K2HorizonMoVAShardIndex;
 use crate::k2_horizon_mova::artifacts::ValidatedK2HorizonMoVAArtifact;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVALayerKind;
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) fn load_weights(
     runtime: &MlxRuntime,

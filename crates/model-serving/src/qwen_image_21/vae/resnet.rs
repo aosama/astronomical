@@ -4,11 +4,12 @@
 //! no activation) as a 1×1 convolution only when the channel counts differ; dropout is an
 //! identity at inference.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::rms_norm::QwenImage21VaeRmsNorm;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct QwenImage21VaeResnetBlock {

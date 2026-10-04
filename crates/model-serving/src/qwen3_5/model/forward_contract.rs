@@ -1,8 +1,7 @@
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
-
 use super::error::invalid_request_decoder_state;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::DecoderCacheState;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(crate) fn forward_state_arrays<'state>(
     output: &'state MlxArray,

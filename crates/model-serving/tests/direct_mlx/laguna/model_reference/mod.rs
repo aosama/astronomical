@@ -17,7 +17,7 @@ mod tensor_identity;
 use astronomical_model_serving::{
     LagunaDecoderState, PerformanceAttribution, PerformanceOperation,
 };
-use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use self::fixture::build_fixture;
 use self::operations::{ReferenceDecoderState, reference_forward};
@@ -25,6 +25,7 @@ use self::rows::{ReferenceRow, generic_moe_rows, generic_rows, named_rows};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxDtype;
 
 #[tokio::test]
 async fn should_match_complete_model_reference_for_generalized_descriptor_rows() {
@@ -251,18 +252,22 @@ fn assert_arrays_close(
     runtime: &MlxRuntime,
     row_name: &str,
     boundary_name: &str,
-    actual: &astronomical_runtime_integration::MlxArray,
-    expected: &astronomical_runtime_integration::MlxArray,
+    actual: &astronomical_mlx_c_rust::MlxArray,
+    expected: &astronomical_mlx_c_rust::MlxArray,
     tolerance: f32,
 ) {
     // Comparison happens only after both lazy graphs are complete. Casting here
     // keeps production execution at its declared dtype while giving one stable
     // host representation for diagnostics.
-    let evaluated_float32_values = |array: &astronomical_runtime_integration::MlxArray| {
+    let evaluated_float32_values = |array: &astronomical_mlx_c_rust::MlxArray| {
         runtime
             .astype(array, MlxDtype::Float32)
             .and_then(|array| runtime.build_contiguous_row_major_copy(&array))
-            .and_then(|array| array.to_vec_f32())
+            .and_then(|array| {
+                array
+                    .to_vec_f32()
+                    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+            })
             .expect("reference comparison should evaluate")
     };
     let actual_values = evaluated_float32_values(actual);

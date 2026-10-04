@@ -7,9 +7,9 @@ use std::{
     time::Instant,
 };
 
+use astronomical_mlx_c_rust::MlxDtype;
 use astronomical_runtime_integration::{
-    BoundedReadInterval, MlxDtype, MlxMemoryLimits, MlxRuntime, MlxRuntimeError,
-    PositionalFileReadMetrics,
+    BoundedReadInterval, MlxMemoryLimits, MlxRuntime, MlxRuntimeError, PositionalFileReadMetrics,
 };
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;

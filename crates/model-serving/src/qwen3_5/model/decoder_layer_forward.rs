@@ -9,7 +9,7 @@
 //! specialized owners. Keeping the two halves here makes the residual boundaries
 //! explicit and provides one restart-safe attention output for chunk recovery.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;

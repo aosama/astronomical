@@ -1,12 +1,13 @@
 //! One contiguous float32 host transfer followed by the exact reference pixel conversion.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::{
     Flux2KleinImageEncodingError, Flux2KleinPngEncoder, reference_pixels::normalized_rgb_u8,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Flux2KleinPngEncoder {
     pub fn encode_decoded_mlx_rgb(

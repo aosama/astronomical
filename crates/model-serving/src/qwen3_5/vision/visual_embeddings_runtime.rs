@@ -8,7 +8,7 @@ use crate::{
     PersistentVisualEmbeddingKey,
 };
 use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5) fn resolve_visual_embeddings_for_processed_images(

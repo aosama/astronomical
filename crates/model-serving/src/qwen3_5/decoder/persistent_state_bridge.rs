@@ -1,6 +1,7 @@
 use super::RequestDecoderStateStack;
 use crate::DecoderCacheState;
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::MlxArray;
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use std::collections::HashMap;
 /// Bridges persistent prompt-cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors
@@ -343,7 +344,7 @@ pub(super) fn retain_layer_tensor(
         |source| PersistentPromptCacheStateBridgeError::RetainLayerTensor {
             layer_index,
             tensor_role,
-            source,
+            source: MlxRuntimeError::from(source),
         },
     )
 }

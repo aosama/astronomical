@@ -28,13 +28,14 @@ pub(in crate::laguna) use resident::forward_resident_mixture_of_experts;
 
 #[cfg(feature = "direct-mlx")]
 mod public_router {
-    use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+    use astronomical_runtime_integration::MlxRuntime;
 
     use crate::laguna::normalization::LagunaMoeDescriptor;
     use crate::performance_attribution::PerformanceAttribution;
 
     use super::super::model::LagunaExecutionError;
     use super::router::route_laguna_experts;
+    use astronomical_mlx_c_rust::MlxArray;
 
     /// Routes native Laguna logits with the same formula as resident execution.
     pub fn route_laguna_native_experts(

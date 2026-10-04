@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::{
     MemoryCeilingUtilization, MlxMemoryTelemetry, ModelLoadingPerformanceAttributionMetadata,
@@ -44,6 +44,7 @@ use super::{
     Flux2KleinTokenizer,
 };
 use super::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const TRANSFORMER_BLOCKS_PER_CANCELLATION_GROUP: usize = 1;
 const TEXT_ENCODER_LAYERS_PER_CANCELLATION_GROUP: usize = 1;

@@ -5,11 +5,12 @@
 //! not use this owner because repeatedly materializing concatenations would add
 //! work to their one-operation lifetime.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource};
 use crate::qwen3_5::model::Qwen3_5ExecutionError;
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Resident gate/up ownership selected from startup-validated source geometry.
 #[derive(Debug)]

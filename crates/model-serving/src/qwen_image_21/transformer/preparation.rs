@@ -11,7 +11,7 @@
 //! tokens whose values come from `img_in(packed_latents)`, while text tokens copy their VLM
 //! embedding one-to-one.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::kv_cache::prefix_length;
@@ -26,6 +26,7 @@ use super::weights::{
     CONTEXT_INPUT_WIDTH, HEAD_WIDTH, HIDDEN_WIDTH, LATENT_CHANNEL_COUNT, MODULATION_WIDTH,
     QwenImage21TransformerWeights, TIMESTEP_EMBEDDING_WIDTH,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Each vision-language image slot represents a 2×2 group of latent tokens.
 const IMG_TOKENS_PER_SLOT: usize = 4;

@@ -6,12 +6,13 @@ use astronomical_model_serving::{
     LagunaTargetNormalizer, LagunaTensorComponent, LagunaTensorId, PerformanceAttribution,
     PerformanceOperation,
 };
-use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::json;
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(

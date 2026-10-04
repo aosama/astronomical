@@ -1,6 +1,7 @@
-use astronomical_runtime_integration::{MlxDtype, MlxRuntimeError};
+use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::common::runtime_test_support::{assert_f32_close, runtime};
+use astronomical_mlx_c_rust::MlxDtype;
 
 #[test]
 fn should_run_flux_vae_asymmetric_padding_and_channel_last_convolution() {

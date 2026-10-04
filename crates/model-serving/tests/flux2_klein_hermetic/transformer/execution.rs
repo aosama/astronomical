@@ -57,11 +57,12 @@ fn adjacent_pair_rope_scalar_oracle(
         })
         .collect()
 }
-use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxDtype;
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"

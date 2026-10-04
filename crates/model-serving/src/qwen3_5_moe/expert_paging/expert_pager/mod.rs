@@ -7,7 +7,7 @@ pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
 use std::fs::File;
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntimeError};
+use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
 use crate::expert_paging::{
@@ -16,6 +16,7 @@ use crate::expert_paging::{
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Typed failures during expert streaming and resident-source handling.
 #[derive(Debug, Error)]

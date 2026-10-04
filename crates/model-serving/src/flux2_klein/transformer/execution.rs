@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -14,6 +14,7 @@ use super::{
     Flux2KleinTransformerError, Flux2KleinTransformerGeometry, Flux2KleinTransformerInputs,
     Flux2KleinTransformerWeights,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Flux2KleinBlockKind {

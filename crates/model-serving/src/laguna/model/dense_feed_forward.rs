@@ -1,12 +1,13 @@
 //! Dense SwiGLU: `down(silu(gate(x)) * up(x))`.
 
-use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxRuntime};
+use astronomical_runtime_integration::{MlxCompiledSwiGlu, MlxRuntime};
 
 use crate::laguna::artifacts::{LagunaExpertProjection, LagunaLayerTensorRole};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaExecutionError;
 use super::weights::LagunaNativeWeights;
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) fn dense_swiglu(
     runtime: &MlxRuntime,

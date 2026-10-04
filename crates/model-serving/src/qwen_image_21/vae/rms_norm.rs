@@ -8,10 +8,11 @@
 //! encoder's zero-centered RMSNorm (`qwen_image_21::norm` on the CPU, `mlx_math::fp32_zero_center_rms_norm`
 //! on the runtime path), which divides by the root-mean-square and scales by `weight + 1`.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::tensor_shape::{as_i32, validate_shape};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// `torch.nn.functional.normalize` clamps the L2 norm at this floor before dividing.
 const NORMALIZE_L2_FLOOR: f32 = 0.000_000_000_001;

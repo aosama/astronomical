@@ -89,5 +89,5 @@ fn sorted_expert_weighted_sum_probe_journey(
         &selected_scores,
         probe_attribution,
     )?;
-    weighted_outputs.to_vec_f32()
+    weighted_outputs.to_vec_f32().map_err(MlxRuntimeError::from)
 }

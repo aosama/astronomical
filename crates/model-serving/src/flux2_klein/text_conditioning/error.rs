@@ -46,3 +46,10 @@ pub(crate) enum Flux2KleinTextConditioningError {
     #[error("native MLX text conditioning failed")]
     Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
 }
+
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_mlx_c_rust::MlxCError> for Flux2KleinTextConditioningError {
+    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+    }
+}

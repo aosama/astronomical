@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights;
 use crate::{PerformanceAttribution, PerformanceOperation};
@@ -14,6 +14,7 @@ use super::{
     },
     qwen3_5_resident_language_tensor_profiles,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Strict typed ownership for the indexed executable Qwen3.5 language shards.
 #[derive(Debug)]

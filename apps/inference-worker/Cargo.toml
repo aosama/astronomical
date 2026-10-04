@@ -33,6 +33,7 @@ astronomical-config = { path = "../../crates/config" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+astronomical-mlx-c-rust = { path = "../../crates/mlx-c-rust" }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

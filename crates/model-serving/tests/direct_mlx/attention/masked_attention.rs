@@ -2,11 +2,12 @@ use astronomical_model_serving::{
     PerformanceAttribution, PerformanceOperation, build_causal_sliding_window_mask,
     sliding_window_visibility_table,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[tokio::test]
 async fn should_match_fused_causal_attention_with_an_array_causal_mask() {
@@ -52,7 +53,7 @@ async fn should_match_the_cpu_visibility_table_for_a_prefix_plus_chunk() {
     let mask = build_causal_sliding_window_mask(&runtime, 6, 4, 0, 10, 4, &mut attribution)
         .expect("the mask should build");
     let actual = runtime
-        .astype(&mask, astronomical_runtime_integration::MlxDtype::Float32)
+        .astype(&mask, astronomical_mlx_c_rust::MlxDtype::Float32)
         .expect("the mask should cast")
         .to_vec_f32()
         .expect("the mask should evaluate");

@@ -130,10 +130,10 @@ fn expert_local_shape(tensor_source: &QuantizedTensorSource) -> Vec<usize> {
 #[cfg(feature = "direct-mlx")]
 pub fn assemble_streaming_expert_page_tensors(
     runtime: &astronomical_runtime_integration::MlxRuntime,
-    loaded_tensors: &mut HashMap<String, astronomical_runtime_integration::MlxArray>,
+    loaded_tensors: &mut HashMap<String, astronomical_mlx_c_rust::MlxArray>,
     layer_plan: &QuantizedExpertLayerPlan,
     expert_count: usize,
-) -> Result<HashMap<String, astronomical_runtime_integration::MlxArray>, StreamingExpertPackError> {
+) -> Result<HashMap<String, astronomical_mlx_c_rust::MlxArray>, StreamingExpertPackError> {
     let mut assembled_tensors = HashMap::with_capacity(layer_plan.tensor_sources.len());
     for tensor_source in &layer_plan.tensor_sources {
         let canonical_tensor_name = expert_page_tensor_name(

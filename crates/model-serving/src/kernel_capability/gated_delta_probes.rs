@@ -7,7 +7,7 @@
 //! geometry is bounded by the sequence contract: a 128 key dimension, a
 //! 32-divisible value dimension, one key head, and one value head.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
 use crate::qwen3_5::{
@@ -15,6 +15,7 @@ use crate::qwen3_5::{
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const PROBE_TOKEN_COUNT: i32 = 3;
 const PROBE_KEY_HEAD_COUNT: i32 = 1;
@@ -111,7 +112,7 @@ fn patterned_rank_four(
 fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Result<Vec<f32>, MlxRuntimeError> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32())
+        .and_then(|float32_array| float32_array.to_vec_f32().map_err(MlxRuntimeError::from))
 }
 
 fn execution_error(error: MlxRuntimeError) -> KernelCapabilityError {

@@ -5,12 +5,13 @@ use astronomical_model_serving::{
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
     PersistentPromptCacheDiskStoreError, PersistentPromptCacheModelContract,
 };
-use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) fn open_persistent_prompt_cache_disk_store(
     persistent_prompt_cache_directory: &tempfile::TempDir,

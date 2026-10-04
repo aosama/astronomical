@@ -1,10 +1,9 @@
-use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxDtype, MlxMemoryLimits, MlxRuntime,
-};
+use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxDtype;
 
 // Qwen3.5 vision tower geometry: hidden 1152 over 16 heads is head dimension 72.
 const HEAD_COUNT: i32 = 16;
@@ -119,12 +118,12 @@ async fn should_match_composed_vision_rope_bit_for_bit_through_the_compiled_grap
 // contract compares the compiled graph against the reference it replaces.
 fn composed_vision_rope(
     runtime: &MlxRuntime,
-    attention_states: &astronomical_runtime_integration::MlxArray,
-    rotary_cosines: &astronomical_runtime_integration::MlxArray,
-    rotary_sines: &astronomical_runtime_integration::MlxArray,
-    first_half: &astronomical_runtime_integration::MlxArray,
-    second_half: &astronomical_runtime_integration::MlxArray,
-) -> astronomical_runtime_integration::MlxArray {
+    attention_states: &astronomical_mlx_c_rust::MlxArray,
+    rotary_cosines: &astronomical_mlx_c_rust::MlxArray,
+    rotary_sines: &astronomical_mlx_c_rust::MlxArray,
+    first_half: &astronomical_mlx_c_rust::MlxArray,
+    second_half: &astronomical_mlx_c_rust::MlxArray,
+) -> astronomical_mlx_c_rust::MlxArray {
     let negative_second_half = runtime
         .negative(second_half)
         .expect("the second half should negate");
@@ -149,7 +148,7 @@ fn bf16_array(
     runtime: &MlxRuntime,
     values: &[f32],
     shape: &[i32],
-) -> astronomical_runtime_integration::MlxArray {
+) -> astronomical_mlx_c_rust::MlxArray {
     runtime
         .astype(
             &runtime
@@ -164,7 +163,7 @@ fn f32_array(
     runtime: &MlxRuntime,
     values: &[f32],
     shape: &[i32],
-) -> astronomical_runtime_integration::MlxArray {
+) -> astronomical_mlx_c_rust::MlxArray {
     runtime
         .array_from_f32(values, shape)
         .expect("the float32 array should be valid")

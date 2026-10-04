@@ -1,7 +1,7 @@
 //! Laguna model: embed, descriptor-ordered layers, final norm, output head.
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, graph_submission_layer_interval};
-use astronomical_runtime_integration::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::{MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime};
 
 use crate::ExpertResidencyTelemetry;
 use crate::MlxAllocationAdmission;
@@ -21,6 +21,7 @@ use super::error::LagunaExecutionError;
 use super::expert_coverage::validate_sparse_coverage;
 use super::expert_residency::LagunaExpertResidencyState;
 use super::weights::LagunaNativeWeights;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Executable Laguna model bound to one canonical contract and native weights.
 pub struct LagunaModel {

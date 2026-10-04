@@ -1,7 +1,7 @@
 //! Validated axis-specific padding for lazy MLX tensors.
 
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Applies axis-specific constant padding, including asymmetric image padding.

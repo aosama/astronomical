@@ -26,3 +26,10 @@ impl Flux2KleinVaeError {
         }
     }
 }
+
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_mlx_c_rust::MlxCError> for Flux2KleinVaeError {
+    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+    }
+}

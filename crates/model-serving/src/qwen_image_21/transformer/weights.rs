@@ -7,7 +7,7 @@
 //! repacking. The affine `biases` are dequantization offsets, not layer biases — the reference
 //! model has no projection biases anywhere.
 
-use astronomical_runtime_integration::{MlxArray, MlxSafetensors};
+use astronomical_runtime_integration::MlxSafetensors;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::{QuantizedLinear, validate_shape};
@@ -15,6 +15,7 @@ use crate::qwen_image_21::mlx_math::{QuantizedLinear, validate_shape};
 use super::blocks::{
     QwenImage21AttentionWeights, QwenImage21BlockWeights, QwenImage21FeedForwardWeights,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Hidden width everywhere: `num_attention_heads × attention_head_dim`.
 pub(super) const HIDDEN_WIDTH: usize = 4096;

@@ -1,6 +1,7 @@
 //! Affine quantized linear modules for stacked MLX weights.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::MlxArray;
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// One affine quantized linear (weight, scales, biases) plus optional dense bias.
 #[derive(Debug)]

@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxRuntime, MlxSafetensors, PositionalFileReadMetrics,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
 
 use crate::PerformanceAttribution;
 use crate::expert_paging::ExpertWeightPage;
@@ -19,6 +17,7 @@ use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 use super::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 type ResidentSourceTensorKey = (PathBuf, String);
 type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;

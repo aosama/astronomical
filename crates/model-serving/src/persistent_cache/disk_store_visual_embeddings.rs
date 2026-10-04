@@ -2,7 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
@@ -18,6 +18,7 @@ use super::{
     PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
     PersistentVisualEmbeddingModelContract,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
     pub fn save_visual_embedding(

@@ -1,9 +1,10 @@
 use astronomical_model_serving::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
-use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxDtype;
 
 #[tokio::test]
 async fn should_collect_complete_persistent_prompt_cache_boundary_tensors_in_prompt_order() {

@@ -3,11 +3,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use astronomical_runtime_integration::{
-    MlxDtype, MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadRange,
+    MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadRange,
     MlxMetalExpertPackOutputTensor,
 };
 
 use super::runtime;
+use astronomical_mlx_c_rust::MlxDtype;
 
 #[test]
 fn should_record_metal_io_completion_metrics_without_an_explicit_wait() {

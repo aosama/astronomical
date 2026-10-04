@@ -10,9 +10,10 @@
 //! to the same selected keys, so a gather that drops a selected key, a
 //! softmax over the wrong axis, or a mis-ordered restore fails here.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Computes attention over the selected keys for every query.
 ///

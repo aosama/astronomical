@@ -10,9 +10,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxDtype, MlxMemoryLimits, MlxRuntime,
-};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 const HEAD_COUNT: i32 = 16;
@@ -217,7 +216,7 @@ fn bf16_array(
     runtime: &MlxRuntime,
     values: &[f32],
     shape: &[i32],
-) -> astronomical_runtime_integration::MlxArray {
+) -> astronomical_mlx_c_rust::MlxArray {
     runtime
         .astype(
             &runtime
@@ -232,7 +231,7 @@ fn f32_array(
     runtime: &MlxRuntime,
     values: &[f32],
     shape: &[i32],
-) -> astronomical_runtime_integration::MlxArray {
+) -> astronomical_mlx_c_rust::MlxArray {
     runtime
         .array_from_f32(values, shape)
         .expect("the float32 array should be valid")

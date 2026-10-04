@@ -5,9 +5,7 @@ mod experimental;
 #[cfg(feature = "mlx")]
 mod mlx_activation_operations;
 #[cfg(feature = "mlx")]
-mod mlx_array;
 #[cfg(feature = "mlx")]
-mod mlx_array_vector;
 #[cfg(feature = "mlx")]
 mod mlx_attention_operations;
 #[cfg(feature = "mlx")]
@@ -77,7 +75,6 @@ mod mlx_safetensors_writer;
 #[cfg(feature = "mlx")]
 mod mlx_shape_operations;
 #[cfg(feature = "mlx")]
-mod mlx_stream;
 #[cfg(feature = "mlx")]
 mod positional_file_read_metrics;
 
@@ -88,7 +85,6 @@ pub use experimental::{
     MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
 };
 #[cfg(feature = "mlx")]
-pub use mlx_array::{MlxArray, MlxDtype};
 #[cfg(feature = "mlx")]
 pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
 #[cfg(feature = "mlx")]
@@ -134,7 +130,6 @@ pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadRe
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
 #[cfg(feature = "mlx")]
-pub use mlx_stream::MlxStream;
 #[cfg(feature = "mlx")]
 pub use positional_file_read_metrics::{
     PositionalFileReadMetrics, PositionalFileReadMetricsSnapshot,

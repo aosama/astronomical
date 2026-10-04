@@ -144,7 +144,7 @@ async fn should_draw_acceptance_coins_at_their_probabilities() {
 
 fn sampled_residual_token_counts(
     runtime: &MlxRuntime,
-    residuals: &astronomical_runtime_integration::MlxArray,
+    residuals: &astronomical_mlx_c_rust::MlxArray,
     draw_count: usize,
 ) -> Vec<u32> {
     let mut emission_counts = vec![0_u32; 3];

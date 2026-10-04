@@ -5,7 +5,7 @@
 //! and cache mechanisms remain neutral so another model family does not have to
 //! import Laguna policy to reuse identical mathematics.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::attention::build_causal_sliding_window_mask;
 use crate::laguna::artifacts::{LagunaAttentionProjection, LagunaLayerTensorRole};
@@ -19,6 +19,7 @@ use super::decoder_state::LagunaDecoderState;
 use super::error::LagunaExecutionError;
 use super::rope_application::apply_layer_rope;
 use super::weights::LagunaNativeWeights;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Reuses the two causal masks shared by equivalent attention layers during
 /// one model forward. The cache is intentionally forward-scoped because its

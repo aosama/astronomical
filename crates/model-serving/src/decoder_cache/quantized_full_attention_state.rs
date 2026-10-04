@@ -5,10 +5,11 @@
 //! bfloat16. The append, growth, and active-view mechanics mirror
 //! `FullAttentionKeyValueState`; only the tensor payload differs.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::STATE_DIMENSION_TOKEN_AXIS;
 use super::append_only_attention_state_operations::{active_view, build_updated_storage};
+use astronomical_mlx_c_rust::MlxArray;
 
 const QUANTIZED_STATE_OPERATION: &str = "update the in-memory quantized full-attention KV state";
 

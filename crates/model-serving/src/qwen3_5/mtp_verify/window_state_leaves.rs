@@ -14,7 +14,7 @@
 //! are installed through that owner's append path so its existing capacity
 //! policy remains authoritative.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::decoder_cache::{DecoderCacheState, FullAttentionKeyValueState};
 use crate::qwen3_5::decoder::RequestDecoderStateStack;

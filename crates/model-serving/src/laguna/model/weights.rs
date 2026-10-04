@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::artifacts::{
     LagunaAttentionProjection, LagunaExpertProjection, LagunaGlobalTensorRole,
@@ -17,6 +17,7 @@ use super::bound_linear::{
 };
 use super::error::LagunaExecutionError;
 use super::router_correction_bias::bind_optional_router_correction_bias;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Resident weight map bound from canonical tensor IDs.
 pub struct LagunaNativeWeights {

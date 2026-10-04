@@ -1,6 +1,6 @@
 //! Host materialization of routed expert identifiers for paging and demand evidence.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 

@@ -1,11 +1,12 @@
 //! Exact dense Qwen3 decoder layer using native MLX fused attention and RoPE.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::Flux2KleinTextConditioningError;
 use super::weights::{
     Flux2KleinDecoderLayerWeights, HEAD_WIDTH, KEY_VALUE_HEAD_COUNT, QUERY_HEAD_COUNT,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const RMS_NORM_EPSILON: f32 = 0.000_001;
 const ROPE_THETA: f32 = 1_000_000.0;

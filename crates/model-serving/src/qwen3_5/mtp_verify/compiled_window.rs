@@ -16,7 +16,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledVerifyWindowGraph, VerifyWindowFullAttentionQuantization,
+    MlxCompiledVerifyWindowGraph, VerifyWindowFullAttentionQuantization,
     VerifyWindowGatedDeltaQuantization, VerifyWindowGdnKernelSet, VerifyWindowGeometry,
     VerifyWindowLayerKind, VerifyWindowLayerQuantization, VerifyWindowQuantizationPair,
     VerifyWindowTrunkQuantization,
@@ -35,6 +35,7 @@ use crate::qwen3_5::mtp_verify::window_abi_assembly::{
 use crate::qwen3_5::mtp_verify::window_state_leaves::{
     WindowStateLeaves, WindowStateUpdate, extract_window_input_leaves, install_window_output_leaves,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// The supported window row counts (draft depth plus one).
 pub(crate) const SUPPORTED_ROW_COUNTS: [i32; 3] = [2, 3, 4];

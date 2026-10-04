@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::weights::{take_quantized_affine_weights, take_tensor};

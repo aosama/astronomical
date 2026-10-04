@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["experimental-aligned-expert-packs"] }
+astronomical-mlx-c-rust = { path = "../../crates/mlx-c-rust" }
 fs4.workspace = true
 serde.workspace = true
 serde_json.workspace = true

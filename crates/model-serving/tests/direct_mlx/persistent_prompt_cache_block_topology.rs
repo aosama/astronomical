@@ -358,14 +358,8 @@ fn save_three_block_chain(
     root_block_key: &astronomical_model_serving::PersistentPromptCacheBlockKey,
     child_block_key: &astronomical_model_serving::PersistentPromptCacheBlockKey,
     grandchild_block_key: &astronomical_model_serving::PersistentPromptCacheBlockKey,
-    sequence_state_tensors: &std::collections::HashMap<
-        String,
-        astronomical_runtime_integration::MlxArray,
-    >,
-    boundary_state_tensors: &std::collections::HashMap<
-        String,
-        astronomical_runtime_integration::MlxArray,
-    >,
+    sequence_state_tensors: &std::collections::HashMap<String, astronomical_mlx_c_rust::MlxArray>,
+    boundary_state_tensors: &std::collections::HashMap<String, astronomical_mlx_c_rust::MlxArray>,
 ) {
     for (block_key, parent_block_key) in [
         (root_block_key, None),

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::{
     LagunaDecoderState, LagunaExecutionError, LagunaTargetContract, laguna_decoder_cache_layout,
@@ -16,6 +16,7 @@ use crate::{
     PersistentPromptCachePrefixLookup, PersistentPromptCachePrefixLookupResult,
     PersistentPromptCachePublicationOutcome,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Separates recoverable allocation pressure from durable cache/publication failures.
 pub(super) enum LagunaPromptCacheCaptureError {

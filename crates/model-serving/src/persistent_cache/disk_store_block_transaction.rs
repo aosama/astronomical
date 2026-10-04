@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -35,6 +35,7 @@ use super::disk_store_index::{
     TrackedPersistentPromptCacheBlock, TrackedPersistentPromptCacheFile,
 };
 use super::retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint;
+use astronomical_mlx_c_rust::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
     pub(super) fn publish_new_block_transaction(
