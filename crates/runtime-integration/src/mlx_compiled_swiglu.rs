@@ -22,7 +22,11 @@ impl MlxCompiledSwiGlu {
     /// Compiles one shape-polymorphic SwiGLU graph for reuse across model layers.
     pub fn new() -> Result<Self, MlxRuntimeError> {
         Ok(Self {
-            compiled_graph: MlxCompiledGraph::new(build_swiglu_graph, COMPILE_SWIGLU_OPERATION)?,
+            compiled_graph: MlxCompiledGraph::new(
+                build_swiglu_graph,
+                COMPILE_SWIGLU_OPERATION,
+                true,
+            )?,
         })
     }
 }

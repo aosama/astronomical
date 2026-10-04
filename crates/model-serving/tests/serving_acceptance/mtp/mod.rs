@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::serving_acceptance::support::mtp_support::run_one_layer_mtp_head_forward_acceptance;
 
+mod compiled_window_parity;
 mod dense_head;
 mod engine_support;
 mod lifecycle;

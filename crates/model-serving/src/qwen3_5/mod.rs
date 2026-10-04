@@ -8,6 +8,8 @@ pub(crate) mod dense;
 pub(crate) mod inference_execution;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod mtp_verify;
 pub(crate) mod multi_token_prediction;
 pub(crate) mod quantizations;
 mod text;

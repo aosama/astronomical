@@ -38,6 +38,14 @@ use crate::performance_throughput::machine_specs::MachineSpecs;
 pub(crate) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const READY_ATTEMPT_LIMIT: u8 = 70;
+const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
+const DIAGNOSTICS_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_THROUGHPUT_DIAGNOSTICS";
+
+/// Diagnostic runs turn on worker attribution and info logging to explain where
+/// time goes; their throughput is not production-faithful and is never recorded.
+fn diagnostics_enabled() -> bool {
+    std::env::var(DIAGNOSTICS_ENVIRONMENT_VARIABLE).is_ok_and(|value| value == "1")
+}
 
 /// The test case for one throughput journey: the journey family recorded in
 /// the durable history line, the short warmup completion (its prompt, images,
@@ -47,6 +55,9 @@ const READY_ATTEMPT_LIMIT: u8 = 70;
 #[derive(Clone, Debug)]
 pub(crate) struct ThroughputJourney {
     pub(crate) journey_kind: ThroughputJourneyKind,
+    /// The MTP draft depth the journey's isolated worker configuration
+    /// engages; `None` measures the MTP-off baseline.
+    pub(crate) mtp_draft_depth: Option<u8>,
     pub(crate) warmup_input_prompt: String,
     pub(crate) warmup_images: Vec<ChatImageInput>,
     pub(crate) warmup_output_tokens: u16,
@@ -82,9 +93,32 @@ struct ThroughputSample {
 }
 
 /// Builds an isolated Development home pinned to the measured model and resolves
-/// the supervisor-owned bootstrap settings for the worker.
-fn perf_worker_environment(
+/// the supervisor-owned bootstrap settings for the worker. The worker's logging
+/// directory is pointed at a persistent per-model directory so its log lines
+/// survive the isolated home's panic-unwind cleanup and stay readable after a
+/// failed journey.
+/// The directory to advertise as a `model_directories` entry for `model_directory`.
+///
+/// For a HuggingFace-cache snapshot (`.../models--org--repo/snapshots/<hash>`), returns
+/// the `models--org--repo` entry root so discovery derives the decoded `org/repo`
+/// identity. For any other layout the directory is already named by its model id, so it
+/// is returned unchanged.
+fn discovery_root_for_model_directory(model_directory: &Path) -> &Path {
+    model_directory
+        .ancestors()
+        .find(|ancestor| {
+            ancestor
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("models--"))
+        })
+        .unwrap_or(model_directory)
+}
+
+pub(crate) fn perf_worker_environment(
+    model_id: &str,
     model_directory: &Path,
+    mtp_draft_depth: Option<u8>,
 ) -> (
     tempfile::TempDir,
     PathBuf,
@@ -101,10 +135,28 @@ fn perf_worker_environment(
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
     fs::create_dir_all(&configuration_directory)
         .expect("the throughput worker configuration directory should be created");
-    let configuration_document = serde_json::json!({
-        "model_directories": [model_directory],
+    // A HuggingFace-cache model must be advertised through its `models--org--repo`
+    // entry root, not the raw `snapshots/<hash>` leaf. Discovery only decodes the
+    // `org/repo` identity from a `models--` directory; pointed at the snapshot
+    // leaf it names the model by the hash, so the requested model id never
+    // resolves and the worker rejects the request as unavailable.
+    let discovery_root = discovery_root_for_model_directory(model_directory);
+    let mut configuration_document = serde_json::json!({
+        "model_directories": [discovery_root],
         "persistent_prompt_cache_enabled": false,
     });
+    if diagnostics_enabled() {
+        // Attribution adds host synchronization to every multi-token forward
+        // and info logging adds I/O, so a diagnostic run explains where time
+        // goes but its throughput is distorted. Production-faithful measured
+        // runs leave both off.
+        configuration_document["logging"] = serde_json::json!({ "level": "info" });
+        configuration_document["performance_attribution_enabled"] = serde_json::Value::Bool(true);
+    }
+    if let Some(mtp_draft_depth) = mtp_draft_depth {
+        configuration_document["mtp_enabled"] = serde_json::Value::Bool(true);
+        configuration_document["mtp_draft_depth"] = mtp_draft_depth.into();
+    }
     fs::write(
         configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&configuration_document)
@@ -117,15 +169,21 @@ fn perf_worker_environment(
     )
     .load()
     .expect("the throughput worker configuration should resolve");
+    let persistent_logging_directory = std::env::temp_dir()
+        .join("astronomical-throughput-logs")
+        .join(model_id);
+    if persistent_logging_directory.exists() {
+        fs::remove_dir_all(&persistent_logging_directory)
+            .expect("the stale throughput logging directory should be removed");
+    }
+    let mut worker_startup_configuration = resolved_configuration.worker_startup_configuration();
+    worker_startup_configuration.logging_directory = persistent_logging_directory.clone();
     (
         isolated_worker_home,
         production_worker_executable_path,
-        resolved_configuration
-            .worker_startup_configuration()
-            .logging_directory
-            .clone(),
+        persistent_logging_directory,
         resolved_configuration.model_policy_catalog.clone(),
-        resolved_configuration.worker_startup_configuration(),
+        worker_startup_configuration,
     )
 }
 
@@ -139,7 +197,7 @@ async fn drive_completion(
     images: Vec<ChatImageInput>,
     output_tokens: u16,
     temperature_thousandths: u16,
-) {
+) -> Result<(), String> {
     let command = ChatGenerationCommand {
         request_id,
         model: model_id.to_owned(),
@@ -159,20 +217,83 @@ async fn drive_completion(
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
-    let mut receiver = worker_handle
-        .start_chat_generation(command)
-        .await
-        .expect("the worker should accept the throughput completion request");
+    let mut receiver = match worker_handle.start_chat_generation(command).await {
+        Ok(receiver) => receiver,
+        Err(error) => {
+            return Err(format!(
+                "the worker rejected the completion request: {error:?}"
+            ));
+        }
+    };
     while let Some(event) = receiver.recv().await {
         match event {
-            ChatGenerationStreamEvent::Completed { .. } => break,
+            ChatGenerationStreamEvent::Completed { .. } => return Ok(()),
             ChatGenerationStreamEvent::Failed { reason } => {
-                panic!("the worker failed the throughput completion request: {reason:?}")
+                return Err(format!(
+                    "the worker failed the completion request: {reason:?}"
+                ));
             }
             ChatGenerationStreamEvent::Error(error_code) => {
-                panic!("the worker stream reported a throughput error: {error_code:?}")
+                return Err(format!(
+                    "the worker stream reported a completion error: {error_code:?}"
+                ));
             }
             _ => {}
+        }
+    }
+    Err("the worker stream closed without a terminal completion event".to_owned())
+}
+
+/// Drives a completion and, when it fails, prints the worker's own log lines
+/// from the persistent logging directory so a dead worker's last words are
+/// never lost inside a bare WorkerUnavailable panic.
+async fn drive_completion_with_exit_diagnostics(
+    worker_handle: &WorkerHandle,
+    request_id: RequestId,
+    model_id: &str,
+    prompt: &str,
+    images: Vec<ChatImageInput>,
+    output_tokens: u16,
+    temperature_thousandths: u16,
+    logging_directory: &Path,
+) {
+    if let Err(error) = drive_completion(
+        worker_handle,
+        request_id,
+        model_id,
+        prompt,
+        images,
+        output_tokens,
+        temperature_thousandths,
+    )
+    .await
+    {
+        dump_worker_logging_directory(logging_directory);
+        panic!("the throughput completion for {model_id} failed: {error}");
+    }
+}
+
+/// Prints the tail of every file in the worker's persistent logging directory
+/// so the last lines a failed worker wrote stay in the journey output.
+fn dump_worker_logging_directory(logging_directory: &Path) {
+    let Ok(entries) = fs::read_dir(logging_directory) else {
+        eprintln!(
+            "[performance-throughput] no worker logging directory at {}",
+            logging_directory.display()
+        );
+        return;
+    };
+    for entry in entries.flatten().filter(|entry| entry.path().is_file()) {
+        let log_file_path = entry.path();
+        let Ok(contents) = fs::read_to_string(&log_file_path) else {
+            continue;
+        };
+        eprintln!(
+            "[performance-throughput] worker log {} (tail):",
+            log_file_path.display()
+        );
+        for log_line in contents.lines().rev().take(WORKER_LOG_DUMP_LINE_LIMIT) {
+            eprintln!("[performance-throughput]   {log_line}");
         }
     }
 }
@@ -248,6 +369,7 @@ pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJ
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: journey.journey_kind,
+        mtp_draft_depth: journey.mtp_draft_depth,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
@@ -263,6 +385,12 @@ pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJ
         serde_json::to_string_pretty(&throughput_record_json(&record))
             .unwrap_or_else(|_| "{ \"error\": \"record serialization failed\"".to_owned())
     );
+    if diagnostics_enabled() {
+        eprintln!(
+            "[performance-throughput] diagnostics run: durable history append skipped because attribution distorts throughput"
+        );
+        return;
+    }
     let history_path = history_log_path();
     match append_throughput_history(&record, &history_path) {
         Ok(()) => eprintln!(
@@ -283,7 +411,7 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
         logging_directory,
         model_policy_catalog,
         worker_startup_configuration,
-    ) = perf_worker_environment(&model_directory);
+    ) = perf_worker_environment(model_id, &model_directory, journey.mtp_draft_depth);
     let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");
@@ -301,7 +429,7 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
     wait_until_idle(&worker_handle).await;
 
     eprintln!("[performance-throughput] warmup model={model_id}");
-    drive_completion(
+    drive_completion_with_exit_diagnostics(
         &worker_handle,
         RequestId::new(1),
         model_id,
@@ -309,10 +437,11 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
         journey.warmup_images.clone(),
         journey.warmup_output_tokens,
         journey.temperature_thousandths,
+        &logging_directory,
     )
     .await;
     eprintln!("[performance-throughput] measured model={model_id}");
-    drive_completion(
+    drive_completion_with_exit_diagnostics(
         &worker_handle,
         RequestId::new(2),
         model_id,
@@ -320,6 +449,7 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
         journey.measured_images.clone(),
         journey.measured_output_tokens,
         journey.temperature_thousandths,
+        &logging_directory,
     )
     .await;
     let samples = read_throughput_samples(&performance_log_path);

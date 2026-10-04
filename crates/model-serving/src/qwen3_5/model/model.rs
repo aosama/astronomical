@@ -83,6 +83,9 @@ pub struct Qwen3_5Model {
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation:
         RefCell<crate::qwen3_5_moe::model::route_observation::RouteObservationCollector>,
+    /// Compiled multi-token-prediction verification windows, one per row
+    /// count, traced lazily on first use.
+    pub(crate) mtp_verify_lane: crate::qwen3_5::mtp_verify::compiled_window::MtpVerifyWindowLane,
 }
 
 impl Qwen3_5Model {

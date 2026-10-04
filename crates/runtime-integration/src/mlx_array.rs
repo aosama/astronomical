@@ -46,7 +46,8 @@ impl MlxDtype {
         }
     }
 
-    pub(crate) const fn to_raw(self) -> raw::mlx_dtype {
+    /// The raw MLX dtype tag for raw-operation builders outside this crate.
+    pub const fn to_raw(self) -> raw::mlx_dtype {
         match self {
             Self::Bool => raw::mlx_dtype__MLX_BOOL,
             Self::UInt8 => raw::mlx_dtype__MLX_UINT8,
@@ -73,7 +74,10 @@ pub struct MlxArray {
 }
 
 impl MlxArray {
-    pub(crate) fn from_f32(values: &[f32], shape: &[i32]) -> Result<Self, MlxRuntimeError> {
+    /// Creates a float32 array from host values, the way compiled-graph
+    /// builders embed scalar constants (the softplus graph's ln 2, the
+    /// verification window's attention-mask boundary values).
+    pub fn from_f32(values: &[f32], shape: &[i32]) -> Result<Self, MlxRuntimeError> {
         validate_shape(values.len(), shape)?;
         let dimension_count =
             i32::try_from(shape.len()).map_err(|_| MlxRuntimeError::RuntimeOperation {
@@ -157,11 +161,17 @@ impl MlxArray {
         self.raw_array.ctx.is_null()
     }
 
-    pub(crate) const fn raw(&self) -> raw::mlx_array {
+    pub const fn raw(&self) -> raw::mlx_array {
         self.raw_array
     }
 
-    pub(crate) const fn empty_raw() -> raw::mlx_array {
+    /// The official absent-optional-handle placeholder for raw MLX calls.
+    ///
+    /// Compiled-graph builders outside this crate mirror the runtime's own
+    /// operations and need the same empty convention for absent `freqs`,
+    /// `sinks`, and `global_scale` handles; the placeholder owns nothing and
+    /// is always valid to pass by value.
+    pub const fn empty_raw() -> raw::mlx_array {
         raw::mlx_array {
             ctx: std::ptr::null_mut(),
         }

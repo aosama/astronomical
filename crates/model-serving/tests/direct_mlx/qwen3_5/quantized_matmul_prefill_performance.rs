@@ -35,17 +35,29 @@ async fn measure_affine_quantized_matmul_costs() {
     )
     .expect("the direct MLX runtime should initialize");
 
-    // (shape name, activation token count, output rows, input columns)
+    // (shape name, activation token count, output rows, input columns, group size)
     let shapes = [
-        ("prefill-qkv", 2048, 8192, 2048),
-        ("prefill-down", 2048, 2048, 4096),
-        ("decode-qkv", 1, 8192, 2048),
-        ("decode-down", 1, 2048, 4096),
+        ("prefill-qkv", 2048, 8192, 2048, GROUP_SIZE),
+        ("prefill-down", 2048, 2048, 4096, GROUP_SIZE),
+        ("decode-qkv", 1, 8192, 2048, GROUP_SIZE),
+        ("decode-down", 1, 2048, 4096, GROUP_SIZE),
+        // The 27B dense artifact's verify-window geometry: MTP verification
+        // forwards present 2..4 rows against the same weights a 1-row decode
+        // step presents. The dense-MLP projection is the square case; the
+        // vocabulary head is the huge-N case.
+        ("verify27b-proj-m1", 1, 5120, 5120, 32),
+        ("verify27b-proj-m2", 2, 5120, 5120, 32),
+        ("verify27b-proj-m3", 3, 5120, 5120, 32),
+        ("verify27b-proj-m4", 4, 5120, 5120, 32),
+        ("verify27b-lmhead-m1", 1, 248320, 5120, 32),
+        ("verify27b-lmhead-m2", 2, 248320, 5120, 32),
+        ("verify27b-lmhead-m3", 3, 248320, 5120, 32),
+        ("verify27b-lmhead-m4", 4, 248320, 5120, 32),
     ];
-    for (shape_name, token_count, output_rows, input_columns) in shapes {
+    for (shape_name, token_count, output_rows, input_columns, quantization_group_size) in shapes {
         let weights = sample_tensor(&runtime, &[output_rows, input_columns]);
         let (packed_weight, quantization_scales, quantization_biases) = runtime
-            .quantize_affine(&weights, GROUP_SIZE, BITS)
+            .quantize_affine(&weights, quantization_group_size, BITS)
             .expect("the weights should quantize");
         runtime
             .evaluate_arrays(&[&packed_weight, &quantization_scales, &quantization_biases])
@@ -59,7 +71,7 @@ async fn measure_affine_quantized_matmul_costs() {
                     &quantization_scales,
                     &quantization_biases,
                     true,
-                    GROUP_SIZE,
+                    quantization_group_size,
                     BITS,
                 )
                 .expect("the quantized matmul should build");

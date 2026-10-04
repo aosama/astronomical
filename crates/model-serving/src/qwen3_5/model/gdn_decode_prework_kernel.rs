@@ -37,7 +37,7 @@ use astronomical_runtime_integration::{
 /// Rolling convolution rows retained across steps: conv kernel size minus one.
 const KEPT_STATE_ROW_COUNT: i32 = 3;
 /// Thirty-two lanes each own four contiguous head channels.
-const LANE_COUNT: i32 = 32;
+pub(crate) const LANE_COUNT: i32 = 32;
 const CHANNELS_PER_LANE: i32 = 4;
 /// The only head dimension this kernel serves: `LANE_COUNT * CHANNELS_PER_LANE`.
 const SUPPORTED_HEAD_DIMENSION: i32 = LANE_COUNT * CHANNELS_PER_LANE;

@@ -120,7 +120,16 @@ impl Qwen3_5Model {
             }
         };
         let attention_output = match attention_output {
-            Ok(attention_output) if performance_attribution.is_enabled() && token_count > 1 => {
+            Ok(attention_output)
+                if performance_attribution.is_enabled()
+                    && token_count > 1
+                    // The MTP verification window is a latency-sensitive decode
+                    // pass: injected evaluation boundaries serialize it the same
+                    // way they would serialize one-token decode, and its phase
+                    // costs are attributed at the attempt boundary instead.
+                    && paged_prefill_execution_mode
+                        != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow =>
+            {
                 performance_attribution.measure_operation(
                     attention_family_gpu_wait_operation,
                     |_performance_attribution| self.runtime.evaluate_arrays(&[&attention_output]),
@@ -195,7 +204,12 @@ impl Qwen3_5Model {
         // its graphics-processor time is attributed separately from the chunk
         // terminal wait. See the attention boundary above for the rationale.
         let mlp_output = match mlp_output {
-            Ok(mlp_output) if performance_attribution.is_enabled() && token_count > 1 => {
+            Ok(mlp_output)
+                if performance_attribution.is_enabled()
+                    && token_count > 1
+                    && paged_prefill_execution_mode
+                        != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow =>
+            {
                 performance_attribution.measure_operation(
                     PerformanceOperation::PrefillFeedForwardGraphicsProcessorCompletionWait,
                     |_performance_attribution| self.runtime.evaluate_arrays(&[&mlp_output]),
