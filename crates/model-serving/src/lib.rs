@@ -1,5 +1,8 @@
-#![forbid(unsafe_code)]
-
+// Unsafe is denied workspace-wide. This crate previously carried a source-level
+// forbid; it was relaxed to the workspace deny for exactly one module —
+// performance_attribution::macos_process_io — whose macOS accounting syscall is
+// inseparable from the evidence types it produces (rationale lives there). Any
+// new unsafe elsewhere in this crate still fails the build.
 mod artifact_validation;
 mod attention;
 mod decoder_cache;
@@ -262,6 +265,9 @@ pub use model_generation_processor::{
 pub use modernbert::{
     EncodedEmbeddingInput, ModernBertConfiguration, ModernBertEmbeddingEngine,
     encode_embedding_input,
+};
+pub use performance_attribution::macos_process_io::{
+    MacosProcessIoDelta, MacosProcessIoError, MacosProcessIoSnapshot, sample_current_process_io,
 };
 pub use performance_attribution::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,

@@ -451,8 +451,8 @@ impl EnabledPerformanceAttribution {
 #[cfg(feature = "direct-mlx")]
 fn finish_process_io_evidence(
     process_io_start: &Result<
-        astronomical_runtime_integration::MacosProcessIoSnapshot,
-        astronomical_runtime_integration::MacosProcessIoError,
+        super::macos_process_io::MacosProcessIoSnapshot,
+        super::macos_process_io::MacosProcessIoError,
     >,
 ) -> (Option<u64>, Option<u64>, Option<String>) {
     // Preserve one invariant in the serialized contract: either both byte
@@ -462,7 +462,7 @@ fn finish_process_io_evidence(
         .as_ref()
         .map_err(ToString::to_string)
         .and_then(|process_io_start| {
-            astronomical_runtime_integration::sample_current_process_io()
+            super::macos_process_io::sample_current_process_io()
                 .map_err(|sampling_error| sampling_error.to_string())?
                 .delta_since(*process_io_start)
                 .map_err(|delta_error| delta_error.to_string())
