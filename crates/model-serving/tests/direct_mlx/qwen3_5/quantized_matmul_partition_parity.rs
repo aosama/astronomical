@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const FULL_PREFILL_TOKEN_COUNT: i32 = 4_096;
 const PREFILL_PARTITION_TOKEN_COUNT: i32 = FULL_PREFILL_TOKEN_COUNT / 2;

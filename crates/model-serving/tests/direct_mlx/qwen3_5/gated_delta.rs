@@ -1,7 +1,7 @@
+use astronomical_mlx_c_rust::MlxArray;
 use astronomical_model_serving::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step,
 };
-use astronomical_runtime_integration::MlxArray;
 use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -223,7 +223,7 @@ async fn should_apply_fused_gated_delta_tail_after_full_persistent_prompt_cache_
     let initial_recurrent_state = runtime
         .zeros(
             &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-            astronomical_runtime_integration::MlxDtype::Float32,
+            astronomical_mlx_c_rust::MlxDtype::Float32,
         )
         .expect("the initial recurrent state should be valid");
 

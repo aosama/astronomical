@@ -423,7 +423,7 @@ async fn should_lazily_allocate_gated_delta_recurrent_state_as_zeros_on_first_us
     );
     assert_eq!(
         recurrent_state_view.dtype(),
-        astronomical_runtime_integration::MlxDtype::Float32,
+        astronomical_mlx_c_rust::MlxDtype::Float32,
         "the recurrent state must always be float32"
     );
 }
@@ -532,10 +532,7 @@ async fn should_report_inconsistent_linear_layer_tensor_allocation() {
         } => {
             convolution.restore_from_snapshot(
                 runtime
-                    .zeros(
-                        &[1, 3, 8_192],
-                        astronomical_runtime_integration::MlxDtype::BFloat16,
-                    )
+                    .zeros(&[1, 3, 8_192], astronomical_mlx_c_rust::MlxDtype::BFloat16)
                     .expect("the test should create a convolution snapshot"),
             );
             assert!(

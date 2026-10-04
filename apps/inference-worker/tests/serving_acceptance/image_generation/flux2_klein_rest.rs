@@ -8,7 +8,7 @@ use astronomical_model_serving::{
     FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID, Flux2KleinImageDimensions,
     flux2_klein_initial_latents_for_tests,
 };
-use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{GenericImageView, ImageFormat};
 use serde_json::{Value, json};
@@ -29,6 +29,7 @@ use crate::serving_acceptance::image_generation::flux2_klein_reference_oracle::{
     BFL_SOURCE_REVISION, DIFFUSERS_SOURCE_REVISION, ExpectedFluxReference, FluxReferenceOracle,
     sha256_hex,
 };
+use astronomical_mlx_c_rust::MlxDtype;
 
 /// The independent reference bundle must be produced outside Astronomical and
 /// located through this operator-provided path.

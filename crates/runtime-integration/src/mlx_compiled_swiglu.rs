@@ -1,13 +1,12 @@
 use std::os::raw::c_int;
 
 use crate::{
-    MlxArray, MlxRuntime, MlxRuntimeError,
+    MlxRuntime, MlxRuntimeError,
     mlx_compiled_graph::{
         MlxCompiledGraph, array_from_vector, graph_output_array, set_graph_output,
     },
-    mlx_stream::MlxStream,
 };
-use astronomical_mlx_c_rust::raw;
+use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
 
 const APPLY_COMPILED_SWIGLU_OPERATION: &str = "apply a compiled MLX SwiGLU graph";
 const COMPILE_SWIGLU_OPERATION: &str = "compile a shapeless MLX SwiGLU graph";

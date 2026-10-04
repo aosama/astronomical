@@ -1,6 +1,6 @@
 //! Request-scoped VAE advancement bounds complete-decoder graph construction.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -10,6 +10,7 @@ use super::{
     FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, Flux2KleinPackedLatentLayout, Flux2KleinVaeDecodeMode,
     Flux2KleinVaeDecoder, Flux2KleinVaeError,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(in crate::flux2_klein) struct Flux2KleinVaeDecodeState {

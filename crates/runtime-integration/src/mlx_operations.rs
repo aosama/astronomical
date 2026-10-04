@@ -1,8 +1,5 @@
-use crate::{
-    MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status,
-};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Builds lazy matrix multiplication on the runtime's GPU stream.
@@ -436,13 +433,15 @@ impl MlxRuntime {
     /// Materializes one uint32 array contiguously and copies its bounded values.
     pub fn copy_u32_values(&self, input: &MlxArray) -> Result<Vec<u32>, MlxRuntimeError> {
         let contiguous_values = self.build_contiguous_row_major_copy(input)?;
-        contiguous_values.to_vec_u32()
+        contiguous_values
+            .to_vec_u32()
+            .map_err(MlxRuntimeError::from)
     }
 
     /// Materializes one uint8 array contiguously and copies it in one host transfer.
     pub fn copy_u8_values(&self, input: &MlxArray) -> Result<Vec<u8>, MlxRuntimeError> {
         let contiguous_values = self.build_contiguous_row_major_copy(input)?;
-        contiguous_values.to_vec_u8()
+        contiguous_values.to_vec_u8().map_err(MlxRuntimeError::from)
     }
 
     /// Builds a lazy row-major contiguous copy without evaluating it.

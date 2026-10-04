@@ -14,11 +14,12 @@
 //! The oracle is intentionally unoptimized: dense materialized masks, whole
 //! scoring, dequantized rows. Production must never depend on it.
 
-use astronomical_runtime_integration::{MlxArray, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(crate) mod hyper_connection_executor;
 pub(crate) mod hyper_connection_reference;

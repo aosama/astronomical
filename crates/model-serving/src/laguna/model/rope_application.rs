@@ -1,10 +1,11 @@
 //! Applies the layer's canonical rotary policy using the family-neutral helpers.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::attention::compute_yarn_rope_frequency_denominators;
 use crate::laguna::normalization::LagunaRopeDescriptor;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) fn apply_layer_rope(
     runtime: &MlxRuntime,
@@ -74,7 +75,7 @@ fn scale_rotary_prefix(
     attention_factor: f32,
 ) -> Result<MlxArray, MlxRuntimeError> {
     if (attention_factor - 1.0).abs() <= f32::EPSILON {
-        return input.retain();
+        return input.retain().map_err(MlxRuntimeError::from);
     }
     let input_shape = input.shape();
     if input_shape.len() != 4 || rotary_dimension >= input_shape[3] {

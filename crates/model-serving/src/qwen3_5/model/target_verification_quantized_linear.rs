@@ -1,11 +1,12 @@
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
+    MlxRuntimeError,
 };
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 // Adapted from an upstream open-source Qwen3.5 target-verification QMV
 // kernel (see third-party/THIRD_PARTY_NOTICES for the provenance and license).

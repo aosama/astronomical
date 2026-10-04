@@ -80,3 +80,10 @@ impl From<MlxRuntimeError> for LagunaExecutionError {
         Self::Runtime(error)
     }
 }
+
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_mlx_c_rust::MlxCError> for LagunaExecutionError {
+    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+        MlxRuntimeError::from(captured_error).into()
+    }
+}

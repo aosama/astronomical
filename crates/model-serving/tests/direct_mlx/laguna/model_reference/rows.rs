@@ -1,6 +1,6 @@
 //! Descriptor matrices for dense and resident-MoE complete-model references.
 
-use astronomical_runtime_integration::MlxDtype;
+use astronomical_mlx_c_rust::MlxDtype;
 use serde_json::{Map, Value, json};
 
 pub(super) struct ReferenceRow {

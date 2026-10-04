@@ -7,7 +7,7 @@
 
 use std::fs::File;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::rope::QwenImage21Rope;
@@ -16,6 +16,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::blocks::{BlockContext, forward_block};
 use super::preparation::{QwenImage21TransformerRequest, forward_output_head, prepare_forward};
 use super::weights::{HEAD_COUNT, HEAD_WIDTH, QwenImage21TransformerWeights};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// The reviewed artifact's block count (`num_layers`).
 const BLOCK_COUNT: usize = 32;

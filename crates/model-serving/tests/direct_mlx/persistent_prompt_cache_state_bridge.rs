@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{DecoderCacheState, RequestDecoderStateStack};
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::qwen3_5_moe::{
     frozen_ornith_1_0_config, persistent_prompt_cache_model_contract,
@@ -9,6 +9,7 @@ use crate::common::qwen3_5_moe::{
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[tokio::test]
 async fn should_extract_split_persistent_prompt_cache_tensors_from_populated_decoder_state() {

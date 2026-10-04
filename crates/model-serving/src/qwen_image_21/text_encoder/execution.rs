@@ -8,7 +8,7 @@
 
 use std::fs::File;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::attention_scale;
@@ -16,6 +16,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::blocks::{EncoderBlockContext, build_causal_mask, build_rope_tables, forward_layer};
 use super::weights::{HEAD_WIDTH, LAYER_COUNT, QwenImage21TextEncoderWeights};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub struct QwenImage21TextEncoder {
     weights: QwenImage21TextEncoderWeights,

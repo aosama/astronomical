@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::artifact_validation::{TensorInventory, TensorSourceId};
 use crate::qwen3_5::model::decoder_layer_weights::{
@@ -20,6 +20,7 @@ use crate::qwen3_5::{
 };
 use crate::qwen3_5_moe::artifacts::tensor_spec::is_sparse_selected_expert_tensor_name;
 use crate::qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const MTP_NORMALIZATION_REPAIR_MARGIN: f32 = 0.4;
 

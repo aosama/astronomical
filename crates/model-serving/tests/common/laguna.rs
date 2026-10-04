@@ -8,12 +8,13 @@
 
 use std::collections::HashMap;
 
+use astronomical_mlx_c_rust::MlxArray;
 use astronomical_model_serving::{
     LagunaAttentionProjection, LagunaExpertProjection, LagunaGlobalTensorRole,
     LagunaLayerTensorRole, LagunaNativeWeights, LagunaTargetContract, LagunaTargetNormalizer,
     LagunaTensorComponent, LagunaTensorId,
 };
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use serde_json::json;
 
 /// A two-layer Laguna contract: layer 0 is full attention (append-only state)

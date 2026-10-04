@@ -11,12 +11,13 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{LagunaDecoderState, LagunaModel, PerformanceAttribution};
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::laguna::{bind_tiny_weights, tiny_mixed_contract};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const BLOCK_TOKEN_COUNT: usize = 2;
 /// Tiny fixtures round through MLX allocation granularity, so memory-bound

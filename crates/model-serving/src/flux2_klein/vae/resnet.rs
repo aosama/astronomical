@@ -1,8 +1,9 @@
 //! FLUX.2 decoder residual block with explicit optional channel projection.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinGroupNorm, Flux2KleinVaeError};
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct Flux2KleinVaeResnetBlock {

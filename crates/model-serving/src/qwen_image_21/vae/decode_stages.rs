@@ -5,7 +5,7 @@
 //! lets the decoder evaluate and release each stage before the next one is built, which is the
 //! difference between decoding 1024×1024 inside the memory ceiling and being rejected by it.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// The stage a decode is about to build.
 #[derive(Clone, Copy, Debug)]

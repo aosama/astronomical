@@ -230,7 +230,7 @@ fn forward_one_prompt_chunk(
     last_published_block_key: &mut Option<PersistentPromptCacheBlockKey>,
     decoder_state: &mut crate::laguna::LagunaDecoderState,
     performance_attribution: &mut crate::PerformanceAttribution,
-) -> Result<(Option<astronomical_runtime_integration::MlxArray>, u64), LagunaPrefillAttemptError> {
+) -> Result<(Option<astronomical_mlx_c_rust::MlxArray>, u64), LagunaPrefillAttemptError> {
     let prompt_cache_publication_workspace_bytes = prompt_cache_publication_workspace_bytes(
         model,
         persistent_prompt_cache,

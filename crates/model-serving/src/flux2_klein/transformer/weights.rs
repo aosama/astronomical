@@ -3,11 +3,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::ValidatedWeightsFile;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Debug)]
 enum TransformerTensorSource {

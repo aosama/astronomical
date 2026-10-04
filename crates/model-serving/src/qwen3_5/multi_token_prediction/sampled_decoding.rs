@@ -5,7 +5,7 @@
 //! proposal/verify wiring and the request's keyed random stream handling.
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};

@@ -1,10 +1,11 @@
 //! Request-owned Laguna token selection for one generation.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::{LagunaModel, LagunaSamplerConfig, LagunaSamplingStrategy};
 use crate::sampling_seed::{current_time_millis_since_unix_epoch, resolve_sampling_seed};
 use crate::{InferenceEngineError, PerformanceAttribution};
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) fn random_state_for_strategy(
     runtime: &MlxRuntime,

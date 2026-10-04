@@ -28,3 +28,10 @@ impl QwenImage21VaeError {
         }
     }
 }
+
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_mlx_c_rust::MlxCError> for QwenImage21VaeError {
+    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+        astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
+    }
+}

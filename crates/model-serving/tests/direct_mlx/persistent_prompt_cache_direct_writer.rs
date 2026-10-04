@@ -4,7 +4,7 @@ use astronomical_model_serving::{
     PerformanceAttribution, PerformanceOperation, PersistentPromptCacheBlockKey,
     PersistentPromptCachePublicationOutcome,
 };
-use astronomical_runtime_integration::{MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::persistent_prompt_cache_disk_store_support::{
     block_tokens_for_seed, open_persistent_prompt_cache_disk_store,
@@ -12,6 +12,7 @@ use super::persistent_prompt_cache_disk_store_support::{
     synthetic_kv_block_tensors, synthetic_recurrent_snapshot_tensors,
 };
 use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use astronomical_mlx_c_rust::MlxDtype;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const DIRECT_MLX_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);

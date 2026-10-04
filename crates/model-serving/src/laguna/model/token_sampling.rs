@@ -3,13 +3,14 @@
 //! Highest-logit selection stays argmax. Sampled requests use the shared MLX categorical graph so
 //! temperature, top-k, and top-p cannot be logged as effective and then ignored.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::LagunaSamplerConfig;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaExecutionError;
 use super::model::{LagunaModel, last_token_vocabulary_logits};
+use astronomical_mlx_c_rust::MlxArray;
 
 impl LagunaModel {
     /// Samples one vocabulary index with temperature, optional top-k, and top-p.

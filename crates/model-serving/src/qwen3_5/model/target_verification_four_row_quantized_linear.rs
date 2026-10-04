@@ -5,9 +5,10 @@
 //! high without a second full weight stream. Prefill and one-token decode stay
 //! on the existing routes.
 
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
+    MlxRuntimeError,
 };
 
 const FOUR_ROW_COUNT: i32 = 4;

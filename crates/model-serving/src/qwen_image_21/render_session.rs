@@ -11,7 +11,7 @@
 //! then owns the working set with only the VAE's weights resident. Dropping mid-sequence is what
 //! keeps a full-resolution decode inside the wired-memory ceiling.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
 use crate::qwen_image_21::pipeline::{QwenImage21Pipeline, TEXT_EMBEDDING_WIDTH};
@@ -26,6 +26,7 @@ use crate::qwen_image_21::{
     normalize_empty_prompt, render_t2i_prompt_template, resolve_generation_dimensions,
     special_tokens,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Where a session is in the reference's render sequence.
 enum RenderPhase {
@@ -328,9 +329,11 @@ impl QwenImage21RenderSession {
                     description: format!("the VAE decode failed: {other}"),
                 },
             })?;
-        let pixel_values = pixels
-            .to_vec_f32()
-            .map_err(|source| QwenImage21EngineError::Mlx(source))?;
+        let pixel_values = pixels.to_vec_f32().map_err(|source| {
+            QwenImage21EngineError::Mlx(astronomical_runtime_integration::MlxRuntimeError::from(
+                source,
+            ))
+        })?;
         self.pixel_values = Some(pixel_values);
         Ok(())
     }

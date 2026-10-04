@@ -5,14 +5,13 @@
 //! prefill-side attributed forwards in `forward_attribution.rs` to keep both
 //! files inside the source-size budget.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
-
 use crate::PerformanceAttribution;
 use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 
 use super::forward_contract::validate_generated_token_forward;
 use super::model::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Qwen3_5Model {
     pub(crate) fn build_forward_chunk_with_performance_attribution(

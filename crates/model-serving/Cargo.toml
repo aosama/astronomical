@@ -12,12 +12,13 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust"]
 
 [dependencies]
 astronomical-config = { path = "../config" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
 fs4.workspace = true
 image.workspace = true
 libc.workspace = true

@@ -1,8 +1,8 @@
 use crate::{
-    MlxRuntimeError,
-    mlx_runtime::{check_status, classify_mlx_error},
+    MlxCError,
+    error::{check_status, clear_captured_mlx_error, take_captured_mlx_error},
+    raw,
 };
-use astronomical_mlx_c_rust::{clear_captured_mlx_error, raw, take_captured_mlx_error};
 
 /// MLX array element types exposed without leaking generated C declarations.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -75,13 +75,12 @@ impl MlxArray {
     /// Creates a float32 array from host values, the way compiled-graph
     /// builders embed scalar constants (the softplus graph's ln 2, the
     /// verification window's attention-mask boundary values).
-    pub fn from_f32(values: &[f32], shape: &[i32]) -> Result<Self, MlxRuntimeError> {
+    pub fn from_f32(values: &[f32], shape: &[i32]) -> Result<Self, MlxCError> {
         validate_shape(values.len(), shape)?;
-        let dimension_count =
-            i32::try_from(shape.len()).map_err(|_| MlxRuntimeError::RuntimeOperation {
-                operation: "create an MLX float32 array",
-                description: "array rank exceeds the C API integer range".to_owned(),
-            })?;
+        let dimension_count = i32::try_from(shape.len()).map_err(|_| MlxCError {
+            operation: "create an MLX float32 array",
+            description: "array rank exceeds the C API integer range".to_owned(),
+        })?;
         // SAFETY: The slices remain valid for this copying constructor, their
         // lengths were validated, and the returned handle enters RAII ownership.
         let raw_array = unsafe {
@@ -97,13 +96,12 @@ impl MlxArray {
         Ok(array)
     }
 
-    pub(crate) fn from_i32(values: &[i32], shape: &[i32]) -> Result<Self, MlxRuntimeError> {
+    pub fn from_i32(values: &[i32], shape: &[i32]) -> Result<Self, MlxCError> {
         validate_shape(values.len(), shape)?;
-        let dimension_count =
-            i32::try_from(shape.len()).map_err(|_| MlxRuntimeError::RuntimeOperation {
-                operation: "create an MLX int32 array",
-                description: "array rank exceeds the C API integer range".to_owned(),
-            })?;
+        let dimension_count = i32::try_from(shape.len()).map_err(|_| MlxCError {
+            operation: "create an MLX int32 array",
+            description: "array rank exceeds the C API integer range".to_owned(),
+        })?;
         // SAFETY: The slices remain valid for this copying constructor, their
         // lengths were validated, and the returned handle enters RAII ownership.
         let raw_array = unsafe {
@@ -119,13 +117,12 @@ impl MlxArray {
         Ok(array)
     }
 
-    pub(crate) fn from_u32(values: &[u32], shape: &[i32]) -> Result<Self, MlxRuntimeError> {
+    pub fn from_u32(values: &[u32], shape: &[i32]) -> Result<Self, MlxCError> {
         validate_shape(values.len(), shape)?;
-        let dimension_count =
-            i32::try_from(shape.len()).map_err(|_| MlxRuntimeError::RuntimeOperation {
-                operation: "create an MLX uint32 array",
-                description: "array rank exceeds the C API integer range".to_owned(),
-            })?;
+        let dimension_count = i32::try_from(shape.len()).map_err(|_| MlxCError {
+            operation: "create an MLX uint32 array",
+            description: "array rank exceeds the C API integer range".to_owned(),
+        })?;
         // SAFETY: The slices remain valid for this copying constructor, their
         // lengths were validated, and the returned handle enters RAII ownership.
         let raw_array = unsafe {
@@ -141,7 +138,7 @@ impl MlxArray {
         Ok(array)
     }
 
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         // SAFETY: The runtime error handler is installed before model loading,
         // and the official API's empty placeholder is immediately placed under
         // RAII ownership before a fallible operation populates it.
@@ -150,12 +147,12 @@ impl MlxArray {
     }
 
     #[cfg(feature = "experimental-aligned-expert-packs")]
-    pub(crate) fn from_populated_owned_raw(raw_array: raw::mlx_array) -> Self {
+    pub fn from_populated_owned_raw(raw_array: raw::mlx_array) -> Self {
         debug_assert!(!raw_array.ctx.is_null());
         Self { raw_array }
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.raw_array.ctx.is_null()
     }
 
@@ -175,18 +172,28 @@ impl MlxArray {
         }
     }
 
-    pub(crate) fn raw_mut(&mut self) -> *mut raw::mlx_array {
+    pub fn raw_mut(&mut self) -> *mut raw::mlx_array {
         &mut self.raw_array
     }
 
-    pub(crate) fn require_populated(&self, operation: &'static str) -> Result<(), MlxRuntimeError> {
+    /// Validates that a returned handle is populated, translating the captured
+    /// MLX-C description into a typed failure.
+    ///
+    /// This is a pure translation: Astronomical-specific error classification
+    /// (for example the active memory ceiling) is runtime policy and happens
+    /// when `astronomical-runtime-integration` converts this error at its
+    /// boundary.
+    pub fn require_populated(&self, operation: &'static str) -> Result<(), MlxCError> {
         if !self.is_empty() {
             clear_captured_mlx_error();
             return Ok(());
         }
         let description = take_captured_mlx_error()
             .unwrap_or_else(|| "MLX returned an empty array handle".to_owned());
-        Err(classify_mlx_error(operation, description))
+        Err(MlxCError {
+            operation,
+            description,
+        })
     }
 
     /// Returns the dimensions of this live array.
@@ -230,7 +237,7 @@ impl MlxArray {
     }
 
     /// Materializes this lazy array and reports runtime failures without exit.
-    pub fn evaluate(&self) -> Result<(), MlxRuntimeError> {
+    pub fn evaluate(&self) -> Result<(), MlxCError> {
         // SAFETY: `self` owns a live handle and MLX evaluation does not retain
         // any Rust borrow beyond this call.
         let status = unsafe { raw::mlx_array_eval(self.raw_array) };
@@ -244,9 +251,9 @@ impl MlxArray {
     /// this readout is only valid for contiguous arrays. Read a strided view
     /// through `MlxRuntime::array_to_vec_f32`, whose flat reshape forces one
     /// contiguous materialization.
-    pub fn to_vec_f32(&self) -> Result<Vec<f32>, MlxRuntimeError> {
+    pub fn to_vec_f32(&self) -> Result<Vec<f32>, MlxCError> {
         if self.dtype() != MlxDtype::Float32 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an MLX float32 array",
                 description: "array dtype is not float32".to_owned(),
             });
@@ -260,7 +267,7 @@ impl MlxArray {
         // the live array for at least `element_count` float32 values.
         let values_pointer = unsafe { raw::mlx_array_data_float32(self.raw_array) };
         if values_pointer.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an MLX float32 array",
                 description: "MLX returned a null data pointer after evaluation".to_owned(),
             });
@@ -270,9 +277,9 @@ impl MlxArray {
         Ok(unsafe { std::slice::from_raw_parts(values_pointer, element_count) }.to_vec())
     }
 
-    pub fn to_vec_u32(&self) -> Result<Vec<u32>, MlxRuntimeError> {
+    pub fn to_vec_u32(&self) -> Result<Vec<u32>, MlxCError> {
         if self.dtype() != MlxDtype::UInt32 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an MLX uint32 array",
                 description: "array dtype is not uint32".to_owned(),
             });
@@ -282,9 +289,9 @@ impl MlxArray {
     }
 
     /// Evaluates and copies a uint8 array into Rust-owned memory.
-    pub fn to_vec_u8(&self) -> Result<Vec<u8>, MlxRuntimeError> {
+    pub fn to_vec_u8(&self) -> Result<Vec<u8>, MlxCError> {
         if self.dtype() != MlxDtype::UInt8 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an MLX uint8 array",
                 description: "array dtype is not uint8".to_owned(),
             });
@@ -294,9 +301,9 @@ impl MlxArray {
     }
 
     /// Copies an already evaluated contiguous uint8 array in one host transfer.
-    pub fn copy_evaluated_u8_values(&self) -> Result<Vec<u8>, MlxRuntimeError> {
+    pub fn copy_evaluated_u8_values(&self) -> Result<Vec<u8>, MlxCError> {
         if self.dtype() != MlxDtype::UInt8 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an evaluated MLX uint8 array",
                 description: "array dtype is not uint8".to_owned(),
             });
@@ -309,7 +316,7 @@ impl MlxArray {
         // this live array for at least `element_count` uint8 values.
         let values_pointer = unsafe { raw::mlx_array_data_uint8(self.raw_array) };
         if values_pointer.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an evaluated MLX uint8 array",
                 description: "MLX returned a null data pointer for an evaluated array".to_owned(),
             });
@@ -323,9 +330,9 @@ impl MlxArray {
     ///
     /// Callers must evaluate the array first. This split exists so performance
     /// attribution can distinguish the synchronization wait from the small host copy.
-    pub fn copy_evaluated_u32_values(&self) -> Result<Vec<u32>, MlxRuntimeError> {
+    pub fn copy_evaluated_u32_values(&self) -> Result<Vec<u32>, MlxCError> {
         if self.dtype() != MlxDtype::UInt32 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an evaluated MLX uint32 array",
                 description: "array dtype is not uint32".to_owned(),
             });
@@ -338,7 +345,7 @@ impl MlxArray {
         // the live array for at least `element_count` uint32 values.
         let values_pointer = unsafe { raw::mlx_array_data_uint32(self.raw_array) };
         if values_pointer.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "copy an evaluated MLX uint32 array",
                 description: "MLX returned a null data pointer for an evaluated array".to_owned(),
             });
@@ -349,7 +356,7 @@ impl MlxArray {
     }
 
     /// Evaluates a scalar array and copies its value as an unsigned token ID.
-    pub fn item_u32(&self) -> Result<u32, MlxRuntimeError> {
+    pub fn item_u32(&self) -> Result<u32, MlxCError> {
         self.evaluate()?;
         let mut scalar_value = 0_u32;
         // SAFETY: The output pointer is valid writable storage and `self` owns
@@ -364,7 +371,7 @@ impl MlxArray {
     /// MLX uses reference counting, so this is cheap and does not copy the
     /// tensor data. The returned array shares the same lazy graph and
     /// evaluated buffers as the source.
-    pub fn retain(&self) -> Result<Self, MlxRuntimeError> {
+    pub fn retain(&self) -> Result<Self, MlxCError> {
         let mut retained_array = Self::empty();
         // SAFETY: `retained_array` owns a live (empty) handle and `self` owns a
         // live source handle. `mlx_array_set` copies the source reference into
@@ -372,7 +379,7 @@ impl MlxArray {
         let status = unsafe { raw::mlx_array_set(retained_array.raw_mut(), self.raw_array) };
         check_status(status, "retain an MLX array")?;
         if retained_array.is_empty() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "retain an MLX array",
                 description: "MLX returned an empty handle after set".to_owned(),
             });
@@ -381,13 +388,13 @@ impl MlxArray {
     }
 }
 
-fn validate_shape(element_count: usize, shape: &[i32]) -> Result<(), MlxRuntimeError> {
+fn validate_shape(element_count: usize, shape: &[i32]) -> Result<(), MlxCError> {
     let shaped_element_count = shape.iter().try_fold(1_usize, |product, dimension| {
         let dimension = usize::try_from(*dimension).ok()?;
         product.checked_mul(dimension)
     });
     if shaped_element_count != Some(element_count) {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: "create an MLX array",
             description: "shape element count does not match the provided values".to_owned(),
         });

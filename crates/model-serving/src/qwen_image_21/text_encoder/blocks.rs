@@ -2,7 +2,7 @@
 //! SwiGLU feed-forward, each behind an RMSNorm with a residual — the reference
 //! `Qwen3VLTextDecoderLayer` exactly.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::{apply_rope_half_split, fp32_rms_norm, masked_attention};
@@ -10,6 +10,7 @@ use crate::qwen_image_21::mlx_math::{apply_rope_half_split, fp32_rms_norm, maske
 use super::weights::{
     HEAD_WIDTH, KEY_VALUE_HEAD_COUNT, QUERY_HEAD_COUNT, QwenImage21TextEncoderLayerWeights,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// The Qwen RMSNorm epsilon (`rms_norm_eps`).
 pub(super) const RMS_NORM_EPSILON: f32 = 0.000_001;

@@ -5,10 +5,11 @@ use std::collections::{BTreeSet, HashMap};
 use astronomical_model_serving::{
     LagunaModel, LagunaNativeWeights, LagunaTargetNormalizer, LagunaTensorId,
 };
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::rows::ReferenceRow;
 use super::tensor_fixture::build_tensor_inventories;
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) struct ReferenceFixture {
     pub(super) model: LagunaModel,

@@ -2,7 +2,8 @@
 // Prediction (MTP) verify. Native causal SDPA matches highest-logit tokens on this
 // geometry, but the tiled kernel for query length two against a long prefix
 // is slower than two vector passes.
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::MlxArray;
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 const SEQUENTIAL_ATTENTION_OPERATION: &str = "apply sequential target-verification attention rows";
 

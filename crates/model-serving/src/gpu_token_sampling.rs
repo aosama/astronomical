@@ -5,9 +5,10 @@
 //! silently argmax. The ops match the already-proven Qwen3.5 pipeline rather than a
 //! host-side sampler.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::InferenceEngineError;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Builds one lazy sampled token using a fully GPU-resident top-k + top-p pipeline.
 ///
@@ -368,10 +369,7 @@ pub fn apply_top_p_mask(
         .map_err(sampling_runtime_error)?;
     // Cast indices to int32 to ensure compatibility with put_along_axis.
     let sorted_indices_i32 = runtime
-        .astype(
-            &sorted_indices,
-            astronomical_runtime_integration::MlxDtype::Int32,
-        )
+        .astype(&sorted_indices, astronomical_mlx_c_rust::MlxDtype::Int32)
         .map_err(sampling_runtime_error)?;
     let sorted_probabilities = runtime
         .take_along_axis(selected_probabilities, &sorted_indices_i32, -1)

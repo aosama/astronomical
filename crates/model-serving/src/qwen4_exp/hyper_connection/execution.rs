@@ -19,11 +19,12 @@
 //! justified by measurement, not by taste. The kernel-capability family
 //! gains one when a measured win exists.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::stream_algebra::StreamMixingPlan;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Executes the pinned stream algebra on the GPU.
 ///

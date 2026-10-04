@@ -3,9 +3,10 @@
 //! Multi-token prefill exposes at most `window + chunk - 1` chronological tokens,
 //! then commits only the final window. One-token decode updates one physical slot.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 const TOKEN_AXIS: usize = 2;
 const OPERATION: &str = "update the in-memory rotating key/value state";
@@ -211,7 +212,7 @@ impl RotatingKeyValueState {
                 )?,
                 new_tokens,
             ),
-            None => new_tokens.retain(),
+            None => new_tokens.retain().map_err(MlxRuntimeError::from),
         }
     }
 
@@ -383,7 +384,7 @@ fn append_optional(
 ) -> Result<MlxArray, MlxRuntimeError> {
     match stored {
         Some(stored_tokens) => concatenate_tokens(runtime, stored_tokens, new_tokens),
-        None => new_tokens.retain(),
+        None => new_tokens.retain().map_err(MlxRuntimeError::from),
     }
 }
 
@@ -402,7 +403,7 @@ fn take_last_tokens(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let available_token_count = token_count(tokens)?;
     if keep_token_count >= available_token_count {
-        return tokens.retain();
+        return tokens.retain().map_err(MlxRuntimeError::from);
     }
     slice_tokens(
         runtime,

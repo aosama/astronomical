@@ -1,11 +1,10 @@
 //! Input validation and request-scoped graph preparation for transformer execution.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
-
 use super::Flux2KleinTransformerError;
 use super::blocks::{DoubleStreamState, ModulationSet};
 use super::execution::{Flux2KleinForwardState, Flux2KleinTransformer, ForwardBlockState};
 use super::math::{linear, rope_frequencies, timestep_embedding};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Clone, Copy)]
 pub struct Flux2KleinTransformerInputs<'a> {

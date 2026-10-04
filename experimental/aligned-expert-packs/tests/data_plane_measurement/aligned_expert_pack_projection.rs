@@ -4,11 +4,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use astronomical_mlx_c_rust::MlxArray;
 use astronomical_model_serving::{
     QuantizedExpertLayerPlan, QuantizedExpertPageManifest, load_quantized_expert_page,
 };
 use astronomical_runtime_integration::{
-    MlxArray, MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics, MlxMetalExpertPackLoadRange,
+    MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics, MlxMetalExpertPackLoadRange,
     MlxMetalExpertPackOutputTensor, MlxRuntime,
 };
 

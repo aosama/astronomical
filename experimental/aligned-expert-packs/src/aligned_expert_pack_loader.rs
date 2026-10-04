@@ -5,10 +5,11 @@ use astronomical_model_serving::{
     contiguous_selected_runs,
 };
 use astronomical_runtime_integration::{
-    MlxDtype, MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
+    MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
 };
 
 use crate::AlignedExpertPackTensorDescriptor;
+use astronomical_mlx_c_rust::MlxDtype;
 
 /// Builds compact MLX output tensors and direct Metal input/output ranges for one expert page.
 pub fn build_aligned_expert_pack_metal_io_descriptors(

@@ -1,6 +1,6 @@
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
+    MlxRuntimeError,
 };
 
 use super::gated_delta_pipelined_kernel::{
@@ -9,6 +9,7 @@ use super::gated_delta_pipelined_kernel::{
 use super::gated_delta_sequence_contract::{
     gated_delta_sequence_error, template_arguments, validate_gated_delta_sequence_shapes,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const GATED_DELTA_CHECKPOINT_SETUP_SOURCE: &str = r#"
     int checkpoint_index = 0;
@@ -289,10 +290,8 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
     let mut token_outputs = Vec::with_capacity(sequence_shape.token_count as usize);
     let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunk_tokens.len());
     let mut next_checkpoint_position_index = 0_usize;
-    let mut current_recurrent_state = runtime.astype(
-        recurrent_state,
-        astronomical_runtime_integration::MlxDtype::Float32,
-    )?;
+    let mut current_recurrent_state =
+        runtime.astype(recurrent_state, astronomical_mlx_c_rust::MlxDtype::Float32)?;
     for token_index in 0..sequence_shape.token_count {
         let token_queries = runtime
             .slice(
@@ -354,7 +353,7 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
             // float32 cast yields an owned handle without a data copy.
             recurrent_boundary_states.push(runtime.astype(
                 &current_recurrent_state,
-                astronomical_runtime_integration::MlxDtype::Float32,
+                astronomical_mlx_c_rust::MlxDtype::Float32,
             )?);
             next_checkpoint_position_index += 1;
         }

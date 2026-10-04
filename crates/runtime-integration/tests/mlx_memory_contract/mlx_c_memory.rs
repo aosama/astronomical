@@ -1,5 +1,6 @@
+use astronomical_mlx_c_rust::MlxDtype;
 use astronomical_runtime_integration::{
-    MlxDtype, MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
+    MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
 };
 
 const GRAPH_DIMENSION: i32 = 4096;

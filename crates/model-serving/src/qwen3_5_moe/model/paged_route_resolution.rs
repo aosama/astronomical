@@ -9,10 +9,11 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Set after the first capture attempt so at most one prefill chunk is traced.
 static METAL_CAPTURE_ATTEMPTED: AtomicBool = AtomicBool::new(false);

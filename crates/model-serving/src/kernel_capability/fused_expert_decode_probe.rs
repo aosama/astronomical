@@ -114,7 +114,11 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
             .map_err(|error| KernelCapabilityError::Execution {
                 description: error.to_string(),
             })?;
-        let output_values = output.to_vec_f32().map_err(probe_execution)?;
+        let output_values = output.to_vec_f32().map_err(|error| {
+            probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                error,
+            ))
+        })?;
         let assignment_scales = [2.0_f32, 3.0];
         let assignment_biases = [1.0_f32, 0.0];
         let assignment_scores = [1.0_f32, 0.5];
@@ -229,7 +233,11 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
             .map_err(|error| KernelCapabilityError::Execution {
                 description: error.to_string(),
             })?;
-        let output_values = output.to_vec_f32().map_err(probe_execution)?;
+        let output_values = output.to_vec_f32().map_err(|error| {
+            probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                error,
+            ))
+        })?;
 
         // Rebuild the expected values: assignment a selects expert a, and the
         // SwiGLU hidden is silu(gate row o) * up row 64+o per assignment.

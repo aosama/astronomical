@@ -5,12 +5,13 @@
 //! the original assignment tensor by the original scores.
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
+    MlxRuntimeError,
 };
 
 use super::error::SparseExpertError;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const OPERATION: &str = "reduce stacked expert outputs";
 const SORTED_EXPERT_WEIGHTED_SUM_SOURCE: &str = r#"

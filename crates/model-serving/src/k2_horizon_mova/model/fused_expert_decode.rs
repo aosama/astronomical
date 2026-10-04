@@ -21,8 +21,8 @@
 //! chunked prefill on the standard gathered path.
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    MlxRuntime, MlxRuntimeError,
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
+    MlxRuntimeError,
 };
 
 use crate::PerformanceAttribution;
@@ -32,6 +32,7 @@ use super::error::K2HorizonMoVAExecutionError;
 
 mod kernel_sources;
 
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use kernel_sources::{
     FUSED_DECODE_KERNEL_HEADER, ROUTED_DOWN_KERNEL_SOURCE, ROUTED_GATE_UP_KERNEL_SOURCE,
     VALUE_EXPERT_KERNEL_SOURCE,

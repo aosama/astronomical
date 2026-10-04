@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5_moe::PagedRouteValidationOutcome;
