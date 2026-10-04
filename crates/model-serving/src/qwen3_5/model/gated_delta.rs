@@ -26,8 +26,12 @@ fn evaluate_linear_attention_section(
     operation: PerformanceOperation,
     arrays: &[&MlxArray],
     token_count: i32,
+    is_verification_window: bool,
 ) -> Result<(), Qwen3_5ExecutionError> {
-    if !performance_attribution.is_enabled() || token_count <= 1 {
+    // The MTP verification window is a latency-sensitive decode pass: injected
+    // evaluation boundaries serialize it like one-token decode, and its phase
+    // costs are attributed at the attempt boundary instead.
+    if !performance_attribution.is_enabled() || token_count <= 1 || is_verification_window {
         return Ok(());
     }
     performance_attribution.measure_operation(operation, |_performance_attribution| {
@@ -186,6 +190,8 @@ impl Qwen3_5Model {
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
         let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
         let linear_value_dimension = self.config.linear_value_dimension() as i32;
+        let is_verification_window = paged_prefill_execution_mode
+            == crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
         let mixed_queries_keys_values = self.quantized_linear_for_paged_prefill_execution_mode(
             hidden_states,
             &linear_attention_weights.input_queries_keys_values_projection,
@@ -226,6 +232,7 @@ impl Qwen3_5Model {
                 &decay_inputs,
             ],
             token_count,
+            is_verification_window,
         )?;
         let completed_prefill_chunk_tokens = boundary_checkpoint_collector
             .as_ref()
@@ -233,24 +240,63 @@ impl Qwen3_5Model {
         let (queries, keys, values, boundary_convolution_states) =
             match completed_prefill_chunk_tokens.as_deref() {
                 Some(completed_prefill_chunk_tokens) => {
+                    // The pre-window rolling buffer feeds the fused prework
+                    // below; the checkpoint update replaces the state itself.
+                    let pre_window_convolution_state = convolution_state
+                        .current_or_zero(&self.runtime, mixed_queries_keys_values.dtype())?;
                     let checkpoint_update = convolution_state.update_with_boundary_checkpoints(
                         &self.runtime,
                         &mixed_queries_keys_values,
                         token_count,
                         completed_prefill_chunk_tokens,
                     )?;
-                    let (queries, keys, values) = self.convolution_to_normalized_heads(
-                        &checkpoint_update.convolution_input,
-                        token_count,
-                        linear_attention_weights,
-                        performance_attribution,
-                    )?;
-                    (
-                        queries,
-                        keys,
-                        values,
-                        checkpoint_update.boundary_convolution_states,
-                    )
+                    // Verification rows are launch-bound decode work: the fused
+                    // prework kernel serves them exactly as one-token decode
+                    // (the kernel is numerics-contracted at two and four tokens),
+                    // while plain prefill keeps the composed chain.
+                    if is_verification_window
+                        && is_gdn_decode_prework_eligible(
+                            self.gdn_decode_prework_kernel.as_ref(),
+                            token_count,
+                            mixed_queries_keys_values.dtype(),
+                            linear_head_dimension,
+                        )
+                    {
+                        let fused = qwen3_5_gdn_decode_prework(
+                            &self.runtime,
+                            self.gdn_decode_prework_kernel
+                                .as_ref()
+                                .expect("prework eligibility just proved the kernel is retained"),
+                            linear_key_head_count,
+                            linear_value_head_count,
+                            linear_head_dimension,
+                            &mixed_queries_keys_values,
+                            &pre_window_convolution_state,
+                            &linear_attention_weights.convolution_weight,
+                            &self.inverse_linear_head_dimension_scale,
+                            &self.inverse_square_root_linear_head_dimension_scale,
+                        )?;
+                        (
+                            fused.queries,
+                            fused.keys,
+                            fused.values,
+                            checkpoint_update.boundary_convolution_states,
+                        )
+                    } else {
+                        let (queries, keys, values) = self.convolution_to_normalized_heads(
+                            &checkpoint_update.convolution_input,
+                            token_count,
+                            linear_attention_weights,
+                            is_verification_window,
+                            performance_attribution,
+                        )?;
+                        (
+                            queries,
+                            keys,
+                            values,
+                            checkpoint_update.boundary_convolution_states,
+                        )
+                    }
                 }
                 None => {
                     // Launch-bound decode steps and verification rows take the
@@ -291,6 +337,7 @@ impl Qwen3_5Model {
                             &convolution_input,
                             token_count,
                             linear_attention_weights,
+                            is_verification_window,
                             performance_attribution,
                         )?;
                         (queries, keys, values, Vec::new())
@@ -313,6 +360,7 @@ impl Qwen3_5Model {
             PerformanceOperation::PrefillLinearAttentionNormalizationGraphicsProcessorCompletionWait,
             &[&queries, &keys, &values, &decays, &update_rates],
             token_count,
+            is_verification_window,
         )?;
         let current_recurrent_state = recurrent_state.current_or_zero(&self.runtime)?;
         // Each dispatch entry owns its capability routing: a retained kernel
@@ -366,6 +414,7 @@ impl Qwen3_5Model {
             PerformanceOperation::PrefillLinearAttentionRecurrenceGraphicsProcessorCompletionWait,
             &[&recurrent_output, &next_recurrent_state],
             token_count,
+            is_verification_window,
         )?;
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector.as_deref_mut() {
             boundary_checkpoint_collector.record_linear_attention_layer(
@@ -399,6 +448,7 @@ impl Qwen3_5Model {
             PerformanceOperation::PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait,
             &[&projected_output],
             token_count,
+            is_verification_window,
         )?;
         Ok(projected_output)
     }
@@ -415,6 +465,7 @@ impl Qwen3_5Model {
         convolution_input: &MlxArray,
         token_count: i32,
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
+        is_verification_window: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
@@ -443,6 +494,7 @@ impl Qwen3_5Model {
             PerformanceOperation::PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait,
             &[&convolution_output],
             token_count,
+            is_verification_window,
         )?;
         let queries =
             slice_last_dimension(&self.runtime, &convolution_output, 0, linear_key_dimension)?;

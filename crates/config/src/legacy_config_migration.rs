@@ -204,10 +204,15 @@ fn build_migrated_config(
                 ..Default::default()
             });
         }
-        if legacy_config.mtp_draft_depth.is_some() || legacy_config.mtp_enabled == Some(false) {
+        // The legacy `mtp_enabled` field was written as an explicit operator
+        // intent in both directions: `true` must migrate to an enabled v1
+        // acceleration policy (omission stays off), and `false` must survive
+        // as an explicit opt-out. Dropping `true` silently disabled MTP for
+        // operators who asked for it.
+        if legacy_config.mtp_enabled.is_some() || legacy_config.mtp_draft_depth.is_some() {
             model_config.acceleration = Some(AccelerationConfigFile {
                 mtp: Some(MtpConfigFile {
-                    enabled: legacy_config.mtp_enabled.filter(|mtp_enabled| !mtp_enabled),
+                    enabled: legacy_config.mtp_enabled,
                     draft_depth: legacy_config.mtp_draft_depth,
                 }),
                 ..Default::default()

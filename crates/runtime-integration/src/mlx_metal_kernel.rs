@@ -2,7 +2,7 @@ use std::ffi::{CString, NulError};
 
 use crate::{
     MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status, raw,
+    mlx_runtime::check_status, mlx_stream::MlxStream, raw,
 };
 
 /// Output shape and dtype requested from one custom Metal kernel launch.
@@ -192,6 +192,60 @@ impl MlxRuntime {
             .map(|output_index| output_vector.array_at(output_index, OPERATION))
             .collect()
     }
+}
+
+/// Applies one custom Metal kernel inside a compiled-graph trace.
+///
+/// Identical to [`MlxRuntime::apply_metal_kernel`] minus the runtime handle:
+/// compiled-graph builders run without a runtime, on the stream the trace is
+/// being built for. Errors surface as plain status codes; the input contract
+/// (row-contiguous arrays, validated launch dimensions) is the builder's
+/// responsibility.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_metal_kernel_in_graph(
+    kernel: &MlxMetalKernel,
+    input_arrays: &[&MlxArray],
+    output_specs: &[MlxMetalKernelOutput],
+    grid: [i32; 3],
+    thread_group: [i32; 3],
+    template_arguments: &[MlxMetalKernelTemplateArgument],
+    gpu_stream: &MlxStream,
+) -> Result<Vec<MlxArray>, i32> {
+    let input_vector = MlxArrayVector::new(input_arrays).map_err(|_| 1)?;
+    let kernel_config =
+        MlxMetalKernelConfig::new(output_specs, grid, thread_group, None).map_err(|_| 1)?;
+    kernel_config
+        .add_template_arguments(template_arguments)
+        .map_err(|_| 1)?;
+    let mut output_vector =
+        MlxArrayVector::empty("apply a Metal kernel in a graph trace").map_err(|_| 1)?;
+    // SAFETY: Kernel, input vector, config, stream, and output vector are live;
+    // MLX populates the output vector synchronously as a lazy graph result.
+    let status = unsafe {
+        raw::mlx_fast_metal_kernel_apply(
+            output_vector.raw_mut(),
+            kernel.raw(),
+            input_vector.raw(),
+            kernel_config.raw(),
+            gpu_stream.raw(),
+        )
+    };
+    if status != 0 {
+        return Err(status);
+    }
+    let output_count = output_vector.len();
+    if output_count != output_specs.len() {
+        return Err(1);
+    }
+    let mut outputs = Vec::with_capacity(output_count);
+    for output_index in 0..output_count {
+        outputs.push(
+            output_vector
+                .array_at(output_index, "apply a Metal kernel in a graph trace")
+                .map_err(|_| 1)?,
+        );
+    }
+    Ok(outputs)
 }
 
 #[derive(Debug)]

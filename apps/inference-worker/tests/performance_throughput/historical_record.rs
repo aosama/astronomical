@@ -45,6 +45,10 @@ pub struct ThroughputRecord {
     pub timestamp: String,
     pub model_id: String,
     pub journey: ThroughputJourneyKind,
+    /// The multi-token prediction draft depth the measured completion ran
+    /// with, when the journey's resolved configuration engaged MTP; `None`
+    /// means MTP stayed off, which is every pre-MTP line's baseline.
+    pub mtp_draft_depth: Option<u8>,
     pub prefill_tokens_per_second: u32,
     pub decode_tokens_per_second: u32,
     pub git_commit: Option<String>,

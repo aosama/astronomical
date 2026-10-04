@@ -72,10 +72,17 @@ pub use gated_delta_boundary_checkpoints::{
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
 #[cfg(feature = "direct-mlx")]
+pub(crate) use gated_delta_pipelined_kernel::{
+    THREADGROUP_THREAD_COUNT as GDN_CHECKPOINT_THREADGROUP_THREAD_COUNT,
+    VALUE_ROW_BLOCK_SIZE as GDN_CHECKPOINT_VALUE_ROW_BLOCK_SIZE,
+};
+#[cfg(feature = "direct-mlx")]
 pub use gated_delta_sequence::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
     qwen3_5_gated_delta_sequence_ops_fallback,
 };
+#[cfg(feature = "direct-mlx")]
+pub(crate) use gdn_decode_prework_kernel::LANE_COUNT as GDN_PREWORK_LANE_COUNT;
 #[cfg(feature = "direct-mlx")]
 pub use gdn_decode_prework_kernel::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
