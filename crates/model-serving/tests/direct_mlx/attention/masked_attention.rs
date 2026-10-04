@@ -2,7 +2,7 @@ use astronomical_model_serving::{
     PerformanceAttribution, PerformanceOperation, build_causal_sliding_window_mask,
     sliding_window_visibility_table,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
@@ -110,6 +110,116 @@ async fn should_reject_zero_head_attention_without_panicking() {
     runtime
         .scaled_dot_product_attention(&queries, &keys, &values, 0.5)
         .expect_err("zero attention heads must return a typed error before modulo validation");
+}
+
+#[tokio::test]
+async fn should_compile_nax_dsplit_attention_kernels_for_wide_head_dimensions() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = test_runtime();
+
+    let queries_256 = wide_bfloat16_attention_input(&runtime, 2, 1024, 256);
+    let keys_256 = wide_bfloat16_attention_input(&runtime, 2, 2048, 256);
+    let values_256 = wide_bfloat16_attention_input(&runtime, 2, 2048, 256);
+
+    let causal_output = runtime
+        .causal_scaled_dot_product_attention(&queries_256, &keys_256, &values_256, 1.0)
+        .unwrap_or_else(|error| {
+            panic!("causal wide attention should JIT-compile for head dimension 256: {error}")
+        });
+    assert_wide_attention_output_is_finite(&runtime, &causal_output, 2 * 1024 * 256);
+
+    let mut attribution = PerformanceAttribution::disabled();
+    let causal_mask =
+        build_causal_sliding_window_mask(&runtime, 0, 1024, 0, 2048, 2048, &mut attribution)
+            .expect("a full-history window should produce a causal mask");
+    let bfloat16_causal_mask = runtime
+        .astype(&causal_mask, MlxDtype::BFloat16)
+        .expect("the causal mask should cast to bfloat16");
+    let masked_output = runtime
+        .masked_scaled_dot_product_attention(
+            &queries_256,
+            &keys_256,
+            &values_256,
+            1.0,
+            &bfloat16_causal_mask,
+        )
+        .unwrap_or_else(|error| {
+            panic!("masked wide attention should JIT-compile for head dimension 256: {error}")
+        });
+    assert_wide_attention_output_is_finite(&runtime, &masked_output, 2 * 1024 * 256);
+
+    // The head-dimension 512 fused kernel additionally needs at least 1024
+    // query blocks (batch * heads * ceil(query_length / 32)) before dispatch
+    // leaves the unfused fallback, so this case uses 32 heads.
+    let queries_512 = wide_bfloat16_attention_input(&runtime, 32, 1024, 512);
+    let keys_512 = wide_bfloat16_attention_input(&runtime, 32, 1024, 512);
+    let values_512 = wide_bfloat16_attention_input(&runtime, 32, 1024, 512);
+    let wide_output = runtime
+        .causal_scaled_dot_product_attention(&queries_512, &keys_512, &values_512, 1.0)
+        .unwrap_or_else(|error| {
+            panic!("causal wide attention should JIT-compile for head dimension 512: {error}")
+        });
+    assert_wide_attention_output_is_finite(&runtime, &wide_output, 32 * 1024 * 512);
+}
+
+// Bfloat16 inputs and query lengths of at least 1024 tokens are load-bearing:
+// float32 queries skip the NAX dispatch gate and shorter queries stay on the
+// unfused fallback, so only this shape family reaches the head-split (dsplit)
+// Metal JIT path this regression test exists to protect.
+fn wide_bfloat16_attention_input(
+    runtime: &MlxRuntime,
+    head_count: usize,
+    token_count: usize,
+    head_dimension: usize,
+) -> MlxArray {
+    let element_count = head_count * token_count * head_dimension;
+    let element_values: Vec<f32> = (0..element_count)
+        .map(|element_index| ((element_index % 13) as f32 - 6.0) * 0.125)
+        .collect();
+    let float_input = runtime
+        .array_from_f32(
+            &element_values,
+            &[
+                1,
+                head_count as i32,
+                token_count as i32,
+                head_dimension as i32,
+            ],
+        )
+        .expect("wide attention input should build from deterministic values");
+    let bfloat16_input = runtime
+        .astype(&float_input, MlxDtype::BFloat16)
+        .expect("wide attention input should cast to bfloat16");
+    // Evaluating before the float source drops keeps the lazy graph from
+    // holding every float32 intermediate alive during the attention eval,
+    // which matters for the head-dimension 512 case under the direct-MLX
+    // test memory ceiling.
+    bfloat16_input
+        .evaluate()
+        .expect("wide attention input should evaluate");
+    bfloat16_input
+}
+
+fn assert_wide_attention_output_is_finite(
+    runtime: &MlxRuntime,
+    attention_output: &MlxArray,
+    expected_element_count: usize,
+) {
+    let output_f32 = runtime
+        .astype(attention_output, MlxDtype::Float32)
+        .expect("wide attention output should cast to float32");
+    let output_values = output_f32
+        .to_vec_f32()
+        .expect("wide attention output should evaluate");
+    assert_eq!(
+        output_values.len(),
+        expected_element_count,
+        "wide attention should produce one output value per query position"
+    );
+    assert!(
+        output_values.iter().all(|value| value.is_finite()),
+        "wide attention output should stay finite"
+    );
 }
 
 fn test_runtime() -> MlxRuntime {
