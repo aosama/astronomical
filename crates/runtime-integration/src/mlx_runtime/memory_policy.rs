@@ -2,8 +2,9 @@ use std::sync::Mutex;
 
 use crate::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
-    allocator_cache_exceeds_reclaim_threshold, raw,
+    allocator_cache_exceeds_reclaim_threshold,
 };
+use astronomical_mlx_c_rust::raw;
 
 use super::{check_status, error_handling::lock_unpoisoned};
 

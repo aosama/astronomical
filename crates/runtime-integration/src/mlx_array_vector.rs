@@ -1,4 +1,5 @@
-use crate::{MlxArray, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 /// Temporary MLX vector that retains array handles for one aggregate operation.
 #[derive(Debug)]

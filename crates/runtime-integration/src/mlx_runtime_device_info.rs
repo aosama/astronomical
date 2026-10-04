@@ -2,12 +2,9 @@ use std::ffi::c_char;
 
 use crate::{
     MlxRuntimeError,
-    mlx_runtime::{
-        check_status, configure_metallib_path, configured_metallib_path,
-        install_non_terminating_error_handler,
-    },
-    raw,
+    mlx_runtime::{check_status, configure_metallib_path, configured_metallib_path},
 };
+use astronomical_mlx_c_rust::{install_non_terminating_error_handler, raw};
 
 const MAXIMUM_RECOMMENDED_WORKING_SET_SIZE_DEVICE_INFO_KEY: &[u8] =
     b"max_recommended_working_set_size\0";

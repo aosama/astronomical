@@ -1,58 +1,13 @@
-use std::{
-    cell::RefCell,
-    ffi::{CStr, c_char, c_void},
-    ptr,
-    sync::{Mutex, Once},
-};
+//! Typed MLX runtime error classification for Astronomical policy.
+//!
+//! The captured-error machinery lives in `astronomical-mlx-c-rust`; this
+//! module adds what only Astronomical knows: which descriptions name the
+//! active memory ceiling enforced by the allocator patch, and how they become
+//! typed capacity errors that the worker can recover from.
 
-use crate::{MlxRuntimeError, raw};
+use std::sync::Mutex;
 
-static ERROR_HANDLER_INSTALLATION: Once = Once::new();
-
-thread_local! {
-    /// MLX C reports an error immediately before returning nonzero on the same
-    /// calling thread. Thread-local storage preserves that operation pairing
-    /// without allowing concurrent worker calls to consume each other's errors.
-    static LAST_MLX_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
-}
-
-pub(crate) fn install_non_terminating_error_handler() {
-    ERROR_HANDLER_INSTALLATION.call_once(|| {
-        // SAFETY: The callback follows MLX C's exact ABI, never unwinds, and
-        // stores no borrowed pointers after returning. Null context and
-        // destructor are valid because all state is Rust-owned static state.
-        unsafe {
-            raw::mlx_set_error_handler(Some(capture_mlx_error), ptr::null_mut(), None);
-        }
-    });
-}
-
-unsafe extern "C" fn capture_mlx_error(message: *const c_char, _context: *mut c_void) {
-    let description = if message.is_null() {
-        "MLX reported an error without a message".to_owned()
-    } else {
-        // SAFETY: MLX C documents that the callback receives a valid
-        // null-terminated message for the duration of this call.
-        unsafe { CStr::from_ptr(message) }
-            .to_string_lossy()
-            .into_owned()
-    };
-    LAST_MLX_ERROR.with(|last_error| {
-        if let Ok(mut writable_error) = last_error.try_borrow_mut() {
-            *writable_error = Some(description);
-        }
-    });
-}
-
-pub(crate) fn check_status(status: i32, operation: &'static str) -> Result<(), MlxRuntimeError> {
-    if status == 0 {
-        clear_captured_mlx_error();
-        return Ok(());
-    }
-    let description = take_captured_mlx_error()
-        .unwrap_or_else(|| format!("MLX C returned status {status} without an error message"));
-    Err(classify_mlx_error(operation, description))
-}
+use crate::MlxRuntimeError;
 
 pub fn classify_mlx_error(operation: &'static str, description: String) -> MlxRuntimeError {
     parse_active_memory_limit_error(&description).unwrap_or(MlxRuntimeError::RuntimeOperation {
@@ -61,21 +16,8 @@ pub fn classify_mlx_error(operation: &'static str, description: String) -> MlxRu
     })
 }
 
-pub(crate) fn take_captured_mlx_error() -> Option<String> {
-    LAST_MLX_ERROR.with(|last_error| {
-        last_error
-            .try_borrow_mut()
-            .ok()
-            .and_then(|mut writable_error| writable_error.take())
-    })
-}
-
-pub(crate) fn clear_captured_mlx_error() {
-    LAST_MLX_ERROR.with(|last_error| {
-        if let Ok(mut writable_error) = last_error.try_borrow_mut() {
-            *writable_error = None;
-        }
-    });
+pub(crate) fn check_status(status: i32, operation: &'static str) -> Result<(), MlxRuntimeError> {
+    astronomical_mlx_c_rust::check_status(status, operation).map_err(MlxRuntimeError::from)
 }
 
 fn parse_active_memory_limit_error(description: &str) -> Option<MlxRuntimeError> {

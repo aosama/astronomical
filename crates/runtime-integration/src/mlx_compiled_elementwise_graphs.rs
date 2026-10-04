@@ -9,8 +9,8 @@ use crate::{
         MlxCompiledGraph, array_from_vector, graph_output_array, set_graph_output,
     },
     mlx_stream::MlxStream,
-    raw,
 };
+use astronomical_mlx_c_rust::raw;
 
 const APPLY_ATTENTION_OUTPUT_GATE_OPERATION: &str = "apply the compiled MLX attention output gate";
 const COMPILE_ATTENTION_OUTPUT_GATE_OPERATION: &str =

@@ -1,5 +1,6 @@
+use astronomical_mlx_c_rust::raw;
 use astronomical_runtime_integration::{
-    MlxCompiledMultiOutputGraph, MlxStream, array_from_vector, graph_output_array, raw,
+    MlxCompiledMultiOutputGraph, MlxStream, array_from_vector, graph_output_array,
     set_graph_output_vector,
 };
 

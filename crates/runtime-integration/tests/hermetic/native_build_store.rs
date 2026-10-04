@@ -52,7 +52,18 @@ fn should_reuse_one_complete_native_entry_across_cargo_output_directories() {
         first_artifacts.native_library_directory(),
         second_artifacts.native_library_directory()
     );
-    assert!(first_artifacts.include_directory().is_dir());
+    assert_eq!(
+        first_artifacts.native_library_directory().parent(),
+        second_artifacts.native_library_directory().parent()
+    );
+    assert!(
+        first_artifacts
+            .native_library_directory()
+            .parent()
+            .expect("the native library directory has an entry parent")
+            .join("include")
+            .is_dir()
+    );
     assert!(first_artifacts.metallib_path().is_file());
     assert!(first_artifacts.memory_contract_probe_path().is_none());
     assert!(

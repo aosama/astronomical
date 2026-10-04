@@ -7,7 +7,8 @@
 //! BF16 inputs. Model code should shape/pad/segment tensors, not reproduce this
 //! math. Callers can select unmasked, causal, or explicit array-mask execution.
 
-use crate::{MlxArray, MlxRuntime, MlxRuntimeError, raw};
+use crate::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::raw;
 
 impl MlxRuntime {
     /// Applies MLX-C fused unmasked attention over `[batch, heads, length, width]`.

@@ -45,7 +45,8 @@ create_fingerprint_fixture() {
     printf '%s\n' '[package]' > "${fixture_root}/crates/runtime-integration/Cargo.toml"
     printf '%s\n' 'fn main() {}' > "${fixture_root}/crates/runtime-integration/build.rs"
     printf '%s\n' 'fn store() {}' > "${fixture_root}/crates/runtime-integration/build_native_store.rs"
-    printf '%s\n' 'fn generate() {}' > "${fixture_root}/crates/runtime-integration/build_bindings.rs"
+    mkdir -p "${fixture_root}/crates/mlx-c-rust"
+    printf '%s\n' 'fn main() {}' > "${fixture_root}/crates/mlx-c-rust/build.rs"
     printf '%s\n' 'fn link() {}' > "${fixture_root}/crates/runtime-integration/build_native_linking.rs"
     printf '%s\n' '1' > "${fixture_root}/crates/runtime-integration/native-build-store-schema-version"
     printf '%s\n' 'project(runtime)' > "${fixture_root}/crates/runtime-integration/native/CMakeLists.txt"
@@ -143,8 +144,9 @@ create_change_scope_fixture() {
         "${change_scope_repository}/crates/model-serving/src/lib.rs"
     printf '%s\n' 'fn main() {}' > \
         "${change_scope_repository}/crates/runtime-integration/build.rs"
-    printf '%s\n' 'fn generate() {}' > \
-        "${change_scope_repository}/crates/runtime-integration/build_bindings.rs"
+    mkdir -p "${change_scope_repository}/crates/mlx-c-rust"
+    printf '%s\n' 'fn main() {}' > \
+        "${change_scope_repository}/crates/mlx-c-rust/build.rs"
     printf '%s\n' 'fn link() {}' > \
         "${change_scope_repository}/crates/runtime-integration/build_native_linking.rs"
     printf '%s\n' 'fn store() {}' > \
@@ -426,11 +428,13 @@ main() {
         "${change_scope_fixture_root}/rust-toolchain.toml"
     toolchain_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" toolchain)"
     previous_build_owner_scope_sha="$toolchain_scope_sha"
-    for build_owner_path in build.rs build_bindings.rs build_native_linking.rs \
-        build_native_store.rs build_native_store_manifest.rs
+    for build_owner_path in crates/runtime-integration/build.rs \
+        crates/mlx-c-rust/build.rs crates/runtime-integration/build_native_linking.rs \
+        crates/runtime-integration/build_native_store.rs \
+        crates/runtime-integration/build_native_store_manifest.rs
     do
         printf '%s\n' '// changed owner' >> \
-            "${change_scope_fixture_root}/crates/runtime-integration/${build_owner_path}"
+            "${change_scope_fixture_root}/${build_owner_path}"
         current_build_owner_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" "${build_owner_path}-owner")"
         assert_change_scope "$change_scope_fixture_root" push \
             "$previous_build_owner_scope_sha" "$current_build_owner_scope_sha" true true true
