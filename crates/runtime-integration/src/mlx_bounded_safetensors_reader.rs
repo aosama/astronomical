@@ -168,9 +168,13 @@ unsafe extern "C" fn bounded_reader_tell(descriptor: *mut c_void) -> usize {
     .unwrap_or(0)
 }
 
-unsafe extern "C" fn bounded_reader_seek(descriptor: *mut c_void, offset: i64, whence: c_int) {
-    // SAFETY: MLX invokes this callback only while it owns the descriptor.
-    unsafe {
+unsafe extern "C" fn bounded_reader_seek(
+    descriptor: *mut c_void,
+    offset: i64,
+    whence: c_int,
+) -> c_int {
+    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    let seek_succeeded = unsafe {
         with_bounded_reader_state(descriptor, |reader_state| {
             let mut reader_cursor = reader_state
                 .cursor
@@ -182,23 +186,31 @@ unsafe extern "C" fn bounded_reader_seek(descriptor: *mut c_void, offset: i64, w
                 libc::SEEK_END => i128::from(reader_state.total_virtual_size()),
                 _ => {
                     reader_state.is_good.store(false, Ordering::Release);
-                    return;
+                    return false;
                 }
             };
             let requested_position_bytes = base_position_bytes + i128::from(offset);
             match u64::try_from(requested_position_bytes) {
-                Ok(position_bytes) => reader_cursor.position_bytes = position_bytes,
-                Err(_) => reader_state.is_good.store(false, Ordering::Release),
+                Ok(position_bytes) => {
+                    reader_cursor.position_bytes = position_bytes;
+                    true
+                }
+                Err(_) => {
+                    reader_state.is_good.store(false, Ordering::Release);
+                    false
+                }
             }
-        });
+        })
     }
+    .unwrap_or(false);
+    if seek_succeeded { 0 } else { -1 }
 }
 
 unsafe extern "C" fn bounded_reader_read(
     descriptor: *mut c_void,
     destination: *mut c_char,
     byte_count: usize,
-) {
+) -> usize {
     // SAFETY: MLX invokes this callback only while it owns the descriptor.
     unsafe {
         with_bounded_reader_state(descriptor, |reader_state| {
@@ -210,8 +222,13 @@ unsafe extern "C" fn bounded_reader_read(
             let consumed_byte_count =
                 read_virtual_bytes(reader_state, destination, byte_count, read_position_bytes);
             reader_cursor.position_bytes += consumed_byte_count as u64;
-        });
+            // The v0.7.0 wrapper rejects any count short of the request, so a
+            // read past the virtual payload now fails loudly instead of
+            // handing MLX an unfilled tail.
+            consumed_byte_count
+        })
     }
+    .unwrap_or(0)
 }
 
 unsafe extern "C" fn bounded_reader_read_at_offset(
@@ -219,7 +236,7 @@ unsafe extern "C" fn bounded_reader_read_at_offset(
     destination: *mut c_char,
     byte_count: usize,
     offset_bytes: usize,
-) {
+) -> usize {
     let Ok(offset_bytes) = u64::try_from(offset_bytes) else {
         // SAFETY: MLX invokes this callback only while it owns the descriptor.
         unsafe {
@@ -227,14 +244,15 @@ unsafe extern "C" fn bounded_reader_read_at_offset(
                 reader_state.is_good.store(false, Ordering::Release);
             });
         }
-        return;
+        return 0;
     };
     // SAFETY: MLX invokes this callback only while it owns the descriptor.
     unsafe {
         with_bounded_reader_state(descriptor, |reader_state| {
-            read_virtual_bytes(reader_state, destination, byte_count, offset_bytes);
-        });
+            read_virtual_bytes(reader_state, destination, byte_count, offset_bytes)
+        })
     }
+    .unwrap_or(0)
 }
 
 fn read_virtual_bytes(
@@ -295,13 +313,15 @@ unsafe extern "C" fn bounded_reader_write_is_unsupported(
     descriptor: *mut c_void,
     _source: *const c_char,
     _byte_count: usize,
-) {
+) -> usize {
     // SAFETY: MLX invokes this callback only while it owns the descriptor.
     unsafe {
         with_bounded_reader_state(descriptor, |reader_state| {
             reader_state.is_good.store(false, Ordering::Release);
         });
     }
+    // Zero processed bytes makes the v0.7.0 C++ wrapper reject the write.
+    0
 }
 
 unsafe extern "C" fn bounded_reader_label(_descriptor: *mut c_void) -> *const c_char {

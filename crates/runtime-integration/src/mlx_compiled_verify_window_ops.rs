@@ -390,6 +390,9 @@ pub(super) fn masked_row_attention(
             c"array".as_ptr(),
             additive_mask.raw(),
             MlxArray::empty_raw(),
+            // mlx-c v0.7.0 exposes the fused-attention selection; the compiled
+            // verification mirror keeps the reference implementation.
+            false,
             gpu_stream.raw(),
         )
     })
