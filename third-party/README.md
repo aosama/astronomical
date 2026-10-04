@@ -148,7 +148,10 @@ To bump a pinned dependency:
    time from the pinned headers via the allowlist in
    `crates/runtime-integration/build_bindings.rs`. Diff the generated
    surface, update the allowlist and call sites, and leave zero compiler
-   warnings.
+   warnings. Before the first native build of the new pin, diff the C header
+   surface itself with the bindgen header provisioning (see the next
+   section); header-level differences found there explain almost every
+   binding-level difference before any compile runs.
 5. Run the hermetic lanes, then the real-model acceptance journeys serially
    through `scripts/run-bounded-cargo-test.sh` (GPU journeys are never
    parallel).
@@ -158,6 +161,38 @@ To bump a pinned dependency:
 7. Update this registry, the repo discovery guide, and
    `docs/performance-optimizations-lessons.md`, then commit through
    `scripts/verify-before-commit.sh`.
+
+## Bindgen headers and the C surface diff
+
+`scripts/provision-bindgen-headers.sh` extracts the pinned MLX and MLX-C
+archives from the verified native dependency cache and applies the same patch
+pipeline as the native build (the patch list is parsed from the native
+CMakeLists, so the two can never drift). The extraction is keyed by the
+source-only native build identity, so a pin or patch edit invalidates it
+automatically, and a second run re-verifies the published tree against its
+recorded hash manifests without re-extracting. The script never downloads;
+run `scripts/bootstrap-native-dependencies.sh` first.
+
+```bash
+scripts/provision-bindgen-headers.sh
+scripts/provision-bindgen-headers.sh --verify-headers
+```
+
+`--verify-headers` resolves the completed native build for the current
+identity in the native build store and proves the extracted MLX-C headers are
+byte-identical to the staged headers of that build (`include/mlx` in the store
+entry); any mismatch is reported per file. This is the fast surface-diff step
+of a dependency bump: within seconds of changing a pin — and before any
+CMake build — you have the header tree the new pin will produce, so the
+previous pin's extraction directory can be diffed directory against directory
+to enumerate the exact C surface change. After the new pin's first native
+build, `--verify-headers` closes the loop by proving the extraction matches
+what the build actually staged.
+
+The contract suite in `scripts/test-provision-bindgen-headers-contract.sh`
+covers extraction, patch application, idempotent reuse, self-healing,
+tampered-archive refusal, offline behavior, and verification against hermetic
+store fixtures.
 
 ## Reproducing a native build from scratch
 
