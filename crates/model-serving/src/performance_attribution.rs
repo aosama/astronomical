@@ -9,6 +9,9 @@ mod counter_catalog;
 mod expert_streaming_source;
 mod log;
 mod measurement_catalog;
+// Public so the hermetic tree can exercise the sampling and delta evidence
+// path in every feature mode; production consumers remain direct-MLX gated.
+pub mod macos_process_io;
 mod report;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -56,10 +59,8 @@ pub(super) struct EnabledPerformanceAttribution {
     // Capture cumulative process I/O at the same boundary as the monotonic report
     // clock. Keeping the Result preserves sampling failure as explicit evidence;
     // replacing failure with zero would falsely claim that macOS served no disk I/O.
-    pub(super) process_io_start: Result<
-        astronomical_runtime_integration::MacosProcessIoSnapshot,
-        astronomical_runtime_integration::MacosProcessIoError,
-    >,
+    pub(super) process_io_start:
+        Result<macos_process_io::MacosProcessIoSnapshot, macos_process_io::MacosProcessIoError>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -98,7 +99,7 @@ impl PerformanceAttribution {
                     astronomical_runtime_integration::PositionalFileReadMetrics::default(),
                 ),
                 #[cfg(feature = "direct-mlx")]
-                process_io_start: astronomical_runtime_integration::sample_current_process_io(),
+                process_io_start: macos_process_io::sample_current_process_io(),
             })),
         }
     }

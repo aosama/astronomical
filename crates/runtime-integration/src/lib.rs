@@ -2,7 +2,6 @@
 
 #[cfg(feature = "experimental-aligned-expert-packs")]
 mod experimental;
-mod macos_process_io;
 #[cfg(feature = "mlx")]
 mod mlx_activation_operations;
 #[cfg(feature = "mlx")]
@@ -87,9 +86,6 @@ pub use experimental::{
     MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics,
     MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadMetricsSnapshot,
     MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
-};
-pub use macos_process_io::{
-    MacosProcessIoDelta, MacosProcessIoError, MacosProcessIoSnapshot, sample_current_process_io,
 };
 #[cfg(feature = "mlx")]
 pub use mlx_array::{MlxArray, MlxDtype};
