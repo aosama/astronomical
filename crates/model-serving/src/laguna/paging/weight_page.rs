@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::expert_paging::{
     ExpertWeightPage, QuantizationMode, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
@@ -13,6 +13,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaPagingError;
 use super::layer_plan::LagunaSparseLayerPagingPlan;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// One streamed complete-layer or routed expert page ready for gathered SwiGLU.
 #[derive(Debug)]

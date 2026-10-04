@@ -1,8 +1,9 @@
 //! Channel-last MLX convolution with one-time PyTorch weight-layout conversion.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::Flux2KleinVaeError;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct Flux2KleinChannelLastConv2d {

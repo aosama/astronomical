@@ -2,10 +2,11 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::super::error::LagunaExecutionError;
 use super::{LagunaDecoderState, LagunaLayerCacheState};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl LagunaDecoderState {
     /// Extracts one append-only sequence block plus the current rotating snapshot.

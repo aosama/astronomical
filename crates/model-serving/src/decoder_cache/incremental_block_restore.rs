@@ -10,10 +10,11 @@
 //! costs handles rather than payload: the bytes cross disk → destination
 //! during the single concat materialization.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::{FullAttentionKeyValueState, STATE_DIMENSION_TOKEN_AXIS};
 use super::quantized_full_attention_state::{QuantizedFullAttentionKeyValueState, QuantizedSlab};
+use astronomical_mlx_c_rust::MlxArray;
 
 const RESTORE_OPERATION: &str =
     "restore the in-memory KV state from persistent prompt-cache blocks";

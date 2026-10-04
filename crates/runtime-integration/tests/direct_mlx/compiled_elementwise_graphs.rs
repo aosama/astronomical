@@ -1,12 +1,11 @@
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxDtype, MlxRuntime,
-};
+use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxRuntime};
 
 use crate::common::runtime_test_support::{
     assert_bfloat16_arrays_match, assert_f32_close, runtime, stable_softplus_reference,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[test]
 fn should_gate_full_attention_output_with_one_shapeless_compiled_graph() {
@@ -362,7 +361,7 @@ fn bfloat16_array(
     runtime: &astronomical_runtime_integration::MlxRuntime,
     float32_values: &[f32],
     shape: &[i32],
-) -> astronomical_runtime_integration::MlxArray {
+) -> astronomical_mlx_c_rust::MlxArray {
     runtime
         .array_from_f32(float32_values, shape)
         .and_then(|float32_array| runtime.astype(&float32_array, MlxDtype::BFloat16))

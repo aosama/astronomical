@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime, MlxRuntimeError,
-};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError};
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
@@ -28,8 +27,8 @@ pub fn assert_f32_close(actual_values: &[f32], expected_values: &[f32]) {
 
 pub fn assert_bfloat16_arrays_match(
     runtime: &MlxRuntime,
-    actual_array: &astronomical_runtime_integration::MlxArray,
-    expected_array: &astronomical_runtime_integration::MlxArray,
+    actual_array: &astronomical_mlx_c_rust::MlxArray,
+    expected_array: &astronomical_mlx_c_rust::MlxArray,
 ) {
     assert_eq!(actual_array.dtype(), MlxDtype::BFloat16);
     assert_eq!(expected_array.dtype(), MlxDtype::BFloat16);

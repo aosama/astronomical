@@ -7,11 +7,10 @@
 
 use std::cell::RefCell;
 
-use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxDtype, MlxRuntime,
-};
+use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxRuntime};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionWeights};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Retains the attention head-dimension padding zeros so the 27 vision blocks
 /// stop re-allocating an identical zero tensor three times per block per image

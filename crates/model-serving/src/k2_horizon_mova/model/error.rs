@@ -14,3 +14,10 @@ pub enum K2HorizonMoVAExecutionError {
     #[error("{description}")]
     InvalidExecution { description: String },
 }
+
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_mlx_c_rust::MlxCError> for K2HorizonMoVAExecutionError {
+    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+        MlxRuntimeError::from(captured_error).into()
+    }
+}

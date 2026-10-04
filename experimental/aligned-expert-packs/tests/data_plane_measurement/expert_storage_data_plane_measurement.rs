@@ -325,11 +325,8 @@ fn measure_expert_data_plane_scenario(
 }
 
 fn assert_projection_parity(
-    bounded_reader_projection_outputs: &HashMap<
-        &'static str,
-        astronomical_runtime_integration::MlxArray,
-    >,
-    metal_projection_outputs: &HashMap<&'static str, astronomical_runtime_integration::MlxArray>,
+    bounded_reader_projection_outputs: &HashMap<&'static str, astronomical_mlx_c_rust::MlxArray>,
+    metal_projection_outputs: &HashMap<&'static str, astronomical_mlx_c_rust::MlxArray>,
 ) {
     for projection_name in ["gate_proj", "up_proj", "down_proj"] {
         assert_eq!(

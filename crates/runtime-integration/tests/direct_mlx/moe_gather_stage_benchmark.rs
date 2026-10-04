@@ -1,8 +1,9 @@
 use std::time::Instant;
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support::runtime;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const WARMUP_ITERATIONS: usize = 2;
 const MEASUREMENT_ITERATIONS: usize = 5;

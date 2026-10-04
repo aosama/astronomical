@@ -12,9 +12,10 @@
 //! runtime path without a GPU. Keep the pairs in step when either side changes: the runtime side
 //! is the one the artifact sees, the CPU side is the oracle.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21EngineError;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// The artifact's affine quantization: 4-bit values in groups of 64 input channels.
 pub(in crate::qwen_image_21) const QUANT_GROUP_SIZE: usize = 64;

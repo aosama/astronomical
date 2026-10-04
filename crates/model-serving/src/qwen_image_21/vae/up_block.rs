@@ -13,12 +13,13 @@
 //!    `(a, b)` is `(oc * factor + (factor_t - 1) * 4 + a * 2 + b) // repeats`. That mapping is
 //!    derived from the loaded channel counts at load time, not hardcoded.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::resnet::QwenImage21VaeResnetBlock;
 use super::tensor_shape::as_i32;
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Nearest-neighbor replication factor per spatial axis (`factor_s` in the reference).
 const SPATIAL_UPSAMPLE_FACTOR: usize = 2;

@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::InferenceEngineError;
 use crate::gpu_token_sampling::build_sampled_token;

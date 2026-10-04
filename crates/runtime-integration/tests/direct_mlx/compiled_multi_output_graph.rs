@@ -1,7 +1,6 @@
-use astronomical_mlx_c_rust::raw;
+use astronomical_mlx_c_rust::{MlxStream, raw};
 use astronomical_runtime_integration::{
-    MlxCompiledMultiOutputGraph, MlxStream, array_from_vector, graph_output_array,
-    set_graph_output_vector,
+    MlxCompiledMultiOutputGraph, array_from_vector, graph_output_array, set_graph_output_vector,
 };
 
 use crate::common::runtime_test_support::{assert_f32_close, runtime};

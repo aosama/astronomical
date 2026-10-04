@@ -1,5 +1,3 @@
-use astronomical_runtime_integration::{MlxArray, MlxDtype};
-
 use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRequestState;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
@@ -8,6 +6,7 @@ use crate::qwen3_5::model::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights, Qwen3_5FullAttentionWeights,
 };
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Evaluated Qwen MTP-head outputs for one or more draft positions.
 pub struct Qwen3_5MtpForwardOutput {

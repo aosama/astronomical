@@ -37,12 +37,12 @@ impl DecoderCacheTensorDtype {
     /// Returns the exact MLX execution dtype represented by this storage contract.
     #[cfg(feature = "direct-mlx")]
     #[must_use]
-    pub const fn mlx_dtype(self) -> astronomical_runtime_integration::MlxDtype {
+    pub const fn mlx_dtype(self) -> astronomical_mlx_c_rust::MlxDtype {
         match self {
-            Self::Float16 => astronomical_runtime_integration::MlxDtype::Float16,
-            Self::BFloat16 => astronomical_runtime_integration::MlxDtype::BFloat16,
-            Self::Float32 => astronomical_runtime_integration::MlxDtype::Float32,
-            Self::Int32 => astronomical_runtime_integration::MlxDtype::Int32,
+            Self::Float16 => astronomical_mlx_c_rust::MlxDtype::Float16,
+            Self::BFloat16 => astronomical_mlx_c_rust::MlxDtype::BFloat16,
+            Self::Float32 => astronomical_mlx_c_rust::MlxDtype::Float32,
+            Self::Int32 => astronomical_mlx_c_rust::MlxDtype::Int32,
         }
     }
 }

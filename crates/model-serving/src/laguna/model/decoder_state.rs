@@ -1,6 +1,6 @@
 //! Per-layer Laguna decoder cache: append-only full attention or rotating sliding.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::decoder_cache::{
     FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,
@@ -13,6 +13,7 @@ use crate::memory::rotating_prefill_transient_token_count;
 use crate::performance_attribution::PerformanceAttribution;
 
 use super::error::LagunaExecutionError;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[path = "decoder_cache_bridge.rs"]
 mod decoder_cache_bridge;

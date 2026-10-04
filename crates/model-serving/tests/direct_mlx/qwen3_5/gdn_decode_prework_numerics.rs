@@ -20,14 +20,13 @@ use std::time::Duration;
 use astronomical_model_serving::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
 };
-use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxDtype, MlxMemoryLimits, MlxRuntime,
-};
+use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const KEY_HEAD_COUNT: i32 = 16;
 const VALUE_HEAD_COUNT: i32 = 32;

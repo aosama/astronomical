@@ -1,7 +1,7 @@
 //! Dense GQA, MoVA attention, and dense/sparse FFN for one decoder layer.
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
+    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
 };
 
 use crate::PerformanceAttribution;
@@ -20,6 +20,7 @@ use super::weights::{
     K2HorizonMoVADenseAttentionWeights, K2HorizonMoVADenseMlpWeights, K2HorizonMoVALayerWeights,
     K2HorizonMoVAMoVAAttentionWeights, K2HorizonMoVASparseMlpWeights,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// One decoder layer's KV owner: full-precision or quantized slabs.
 pub enum K2HorizonMoVAKvState {

@@ -6,11 +6,12 @@
 //! forward against a quantized cache, so a multi-token prefill chunk must
 //! request the explicit causal mask here just as the fused kernel does.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAConfig;
 
 use super::error::K2HorizonMoVAExecutionError;
+use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) fn quantized_scaled_dot_product_attention(
     runtime: &MlxRuntime,

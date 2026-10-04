@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxDtype;
+use astronomical_mlx_c_rust::MlxDtype;
 
 use crate::direct_mlx::attention::grouped_query_reference::{
     AttentionGeometry, AttentionVisibility, assert_attention_matches_operations_reference,

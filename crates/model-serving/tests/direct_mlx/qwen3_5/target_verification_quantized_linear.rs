@@ -2,11 +2,12 @@ use astronomical_model_serving::{
     Qwen3_5TargetVerificationProjectionDispatch, four_row_split_k_quantized_linear_kernel,
     qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Clone, Copy)]
 struct ProjectionGeometry {
@@ -324,7 +325,11 @@ fn repeated_one_token_projection(
 fn float32_values(runtime: &MlxRuntime, projected_activations: &MlxArray, name: &str) -> Vec<f32> {
     runtime
         .astype(projected_activations, MlxDtype::Float32)
-        .and_then(|float32_activations| float32_activations.to_vec_f32())
+        .and_then(|float32_activations| {
+            float32_activations
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .unwrap_or_else(|projection_error| panic!("{name} should evaluate: {projection_error}"))
 }
 

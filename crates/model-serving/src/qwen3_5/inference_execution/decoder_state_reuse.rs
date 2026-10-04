@@ -13,7 +13,7 @@ use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,

@@ -9,7 +9,7 @@ use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensorsWriterError};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensorsWriterError};
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -17,6 +17,7 @@ use super::block_format::PersistentPromptCacheBlockHeader;
 use super::block_format_error::PersistentPromptCacheBlockError;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::model_contract::PersistentPromptCacheModelContract;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Clone, Copy)]
 pub(crate) enum PersistentPromptCacheFileKind {

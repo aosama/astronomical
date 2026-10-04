@@ -1,8 +1,8 @@
 use super::VerifyWindowInputReader;
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_ops as ops;
-use crate::{MlxArray, MlxStream};
-use astronomical_mlx_c_rust::raw;
+
+use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
 
 pub(super) fn trace_trunk_tail(
     gpu_stream: &MlxStream,

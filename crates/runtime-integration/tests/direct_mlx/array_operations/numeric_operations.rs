@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxDtype;
+use astronomical_mlx_c_rust::MlxDtype;
 
 use crate::common::runtime_test_support::{assert_f32_close, runtime};
 

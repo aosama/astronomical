@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::Qwen3_5ExecutionError;
 use super::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
@@ -13,6 +13,7 @@ use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const GATED_DELTA_STEP_OPERATION: &str = "apply one Qwen3.5 gated-delta recurrent step";
 

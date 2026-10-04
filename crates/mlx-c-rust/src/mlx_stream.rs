@@ -1,19 +1,19 @@
-use crate::MlxRuntimeError;
-use astronomical_mlx_c_rust::raw;
+use crate::MlxCError;
+use crate::raw;
 
 /// Owned MLX stream handle used to preserve runtime thread affinity.
 #[derive(Debug)]
 pub struct MlxStream(raw::mlx_stream);
 
 impl MlxStream {
-    pub fn default_cpu() -> Result<Self, MlxRuntimeError> {
+    pub fn default_cpu() -> Result<Self, MlxCError> {
         // SAFETY: The runtime error handler is installed and the returned
         // stream is placed immediately under RAII ownership.
         let raw_stream = unsafe { raw::mlx_default_cpu_stream_new() };
         Self::from_raw(raw_stream, "acquire the default MLX CPU stream")
     }
 
-    pub fn default_gpu() -> Result<Self, MlxRuntimeError> {
+    pub fn default_gpu() -> Result<Self, MlxCError> {
         // SAFETY: The runtime error handler is installed and the returned
         // stream is placed immediately under RAII ownership.
         let raw_stream = unsafe { raw::mlx_default_gpu_stream_new() };
@@ -24,12 +24,9 @@ impl MlxStream {
         self.0
     }
 
-    fn from_raw(
-        raw_stream: raw::mlx_stream,
-        operation: &'static str,
-    ) -> Result<Self, MlxRuntimeError> {
+    fn from_raw(raw_stream: raw::mlx_stream, operation: &'static str) -> Result<Self, MlxCError> {
         if raw_stream.ctx.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation,
                 description: "MLX returned an empty stream handle".to_owned(),
             });

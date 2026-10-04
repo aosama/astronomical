@@ -1,10 +1,7 @@
 //! NVFP4 construction and execution through the official MLX C API.
 
-use crate::{
-    MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_array_vector::MlxArrayVector,
-    mlx_runtime::check_status,
-};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
 
 const NVFP4_GROUP_SIZE: i32 = 16;
 const NVFP4_BITS: i32 = 4;

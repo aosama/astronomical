@@ -1,12 +1,11 @@
-use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxRuntime, MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxMetalKernel, MlxRuntime, MlxRuntimeError};
 
 use crate::PerformanceAttribution;
 use crate::sparse_experts::{
     restore_expert_assignment_order, sort_expert_assignments, sorted_expert_weighted_sum,
     sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const ROUTE_EXPERTS_OPERATION: &str = "route Qwen3.5-MoE sparse experts";
 const COMBINE_EXPERTS_OPERATION: &str = "combine Qwen3.5-MoE sparse and shared experts";

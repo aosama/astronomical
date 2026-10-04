@@ -4,7 +4,7 @@
 //! router, assignment sorting, affine profiles, SwiGLU graph, weighted sum, and
 //! shared-expert combination so resident and paged modes implement the same math.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};

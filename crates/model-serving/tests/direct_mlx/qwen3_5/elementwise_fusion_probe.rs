@@ -18,7 +18,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 const TOKEN_COUNT: i32 = 8_192;

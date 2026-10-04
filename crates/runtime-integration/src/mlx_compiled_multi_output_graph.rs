@@ -1,7 +1,8 @@
 use crate::{
-    MlxArray, MlxRuntime, MlxRuntimeError,
+    MlxRuntime, MlxRuntimeError,
     mlx_compiled_graph::{MlxCompiledGraph, MlxGraphBuilder},
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 const APPLY_COMPILED_MULTI_OUTPUT_GRAPH_OPERATION: &str = "apply a compiled multi-output MLX graph";
 

@@ -150,7 +150,7 @@ pub(super) fn restore_prompt_prefix(
     // then seat every layer with one concatenation per tensor; restored blocks
     // are disk-backed lazy handles, so the load holds no payload beside the
     // destination and the concat streams disk → destination in one pass.
-    let mut loaded_block_tensors: Vec<HashMap<String, astronomical_runtime_integration::MlxArray>> =
+    let mut loaded_block_tensors: Vec<HashMap<String, astronomical_mlx_c_rust::MlxArray>> =
         Vec::with_capacity(complete_block_count);
     let mut last_restored_block_key = None;
     for block_index in 0..complete_block_count {
@@ -208,7 +208,7 @@ pub(super) fn restore_prompt_prefix(
 fn restore_layers_from_blocks(
     runtime: &MlxRuntime,
     caches: &mut [K2HorizonMoVAKvState],
-    loaded_block_tensors: &[HashMap<String, astronomical_runtime_integration::MlxArray>],
+    loaded_block_tensors: &[HashMap<String, astronomical_mlx_c_rust::MlxArray>],
     restored_sequence_token_count: i32,
 ) -> Result<(), InferenceEngineError> {
     for (layer_index, layer_cache) in caches.iter_mut().enumerate() {
@@ -233,10 +233,10 @@ fn restore_layers_from_blocks(
 
 /// Gathers one layer's tensors across every loaded block in block order.
 fn block_tensors_by_role<'a>(
-    loaded_block_tensors: &'a [HashMap<String, astronomical_runtime_integration::MlxArray>],
+    loaded_block_tensors: &'a [HashMap<String, astronomical_mlx_c_rust::MlxArray>],
     layer_index: usize,
     tensor_role: &'static str,
-) -> Result<Vec<&'a astronomical_runtime_integration::MlxArray>, InferenceEngineError> {
+) -> Result<Vec<&'a astronomical_mlx_c_rust::MlxArray>, InferenceEngineError> {
     let tensor_name = format!("layer_{layer_index}_attention.{tensor_role}");
     loaded_block_tensors
         .iter()
@@ -354,7 +354,7 @@ fn extract_sequence_block_tensors(
     caches: &[K2HorizonMoVAKvState],
     block_start: usize,
     block_end: usize,
-) -> Result<HashMap<String, astronomical_runtime_integration::MlxArray>, InferenceEngineError> {
+) -> Result<HashMap<String, astronomical_mlx_c_rust::MlxArray>, InferenceEngineError> {
     let mut sequence_state_tensors = HashMap::new();
     for (layer_index, layer_cache) in caches.iter().enumerate() {
         match layer_cache {
@@ -414,10 +414,10 @@ fn extract_sequence_block_tensors(
 
 fn slice_token_range(
     runtime: &MlxRuntime,
-    tensor: &astronomical_runtime_integration::MlxArray,
+    tensor: &astronomical_mlx_c_rust::MlxArray,
     start_tokens: usize,
     end_tokens: usize,
-) -> Result<astronomical_runtime_integration::MlxArray, InferenceEngineError> {
+) -> Result<astronomical_mlx_c_rust::MlxArray, InferenceEngineError> {
     let shape = tensor.shape();
     if shape.len() != 4 {
         return Err(InferenceEngineError::Fatal {

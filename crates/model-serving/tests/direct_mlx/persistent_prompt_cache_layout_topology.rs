@@ -105,8 +105,8 @@ fn publish_complete_chain(
     runtime: &astronomical_runtime_integration::MlxRuntime,
     model_contract: &PersistentPromptCacheModelContract,
     complete_block_count: usize,
-    sequence_state_tensors: &HashMap<String, astronomical_runtime_integration::MlxArray>,
-    boundary_state_tensors: &HashMap<String, astronomical_runtime_integration::MlxArray>,
+    sequence_state_tensors: &HashMap<String, astronomical_mlx_c_rust::MlxArray>,
+    boundary_state_tensors: &HashMap<String, astronomical_mlx_c_rust::MlxArray>,
 ) {
     let mut parent_block_key: Option<PersistentPromptCacheBlockKey> = None;
     for block_index in 0..complete_block_count {

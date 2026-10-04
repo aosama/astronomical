@@ -3,11 +3,11 @@ use std::fs::FileTimes;
 use std::os::unix::fs::PermissionsExt;
 use std::time::{Duration, UNIX_EPOCH};
 
+use astronomical_mlx_c_rust::MlxDtype;
 use astronomical_model_serving::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     PersistentPromptCacheDiskStoreError, PersistentVisualEmbeddingKey,
 };
-use astronomical_runtime_integration::MlxDtype;
 
 use super::persistent_prompt_cache_disk_store_support::*;
 

@@ -9,7 +9,7 @@ mod engine_trait_impl;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
 use crate::k2_horizon_mova::model::K2HorizonMoVAModel;

@@ -11,10 +11,9 @@
 //! `[rotated new keys, new values]`.
 //!
 use astronomical_runtime_integration::{
-    MlxArray, VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
-    VerifyWindowFullAttentionWeightSlot, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
-    VerifyWindowInputSlot, VerifyWindowLayerWeightSlot, VerifyWindowTrunkWeightSlot,
-    verify_window_input_slots,
+    VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot, VerifyWindowFullAttentionWeightSlot,
+    VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry, VerifyWindowInputSlot,
+    VerifyWindowLayerWeightSlot, VerifyWindowTrunkWeightSlot, verify_window_input_slots,
 };
 
 use crate::qwen3_5::model::decoder_layer_weights::{
@@ -22,6 +21,7 @@ use crate::qwen3_5::model::decoder_layer_weights::{
 };
 
 use super::window_state_leaves::{WindowStateLeaves, WindowStateUpdate};
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Everything one apply needs beside the model's resident weights.
 pub(crate) struct VerifyWindowAttemptInputs<'a> {

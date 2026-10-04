@@ -7,7 +7,7 @@
 //! four-row split-K route changes reduction topology, so its documented
 //! contract is token-local argmax alignment.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,
@@ -16,6 +16,7 @@ use crate::qwen3_5::{
     Qwen3_5TargetVerificationProjectionDispatch, four_row_split_k_quantized_linear_kernel,
     qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 struct ProbeProjectionInputs {
     activations: MlxArray,
@@ -110,7 +111,11 @@ fn float32_values(
 ) -> Result<Vec<f32>, MlxRuntimeError> {
     runtime
         .astype(projected_activations, MlxDtype::Float32)
-        .and_then(|float32_activations| float32_activations.to_vec_f32())
+        .and_then(|float32_activations| {
+            float32_activations
+                .to_vec_f32()
+                .map_err(MlxRuntimeError::from)
+        })
 }
 
 pub struct TargetVerificationProjectionProbe<'runtime> {

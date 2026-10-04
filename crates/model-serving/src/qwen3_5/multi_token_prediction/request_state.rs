@@ -1,4 +1,4 @@
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use super::verified_emission_queue::{VerifiedEmissionQueue, VerifiedTargetFrontier};

@@ -1,6 +1,6 @@
 //! Loads Laguna weights by canonical tensor ID from retained shard descriptors.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::artifact_validation::ValidatedWeightsFile;
@@ -11,6 +11,7 @@ use crate::laguna::artifacts::{
 use crate::laguna::{
     LagunaExecutionError, LagunaFeedForwardDescriptor, LagunaTargetContract, LagunaTensorContract,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Loads bindable tensors keyed only by canonical IDs.
 pub(in crate::laguna) fn load_laguna_bindable_tensors(

@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::memory::{MtpDepthDowngradeReason, MtpDraftDepth};
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;

@@ -1,7 +1,7 @@
 //! Resident K2 Horizon MoVA forward pass.
 
 use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
+    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
 };
 
 use crate::PerformanceAttribution;
@@ -15,6 +15,7 @@ use super::error::K2HorizonMoVAExecutionError;
 use super::fused_expert_decode::FusedExpertDecodeKernels;
 use super::ops::grouped_rms_norm;
 use super::weights::K2HorizonMoVAWeights;
+use astronomical_mlx_c_rust::MlxArray;
 
 pub struct K2HorizonMoVAModel {
     pub runtime: MlxRuntime,

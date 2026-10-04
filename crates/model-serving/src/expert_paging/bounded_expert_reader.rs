@@ -27,11 +27,12 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use astronomical_runtime_integration::{MlxArray, PositionalFileReadMetrics};
+use astronomical_runtime_integration::PositionalFileReadMetrics;
 
 use super::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
 };
+use astronomical_mlx_c_rust::MlxArray;
 
 /// Loads only the validated tensor ranges described by one expert-page manifest.
 ///

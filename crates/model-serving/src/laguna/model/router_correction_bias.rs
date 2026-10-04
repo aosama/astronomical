@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::laguna::artifacts::{LagunaLayerTensorRole, LagunaTensorComponent, LagunaTensorId};
 

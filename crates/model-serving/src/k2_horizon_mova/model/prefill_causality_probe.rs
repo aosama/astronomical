@@ -13,8 +13,8 @@ use std::time::Duration;
 use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{ChatMessage, ChatToolChoice};
 use astronomical_runtime_integration::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxMemoryLimits,
-    MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
+    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime,
+    maximum_recommended_gpu_working_set_size_bytes,
 };
 
 use crate::PerformanceAttribution;
@@ -22,6 +22,7 @@ use crate::PerformanceAttribution;
 use super::K2HorizonMoVAKvState;
 use super::K2HorizonMoVAWeights;
 use super::model::K2HorizonMoVAModel;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -109,7 +110,11 @@ fn probe_body() {
 fn float32_logits(runtime: &MlxRuntime, logits: &MlxArray) -> Vec<f32> {
     runtime
         .astype(logits, MlxDtype::Float32)
-        .and_then(|float32_logits| float32_logits.to_vec_f32())
+        .and_then(|float32_logits| {
+            float32_logits
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("probe logits should read as float32 values")
 }
 

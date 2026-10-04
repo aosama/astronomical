@@ -1,6 +1,6 @@
 //! Multi-token prediction prompt-history initialization.
 
-use astronomical_runtime_integration::MlxArray;
+use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};

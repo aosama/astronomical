@@ -8,8 +8,8 @@ use std::{
     },
 };
 
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
 
 /// One MLX output tensor allocated by the Metal I/O expert-pack loader.
 #[derive(Clone, Debug)]

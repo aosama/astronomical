@@ -9,11 +9,12 @@ use astronomical_model_serving::{
     ExpertAssignmentOrder, PerformanceAttribution, StackedExpertProjection,
     gather_expert_projection,
 };
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
@@ -29,7 +30,11 @@ fn test_runtime() -> MlxRuntime {
 fn evaluated_float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32())
+        .and_then(|float32_array| {
+            float32_array
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("the gathered projection should evaluate as float32")
 }
 

@@ -2,10 +2,11 @@
 
 use astronomical_model_serving::ExpertPagingError;
 use astronomical_runtime_integration::{
-    MlxDtype, MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
+    MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
 };
 
 use crate::per_expert_pack::PerExpertPackHeader;
+use astronomical_mlx_c_rust::MlxDtype;
 
 /// Builds compact output tensors and one load range per tensor for a single expert file.
 pub fn build_per_expert_pack_metal_io_descriptors(

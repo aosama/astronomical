@@ -17,9 +17,10 @@
 //! contract this owner may rely on, and a finite sentinel keeps every later
 //! comparison exact.
 
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Selection geometry resolved from validated configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -4,12 +4,13 @@
 //! convolution, attend across the `H*W` positions of the (single) frame with one head, project
 //! back with a second 1×1 convolution, and add the identity.
 
-use astronomical_runtime_integration::{MlxArray, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::rms_norm::QwenImage21VaeRmsNorm;
 use super::tensor_shape::as_i32;
+use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct QwenImage21VaeAttentionBlock {

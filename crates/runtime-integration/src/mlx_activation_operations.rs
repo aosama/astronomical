@@ -6,8 +6,8 @@
 //! kernel selection, and BF16 rounding; do not replace their internals with Rust
 //! scalar math over copied device values.
 
-use crate::{MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::raw;
+use crate::{MlxRuntime, MlxRuntimeError};
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
 
 impl MlxRuntime {
     /// Applies numerically stable softplus through MLX `logaddexp(input, 0)`.

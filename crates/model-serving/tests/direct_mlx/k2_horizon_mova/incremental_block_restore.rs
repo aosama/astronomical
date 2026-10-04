@@ -7,11 +7,12 @@
 //! holds the restore peak at the destination plus the complete block set.
 
 use astronomical_model_serving::K2HorizonMoVAKvState;
-use astronomical_runtime_integration::{MlxArray, MlxDtype, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const BLOCK_TOKEN_COUNT: i32 = 128;
 const COMPLETE_BLOCK_COUNT: usize = 4;
@@ -105,7 +106,11 @@ fn peak_memory_bytes(runtime: &MlxRuntime) -> u64 {
 fn bf16_reference_vec(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float_array| float_array.to_vec_f32())
+        .and_then(|float_array| {
+            float_array
+                .to_vec_f32()
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
+        })
         .expect("the bfloat16 slab should read back as float32")
 }
 

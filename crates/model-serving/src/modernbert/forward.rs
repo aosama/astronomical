@@ -8,11 +8,10 @@
 //! is GELU. Pooling and normalization happen on the host after one evaluation.
 
 use astronomical_ipc_protocol::EmbeddingsFailureReason;
-use astronomical_runtime_integration::{
-    MlxArray, MlxDtype, MlxRuntime, MlxRuntimeError, MlxSafetensors,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 
 use crate::modernbert::configuration::ModernBertConfiguration;
+use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const QUANTIZED_WEIGHTS_TAIL: &str = ".weight";
 const QUANTIZED_SCALES_TAIL: &str = ".scales";
@@ -65,7 +64,9 @@ pub(super) fn embed_token_ids(
         }
         _ => width_limited,
     };
-    output_vector.to_vec_f32().map_err(runtime_failure)
+    output_vector
+        .to_vec_f32()
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn runtime_failure(runtime_error: MlxRuntimeError) -> EmbeddingsFailureReason {
