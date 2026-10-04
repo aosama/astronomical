@@ -34,7 +34,7 @@
 
 ## There are No Downstream Consumers or Dependencies
 
-- There are no downstream consumers or other dependant applications -- hence no need for deprication or compatibilty shims or any other techniques. Work in a fail forward fashion.
+- There are no downstream consumers or other dependant applications -- hence no need for deprication or compatibilty shims or any other techniques.
 
 ## Code File Length and Memory Measurement Units
 
