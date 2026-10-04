@@ -71,6 +71,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() {
     let journey = ThroughputJourney {
         journey_kind: ThroughputJourneyKind::Text,
+        mtp_draft_depth: None,
         warmup_input_prompt: format!(
             "{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"
         ),

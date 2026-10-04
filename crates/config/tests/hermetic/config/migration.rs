@@ -97,6 +97,40 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
 }
 
 #[test]
+fn should_migrate_legacy_mtp_enabled_true_to_a_v1_enabled_acceleration_policy() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    let model_root = temporary_home_directory.path().join("models");
+    let model_directory = model_root.join("target");
+    fs::create_dir_all(&model_directory).expect("model directory should be created");
+    super::super::model_discovery::write_minimal_model_config(
+        &model_directory,
+        "qwen3_5_moe",
+        65_536,
+    );
+    super::super::model_discovery::write_required_model_files(&model_directory);
+    let legacy_config_json = serde_json::json!({
+        "model_directories": [model_root],
+        "mtp_enabled": true,
+        "mtp_draft_depth": 3
+    })
+    .to_string();
+    write_config(temporary_home_directory.path(), &legacy_config_json);
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("a legacy config that enables MTP should migrate");
+    let model_config = astronomical_config
+        .resolved_model_config("target", 65_536)
+        .expect("the migrated MTP policy should resolve");
+
+    assert!(
+        model_config.mtp_enabled(),
+        "legacy mtp_enabled true must migrate to an enabled v1 MTP acceleration policy"
+    );
+    assert_eq!(model_config.mtp_draft_depth(), Some(3));
+}
+
+#[test]
 fn should_strip_retired_speculative_prefill_settings_while_migrating_legacy_config() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     let legacy_config_json = serde_json::json!({

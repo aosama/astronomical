@@ -53,30 +53,37 @@ impl MlxCompiledElementwiseGraphs {
             attention_output_gate: MlxCompiledGraph::new(
                 build_attention_output_gate_graph,
                 COMPILE_ATTENTION_OUTPUT_GATE_OPERATION,
+                true,
             )?,
             gated_delta_decay: MlxCompiledGraph::new(
                 build_gated_delta_decay_graph,
                 COMPILE_GATED_DELTA_DECAY_OPERATION,
+                true,
             )?,
             precise_swiglu: MlxCompiledGraph::new(
                 build_precise_swiglu_graph,
                 COMPILE_PRECISE_SWIGLU_OPERATION,
+                true,
             )?,
             sparse_shared_expert_combination: MlxCompiledGraph::new(
                 build_sparse_shared_expert_combination_graph,
                 COMPILE_SPARSE_SHARED_EXPERT_COMBINATION_OPERATION,
+                true,
             )?,
             fused_silu: MlxCompiledGraph::new(
                 build_fused_silu_graph,
                 COMPILE_FUSED_SILU_OPERATION,
+                true,
             )?,
             fused_softplus: MlxCompiledGraph::new(
                 build_fused_softplus_graph,
                 COMPILE_FUSED_SOFTPLUS_OPERATION,
+                true,
             )?,
             vision_rope: MlxCompiledGraph::new(
                 build_vision_rope_graph,
                 COMPILE_VISION_ROPE_OPERATION,
+                true,
             )?,
         })
     }

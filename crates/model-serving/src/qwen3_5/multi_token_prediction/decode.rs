@@ -244,13 +244,42 @@ fn attempt_greedy_prediction_proposal_and_verification(
     verifier_input_token_ids.extend_from_slice(&draft_token_ids);
     let verification_output = active_request.with_decoder_state_and_performance_attribution(
         |request_decoder_state, performance_attribution| {
-            forward_target_verification_window_with_performance_attribution(
-                model,
-                &verifier_input_token_ids,
-                target_verify_start_position_tokens,
-                request_decoder_state,
-                performance_attribution,
-            )
+            // The compiled window replays a fixed-shape trace of the whole
+            // verification trunk; any decline (unsupported artifact, missing
+            // state, capability refusal) falls back to the eager window.
+            let compiled_started = std::time::Instant::now();
+            let compiled_result =
+                super::target_verification::compiled_mtp_verification_window_with_performance_attribution(
+                    model,
+                    &verifier_input_token_ids,
+                    target_verify_start_position_tokens,
+                    request_decoder_state,
+                );
+            match compiled_result {
+                Ok(compiled_window) => {
+                    log_first_compiled_window_engagement(
+                        "applied",
+                        compiled_started.elapsed().as_secs_f32() * 1_000.0,
+                    );
+                    super::target_verification::complete_mtp_verification_window_with_performance_attribution(
+                        model,
+                        compiled_window,
+                        &verifier_input_token_ids,
+                        request_decoder_state,
+                        performance_attribution,
+                    )
+                }
+                Err(_) => {
+                    log_first_compiled_window_engagement("declined", 0.0);
+                    forward_target_verification_window_with_performance_attribution(
+                        model,
+                        &verifier_input_token_ids,
+                        target_verify_start_position_tokens,
+                        request_decoder_state,
+                        performance_attribution,
+                    )
+                }
+            }
         },
     );
     let mut verification_output = match verification_output {
@@ -453,4 +482,32 @@ pub(in crate::qwen3_5) fn restore_complete_attempt_state(
         .performance_attribution_mut()
         .record_counter(PerformanceCounter::MtpOperationalFallbackCount, 1);
     Ok(())
+}
+
+/// Logs the worker's first compiled-window engagement once, so every
+/// deployment's worker log records whether the compiled lane is live.
+pub(crate) fn log_first_compiled_window_engagement_for_tests(
+    status: &'static str,
+    elapsed_ms: f32,
+) {
+    log_first_compiled_window_engagement(status, elapsed_ms);
+}
+
+fn log_first_compiled_window_engagement(status: &'static str, elapsed_ms: f32) {
+    static LOGGED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    if LOGGED
+        .compare_exchange(
+            0,
+            1,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        )
+        .is_ok()
+    {
+        tracing::info!(
+            elapsed_ms = format_args!("{:.2}", elapsed_ms),
+            status,
+            "[mtp-compiled-window] first engagement"
+        );
+    }
 }

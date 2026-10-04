@@ -7,6 +7,8 @@
 
 use std::collections::HashMap;
 
+use astronomical_runtime_integration::MlxArray;
+
 use crate::qwen3_5::decoder::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
@@ -127,24 +129,20 @@ pub(in crate::qwen3_5) fn forward_mtp_verification_window_with_performance_attri
     })
 }
 
-pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_attribution(
+/// Completes target-token selection and boundary materialization for a window
+/// produced by either the eager or compiled forward.
+pub(in crate::qwen3_5) fn complete_mtp_verification_window_with_performance_attribution(
     model: &Qwen3_5Model,
+    verification_window: MtpVerificationWindow,
     token_ids: &[u32],
-    starting_position_tokens: u32,
-    request_decoder_state: &mut RequestDecoderStateStack,
+    request_decoder_state: &RequestDecoderStateStack,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<TargetVerificationOutput, Qwen3_5ExecutionError> {
     let MtpVerificationWindow {
         target_forward_output,
         boundary_collector,
         completed_verifier_prefix_rows,
-    } = forward_mtp_verification_window_with_performance_attribution(
-        model,
-        token_ids,
-        starting_position_tokens,
-        request_decoder_state,
-        performance_attribution,
-    )?;
+    } = verification_window;
     let all_position_logits =
         target_forward_output
             .all_position_logits()
@@ -174,5 +172,101 @@ pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_at
         target_forward_output,
         target_token_ids,
         prefix_boundaries,
+    })
+}
+
+impl crate::qwen3_5::model::Qwen3_5Model {
+    /// Test-facing eager verification window returning materialized float32
+    /// all-position logits — the A/B reference for the compiled lane.
+    #[doc(hidden)]
+    pub fn eager_verification_window_logits_for_tests(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        let verification_window = forward_mtp_verification_window_with_performance_attribution(
+            self,
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            &mut disabled_performance_attribution,
+        )?;
+        let all_position_logits = verification_window
+            .target_forward_output
+            .all_position_logits()
+            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "the eager verification window retained no all-position logits",
+            })?;
+        self.runtime()
+            .evaluate_arrays(&[all_position_logits])
+            .map_err(Qwen3_5ExecutionError::from)?;
+        Ok(all_position_logits
+            .retain()
+            .map_err(Qwen3_5ExecutionError::from)?)
+    }
+}
+
+pub(in crate::qwen3_5) fn forward_target_verification_window_with_performance_attribution(
+    model: &Qwen3_5Model,
+    token_ids: &[u32],
+    starting_position_tokens: u32,
+    request_decoder_state: &mut RequestDecoderStateStack,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<TargetVerificationOutput, Qwen3_5ExecutionError> {
+    let verification_window = forward_mtp_verification_window_with_performance_attribution(
+        model,
+        token_ids,
+        starting_position_tokens,
+        request_decoder_state,
+        performance_attribution,
+    )?;
+    complete_mtp_verification_window_with_performance_attribution(
+        model,
+        verification_window,
+        token_ids,
+        request_decoder_state,
+        performance_attribution,
+    )
+}
+
+/// Runs the compiled verification window and assembles the shared
+/// [`MtpVerificationWindow`] shape the sampled verifier consumes, declining
+/// with `Err` whenever the compiled lane does not fit.
+pub(in crate::qwen3_5) fn compiled_mtp_verification_window_with_performance_attribution(
+    model: &Qwen3_5Model,
+    token_ids: &[u32],
+    starting_position_tokens: u32,
+    request_decoder_state: &mut RequestDecoderStateStack,
+) -> Result<MtpVerificationWindow, Qwen3_5ExecutionError> {
+    if !(2..=4).contains(&token_ids.len()) {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "the compiled verification window requires two through four tokens",
+        });
+    }
+    let compiled_window = model
+        .run_compiled_verification_window(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+        )
+        .map_err(|description| Qwen3_5ExecutionError::InvalidDecoderCacheLayout { description })?;
+    let token_count =
+        i32::try_from(token_ids.len()).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            description: "the verification window exceeds the Int32 row range",
+        })?;
+    let target_forward_output = Qwen3_5TargetForwardOutput::from_all_position_logits(
+        model.runtime(),
+        compiled_window.all_position_logits,
+        compiled_window.pre_final_normalization_hidden_states,
+        token_count,
+        model.config().vocabulary_size() as i32,
+    )
+    .map_err(Qwen3_5ExecutionError::from)?;
+    Ok(MtpVerificationWindow {
+        target_forward_output,
+        boundary_collector: compiled_window.boundary_collector,
+        completed_verifier_prefix_rows: (1..token_count).collect(),
     })
 }
