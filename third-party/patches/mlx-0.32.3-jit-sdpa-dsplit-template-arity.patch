@@ -1,0 +1,52 @@
+diff --git a/mlx/backend/metal/jit_kernels.cpp b/mlx/backend/metal/jit_kernels.cpp
+index d2ce55b..e79381c 100644
+--- a/mlx/backend/metal/jit_kernels.cpp
++++ b/mlx/backend/metal/jit_kernels.cpp
+@@ -1393,21 +1393,36 @@ MTL::ComputePipelineState* get_steel_attention_nax_kernel(
+   const auto& lib_name = kernel_name;
+   auto lib = d.get_library(lib_name, [&]() {
+     std::string kernel_source;
++    // attention_nax_dsplit takes no BV template parameter because it splits
++    // the head dimension across WN groups; forwarding bv shifts every later
++    // template argument by one and the generated Metal source fails to
++    // compile, so the dsplit instantiation omits it.
+     concatenate(
+         kernel_source,
+         metal::utils(),
+         metal::steel_attention_nax(),
+-        get_template_definition(
+-            lib_name,
+-            split_d ? "attention_nax_dsplit" : "attention_nax",
+-            get_type_string(q.dtype()),
+-            bq,
+-            bk,
+-            bd,
+-            bv,
+-            wm,
+-            wn,
+-            get_type_string(m.dtype())));
++        split_d
++            ? get_template_definition(
++                  lib_name,
++                  "attention_nax_dsplit",
++                  get_type_string(q.dtype()),
++                  bq,
++                  bk,
++                  bd,
++                  wm,
++                  wn,
++                  get_type_string(m.dtype()))
++            : get_template_definition(
++                  lib_name,
++                  "attention_nax",
++                  get_type_string(q.dtype()),
++                  bq,
++                  bk,
++                  bd,
++                  bv,
++                  wm,
++                  wn,
++                  get_type_string(m.dtype())));
+     return kernel_source;
+   });
+   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
