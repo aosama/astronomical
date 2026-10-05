@@ -32,10 +32,10 @@ readonly DIRECT_MLX_TIMEOUT_SECONDS=600
 # contracts run in a web view, so it needs the compilation timeout class rather
 # than the 120-second test bound.
 readonly THIN_TALK_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=23
+readonly TOTAL_STEP_COUNT=24
 readonly REPOSITORY_CONTRACT_STEP_COUNT=13
 readonly SWIFT_NODE_CONTRACT_STEP_COUNT=5
-readonly CARGO_CORE_STEP_COUNT=5
+readonly CARGO_CORE_STEP_COUNT=6
 readonly PHASE_PROGRESS_INTERVAL_SECONDS=2
 readonly FAILED_PHASE_LOG_TAIL_LINES=40
 # Grace window for phase process groups to exit after a termination signal
@@ -218,12 +218,22 @@ phase_cargo_core() {
     # verification contract pins that ordering, and the direct-MLX lane may only
     # start once the shared graph has compiled so a compile failure stops the
     # journey before the lane burns its disposable-target build.
-    # The native CMake build runs alone before any Rust compilation so the
+    # The native CMake builds run alone before any Rust compilation so the
     # two never compete for cores; every later Cargo step reuses the store.
+    # The memory-contract profile is warmed here too because its store entry
+    # carries the probe binary that the feature-gated lane gate compiles
+    # against, and CMake must never overlap the Rust compile steps.
     run_step prewarm-native-build "$COMPILE_TIMEOUT_SECONDS" \
-        scripts/prewarm-native-build.sh --profile core || return $?
+        scripts/prewarm-native-build.sh --profile core --profile core+memory-contract || return $?
     run_step compile-rust "$COMPILE_TIMEOUT_SECONDS" cargo verify-commit-rust \
         --timings --no-run --jobs "$logical_cpu_count" || return $?
+    # The memory-contract lane is feature-gated off every routine graph, so an
+    # API move under its test binary used to ship silently; this compile-only
+    # gate recompiles that feature world while the store is warm. The lane's
+    # GPU journeys stay behind #[ignore] and run through
+    # scripts/test-mlx-memory-contracts.sh, one process per limit profile.
+    run_step compile-memory-contract-lane "$COMPILE_TIMEOUT_SECONDS" \
+        scripts/compile-mlx-memory-contract-lane.sh || return $?
     # Hosted CI cannot execute the direct-MLX lane; the 2026-08-26 Laguna
     # residency regression proved behavioral breaks ship silently without it.
     # The lane owns a disposable target separate from the shared graph, so it
