@@ -1,0 +1,582 @@
+use std::os::raw::c_int;
+
+use crate::MlxBindingsContext;
+use crate::compile::attention_output_gate::build_attention_output_gate_graph;
+use crate::compile::sparse_shared_expert_combination::build_sparse_shared_expert_combination_graph;
+use crate::compile::vision_rope::build_vision_rope_graph;
+use crate::{MlxArray, MlxStream, raw};
+use crate::{
+    MlxCError,
+    compile::graph::{MlxCompiledGraph, array_from_vector, graph_output_array, set_graph_output},
+};
+
+const APPLY_ATTENTION_OUTPUT_GATE_OPERATION: &str = "apply the compiled MLX attention output gate";
+const COMPILE_ATTENTION_OUTPUT_GATE_OPERATION: &str =
+    "compile the shapeless MLX attention output gate";
+const APPLY_SPARSE_SHARED_EXPERT_COMBINATION_OPERATION: &str =
+    "apply the compiled MLX sparse and shared expert combination";
+const COMPILE_SPARSE_SHARED_EXPERT_COMBINATION_OPERATION: &str =
+    "compile the shapeless MLX sparse and shared expert combination";
+const APPLY_PRECISE_SWIGLU_OPERATION: &str = "apply the compiled precise MLX SwiGLU graph";
+const COMPILE_PRECISE_SWIGLU_OPERATION: &str = "compile the shapeless precise MLX SwiGLU graph";
+const APPLY_GATED_DELTA_DECAY_OPERATION: &str =
+    "apply the compiled MLX gated-delta decay arithmetic";
+const COMPILE_GATED_DELTA_DECAY_OPERATION: &str =
+    "compile the shapeless MLX gated-delta decay arithmetic";
+const APPLY_FUSED_SILU_OPERATION: &str = "apply the compiled MLX fused SiLU graph";
+const COMPILE_FUSED_SILU_OPERATION: &str = "compile the shapeless MLX fused SiLU graph";
+const APPLY_FUSED_SOFTPLUS_OPERATION: &str = "apply the compiled MLX fused K2 softplus graph";
+const COMPILE_FUSED_SOFTPLUS_OPERATION: &str = "compile the shapeless MLX fused K2 softplus graph";
+const APPLY_VISION_ROPE_OPERATION: &str =
+    "apply the compiled MLX vision rotate-half rotary embedding";
+const COMPILE_VISION_ROPE_OPERATION: &str =
+    "compile the shapeless MLX vision rotate-half rotary embedding";
+
+/// Retained shapeless compilations for elementwise model graph composites.
+#[derive(Debug)]
+pub struct MlxCompiledElementwiseGraphs {
+    attention_output_gate: MlxCompiledGraph,
+    gated_delta_decay: MlxCompiledGraph,
+    precise_swiglu: MlxCompiledGraph,
+    sparse_shared_expert_combination: MlxCompiledGraph,
+    fused_silu: MlxCompiledGraph,
+    fused_softplus: MlxCompiledGraph,
+    vision_rope: MlxCompiledGraph,
+}
+
+impl MlxCompiledElementwiseGraphs {
+    /// Creates reusable compiled graphs for elementwise model composites.
+    pub fn new() -> Result<Self, MlxCError> {
+        Ok(Self {
+            attention_output_gate: MlxCompiledGraph::new(
+                build_attention_output_gate_graph,
+                COMPILE_ATTENTION_OUTPUT_GATE_OPERATION,
+                true,
+            )?,
+            gated_delta_decay: MlxCompiledGraph::new(
+                build_gated_delta_decay_graph,
+                COMPILE_GATED_DELTA_DECAY_OPERATION,
+                true,
+            )?,
+            precise_swiglu: MlxCompiledGraph::new(
+                build_precise_swiglu_graph,
+                COMPILE_PRECISE_SWIGLU_OPERATION,
+                true,
+            )?,
+            sparse_shared_expert_combination: MlxCompiledGraph::new(
+                build_sparse_shared_expert_combination_graph,
+                COMPILE_SPARSE_SHARED_EXPERT_COMBINATION_OPERATION,
+                true,
+            )?,
+            fused_silu: MlxCompiledGraph::new(
+                build_fused_silu_graph,
+                COMPILE_FUSED_SILU_OPERATION,
+                true,
+            )?,
+            fused_softplus: MlxCompiledGraph::new(
+                build_fused_softplus_graph,
+                COMPILE_FUSED_SOFTPLUS_OPERATION,
+                true,
+            )?,
+            vision_rope: MlxCompiledGraph::new(
+                build_vision_rope_graph,
+                COMPILE_VISION_ROPE_OPERATION,
+                true,
+            )?,
+        })
+    }
+}
+
+impl MlxBindingsContext {
+    /// Applies `attention_output * sigmoid(output_gate_logits)` as one compiled composite.
+    pub fn apply_compiled_attention_output_gate(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        attention_output: &MlxArray,
+        output_gate_logits: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs.attention_output_gate.apply(
+            &[attention_output, output_gate_logits],
+            APPLY_ATTENTION_OUTPUT_GATE_OPERATION,
+        )
+    }
+
+    /// Applies `sparse + shared * sigmoid(shared_gate_logits)` as one compiled composite.
+    pub fn apply_compiled_sparse_shared_expert_combination(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        sparse_expert_output: &MlxArray,
+        shared_expert_output: &MlxArray,
+        shared_expert_gate_logits: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs
+            .sparse_shared_expert_combination
+            .apply(
+                &[
+                    sparse_expert_output,
+                    shared_expert_output,
+                    shared_expert_gate_logits,
+                ],
+                APPLY_SPARSE_SHARED_EXPERT_COMBINATION_OPERATION,
+            )
+    }
+
+    /// Applies float32 SwiGLU arithmetic and restores the input activation dtype.
+    pub fn apply_compiled_precise_swiglu(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        up_states: &MlxArray,
+        gate_states: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs
+            .precise_swiglu
+            .apply(&[up_states, gate_states], APPLY_PRECISE_SWIGLU_OPERATION)
+    }
+
+    /// Applies the complete float32 gated-delta decay formula as one compiled composite.
+    pub fn apply_compiled_gated_delta_decay(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        decay_rate_logarithm: &MlxArray,
+        decay_interval_inputs: &MlxArray,
+        decay_interval_bias: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs.gated_delta_decay.apply(
+            &[
+                decay_rate_logarithm,
+                decay_interval_inputs,
+                decay_interval_bias,
+            ],
+            APPLY_GATED_DELTA_DECAY_OPERATION,
+        )
+    }
+
+    /// Applies `input * sigmoid(input)` as one compiled composite.
+    ///
+    /// Stock MLX defines `nn.silu` as a shapeless `mx.compile`, which fuses the
+    /// sigmoid and the multiply into one kernel reading the input once. The raw
+    /// two-op composition runs two kernels and roughly 2.5x the memory traffic,
+    /// which the gated-delta convolution path paid on every layer of every
+    /// prefill chunk and decode step.
+    pub fn apply_compiled_silu(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        input: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs
+            .fused_silu
+            .apply(&[input], APPLY_FUSED_SILU_OPERATION)
+    }
+
+    /// Applies the K2 Horizon MoVA softplus gate as one compiled composite.
+    ///
+    /// The gate formula is `log1p(exp(input * ln2)) / ln2` — the reference
+    /// implementation's beta-scaled softplus, which is NOT the standard
+    /// `logaddexp(input, 0)` softplus and must not be "simplified" to it.
+    /// Compiling collapses the four hand-composed dispatches into one launch
+    /// without changing the arithmetic.
+    pub fn apply_compiled_softplus(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        input: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs
+            .fused_softplus
+            .apply(&[input], APPLY_FUSED_SOFTPLUS_OPERATION)
+    }
+
+    /// Applies Qwen3-VL rotate-half rotary embedding as one compiled composite.
+    ///
+    /// `first_half` and `second_half` are the pre-sliced head halves of
+    /// `attention_states` (the last axis split at `head_dim / 2`); the head-half
+    /// slices stay outside the compiled graph because the pinned MLX `Slice`
+    /// primitive cannot be shapeless-compiled. The remaining composite fuses the
+    /// elementwise tail into one kernel and keeps the rotate-half concat as one
+    /// shape kernel, replacing the eight separate dispatches.
+    pub fn apply_compiled_vision_rope(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        attention_states: &MlxArray,
+        rotary_cosines: &MlxArray,
+        rotary_sines: &MlxArray,
+        first_half: &MlxArray,
+        second_half: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs.vision_rope.apply(
+            &[
+                attention_states,
+                rotary_cosines,
+                rotary_sines,
+                first_half,
+                second_half,
+            ],
+            APPLY_VISION_ROPE_OPERATION,
+        )
+    }
+}
+
+unsafe extern "C" fn build_precise_swiglu_graph(
+    output_vector: *mut raw::mlx_vector_array,
+    input_vector: raw::mlx_vector_array,
+) -> c_int {
+    if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 2 {
+        return 1;
+    }
+    let up_states = match array_from_vector(input_vector, 0) {
+        Ok(up_states) => up_states,
+        Err(get_status) => return get_status,
+    };
+    let gate_states = match array_from_vector(input_vector, 1) {
+        Ok(gate_states) => gate_states,
+        Err(get_status) => return get_status,
+    };
+    let gpu_stream = match MlxStream::default_gpu() {
+        Ok(gpu_stream) => gpu_stream,
+        Err(_) => return 1,
+    };
+    let output_dtype = unsafe { raw::mlx_array_dtype(up_states.raw()) };
+    let float32_gate = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                gate_states.raw(),
+                raw::mlx_dtype__MLX_FLOAT32,
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(float32_gate) => float32_gate,
+        Err(build_status) => return build_status,
+    };
+    let gate_weights = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_sigmoid(output_array, float32_gate.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(gate_weights) => gate_weights,
+        Err(build_status) => return build_status,
+    };
+    let activated_gate = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                float32_gate.raw(),
+                gate_weights.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(activated_gate) => activated_gate,
+        Err(build_status) => return build_status,
+    };
+    let float32_up = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                up_states.raw(),
+                raw::mlx_dtype__MLX_FLOAT32,
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(float32_up) => float32_up,
+        Err(build_status) => return build_status,
+    };
+    let float32_activated_states = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                activated_gate.raw(),
+                float32_up.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(float32_activated_states) => float32_activated_states,
+        Err(build_status) => return build_status,
+    };
+    let activated_states = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                float32_activated_states.raw(),
+                output_dtype,
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(activated_states) => activated_states,
+        Err(build_status) => return build_status,
+    };
+    // SAFETY: The output vector is unique and live for this callback.
+    unsafe { set_graph_output(output_vector, &activated_states) }
+}
+
+unsafe extern "C" fn build_gated_delta_decay_graph(
+    output_vector: *mut raw::mlx_vector_array,
+    input_vector: raw::mlx_vector_array,
+) -> c_int {
+    if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 3 {
+        return 1;
+    }
+    let decay_rate_logarithm = match array_from_vector(input_vector, 0) {
+        Ok(decay_rate_logarithm) => decay_rate_logarithm,
+        Err(get_status) => return get_status,
+    };
+    let decay_interval_inputs = match array_from_vector(input_vector, 1) {
+        Ok(decay_interval_inputs) => decay_interval_inputs,
+        Err(get_status) => return get_status,
+    };
+    let decay_interval_bias = match array_from_vector(input_vector, 2) {
+        Ok(decay_interval_bias) => decay_interval_bias,
+        Err(get_status) => return get_status,
+    };
+    let gpu_stream = match MlxStream::default_gpu() {
+        Ok(gpu_stream) => gpu_stream,
+        Err(_) => return 1,
+    };
+    let biased_decay_intervals = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_add(
+                output_array,
+                decay_interval_inputs.raw(),
+                decay_interval_bias.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(biased_decay_intervals) => biased_decay_intervals,
+        Err(build_status) => return build_status,
+    };
+    // Stable softplus through MLX logaddexp(x, 0).
+    // The naive log1p(exp(x)) overflows to infinity for large positive decay
+    // intervals, corrupting the gated-delta recurrent state during long-context
+    // prefill. This matches MLX's nn.softplus, which delegates to logaddexp(x, 0).
+    let biased_dtype = biased_decay_intervals.dtype();
+    let scalar_shape_storage = [1_i32];
+    let zero_decay_interval_scalar = match graph_output_array(|output_array| {
+        // SAFETY: The shape pointer references live storage but the zero rank
+        // means MLX reads no dimensions. Dtype and stream are valid, and the
+        // output is uniquely writable. Broadcasting this scalar keeps the
+        // compiled graph shapeless across variable token counts.
+        unsafe {
+            raw::mlx_zeros(
+                output_array,
+                scalar_shape_storage.as_ptr(),
+                0,
+                biased_dtype.to_raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(zero_decay_interval_scalar) => zero_decay_interval_scalar,
+        Err(build_status) => return build_status,
+    };
+    let decay_intervals = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_logaddexp(
+                output_array,
+                biased_decay_intervals.raw(),
+                zero_decay_interval_scalar.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(decay_intervals) => decay_intervals,
+        Err(build_status) => return build_status,
+    };
+    let float32_decay_logs = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                decay_rate_logarithm.raw(),
+                raw::mlx_dtype__MLX_FLOAT32,
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(float32_decay_logs) => float32_decay_logs,
+        Err(build_status) => return build_status,
+    };
+    let decay_rates = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_exp(output_array, float32_decay_logs.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(decay_rates) => decay_rates,
+        Err(build_status) => return build_status,
+    };
+    let decay_products = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                decay_rates.raw(),
+                decay_intervals.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(decay_products) => decay_products,
+        Err(build_status) => return build_status,
+    };
+    let negative_decay_products = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_negative(output_array, decay_products.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(negative_decay_products) => negative_decay_products,
+        Err(build_status) => return build_status,
+    };
+    let decays = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_exp(
+                output_array,
+                negative_decay_products.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(decays) => decays,
+        Err(build_status) => return build_status,
+    };
+    // SAFETY: The output vector is unique and live for this callback.
+    unsafe { set_graph_output(output_vector, &decays) }
+}
+
+unsafe extern "C" fn build_fused_silu_graph(
+    output_vector: *mut raw::mlx_vector_array,
+    input_vector: raw::mlx_vector_array,
+) -> c_int {
+    if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 1 {
+        return 1;
+    }
+    let input = match array_from_vector(input_vector, 0) {
+        Ok(input) => input,
+        Err(get_status) => return get_status,
+    };
+    let gpu_stream = match MlxStream::default_gpu() {
+        Ok(gpu_stream) => gpu_stream,
+        Err(_) => return 1,
+    };
+    let sigmoid_input = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_sigmoid(output_array, input.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(sigmoid_input) => sigmoid_input,
+        Err(build_status) => return build_status,
+    };
+    let silu_output = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                input.raw(),
+                sigmoid_input.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(silu_output) => silu_output,
+        Err(build_status) => return build_status,
+    };
+    // SAFETY: The output vector is unique and live for this callback.
+    unsafe { set_graph_output(output_vector, &silu_output) }
+}
+
+unsafe extern "C" fn build_fused_softplus_graph(
+    output_vector: *mut raw::mlx_vector_array,
+    input_vector: raw::mlx_vector_array,
+) -> c_int {
+    if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 1 {
+        return 1;
+    }
+    let input = match array_from_vector(input_vector, 0) {
+        Ok(input) => input,
+        Err(get_status) => return get_status,
+    };
+    let gpu_stream = match MlxStream::default_gpu() {
+        Ok(gpu_stream) => gpu_stream,
+        Err(_) => return 1,
+    };
+    let ln2 = std::f32::consts::LN_2;
+    let ln2_scalar = match MlxArray::from_f32(&[ln2], &[]) {
+        Ok(ln2_scalar) => ln2_scalar,
+        Err(_) => return 1,
+    };
+    let typed_ln2 = match graph_output_array(|output_array| {
+        // SAFETY: The scalar and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                ln2_scalar.raw(),
+                raw::mlx_array_dtype(input.raw()),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(typed_ln2) => typed_ln2,
+        Err(build_status) => return build_status,
+    };
+    let scaled_input = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_multiply(output_array, input.raw(), typed_ln2.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(scaled_input) => scaled_input,
+        Err(build_status) => return build_status,
+    };
+    let exponent = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_exp(output_array, scaled_input.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(exponent) => exponent,
+        Err(build_status) => return build_status,
+    };
+    let logarithm = match graph_output_array(|output_array| {
+        // SAFETY: The input and stream are live, and the output is uniquely writable.
+        unsafe { raw::mlx_log1p(output_array, exponent.raw(), gpu_stream.raw()) }
+    }) {
+        Ok(logarithm) => logarithm,
+        Err(build_status) => return build_status,
+    };
+    let inverse_ln2_scalar = match MlxArray::from_f32(&[1.0 / ln2], &[]) {
+        Ok(inverse_ln2_scalar) => inverse_ln2_scalar,
+        Err(_) => return 1,
+    };
+    let typed_inverse_ln2 = match graph_output_array(|output_array| {
+        // SAFETY: The scalar and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_astype(
+                output_array,
+                inverse_ln2_scalar.raw(),
+                raw::mlx_array_dtype(input.raw()),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(typed_inverse_ln2) => typed_inverse_ln2,
+        Err(build_status) => return build_status,
+    };
+    let softplus_output = match graph_output_array(|output_array| {
+        // SAFETY: Inputs and stream are live, and the output is uniquely writable.
+        unsafe {
+            raw::mlx_multiply(
+                output_array,
+                logarithm.raw(),
+                typed_inverse_ln2.raw(),
+                gpu_stream.raw(),
+            )
+        }
+    }) {
+        Ok(softplus_output) => softplus_output,
+        Err(build_status) => return build_status,
+    };
+    // SAFETY: The output vector is unique and live for this callback.
+    unsafe { set_graph_output(output_vector, &softplus_output) }
+}
