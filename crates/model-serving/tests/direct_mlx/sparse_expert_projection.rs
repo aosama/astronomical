@@ -48,11 +48,7 @@ fn values_as_float32(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     // in f32. This cast is test-only and occurs after the operation under test.
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| {
-            float32_array
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|float32_array| float32_array.to_vec_f32())
         .expect("the operation result should evaluate as float32")
 }
 

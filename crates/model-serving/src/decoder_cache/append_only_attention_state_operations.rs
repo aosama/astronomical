@@ -75,13 +75,13 @@ pub(super) fn build_updated_storage(
     let mut update_stops = state_update_shape;
     update_stops[STATE_DIMENSION_TOKEN_AXIS] = next_token_count;
     let update_strides = vec![1; update_starts.len()];
-    runtime.slice_update(
+    Ok(runtime.slice_update(
         state_storage,
         state_update,
         &update_starts,
         &update_stops,
         &update_strides,
-    )
+    )?)
 }
 
 pub(super) fn projected_capacity_tokens(
@@ -129,12 +129,12 @@ pub(super) fn active_view(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let mut active_state_stops = updated_state.shape();
     active_state_stops[STATE_DIMENSION_TOKEN_AXIS] = active_token_count;
-    runtime.slice(
+    Ok(runtime.slice(
         updated_state,
         &[0, 0, 0, 0],
         &active_state_stops,
         &[1, 1, 1, 1],
-    )
+    )?)
 }
 
 pub(super) fn full_attention_error(description: &'static str) -> MlxRuntimeError {

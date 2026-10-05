@@ -263,11 +263,7 @@ fn assert_arrays_close(
         runtime
             .astype(array, MlxDtype::Float32)
             .and_then(|array| runtime.build_contiguous_row_major_copy(&array))
-            .and_then(|array| {
-                array
-                    .to_vec_f32()
-                    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-            })
+            .and_then(|array| array.to_vec_f32())
             .expect("reference comparison should evaluate")
     };
     let actual_values = evaluated_float32_values(actual);

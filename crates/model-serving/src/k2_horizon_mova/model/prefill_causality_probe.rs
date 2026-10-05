@@ -110,11 +110,7 @@ fn probe_body() {
 fn float32_logits(runtime: &MlxRuntime, logits: &MlxArray) -> Vec<f32> {
     runtime
         .astype(logits, MlxDtype::Float32)
-        .and_then(|float32_logits| {
-            float32_logits
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|float32_logits| float32_logits.to_vec_f32())
         .expect("probe logits should read as float32 values")
 }
 

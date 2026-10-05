@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
@@ -77,7 +77,7 @@ pub fn assert_bfloat16_arrays_match(
 pub fn stable_softplus_reference(
     runtime: &MlxRuntime,
     input: &MlxArray,
-) -> Result<MlxArray, MlxRuntimeError> {
+) -> Result<MlxArray, astronomical_mlx_c_rust::MlxCError> {
     let zero_values = runtime.zeros(&input.shape(), input.dtype())?;
     let nonnegative_mask = runtime.greater_equal(input, &zero_values)?;
     let positive_part = runtime.where_select(&nonnegative_mask, input, &zero_values)?;

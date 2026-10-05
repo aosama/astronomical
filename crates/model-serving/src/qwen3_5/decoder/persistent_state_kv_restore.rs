@@ -64,7 +64,7 @@ impl RequestDecoderStateStack {
                             PersistentPromptCacheStateBridgeError::ConcatenateRestoreDestination {
                                 layer_index,
                                 tensor_name: keys_tensor_name.clone(),
-                                source,
+                                source: source.into(),
                             }
                         })?;
                     let full_values = runtime
@@ -73,7 +73,7 @@ impl RequestDecoderStateStack {
                             PersistentPromptCacheStateBridgeError::ConcatenateRestoreDestination {
                                 layer_index,
                                 tensor_name: values_tensor_name,
-                                source,
+                                source: source.into(),
                             }
                         })?;
                     validate_concatenated_token_count(
@@ -190,5 +190,9 @@ fn materialize_restored_full_attention_tensors(
     }
     runtime
         .evaluate_arrays(&restored_tensors)
-        .map_err(PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState)
+        .map_err(|captured_error| {
+            PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState(
+                astronomical_runtime_integration::MlxRuntimeError::from(captured_error),
+            )
+        })
 }

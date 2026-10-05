@@ -1,15 +1,16 @@
 //! Validated normalization wrappers over MLX's fused kernels.
 
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies fused LayerNorm without affine weight or bias arrays.
     pub fn layer_norm_without_weight_and_bias(
         &self,
         input: &MlxArray,
         epsilon: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "apply non-affine MLX LayerNorm";
         if input.shape().is_empty()
             || !matches!(
@@ -19,7 +20,7 @@ impl MlxRuntime {
             || !epsilon.is_finite()
             || epsilon < 0.0
         {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description:
                     "input must be a non-scalar floating array and epsilon must be finite and nonnegative"

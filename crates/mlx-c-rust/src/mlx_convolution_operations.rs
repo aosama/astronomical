@@ -6,10 +6,11 @@
 //! Weights begin with output channels and end with input channels per group.
 //! These layouts differ from PyTorch.
 
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies MLX one-dimensional convolution over `[batch, length, channels]` inputs.
     pub fn conv1d(
         &self,
@@ -19,7 +20,7 @@ impl MlxRuntime {
         padding: i32,
         dilation: i32,
         groups: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_convolution_arguments(input, weight, &[stride], &[padding], &[dilation], groups)?;
         self.output_array("apply MLX conv1d", |output, stream| {
             // SAFETY: Arrays and stream are live and validated scalar arguments
@@ -48,7 +49,7 @@ impl MlxRuntime {
         paddings: [i32; 2],
         dilations: [i32; 2],
         groups: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_convolution_arguments(input, weight, &strides, &paddings, &dilations, groups)?;
         self.output_array("apply MLX conv2d", |output, stream| {
             // SAFETY: Arrays and stream are live and all convolution geometry
@@ -84,7 +85,7 @@ impl MlxRuntime {
         paddings: [i32; 3],
         dilations: [i32; 3],
         groups: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_convolution_arguments(input, weight, &strides, &paddings, &dilations, groups)?;
         self.output_array("apply MLX conv3d", |output, stream| {
             // SAFETY: Arrays and stream are live and validated scalar arguments
@@ -118,7 +119,7 @@ fn validate_convolution_arguments(
     paddings: &[i32],
     dilations: &[i32],
     groups: i32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "apply MLX convolution";
     // MLX convolution rank is batch + spatial axes + channel. Validate this at
     // the safe Rust boundary rather than relying on a C++ exception/status later.
@@ -184,8 +185,8 @@ fn validate_convolution_arguments(
     Ok(())
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

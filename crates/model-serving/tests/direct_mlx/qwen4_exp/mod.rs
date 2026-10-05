@@ -91,5 +91,5 @@ pub(crate) fn f32_array(
     values: &[f32],
     shape: &[i32],
 ) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
-    runtime.array_from_f32(values, shape)
+    Ok(runtime.array_from_f32(values, shape)?)
 }

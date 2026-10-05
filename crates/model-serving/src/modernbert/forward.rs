@@ -34,7 +34,7 @@ pub(super) fn embed_token_ids(
                 .collect::<Vec<_>>(),
             &[1, sequence_length as i32],
         )
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let hidden_states = embedding_layer_norm(runtime, tensors, configuration, &token_id_array)?;
     let final_states = encode_all_layers(
         runtime,
@@ -163,7 +163,7 @@ fn encode_one_layer(
         )?;
         runtime
             .add(&layer_states, &attention_output)
-            .map_err(runtime_failure)?
+            .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?
     } else {
         let normalized = layer_norm(
             runtime,
@@ -184,7 +184,7 @@ fn encode_one_layer(
         )?;
         runtime
             .add(&layer_states, &attention_output)
-            .map_err(runtime_failure)?
+            .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?
     };
     let mlp_normalized = layer_norm(
         runtime,
@@ -202,7 +202,7 @@ fn encode_one_layer(
     )?;
     runtime
         .add(&residual_states, &mlp_output)
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn encode_attention(
@@ -236,10 +236,10 @@ fn encode_attention(
                 head_dimension as i32,
             ],
         )
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let reordered = runtime
         .transpose_axes(&split_qkv, &[0, 3, 2, 1, 4])
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let queries = slice_head(runtime, &reordered, 0)?;
     let keys = slice_head(runtime, &reordered, 1)?;
     let values = slice_head(runtime, &reordered, 2)?;
@@ -251,15 +251,15 @@ fn encode_attention(
     let rope_dimension = i32::try_from(head_dimension).unwrap_or(i32::MAX);
     let rotated_queries = runtime
         .rope(&queries, rope_dimension, rope_theta, 0)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let rotated_keys = runtime
         .rope(&keys, rope_dimension, rope_theta, 0)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let attention_scale = f32::from(head_dimension as u16).powf(-0.5);
     let attended = if is_global_layer(configuration, layer_index) {
         runtime
             .scaled_dot_product_attention(&rotated_queries, &rotated_keys, &values, attention_scale)
-            .map_err(runtime_failure)?
+            .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?
     } else if let Some(attention_mask) = local_attention_mask {
         runtime
             .masked_scaled_dot_product_attention(
@@ -269,21 +269,21 @@ fn encode_attention(
                 attention_scale,
                 attention_mask,
             )
-            .map_err(runtime_failure)?
+            .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?
     } else {
         runtime
             .scaled_dot_product_attention(&rotated_queries, &rotated_keys, &values, attention_scale)
-            .map_err(runtime_failure)?
+            .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?
     };
     let sequence_ordered = runtime
         .transpose_axes(&attended, &[0, 2, 1, 3])
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let flat_attention = runtime
         .reshape(
             &sequence_ordered,
             &[1, sequence_length_i32, configuration.hidden_size as i32],
         )
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     quantized_matmul(
         runtime,
         tensors,
@@ -318,10 +318,12 @@ fn encode_mlp(
         intermediate_width,
         intermediate_width * 2,
     )?;
-    let activated = runtime.gelu(&activated_input).map_err(runtime_failure)?;
+    let activated = runtime
+        .gelu(&activated_input)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let gated_input = runtime
         .multiply(&activated, &gate_states)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     quantized_matmul(
         runtime,
         tensors,
@@ -343,13 +345,13 @@ fn quantized_gather(
     let biases = tensor(tensors, &format!("{tensor_prefix}{QUANTIZED_BIASES_TAIL}"))?;
     let selected_weights = runtime
         .take_axis(&quantized_weights, token_id_array, 0)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let selected_scales = runtime
         .take_axis(&scales, token_id_array, 0)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let selected_biases = runtime
         .take_axis(&biases, token_id_array, 0)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     runtime
         .dequantize_affine(
             &selected_weights,
@@ -358,7 +360,7 @@ fn quantized_gather(
             configuration.quantization_group_size as i32,
             configuration.quantization_bits as i32,
         )
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn quantized_matmul(
@@ -381,7 +383,7 @@ fn quantized_matmul(
             configuration.quantization_group_size as i32,
             configuration.quantization_bits as i32,
         )
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn layer_norm(
@@ -394,11 +396,11 @@ fn layer_norm(
     let weight_f16 = tensor(tensors, weight_tensor_name)?;
     let weight = runtime
         .astype(&weight_f16, MlxDtype::Float32)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let hidden_size_i32 = configuration.hidden_size as i32;
     let zero_bias = runtime
         .zeros(&[hidden_size_i32], MlxDtype::Float32)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     runtime
         .layer_norm(
             input_states,
@@ -406,7 +408,7 @@ fn layer_norm(
             &zero_bias,
             configuration.layer_norm_epsilon,
         )
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn mean_pool(
@@ -428,22 +430,28 @@ fn mean_pool(
     let token_count_f32 = token_count as f32;
     let token_sum = runtime
         .sum_axis(final_states, 1, true)
-        .map_err(runtime_failure)?;
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     runtime
         .multiply_scalar(&token_sum, 1.0 / token_count_f32)
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn l2_normalize(
     runtime: &MlxRuntime,
     pooled: &MlxArray,
 ) -> Result<MlxArray, EmbeddingsFailureReason> {
-    let squared = runtime.multiply(pooled, pooled).map_err(runtime_failure)?;
+    let squared = runtime
+        .multiply(pooled, pooled)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
     let squared_sum = runtime
         .sum_axis(&squared, 2, true)
-        .map_err(runtime_failure)?;
-    let norm = runtime.sqrt(&squared_sum).map_err(runtime_failure)?;
-    runtime.divide(pooled, &norm).map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
+    let norm = runtime
+        .sqrt(&squared_sum)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))?;
+    runtime
+        .divide(pooled, &norm)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn slice_width(
@@ -459,7 +467,7 @@ fn slice_width(
             &[1, 1, requested_width_i32],
             &[1, 1, 1],
         )
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn slice_head(
@@ -481,8 +489,12 @@ fn slice_head(
             ],
             &[1, 1, 1, 1, 1],
         )
-        .map_err(runtime_failure)
-        .and_then(|sliced| runtime.squeeze_axis(&sliced, 2).map_err(runtime_failure))
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
+        .and_then(|sliced| {
+            runtime
+                .squeeze_axis(&sliced, 2)
+                .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
+        })
 }
 
 fn slice_tail(
@@ -499,7 +511,7 @@ fn slice_tail(
             &[1, fused.shape()[1], stop.min(width)],
             &[1, 1, 1],
         )
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn build_local_attention_mask(
@@ -525,7 +537,7 @@ fn build_local_attention_mask(
             &mask_values,
             &[1, 1, sequence_length_i32, sequence_length_i32],
         )
-        .map_err(runtime_failure)
+        .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
 fn is_global_layer(configuration: &ModernBertConfiguration, layer_index: u32) -> bool {

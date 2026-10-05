@@ -102,7 +102,7 @@ fn repeated_one_token_reference(
         )?);
     }
     let token_projection_output_references = token_projection_outputs.iter().collect::<Vec<_>>();
-    runtime.concatenate_axis(&token_projection_output_references, 1)
+    Ok(runtime.concatenate_axis(&token_projection_output_references, 1)?)
 }
 
 fn float32_values(
@@ -111,11 +111,8 @@ fn float32_values(
 ) -> Result<Vec<f32>, MlxRuntimeError> {
     runtime
         .astype(projected_activations, MlxDtype::Float32)
-        .and_then(|float32_activations| {
-            float32_activations
-                .to_vec_f32()
-                .map_err(MlxRuntimeError::from)
-        })
+        .and_then(|float32_activations| float32_activations.to_vec_f32())
+        .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 pub struct TargetVerificationProjectionProbe<'runtime> {

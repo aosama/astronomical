@@ -28,12 +28,12 @@ fn apply_layer_rope_inner(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let rotary_dimension = rope.rotary_dimension() as i32;
     match rope {
-        LagunaRopeDescriptor::Default(descriptor) => runtime.rope(
+        LagunaRopeDescriptor::Default(descriptor) => Ok(runtime.rope(
             input,
             rotary_dimension,
             descriptor.rope_theta() as f32,
             offset_tokens,
-        ),
+        )?),
         LagunaRopeDescriptor::Yarn(descriptor) => {
             let frequency_denominators = compute_yarn_rope_frequency_denominators(
                 descriptor.rope_theta(),
@@ -57,13 +57,13 @@ fn apply_layer_rope_inner(
                 rotary_dimension,
                 descriptor.attention_factor() as f32,
             )?;
-            runtime.rope_with_custom_frequencies(
+            Ok(runtime.rope_with_custom_frequencies(
                 &prepared_input,
                 rotary_dimension,
                 &denominator_array,
                 1.0,
                 offset_tokens,
-            )
+            )?)
         }
     }
 }
@@ -79,7 +79,7 @@ fn scale_rotary_prefix(
     }
     let input_shape = input.shape();
     if input_shape.len() != 4 || rotary_dimension >= input_shape[3] {
-        return runtime.multiply_scalar(input, attention_factor);
+        return Ok(runtime.multiply_scalar(input, attention_factor)?);
     }
     let scaled = runtime.multiply_scalar(input, attention_factor)?;
     let scaled_prefix = runtime.slice(
@@ -104,5 +104,5 @@ fn scale_rotary_prefix(
         ],
         &[1, 1, 1, 1],
     )?;
-    runtime.concatenate_axis(&[&scaled_prefix, &unscaled_tail], 3)
+    Ok(runtime.concatenate_axis(&[&scaled_prefix, &unscaled_tail], 3)?)
 }

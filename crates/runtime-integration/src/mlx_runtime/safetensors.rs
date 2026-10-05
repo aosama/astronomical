@@ -41,6 +41,6 @@ impl MlxRuntime {
     }
 
     pub(crate) const fn gpu_stream(&self) -> &MlxStream {
-        &self.gpu_stream
+        self.context.gpu_stream()
     }
 }

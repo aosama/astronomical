@@ -325,11 +325,7 @@ fn repeated_one_token_projection(
 fn float32_values(runtime: &MlxRuntime, projected_activations: &MlxArray, name: &str) -> Vec<f32> {
     runtime
         .astype(projected_activations, MlxDtype::Float32)
-        .and_then(|float32_activations| {
-            float32_activations
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|float32_activations| float32_activations.to_vec_f32())
         .unwrap_or_else(|projection_error| panic!("{name} should evaluate: {projection_error}"))
 }
 

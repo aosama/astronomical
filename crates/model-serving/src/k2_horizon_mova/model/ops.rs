@@ -349,7 +349,7 @@ fn expand_for_gather(
     hidden_states: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let expanded = runtime.expand_dims(hidden_states, -2)?;
-    runtime.expand_dims(&expanded, -3)
+    Ok(runtime.expand_dims(&expanded, -3)?)
 }
 
 fn gather_affine(
@@ -403,7 +403,7 @@ pub fn reshape_heads(
     shape.push(num_heads as i32);
     shape.push(head_dim as i32);
     let reshaped = runtime.reshape(projected, &shape)?;
-    runtime.transpose_axes(&reshaped, &[0, 2, 1, 3])
+    Ok(runtime.transpose_axes(&reshaped, &[0, 2, 1, 3])?)
 }
 
 pub fn merge_heads(
@@ -413,5 +413,5 @@ pub fn merge_heads(
     let transposed = runtime.transpose_axes(attention, &[0, 2, 1, 3])?;
     let shape = transposed.shape();
     let merged = [shape[0], shape[1], shape[2] * shape[3]];
-    runtime.reshape(&transposed, &merged)
+    Ok(runtime.reshape(&transposed, &merged)?)
 }

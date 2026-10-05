@@ -315,11 +315,7 @@ fn float32_values(runtime: &MlxRuntime, array: &MlxArray, row_name: &str) -> Vec
     runtime
         .astype(array, MlxDtype::Float32)
         .and_then(|float32_array| runtime.build_contiguous_row_major_copy(&float32_array))
-        .and_then(|contiguous_array| {
-            contiguous_array
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|contiguous_array| contiguous_array.to_vec_f32())
         .unwrap_or_else(|error| panic!("{row_name} should evaluate: {error}"))
 }
 
