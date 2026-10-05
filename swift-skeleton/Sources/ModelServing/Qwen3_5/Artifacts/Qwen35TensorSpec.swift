@@ -230,4 +230,30 @@ public enum Qwen3_5TensorSpec {
             name: tensorName, dtype: tensorDtype, shape: tensorShape,
             equivalentPublishedShapes: Array());
     }
+
+    /// Validates that the actual language tensor names equal the expected
+    /// generated profile names, reporting the first mismatch in BTreeSet
+    /// (UTF-8 byte) order exactly like the Rust validator.
+    static func validateLanguageTensorNames(
+        actualLanguageTensorNames: Set<String>,
+        languageTensorProfiles: Array<TensorProfile>) throws -> Void {
+        let expectedLanguageTensorNames: Set<String> = Set(
+            languageTensorProfiles.map({ (tensorProfile: TensorProfile) -> String in tensorProfile.name }));
+        let unexpectedTensorNames: Array<String> = actualLanguageTensorNames
+            .subtracting(expectedLanguageTensorNames)
+            .sorted(by: { (leftName: String, rightName: String) -> Bool in
+                return Array(leftName.utf8).lexicographicallyPrecedes(Array(rightName.utf8));
+            });
+        if let unexpectedTensorName: String = unexpectedTensorNames.first {
+            throw Qwen3_5ArtifactError.unexpectedLanguageTensor(tensorName: unexpectedTensorName);
+        }
+        let missingTensorNames: Array<String> = expectedLanguageTensorNames
+            .subtracting(actualLanguageTensorNames)
+            .sorted(by: { (leftName: String, rightName: String) -> Bool in
+                return Array(leftName.utf8).lexicographicallyPrecedes(Array(rightName.utf8));
+            });
+        if let missingTensorName: String = missingTensorNames.first {
+            throw Qwen3_5ArtifactError.missingLanguageTensor(tensorName: missingTensorName);
+        }
+    }
 }
