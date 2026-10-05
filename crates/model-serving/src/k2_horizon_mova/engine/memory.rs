@@ -2,8 +2,8 @@
 
 use astronomical_ipc_protocol::WorkerEvent;
 
+use crate::k2_horizon_mova;
 use crate::k2_horizon_mova::configuration::{K2HorizonMoVAConfig, K2HorizonMoVALayerKind};
-use crate::k2_horizon_mova::k2_horizon_mova_expert_layer_geometries;
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
 use crate::k2_horizon_mova::model::K2HorizonMoVAModel;
 use crate::memory::{
@@ -25,10 +25,13 @@ pub(super) fn reject_unenacted_expert_streaming(
     if sparse_layer_payloads.is_empty() {
         return Ok(());
     }
-    let geometries = k2_horizon_mova_expert_layer_geometries(&model.config, &sparse_layer_payloads)
-        .map_err(|geometry_error| InferenceEngineError::Fatal {
-            reason: format!("K2 Horizon MoVA expert geometry is invalid: {geometry_error}"),
-        })?;
+    let geometries = k2_horizon_mova::k2_horizon_mova_expert_layer_geometries(
+        &model.config,
+        &sparse_layer_payloads,
+    )
+    .map_err(|geometry_error| InferenceEngineError::Fatal {
+        reason: format!("K2 Horizon MoVA expert geometry is invalid: {geometry_error}"),
+    })?;
     let retained_expert_ceiling_bytes = mlx_memory_ceiling_bytes
         .saturating_sub(model.weights.model_core_payload_bytes())
         .saturating_sub(BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES)

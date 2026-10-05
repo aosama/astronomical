@@ -4,8 +4,8 @@
 
 use std::{io::Write, path::PathBuf};
 
+use astronomical_cli::RespondDependencies;
 use astronomical_cli::errors::RespondError;
-use astronomical_cli::{RespondDependencies, run_respond};
 use astronomical_ipc_protocol::{ChatImageInput, ChatMessage};
 use tokio::time::timeout;
 
@@ -43,7 +43,7 @@ async fn should_report_a_missing_daemon_as_not_running() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", None, false),
             &mut respond_dependencies,
         ),
@@ -84,7 +84,7 @@ async fn should_stream_generated_text_to_stdout() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", None, false),
             &mut respond_dependencies,
         ),
@@ -113,7 +113,7 @@ async fn should_print_the_finished_answer_once_with_no_stream() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", None, true),
             &mut respond_dependencies,
         ),
@@ -148,7 +148,7 @@ async fn should_fail_when_the_requested_model_is_unknown() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", Some("test/wanted-model"), false),
             &mut respond_dependencies,
         ),
@@ -197,7 +197,7 @@ async fn should_auto_load_the_builtin_default_when_nothing_is_resident() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", None, false),
             &mut respond_dependencies,
         ),
@@ -249,7 +249,7 @@ async fn should_download_a_missing_model_before_streaming() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", Some("test/downloaded-model"), false),
             &mut respond_dependencies,
         ),
@@ -295,7 +295,7 @@ async fn should_reject_a_chat_request_for_an_embeddings_only_model_before_downlo
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments("Say hello", Some("test/only-embeddings"), false),
             &mut respond_dependencies,
         ),
@@ -346,7 +346,7 @@ async fn should_send_supplied_image_bytes_to_the_daemon() {
     arguments.images = vec![image_path.clone()];
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(&arguments, &mut respond_dependencies),
+        astronomical_cli::run_respond(&arguments, &mut respond_dependencies),
     )
     .await
     .expect("the respond journey should finish inside the test timeout");
@@ -392,7 +392,7 @@ async fn should_send_instructions_as_the_initial_system_message() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments_with("Say hello", Some("Be terse"), None),
             &mut respond_dependencies,
         ),
@@ -453,7 +453,7 @@ async fn should_send_instructions_and_image_together() {
     arguments.images = vec![image_path.clone()];
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(&arguments, &mut respond_dependencies),
+        astronomical_cli::run_respond(&arguments, &mut respond_dependencies),
     )
     .await
     .expect("the respond journey should finish inside the test timeout");
@@ -507,7 +507,7 @@ async fn should_send_the_thinking_budget_in_the_generation_settings() {
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
-        run_respond(
+        astronomical_cli::run_respond(
             &respond_arguments_with("Say hello", None, Some(512)),
             &mut respond_dependencies,
         ),

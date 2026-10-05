@@ -12,13 +12,13 @@ use super::thinking_budget_support::{
     THINKING_BUDGET_TOKEN_COUNT, assert_forced_transition_attribution, parse_streamed_completion,
     write_thinking_budget_acceptance_config,
 };
-use crate::small_dense_model::configured_deployment_litmus_model;
+use crate::small_dense_model;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST surface and smallest configured Qwen3.5 model"]
 async fn should_commit_the_hard_thinking_budget_before_visible_answer_content() {
     tokio::time::timeout(E2E_TIMEOUT, async {
-        let selected_model = configured_deployment_litmus_model();
+        let selected_model = small_dense_model::configured_deployment_litmus_model();
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(
                 &selected_model.model_directory,

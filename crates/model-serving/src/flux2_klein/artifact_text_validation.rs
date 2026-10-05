@@ -14,7 +14,7 @@ use crate::strict_json::DuplicateAwareJsonValue;
 
 use super::Flux2KleinTensorInventory;
 use super::artifact::Flux2KleinArtifactError;
-use super::inventory::public_descriptor;
+use super::inventory;
 
 pub(super) const TEXT_INDEX_FILE_NAME: &str = "text_encoder/model.safetensors.index.json";
 pub(super) const TEXT_GENERATION_CONFIG_FILE_NAME: &str = "text_encoder/generation_config.json";
@@ -197,7 +197,7 @@ fn validate_text_shards(
                     tensor_name: tensor.tensor_name,
                 });
             }
-            descriptors.push(public_descriptor(&relative_file_name, tensor));
+            descriptors.push(inventory::public_descriptor(&relative_file_name, tensor));
         }
         files.insert(relative_file_name, weights_file);
     }

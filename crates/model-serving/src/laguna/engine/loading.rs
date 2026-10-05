@@ -2,8 +2,8 @@
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use crate::kernel_capability::worker_process_kernel_capabilities;
-use crate::laguna::startup::weight_loader::load_laguna_bindable_tensors;
+use crate::kernel_capability;
+use crate::laguna::startup::weight_loader;
 use crate::laguna::{LagunaModel, LagunaNativeWeights};
 use crate::{
     AdaptiveRamGrowthGuard, EngineLoadResult, InferenceEngineError, MemoryPhase,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::execution::LagunaInferenceExecution;
-use super::memory::laguna_ram_budget_snapshot;
+use super::memory;
 
 impl LagunaInferenceExecution {
     /// Loads deferred tensors, expert paging, cache storage, and memory policy.
@@ -51,7 +51,7 @@ impl LagunaInferenceExecution {
         let tensors = pending_startup
             .model_loading_performance_attribution
             .measure_operation(PerformanceOperation::ModelSafetensorsMapping, |_| {
-                load_laguna_bindable_tensors(
+                weight_loader::load_laguna_bindable_tensors(
                     &runtime,
                     &pending_startup.tensor_contract,
                     &pending_startup.target_contract,
@@ -73,7 +73,7 @@ impl LagunaInferenceExecution {
         let mut model = LagunaModel::new(
             pending_startup.target_contract,
             weights,
-            worker_process_kernel_capabilities(
+            kernel_capability::worker_process_kernel_capabilities(
                 &runtime,
                 &mut pending_startup.model_loading_performance_attribution,
             ),
@@ -112,7 +112,7 @@ impl LagunaInferenceExecution {
                 pending_startup
                     .mlx_ram_budget
                     .update_model_geometry(measured_model_geometry);
-                let initial_ram_budget = laguna_ram_budget_snapshot(
+                let initial_ram_budget = memory::laguna_ram_budget_snapshot(
                     &pending_startup.mlx_ram_budget,
                     MemoryPhase::Prefill,
                     0,

@@ -1,7 +1,8 @@
 use astronomical_mlx_c_rust::MlxArray;
 
+use crate::qwen3_5::inference_execution;
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::{InferenceEngineError, PerformanceOperation};
 
@@ -27,19 +28,26 @@ pub(crate) fn commit_accepted_mtp_prefix(
     let accepted_count = usize::from(decision.accepted_count());
     let retained_target_input_count = accepted_count + 1;
     let verifier_input_count = draft_token_ids.len() + 1;
-    let retained_target_position_tokens =
-        target_verify_start_position_tokens
-            .checked_add(u32::try_from(retained_target_input_count).map_err(|_| {
-                fatal_engine_error("retained MTP target prefix exceeds the u32 range")
-            })?)
-            .ok_or_else(|| fatal_engine_error("retained MTP target position overflowed"))?;
+    let retained_target_position_tokens = target_verify_start_position_tokens
+        .checked_add(u32::try_from(retained_target_input_count).map_err(|_| {
+            inference_execution::fatal_engine_error(
+                "retained MTP target prefix exceeds the u32 range",
+            )
+        })?)
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error("retained MTP target position overflowed")
+        })?;
 
     let mut prefix_boundaries = prefix_boundaries.drain(..).map(Some).collect::<Vec<_>>();
     if retained_target_input_count < verifier_input_count {
         let retained_boundary = prefix_boundaries
             .get_mut(accepted_count)
             .and_then(Option::take)
-            .ok_or_else(|| fatal_engine_error("MTP target repair lost its retained boundary"))?;
+            .ok_or_else(|| {
+                inference_execution::fatal_engine_error(
+                    "MTP target repair lost its retained boundary",
+                )
+            })?;
         active_request.measure_operation_with_request(
             PerformanceOperation::MtpTargetRepair,
             |active_request| {
@@ -59,10 +67,16 @@ pub(crate) fn commit_accepted_mtp_prefix(
         let public_boundary = prefix_boundaries
             .get_mut(0)
             .and_then(Option::take)
-            .ok_or_else(|| fatal_engine_error("MTP queue lost its initial public frontier"))?;
+            .ok_or_else(|| {
+                inference_execution::fatal_engine_error(
+                    "MTP queue lost its initial public frontier",
+                )
+            })?;
         let public_position_tokens = target_verify_start_position_tokens
             .checked_add(1)
-            .ok_or_else(|| fatal_engine_error("MTP public frontier position overflowed"))?;
+            .ok_or_else(|| {
+                inference_execution::fatal_engine_error("MTP public frontier position overflowed")
+            })?;
         let mut emission_queue = VerifiedEmissionQueue::new(VerifiedTargetFrontier {
             position_tokens: public_position_tokens,
             boundary: public_boundary,
@@ -77,14 +91,20 @@ pub(crate) fn commit_accepted_mtp_prefix(
                     .get_mut(boundary_index)
                     .and_then(Option::take)
                     .ok_or_else(|| {
-                        fatal_engine_error("MTP queue lost an intermediate public frontier")
+                        inference_execution::fatal_engine_error(
+                            "MTP queue lost an intermediate public frontier",
+                        )
                     })?;
                 Some(VerifiedTargetFrontier {
                     position_tokens: target_verify_start_position_tokens
                         .checked_add(u32::try_from(boundary_index + 1).map_err(|_| {
-                            fatal_engine_error("MTP queue frontier exceeds the u32 range")
+                            inference_execution::fatal_engine_error(
+                                "MTP queue frontier exceeds the u32 range",
+                            )
                         })?)
-                        .ok_or_else(|| fatal_engine_error("MTP queue frontier overflowed"))?,
+                        .ok_or_else(|| {
+                            inference_execution::fatal_engine_error("MTP queue frontier overflowed")
+                        })?,
                     boundary,
                 })
             };
@@ -92,7 +112,11 @@ pub(crate) fn commit_accepted_mtp_prefix(
         }
         active_request
             .optional_prediction_session_mut()
-            .ok_or_else(|| fatal_engine_error("MTP request session disappeared during commit"))?
+            .ok_or_else(|| {
+                inference_execution::fatal_engine_error(
+                    "MTP request session disappeared during commit",
+                )
+            })?
             .set_verified_emission_queue(emission_queue);
     }
 
@@ -117,8 +141,9 @@ pub(crate) fn commit_accepted_mtp_prefix(
         &draft_token_ids[..accepted_count],
         &target_forward_output,
     )?;
-    let retained_hidden_row_index = i32::try_from(accepted_count)
-        .map_err(|_| fatal_engine_error("MTP retained hidden row exceeds Int32"))?;
+    let retained_hidden_row_index = i32::try_from(accepted_count).map_err(|_| {
+        inference_execution::fatal_engine_error("MTP retained hidden row exceeds Int32")
+    })?;
     let retained_target_hidden = target_forward_output
         .pre_final_normalization_hidden_state_at(model.runtime(), retained_hidden_row_index)
         .map_err(qwen3_5_runtime_error)?;
@@ -151,7 +176,9 @@ fn commit_confirmed_predictor_history(
                             Vec::with_capacity(accepted_draft_token_ids.len());
                         let proposal_committed_draft_count =
                             proposed_draft_count.checked_sub(1).ok_or_else(|| {
-                                fatal_engine_error("MTP proposal contained no drafts")
+                                inference_execution::fatal_engine_error(
+                                    "MTP proposal contained no drafts",
+                                )
                             })?;
 
                         // The proposal chain has already committed current + every draft except
@@ -191,7 +218,9 @@ fn commit_confirmed_predictor_history(
                                 .pre_final_normalization_hidden_state_at(
                                     model.runtime(),
                                     i32::try_from(accepted_position).map_err(|_| {
-                                        fatal_engine_error("MTP predictor replay row exceeds Int32")
+                                        inference_execution::fatal_engine_error(
+                                            "MTP predictor replay row exceeds Int32",
+                                        )
                                     })?,
                                 )
                                 .map_err(qwen3_5_runtime_error)?;
@@ -227,7 +256,9 @@ fn commit_confirmed_predictor_history(
                     },
                 )
                 .ok_or_else(|| {
-                    fatal_engine_error("MTP request session disappeared during predictor repair")
+                    inference_execution::fatal_engine_error(
+                        "MTP request session disappeared during predictor repair",
+                    )
                 })?
         },
     )

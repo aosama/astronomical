@@ -9,7 +9,7 @@ use super::openai_rest::{
     assert_successful_streaming_responses_response, launch_serving_rest_server_for_model,
     post_chat_completion, post_responses_completion, stop_serving_rest_server,
 };
-use crate::small_dense_model::configured_deployment_litmus_model;
+use crate::small_dense_model;
 
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
@@ -20,7 +20,7 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 64;
 #[ignore = "launches the production REST surface and smallest configured Qwen3.5 model"]
 async fn should_seed_the_first_reasoning_output_across_both_streaming_rest_apis() {
     tokio::time::timeout(E2E_TIMEOUT, async {
-        let selected_model = configured_deployment_litmus_model();
+        let selected_model = small_dense_model::configured_deployment_litmus_model();
         let isolated_worker_home = tempfile::tempdir()
             .expect("the thinking-seed REST journey should create an isolated worker home");
         write_thinking_seed_acceptance_state(

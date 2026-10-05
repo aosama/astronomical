@@ -2,9 +2,7 @@ use std::fs;
 
 use astronomical_config::{AstronomicalConfig, DiscoveredModelError, ModelDiscoveryDiagnosticCode};
 
-use crate::hermetic::write_config;
-
-use super::{write_minimal_model_config, write_required_model_files};
+use crate::hermetic;
 
 #[test]
 fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
@@ -14,9 +12,9 @@ fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
         .join("nested")
         .join("ExactModel-OptiQ-4bit");
     fs::create_dir_all(&exact_model_directory).expect("model directory should be created");
-    write_minimal_model_config(&exact_model_directory, "qwen3_5_moe", 262_144);
-    write_required_model_files(&exact_model_directory);
-    write_config(
+    super::write_minimal_model_config(&exact_model_directory, "qwen3_5_moe", 262_144);
+    super::write_required_model_files(&exact_model_directory);
+    hermetic::write_config(
         temporary_home_directory.path(),
         &serde_json::json!({
             "model_directories": [configured_model_root],
@@ -52,8 +50,8 @@ fn should_reject_duplicate_model_ids_with_deterministic_directory_order() {
     let second_model_directory = second_root_directory.join("SharedModel");
     for model_directory in [&first_model_directory, &second_model_directory] {
         fs::create_dir_all(model_directory).expect("duplicate model directory should be created");
-        write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
-        write_required_model_files(model_directory);
+        super::write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
+        super::write_required_model_files(model_directory);
     }
 
     let discovery_error =
@@ -87,8 +85,8 @@ fn should_exclude_ambiguous_models_and_report_path_safe_configured_root_numbers(
         &available_model_directory,
     ] {
         fs::create_dir_all(model_directory).expect("model directory should be created");
-        write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
-        write_required_model_files(model_directory);
+        super::write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
+        super::write_required_model_files(model_directory);
     }
 
     let discovery_report = astronomical_config::discover_models_excluding_ambiguous_identities(&[
@@ -122,8 +120,8 @@ fn should_skip_an_unreadable_authored_root_and_keep_models_from_remaining_roots(
     let available_model_directory = available_root_directory.join("KeptModel");
     fs::create_dir_all(&available_model_directory)
         .expect("available model directory should be created");
-    write_minimal_model_config(&available_model_directory, "qwen3_5_moe", 262_144);
-    write_required_model_files(&available_model_directory);
+    super::write_minimal_model_config(&available_model_directory, "qwen3_5_moe", 262_144);
+    super::write_required_model_files(&available_model_directory);
 
     let discovery_report = astronomical_config::discover_models_excluding_ambiguous_identities(&[
         missing_root_directory,
@@ -166,8 +164,8 @@ fn should_discover_an_organization_model_tree_and_skip_hidden_incomplete_staging
         .join("staged-qwen");
     for model_directory in [&published_model_directory, &incomplete_model_directory] {
         fs::create_dir_all(model_directory).expect("model fixture directory should be created");
-        write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
-        write_required_model_files(model_directory);
+        super::write_minimal_model_config(model_directory, "qwen3_5_moe", 262_144);
+        super::write_required_model_files(model_directory);
     }
 
     let directory_scans = astronomical_config::discover_models(&[models_root_directory])

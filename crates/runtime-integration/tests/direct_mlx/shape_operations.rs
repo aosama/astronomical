@@ -1,8 +1,8 @@
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 
 #[test]
 fn should_repeat_values_along_one_axis() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let matrix = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[2, 2])
         .expect("matrix should be valid");
@@ -22,7 +22,7 @@ fn should_repeat_values_along_one_axis() {
 
 #[test]
 fn should_stack_arrays_along_a_new_axis() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let first_row = runtime
         .array_from_f32(&[1.0, 2.0], &[2])
         .expect("first row should be valid");
@@ -45,7 +45,7 @@ fn should_stack_arrays_along_a_new_axis() {
 
 #[test]
 fn should_broadcast_an_array_to_a_static_shape() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let row = runtime
         .array_from_f32(&[1.0, 2.0], &[2])
         .expect("row should be valid");
@@ -65,7 +65,7 @@ fn should_broadcast_an_array_to_a_static_shape() {
 
 #[test]
 fn should_squeeze_one_singleton_axis() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let singleton_tensor = runtime
         .array_from_f32(&[1.0, 2.0], &[1, 2, 1])
         .expect("singleton tensor should be valid");

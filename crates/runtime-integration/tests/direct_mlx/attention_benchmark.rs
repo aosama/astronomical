@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const ORNITH_BATCH_SIZE: i32 = 1;
@@ -18,7 +18,7 @@ const BF16_ATTENTION_RELATIVE_TOLERANCE: f32 = 5e-3;
 #[test]
 #[ignore = "compares fused NAX head_dim=256 attention with independent MLX primitives"]
 fn should_match_unfused_reference_for_head_dim_256_causal_attention() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     for attention_benchmark_shape in [
         AttentionBenchmarkShape::new(1_024, 1_024),
         AttentionBenchmarkShape::new(1_025, 1_301),
@@ -49,7 +49,7 @@ fn should_match_unfused_reference_for_head_dim_256_causal_attention() {
 #[test]
 #[ignore = "measures MLX causal attention for Ornith-shaped BF16 prefill tensors"]
 fn should_measure_mlx_attention_for_ornith_prefill_shapes() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     for attention_benchmark_shape in [
         AttentionBenchmarkShape::new(1_024, 2_048),
         AttentionBenchmarkShape::new(1_024, 4_096),
@@ -95,7 +95,7 @@ fn should_measure_mlx_attention_for_ornith_prefill_shapes() {
 #[test]
 #[ignore = "proves fused head_dim=256 attention does not materialize the quadratic score tensor"]
 fn should_keep_head_dim_256_attention_peak_below_the_score_tensor_size() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let attention_benchmark_inputs =
         AttentionBenchmarkInputs::new(&runtime, AttentionBenchmarkShape::new(1_024, 4_096));
     materialize_inputs(&runtime, &attention_benchmark_inputs);

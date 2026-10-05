@@ -4,7 +4,7 @@ use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::Qwen3_5Config;
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5::model::weights::take_quantized_affine_weights;
+use crate::qwen3_5::model::weights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 
@@ -34,17 +34,17 @@ pub(crate) fn bind_qwen3_5_dense_mlp_weights(
 ) -> Result<Qwen3_5DenseMlpWeights, Qwen3_5ExecutionError> {
     let dense_mlp_prefix = format!("{decoder_layer_prefix}.mlp");
     Ok(Qwen3_5DenseMlpWeights {
-        gate_projection: take_quantized_affine_weights(
+        gate_projection: weights::take_quantized_affine_weights(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.gate_proj"),
         )?,
-        up_projection: take_quantized_affine_weights(
+        up_projection: weights::take_quantized_affine_weights(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.up_proj"),
         )?,
-        down_projection: take_quantized_affine_weights(
+        down_projection: weights::take_quantized_affine_weights(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.down_proj"),

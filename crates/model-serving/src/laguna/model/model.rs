@@ -1,6 +1,6 @@
 //! Laguna model: embed, descriptor-ordered layers, final norm, output head.
 
-use astronomical_ipc_protocol::{ExpertMemoryMode, graph_submission_layer_interval};
+use astronomical_ipc_protocol::ExpertMemoryMode;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::ExpertResidencyTelemetry;
@@ -12,13 +12,13 @@ use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaTargetCont
 use crate::laguna::paging::LagunaExpertPagingPlan;
 use crate::memory::{ExpertResidencyPlan, MemoryPhase};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use crate::sparse_experts::sorted_expert_weighted_sum_kernel;
+use crate::sparse_experts;
 
 use super::attention::LagunaAttentionMaskCache;
-use super::decoder_layer::forward_decoder_layer;
+use super::decoder_layer;
 use super::decoder_state::LagunaDecoderState;
 use super::error::LagunaExecutionError;
-use super::expert_coverage::validate_sparse_coverage;
+use super::expert_coverage;
 use super::expert_residency::LagunaExpertResidencyState;
 use super::weights::LagunaNativeWeights;
 use astronomical_mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel};
@@ -58,7 +58,7 @@ impl LagunaModel {
             true if worker_kernel_capabilities
                 .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum) =>
             {
-                Some(sorted_expert_weighted_sum_kernel()?)
+                Some(sparse_experts::sorted_expert_weighted_sum_kernel()?)
             }
             true => {
                 tracing::info!(
@@ -104,7 +104,11 @@ impl LagunaModel {
         mut self,
         paging_plan: LagunaExpertPagingPlan,
     ) -> Result<Self, LagunaExecutionError> {
-        validate_sparse_coverage(&self.contract, &self.weights, Some(&paging_plan))?;
+        expert_coverage::validate_sparse_coverage(
+            &self.contract,
+            &self.weights,
+            Some(&paging_plan),
+        )?;
         let maximum_expert_page_bytes = paging_plan.sparse_layers().iter().try_fold(
             0_u64,
             |maximum_page_bytes, sparse_layer| {
@@ -332,17 +336,18 @@ impl LagunaModel {
         // another. Retain each lazy mask once for this forward instead of
         // rebuilding equivalent token-by-token mask graphs in every layer.
         let mut attention_mask_cache = LagunaAttentionMaskCache::default();
-        let graph_submission_layer_interval = usize::try_from(graph_submission_layer_interval(
-            token_count_from_hidden_states(&hidden_states)?,
-            !matches!(self.expert_memory_mode(), ExpertMemoryMode::Resident),
-            self.prefill_graph_submission_layer_interval,
-            self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
-            self.experimental_ssd_paging_generation_graph_submission_layer_interval,
-        ))
-        .unwrap_or(0);
+        let graph_submission_layer_interval =
+            usize::try_from(astronomical_ipc_protocol::graph_submission_layer_interval(
+                token_count_from_hidden_states(&hidden_states)?,
+                !matches!(self.expert_memory_mode(), ExpertMemoryMode::Resident),
+                self.prefill_graph_submission_layer_interval,
+                self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
+                self.experimental_ssd_paging_generation_graph_submission_layer_interval,
+            ))
+            .unwrap_or(0);
         let decoder_layer_count = self.contract.layers().len();
         for (layer_index, layer_descriptor) in self.contract.layers().iter().enumerate() {
-            hidden_states = forward_decoder_layer(
+            hidden_states = decoder_layer::forward_decoder_layer(
                 runtime,
                 &hidden_states,
                 self,

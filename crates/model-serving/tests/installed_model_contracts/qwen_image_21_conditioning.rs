@@ -22,7 +22,7 @@ use std::num::NonZeroUsize;
 use std::sync::OnceLock;
 use tokenizers::Tokenizer;
 
-use crate::common::qwen_image_21::artifact_directory;
+use crate::common::qwen_image_21;
 
 const ORACLE_FIXTURE_JSON: &str =
     include_str!("../fixtures/qwen_image_21/conditioning_oracle.json");
@@ -38,7 +38,7 @@ const SPECIAL_TOKEN_IDS: [(u32, &str); 5] = [
 
 /// Loads the real artifact tokenizer with the standalone `tokenizers` crate.
 fn artifact_tokenizer() -> Tokenizer {
-    let processor_path = artifact_directory().join("processor");
+    let processor_path = qwen_image_21::artifact_directory().join("processor");
     assert!(
         processor_path.join("tokenizer.json").exists(),
         "expected the Qwen-Image-2.1 artifact tokenizer at {}",

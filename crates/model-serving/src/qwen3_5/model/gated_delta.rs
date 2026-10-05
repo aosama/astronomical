@@ -2,13 +2,13 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::Qwen3_5ExecutionError;
 use super::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
-use super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints;
-use super::gated_delta_sequence::qwen3_5_gated_delta_sequence;
+use super::gated_delta_boundary_checkpoints;
+use super::gated_delta_sequence;
 use super::gdn_decode_prework_kernel::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework,
 };
 use super::model::Qwen3_5Model;
-use super::tensor_slicing::slice_last_dimension;
+use super::tensor_slicing;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
@@ -377,7 +377,7 @@ impl Qwen3_5Model {
                         .ok_or_else(|| {
                             gated_delta_error("gated-delta checkpoint collector disappeared")
                         })?;
-                    let checkpoint_result = qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
+                    let checkpoint_result = gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                         &self.runtime,
                         self.gated_delta_checkpoint_kernel.as_ref(),
                         &queries,
@@ -396,16 +396,17 @@ impl Qwen3_5Model {
                     )
                 }
                 None => {
-                    let (recurrent_output, next_recurrent_state) = qwen3_5_gated_delta_sequence(
-                        &self.runtime,
-                        self.gated_delta_kernel.as_ref(),
-                        &queries,
-                        &keys,
-                        &values,
-                        &decays,
-                        &update_rates,
-                        &current_recurrent_state,
-                    )?;
+                    let (recurrent_output, next_recurrent_state) =
+                        gated_delta_sequence::qwen3_5_gated_delta_sequence(
+                            &self.runtime,
+                            self.gated_delta_kernel.as_ref(),
+                            &queries,
+                            &keys,
+                            &values,
+                            &decays,
+                            &update_rates,
+                            &current_recurrent_state,
+                        )?;
                     (recurrent_output, next_recurrent_state, Vec::new())
                 }
             };
@@ -497,13 +498,17 @@ impl Qwen3_5Model {
             token_count,
             is_verification_window,
         )?;
-        let queries =
-            slice_last_dimension(&self.runtime, &convolution_output, 0, linear_key_dimension)?;
+        let queries = tensor_slicing::slice_last_dimension(
+            &self.runtime,
+            &convolution_output,
+            0,
+            linear_key_dimension,
+        )?;
         let queries = self.runtime.reshape(
             &queries,
             &[1, token_count, linear_key_head_count, linear_head_dimension],
         )?;
-        let keys = slice_last_dimension(
+        let keys = tensor_slicing::slice_last_dimension(
             &self.runtime,
             &convolution_output,
             linear_key_dimension,
@@ -513,7 +518,7 @@ impl Qwen3_5Model {
             &keys,
             &[1, token_count, linear_key_head_count, linear_head_dimension],
         )?;
-        let values = slice_last_dimension(
+        let values = tensor_slicing::slice_last_dimension(
             &self.runtime,
             &convolution_output,
             linear_key_dimension * 2,

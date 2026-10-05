@@ -9,7 +9,7 @@ use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::expert_reuse::ExpertPageDisposition;
 use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights};
-use super::routing::qwen3_5_moe_route_experts;
+use super::routing;
 
 impl Qwen3_5Model {
     /// Routes once, then selects contiguous resident arrays or native paging.
@@ -87,7 +87,7 @@ impl Qwen3_5Model {
                         }
                     }
                 };
-                qwen3_5_moe_route_experts(
+                routing::qwen3_5_moe_route_experts(
                     &self.runtime,
                     &router_logits,
                     self.config.experts_per_token() as i32,

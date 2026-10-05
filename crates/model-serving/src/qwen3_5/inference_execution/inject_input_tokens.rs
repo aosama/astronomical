@@ -2,9 +2,9 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
 
-use super::super::model::memory_admission::invalid_request_error;
-use super::completed_forward_memory::record_completed_adaptive_ram_growth;
-use super::{Qwen3_5EngineState, fatal_engine_error};
+use super::super::model::memory_admission;
+use super::Qwen3_5EngineState;
+use super::completed_forward_memory;
 use crate::qwen3_5::multi_token_prediction::{
     disable_prediction_after_optional_injection_failure,
     projected_injected_prediction_growth_bytes, restore_queued_prediction_prefix_before_injection,
@@ -23,19 +23,19 @@ impl Qwen3_5EngineState {
             .iter()
             .any(|token_id| *token_id >= self.vocabulary_size)
         {
-            return Err(fatal_engine_error(
+            return Err(super::fatal_engine_error(
                 "injected model feedback contains a token outside the model vocabulary",
             ));
         }
 
         let mut active_request = self.active_request.take().ok_or_else(|| {
-            fatal_engine_error(
+            super::fatal_engine_error(
                 "Qwen3.5 model feedback injection requested without an active request",
             )
         })?;
         if active_request.request_id != request_id {
             self.active_request = Some(active_request);
-            return Err(fatal_engine_error(
+            return Err(super::fatal_engine_error(
                 "Qwen3.5 model feedback injection request correlation mismatch",
             ));
         }
@@ -79,9 +79,11 @@ impl Qwen3_5EngineState {
         let projected_context_tokens = (active_request.next_position_tokens as usize)
             .checked_add(input_token_ids.len())
             .and_then(|context_tokens| context_tokens.checked_add(remaining_output_tokens))
-            .ok_or_else(|| invalid_request_error("generation context token count overflowed"))?;
+            .ok_or_else(|| {
+                memory_admission::invalid_request_error("generation context token count overflowed")
+            })?;
         if projected_context_tokens > self.hard_maximum_position_count {
-            return Err(invalid_request_error(
+            return Err(memory_admission::invalid_request_error(
                 "generation context exceeds the model maximum position count",
             ));
         }
@@ -120,7 +122,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
             let additional_persistent_state_growth_bytes =
                 projected_injected_prediction_growth_bytes(
@@ -159,7 +161,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             model
                 .prefill_chunk_with_performance_attribution(
                     feedback_prefix_token_ids,
@@ -169,7 +171,7 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
             active_request.advance_position(feedback_prefix_token_ids.len())?;
-            record_completed_adaptive_ram_growth(
+            completed_forward_memory::record_completed_adaptive_ram_growth(
                 &mut self.adaptive_ram_growth_guard,
                 adaptive_ram_growth_context
                     .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
@@ -186,7 +188,7 @@ impl Qwen3_5EngineState {
         let sparse_experts_are_paged = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .sparse_experts_are_paged();
         let adaptive_ram_growth_context =
             AdaptiveRamGrowthContext::decode(1, false, sparse_experts_are_paged);
@@ -204,7 +206,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let feedback_logits = model
             .build_forward_chunk_with_performance_attribution(
                 &[final_input_token_id],
@@ -227,7 +229,7 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(InferenceEngineError::from)?;
-        record_completed_adaptive_ram_growth(
+        completed_forward_memory::record_completed_adaptive_ram_growth(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context
                 .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),

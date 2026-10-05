@@ -1,6 +1,6 @@
 //! Hermetic contracts for selecting a runtime without loading model artifacts.
 
-use astronomical_config::{PromptCacheConfig, discover_models};
+use astronomical_config::PromptCacheConfig;
 use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
@@ -115,11 +115,12 @@ async fn should_reject_changed_evidence_between_supervisor_discovery_and_worker_
         ),
     ] {
         let model_directory = flux_model_directory();
-        let discovered_model = discover_models(&[model_directory.path().to_path_buf()])
-            .expect("supervisor discovery should complete")
-            .remove(0)
-            .discovered_models
-            .remove(0);
+        let discovered_model =
+            astronomical_config::discover_models(&[model_directory.path().to_path_buf()])
+                .expect("supervisor discovery should complete")
+                .remove(0)
+                .discovered_models
+                .remove(0);
         mutate_discovered_artifact(model_directory.path());
 
         let factory_outcome = model_family_factory(model_directory.path())

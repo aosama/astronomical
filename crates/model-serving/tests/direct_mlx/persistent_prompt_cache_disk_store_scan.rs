@@ -17,7 +17,7 @@ use astronomical_model_serving::{
     PersistentPromptCacheDiskStoreError,
 };
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 
 const ONE_BYTE_QUOTA: u64 = 1;
 const FIRST_CROSS_MODEL_FILE_BYTE_COUNT: usize = 1_024;
@@ -158,7 +158,7 @@ fn should_enforce_one_global_prompt_cache_quota_across_model_directories() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             global_prompt_cache_maximum_size_bytes,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the active model prompt cache should enforce the global root quota");
 
@@ -213,7 +213,7 @@ fn should_evict_the_oldest_written_cross_model_file_first() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             global_prompt_cache_maximum_size_bytes,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the active model prompt cache should evict the oldest-written file");
 
@@ -263,7 +263,7 @@ fn should_evict_a_cross_model_block_parent_with_its_descendants_under_global_quo
             global_prompt_cache_root_directory.path().to_path_buf(),
             unrelated_block_size_bytes,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the active model prompt cache should evict the oldest block subtree");
 
@@ -308,7 +308,7 @@ fn should_delete_stale_cross_model_block_staging_directory_below_global_quota() 
             global_prompt_cache_root_directory.path().to_path_buf(),
             10_000,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the global cache should remove stale block staging directories");
 
@@ -350,7 +350,7 @@ fn should_return_typed_error_when_cross_model_global_eviction_fails() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     );
 
     fs::set_permissions(
@@ -400,7 +400,7 @@ fn should_delete_cross_model_stale_writer_temp_below_global_quota() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             10_000,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the global cache should remove stale writer temp files");
 
@@ -429,7 +429,7 @@ fn should_delete_invalid_content_safetensors_file_under_one_byte_quota() {
             persistent_prompt_cache_directory.path().to_path_buf(),
             ONE_BYTE_QUOTA,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the persistent prompt cache should open and delete invalid files");
 
@@ -475,7 +475,7 @@ fn should_return_remove_prompt_cache_file_error_when_deletion_fails() {
             persistent_prompt_cache_directory.path().to_path_buf(),
             ONE_BYTE_QUOTA,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     );
 
     fs::set_permissions(

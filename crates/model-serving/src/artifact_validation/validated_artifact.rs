@@ -4,7 +4,6 @@ use std::os::unix::fs::MetadataExt;
 use ::safetensors::Dtype;
 
 use super::ArtifactValidationError;
-use super::raw_safetensors_inventory::read_raw_safetensors_inventory;
 
 /// An open required-file descriptor whose identity was checked during validation.
 #[derive(Debug)]
@@ -127,7 +126,9 @@ impl ValidatedWeightsFile {
     pub(crate) fn read_raw_safetensors_inventory(
         &self,
     ) -> Result<super::RawSafetensorsInventory, ArtifactValidationError> {
-        read_raw_safetensors_inventory(&self.validated_required_file)
+        super::raw_safetensors_inventory::read_raw_safetensors_inventory(
+            &self.validated_required_file,
+        )
     }
 
     /// Integration-test seam for the crate-private raw inventory owner.

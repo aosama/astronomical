@@ -23,7 +23,7 @@ use super::canonical_tensor_contract::{
 };
 use super::retained_artifact::{LagunaIndexTotalSizeSemantics, ValidatedLagunaArtifact};
 use super::shard_index::LagunaShardIndex;
-use super::storage_fingerprint::storage_fingerprint;
+use super::storage_fingerprint;
 use super::template_source_validator::LagunaTemplateSourceValidator;
 use super::tensor_assembly::LagunaRawTensorNameRecord;
 use super::tensor_name_normalizer::LagunaTensorNameNormalizer;
@@ -173,7 +173,7 @@ impl LagunaArtifactValidator {
                     &tensor_name_contract,
                     &located_tensors,
                 )?;
-                let storage_fingerprint = storage_fingerprint(
+                let storage_fingerprint = storage_fingerprint::storage_fingerprint(
                     &target_contract,
                     &tensor_contract,
                     shard_inventory_byte_totals.tensor_payload_bytes,

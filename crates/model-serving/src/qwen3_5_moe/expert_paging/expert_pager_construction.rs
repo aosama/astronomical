@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
-use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
+use super::quantized_expert_layer_plan;
 use crate::MlxAllocationAdmission;
+use crate::expert_paging;
 use crate::expert_paging::QuantizedExpertLayerPlan;
-use crate::expert_paging::build_streaming_expert_layer_plans;
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
 use crate::qwen3_5::Qwen3_5Config;
 
@@ -56,7 +56,7 @@ impl Qwen3_5ExpertPager {
                     });
                 }
                 let (layer_plans, streaming_expert_pack_sources) =
-                    build_streaming_expert_layer_plans(&model_dir, config)?;
+                    expert_paging::build_streaming_expert_layer_plans(&model_dir, config)?;
                 (layer_plans, Some(streaming_expert_pack_sources))
             } else {
                 (
@@ -113,7 +113,7 @@ fn self_shard_layer_plans(
     let mut safetensors_header_by_source_file = HashMap::<PathBuf, SafetensorsHeader>::new();
     for decoder_layer_index in 0..decoder_layer_count {
         let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
-        let layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+        let layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
             model_dir,
             weight_map,
             stored_tensor_name_by_canonical_name,
@@ -128,7 +128,7 @@ fn self_shard_layer_plans(
     // immediately after the target decoder layers without merging artifact
     // inventories during validation.
     if include_mtp_sparse_expert_layer {
-        let mtp_layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+        let mtp_layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
             model_dir,
             weight_map,
             stored_tensor_name_by_canonical_name,

@@ -10,7 +10,8 @@
 use astronomical_runtime_integration::MlxSafetensors;
 
 use crate::qwen_image_21::QwenImage21EngineError;
-use crate::qwen_image_21::mlx_math::{QuantizedLinear, validate_shape};
+use crate::qwen_image_21::mlx_math;
+use crate::qwen_image_21::mlx_math::QuantizedLinear;
 
 use super::blocks::{
     QwenImage21AttentionWeights, QwenImage21BlockWeights, QwenImage21FeedForwardWeights,
@@ -57,7 +58,7 @@ impl QwenImage21TransformerWeights {
         block_count: usize,
     ) -> Result<Self, QwenImage21EngineError> {
         let text_norm = tensors.tensor("txt_in.text_norm.weight")?;
-        validate_shape(
+        mlx_math::validate_shape(
             "txt_in.text_norm",
             "weight",
             &text_norm,
@@ -153,13 +154,13 @@ fn load_block(
         norm_query: tensors.tensor(&format!("{prefix}.attn.norm_q.weight"))?,
         norm_key: tensors.tensor(&format!("{prefix}.attn.norm_k.weight"))?,
     };
-    validate_shape(
+    mlx_math::validate_shape(
         &format!("{prefix}.attn"),
         "norm_q.weight",
         &attention.norm_query,
         &[HEAD_WIDTH],
     )?;
-    validate_shape(
+    mlx_math::validate_shape(
         &format!("{prefix}.attn"),
         "norm_k.weight",
         &attention.norm_key,

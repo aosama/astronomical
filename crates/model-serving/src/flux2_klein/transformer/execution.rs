@@ -9,7 +9,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::blocks::{
     DoubleStreamState, ModulationSet, double_stream_block, single_stream_block, split_modulation,
 };
-use super::math::{fp32_layer_norm, linear};
+use super::math;
 use super::{
     Flux2KleinTransformerError, Flux2KleinTransformerGeometry, Flux2KleinTransformerInputs,
     Flux2KleinTransformerWeights,
@@ -391,12 +391,12 @@ impl Flux2KleinTransformer {
             ],
             &[1, 1, 1],
         )?;
-        let normalized = fp32_layer_norm(
+        let normalized = math::fp32_layer_norm(
             &self.runtime,
             &image_states,
             self.geometry.normalization_epsilon(),
         )?;
-        let final_modulation = linear(
+        let final_modulation = math::linear(
             &self.runtime,
             &self.runtime.silu(&timestep_embedding)?,
             self.weights.tensor("norm_out.linear.weight")?,
@@ -415,7 +415,7 @@ impl Flux2KleinTransformer {
             &self.runtime.multiply(&normalized, &one_plus_scale)?,
             &final_parts[1],
         )?;
-        let sample = linear(
+        let sample = math::linear(
             &self.runtime,
             &adaptive_normalized,
             self.weights.tensor("proj_out.weight")?,

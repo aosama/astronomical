@@ -3,9 +3,9 @@
 //! Thin wrapper around `measure_adaptive_ram_growth_memory_admission` that
 //! logs slow admissions and records expert-byte reclamation diagnostics.
 
+use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, fatal_engine_error};
 
 use crate::AdaptiveRamGrowthContext;
 
@@ -45,7 +45,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let owned_complete_resident_experts_before_admission =
             model.resident_expert_weights.is_some();
         let target_expert_payload_bytes_before_context_admission = model
@@ -77,7 +77,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let demoted_complete_resident_expert_owner =
             owned_complete_resident_experts_before_admission
                 && model.resident_expert_weights.is_none();

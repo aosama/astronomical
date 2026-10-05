@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::image_input::{decode_image_url, validate_image_url_scheme};
+use crate::image_input;
 use crate::{OpenAiImageInput, OpenAiResponsesValidationError};
 
 /// Stateless input accepted by the local Responses endpoint.
@@ -340,10 +340,10 @@ impl OpenAiResponseMessageContent {
                             combined_text.push_str(&text);
                         }
                         OpenAiResponseContentPart::InputImage { image_url, .. } => {
-                            validate_image_url_scheme(&image_url)
+                            image_input::validate_image_url_scheme(&image_url)
                                 .map_err(OpenAiResponsesValidationError::ImageInput)?;
                             decoded_images.push(
-                                decode_image_url(&image_url)
+                                image_input::decode_image_url(&image_url)
                                     .map_err(OpenAiResponsesValidationError::ImageInput)?,
                             );
                         }

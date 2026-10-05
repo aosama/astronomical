@@ -7,7 +7,7 @@ use astronomical_ipc_protocol::{
 use tokio::io::AsyncWrite;
 
 use super::WorkerRuntimeError;
-use super::output::worker_memory_snapshot;
+use super::output;
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::EmbeddingEngine;
 use crate::InferenceEngine;
@@ -120,7 +120,10 @@ where
             Some(LoadedRuntime::Embeddings(embedding_engine)) => embedding_engine
                 .take_post_cleanup_memory_telemetry()
                 .map(|mlx_memory_telemetry| {
-                    worker_memory_snapshot(MlxMemorySnapshotSource::Finalized, mlx_memory_telemetry)
+                    output::worker_memory_snapshot(
+                        MlxMemorySnapshotSource::Finalized,
+                        mlx_memory_telemetry,
+                    )
                 }),
             _ => None,
         };

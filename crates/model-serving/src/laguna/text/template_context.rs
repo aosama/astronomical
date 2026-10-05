@@ -2,7 +2,8 @@ use astronomical_ipc_protocol::{ChatMessage, ChatToolDefinition};
 use serde::Serialize;
 use serde_json::Value;
 
-use super::prompt_renderer::{LagunaPromptRendererError, parse_strict_tool_json};
+use super::prompt_renderer;
+use super::prompt_renderer::LagunaPromptRendererError;
 
 /// Typed root passed to the strict artifact template for every render.
 #[derive(Debug, Serialize)]
@@ -77,7 +78,7 @@ impl LagunaTemplateMessage {
                 let tool_calls = tool_calls
                     .iter()
                     .map(|tool_call| {
-                        let arguments = parse_strict_tool_json(
+                        let arguments = prompt_renderer::parse_strict_tool_json(
                             &tool_call.function.name,
                             tool_call.function.arguments_json.as_bytes(),
                         )?;
@@ -144,7 +145,7 @@ impl LagunaTemplateTool {
     fn from_definition(
         tool_definition: &ChatToolDefinition,
     ) -> Result<Self, LagunaPromptRendererError> {
-        let parameters = parse_strict_tool_json(
+        let parameters = prompt_renderer::parse_strict_tool_json(
             &tool_definition.name,
             tool_definition.parameters_json.as_bytes(),
         )?;

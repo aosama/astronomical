@@ -11,7 +11,7 @@ use crate::{
     PreparedModelGeneration,
 };
 
-use super::thinking_budget::resolve_k2_horizon_mova_thinking_budget;
+use super::thinking_budget;
 use super::{
     K2HorizonMoVAInferenceRequest, K2HorizonMoVAPromptRenderer, K2HorizonMoVARequestOutput,
     K2HorizonMoVATokenizer, K2HorizonMoVATokenizerError,
@@ -132,7 +132,7 @@ impl ModelGenerationProcessor for K2HorizonMoVAGenerationProcessor {
             .settings
             .top_p_thousandths
             .unwrap_or(DEFAULT_TOP_P_THOUSANDTHS);
-        let thinking_budget = resolve_k2_horizon_mova_thinking_budget(
+        let thinking_budget = thinking_budget::resolve_k2_horizon_mova_thinking_budget(
             chat_generation_command.settings.thinking_budget,
             requested_output_tokens,
             self.tokenizer.think_close_token_ids().len(),

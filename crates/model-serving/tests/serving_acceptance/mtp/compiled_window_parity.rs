@@ -9,7 +9,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::timeout;
 
-use crate::serving_acceptance::support::dense_mtp_model_directory;
+use crate::serving_acceptance::support;
 
 const PARITY_TIMEOUT: Duration = Duration::from_secs(115);
 const WINDOW_ROW_COUNT: usize = 4;
@@ -31,7 +31,7 @@ async fn should_match_the_eager_verification_window_on_the_dense_mtp_artifact() 
 async fn compare_compiled_verification_window_with_eager_window() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let started_at = Instant::now();
-    let model_directory = dense_mtp_model_directory();
+    let model_directory = support::dense_mtp_model_directory();
     eprintln!("[compiled-window-parity] status=start phase=artifact_validation");
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)

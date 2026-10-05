@@ -18,7 +18,7 @@ use crate::{
 use super::super::{FLUX2_KLEIN_OFFICIAL_MODEL_ID, Flux2KleinArtifactProvenance};
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinImageDimensions, Flux2KleinOfficialProfile};
 use super::components::Flux2KleinEngineComponents;
-use super::request_validation::validate_official_request;
+use super::request_validation;
 
 const IMAGE_TRANSPORT_LIMIT_BYTES: u64 = 32 * 1024 * 1024;
 
@@ -175,7 +175,7 @@ impl ImageGenerationEngine for Flux2KleinImageEngine {
         if self.active_request.is_some() {
             return Err(ImageGenerationFailureReason::EngineBusy);
         }
-        validate_official_request(&self.serving_model_id, &generation_command)?;
+        request_validation::validate_official_request(&self.serving_model_id, &generation_command)?;
         let dimensions = Flux2KleinImageDimensions::validate(
             generation_command.settings.width_pixels,
             generation_command.settings.height_pixels,

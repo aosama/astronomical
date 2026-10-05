@@ -6,7 +6,7 @@
 use astronomical_model_serving::LagunaOutputEvent;
 use serde_json::Value;
 
-use super::support::literary_output_parser;
+use super::support;
 
 const DECLARED_CHARACTER_FUNCTION: &str = "find_character";
 const CHARACTER_NAME: &str = "Romeo";
@@ -26,7 +26,7 @@ struct WellFormedCallCase {
 #[test]
 fn should_emit_a_tool_call_for_every_well_formed_poolside_layout() {
     for well_formed_call in well_formed_single_call_cases() {
-        let mut output_parser = literary_output_parser();
+        let mut output_parser = support::literary_output_parser();
         let output_events = output_parser
             .push_fragment(well_formed_call.poolside_fragment)
             .unwrap_or_else(|parser_error| {
@@ -58,7 +58,7 @@ fn should_emit_a_tool_call_for_every_well_formed_poolside_layout() {
 
 #[test]
 fn should_emit_sequential_well_formed_tool_calls_in_source_order() {
-    let mut output_parser = literary_output_parser();
+    let mut output_parser = support::literary_output_parser();
     let output_events = output_parser
         .push_fragment(
             "They are central.\
@@ -89,8 +89,8 @@ fn should_emit_sequential_well_formed_tool_calls_in_source_order() {
 
 #[test]
 fn should_keep_argument_order_independent_for_required_and_extra_fields() {
-    let mut extra_after_required = literary_output_parser();
-    let mut extra_before_required = literary_output_parser();
+    let mut extra_after_required = support::literary_output_parser();
+    let mut extra_before_required = support::literary_output_parser();
     let extra_after_required_events = extra_after_required
         .push_fragment(
             "<tool_call>find_character\

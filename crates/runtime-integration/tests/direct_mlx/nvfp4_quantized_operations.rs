@@ -2,7 +2,7 @@
 
 use astronomical_mlx_c_rust::MlxDtype;
 
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 
 #[test]
 fn should_match_dense_reference_for_nvfp4_split_k_quantized_matmul() {
@@ -13,7 +13,7 @@ fn should_match_dense_reference_for_nvfp4_split_k_quantized_matmul() {
     const OUTPUT_WIDTH: i32 = 128;
     const MAX_ABSOLUTE_ERROR: f32 = 1e-3;
 
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activation_values = (0..ACTIVATION_ROWS * INPUT_WIDTH)
         .map(|activation_index| 0.01 * ((activation_index % 19) as f32 - 9.0))
         .collect::<Vec<_>>();
@@ -77,7 +77,7 @@ fn should_compute_nvfp4_scales_independently_for_each_sixteen_value_group() {
     const GROUP_SIZE: i32 = 16;
     const MAX_ABSOLUTE_ERROR: f32 = 1e-6;
 
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let mut source_weight_values = Vec::with_capacity((GROUP_COUNT * GROUP_SIZE) as usize);
     for group_index in 0..GROUP_COUNT {
         // Adjacent extremes expose an accidental 32-lane maximum immediately:

@@ -13,7 +13,7 @@
 //! pooling exclusion has real tokens to act on. It runs hermetically: no GPU,
 //! no installed checkpoint, no Python.
 
-use astronomical_model_serving::{ModernBertConfiguration, encode_embedding_input};
+use astronomical_model_serving::ModernBertConfiguration;
 use tokenizers::Tokenizer;
 
 const CLS_TOKEN_ID: u32 = 50_281;
@@ -32,10 +32,12 @@ fn should_encode_embedding_inputs_with_the_artifact_declared_special_tokens() {
     let tokenizer = fixture_tokenizer();
 
     for input_text in [TSNE_QUERY, LAURENS_QUERY, TSNE_DOCUMENT] {
-        let encoded_input = encode_embedding_input(&tokenizer, &configuration, input_text)
-            .unwrap_or_else(|failure| {
-                panic!("the declared worked example should encode: {failure:?}")
-            });
+        let encoded_input = astronomical_model_serving::encode_embedding_input(
+            &tokenizer,
+            &configuration,
+            input_text,
+        )
+        .unwrap_or_else(|failure| panic!("the declared worked example should encode: {failure:?}"));
 
         let content_only_ids = fixture_content_ids(input_text);
         assert_eq!(

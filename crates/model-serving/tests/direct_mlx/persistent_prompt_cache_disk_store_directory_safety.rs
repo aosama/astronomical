@@ -6,7 +6,7 @@ use astronomical_model_serving::{
     PersistentPromptCacheDiskStoreError,
 };
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 use crate::direct_mlx::persistent_prompt_cache_disk_store_support::{
     persistent_prompt_cache_block_key_for_seed, runtime_with_shared_limits,
     synthetic_kv_block_tensors, synthetic_recurrent_snapshot_tensors,
@@ -30,7 +30,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
             global_prompt_cache_root_directory.path().to_path_buf(),
             LARGE_CACHE_LIMIT_BYTES,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the persistent prompt cache should open");
     let persistent_prompt_cache_block_key = persistent_prompt_cache_block_key_for_seed(0);
@@ -105,7 +105,7 @@ fn should_never_follow_a_global_prompt_cache_symlink_outside_the_root() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("global quota enforcement should remove only the symlink itself");
 
@@ -142,7 +142,7 @@ fn should_never_follow_an_active_model_safetensors_symlink() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("startup should remove the symlink itself without following it");
 
@@ -176,7 +176,7 @@ fn should_reject_a_symlink_as_the_global_prompt_cache_root() {
             symlinked_global_prompt_cache_root_directory,
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     );
 
     assert!(matches!(
@@ -205,7 +205,7 @@ fn should_reject_a_symlinked_active_model_directory_component() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     );
 
     assert!(matches!(
@@ -228,7 +228,7 @@ fn should_reject_an_active_model_directory_outside_the_global_root() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     );
 
     assert!(matches!(
@@ -255,7 +255,7 @@ fn should_reject_parent_directory_components_inside_the_active_model_path() {
             global_prompt_cache_root_directory.path().to_path_buf(),
             0,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     );
 
     assert!(matches!(

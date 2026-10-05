@@ -40,7 +40,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::memory::{MemoryPhase, expert_reclamation_bytes_to_fit_fixed_forward};
+use crate::memory;
+use crate::memory::MemoryPhase;
 
 /// Bootstrap context-window reserve before any live measurement exists (1 GB SI).
 pub const BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES: u64 = 1_000_000_000;
@@ -400,7 +401,7 @@ impl MlxRamBudget {
         retained_expert_payload_bytes: u64,
         fixed_forward_workspace_bytes: u64,
     ) -> u64 {
-        u64::try_from(expert_reclamation_bytes_to_fit_fixed_forward(
+        u64::try_from(memory::expert_reclamation_bytes_to_fit_fixed_forward(
             usize::try_from(current_active_memory_bytes).unwrap_or(usize::MAX),
             usize::try_from(retained_expert_payload_bytes).unwrap_or(usize::MAX),
             usize::try_from(self.mlx_active_memory_ceiling_bytes()).unwrap_or(usize::MAX),

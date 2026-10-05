@@ -11,7 +11,7 @@ use std::time::Duration;
 use astronomical_model_serving::Qwen3_5ArtifactValidator;
 use tokio::time::timeout;
 
-use crate::common::{configured_model_directory_by_id, dense_mtp_model_id};
+use crate::common;
 
 const DENSE_MTP_VALIDATION_TIMEOUT: Duration = Duration::from_secs(60);
 const DENSE_MTP_VALIDATION_MAXIMUM_OUTPUT_TOKENS: u32 = 2_048;
@@ -28,11 +28,11 @@ async fn should_validate_the_configured_dense_mtp_artifact() {
 
 async fn validate_configured_dense_mtp_artifact() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory =
-        configured_model_directory_by_id(dense_mtp_model_id()).unwrap_or_else(|| {
+    let model_directory = common::configured_model_directory_by_id(common::dense_mtp_model_id())
+        .unwrap_or_else(|| {
             panic!(
                 "the configured model directories should discover the dense-MTP model {}",
-                dense_mtp_model_id()
+                common::dense_mtp_model_id()
             )
         });
 
@@ -42,7 +42,7 @@ async fn validate_configured_dense_mtp_artifact() {
 
     assert_eq!(
         validated_artifact.model_id(),
-        dense_mtp_model_id(),
+        common::dense_mtp_model_id(),
         "the validated artifact's leaf identity must match the dense_mtp role"
     );
 }

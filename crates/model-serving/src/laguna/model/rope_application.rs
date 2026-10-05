@@ -2,7 +2,7 @@
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::attention::compute_yarn_rope_frequency_denominators;
+use crate::attention;
 use crate::laguna::normalization::LagunaRopeDescriptor;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use astronomical_mlx_c_rust::MlxArray;
@@ -35,7 +35,7 @@ fn apply_layer_rope_inner(
             offset_tokens,
         )?),
         LagunaRopeDescriptor::Yarn(descriptor) => {
-            let frequency_denominators = compute_yarn_rope_frequency_denominators(
+            let frequency_denominators = attention::compute_yarn_rope_frequency_denominators(
                 descriptor.rope_theta(),
                 descriptor.rotary_dimension(),
                 descriptor.original_maximum_position_count(),

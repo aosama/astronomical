@@ -8,11 +8,12 @@ use astronomical_model_serving::{
 };
 use serde_json::{Map, Value, json};
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 
 #[test]
 fn should_accept_a_contract_generated_sequence_state_header() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
     let sequence_state_file_path = temporary_directory.path().join("sequence.safetensors");
     write_contract_generated_file(
@@ -50,7 +51,8 @@ fn should_accept_a_contract_generated_sequence_state_header() {
 
 #[test]
 fn should_accept_a_contract_generated_boundary_state_header() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
     let boundary_state_file_path = temporary_directory.path().join("boundary.safetensors");
     write_contract_generated_file(
@@ -81,7 +83,8 @@ fn should_accept_a_contract_generated_boundary_state_header() {
 
 #[test]
 fn should_reject_a_declared_dtype_that_differs_from_the_model_contract() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let first_sequence_tensor_name = persistent_prompt_cache_model_contract
         .decoder_cache_layout()
         .sequence_tensor_layouts()
@@ -115,7 +118,8 @@ fn should_reject_a_declared_dtype_that_differs_from_the_model_contract() {
 
 #[test]
 fn should_reject_a_missing_declared_tensor() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let first_sequence_tensor_name = persistent_prompt_cache_model_contract
         .decoder_cache_layout()
         .sequence_tensor_layouts()
@@ -147,7 +151,8 @@ fn should_reject_a_missing_declared_tensor() {
 
 #[test]
 fn should_reject_a_foreign_storage_contract_fingerprint_before_payload_use() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
     let sequence_state_file_path = temporary_directory
         .path()
@@ -178,7 +183,8 @@ fn should_reject_a_foreign_storage_contract_fingerprint_before_payload_use() {
 
 #[test]
 fn should_reject_a_previous_disposable_format_version() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let temporary_directory = tempfile::tempdir().expect("the test directory should exist");
     let sequence_state_file_path = temporary_directory.path().join("old-format.safetensors");
     write_contract_generated_file(

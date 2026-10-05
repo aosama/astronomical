@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use super::{QwenImage21ConfigError, parse_document, require};
+use super::QwenImage21ConfigError;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,38 +25,38 @@ pub struct QwenImage21PipelineConfig;
 impl QwenImage21PipelineConfig {
     pub fn parse(json_bytes: &[u8]) -> Result<Self, QwenImage21ConfigError> {
         const DOCUMENT: &str = "model_index.json";
-        let document: PipelineDocument = parse_document(json_bytes, DOCUMENT)?;
-        require(
+        let document: PipelineDocument = super::parse_document(json_bytes, DOCUMENT)?;
+        super::require(
             document.class_name == "QwenImage21Pipeline",
             DOCUMENT,
             "_class_name",
         )?;
-        require(
+        super::require(
             document.diffusers_version == "0.37.0.dev0",
             DOCUMENT,
             "_diffusers_version",
         )?;
-        require(
+        super::require(
             document.processor == ["transformers", "Qwen3VLProcessor"],
             DOCUMENT,
             "processor",
         )?;
-        require(
+        super::require(
             document.scheduler == ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             DOCUMENT,
             "scheduler",
         )?;
-        require(
+        super::require(
             document.text_encoder == ["transformers", "Qwen3VLForConditionalGeneration"],
             DOCUMENT,
             "text_encoder",
         )?;
-        require(
+        super::require(
             document.transformer == ["diffusers", "QwenImage21Transformer2DModel"],
             DOCUMENT,
             "transformer",
         )?;
-        require(
+        super::require(
             document.vae == ["diffusers", "AutoencoderKLQwenImage21"],
             DOCUMENT,
             "vae",

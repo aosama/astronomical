@@ -34,8 +34,8 @@
 //! performance_throughput_tests -- --ignored --exact`.
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
-use crate::performance_throughput::support::{ThroughputJourney, run_journey_with_timeout};
-use crate::support::dense_mtp_model_id;
+use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::support;
 
 /// The short warmup: a ~1,000-token Romeo and Juliet opening, continued for a
 /// short passage, that spins up first-use JIT kernels before the measured run.
@@ -92,7 +92,10 @@ fn dense_mtp_journey(mtp_draft_depth: Option<u8>) -> ThroughputJourney {
 #[test]
 #[ignore = "loads the canonical dense MTP model and measures its MTP-off serving throughput over IPC"]
 fn should_measure_dense_mtp_prompt_processing_and_decode_throughput_with_mtp_disabled() {
-    run_journey_with_timeout(dense_mtp_model_id(), dense_mtp_journey(None));
+    throughput_support::run_journey_with_timeout(
+        support::dense_mtp_model_id(),
+        dense_mtp_journey(None),
+    );
 }
 
 /// Same case with multi-token prediction engaged at draft depth 1, the regime
@@ -101,19 +104,28 @@ fn should_measure_dense_mtp_prompt_processing_and_decode_throughput_with_mtp_dis
 #[test]
 #[ignore = "loads the canonical dense MTP model and measures its draft-depth-1 serving throughput over IPC"]
 fn should_measure_dense_mtp_prompt_processing_and_decode_throughput_with_mtp_draft_depth_one() {
-    run_journey_with_timeout(dense_mtp_model_id(), dense_mtp_journey(Some(1)));
+    throughput_support::run_journey_with_timeout(
+        support::dense_mtp_model_id(),
+        dense_mtp_journey(Some(1)),
+    );
 }
 
 /// Same case at draft depth 2.
 #[test]
 #[ignore = "loads the canonical dense MTP model and measures its draft-depth-2 serving throughput over IPC"]
 fn should_measure_dense_mtp_prompt_processing_and_decode_throughput_with_mtp_draft_depth_two() {
-    run_journey_with_timeout(dense_mtp_model_id(), dense_mtp_journey(Some(2)));
+    throughput_support::run_journey_with_timeout(
+        support::dense_mtp_model_id(),
+        dense_mtp_journey(Some(2)),
+    );
 }
 
 /// Same case at draft depth 3, the artifact's own default depth.
 #[test]
 #[ignore = "loads the canonical dense MTP model and measures its draft-depth-3 serving throughput over IPC"]
 fn should_measure_dense_mtp_prompt_processing_and_decode_throughput_with_mtp_draft_depth_three() {
-    run_journey_with_timeout(dense_mtp_model_id(), dense_mtp_journey(Some(3)));
+    throughput_support::run_journey_with_timeout(
+        support::dense_mtp_model_id(),
+        dense_mtp_journey(Some(3)),
+    );
 }

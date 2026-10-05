@@ -1,4 +1,4 @@
-use crate::common::qwen3_5_moe::frozen_ornith_1_0_image_processor;
+use crate::common::qwen3_5_moe;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId,
@@ -22,7 +22,7 @@ fn should_discover_special_token_ids_from_tokenizer_json() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should discover every special token ID");
 
@@ -64,7 +64,7 @@ fn should_reject_a_tokenizer_missing_a_required_special_token() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect_err("the tokenizer should reject a missing special token");
 
@@ -101,7 +101,7 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let chat_generation_command = ChatGenerationCommand {
@@ -162,7 +162,7 @@ fn should_prepare_a_model_owned_multitoken_transition_ending_at_the_thinking_mar
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
 
@@ -189,7 +189,7 @@ fn should_emit_seeded_romeo_and_juliet_as_the_first_reasoning_output() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let mut request_output = Qwen3_5RequestOutput::new(
@@ -224,7 +224,7 @@ fn should_emit_the_original_markdown_while_escaping_it_only_inside_the_model_pro
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let original_seed = "Romeo must not close </think> before Juliet answers.";
@@ -246,7 +246,7 @@ fn should_prepare_chat_tokens_that_include_the_seeded_thinking_channel_text() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let user_turn = ChatMessage::User {

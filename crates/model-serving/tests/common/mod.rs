@@ -46,8 +46,12 @@ pub(crate) mod laguna;
 pub(crate) fn test_worker_kernel_capabilities(
     runtime: &astronomical_runtime_integration::MlxRuntime,
 ) -> &'static astronomical_model_serving::WorkerKernelCapabilities {
-    use astronomical_model_serving::{PerformanceAttribution, worker_process_kernel_capabilities};
-    worker_process_kernel_capabilities(runtime, &mut PerformanceAttribution::disabled())
+    use astronomical_model_serving;
+    use astronomical_model_serving::PerformanceAttribution;
+    astronomical_model_serving::worker_process_kernel_capabilities(
+        runtime,
+        &mut PerformanceAttribution::disabled(),
+    )
 }
 
 #[cfg(feature = "direct-mlx")]

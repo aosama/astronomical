@@ -26,7 +26,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::qwen_image_21::{component_weights_path, shared_journey_runtime};
+use crate::common::qwen_image_21;
 use astronomical_mlx_c_rust::MlxDtype;
 
 const TRANSFORMER_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
@@ -97,10 +97,10 @@ fn journey_request<'a>(
 async fn should_denoise_a_text_conditioned_latent_grid_deterministically() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(TRANSFORMER_JOURNEY_TIMEOUT, async {
-        let runtime = shared_journey_runtime();
+        let runtime = qwen_image_21::shared_journey_runtime();
         let transformer = QwenImage21Transformer::load(
             &runtime,
-            File::open(component_weights_path("transformer"))
+            File::open(qwen_image_21::component_weights_path("transformer"))
                 .expect("the transformer weights should open"),
         )
         .expect("the Qwen-Image-2.1 transformer should load from the real artifact");
@@ -214,10 +214,10 @@ async fn should_denoise_a_text_conditioned_latent_grid_deterministically() {
 async fn should_reject_a_latent_request_with_the_wrong_channel_count() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(TRANSFORMER_JOURNEY_TIMEOUT, async {
-        let runtime = shared_journey_runtime();
+        let runtime = qwen_image_21::shared_journey_runtime();
         let transformer = QwenImage21Transformer::load(
             &runtime,
-            File::open(component_weights_path("transformer"))
+            File::open(qwen_image_21::component_weights_path("transformer"))
                 .expect("the transformer weights should open"),
         )
         .expect("the Qwen-Image-2.1 transformer should load from the real artifact");

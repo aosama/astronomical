@@ -3,7 +3,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::Flux2KleinVaeError;
-use super::convolution::{as_i32, validate_shape};
+use super::convolution;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const GROUP_NORM_EPSILON: f32 = 1e-6;
@@ -30,8 +30,8 @@ impl Flux2KleinGroupNorm {
         }
         let weight = tensors.tensor(&format!("{prefix}.weight"))?;
         let bias = tensors.tensor(&format!("{prefix}.bias"))?;
-        validate_shape(prefix, "weight", &weight, &[channels])?;
-        validate_shape(prefix, "bias", &bias, &[channels])?;
+        convolution::validate_shape(prefix, "weight", &weight, &[channels])?;
+        convolution::validate_shape(prefix, "bias", &bias, &[channels])?;
         Ok(Self {
             channels,
             weight_float32: runtime.astype(&weight, MlxDtype::Float32)?,
@@ -45,7 +45,8 @@ impl Flux2KleinGroupNorm {
         input: &MlxArray,
     ) -> Result<MlxArray, Flux2KleinVaeError> {
         let shape = input.shape();
-        if shape.len() != 4 || shape[3] != as_i32(self.channels, "GroupNorm channels")? {
+        if shape.len() != 4 || shape[3] != convolution::as_i32(self.channels, "GroupNorm channels")?
+        {
             return Err(Flux2KleinVaeError::latent_geometry(format!(
                 "GroupNorm expected NHWC channels {}, received {shape:?}",
                 self.channels
@@ -55,8 +56,9 @@ impl Flux2KleinGroupNorm {
         let spatial = shape[1]
             .checked_mul(shape[2])
             .ok_or_else(|| Flux2KleinVaeError::latent_geometry("GroupNorm spatial overflow"))?;
-        let groups = as_i32(GROUP_COUNT, "GroupNorm group count")?;
-        let group_width = as_i32(self.channels / GROUP_COUNT, "GroupNorm group width")?;
+        let groups = convolution::as_i32(GROUP_COUNT, "GroupNorm group count")?;
+        let group_width =
+            convolution::as_i32(self.channels / GROUP_COUNT, "GroupNorm group width")?;
         let float_input = runtime.astype(input, MlxDtype::Float32)?;
         let grouped = runtime.reshape(&float_input, &[batch, spatial, groups, group_width])?;
         let pytorch_grouped = runtime.transpose_axes(&grouped, &[0, 2, 1, 3])?;

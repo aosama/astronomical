@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5PrefillRequestCheckpoint};
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
@@ -47,15 +47,14 @@ impl Qwen3_5EngineState {
         let memory_snapshot_before_reclamation = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
-        let retained_expert_payload_bytes = retained_expert_payload_bytes(
-            self.model
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?,
-        );
+        let retained_expert_payload_bytes =
+            retained_expert_payload_bytes(self.model.as_ref().ok_or_else(|| {
+                super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
+            })?);
         // The retry needs transient arrays already active at failure plus the
         // allocation that failed. They are additive, not alternative estimates.
         let fixed_forward_workspace_bytes = ForwardRecoveryPolicy::fixed_workspace_bytes(
@@ -78,7 +77,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let active_memory_bytes_after_reclamation = reclaim_and_sample_active_memory(
             model,
             expert_reclamation_target_bytes,
@@ -140,15 +139,14 @@ impl Qwen3_5EngineState {
         let memory_snapshot_before_reclamation = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
-        let retained_expert_payload_bytes = retained_expert_payload_bytes(
-            self.model
-                .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?,
-        );
+        let retained_expert_payload_bytes =
+            retained_expert_payload_bytes(self.model.as_ref().ok_or_else(|| {
+                super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
+            })?);
         let retained_payload_before_reclamation =
             u64::try_from(retained_expert_payload_bytes).unwrap_or(u64::MAX);
         // GPU OOM does not expose one failed allocation size. Use learned
@@ -161,7 +159,7 @@ impl Qwen3_5EngineState {
         let active_memory_limit_bytes = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .runtime()
             .memory_limits()
             .active_memory_limit_bytes();
@@ -176,7 +174,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let active_memory_bytes_after_reclamation = reclaim_and_sample_active_memory(
             model,
             expert_reclamation_target_bytes,
@@ -225,7 +223,7 @@ fn clear_allocator_cache_after_active_memory_limit(
     let model = engine_state
         .model
         .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
     // Synchronize before clearing reusable allocator storage. If synchronization
     // itself reports recoverable OOM, command completion has established the
     // failure boundary and cache cleanup remains the required next action.
@@ -253,7 +251,7 @@ fn clear_allocator_cache_without_stream_sync(
     let model = engine_state
         .model
         .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
     active_request
         .performance_attribution
         .measure_operation(
@@ -293,7 +291,7 @@ fn republish_prefill_residency_plan_after_demotion(
     engine_state
         .model
         .as_ref()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+        .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
         .republish_prefill_residency_plan_after_demotion(
             context_token_count,
             operation_token_count,
@@ -316,7 +314,7 @@ fn demote_complete_resident_owner_for_prefill_recovery(
     engine_state
         .model
         .as_mut()
-        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+        .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
         .demote_resident_experts_to_paging(
             Qwen3_5ExpertResidencyTransitionReason::RequestPressure,
             &mut active_request.performance_attribution,

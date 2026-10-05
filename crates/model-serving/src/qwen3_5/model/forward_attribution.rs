@@ -5,9 +5,9 @@ use astronomical_mlx_c_rust::MlxArray;
 use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::forward_contract::validate_forward_input;
+use super::forward_contract;
 use super::model::Qwen3_5Model;
-use super::visual_embedding_injection::qwen3_5_inject_visual_embeddings;
+use super::visual_embedding_injection;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
@@ -83,7 +83,7 @@ impl Qwen3_5Model {
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<usize, Qwen3_5ExecutionError> {
-        let token_count = validate_forward_input(
+        let token_count = forward_contract::validate_forward_input(
             chunk_token_ids,
             starting_position_tokens,
             None,
@@ -105,7 +105,7 @@ impl Qwen3_5Model {
             .array_from_i32(&signed_token_ids, &[1, token_count])?;
         let text_embeddings = self.embedding_lookup(&token_indices)?;
         let (injected_embeddings, consumed_visual_embedding_count) =
-            qwen3_5_inject_visual_embeddings(
+            visual_embedding_injection::qwen3_5_inject_visual_embeddings(
                 &self.runtime,
                 &text_embeddings,
                 chunk_token_ids,

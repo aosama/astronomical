@@ -4,12 +4,14 @@ use astronomical_model_serving::{
 };
 use safetensors::Dtype;
 
-use super::compressed_artifact_support::{CompressedFixtureFormat, dense_fixture};
+use super::compressed_artifact_support;
+use super::compressed_artifact_support::CompressedFixtureFormat;
 
 #[test]
 fn should_preserve_e4m3_nvfp4_scales_and_json_scalar_global_scales() {
     let model_directory = tempfile::tempdir().expect("the test should create a directory");
-    let mut fixture = dense_fixture("", CompressedFixtureFormat::TwoLevelNvfp4);
+    let mut fixture =
+        compressed_artifact_support::dense_fixture("", CompressedFixtureFormat::TwoLevelNvfp4);
     for shard_tensors in fixture.tensors_by_shard.values_mut() {
         for source_tensor in shard_tensors {
             if source_tensor.name.ends_with(".weight_scale") {
@@ -55,7 +57,7 @@ fn should_preserve_e4m3_nvfp4_scales_and_json_scalar_global_scales() {
 #[test]
 fn should_reject_block_fp8_scale_geometry_that_contradicts_config() {
     let model_directory = tempfile::tempdir().expect("the test should create a directory");
-    let mut fixture = dense_fixture(
+    let mut fixture = compressed_artifact_support::dense_fixture(
         "",
         CompressedFixtureFormat::BlockFp8 {
             block_row_extent: 128,

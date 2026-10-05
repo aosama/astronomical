@@ -15,8 +15,9 @@ use crate::per_expert_pack::{
     per_expert_pack_relative_path, read_per_expert_pack_header, validate_per_expert_pack_header,
     validate_per_expert_pack_payload,
 };
-use crate::revision_manifest::{StreamingModelManifest, expert_file_entry, sha256_hex_digest};
-use crate::streaming_model_preparer::quantization_mode_name;
+use crate::revision_manifest;
+use crate::revision_manifest::StreamingModelManifest;
+use crate::streaming_model_preparer;
 
 /// Writes the revision manifest: every published file declared with its
 /// measured size and content hash, so integrity verification works
@@ -46,7 +47,7 @@ pub(super) fn write_manifest(
     let mut expert_files = Vec::new();
     for (layer_index, layer_plan) in layer_plans.iter().enumerate() {
         for expert_id in 0..layer_plan.expert_capacity {
-            expert_files.push(expert_file_entry(
+            expert_files.push(revision_manifest::expert_file_entry(
                 staging_model_directory,
                 layer_index,
                 expert_id,
@@ -66,7 +67,7 @@ pub(super) fn write_manifest(
         source_model_id,
         model_revision,
         first_layer_plan.expert_capacity,
-        quantization_mode_name(first_layer_plan),
+        streaming_model_preparer::quantization_mode_name(first_layer_plan),
         first_layer_plan.quantization_bits,
         first_layer_plan.quantization_group_size,
         resident_files,
@@ -111,7 +112,8 @@ pub(super) fn validate_complete_streaming_model(
         let resident_file_path = model_directory.join(&resident_file.file_name);
         if !resident_file_path.is_file()
             || fs::metadata(&resident_file_path)?.len() != resident_file.expected_file_byte_count
-            || sha256_hex_digest(&resident_file_path)? != resident_file.content_sha256
+            || revision_manifest::sha256_hex_digest(&resident_file_path)?
+                != resident_file.content_sha256
         {
             return Err(AlignedExpertPackPreparationError::InvalidExistingRevision {
                 revision_directory: model_directory.to_path_buf(),
@@ -129,7 +131,7 @@ pub(super) fn validate_complete_streaming_model(
     }
     for expert_file in &streaming_model_manifest.expert_files {
         let expert_file_path = model_directory.join(&expert_file.file_name);
-        if sha256_hex_digest(&expert_file_path)? != expert_file.content_sha256 {
+        if revision_manifest::sha256_hex_digest(&expert_file_path)? != expert_file.content_sha256 {
             return Err(AlignedExpertPackPreparationError::InvalidExistingRevision {
                 revision_directory: model_directory.to_path_buf(),
             });

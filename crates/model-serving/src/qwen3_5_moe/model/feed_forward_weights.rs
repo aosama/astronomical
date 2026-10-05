@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5::model::weights::{take_quantized_affine_weights, take_tensor};
+use crate::qwen3_5::model::weights;
 use crate::qwen3_5::{Qwen3_5Config, Qwen3_5ExecutionError};
 
 /// Router gate weights that can be affine-quantized or plain bfloat16.
@@ -56,19 +56,19 @@ pub(crate) fn bind_qwen3_5_moe_feed_forward_weights(
     let gate_module_name = format!("{mixture_of_experts_prefix}.gate");
     let gate_scales_name = format!("{gate_module_name}.scales");
     let router_projection = if bound_tensors.contains_key(&gate_scales_name) {
-        Qwen3_5MoERouterGateWeights::Affine(take_quantized_affine_weights(
+        Qwen3_5MoERouterGateWeights::Affine(weights::take_quantized_affine_weights(
             bound_tensors,
             qwen3_5_config,
             &gate_module_name,
         )?)
     } else {
-        Qwen3_5MoERouterGateWeights::Unquantized(take_tensor(
+        Qwen3_5MoERouterGateWeights::Unquantized(weights::take_tensor(
             bound_tensors,
             format!("{gate_module_name}.weight"),
         )?)
     };
     let bind_projection = |bound_tensors: &mut HashMap<String, MlxArray>, suffix: &str| {
-        take_quantized_affine_weights(
+        weights::take_quantized_affine_weights(
             bound_tensors,
             qwen3_5_config,
             &format!("{mixture_of_experts_prefix}.{suffix}"),

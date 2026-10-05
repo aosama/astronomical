@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 use tokio::{process::Command, time::timeout};
 
 use crate::worker_startup_error::WorkerStartupError;
@@ -92,7 +91,7 @@ pub async fn sample_iogpu_wired_limit_bytes() -> Result<usize, WorkerStartupErro
             Ok(explicit_limit_bytes)
         }
         GpuWiredMemoryLimitSetting::SystemDefaultPolicy => {
-            maximum_recommended_gpu_working_set_size_bytes()
+            astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes()
                 .map_err(WorkerStartupError::ReadMlxRecommendedGpuWorkingSet)
         }
     }

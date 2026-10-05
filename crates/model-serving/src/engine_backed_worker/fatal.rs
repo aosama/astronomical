@@ -3,7 +3,8 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use super::support::{WorkerRuntimeError, engine_generation_error};
+use super::support;
+use super::support::WorkerRuntimeError;
 use crate::InferenceEngineError;
 
 pub(crate) async fn report_fatal_engine_error<WriteTransport, ActiveGeneration>(
@@ -14,7 +15,7 @@ pub(crate) async fn report_fatal_engine_error<WriteTransport, ActiveGeneration>(
 where
     WriteTransport: AsyncWrite + Unpin,
 {
-    let fatal_worker_error = engine_generation_error(engine_error);
+    let fatal_worker_error = support::engine_generation_error(engine_error);
     let public_failure_reason = public_fatal_execution_reason(&fatal_worker_error.to_string());
     tracing::error!(
         request_id = request_id.value(),

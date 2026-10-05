@@ -19,7 +19,7 @@ use crate::config_file::{
     strip_retired_speculative_prefill_config, write_adjacent_schema,
     write_config_file_bytes_atomically,
 };
-use crate::{AstronomicalConfigError, LogLevel, discover_models};
+use crate::{AstronomicalConfigError, LogLevel};
 
 const LEGACY_CONFIG_BACKUP_FILE_NAME: &str = "config.legacy-v0.json";
 
@@ -170,13 +170,14 @@ fn discover_model_ids_required_for_migration(
     {
         return Ok(Vec::new());
     }
-    let directory_scans = discover_models(&legacy_config.model_directories).map_err(|source| {
-        AstronomicalConfigError::LegacyMigration {
-            description: format!(
-                "could not discover models needed to preserve global policy: {source}"
-            ),
-        }
-    })?;
+    let directory_scans =
+        crate::discover_models(&legacy_config.model_directories).map_err(|source| {
+            AstronomicalConfigError::LegacyMigration {
+                description: format!(
+                    "could not discover models needed to preserve global policy: {source}"
+                ),
+            }
+        })?;
     let discovered_model_ids: Vec<String> = directory_scans
         .into_iter()
         .flat_map(|directory_scan| directory_scan.discovered_models)

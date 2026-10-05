@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::time::Instant;
 
-use crate::worker_cache_clear::apply_pending_prompt_cache_clear_if_idle;
+use crate::worker_cache_clear;
 use crate::worker_memory_limit::{
     PendingMlxMemoryLimitUpdate, apply_pending_mlx_memory_limit_if_idle,
     contain_mlx_memory_limit_failure,
@@ -59,7 +59,7 @@ pub(super) async fn drain_pending_idle_work(
         )
         .await;
     }
-    apply_pending_prompt_cache_clear_if_idle(
+    worker_cache_clear::apply_pending_prompt_cache_clear_if_idle(
         pending_prompt_cache_clear,
         worker_process,
         health_snapshot,

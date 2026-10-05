@@ -8,7 +8,7 @@
 use thiserror::Error;
 
 use super::ram_values::MlxRamBudgetModelGeometry;
-use crate::memory::reclamation::required_complete_residency_activation_headroom_bytes;
+use crate::memory::reclamation;
 
 /// Why RAM-budget geometry could not be composed from measured layer facts.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -76,10 +76,11 @@ pub fn mlx_ram_budget_model_geometry_from_measured_layer_facts(
         largest_routed_expert_page_bytes(measured_layer_payloads, experts_per_token)?;
     let model_core_payload_bytes =
         total_model_payload_bytes.saturating_sub(complete_expert_payload_bytes);
-    let required_headroom_bytes = required_complete_residency_activation_headroom_bytes(
-        complete_residency_transient_bytes,
-        0,
-    );
+    let required_headroom_bytes =
+        reclamation::required_complete_residency_activation_headroom_bytes(
+            complete_residency_transient_bytes,
+            0,
+        );
     Ok((
         MlxRamBudgetModelGeometry {
             model_core_payload_bytes,

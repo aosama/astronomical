@@ -13,10 +13,10 @@ use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::{Instant, MissedTickBehavior, interval};
 
-use crate::worker_cache_clear::handle_prompt_cache_clear_command;
-use crate::worker_embeddings_request::handle_generate_embeddings_command;
-use crate::worker_generate::handle_generate_command;
-use crate::worker_image_request::handle_generate_image_command;
+use crate::worker_cache_clear;
+use crate::worker_embeddings_request;
+use crate::worker_generate;
+use crate::worker_image_request;
 use crate::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate, apply_mlx_memory_limit,
     take_generation_start_after_pending_memory_limit,
@@ -143,7 +143,7 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = handle_generate_command(
+                        if let Err(control_error) = worker_generate::handle_generate_command(
                             &mut worker_process,
                             active_generation_permit,
                             generation_command,
@@ -199,7 +199,7 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = handle_generate_image_command(
+                        if let Err(control_error) = worker_image_request::handle_generate_image_command(
                             &mut worker_process,
                             active_generation_permit,
                             generation_command,
@@ -255,7 +255,7 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = handle_generate_embeddings_command(
+                        if let Err(control_error) = worker_embeddings_request::handle_generate_embeddings_command(
                             &mut worker_process,
                             active_generation_permit,
                             embeddings_command,
@@ -372,7 +372,7 @@ pub(crate) async fn run_worker(
                         model_id,
                         clear_sender,
                     } => {
-                        handle_prompt_cache_clear_command(
+                        worker_cache_clear::handle_prompt_cache_clear_command(
                             model_id,
                             clear_sender,
                             &mut pending_prompt_cache_clear,

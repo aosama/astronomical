@@ -3,9 +3,10 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde_json::Value;
 
-use super::openai_rest::{E2E_TIMEOUT, get_endpoint, stop_serving_rest_server};
-use crate::support::http::send_http_request;
-use crate::support::serving_rest::launch_serving_rest_server_for_embedding_model;
+use super::openai_rest;
+use super::openai_rest::E2E_TIMEOUT;
+use crate::support::http;
+use crate::support::serving_rest;
 
 const EMBEDDINGS_MODEL_LEAF_ID: &str = "nomicai-modernbert-embed-base-8bit";
 const NATIVE_VECTOR_WIDTH: usize = 768;
@@ -39,7 +40,7 @@ async fn run_embeddings_gpu_journey() {
             panic!("expected embedding capability, got {other_capabilities:?}")
         }
     };
-    let rest_server = launch_serving_rest_server_for_embedding_model(
+    let rest_server = serving_rest::launch_serving_rest_server_for_embedding_model(
         &selected_model.model_id,
         selected_model.model_directory.clone(),
         NATIVE_VECTOR_WIDTH as u32,
@@ -49,7 +50,7 @@ async fn run_embeddings_gpu_journey() {
     let server_address = rest_server.server_address;
 
     eprintln!("[embeddings-rest 1/6] status=progress phase=models_capability");
-    let models_response = get_endpoint(server_address, "/v1/models").await;
+    let models_response = openai_rest::get_endpoint(server_address, "/v1/models").await;
     assert_http_ok(&models_response);
     let models_document = http_json_body(&models_response);
     let advertised_model = advertised_model_document(&models_document, &selected_model.model_id);
@@ -149,7 +150,7 @@ async fn run_embeddings_gpu_journey() {
     // Issue #510: the finalized status must publish the unused-headroom
     // split the menu paints. The embeddings engine owns no experts, context
     // state, so no owner may overrun and nothing is unexplained.
-    let status_response = get_endpoint(server_address, "/v1/status").await;
+    let status_response = openai_rest::get_endpoint(server_address, "/v1/status").await;
     assert_http_ok(&status_response);
     let status_document = http_json_body(&status_response);
     let memory_snapshot = &status_document["mlx_memory_snapshot"];
@@ -192,7 +193,7 @@ async fn run_embeddings_gpu_journey() {
             / 1_000_000_000.0,
     );
 
-    stop_serving_rest_server(rest_server).await;
+    openai_rest::stop_serving_rest_server(rest_server).await;
     eprintln!(
         "[embeddings-rest] status=success model={}",
         selected_model.model_id
@@ -255,7 +256,7 @@ async fn post_embeddings(server_address: std::net::SocketAddr, request_body: Str
         "POST /v1/embeddings HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",
         request_body.len()
     );
-    send_http_request(server_address, request_text).await
+    http::send_http_request(server_address, request_text).await
 }
 
 fn assert_embeddings_list(

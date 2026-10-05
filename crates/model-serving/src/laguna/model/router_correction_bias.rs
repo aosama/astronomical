@@ -6,7 +6,7 @@ use astronomical_mlx_c_rust::MlxArray;
 
 use crate::laguna::artifacts::{LagunaLayerTensorRole, LagunaTensorComponent, LagunaTensorId};
 
-use super::bound_linear::is_floating_weight;
+use super::bound_linear;
 use super::error::LagunaExecutionError;
 
 pub(super) fn bind_optional_router_correction_bias(
@@ -29,7 +29,7 @@ pub(super) fn bind_optional_router_correction_bias(
         )
     })?;
     if correction_bias.shape() != [expected_expert_count]
-        || !is_floating_weight(correction_bias.dtype())
+        || !bound_linear::is_floating_weight(correction_bias.dtype())
     {
         return Err(LagunaExecutionError::invalid_geometry(
             "router correction bias must be one floating-point value per expert",

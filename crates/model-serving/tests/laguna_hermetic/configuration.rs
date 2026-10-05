@@ -4,11 +4,11 @@ use astronomical_model_serving::{
 };
 use serde_json::{Value, json};
 
-use super::support::{config_bytes, config_value, normalize};
+use super::support;
 
 #[test]
 fn should_normalize_root_and_text_config_envelopes_into_the_same_contract() {
-    let root_config = config_value(4);
+    let root_config = support::config_value(4);
     let mut nested_config = root_config.clone();
     let nested_object = nested_config
         .as_object_mut()
@@ -29,8 +29,8 @@ fn should_normalize_root_and_text_config_envelopes_into_the_same_contract() {
         "text_config": nested_config,
     });
 
-    let root_contract = normalize(root_config);
-    let nested_contract = normalize(wrapped_config);
+    let root_contract = support::normalize(root_config);
+    let nested_contract = support::normalize(wrapped_config);
 
     assert_eq!(root_contract, nested_contract);
     assert_eq!(nested_contract.model().layer_count(), 4);
@@ -39,7 +39,7 @@ fn should_normalize_root_and_text_config_envelopes_into_the_same_contract() {
 
 #[test]
 fn should_accept_equivalent_duplicates_and_reject_conflicting_envelope_fields() {
-    let mut nested_geometry = config_value(3);
+    let mut nested_geometry = support::config_value(3);
     nested_geometry["gating"] = json!("per_head");
     let equivalent = json!({
         "model_type": "laguna",
@@ -47,12 +47,12 @@ fn should_accept_equivalent_duplicates_and_reject_conflicting_envelope_fields() 
         "gating": "per-head",
         "text_config": nested_geometry.clone()
     });
-    normalize(equivalent);
+    support::normalize(equivalent);
 
     let mut conflicting = json!({"hidden_size": 2_048, "text_config": nested_geometry});
     conflicting["model_type"] = json!("laguna");
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&conflicting)),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&conflicting)),
         Err(LagunaNormalizationError::ConflictingEnvelopeField {
             field_name,
         }) if field_name == "hidden_size"
@@ -93,12 +93,12 @@ fn should_normalize_explicit_and_default_attention_schedules() {
     ];
 
     for (explicit_schedule, expected_kinds) in schedule_rows {
-        let mut config = config_value(4);
+        let mut config = support::config_value(4);
         if let Some(layer_types) = explicit_schedule {
             config["layer_types"] = layer_types;
             config["sliding_window"] = json!(768);
         }
-        let contract = normalize(config);
+        let contract = support::normalize(config);
         let actual_kinds = contract
             .layers()
             .iter()
@@ -119,7 +119,7 @@ fn should_normalize_explicit_and_default_attention_schedules() {
 
 #[test]
 fn should_apply_per_layer_query_heads_before_the_global_head_count() {
-    let global_contract = normalize(config_value(3));
+    let global_contract = support::normalize(support::config_value(3));
     assert!(
         global_contract
             .layers()
@@ -127,10 +127,10 @@ fn should_apply_per_layer_query_heads_before_the_global_head_count() {
             .all(|layer| layer.attention().query_head_count() == 12)
     );
 
-    let mut heterogeneous = config_value(3);
+    let mut heterogeneous = support::config_value(3);
     heterogeneous["num_attention_heads"] = json!(10);
     heterogeneous["num_attention_heads_per_layer"] = json!([8, 12, 16]);
-    let heterogeneous_contract = normalize(heterogeneous);
+    let heterogeneous_contract = support::normalize(heterogeneous);
     assert_eq!(
         heterogeneous_contract
             .layers()
@@ -143,7 +143,7 @@ fn should_apply_per_layer_query_heads_before_the_global_head_count() {
 
 #[test]
 fn should_normalize_explicit_legacy_and_dense_only_feed_forward_schedules() {
-    let dense_contract = normalize(config_value(4));
+    let dense_contract = support::normalize(support::config_value(4));
     assert!(
         dense_contract
             .layers()
@@ -151,12 +151,12 @@ fn should_normalize_explicit_legacy_and_dense_only_feed_forward_schedules() {
             .all(|layer| matches!(layer.feed_forward(), LagunaFeedForwardDescriptor::Dense(_)))
     );
 
-    let mut explicit = config_value(4);
+    let mut explicit = support::config_value(4);
     add_sparse_geometry(&mut explicit);
     explicit["mlp_layer_types"] = json!(["sparse", "dense", "moe", "dense"]);
     explicit["mlp_only_layers"] = json!([0]);
     explicit["decoder_sparse_step"] = json!(1);
-    let explicit_contract = normalize(explicit);
+    let explicit_contract = support::normalize(explicit);
     assert_eq!(sparse_layer_indexes(&explicit_contract), vec![0, 2]);
     let LagunaFeedForwardDescriptor::Moe(first_layer_moe) =
         explicit_contract.layers()[0].feed_forward()
@@ -167,19 +167,19 @@ fn should_normalize_explicit_legacy_and_dense_only_feed_forward_schedules() {
     assert_eq!(first_layer_moe.expert_count(), 16);
     assert_eq!(first_layer_moe.experts_per_token(), 4);
 
-    let mut legacy = config_value(5);
+    let mut legacy = support::config_value(5);
     add_sparse_geometry(&mut legacy);
     legacy["mlp_only_layers"] = json!([2]);
     legacy["decoder_sparse_step"] = json!(2);
-    let legacy_contract = normalize(legacy);
+    let legacy_contract = support::normalize(legacy);
     assert_eq!(sparse_layer_indexes(&legacy_contract), vec![1, 3]);
 }
 
 #[test]
 fn should_normalize_none_global_and_per_layer_gating_aliases() {
-    let mut disabled = config_value(3);
+    let mut disabled = support::config_value(3);
     disabled["gating"] = json!(false);
-    let disabled_contract = normalize(disabled);
+    let disabled_contract = support::normalize(disabled);
     assert!(
         disabled_contract
             .layers()
@@ -187,9 +187,9 @@ fn should_normalize_none_global_and_per_layer_gating_aliases() {
             .all(|layer| { layer.attention().gating_kind() == LagunaGatingKind::None })
     );
 
-    let mut global = config_value(3);
+    let mut global = support::config_value(3);
     global["gating"] = json!("per-head");
-    let global_contract = normalize(global);
+    let global_contract = support::normalize(global);
     assert!(
         global_contract
             .layers()
@@ -197,10 +197,10 @@ fn should_normalize_none_global_and_per_layer_gating_aliases() {
             .all(|layer| { layer.attention().gating_kind() == LagunaGatingKind::PerHead })
     );
 
-    let mut per_layer = config_value(3);
+    let mut per_layer = support::config_value(3);
     per_layer["gating"] = json!(true);
     per_layer["gating_types"] = json!(["none", "per-element", "per_element"]);
-    let per_layer_contract = normalize(per_layer);
+    let per_layer_contract = support::normalize(per_layer);
     assert_eq!(
         per_layer_contract
             .layers()
@@ -222,12 +222,12 @@ fn should_canonicalize_omitted_zero_and_positive_router_softcaps() {
         (Some(json!(0.0)), 0.0),
         (Some(json!(30.5)), 30.5),
     ] {
-        let mut config = config_value(2);
+        let mut config = support::config_value(2);
         if let Some(softcap_value) = softcap {
             config["moe_router_logit_softcapping"] = softcap_value;
         }
         assert_eq!(
-            normalize(config).model().router_logit_softcap(),
+            support::normalize(config).model().router_logit_softcap(),
             expected_softcap
         );
     }
@@ -244,7 +244,7 @@ fn should_reject_malformed_oversized_unsafe_and_inconsistent_declarations() {
         LagunaTargetNormalizer::normalize(&oversized_json),
         Err(LagunaNormalizationError::ConfigTooLarge { .. })
     ));
-    let mut non_finite_softcap = config_bytes(&config_value(1));
+    let mut non_finite_softcap = support::config_bytes(&support::config_value(1));
     assert_eq!(non_finite_softcap.pop(), Some(b'}'));
     non_finite_softcap.extend_from_slice(b",\"moe_router_logit_softcapping\":1e400}");
     assert!(matches!(
@@ -258,10 +258,10 @@ fn should_reject_malformed_oversized_unsafe_and_inconsistent_declarations() {
         ("moe_router_logit_softcapping", json!(-1.0)),
     ];
     for (field_name, invalid_value) in invalid_rows {
-        let mut config = config_value(3);
+        let mut config = support::config_value(3);
         config[field_name] = invalid_value;
         assert!(matches!(
-            LagunaTargetNormalizer::normalize(&config_bytes(&config)),
+            LagunaTargetNormalizer::normalize(&support::config_bytes(&config)),
             Err(LagunaNormalizationError::InvalidNumericValue { .. })
         ));
     }
@@ -272,7 +272,7 @@ fn should_reject_malformed_oversized_unsafe_and_inconsistent_declarations() {
         "gating_types",
         "mlp_layer_types",
     ] {
-        let mut config = config_value(3);
+        let mut config = support::config_value(3);
         config[field_name] = match field_name {
             "layer_types" => json!(["full", "full"]),
             "num_attention_heads_per_layer" => json!([12, 12]),
@@ -280,23 +280,23 @@ fn should_reject_malformed_oversized_unsafe_and_inconsistent_declarations() {
             _ => json!(["dense", "dense"]),
         };
         assert!(matches!(
-            LagunaTargetNormalizer::normalize(&config_bytes(&config)),
+            LagunaTargetNormalizer::normalize(&support::config_bytes(&config)),
             Err(LagunaNormalizationError::LayerArrayLengthMismatch { .. })
         ));
     }
 
-    let mut indivisible_heads = config_value(2);
+    let mut indivisible_heads = support::config_value(2);
     indivisible_heads["num_attention_heads_per_layer"] = json!([12, 10]);
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&indivisible_heads)),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&indivisible_heads)),
         Err(LagunaNormalizationError::InvalidHeadDivisibility { layer_index: 1, .. })
     ));
 
-    let mut invalid_top_k = config_value(2);
+    let mut invalid_top_k = support::config_value(2);
     add_sparse_geometry(&mut invalid_top_k);
     invalid_top_k["num_experts_per_tok"] = json!(17);
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&invalid_top_k)),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&invalid_top_k)),
         Err(LagunaNormalizationError::TopKExceedsExpertCount { .. })
     ));
 }
@@ -310,25 +310,25 @@ fn should_reject_unsupported_attention_mlp_gating_and_model_values() {
         ("torch_dtype", json!("float64")),
     ];
     for (field_name, unsupported_value) in mutations {
-        let mut config = config_value(2);
+        let mut config = support::config_value(2);
         config[field_name] = unsupported_value;
         assert!(matches!(
-            LagunaTargetNormalizer::normalize(&config_bytes(&config)),
+            LagunaTargetNormalizer::normalize(&support::config_bytes(&config)),
             Err(LagunaNormalizationError::UnsupportedValue { .. })
         ));
     }
 
-    let mut ambiguous_boolean = config_value(2);
+    let mut ambiguous_boolean = support::config_value(2);
     ambiguous_boolean["gating"] = json!(true);
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&ambiguous_boolean)),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&ambiguous_boolean)),
         Err(LagunaNormalizationError::AmbiguousGatingBoolean)
     ));
 }
 
 #[test]
 fn should_normalize_a_synthetic_non_pinned_geometry() {
-    let mut config = config_value(7);
+    let mut config = support::config_value(7);
     config["vocab_size"] = json!(65_537);
     config["hidden_size"] = json!(1_792);
     config["intermediate_size"] = json!(5_376);
@@ -342,7 +342,7 @@ fn should_normalize_a_synthetic_non_pinned_geometry() {
     config["sliding_window"] = json!(640);
     config["rope_parameters"]["partial_rotary_factor"] = json!(0.5);
 
-    let contract = normalize(config);
+    let contract = support::normalize(config);
 
     assert_eq!(contract.model().vocabulary_size(), 65_537);
     assert_eq!(contract.layers().len(), 7);

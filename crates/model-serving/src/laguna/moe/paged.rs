@@ -13,8 +13,8 @@ use crate::laguna::paging::{
 };
 use crate::performance_attribution::PerformanceAttribution;
 
-use super::resident::shared_expert_swiglu;
-use super::router::route_laguna_experts;
+use super::resident;
+use super::router;
 use astronomical_mlx_c_rust::{MlxArray, MlxMetalKernel};
 
 /// Routes with the resident router, streams one page, scales, and adds the shared expert.
@@ -132,7 +132,7 @@ pub(in crate::laguna) fn execute_paged_mixture_on_page(
     }
     let shared_output = performance_attribution.measure_operation(
         crate::performance_attribution::PerformanceOperation::SharedExpertExecution,
-        |_| shared_expert_swiglu(runtime, hidden_states, weights, layer_index, None),
+        |_| resident::shared_expert_swiglu(runtime, hidden_states, weights, layer_index, None),
     )?;
     Ok(runtime.add(&scaled_routed_output, &shared_output)?)
 }
@@ -188,7 +188,7 @@ pub(in crate::laguna) fn route_laguna_layer_experts(
         .project(runtime, hidden_states)?;
     let correction_bias =
         weights.optional_layer(layer_index, LagunaLayerTensorRole::RouterCorrectionBias);
-    route_laguna_experts(
+    router::route_laguna_experts(
         runtime,
         &router_logits,
         correction_bias,

@@ -2,8 +2,6 @@ use std::fs;
 use std::future::Future;
 use std::time::Duration;
 
-use astronomical_model_serving::clear_persistent_prompt_cache_directory;
-
 const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tokio::test]
@@ -15,8 +13,11 @@ async fn should_clear_every_model_cache_from_the_global_root() {
         create_cache_block(cache_root.path(), "publisher/model-b", "revision-b", 7);
 
         eprintln!("[cache-clear] clearing the global cache root");
-        let clear_outcome = clear_persistent_prompt_cache_directory(cache_root.path(), None)
-            .expect("global cache clear should succeed");
+        let clear_outcome = astronomical_model_serving::clear_persistent_prompt_cache_directory(
+            cache_root.path(),
+            None,
+        )
+        .expect("global cache clear should succeed");
 
         assert_eq!(clear_outcome.model_id, None);
         assert_eq!(clear_outcome.blocks_removed, 2);
@@ -34,9 +35,11 @@ async fn should_clear_only_the_requested_model_and_preserve_other_models() {
         create_cache_block(cache_root.path(), "publisher/model-a", "revision-a", 5);
         create_cache_block(cache_root.path(), "publisher/model-b", "revision-b", 7);
 
-        let clear_outcome =
-            clear_persistent_prompt_cache_directory(cache_root.path(), Some("publisher/model-a"))
-                .expect("model-scoped cache clear should succeed");
+        let clear_outcome = astronomical_model_serving::clear_persistent_prompt_cache_directory(
+            cache_root.path(),
+            Some("publisher/model-a"),
+        )
+        .expect("model-scoped cache clear should succeed");
 
         assert_eq!(clear_outcome.model_id.as_deref(), Some("publisher/model-a"));
         assert_eq!(clear_outcome.blocks_removed, 1);
@@ -52,7 +55,7 @@ async fn should_treat_a_missing_model_cache_as_an_idempotent_clear() {
     run_bounded_test(async {
         let cache_root = tempfile::tempdir().expect("cache root should be created");
 
-        let clear_outcome = clear_persistent_prompt_cache_directory(
+        let clear_outcome = astronomical_model_serving::clear_persistent_prompt_cache_directory(
             cache_root.path(),
             Some("publisher/missing-model"),
         )
@@ -72,9 +75,11 @@ async fn should_reject_model_paths_that_can_escape_the_cache_root() {
         fs::write(&preserved_file, b"preserved").expect("preserved fixture should be written");
 
         for unsafe_model_id in ["../outside", "publisher/../outside", "/outside", "."] {
-            let clear_error =
-                clear_persistent_prompt_cache_directory(cache_root.path(), Some(unsafe_model_id))
-                    .expect_err("unsafe model path should be rejected");
+            let clear_error = astronomical_model_serving::clear_persistent_prompt_cache_directory(
+                cache_root.path(),
+                Some(unsafe_model_id),
+            )
+            .expect_err("unsafe model path should be rejected");
             assert!(clear_error.to_string().contains("real directory"));
         }
         assert!(preserved_file.exists());
@@ -100,8 +105,11 @@ async fn should_reject_an_intermediate_symlink_without_deleting_its_target() {
         )
         .expect("cache namespace symlink should be created");
 
-        clear_persistent_prompt_cache_directory(cache_root.path(), Some("publisher/model"))
-            .expect_err("cache clear should reject an intermediate symlink");
+        astronomical_model_serving::clear_persistent_prompt_cache_directory(
+            cache_root.path(),
+            Some("publisher/model"),
+        )
+        .expect_err("cache clear should reject an intermediate symlink");
 
         assert!(preserved_file.exists());
     })
@@ -123,8 +131,11 @@ async fn should_reject_a_global_root_with_parent_directory_components() {
             .join("..")
             .join("preserved-cache");
 
-        clear_persistent_prompt_cache_directory(&unsafe_global_root, None)
-            .expect_err("global root with parent components should be rejected");
+        astronomical_model_serving::clear_persistent_prompt_cache_directory(
+            &unsafe_global_root,
+            None,
+        )
+        .expect_err("global root with parent components should be rejected");
 
         assert!(preserved_file.exists());
     })
@@ -144,8 +155,11 @@ async fn should_unlink_a_global_cache_symlink_without_following_its_target() {
         symlink(external_directory.path(), &cache_symlink)
             .expect("cache symlink should be created");
 
-        let clear_outcome = clear_persistent_prompt_cache_directory(cache_root.path(), None)
-            .expect("global clear should unlink cache-owned symlinks");
+        let clear_outcome = astronomical_model_serving::clear_persistent_prompt_cache_directory(
+            cache_root.path(),
+            None,
+        )
+        .expect("global clear should unlink cache-owned symlinks");
 
         assert!(clear_outcome.bytes_freed > 0);
         assert!(!cache_symlink.exists());

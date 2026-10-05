@@ -22,7 +22,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
-use crate::common::qwen_image_21::{component_weights_path, shared_journey_runtime};
+use crate::common::qwen_image_21;
 use astronomical_mlx_c_rust::MlxDtype;
 
 const ENCODER_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
@@ -77,10 +77,10 @@ fn encode_prompt(runtime: &MlxRuntime, encoder: &QwenImage21TextEncoder, prompt:
 async fn should_encode_a_real_prompt_into_deterministic_conditioning() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(ENCODER_JOURNEY_TIMEOUT, async {
-        let runtime = shared_journey_runtime();
+        let runtime = qwen_image_21::shared_journey_runtime();
         let encoder = QwenImage21TextEncoder::load(
             &runtime,
-            File::open(component_weights_path("text_encoder"))
+            File::open(qwen_image_21::component_weights_path("text_encoder"))
                 .expect("the text-encoder weights should open"),
         )
         .expect("the Qwen3-VL text encoder should load from the real artifact");
@@ -117,10 +117,10 @@ async fn should_encode_a_real_prompt_into_deterministic_conditioning() {
 async fn should_reject_an_out_of_vocabulary_token_id() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(ENCODER_JOURNEY_TIMEOUT, async {
-        let runtime = shared_journey_runtime();
+        let runtime = qwen_image_21::shared_journey_runtime();
         let encoder = QwenImage21TextEncoder::load(
             &runtime,
-            File::open(component_weights_path("text_encoder"))
+            File::open(qwen_image_21::component_weights_path("text_encoder"))
                 .expect("the text-encoder weights should open"),
         )
         .expect("the Qwen3-VL text encoder should load from the real artifact");

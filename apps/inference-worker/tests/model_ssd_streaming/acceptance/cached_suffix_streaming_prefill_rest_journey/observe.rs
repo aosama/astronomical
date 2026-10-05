@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
-use crate::support::serving_rest::get_json_endpoint;
+use crate::support::serving_rest;
 
 use super::reports::InteractionReports;
 use super::support::{
@@ -164,7 +164,7 @@ async fn observe_request(
     let mut last_prefill_progress_at = request_started_at;
     let mut last_stall_dump_at = request_started_at;
     loop {
-        let status_document = get_json_endpoint(server_address, "/v1/status").await;
+        let status_document = serving_rest::get_json_endpoint(server_address, "/v1/status").await;
         let activity = status_document["activity"].as_str().unwrap_or("unknown");
         evidence.observe(&status_document);
         if activity == "prompt_processing" {

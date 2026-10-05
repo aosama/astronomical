@@ -1,8 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::decode_huggingface_cache_directory_name;
-
 /// A Hugging Face cache entry resolved to its active snapshot directory.
 pub(super) struct HuggingFaceCacheEntry {
     pub(super) model_id: String,
@@ -18,7 +16,7 @@ pub(super) fn resolve_huggingface_cache_entry(
     huggingface_cache_directory: &Path,
 ) -> Option<HuggingFaceCacheEntry> {
     let directory_name = huggingface_cache_directory.file_name()?.to_str()?;
-    let decoded_model_id = decode_huggingface_cache_directory_name(directory_name)?;
+    let decoded_model_id = crate::decode_huggingface_cache_directory_name(directory_name)?;
     let snapshots_directory = huggingface_cache_directory.join("snapshots");
     if !snapshots_directory.is_dir() {
         return None;

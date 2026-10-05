@@ -1,7 +1,7 @@
 use astronomical_model_serving::PersistentPromptCachePublicationOutcome;
 
 use super::persistent_prompt_cache_disk_store_support::*;
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
@@ -16,7 +16,7 @@ async fn should_publish_a_partial_tail_block_and_survive_a_rescan() {
         LARGE_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open an empty directory");
-    let model_contract = persistent_prompt_cache_model_contract();
+    let model_contract = qwen3_5_moe::persistent_prompt_cache_model_contract();
     let parent_block_key = persistent_prompt_cache_block_key_for_seed(0);
     let tail_token_count = model_contract.block_token_count() / 2;
     let tail_block_key = parent_block_key
@@ -80,7 +80,7 @@ async fn should_supersede_only_strictly_shorter_tail_siblings() {
         LARGE_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open an empty directory");
-    let model_contract = persistent_prompt_cache_model_contract();
+    let model_contract = qwen3_5_moe::persistent_prompt_cache_model_contract();
     let parent_block_key = persistent_prompt_cache_block_key_for_seed(0);
     let full_block_key = parent_block_key
         .for_child_block(&block_tokens_for_seed(1))
@@ -263,7 +263,7 @@ async fn should_load_a_published_partial_tail_block_back_by_its_actual_token_cou
         LARGE_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open an empty directory");
-    let model_contract = persistent_prompt_cache_model_contract();
+    let model_contract = qwen3_5_moe::persistent_prompt_cache_model_contract();
     let parent_block_key = persistent_prompt_cache_block_key_for_seed(0);
     let tail_token_count = model_contract.block_token_count() / 2;
     let tail_block_key = parent_block_key
@@ -316,13 +316,13 @@ fn tail_tokens_for_count(tail_token_count: usize) -> Vec<u32> {
 }
 
 fn sequence_tensor_layouts() -> Vec<astronomical_model_serving::DecoderCachePersistedTensorLayout> {
-    persistent_prompt_cache_model_contract()
+    qwen3_5_moe::persistent_prompt_cache_model_contract()
         .decoder_cache_layout()
         .sequence_tensor_layouts()
 }
 
 fn boundary_tensor_layouts() -> Vec<astronomical_model_serving::DecoderCachePersistedTensorLayout> {
-    persistent_prompt_cache_model_contract()
+    qwen3_5_moe::persistent_prompt_cache_model_contract()
         .decoder_cache_layout()
         .boundary_tensor_layouts()
 }

@@ -3,13 +3,14 @@ use astronomical_model_serving::{
     k2_horizon_mova_expert_layer_geometries,
 };
 
-use super::support::family_member_config_json;
+use super::support;
 
 #[test]
 fn k2_horizon_mova_plan_slots_are_feed_forward_then_mixture_of_values() {
-    let config =
-        K2HorizonMoVAConfig::from_json_bytes(family_member_config_json(4, &[0], 4, 2).as_bytes())
-            .expect("tiny family config should parse");
+    let config = K2HorizonMoVAConfig::from_json_bytes(
+        support::family_member_config_json(4, &[0], 4, 2).as_bytes(),
+    )
+    .expect("tiny family config should parse");
     let geometries = k2_horizon_mova_expert_layer_geometries(
         &config,
         &[

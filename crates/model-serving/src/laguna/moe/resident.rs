@@ -12,7 +12,7 @@ use crate::sparse_experts::{
 
 use crate::laguna::LagunaNativeWeights;
 
-use super::router::route_laguna_experts;
+use super::router;
 use crate::laguna::model::LagunaExecutionError;
 use astronomical_mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel};
 
@@ -68,7 +68,7 @@ fn forward_resident_mixture_of_experts_inner(
         .project(runtime, hidden_states)?;
     let correction_bias =
         weights.optional_layer(layer_index, LagunaLayerTensorRole::RouterCorrectionBias);
-    let (selected_indices, selected_scores) = route_laguna_experts(
+    let (selected_indices, selected_scores) = router::route_laguna_experts(
         runtime,
         &router_logits,
         correction_bias,

@@ -18,7 +18,7 @@ use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 use super::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
 };
-use super::error::invalid_request_decoder_state;
+use super::error;
 use super::{Qwen3_5ExecutionError, Qwen3_5Model};
 
 /// Correct attention result retained as one decoder layer's restart boundary.
@@ -96,7 +96,7 @@ impl Qwen3_5Model {
                     )
                 },
             ),
-            _ => Err(invalid_request_decoder_state(
+            _ => Err(error::invalid_request_decoder_state(
                 layer_index,
                 "decoder state attention family does not match the bound layer weights",
             )),

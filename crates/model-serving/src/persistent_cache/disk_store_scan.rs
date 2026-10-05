@@ -19,7 +19,7 @@ use super::disk_store_index::{
     TrackedPersistentPromptCacheFile,
 };
 use super::model_contract::PersistentPromptCacheModelContract;
-use super::retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint;
+use super::retention_policy;
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 
 pub(crate) fn scan_current_format_directory<HeaderValidator>(
@@ -421,7 +421,7 @@ fn block_candidate_has_valid_boundary_topology(
     // retain a snapshot at every indexed block.
     persistent_prompt_cache_model_contract.has_sequence_state()
         && block_hashes_with_children.contains(&block_hash)
-        && !persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
+        && !retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
             block_candidate.block_index,
             persistent_prompt_cache_model_contract.common_prefix_checkpoint_stride_blocks(),
         )

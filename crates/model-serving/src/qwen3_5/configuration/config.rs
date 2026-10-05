@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
-use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError, validate_exact_value};
+use super::config_validation;
+use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
 use super::quantizations::optiq::OptiQQuantizationProfile;
 
 /// Global MTP quantization fallback parsed from `mtplx_mtp_quantization`.
@@ -81,7 +82,7 @@ impl Qwen3_5Config {
             Qwen3_5FeedForwardArchitecture::Dense => EXPECTED_DENSE_ARCHITECTURE,
             Qwen3_5FeedForwardArchitecture::MixtureOfExperts => EXPECTED_MOE_ARCHITECTURE,
         };
-        validate_exact_value(
+        config_validation::validate_exact_value(
             "architectures",
             &config_document.architectures.join(","),
             expected_architecture,
@@ -92,7 +93,7 @@ impl Qwen3_5Config {
             .activation_dtype
             .or(config_document.text_config.text_config_dtype.clone())
             .ok_or(Qwen3_5ConfigError::MissingActivationDtype)?;
-        validate_exact_value("dtype", &activation_dtype, EXPECTED_TORCH_DTYPE)?;
+        config_validation::validate_exact_value("dtype", &activation_dtype, EXPECTED_TORCH_DTYPE)?;
         // Source lineage: an upstream open-source Qwen3.5 configuration
         // compatibility translation (see third-party/THIRD_PARTY_NOTICES).
         // Resolve eos_token_ids:

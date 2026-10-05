@@ -13,8 +13,10 @@ use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::rope::QwenImage21Rope;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::blocks::{BlockContext, forward_block};
-use super::preparation::{QwenImage21TransformerRequest, forward_output_head, prepare_forward};
+use super::blocks;
+use super::blocks::BlockContext;
+use super::preparation;
+use super::preparation::QwenImage21TransformerRequest;
 use super::weights::{HEAD_COUNT, HEAD_WIDTH, QwenImage21TransformerWeights};
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -75,7 +77,7 @@ impl QwenImage21Transformer {
     ) -> Result<MlxArray, QwenImage21EngineError> {
         let prepared = performance_attribution.measure_operation(
             PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
-            |_| prepare_forward(runtime, &self.weights, request, &self.rope),
+            |_| preparation::prepare_forward(runtime, &self.weights, request, &self.rope),
         )?;
         performance_attribution.measure_operation(
             PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
@@ -101,7 +103,7 @@ impl QwenImage21Transformer {
         for block_weights in &self.weights.blocks {
             let advanced = performance_attribution.measure_operation(
                 PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
-                |_| forward_block(runtime, block_weights, &hidden_states, &block_context),
+                |_| blocks::forward_block(runtime, block_weights, &hidden_states, &block_context),
             )?;
             performance_attribution.measure_operation(
                 PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
@@ -112,7 +114,7 @@ impl QwenImage21Transformer {
 
         let output = performance_attribution.measure_operation(
             PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
-            |_| forward_output_head(runtime, &self.weights, &prepared, &hidden_states),
+            |_| preparation::forward_output_head(runtime, &self.weights, &prepared, &hidden_states),
         )?;
         performance_attribution.measure_operation(
             PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,

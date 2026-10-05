@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::RequestId;
 use crate::{InferenceEngineError, MemoryPhase};
 
 use super::execution::LagunaInferenceExecution;
-use super::memory::complete_laguna_forward_memory_observation;
+use super::memory;
 
 pub(super) fn inject_input_tokens(
     execution: &mut LagunaInferenceExecution,
@@ -88,7 +88,7 @@ pub(super) fn inject_input_tokens(
         .map_err(|evaluation_error| InferenceEngineError::Fatal {
             reason: format!("Laguna injected-token materialization failed: {evaluation_error}"),
         })?;
-    complete_laguna_forward_memory_observation(
+    memory::complete_laguna_forward_memory_observation(
         runtime,
         model,
         adaptive_ram_growth_guard,

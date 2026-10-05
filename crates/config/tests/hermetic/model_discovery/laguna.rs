@@ -4,8 +4,6 @@ use std::path::Path;
 use astronomical_config::{ModelCapabilities, ModelFamily};
 use serde_json::{Value, json};
 
-use super::discover_configured_models;
-
 const IMMUTABLE_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
 #[test]
@@ -14,7 +12,7 @@ fn should_advertise_one_complete_executable_laguna_artifact() {
     let model_directory = temporary_directory.path().join("Laguna-Fixture");
     write_executable_laguna_artifact(&model_directory);
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .first()
@@ -52,7 +50,7 @@ fn should_retain_library_provider_identity_for_an_executable_laguna_artifact() {
     .expect("Library provider identity should be written");
 
     let discovered_model =
-        &discover_configured_models(&temporary_directory)[0].discovered_models[0];
+        &super::discover_configured_models(&temporary_directory)[0].discovered_models[0];
 
     assert_eq!(
         discovered_model.provider_model_id.as_deref(),
@@ -70,7 +68,7 @@ fn should_advertise_standalone_laguna_templates_when_the_embedded_source_is_abse
         write_executable_laguna_artifact(&model_directory);
         select_standalone_template(&model_directory, embedded_template);
 
-        let discovered_models = discover_configured_models(&temporary_directory)[0]
+        let discovered_models = super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .clone();
 
@@ -94,7 +92,7 @@ fn should_reject_conflicting_embedded_and_standalone_laguna_templates() {
     .expect("the conflicting standalone template should be written");
 
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty()
     );
@@ -128,7 +126,7 @@ fn should_reject_missing_empty_or_malformed_laguna_template_authority() {
         }
 
         assert!(
-            discover_configured_models(&temporary_directory)[0]
+            super::discover_configured_models(&temporary_directory)[0]
                 .discovered_models
                 .is_empty(),
             "Laguna discovery must reject tokenizer config {tokenizer_config}"
@@ -149,7 +147,7 @@ fn should_reject_duplicate_non_utf8_and_oversized_standalone_laguna_templates() 
     )
     .expect("the duplicate template field should be written");
     assert!(
-        discover_configured_models(&duplicate_field_home)[0]
+        super::discover_configured_models(&duplicate_field_home)[0]
             .discovered_models
             .is_empty()
     );
@@ -170,7 +168,7 @@ fn should_reject_duplicate_non_utf8_and_oversized_standalone_laguna_templates() 
         .expect("the invalid standalone template should be written");
 
         assert!(
-            discover_configured_models(&temporary_directory)[0]
+            super::discover_configured_models(&temporary_directory)[0]
                 .discovered_models
                 .is_empty()
         );
@@ -192,7 +190,7 @@ fn should_validate_includes_from_the_selected_standalone_laguna_template() {
         .expect("the standalone include should be written");
 
     assert_eq!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .len(),
         1
@@ -201,7 +199,7 @@ fn should_validate_includes_from_the_selected_standalone_laguna_template() {
     fs::remove_file(model_directory.join("prompt.jinja"))
         .expect("the standalone include should be removable");
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty()
     );
@@ -225,7 +223,7 @@ fn should_require_every_laguna_discovery_boundary_before_advertising() {
             .expect("the selected required file should be removed");
 
         assert!(
-            discover_configured_models(&temporary_directory)[0]
+            super::discover_configured_models(&temporary_directory)[0]
                 .discovered_models
                 .is_empty(),
             "Laguna discovery must reject an artifact missing {missing_relative_path}"
@@ -245,7 +243,7 @@ fn should_reject_unsupported_text_contract_and_missing_template_include() {
     )
     .expect("unsupported generation config should be written");
     assert!(
-        discover_configured_models(&unsupported_parser_home)[0]
+        super::discover_configured_models(&unsupported_parser_home)[0]
             .discovered_models
             .is_empty()
     );
@@ -259,7 +257,7 @@ fn should_reject_unsupported_text_contract_and_missing_template_include() {
     )
     .expect("include-bearing tokenizer config should be written");
     assert!(
-        discover_configured_models(&missing_include_home)[0]
+        super::discover_configured_models(&missing_include_home)[0]
             .discovered_models
             .is_empty()
     );
@@ -284,7 +282,7 @@ fn should_reject_unsafe_incomplete_or_zero_payload_laguna_indexes() {
         .expect("the selected unsafe index should be written");
 
         assert!(
-            discover_configured_models(&temporary_directory)[0]
+            super::discover_configured_models(&temporary_directory)[0]
                 .discovered_models
                 .is_empty(),
             "Laguna discovery must reject index {index_document}"
@@ -304,7 +302,7 @@ fn should_keep_advertising_a_laguna_conversion_without_torch_dtype() {
     .expect("the conversion config should be written");
 
     assert_eq!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .len(),
         1
@@ -323,7 +321,7 @@ fn should_not_advertise_compressed_tensors_laguna_storage() {
     .expect("the compressed-tensors config should be written");
 
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty(),
         "compressed-tensors Laguna checkpoints are not executable MLX affine artifacts"
@@ -341,7 +339,7 @@ fn should_reject_nonimmutable_revision_and_zero_context() {
     )
     .expect("mutable revision metadata should be written");
     assert!(
-        discover_configured_models(&mutable_revision_home)[0]
+        super::discover_configured_models(&mutable_revision_home)[0]
             .discovered_models
             .is_empty()
     );
@@ -355,7 +353,7 @@ fn should_reject_nonimmutable_revision_and_zero_context() {
     )
     .expect("zero-context model config should be written");
     assert!(
-        discover_configured_models(&zero_context_home)[0]
+        super::discover_configured_models(&zero_context_home)[0]
             .discovered_models
             .is_empty()
     );

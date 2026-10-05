@@ -8,7 +8,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::PositionalFileReadMetrics;
 
 use super::persistent_prompt_cache_disk_store_support::*;
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const PERSISTENT_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);
@@ -113,7 +113,7 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
         .path()
         .join("blocks")
         .join(hex::encode(persistent_prompt_cache_block_key.block_hash()));
-    let model_contract = persistent_prompt_cache_model_contract();
+    let model_contract = qwen3_5_moe::persistent_prompt_cache_model_contract();
     let actual_sequence_state_file_bytes =
         fs::metadata(published_block_directory.join("sequence.safetensors"))
             .expect("the test should read sequence-state metadata")
@@ -379,7 +379,8 @@ fn write_block_manifest_for_hash_with_format(
     block_index: u32,
     format_version: &str,
 ) {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let persistent_prompt_cache_model_contract =
+        qwen3_5_moe::persistent_prompt_cache_model_contract();
     let manifest_json = serde_json::json!({
         "format_version": format_version,
         "block_hash": block_hash_hex,

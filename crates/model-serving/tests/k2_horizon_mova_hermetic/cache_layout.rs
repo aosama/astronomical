@@ -2,13 +2,14 @@ use astronomical_model_serving::{
     DecoderCacheTensorDtype, K2HorizonMoVAConfig, k2_horizon_mova_decoder_cache_layout,
 };
 
-use super::support::family_member_config_json;
+use super::support;
 
 #[test]
 fn k2_horizon_mova_prompt_cache_layout_is_append_only_attention_from_family_config() {
-    let config =
-        K2HorizonMoVAConfig::from_json_bytes(family_member_config_json(4, &[0], 4, 2).as_bytes())
-            .expect("tiny family config should parse");
+    let config = K2HorizonMoVAConfig::from_json_bytes(
+        support::family_member_config_json(4, &[0], 4, 2).as_bytes(),
+    )
+    .expect("tiny family config should parse");
     let layout = k2_horizon_mova_decoder_cache_layout(&config)
         .expect("K2 Horizon MoVA cache layout should resolve from family config");
     let sequence_tensors = layout.sequence_tensor_layouts();

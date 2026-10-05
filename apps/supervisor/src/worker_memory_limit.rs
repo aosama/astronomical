@@ -6,8 +6,8 @@ use std::{
 use astronomical_ipc_protocol::WorkerEvent;
 use tokio::time::{Instant, timeout};
 
-use crate::worker_containment::contain_worker_failure;
-use crate::worker_event_handler::handle_worker_event;
+use crate::worker_containment;
+use crate::worker_event_handler;
 use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError, WorkerControlError,
@@ -60,7 +60,7 @@ pub(super) async fn apply_mlx_memory_limit(
                 }
                 _ => None,
             };
-            handle_worker_event(
+            worker_event_handler::handle_worker_event(
                 worker_event,
                 health_snapshot,
                 is_ready,
@@ -79,7 +79,7 @@ pub(super) async fn apply_mlx_memory_limit(
         Ok(update_outcome) => update_outcome,
         Err(_) => {
             let memory_limit_update_timeout_millis = memory_limit_update_timeout.as_millis();
-            contain_worker_failure(
+            worker_containment::contain_worker_failure(
                 worker_process,
                 health_snapshot,
                 active_request,
@@ -107,7 +107,7 @@ pub(super) async fn contain_mlx_memory_limit_failure(
         &memory_limit_error,
         WorkerControlError::MlxMemoryLimitUpdateTimeout { .. }
     ) {
-        contain_worker_failure(
+        worker_containment::contain_worker_failure(
             worker_process,
             health_snapshot,
             active_request,

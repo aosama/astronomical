@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::qwen_image_21::FlowMatchSchedulerParams;
 
-use super::{QwenImage21ConfigError, parse_document, require};
+use super::QwenImage21ConfigError;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,63 +39,63 @@ pub struct QwenImage21SchedulerConfig {
 impl QwenImage21SchedulerConfig {
     pub fn parse(json_bytes: &[u8]) -> Result<Self, QwenImage21ConfigError> {
         const DOCUMENT: &str = "scheduler/scheduler_config.json";
-        let document: SchedulerDocument = parse_document(json_bytes, DOCUMENT)?;
-        require(
+        let document: SchedulerDocument = super::parse_document(json_bytes, DOCUMENT)?;
+        super::require(
             document.class_name == "FlowMatchEulerDiscreteScheduler",
             DOCUMENT,
             "_class_name",
         )?;
-        require(
+        super::require(
             document.diffusers_version == "0.37.0.dev0",
             DOCUMENT,
             "_diffusers_version",
         )?;
-        require(
+        super::require(
             document.base_image_seq_len == 256,
             DOCUMENT,
             "base_image_seq_len",
         )?;
-        require(document.base_shift == 0.5, DOCUMENT, "base_shift")?;
-        require(!document.invert_sigmas, DOCUMENT, "invert_sigmas")?;
-        require(
+        super::require(document.base_shift == 0.5, DOCUMENT, "base_shift")?;
+        super::require(!document.invert_sigmas, DOCUMENT, "invert_sigmas")?;
+        super::require(
             document.max_image_seq_len == 8192,
             DOCUMENT,
             "max_image_seq_len",
         )?;
-        require(document.max_shift == 0.9, DOCUMENT, "max_shift")?;
-        require(
+        super::require(document.max_shift == 0.9, DOCUMENT, "max_shift")?;
+        super::require(
             document.num_train_timesteps == 1000,
             DOCUMENT,
             "num_train_timesteps",
         )?;
-        require(document.shift == 1.0, DOCUMENT, "shift")?;
-        require(
+        super::require(document.shift == 1.0, DOCUMENT, "shift")?;
+        super::require(
             document.shift_terminal == Some(0.02),
             DOCUMENT,
             "shift_terminal",
         )?;
-        require(
+        super::require(
             !document.stochastic_sampling,
             DOCUMENT,
             "stochastic_sampling",
         )?;
-        require(
+        super::require(
             document.time_shift_type == "exponential",
             DOCUMENT,
             "time_shift_type",
         )?;
-        require(!document.use_beta_sigmas, DOCUMENT, "use_beta_sigmas")?;
-        require(
+        super::require(!document.use_beta_sigmas, DOCUMENT, "use_beta_sigmas")?;
+        super::require(
             document.use_dynamic_shifting,
             DOCUMENT,
             "use_dynamic_shifting",
         )?;
-        require(
+        super::require(
             !document.use_exponential_sigmas,
             DOCUMENT,
             "use_exponential_sigmas",
         )?;
-        require(!document.use_karras_sigmas, DOCUMENT, "use_karras_sigmas")?;
+        super::require(!document.use_karras_sigmas, DOCUMENT, "use_karras_sigmas")?;
         Ok(Self {
             num_train_timesteps: document.num_train_timesteps,
             params: FlowMatchSchedulerParams {

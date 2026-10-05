@@ -4,22 +4,23 @@ use astronomical_model_serving::{
     DecoderCacheLayerLayout, PersistentPromptCacheModelContract, laguna_decoder_cache_layout,
 };
 
-use super::support::{LagunaAcceptanceSize, acceptance_config_value, config_value, normalize};
+use super::support;
+use super::support::LagunaAcceptanceSize;
 
 #[test]
 fn should_derive_mixed_append_only_and_rotating_topology_from_descriptors() {
-    let synthetic_contract = normalize(config_value(5));
+    let synthetic_contract = support::normalize(support::config_value(5));
     let synthetic_layout = laguna_decoder_cache_layout(&synthetic_contract)
         .expect("a synthetic Laguna contract should produce a cache layout");
     assert_eq!(synthetic_layout.layer_count(), 5);
 
-    let extra_small_layout = laguna_decoder_cache_layout(&normalize(acceptance_config_value(
-        LagunaAcceptanceSize::ExtraSmall,
-    )))
+    let extra_small_layout = laguna_decoder_cache_layout(&support::normalize(
+        support::acceptance_config_value(LagunaAcceptanceSize::ExtraSmall),
+    ))
     .expect("the XS acceptance contract should produce a cache layout");
-    let small_layout = laguna_decoder_cache_layout(&normalize(acceptance_config_value(
-        LagunaAcceptanceSize::Small,
-    )))
+    let small_layout = laguna_decoder_cache_layout(&support::normalize(
+        support::acceptance_config_value(LagunaAcceptanceSize::Small),
+    ))
     .expect("the S acceptance contract should produce a cache layout");
     assert_ne!(
         extra_small_layout.layer_count(),
@@ -59,7 +60,9 @@ fn should_derive_mixed_append_only_and_rotating_topology_from_descriptors() {
 
 #[test]
 fn should_resolve_a_fifty_gigabyte_cache_contract_or_name_the_quota_limit() {
-    let extra_small_contract = normalize(acceptance_config_value(LagunaAcceptanceSize::ExtraSmall));
+    let extra_small_contract = support::normalize(support::acceptance_config_value(
+        LagunaAcceptanceSize::ExtraSmall,
+    ));
     let extra_small_layout = laguna_decoder_cache_layout(&extra_small_contract)
         .expect("the XS acceptance contract should produce a cache layout");
     let fifty_gigabyte_quota_bytes = 50_000_000_000_u64;

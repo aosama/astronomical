@@ -12,7 +12,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
-use super::large_prefill_prompt::representative_long_generation_prompt_token_ids;
+use super::large_prefill_prompt;
 
 const CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 const MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS: u32 = 2_048;
@@ -28,10 +28,11 @@ async fn should_not_reclaim_more_expert_payload_for_a_cache_miss_than_without_ca
             .expect("the model artifact should validate before preparing the source prompt");
         let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
             .expect("the model tokenizer should load before preparing the source prompt");
-        let mut prompt_token_ids = representative_long_generation_prompt_token_ids(
-            &prompt_tokenizer,
-            validated_artifact.model_id(),
-        );
+        let mut prompt_token_ids =
+            large_prefill_prompt::representative_long_generation_prompt_token_ids(
+                &prompt_tokenizer,
+                validated_artifact.model_id(),
+            );
         let maximum_prompt_token_count =
             usize::try_from(validated_artifact.config().maximum_position_count())
                 .expect("the model context limit should fit usize")

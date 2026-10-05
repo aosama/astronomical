@@ -4,7 +4,7 @@ use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter, Performanc
 
 use super::completed_forward_memory::CompletedForwardMemoryObservation;
 use super::engine_request::Qwen3_5EngineRequest;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::qwen3_5::Qwen3_5Model;
 
 pub(in crate::qwen3_5) struct GeneratedTokenEmission {
@@ -33,7 +33,7 @@ impl Qwen3_5EngineState {
         active_request.generated_token_count = active_request
             .generated_token_count
             .checked_add(1)
-            .ok_or_else(|| fatal_engine_error("generated-token counter overflowed"))?;
+            .ok_or_else(|| super::fatal_engine_error("generated-token counter overflowed"))?;
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
@@ -50,62 +50,64 @@ impl Qwen3_5EngineState {
 
         let is_terminal = self.end_of_sequence_token_ids.contains(&generated_token_id)
             || active_request.generated_token_count >= active_request.maximum_output_tokens;
-        let mlx_memory_telemetry =
-            completed_forward_memory
-                .map(|completed_forward_memory| {
-                    let mlx_memory_snapshot = &completed_forward_memory.mlx_memory_snapshot;
-                    let mlx_active_memory_bytes =
-                        u64::try_from(mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
-                            fatal_engine_error("MLX active memory bytes exceed the u64 range")
-                        })?;
-                    let active_memory_breakdown = model.active_memory_breakdown(
-                        &active_request.request_decoder_state,
-                        active_request.additional_context_state_payload_bytes(),
+        let mlx_memory_telemetry = completed_forward_memory
+            .map(|completed_forward_memory| {
+                let mlx_memory_snapshot = &completed_forward_memory.mlx_memory_snapshot;
+                let mlx_active_memory_bytes =
+                    u64::try_from(mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
+                        super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
+                    })?;
+                let active_memory_breakdown = model.active_memory_breakdown(
+                    &active_request.request_decoder_state,
+                    active_request.additional_context_state_payload_bytes(),
+                    mlx_active_memory_bytes,
+                    0,
+                );
+                // The breakdown reconciles the snapshot captured at one instant by
+                // the observation owner, and the residency claim is derived from
+                // that same breakdown, so this pair can never straddle a promotion
+                // or demote (issue #337).
+                Ok::<crate::MlxMemoryTelemetry, InferenceEngineError>(
+                    crate::MlxMemoryTelemetry::new(
                         mlx_active_memory_bytes,
-                        0,
-                    );
-                    // The breakdown reconciles the snapshot captured at one instant by
-                    // the observation owner, and the residency claim is derived from
-                    // that same breakdown, so this pair can never straddle a promotion
-                    // or demote (issue #337).
-                    Ok::<crate::MlxMemoryTelemetry, InferenceEngineError>(
-                        crate::MlxMemoryTelemetry::new(
-                            mlx_active_memory_bytes,
-                            u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes())
-                                .map_err(|_| {
-                                    fatal_engine_error(
-                                        "MLX allocator-cache memory bytes exceed the u64 range",
-                                    )
-                                })?,
-                            u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
-                                |_| {
-                                    fatal_engine_error("MLX peak memory bytes exceed the u64 range")
-                                },
-                            )?,
-                            active_memory_breakdown,
-                        )
-                        .with_expert_residency_telemetry(
-                            model
-                                .expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
-                        )
-                        // Issue #510: publish the same utilization split the decode
-                        // attribution records, so the live status shows why the
-                        // ceiling is not fully in use while generation runs.
-                        .with_memory_ceiling_utilization(
-                            model.memory_ceiling_utilization_for_breakdown(
-                                crate::MemoryPhase::Decode,
-                                u64::try_from(active_request.input_token_ids.len().saturating_add(
-                                    usize::from(active_request.generated_token_count),
-                                ))
-                                .unwrap_or(u64::MAX),
-                                1,
-                                mlx_active_memory_bytes,
-                                active_memory_breakdown,
-                            ),
-                        ),
+                        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(
+                            |_| {
+                                super::fatal_engine_error(
+                                    "MLX allocator-cache memory bytes exceed the u64 range",
+                                )
+                            },
+                        )?,
+                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(|_| {
+                            super::fatal_engine_error("MLX peak memory bytes exceed the u64 range")
+                        })?,
+                        active_memory_breakdown,
                     )
-                })
-                .transpose()?;
+                    .with_expert_residency_telemetry(
+                        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+                    )
+                    // Issue #510: publish the same utilization split the decode
+                    // attribution records, so the live status shows why the
+                    // ceiling is not fully in use while generation runs.
+                    .with_memory_ceiling_utilization(
+                        model.memory_ceiling_utilization_for_breakdown(
+                            crate::MemoryPhase::Decode,
+                            u64::try_from(
+                                active_request
+                                    .input_token_ids
+                                    .len()
+                                    .saturating_add(usize::from(
+                                        active_request.generated_token_count,
+                                    )),
+                            )
+                            .unwrap_or(u64::MAX),
+                            1,
+                            mlx_active_memory_bytes,
+                            active_memory_breakdown,
+                        ),
+                    ),
+                )
+            })
+            .transpose()?;
         let generated_token = GeneratedToken::TokenId {
             token_id: generated_token_id,
             is_reasoning_token,

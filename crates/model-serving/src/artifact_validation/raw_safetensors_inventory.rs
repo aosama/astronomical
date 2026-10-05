@@ -7,9 +7,10 @@ use ::safetensors::Dtype;
 use super::bounded_safetensors::{
     MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES, artifact_safetensors_header_error,
 };
-use super::safetensors_dtype::{checked_safetensors_payload_bytes, parse_raw_safetensors_dtype};
+use super::safetensors_dtype;
 use super::{ArtifactValidationError, ValidatedRequiredFile};
-use crate::safetensors::{SafetensorsTensorView, read_bounded_safetensors_json_header};
+use crate::safetensors;
+use crate::safetensors::SafetensorsTensorView;
 
 /// A deterministic raw inventory produced before family normalization.
 #[derive(Debug)]
@@ -53,7 +54,7 @@ pub(crate) fn read_raw_safetensors_inventory(
 ) -> Result<RawSafetensorsInventory, ArtifactValidationError> {
     let weights_file_name = validated_required_file.file_name();
     let file_size_bytes = validated_required_file.size_bytes();
-    let bounded_header = read_bounded_safetensors_json_header(
+    let bounded_header = safetensors::read_bounded_safetensors_json_header(
         validated_required_file.file(),
         file_size_bytes,
         MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES,
@@ -82,8 +83,11 @@ pub(crate) fn read_raw_safetensors_inventory(
                 file_name: weights_file_name.to_owned(),
                 source,
             })?;
-        let dtype =
-            parse_raw_safetensors_dtype(&tensor_view.dtype, weights_file_name, &tensor_name)?;
+        let dtype = safetensors_dtype::parse_raw_safetensors_dtype(
+            &tensor_view.dtype,
+            weights_file_name,
+            &tensor_name,
+        )?;
         let tensor_payload_bytes =
             validate_tensor_payload_bytes(&tensor_name, &tensor_view, dtype, weights_file_name)?;
         shard_payload_bytes = shard_payload_bytes
@@ -196,7 +200,8 @@ fn validate_tensor_payload_bytes(
         })?;
     let dtype_bits = u64::try_from(dtype.bitsize())
         .map_err(|_| ArtifactValidationError::TensorPayloadSizeOverflow)?;
-    let expected_payload_bytes = checked_safetensors_payload_bytes(element_count, dtype_bits)?;
+    let expected_payload_bytes =
+        safetensors_dtype::checked_safetensors_payload_bytes(element_count, dtype_bits)?;
     let actual_payload_bytes = tensor_view
         .data_end_offset()
         .checked_sub(tensor_view.data_start_offset())
