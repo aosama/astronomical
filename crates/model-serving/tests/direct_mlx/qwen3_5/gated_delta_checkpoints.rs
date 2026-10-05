@@ -301,11 +301,7 @@ fn assert_close(actual_values: &[f32], expected_values: &[f32], description: &st
 fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     runtime
         .astype(array, astronomical_mlx_c_rust::MlxDtype::Float32)
-        .and_then(|float32_array| {
-            float32_array
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|float32_array| float32_array.to_vec_f32())
         .expect("demotion parity values should evaluate")
 }
 

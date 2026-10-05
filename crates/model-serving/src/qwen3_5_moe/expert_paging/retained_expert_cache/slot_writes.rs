@@ -112,7 +112,7 @@ fn pad_array_to_warm_capacity(
         });
     };
     *expert_axis = slot_count_i32;
-    runtime.zeros(&warm_shape, streamed_array.dtype())
+    Ok(runtime.zeros(&warm_shape, streamed_array.dtype())?)
 }
 
 /// Writes one expert row from `streamed_weights` into `slot` of the table's

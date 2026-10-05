@@ -421,7 +421,7 @@ fn token_local_quantized_linear(
         )?);
     }
     let token_projection_output_references = token_projection_outputs.iter().collect::<Vec<_>>();
-    runtime.concatenate_axis(&token_projection_output_references, 1)
+    Ok(runtime.concatenate_axis(&token_projection_output_references, 1)?)
 }
 
 #[allow(clippy::too_many_arguments)]

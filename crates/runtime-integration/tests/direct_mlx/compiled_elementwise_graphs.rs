@@ -377,7 +377,7 @@ fn apply_uncompiled_precise_swiglu(
     let activated_gate_states = runtime.silu(&float32_gate_states)?;
     let float32_up_states = runtime.astype(up_states, MlxDtype::Float32)?;
     let activated_states = runtime.multiply(&activated_gate_states, &float32_up_states)?;
-    runtime.astype(&activated_states, MlxDtype::BFloat16)
+    Ok(runtime.astype(&activated_states, MlxDtype::BFloat16)?)
 }
 
 fn measure_warmed_one_token_precise_swiglu_path(

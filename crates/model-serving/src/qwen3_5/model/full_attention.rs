@@ -156,7 +156,7 @@ pub fn qwen3_5_full_attention_step(
         )
     } else {
         let gate_weights = runtime.sigmoid(output_gate)?;
-        runtime.multiply(&attention_output, &gate_weights)
+        Ok(runtime.multiply(&attention_output, &gate_weights)?)
     }
 }
 #[derive(Clone, Copy)]

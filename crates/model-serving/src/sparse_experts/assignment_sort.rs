@@ -117,7 +117,7 @@ pub fn restore_expert_assignment_order(
         let output_dimension = sorted_expert_outputs.shape().last().copied().unwrap_or(0);
         let mut restored_shape = selected_index_shape.to_vec();
         restored_shape.push(output_dimension);
-        return runtime.zeros(&restored_shape, sorted_expert_outputs.dtype());
+        return Ok(runtime.zeros(&restored_shape, sorted_expert_outputs.dtype())?);
     }
     let sorted_output_shape = sorted_expert_outputs.shape();
     if sorted_output_shape.len() != 3
@@ -135,7 +135,7 @@ pub fn restore_expert_assignment_order(
     restored_shape.push(1);
     restored_shape.push(output_dimension);
     let restored_outputs = runtime.reshape(&original_order_outputs, &restored_shape)?;
-    runtime.squeeze_axis(&restored_outputs, -2)
+    Ok(runtime.squeeze_axis(&restored_outputs, -2)?)
 }
 
 fn empty_sorted_assignments(

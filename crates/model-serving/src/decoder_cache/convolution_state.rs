@@ -90,7 +90,7 @@ impl ConvolutionState {
         let zero_buffer_shape = [1, rolling_buffer_tokens, self.linear_convolution_dimension];
         match self.state.as_ref() {
             Some(existing_state) => existing_state.retain().map_err(MlxRuntimeError::from),
-            None => runtime.zeros(&zero_buffer_shape, activation_dtype),
+            None => Ok(runtime.zeros(&zero_buffer_shape, activation_dtype)?),
         }
     }
 

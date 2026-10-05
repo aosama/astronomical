@@ -84,7 +84,7 @@ fn select_keys_inner(
     if budget <= 0 {
         // A zero budget selects nothing: the documented degenerate outcome,
         // returned as unsigned indices so downstream shapes stay uniform.
-        return runtime.zeros(&[token_count, 0], MlxDtype::UInt32);
+        return Ok(runtime.zeros(&[token_count, 0], MlxDtype::UInt32)?);
     }
     // Causal mask: query i may see keys j <= i. The comparison builds the
     // mask from positions, so the selection cannot see the future even if
@@ -136,5 +136,5 @@ fn select_keys_inner(
     let ordered = runtime.take_along_axis(&substituted, &descending_order, -1)?;
     // The selection contract returns unsigned indices regardless of the
     // index dtype the partition produced.
-    runtime.astype(&ordered, MlxDtype::UInt32)
+    Ok(runtime.astype(&ordered, MlxDtype::UInt32)?)
 }

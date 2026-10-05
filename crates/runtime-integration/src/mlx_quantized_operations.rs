@@ -43,6 +43,7 @@ impl MlxRuntime {
                 )
             }
         })
+        .map_err(MlxRuntimeError::from)
     }
 
     /// Builds an affine quantized matrix multiplication using parameters supported by MLX.
@@ -94,6 +95,7 @@ impl MlxRuntime {
                 )
             }
         })
+        .map_err(MlxRuntimeError::from)
     }
 
     /// Builds selected affine quantized matrix multiplications for MoE experts.
@@ -155,6 +157,7 @@ impl MlxRuntime {
                 )
             }
         })
+        .map_err(MlxRuntimeError::from)
     }
 }
 

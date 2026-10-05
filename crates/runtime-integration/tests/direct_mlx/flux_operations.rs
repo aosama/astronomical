@@ -1,5 +1,3 @@
-use astronomical_runtime_integration::MlxRuntimeError;
-
 use crate::common::runtime_test_support::{assert_f32_close, runtime};
 use astronomical_mlx_c_rust::MlxDtype;
 
@@ -191,22 +189,22 @@ fn should_reject_invalid_flux_operation_arguments_before_building_graphs() {
 
     assert!(matches!(
         runtime.random_normal(&[-1], MlxDtype::Float32, 0.0, 1.0, &request_key),
-        Err(MlxRuntimeError::RuntimeOperation { .. })
+        Err(astronomical_mlx_c_rust::MlxCError { .. })
     ));
     assert!(matches!(
         runtime.pad(&image, &[1, 1], &[0, 0], &[1, 1], 0.0),
-        Err(MlxRuntimeError::RuntimeOperation { .. })
+        Err(astronomical_mlx_c_rust::MlxCError { .. })
     ));
     assert!(matches!(
         runtime.conv2d(&image, &invalid_conv2d_weights, [1, 1], [0, 0], [1, 1], 1),
-        Err(MlxRuntimeError::RuntimeOperation { .. })
+        Err(astronomical_mlx_c_rust::MlxCError { .. })
     ));
     assert!(matches!(
         runtime.layer_norm_without_weight_and_bias(&scalar, f32::NAN),
-        Err(MlxRuntimeError::RuntimeOperation { .. })
+        Err(astronomical_mlx_c_rust::MlxCError { .. })
     ));
     assert!(matches!(
         runtime.clip(&image, 2.0, 1.0),
-        Err(MlxRuntimeError::RuntimeOperation { .. })
+        Err(astronomical_mlx_c_rust::MlxCError { .. })
     ));
 }

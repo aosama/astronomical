@@ -70,7 +70,7 @@ pub(super) fn sequential_causal_attention(
 
     let sequential_attention_output_references =
         sequential_attention_outputs.iter().collect::<Vec<_>>();
-    runtime.concatenate_axis(&sequential_attention_output_references, 2)
+    Ok(runtime.concatenate_axis(&sequential_attention_output_references, 2)?)
 }
 
 fn sequential_attention_error(description: &'static str) -> MlxRuntimeError {

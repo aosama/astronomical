@@ -170,5 +170,5 @@ fn sparse_attention_inner(
     let probabilities = runtime.softmax_axis(&scores, -1)?;
     let attended = runtime.matmul(&probabilities, &values_by_head)?;
     // Restore token-major order: [token_count, head_count, head_dim].
-    runtime.squeeze_axis(&attended, 2)
+    Ok(runtime.squeeze_axis(&attended, 2)?)
 }
