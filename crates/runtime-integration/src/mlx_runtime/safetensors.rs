@@ -39,8 +39,4 @@ impl MlxRuntime {
             expert_file_read_metrics,
         )
     }
-
-    pub(crate) const fn gpu_stream(&self) -> &MlxStream {
-        self.context.gpu_stream()
-    }
 }
