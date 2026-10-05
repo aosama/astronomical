@@ -10,9 +10,8 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use crate::MlxRuntimeError;
-use astronomical_mlx_c_rust::raw;
 
-use super::{check_status, error_handling::lock_unpoisoned};
+use super::error_handling::lock_unpoisoned;
 
 static RUNTIME_METALLIB_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -129,10 +128,8 @@ pub(crate) fn configure_metallib_path(metallib_path: &Path) -> Result<(), MlxRun
             description: "path contains an interior NUL byte".to_owned(),
         }
     })?;
-    // SAFETY: The official C API copies the non-null NUL-terminated path and
-    // does not retain the borrowed pointer after returning.
-    let status = unsafe { raw::mlx_metal_set_metallib_path(metallib_path_c_string.as_ptr()) };
-    check_status(status, "set the MLX AOT metallib path")?;
+    astronomical_mlx_c_rust::set_metallib_path(metallib_path_c_string.as_ptr())
+        .map_err(MlxRuntimeError::from)?;
     *configured_path = Some(metallib_path.to_path_buf());
     Ok(())
 }
