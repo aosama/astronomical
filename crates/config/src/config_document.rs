@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::chunking_config::ChunkingConfigFile;
-use crate::{AstronomicalConfigError, LogLevel, prompt_cache_size_gb_to_bytes};
+use crate::{AstronomicalConfigError, LogLevel};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -60,7 +60,7 @@ impl UserConfigFile {
     pub(crate) fn validate(&self) -> Result<(), AstronomicalConfigError> {
         if let Some(prompt_cache) = &self.prompt_cache {
             if let Some(maximum_size_gb) = prompt_cache.maximum_size_gb {
-                prompt_cache_size_gb_to_bytes(maximum_size_gb)?;
+                crate::prompt_cache_size_gb_to_bytes(maximum_size_gb)?;
             }
         }
         if self

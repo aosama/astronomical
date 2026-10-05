@@ -9,7 +9,6 @@ use astronomical_model_serving::{
     ExpertMemoryMode, GeneratedToken, LagunaArtifactValidator, MlxInferenceExecution,
     initialize_laguna_execution,
 };
-use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 use tokio::process::Command;
 use tokio::time::{Duration, timeout};
 
@@ -76,8 +75,9 @@ fn run_constrained_startup_journey() {
         .total_shard_file_bytes();
     let constrained_memory_ceiling_bytes = usize::try_from(weight_file_payload_bytes / 2)
         .expect("half the Laguna weight payload should fit the platform integer range");
-    let machine_memory_ceiling_bytes = maximum_recommended_gpu_working_set_size_bytes()
-        .expect("the machine GPU working-set recommendation should be readable");
+    let machine_memory_ceiling_bytes =
+        astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes()
+            .expect("the machine GPU working-set recommendation should be readable");
     let constrained_memory_ceiling_bytes =
         constrained_memory_ceiling_bytes.min(machine_memory_ceiling_bytes);
     assert!(
@@ -131,8 +131,9 @@ fn run_real_laguna_memory_journey() {
     eprintln!("[laguna-memory-acceptance] status=progress phase=select model={laguna_model_id}");
     let model_directory =
         crate::support::configured_installed_model_directory_by_id(&laguna_model_id);
-    let machine_memory_ceiling_bytes = maximum_recommended_gpu_working_set_size_bytes()
-        .expect("the machine GPU working-set recommendation should be readable");
+    let machine_memory_ceiling_bytes =
+        astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes()
+            .expect("the machine GPU working-set recommendation should be readable");
     let startup_memory_ceiling_bytes = machine_memory_ceiling_bytes.saturating_sub(1);
     assert!(
         startup_memory_ceiling_bytes > 0,

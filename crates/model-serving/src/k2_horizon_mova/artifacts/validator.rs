@@ -13,7 +13,7 @@ use crate::k2_horizon_mova::configuration::{K2HorizonMoVAConfig, K2HorizonMoVALa
 
 use super::dialect::K2HorizonMoVAWeightDialect;
 use super::error::K2HorizonMoVAArtifactValidationError;
-use super::expected_tensors::expected_stacked_affine_tensor_names;
+use super::expected_tensors;
 use super::shard_index::K2HorizonMoVAShardIndex;
 
 const MAXIMUM_INDEX_BYTES: u64 = 32 * 1024 * 1024;
@@ -149,7 +149,7 @@ impl K2HorizonMoVAArtifactValidator {
             K2HorizonMoVAWeightDialect::StackedAffine | K2HorizonMoVAWeightDialect::Unknown => {}
         }
         let present_names = shard_index.tensor_names().collect::<HashSet<_>>();
-        for expected_name in expected_stacked_affine_tensor_names(&config) {
+        for expected_name in expected_tensors::expected_stacked_affine_tensor_names(&config) {
             if !present_names.contains(expected_name.as_str()) {
                 return Err(K2HorizonMoVAArtifactValidationError::InvalidArtifact {
                     description: format!("stacked affine artifact is missing {expected_name}"),

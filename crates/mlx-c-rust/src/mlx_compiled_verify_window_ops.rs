@@ -8,7 +8,6 @@
 //! the owned lazy output so the builder chains them like the eager path does.
 
 use crate::{MlxArray, MlxStream, raw};
-use crate::{array_from_vector, graph_output_array};
 
 pub(super) type BuildResult = Result<MlxArray, i32>;
 
@@ -16,7 +15,7 @@ pub(super) fn builder_input(
     input_vector: raw::mlx_vector_array,
     input_index: usize,
 ) -> Result<MlxArray, i32> {
-    array_from_vector(input_vector, input_index)
+    crate::array_from_vector(input_vector, input_index)
 }
 
 pub(super) fn astype(
@@ -24,43 +23,49 @@ pub(super) fn astype(
     input: &MlxArray,
     dtype: raw::mlx_dtype,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_astype(output, input.raw(), dtype, gpu_stream.raw())
     })
 }
 
 pub(super) fn add(gpu_stream: &MlxStream, left: &MlxArray, right: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_add(output, left.raw(), right.raw(), gpu_stream.raw())
     })
 }
 
 pub(super) fn subtract(gpu_stream: &MlxStream, left: &MlxArray, right: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_subtract(output, left.raw(), right.raw(), gpu_stream.raw())
     })
 }
 
 pub(super) fn multiply(gpu_stream: &MlxStream, left: &MlxArray, right: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_multiply(output, left.raw(), right.raw(), gpu_stream.raw())
     })
 }
 
 pub(super) fn sigmoid(gpu_stream: &MlxStream, input: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe { raw::mlx_sigmoid(output, input.raw(), gpu_stream.raw()) })
+    crate::graph_output_array(|output| unsafe {
+        raw::mlx_sigmoid(output, input.raw(), gpu_stream.raw())
+    })
 }
 
 pub(super) fn exponential(gpu_stream: &MlxStream, input: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe { raw::mlx_exp(output, input.raw(), gpu_stream.raw()) })
+    crate::graph_output_array(|output| unsafe {
+        raw::mlx_exp(output, input.raw(), gpu_stream.raw())
+    })
 }
 
 pub(super) fn negative(gpu_stream: &MlxStream, input: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe { raw::mlx_negative(output, input.raw(), gpu_stream.raw()) })
+    crate::graph_output_array(|output| unsafe {
+        raw::mlx_negative(output, input.raw(), gpu_stream.raw())
+    })
 }
 
 pub(super) fn logaddexp(gpu_stream: &MlxStream, left: &MlxArray, right: &MlxArray) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_logaddexp(output, left.raw(), right.raw(), gpu_stream.raw())
     })
 }
@@ -70,7 +75,7 @@ pub(super) fn greater_equal(
     left: &MlxArray,
     right: &MlxArray,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_greater_equal(output, left.raw(), right.raw(), gpu_stream.raw())
     })
 }
@@ -81,7 +86,7 @@ pub(super) fn where_op(
     taken_when_true: &MlxArray,
     taken_when_false: &MlxArray,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_where(
             output,
             condition.raw(),
@@ -95,7 +100,7 @@ pub(super) fn where_op(
 /// A scalar zero in the given dtype, mirroring the compiled decay graph's
 /// stable-softplus identity operand.
 pub(super) fn zero_scalar(gpu_stream: &MlxStream, dtype: raw::mlx_dtype) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_zeros(output, std::ptr::null(), 0, dtype, gpu_stream.raw())
     })
 }
@@ -105,7 +110,7 @@ pub(super) fn take_axis_zero(
     source: &MlxArray,
     indices: &MlxArray,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_take_axis(output, source.raw(), indices.raw(), 0, gpu_stream.raw())
     })
 }
@@ -130,7 +135,7 @@ pub(super) fn dequantize_affine(
         value: raw::mlx_dtype__MLX_FLOAT32,
         has_value: false,
     };
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_dequantize(
             output,
             quantized_weights.raw(),
@@ -163,7 +168,7 @@ pub(super) fn quantized_matmul_affine(
         value: bits,
         has_value: true,
     };
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_quantized_matmul(
             output,
             activations.raw(),
@@ -185,13 +190,13 @@ pub(super) fn fast_rms_norm(
     weight: &MlxArray,
     epsilon: f32,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_fast_rms_norm(output, input.raw(), weight.raw(), epsilon, gpu_stream.raw())
     })
 }
 
 pub(super) fn reshape(gpu_stream: &MlxStream, input: &MlxArray, shape: &[i32]) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_reshape(
             output,
             input.raw(),
@@ -207,7 +212,7 @@ pub(super) fn transpose_axes(
     input: &MlxArray,
     axes: &[i32],
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_transpose_axes(
             output,
             input.raw(),
@@ -225,7 +230,7 @@ pub(super) fn slice(
     stop: &[i32],
     stride: &[i32],
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_slice(
             output,
             input.raw(),
@@ -257,7 +262,7 @@ pub(super) fn concatenate_axis(
     axis: i32,
 ) -> BuildResult {
     let parts_vector = raw_vector(parts)?;
-    let concatenate_status = graph_output_array(|output| unsafe {
+    let concatenate_status = crate::graph_output_array(|output| unsafe {
         raw::mlx_concatenate_axis(output, parts_vector, axis, gpu_stream.raw())
     });
     // SAFETY: This local vector owner releases its live handle exactly once.
@@ -267,7 +272,7 @@ pub(super) fn concatenate_axis(
 
 pub(super) fn stack_axis(gpu_stream: &MlxStream, parts: &[&MlxArray], axis: i32) -> BuildResult {
     let parts_vector = raw_vector(parts)?;
-    let stack_status = graph_output_array(|output| unsafe {
+    let stack_status = crate::graph_output_array(|output| unsafe {
         raw::mlx_stack_axis(output, parts_vector, axis, gpu_stream.raw())
     });
     // SAFETY: This local vector owner releases its live handle exactly once.
@@ -276,13 +281,13 @@ pub(super) fn stack_axis(gpu_stream: &MlxStream, parts: &[&MlxArray], axis: i32)
 }
 
 pub(super) fn squeeze_axis(gpu_stream: &MlxStream, input: &MlxArray, axis: i32) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_squeeze_axis(output, input.raw(), axis, gpu_stream.raw())
     })
 }
 
 pub(super) fn expand_dims(gpu_stream: &MlxStream, input: &MlxArray, axis: i32) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_expand_dims(output, input.raw(), axis, gpu_stream.raw())
     })
 }
@@ -293,14 +298,14 @@ pub(super) fn repeat_axis(
     repetitions: i32,
     axis: i32,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_repeat_axis(output, input.raw(), repetitions, axis, gpu_stream.raw())
     })
 }
 
 pub(super) fn sum_axis_last(gpu_stream: &MlxStream, input: &MlxArray) -> BuildResult {
     let input_rank = input.shape().len() as i32;
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_sum_axis(output, input.raw(), input_rank - 1, false, gpu_stream.raw())
     })
 }
@@ -308,7 +313,7 @@ pub(super) fn sum_axis_last(gpu_stream: &MlxStream, input: &MlxArray) -> BuildRe
 /// A static int32 ramp `[start, start + length)` — the position basis for
 /// masked-attention masks and the per-row thresholds.
 pub(super) fn arange_i32(gpu_stream: &MlxStream, start: i32, length: i32) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_arange(
             output,
             f64::from(start),
@@ -326,7 +331,7 @@ pub(super) fn conv1d_depthwise(
     weight: &MlxArray,
     groups: i32,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_conv1d(
             output,
             input.raw(),
@@ -355,7 +360,7 @@ pub(super) fn rope_at_token_positions(
         value: base,
         has_value: true,
     };
-    let token_batched_output = graph_output_array(|output| unsafe {
+    let token_batched_output = crate::graph_output_array(|output| unsafe {
         raw::mlx_fast_rope_dynamic(
             output,
             token_batched_input.raw(),
@@ -382,7 +387,7 @@ pub(super) fn masked_row_attention(
     scale: f32,
     additive_mask: &MlxArray,
 ) -> BuildResult {
-    graph_output_array(|output| unsafe {
+    crate::graph_output_array(|output| unsafe {
         raw::mlx_fast_scaled_dot_product_attention(
             output,
             queries.raw(),

@@ -13,7 +13,8 @@ use astronomical_ipc_protocol::ChatToolDefinition;
 use serde_json::Value;
 
 use super::output_parser_error::Qwen3_5OutputParserError;
-use super::tool_schema::{DeclaredTool, parse_tool_parameters};
+use super::tool_schema;
+use super::tool_schema::DeclaredTool;
 
 mod foreign_syntax;
 mod salvage;
@@ -385,7 +386,7 @@ impl Qwen3_5OutputParser {
             split_qwen_function_envelope(normalized_body.trim())?;
         // Unknown names and sloppy-but-closed XML are forwarded so the harness
         // can return "no such tool" and the model can retry.
-        let parsed_arguments = parse_tool_parameters(
+        let parsed_arguments = tool_schema::parse_tool_parameters(
             &parameter_content,
             self.declared_tools.get(function_name.as_str()),
         )?;
@@ -410,7 +411,8 @@ impl Qwen3_5OutputParser {
         };
         // Declared-schema rejection would still abort. Passthrough lets the harness
         // return invalid-argument or unknown-tool instead of killing the stream.
-        let parsed_arguments = parse_tool_parameters(&parameter_content, None).unwrap_or_default();
+        let parsed_arguments =
+            tool_schema::parse_tool_parameters(&parameter_content, None).unwrap_or_default();
         let arguments_json = serde_json::to_string(&Value::Object(parsed_arguments))
             .unwrap_or_else(|_| "{}".to_owned());
         Some(Qwen3_5OutputEvent::ToolCall(Qwen3_5ToolCall {

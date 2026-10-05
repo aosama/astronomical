@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use super::block_manifest::PersistentPromptCacheBlockManifest;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
-use super::disk_store_file::parse_persistent_prompt_cache_file_hash_from_path;
+use super::disk_store_file;
 use super::disk_store_global_quota_candidate::{
     GlobalPromptCacheBlockSubtree, GlobalPromptCacheEvictionCandidate, GlobalPromptCacheFile,
     GlobalPromptCacheStaleDirectory, GlobalPromptCacheStandaloneFileClassification,
@@ -262,7 +262,9 @@ fn scan_block_directory(
     }) else {
         return Ok(None);
     };
-    let Some(block_hash) = parse_persistent_prompt_cache_file_hash_from_path(directory_path) else {
+    let Some(block_hash) =
+        disk_store_file::parse_persistent_prompt_cache_file_hash_from_path(directory_path)
+    else {
         return Ok(None);
     };
     let directory_metadata = fs::symlink_metadata(directory_path).map_err(|source| {

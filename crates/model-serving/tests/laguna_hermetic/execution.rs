@@ -4,11 +4,11 @@ use astronomical_model_serving::{
 };
 use serde_json::json;
 
-use super::support::{config_value, normalize};
+use super::support;
 
 #[test]
 fn should_build_cache_layout_from_a_synthetic_non_modulo_schedule() {
-    let mut config = config_value(3);
+    let mut config = support::config_value(3);
     config["layer_types"] = json!(["sliding", "full", "sliding"]);
     config["sliding_window"] = json!(16);
     config["mlp_layer_types"] = json!(["dense", "sparse", "dense"]);
@@ -17,7 +17,7 @@ fn should_build_cache_layout_from_a_synthetic_non_modulo_schedule() {
     config["num_experts_per_tok"] = json!(4);
     config["moe_intermediate_size"] = json!(768);
     config["shared_expert_intermediate_size"] = json!(512);
-    let contract = normalize(config);
+    let contract = support::normalize(config);
     assert_eq!(contract.layers().len(), 3);
     assert_eq!(
         contract.layers()[0].attention().kind(),

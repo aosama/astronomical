@@ -1,6 +1,5 @@
 use std::{collections::HashMap, time::Duration};
 
-use astronomical_config::resolve_model_id;
 use astronomical_experimental_aligned_expert_packs::{
     AlignedExpertPackTensorDescriptor, build_aligned_expert_pack_metal_io_descriptors,
     read_aligned_expert_pack_header, validate_aligned_expert_pack_header,
@@ -120,7 +119,7 @@ async fn run_expert_data_plane_measurements(
         .validate(&model_directory, 20_480)
         .expect("the configured data-plane artifact should validate");
     assert_eq!(
-        resolve_model_id(
+        astronomical_config::resolve_model_id(
             expert_data_plane_model.model_id,
             &[validated_artifact.model_id()],
         ),

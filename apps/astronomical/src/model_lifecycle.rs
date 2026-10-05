@@ -8,13 +8,13 @@
 
 use std::time::Duration;
 
-use astronomical_config::{BUILTIN_DEFAULT_MODEL_ID, leaf_model_id, near_model_matches};
+use astronomical_config::BUILTIN_DEFAULT_MODEL_ID;
 use astronomical_ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonWorkerStatus,
 };
 
 use crate::daemon_probe::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
-use crate::formatting::format_gigabytes;
+use crate::formatting;
 
 /// Bound for the whole download-wait stage: local disk writes are slow but
 /// finite; generous enough for multi-GB models, short enough that a wedged
@@ -295,7 +295,8 @@ fn download_timeout_reason(model_id: &str) -> String {
 /// stays `None` until the entry is ready on this Mac.
 fn catalog_entry_matches(catalog_entry: &DaemonCatalogEntry, requested_model_id: &str) -> bool {
     catalog_entry.huggingface_id == requested_model_id
-        || leaf_model_id(&catalog_entry.huggingface_id) == leaf_model_id(requested_model_id)
+        || astronomical_config::leaf_model_id(&catalog_entry.huggingface_id)
+            == astronomical_config::leaf_model_id(requested_model_id)
 }
 
 /// Usage-grade rejection for a model neither installed nor downloadable:
@@ -310,7 +311,7 @@ fn unknown_model_reason(
         .iter()
         .map(|listed_model| listed_model.model_id.as_str())
         .collect();
-    let near_matches = near_model_matches(requested_model_id, &installed_ids);
+    let near_matches = astronomical_config::near_model_matches(requested_model_id, &installed_ids);
     let (_, capability) = required_capability.capability_text();
     let mut reason = format!(
         "model {requested_model_id} is not installed on this Mac and is not in the release \
@@ -329,8 +330,8 @@ fn render_download_progress(download_job: &DaemonDownloadJob) -> String {
     if download_job.bytes_total == 0 {
         return format!("{}: {}", download_job.huggingface_id, download_job.state);
     }
-    let completed_gigabytes = format_gigabytes(download_job.bytes_completed);
-    let total_gigabytes = format_gigabytes(download_job.bytes_total);
+    let completed_gigabytes = formatting::format_gigabytes(download_job.bytes_completed);
+    let total_gigabytes = formatting::format_gigabytes(download_job.bytes_total);
     let percentage = 100.0 * download_job.bytes_completed as f64 / download_job.bytes_total as f64;
     format!(
         "{}: {} {} GB / {} GB ({:.0}%)",

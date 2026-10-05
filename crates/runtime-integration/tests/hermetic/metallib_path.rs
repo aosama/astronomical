@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use astronomical_runtime_integration::{MlxRuntimeError, resolve_mlx_metallib_path};
+use astronomical_runtime_integration::MlxRuntimeError;
 
 fn write_regular_file(file_path: &Path, file_contents: &[u8]) {
     if let Some(parent_directory) = file_path.parent() {
@@ -34,7 +34,7 @@ fn should_select_the_bundled_metallib_for_a_macos_app_executable() {
         sandbox_directory.path().join("native-store/mlx.metallib");
     write_regular_file(&unpackaged_native_store_metallib_path, b"unpackaged");
 
-    let resolved_metallib_path = resolve_mlx_metallib_path(
+    let resolved_metallib_path = astronomical_runtime_integration::resolve_mlx_metallib_path(
         None,
         &worker_executable_path,
         Some(&unpackaged_native_store_metallib_path),
@@ -57,7 +57,7 @@ fn should_prefer_an_environment_override_over_the_bundled_metallib() {
     let environment_override_path = sandbox_directory.path().join("override/mlx.metallib");
     write_regular_file(&environment_override_path, b"override");
 
-    let resolved_metallib_path = resolve_mlx_metallib_path(
+    let resolved_metallib_path = astronomical_runtime_integration::resolve_mlx_metallib_path(
         Some(environment_override_path.clone()),
         &worker_executable_path,
         None,
@@ -79,7 +79,7 @@ fn should_use_the_unpackaged_native_store_when_the_executable_is_not_in_an_app_b
         sandbox_directory.path().join("native-store/mlx.metallib");
     write_regular_file(&unpackaged_native_store_metallib_path, b"unpackaged");
 
-    let resolved_metallib_path = resolve_mlx_metallib_path(
+    let resolved_metallib_path = astronomical_runtime_integration::resolve_mlx_metallib_path(
         None,
         &worker_executable_path,
         Some(&unpackaged_native_store_metallib_path),
@@ -112,7 +112,7 @@ fn should_skip_a_symlinked_bundled_metallib_and_use_the_unpackaged_store() {
         sandbox_directory.path().join("native-store/mlx.metallib");
     write_regular_file(&unpackaged_native_store_metallib_path, b"unpackaged");
 
-    let resolved_metallib_path = resolve_mlx_metallib_path(
+    let resolved_metallib_path = astronomical_runtime_integration::resolve_mlx_metallib_path(
         None,
         &worker_executable_path,
         Some(&unpackaged_native_store_metallib_path),
@@ -134,8 +134,12 @@ fn should_fail_when_no_metallib_is_available_for_the_worker() {
         .join("target/release/astronomical-inference-worker");
     write_regular_file(&worker_executable_path, b"worker");
 
-    let resolution_error = resolve_mlx_metallib_path(None, &worker_executable_path, None)
-        .expect_err("a missing metallib should fail before MLX starts");
+    let resolution_error = astronomical_runtime_integration::resolve_mlx_metallib_path(
+        None,
+        &worker_executable_path,
+        None,
+    )
+    .expect_err("a missing metallib should fail before MLX starts");
 
     assert!(matches!(
         resolution_error,
@@ -161,7 +165,7 @@ fn should_reject_a_relative_environment_override_path() {
         .join("target/release/astronomical-inference-worker");
     write_regular_file(&worker_executable_path, b"worker");
 
-    let resolution_error = resolve_mlx_metallib_path(
+    let resolution_error = astronomical_runtime_integration::resolve_mlx_metallib_path(
         Some(PathBuf::from("mlx.metallib")),
         &worker_executable_path,
         None,

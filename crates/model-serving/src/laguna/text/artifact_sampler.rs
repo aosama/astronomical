@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use super::artifact_documents::required_u32;
+use super::artifact_documents;
 use super::{LagunaSamplerConfig, LagunaTextArtifactError};
 
 /// Preserves artifact-specific sampling differences without a family-wide policy.
@@ -19,7 +19,7 @@ pub(super) fn normalize_sampler_config(
             .unwrap_or(1_000);
     let top_k = generation_fields
         .get("top_k")
-        .map(|_| required_u32(generation_fields, "top_k", false))
+        .map(|_| artifact_documents::required_u32(generation_fields, "top_k", false))
         .transpose()?
         .map(|top_k| {
             u16::try_from(top_k).map_err(|_| LagunaTextArtifactError::InvalidNumericField {
@@ -29,7 +29,7 @@ pub(super) fn normalize_sampler_config(
         .transpose()?;
     let maximum_new_tokens = generation_fields
         .get("max_new_tokens")
-        .map(|_| required_u32(generation_fields, "max_new_tokens", false))
+        .map(|_| artifact_documents::required_u32(generation_fields, "max_new_tokens", false))
         .transpose()?;
     Ok(LagunaSamplerConfig::new(
         uses_sampling,

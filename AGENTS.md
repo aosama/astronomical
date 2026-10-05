@@ -2,6 +2,8 @@
 
 - This is our constitution at repo-root/docs/north-star-product-vision.md everything is derived from there.
 
+- Call free functions through their owning module: import the module, never the bare function (`use crate::support;` then `support::run_journey_with_timeout(...)`), so every call site names its owner; all new and refactored Rust code must follow this.
+
 - You keep repo-root/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs.
 
 - All commands and tests must emit a live progress indicator instead of leaving the user with silent output.

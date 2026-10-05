@@ -7,13 +7,16 @@ use astronomical_ipc_protocol::MlxMemorySnapshotSource;
 use astronomical_supervisor::{ChatGenerationExecutor, ImageGenerationExecutor};
 use tokio::time::{Instant, sleep, timeout};
 
-use super::image_generation::{image_command, launch_scripted_worker};
+use super::image_generation;
 
 #[tokio::test]
 async fn should_publish_a_live_mlx_memory_snapshot_from_image_progress_steps() {
-    let worker_handle = launch_scripted_worker().await;
+    let worker_handle = image_generation::launch_scripted_worker().await;
     let mut image_receiver = worker_handle
-        .start_image_generation(image_command(120, "progress-snapshot-image-fixture"))
+        .start_image_generation(image_generation::image_command(
+            120,
+            "progress-snapshot-image-fixture",
+        ))
         .await
         .expect("the snapshot-carrying image should start");
 

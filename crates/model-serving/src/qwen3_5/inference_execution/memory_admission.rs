@@ -21,15 +21,15 @@ use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::adaptive_ram_growth_logging::{
     log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
 };
-use crate::qwen3_5::model::memory_admission::invalid_request_error;
-use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
+use crate::qwen3_5::model::memory_admission;
+use crate::qwen3_5_moe;
 use crate::{
     AdaptiveRamGrowthContext, InferenceEngineError, MemoryPhase, PagedExpertReclamationStep,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation,
     combined_persistent_growth_bytes, next_paged_expert_reclamation_step,
 };
 
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 /// Bound on reclaim passes for one forward. Each pass snapshots MLX after a
 /// synchronize, so a handful is enough to drain leftover experts; spinning
@@ -53,7 +53,7 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
     fn from(admission_error: AdaptiveRamGrowthMemoryAdmissionError) -> Self {
         match admission_error {
             AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason } => {
-                invalid_request_error(reason)
+                memory_admission::invalid_request_error(reason)
             }
             AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
                 inference_engine_error
@@ -160,7 +160,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let target_persistent_state_growth_bytes = request_decoder_state
                 .projected_persistent_state_growth_bytes(
                     model.decoder_cache_layout(),
@@ -178,7 +178,7 @@ impl Qwen3_5EngineState {
                     .map_err(InferenceEngineError::from)?
                     .try_into()
                     .map_err(|_| {
-                        invalid_request_error(
+                        memory_admission::invalid_request_error(
                             "routed expert page reservation exceeds the platform range",
                         )
                     })?
@@ -204,7 +204,9 @@ impl Qwen3_5EngineState {
             additional_persistent_state_growth_bytes,
         )
         .ok_or_else(|| {
-            invalid_request_error("target and additional persistent growth overflowed")
+            memory_admission::invalid_request_error(
+                "target and additional persistent growth overflowed",
+            )
         })?;
         // The first projection describes ownership exactly as sampled. It may be
         // replaced below after complete-resident demotion or paged-byte eviction.
@@ -226,7 +228,7 @@ impl Qwen3_5EngineState {
                     error = %adaptive_ram_growth_projection_error,
                     "stopped Qwen3.5 forward after adaptive RAM growth projection failed"
                 );
-                invalid_request_error(format!(
+                memory_admission::invalid_request_error(format!(
                     "adaptive RAM growth rejected: {adaptive_ram_growth_projection_error}"
                 ))
             })?;
@@ -275,7 +277,9 @@ impl Qwen3_5EngineState {
                 retained_expert_payload_bytes_before_growth = self
                     .model
                     .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                    .ok_or_else(|| {
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?
                     .expert_weight_memory_cache_statistics()
                     .resident_payload_byte_count;
             }
@@ -286,7 +290,7 @@ impl Qwen3_5EngineState {
                 // valid for stable and expected-peak deficits.
                 let expert_weight_memory_cache_statistics_before_reclamation = {
                     let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
                     if model.resident_expert_weights.is_some() {
                         return Err(
@@ -303,7 +307,7 @@ impl Qwen3_5EngineState {
                 let mut paged_expert_reclamation_admitted = false;
                 for _ in 0..MAXIMUM_PAGED_EXPERT_RECLAMATION_PASSES {
                     let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
                     let expert_weight_memory_cache_statistics =
                         model.expert_weight_memory_cache_statistics();
@@ -375,7 +379,7 @@ impl Qwen3_5EngineState {
                         }
                         PagedExpertReclamationStep::Reclaim { target_bytes } => {
                             let Some(memory_snapshot_after_reclamation) =
-                                reclaim_retained_experts_for_request_memory_pressure(
+                                qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure(
                                     model,
                                     target_bytes,
                                 )?
@@ -408,7 +412,7 @@ impl Qwen3_5EngineState {
                                         error = %adaptive_ram_growth_projection_error,
                                         "stopped Qwen3.5 forward after post-reclamation adaptive RAM growth projection failed"
                                     );
-                                    invalid_request_error(format!(
+                                    memory_admission::invalid_request_error(format!(
                                         "adaptive RAM growth rejected: {adaptive_ram_growth_projection_error}"
                                     ))
                                 })?;
@@ -442,7 +446,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let admitted_forward_reserve_bytes =
             u64::try_from(first_forward_projection.forward_reserve_bytes()).unwrap_or(u64::MAX);
         let current_active_memory_bytes =

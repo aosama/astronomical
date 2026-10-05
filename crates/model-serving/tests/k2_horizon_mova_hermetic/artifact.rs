@@ -5,12 +5,12 @@ use astronomical_model_serving::{
     expected_stacked_affine_tensor_names,
 };
 
-use super::support::{family_member_config_json, write_stacked_affine_fixture};
+use super::support;
 
 #[test]
 fn should_validate_a_tiny_stacked_affine_family_member() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
-    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let model_directory = support::write_stacked_affine_fixture(temporary_directory.path());
     let validated = K2HorizonMoVAArtifactValidator::new()
         .validate(&model_directory)
         .expect("tiny stacked affine fixture should validate");
@@ -28,7 +28,7 @@ fn should_validate_a_tiny_stacked_affine_family_member() {
 #[test]
 fn should_prefer_only_an_immutable_provenance_revision_over_the_config_hash() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
-    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let model_directory = support::write_stacked_affine_fixture(temporary_directory.path());
     let without_provenance = K2HorizonMoVAArtifactValidator::new()
         .validate(&model_directory)
         .expect("the fixture should validate without a provenance file");
@@ -70,7 +70,7 @@ fn should_prefer_only_an_immutable_provenance_revision_over_the_config_hash() {
 #[test]
 fn should_reject_unstacked_per_expert_tensors() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
-    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let model_directory = support::write_stacked_affine_fixture(temporary_directory.path());
     let unstacked_index = serde_json::json!({
         "weight_map": {
             "model.layers.1.mlp.experts.0.up_proj.weight": "model-00001-of-00001.safetensors",
@@ -99,7 +99,7 @@ fn should_reject_unstacked_per_expert_tensors() {
 #[test]
 fn should_reject_a_missing_indexed_shard() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
-    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let model_directory = support::write_stacked_affine_fixture(temporary_directory.path());
     fs::remove_file(model_directory.join("model-00001-of-00001.safetensors"))
         .expect("shard should be removed");
     assert!(
@@ -112,10 +112,10 @@ fn should_reject_a_missing_indexed_shard() {
 #[test]
 fn should_reject_wrong_model_type_directories() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
-    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let model_directory = support::write_stacked_affine_fixture(temporary_directory.path());
     fs::write(
         model_directory.join("config.json"),
-        family_member_config_json(2, &[0], 4, 2).replace("k2_horizon_mova", "llama"),
+        support::family_member_config_json(2, &[0], 4, 2).replace("k2_horizon_mova", "llama"),
     )
     .expect("wrong type config should be written");
     assert!(
@@ -128,10 +128,10 @@ fn should_reject_wrong_model_type_directories() {
 #[test]
 fn should_reject_sparse_feed_forward_members_as_not_executable_yet() {
     let temporary_directory = tempfile::tempdir().expect("temp dir");
-    let model_directory = write_stacked_affine_fixture(temporary_directory.path());
+    let model_directory = support::write_stacked_affine_fixture(temporary_directory.path());
     fs::write(
         model_directory.join("config.json"),
-        family_member_config_json(2, &[0], 4, 0),
+        support::family_member_config_json(2, &[0], 4, 0),
     )
     .expect("sparse feed-forward config should be written");
     let validation_error = K2HorizonMoVAArtifactValidator::new()

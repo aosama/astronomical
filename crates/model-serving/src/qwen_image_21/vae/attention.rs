@@ -9,7 +9,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::rms_norm::QwenImage21VaeRmsNorm;
-use super::tensor_shape::as_i32;
+use super::tensor_shape;
 use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
@@ -60,14 +60,16 @@ impl QwenImage21VaeAttentionBlock {
         input: &MlxArray,
     ) -> Result<MlxArray, QwenImage21VaeError> {
         let shape = input.shape();
-        if shape.len() != 4 || shape[3] != as_i32(self.channels, "attention channels")? {
+        if shape.len() != 4
+            || shape[3] != tensor_shape::as_i32(self.channels, "attention channels")?
+        {
             return Err(QwenImage21VaeError::invalid_geometry(format!(
                 "attention expected NHWC channels {}, received {shape:?}",
                 self.channels
             )));
         }
         let (batch, height, width) = (shape[0], shape[1], shape[2]);
-        let channels = as_i32(self.channels, "attention channels")?;
+        let channels = tensor_shape::as_i32(self.channels, "attention channels")?;
         let normalized = self.norm.forward(runtime, input)?;
         let fused = self.fused_query_key_value.forward(runtime, &normalized)?;
         // The fused axis is ordered query, key, value — matching the reference `chunk(3, dim=-1)`.

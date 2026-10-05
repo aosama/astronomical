@@ -19,9 +19,8 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use self::fixture::build_fixture;
-use self::operations::{ReferenceDecoderState, reference_forward};
-use self::rows::{ReferenceRow, generic_moe_rows, generic_rows, named_rows};
+use self::operations::ReferenceDecoderState;
+use self::rows::ReferenceRow;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -31,7 +30,7 @@ use astronomical_mlx_c_rust::MlxDtype;
 async fn should_match_complete_model_reference_for_generalized_descriptor_rows() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    for row in generic_rows() {
+    for row in rows::generic_rows() {
         assert_row_matches_reference(&runtime, &row);
     }
 }
@@ -40,7 +39,7 @@ async fn should_match_complete_model_reference_for_generalized_descriptor_rows()
 async fn should_match_complete_model_reference_for_named_xs_and_s_rows() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    for row in named_rows() {
+    for row in rows::named_rows() {
         assert_row_matches_reference(&runtime, &row);
     }
 }
@@ -49,7 +48,7 @@ async fn should_match_complete_model_reference_for_named_xs_and_s_rows() {
 async fn should_match_complete_model_reference_for_resident_moe_rows() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    for row in generic_moe_rows() {
+    for row in rows::generic_moe_rows() {
         assert_row_matches_reference(&runtime, &row);
     }
 }
@@ -58,11 +57,11 @@ async fn should_match_complete_model_reference_for_resident_moe_rows() {
 async fn should_avoid_optional_model_diagnostics_when_attribution_is_disabled() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    let row = generic_moe_rows()
+    let row = rows::generic_moe_rows()
         .into_iter()
         .find(|row| row.row_name == "native_mixed_shared")
         .expect("the resident-MoE attribution row should exist");
-    let fixture = build_fixture(&runtime, &row);
+    let fixture = fixture::build_fixture(&runtime, &row);
     let mut decoder_state = LagunaDecoderState::empty(fixture.model.contract())
         .expect("the disabled-attribution cache should construct");
     let token_ids = runtime
@@ -92,7 +91,7 @@ async fn should_avoid_optional_model_diagnostics_when_attribution_is_disabled() 
 }
 
 fn assert_row_matches_reference(runtime: &MlxRuntime, row: &ReferenceRow) {
-    let fixture = build_fixture(runtime, row);
+    let fixture = fixture::build_fixture(runtime, row);
     assert_eq!(
         fixture
             .observed_affine_profiles
@@ -126,7 +125,7 @@ fn assert_row_matches_reference(runtime: &MlxRuntime, row: &ReferenceRow) {
                 &mut attribution,
             )
             .unwrap_or_else(|error| panic!("{} {boundary_name} failed: {error:?}", row.row_name));
-        let reference_logits = reference_forward(
+        let reference_logits = operations::reference_forward(
             runtime,
             fixture.model.contract(),
             &fixture.reference_tensors,

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::model_discovery_huggingface_cache::resolve_huggingface_cache_entry;
+use crate::model_discovery_huggingface_cache;
 
 const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 
@@ -401,7 +401,8 @@ fn scan_directory_recursive(
         .file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.starts_with("models--"))
-        && let Some(huggingface_cache_entry) = resolve_huggingface_cache_entry(current_directory)
+        && let Some(huggingface_cache_entry) =
+            model_discovery_huggingface_cache::resolve_huggingface_cache_entry(current_directory)
     {
         if let Some(discovered_model) = try_discover_model_with_id(
             &huggingface_cache_entry.snapshot_directory,

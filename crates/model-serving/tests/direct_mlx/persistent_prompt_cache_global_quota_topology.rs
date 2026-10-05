@@ -10,7 +10,7 @@ use astronomical_model_serving::{
 };
 
 use super::persistent_prompt_cache_disk_store_support::*;
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
@@ -143,7 +143,7 @@ fn should_bound_global_quota_topology_walk_for_cyclic_foreign_manifests() {
             global_prompt_cache_root.path().to_path_buf(),
             1,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("cyclic foreign manifests should be evicted without recursive overflow");
 
@@ -308,7 +308,7 @@ fn open_foreign_quota_trigger(
             global_prompt_cache_root.path().to_path_buf(),
             global_prompt_cache_maximum_size_bytes,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("global quota reconciliation should complete");
 }

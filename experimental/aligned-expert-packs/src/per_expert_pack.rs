@@ -18,7 +18,7 @@ use crate::aligned_expert_pack::{
     ALIGNED_EXPERT_PACK_HEADER_BYTES, ALIGNED_EXPERT_PACK_HEADER_PREFIX_BYTES,
     ALIGNED_EXPERT_PACK_MAGIC, AlignedExpertPackError,
 };
-use crate::aligned_expert_pack_layout::ordered_tensor_sources;
+use crate::aligned_expert_pack_layout;
 use crate::aligned_expert_pack_positional_io::{
     compare_file_range_to_pack, copy_file_range_to_pack, write_header_region,
 };
@@ -230,7 +230,8 @@ pub fn validate_per_expert_pack_payload(
     expected_layer_plan: &QuantizedExpertLayerPlan,
 ) -> Result<(), AlignedExpertPackError> {
     let per_expert_pack_file = File::open(per_expert_pack_path)?;
-    let expected_tensor_sources = ordered_tensor_sources(expected_layer_plan)?;
+    let expected_tensor_sources =
+        aligned_expert_pack_layout::ordered_tensor_sources(expected_layer_plan)?;
     for (tensor_source, tensor_descriptor) in expected_tensor_sources
         .iter()
         .zip(&per_expert_pack_header.tensor_descriptors)
@@ -252,7 +253,8 @@ fn build_unpublished_per_expert_pack(
     requested_pack_output_path: &Path,
     build_request: &PerExpertPackBuildRequest<'_>,
 ) -> Result<PerExpertPackHeader, AlignedExpertPackError> {
-    let ordered_tensor_sources = ordered_tensor_sources(build_request.layer_plan)?;
+    let ordered_tensor_sources =
+        aligned_expert_pack_layout::ordered_tensor_sources(build_request.layer_plan)?;
     let per_expert_pack_header = planned_per_expert_pack_header(
         build_request.model_id,
         build_request.model_revision,
@@ -318,7 +320,7 @@ fn planned_per_expert_pack_header(
             actual_expert_id: layer_plan.expert_capacity,
         });
     }
-    let ordered_tensor_sources = ordered_tensor_sources(layer_plan)?;
+    let ordered_tensor_sources = aligned_expert_pack_layout::ordered_tensor_sources(layer_plan)?;
     let mut tensor_descriptors = Vec::with_capacity(ordered_tensor_sources.len());
     let mut next_segment_offset_bytes = ALIGNED_EXPERT_PACK_HEADER_BYTES;
     for tensor_source in &ordered_tensor_sources {

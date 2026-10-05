@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::qwen3_5::dense::tensor_spec::append_qwen3_5_dense_mlp_tensor_profiles;
+use crate::qwen3_5::dense::tensor_spec;
 use crate::qwen3_5_moe::artifacts::tensor_spec::{
     append_qwen3_5_moe_feed_forward_tensor_profiles, is_sparse_selected_expert_tensor_name,
 };
@@ -131,12 +131,14 @@ fn append_qwen3_5_decoder_layer_tensor_profiles(
         vec![hidden_size],
     ));
     match qwen3_5_config.feed_forward_architecture() {
-        Qwen3_5FeedForwardArchitecture::Dense => append_qwen3_5_dense_mlp_tensor_profiles(
-            tensor_profiles,
-            &layer_prefix,
-            hidden_size,
-            qwen3_5_config,
-        ),
+        Qwen3_5FeedForwardArchitecture::Dense => {
+            tensor_spec::append_qwen3_5_dense_mlp_tensor_profiles(
+                tensor_profiles,
+                &layer_prefix,
+                hidden_size,
+                qwen3_5_config,
+            )
+        }
         Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
             append_qwen3_5_moe_feed_forward_tensor_profiles(
                 tensor_profiles,

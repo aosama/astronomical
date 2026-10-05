@@ -5,12 +5,12 @@ use astronomical_model_serving::{
 };
 use serde_json::json;
 
-use crate::common::qwen3_5::frozen_dense_qwen3_6_config;
-use crate::qwen3_5_hermetic::config::support::minimal_valid_config_json;
+use crate::common::qwen3_5;
+use crate::qwen3_5_hermetic::config::support;
 
 #[test]
 fn should_classify_the_dense_model_type_as_dense_feed_forward_architecture() {
-    let dense_config = frozen_dense_qwen3_6_config();
+    let dense_config = qwen3_5::frozen_dense_qwen3_6_config();
 
     assert_eq!(
         dense_config.feed_forward_architecture(),
@@ -20,7 +20,7 @@ fn should_classify_the_dense_model_type_as_dense_feed_forward_architecture() {
 
 #[test]
 fn should_not_add_sparse_router_gate_profiles_when_resolving_a_dense_model() {
-    let mut dense_config_document = minimal_valid_config_json();
+    let mut dense_config_document = support::minimal_valid_config_json();
     dense_config_document["architectures"] = json!(["Qwen3_5ForConditionalGeneration"]);
     dense_config_document["model_type"] = json!("qwen3_5");
     dense_config_document["text_config"]["model_type"] = json!("qwen3_5_text");
@@ -45,7 +45,7 @@ fn should_not_add_sparse_router_gate_profiles_when_resolving_a_dense_model() {
 
 #[test]
 fn should_use_tied_embedding_weights_without_requiring_a_separate_language_model_head() {
-    let mut dense_config_document = minimal_valid_config_json();
+    let mut dense_config_document = support::minimal_valid_config_json();
     dense_config_document["architectures"] = json!(["Qwen3_5ForConditionalGeneration"]);
     dense_config_document["model_type"] = json!("qwen3_5");
     dense_config_document["tie_word_embeddings"] = json!(true);

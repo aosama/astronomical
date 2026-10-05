@@ -11,7 +11,7 @@ use astronomical_rest_contract::{
     OpenAiStructuredOutputsValidationError, enforced_generation_from_json_schema,
 };
 
-use crate::structured_output::constraint_from_enforced_generation;
+use crate::structured_output;
 
 /// Parses and bounds the raw schema text into the worker-enforced JSON
 /// constraint. The returned reason is a user-facing CLI error message.
@@ -45,5 +45,7 @@ pub fn validated_chat_schema_constraint(
         })?;
     // Re-serializing through the constraint keeps the compact canonical form
     // the worker's DFA compiler sees and drops trailing whitespace noise.
-    Ok(constraint_from_enforced_generation(enforced_generation))
+    Ok(structured_output::constraint_from_enforced_generation(
+        enforced_generation,
+    ))
 }

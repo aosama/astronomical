@@ -11,7 +11,7 @@ use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
     remove_cache_owned_directory_or_confirm_absent, remove_cache_owned_file_or_confirm_absent,
 };
-use super::disk_store_global_quota::reject_parent_directory_components;
+use super::disk_store_global_quota;
 use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
 
 const BLOCKS_DIRECTORY_NAME: &str = "blocks";
@@ -59,7 +59,9 @@ fn clear_target_directory(
     global_prompt_cache_root_directory: &Path,
     model_id: Option<&str>,
 ) -> Result<Option<PathBuf>, PersistentPromptCacheDiskStoreError> {
-    reject_parent_directory_components(global_prompt_cache_root_directory)?;
+    disk_store_global_quota::reject_parent_directory_components(
+        global_prompt_cache_root_directory,
+    )?;
     if !verify_existing_real_directory(global_prompt_cache_root_directory)? {
         return Ok(None);
     }

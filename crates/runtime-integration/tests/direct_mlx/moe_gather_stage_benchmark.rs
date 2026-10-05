@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const WARMUP_ITERATIONS: usize = 2;
@@ -32,7 +32,7 @@ const CHUNK_TOKEN_COUNTS: [usize; 2] = [2_048, 4_096];
 #[test]
 #[ignore = "measures MoE gather stages on real GPU kernels; run via scripts/run-bounded-cargo-test.sh"]
 fn should_measure_moe_gather_stage_costs_at_ornith_shapes() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
 
     for token_count in CHUNK_TOKEN_COUNTS {
         let sorted_row_count = token_count * TOP_K;
@@ -349,7 +349,7 @@ fn build_swiglu_output(runtime: &MlxRuntime, row_count: usize, intermediate: usi
 /// 64-row blocks; the gap against the realistic run sizes the masked-work
 /// overhead a segmented single-expert tile scheduler would recover.
 fn build_single_expert_ids(row_count: usize) -> MlxArray {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let expert_ids = vec![0u32; row_count];
     runtime
         .array_from_u32(&expert_ids, &[row_count as i32])
@@ -357,7 +357,7 @@ fn build_single_expert_ids(row_count: usize) -> MlxArray {
 }
 
 fn build_uniform_expert_ids(row_count: usize) -> MlxArray {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let mut generator_state = 0x9E37_79B9_7F4A_7C15u64;
     let expert_ids: Vec<u32> = (0..row_count)
         .map(|_| {

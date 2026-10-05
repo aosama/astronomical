@@ -4,8 +4,6 @@ use std::fs;
 
 use astronomical_config::{EmbeddingModelCapabilities, ModelCapabilities};
 
-use super::discover_configured_models;
-
 /// Writes the minimal ModernBERT embedding artifact accepted by shallow discovery.
 fn write_modernbert_model_files(model_directory: &std::path::Path) {
     let embedding_config_json = serde_json::json!({
@@ -48,7 +46,7 @@ fn should_discover_an_executable_modernbert_embedding_model() {
     fs::create_dir(&model_directory).expect("model directory should be created");
     write_modernbert_model_files(&model_directory);
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_models = directory_scans
         .into_iter()
         .flat_map(|directory_scan| directory_scan.discovered_models)
@@ -94,7 +92,7 @@ fn should_reject_a_modernbert_model_without_tokenizer_or_weights() {
     )
     .expect("embedding config should be written");
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_models = directory_scans
         .into_iter()
         .flat_map(|directory_scan| directory_scan.discovered_models)
@@ -131,7 +129,7 @@ fn should_reject_unsupported_modernbert_quantization_widths() {
     )
     .expect("safetensors should be written");
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_models = directory_scans
         .into_iter()
         .flat_map(|directory_scan| directory_scan.discovered_models)

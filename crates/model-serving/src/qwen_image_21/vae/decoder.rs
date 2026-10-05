@@ -19,7 +19,7 @@ use super::latent_geometry::{
 };
 use super::mid_block::QwenImage21VaeMidBlock;
 use super::rms_norm::QwenImage21VaeRmsNorm;
-use super::tensor_shape::as_i32;
+use super::tensor_shape;
 use super::up_block::QwenImage21VaeResidualUpBlock;
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -100,10 +100,12 @@ impl QwenImage21VaeDecoder {
     fn bind(runtime: &MlxRuntime, tensors: &MlxSafetensors) -> Result<Self, QwenImage21VaeError> {
         let latents_mean = runtime.array_from_f32(
             &LATENTS_MEAN,
-            &[as_i32(LATENT_CHANNEL_COUNT, "mean width")?],
+            &[tensor_shape::as_i32(LATENT_CHANNEL_COUNT, "mean width")?],
         )?;
-        let latents_std =
-            runtime.array_from_f32(&LATENTS_STD, &[as_i32(LATENT_CHANNEL_COUNT, "std width")?])?;
+        let latents_std = runtime.array_from_f32(
+            &LATENTS_STD,
+            &[tensor_shape::as_i32(LATENT_CHANNEL_COUNT, "std width")?],
+        )?;
         let up_blocks = UP_BLOCK_CHANNELS
             .iter()
             .enumerate()
@@ -306,7 +308,9 @@ pub(super) fn clamp_decoded_pixels(
 
 fn validate_latent_shape(latents: &MlxArray) -> Result<(), QwenImage21VaeError> {
     let shape = latents.shape();
-    if shape.len() == 4 && shape[3] == as_i32(LATENT_CHANNEL_COUNT, "latent channels")? {
+    if shape.len() == 4
+        && shape[3] == tensor_shape::as_i32(LATENT_CHANNEL_COUNT, "latent channels")?
+    {
         return Ok(());
     }
     Err(QwenImage21VaeError::invalid_geometry(format!(

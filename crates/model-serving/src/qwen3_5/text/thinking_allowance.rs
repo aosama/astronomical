@@ -8,7 +8,7 @@
 //! Pi compaction sends exactly that shape: an output cap of 16,000 with a
 //! 16,384 high-effort allowance.
 
-use super::thinking_budget::minimum_bounded_output_token_count;
+use super::thinking_budget;
 
 /// Resolves the effective thinking allowance for one request.
 ///
@@ -30,12 +30,13 @@ pub fn resolve_effective_thinking_allowance(
     if !enable_thinking || thinking_budget == 0 {
         return None;
     }
-    let fits_requested_allowance =
-        minimum_bounded_output_token_count(thinking_budget, transition_token_count).is_some_and(
-            |minimum_bounded_output_tokens| {
-                usize::from(max_output_tokens) >= minimum_bounded_output_tokens
-            },
-        );
+    let fits_requested_allowance = thinking_budget::minimum_bounded_output_token_count(
+        thinking_budget,
+        transition_token_count,
+    )
+    .is_some_and(|minimum_bounded_output_tokens| {
+        usize::from(max_output_tokens) >= minimum_bounded_output_tokens
+    });
     if fits_requested_allowance {
         return Some(thinking_budget);
     }
@@ -50,5 +51,5 @@ pub fn effective_thinking_reservation_token_count(
     transition_token_count: usize,
 ) -> Option<usize> {
     let thinking_budget = effective_thinking_allowance?;
-    minimum_bounded_output_token_count(thinking_budget, transition_token_count)
+    thinking_budget::minimum_bounded_output_token_count(thinking_budget, transition_token_count)
 }

@@ -1,10 +1,10 @@
 use astronomical_mlx_c_rust::MlxDtype;
 
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 
 #[test]
 fn should_run_affine_four_bit_quantized_matmul_with_group_size_sixty_four() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activation_values = (1..=64)
         .map(|activation_index| activation_index as f32)
         .collect::<Vec<_>>();
@@ -62,7 +62,7 @@ fn should_run_affine_four_bit_quantized_matmul_with_group_size_sixty_four() {
 
 #[test]
 fn should_run_affine_eight_bit_quantized_matmul_with_group_size_sixty_four() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activation_values = (1..=64)
         .map(|activation_index| activation_index as f32)
         .collect::<Vec<_>>();
@@ -136,7 +136,7 @@ fn should_run_affine_eight_bit_quantized_matmul_with_group_size_sixty_four() {
 
 #[test]
 fn should_run_affine_five_bit_quantized_matmul_with_group_size_thirty_two() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activations = runtime
         .array_from_f32(&[1.0; 64], &[1, 64])
         .expect("the activation matrix should be valid");
@@ -179,7 +179,7 @@ fn should_run_bfloat16_affine_qmv_when_output_width_uses_the_slow_jit_kernel() {
     const BITS: i32 = 2;
     const MAX_ABSOLUTE_ERROR: f32 = 2e-2;
 
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activation_values = (0..INPUT_WIDTH)
         .map(|activation_index| 0.02 * (activation_index % 13 + 1) as f32)
         .collect::<Vec<_>>();
@@ -254,7 +254,7 @@ fn should_run_bfloat16_affine_qmv_when_output_width_uses_the_slow_jit_kernel() {
 
 #[test]
 fn should_run_affine_gather_qmm_for_selected_four_bit_experts() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activation_values = (1..=64)
         .map(|activation_index| activation_index as f32)
         .collect::<Vec<_>>();
@@ -307,7 +307,7 @@ fn should_run_affine_gather_qmm_for_selected_four_bit_experts() {
 
 #[test]
 fn should_dequantize_only_selected_eight_bit_embedding_rows() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let mut quantized_embedding_words = Vec::new();
     quantized_embedding_words.extend([0x0101_0101; 16]);
     quantized_embedding_words.extend([0x0202_0202; 16]);
@@ -353,7 +353,7 @@ fn should_dequantize_only_selected_eight_bit_embedding_rows() {
 
 #[test]
 fn should_multiply_selected_dense_experts_without_materializing_selected_weight_copies() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let activations = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0], &[2, 1, 4])
         .expect("the selected-expert activations should be valid");

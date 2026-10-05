@@ -14,10 +14,10 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
-use crate::qwen_image_21::kv_cache::prefix_length;
-use crate::qwen_image_21::mask::{build_image_ids, prefix_segments};
-use crate::qwen_image_21::mlx_math::{attention_scale, fp32_zero_center_rms_norm};
-use crate::qwen_image_21::modulation::build_target_token_mask;
+use crate::qwen_image_21::kv_cache;
+use crate::qwen_image_21::mask;
+use crate::qwen_image_21::mlx_math;
+use crate::qwen_image_21::modulation;
 use crate::qwen_image_21::rope::QwenImage21Rope;
 use crate::qwen_image_21::time::SinusoidalTimesteps;
 
@@ -89,7 +89,7 @@ pub(super) fn prepare_forward(
 
     // 1. Project both streams into the hidden width.
     let image_hidden = weights.img_in.forward(runtime, request.packed_latents)?;
-    let text_normalized = fp32_zero_center_rms_norm(
+    let text_normalized = mlx_math::fp32_zero_center_rms_norm(
         runtime,
         request.text_embeddings,
         &weights.text_norm,
@@ -129,10 +129,10 @@ pub(super) fn prepare_forward(
     let rope_sines = runtime.repeat_axis(&rope_sines, 2, 1)?;
 
     // 4. Attention structure: prefix segments and their additive masks.
-    let image_ids = build_image_ids(request.img_shapes, &joint_mask);
-    let target_token_mask = build_target_token_mask(request.img_shapes, &joint_mask);
-    let prefix_len = prefix_length(&target_token_mask);
-    let segments: Vec<AttentionSegment> = prefix_segments(&image_ids, prefix_len)
+    let image_ids = mask::build_image_ids(request.img_shapes, &joint_mask);
+    let target_token_mask = modulation::build_target_token_mask(request.img_shapes, &joint_mask);
+    let prefix_len = kv_cache::prefix_length(&target_token_mask);
+    let segments: Vec<AttentionSegment> = mask::prefix_segments(&image_ids, prefix_len)
         .into_iter()
         .map(|(start, end, is_text)| AttentionSegment {
             query_start: start,
@@ -230,7 +230,7 @@ pub(super) fn prepare_forward(
         rope_sines,
         segments,
         segment_masks,
-        attention_scale: attention_scale(HEAD_WIDTH)?,
+        attention_scale: mlx_math::attention_scale(HEAD_WIDTH)?,
         attention_one_plus_scale,
         attention_gate,
         feed_forward_one_plus_scale,

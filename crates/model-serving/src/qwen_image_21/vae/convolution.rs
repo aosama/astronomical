@@ -7,7 +7,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
-use super::tensor_shape::validate_shape;
+use super::tensor_shape;
 use astronomical_mlx_c_rust::MlxArray;
 
 /// A spatial (or pointwise) convolution over `NHWC` activations with `OHWI` weights.
@@ -29,13 +29,13 @@ impl QwenImage21VaeSpatialConv {
     ) -> Result<Self, QwenImage21VaeError> {
         let weight = tensors.tensor(&format!("{prefix}.weight"))?;
         let bias = tensors.tensor(&format!("{prefix}.bias"))?;
-        validate_shape(
+        tensor_shape::validate_shape(
             prefix,
             "weight",
             &weight,
             &[output_channels, kernel_edge, kernel_edge, input_channels],
         )?;
-        validate_shape(prefix, "bias", &bias, &[output_channels])?;
+        tensor_shape::validate_shape(prefix, "bias", &bias, &[output_channels])?;
         Ok(Self {
             weight,
             bias,

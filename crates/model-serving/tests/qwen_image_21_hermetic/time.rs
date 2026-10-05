@@ -4,7 +4,8 @@
 use astronomical_model_serving::SinusoidalTimesteps;
 use serde_json::Value;
 
-use super::support::{oracle_document, oracle_f32_array, oracle_f64_values};
+use super::support;
+use super::support::oracle_f32_array;
 
 /// Reference frequency table plus embeddings, derived from the diffusers
 /// QwenImage21TemporalTimesteps implementation.
@@ -16,7 +17,7 @@ const EMBED_TOLERANCE: f32 = 1e-5;
 const FREQ_TOLERANCE: f64 = 1e-12;
 
 fn time_oracle() -> Value {
-    oracle_document(TIME_ORACLE_JSON)
+    support::oracle_document(TIME_ORACLE_JSON)
 }
 
 fn timestep_dim(oracle: &Value) -> usize {
@@ -26,13 +27,13 @@ fn timestep_dim(oracle: &Value) -> usize {
 }
 
 fn timesteps(oracle: &Value) -> Vec<f64> {
-    oracle_f64_values(oracle, "timesteps")
+    support::oracle_f64_values(oracle, "timesteps")
 }
 
 #[test]
 fn should_match_the_oracle_frequency_table() {
     let projection = SinusoidalTimesteps::default();
-    let oracle_freqs = oracle_f64_values(&time_oracle(), "freqs");
+    let oracle_freqs = support::oracle_f64_values(&time_oracle(), "freqs");
     let freqs = projection.freqs_for_tests();
     assert_eq!(
         freqs.len(),

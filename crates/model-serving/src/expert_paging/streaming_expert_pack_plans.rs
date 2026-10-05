@@ -97,14 +97,16 @@ pub fn build_streaming_expert_layer_plans(
     // Full inventory validation against the built plans: every declared file
     // exists with the geometry-derived byte count and one header binds the
     // bytes to the format.
-    let streaming_sources = detect_streaming_expert_pack_sources(model_dir, &layer_plans)?
-        .ok_or_else(|| StreamingExpertPackError::PackHeaderGeometry {
-            description: "the streaming manifest disappeared during plan construction".to_owned(),
-        })?;
+    let streaming_sources =
+        streaming_expert_packs::detect_streaming_expert_pack_sources(model_dir, &layer_plans)?
+            .ok_or_else(|| StreamingExpertPackError::PackHeaderGeometry {
+                description: "the streaming manifest disappeared during plan construction"
+                    .to_owned(),
+            })?;
     Ok((layer_plans, streaming_sources))
 }
 
-use super::streaming_expert_packs::detect_streaming_expert_pack_sources;
+use super::streaming_expert_packs;
 
 /// Builds one layer plan from that layer's expert-zero pack header.
 ///

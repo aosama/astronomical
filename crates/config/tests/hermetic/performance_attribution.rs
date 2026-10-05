@@ -1,11 +1,9 @@
 use astronomical_config::AstronomicalConfig;
 
-use super::write_config;
-
 #[test]
 fn should_disable_performance_attribution_when_explicitly_configured_as_false() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
+    super::write_config(
         temporary_home_directory.path(),
         r#"{
           "model_directories": ["/models/ornith"],
@@ -22,7 +20,7 @@ fn should_disable_performance_attribution_when_explicitly_configured_as_false() 
 #[test]
 fn should_reject_null_performance_attribution_setting() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
+    super::write_config(
         temporary_home_directory.path(),
         r#"{
           "model_directories": ["/models/ornith"],

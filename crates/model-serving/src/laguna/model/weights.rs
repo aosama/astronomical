@@ -16,7 +16,7 @@ use super::bound_linear::{
     LagunaBoundLinear, is_floating_weight, require_supported_affine_profile,
 };
 use super::error::LagunaExecutionError;
-use super::router_correction_bias::bind_optional_router_correction_bias;
+use super::router_correction_bias;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Resident weight map bound from canonical tensor IDs.
@@ -149,7 +149,7 @@ impl LagunaNativeWeights {
                         layer_id(layer_index, LagunaLayerTensorRole::Router),
                         "router weight is required",
                     )?;
-                    bind_optional_router_correction_bias(
+                    router_correction_bias::bind_optional_router_correction_bias(
                         &mut tensors,
                         &mut vectors,
                         layer_index,

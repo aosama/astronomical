@@ -3,7 +3,6 @@ use astronomical_ipc_protocol::{
     WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
     WorkerRuntimeFeatureConfiguration,
 };
-use astronomical_supervisor::build_application;
 use axum::{
     body::{Body, to_bytes},
     http::Request,
@@ -161,7 +160,7 @@ async fn status_document(scripted_executor: ScriptedExecutor) -> serde_json::Val
     // Exercise the public HTTP boundary because status combines worker acknowledgement with the
     // optional reloadable configuration. Directly inspecting WorkerHealthSnapshot would miss the
     // exact regression where an active worker was serialized as MTP-disabled.
-    let response = build_application(scripted_executor)
+    let response = astronomical_supervisor::build_application(scripted_executor)
         .oneshot(
             Request::builder()
                 .uri("/v1/status")

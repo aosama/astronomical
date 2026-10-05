@@ -31,7 +31,7 @@ use crate::mlx_compiled_verify_window_geometry::{
 };
 use crate::mlx_compiled_verify_window_ops as ops;
 use crate::{MlxArray, MlxStream, raw};
-use crate::{MlxCError, MlxCompiledMultiOutputGraph, MlxMetalKernel, set_graph_output_vector};
+use crate::{MlxCError, MlxCompiledMultiOutputGraph, MlxMetalKernel};
 #[path = "mlx_compiled_verify_window_attention.rs"]
 mod attention;
 #[path = "mlx_compiled_verify_window_gdn.rs"]
@@ -179,7 +179,7 @@ unsafe extern "C" fn build_verify_window_graph(
         Ok(window_outputs) => {
             let output_references = window_outputs.iter().collect::<Vec<_>>();
             // SAFETY: The output vector is unique and live for this publish.
-            unsafe { set_graph_output_vector(output_vector, &output_references) }
+            unsafe { crate::set_graph_output_vector(output_vector, &output_references) }
         }
         Err(_status) => 1,
     }

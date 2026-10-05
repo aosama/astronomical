@@ -10,7 +10,7 @@
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use super::{DeterministicValues, assert_f32_close, f32_array, oracle_test_runtime};
+use super::DeterministicValues;
 
 /// Mixing geometry for one reference row.
 pub(crate) struct StreamGeometry {
@@ -99,8 +99,8 @@ pub(crate) fn gpu_gated_mix(
 ) -> Result<(Vec<f32>, Vec<f32>), astronomical_runtime_integration::MlxRuntimeError> {
     let hyper = hyper_width(geometry);
     let width = geometry.stream_width;
-    let input = f32_array(runtime, hyper_input, &[hyper as i32])?;
-    let norm = f32_array(runtime, norm_weights, &[hyper as i32])?;
+    let input = super::f32_array(runtime, hyper_input, &[hyper as i32])?;
+    let norm = super::f32_array(runtime, norm_weights, &[hyper as i32])?;
     // Grouped RMSNorm over each stream: variance per group, then the
     // per-element affine of one plus the weight.
     let mut normalized_parts = Vec::with_capacity(geometry.stream_count);
@@ -129,7 +129,7 @@ pub(crate) fn gpu_gated_mix(
     let stacked_shape = stacked.shape();
     let element_count: i32 = stacked_shape.iter().product();
     let normalized = runtime.reshape(&stacked, &[element_count])?;
-    let down_array = f32_array(runtime, down, &[geometry.low_rank as i32, hyper as i32])?;
+    let down_array = super::f32_array(runtime, down, &[geometry.low_rank as i32, hyper as i32])?;
     let column = runtime.reshape(&normalized, &[hyper as i32, 1])?;
     let hidden = runtime.matmul(&down_array, &column)?;
     let hidden = runtime.divide(
@@ -139,7 +139,7 @@ pub(crate) fn gpu_gated_mix(
     // SiLU: value times sigmoid of value.
     let activated = runtime.sigmoid(&hidden)?;
     let hidden = runtime.multiply(&hidden, &activated)?;
-    let up_array = f32_array(runtime, up, &[hyper as i32, geometry.low_rank as i32])?;
+    let up_array = super::f32_array(runtime, up, &[hyper as i32, geometry.low_rank as i32])?;
     let hidden_column = runtime.reshape(&hidden, &[geometry.low_rank as i32, 1])?;
     let gate = runtime.matmul(&up_array, &hidden_column)?;
     let gate = runtime.sigmoid(&gate)?;
@@ -160,7 +160,7 @@ pub(crate) fn gpu_gated_mix(
 #[tokio::test]
 async fn should_match_gpu_stream_mixing_against_the_pinned_host_algebra() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = oracle_test_runtime();
+    let runtime = super::oracle_test_runtime();
     let mut values = DeterministicValues::new(0x5C9E);
     for geometry in [
         StreamGeometry {
@@ -186,13 +186,13 @@ async fn should_match_gpu_stream_mixing_against_the_pinned_host_algebra() {
                 .expect("GPU mixing should run");
         let (host_mixed, host_normalized) =
             host_gated_mix(&hyper_input, &norm_weights, &down, &up, &geometry);
-        assert_f32_close(
+        super::assert_f32_close(
             &gpu_normalized,
             &host_normalized,
             1.0e-4,
             "GPU grouped normalization must match the host algebra",
         );
-        assert_f32_close(
+        super::assert_f32_close(
             &gpu_mixed,
             &host_mixed,
             1.0e-4,
@@ -208,7 +208,7 @@ async fn should_match_the_hermetic_owner_values_on_the_gpu() {
     // ties the hermetic owner, this oracle, and the future production route
     // to one set of numbers.
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = oracle_test_runtime();
+    let runtime = super::oracle_test_runtime();
     let geometry = StreamGeometry {
         stream_count: 2,
         stream_width: 4,
@@ -228,7 +228,7 @@ async fn should_match_the_hermetic_owner_values_on_the_gpu() {
     let (gpu_mixed, _) =
         gpu_gated_mix(&runtime, &hyper_input, &norm_weights, &down, &up, &geometry)
             .expect("GPU mixing should run");
-    assert_f32_close(
+    super::assert_f32_close(
         &gpu_mixed,
         &[0.456_878_934, 0.304_467_565, 0.874_527_157, 1.137_607_931],
         1.0e-5,

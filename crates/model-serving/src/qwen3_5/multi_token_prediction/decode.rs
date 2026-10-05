@@ -2,14 +2,15 @@ use astronomical_ipc_protocol::RequestId;
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::memory::{MtpDepthDowngradeReason, MtpDraftDepth};
+use crate::qwen3_5::inference_execution;
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::{InferenceEngineError, PerformanceCounter};
 
-use super::accepted_prefix_commit::commit_accepted_mtp_prefix;
+use super::accepted_prefix_commit;
 use super::sampled_verification::MtpSampledSamplingSettings;
-use super::target_verification::forward_target_verification_window_with_performance_attribution;
+use super::target_verification;
 use super::{
     MtpVerificationDecision, qwen3_5_mtp_effective_depth_and_reason_for_windows,
     qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_verification_decision,
@@ -69,12 +70,16 @@ pub(in crate::qwen3_5) fn projected_verification_window_memory_growth_bytes(
         .config()
         .full_attention_key_value_state_bytes_per_layer_token()
         .ok_or_else(|| {
-            fatal_engine_error("prediction full-attention bytes per layer token overflowed")
+            inference_execution::fatal_engine_error(
+                "prediction full-attention bytes per layer token overflowed",
+            )
         })?;
     let sequential_update_token_counts = vec![1; usize::from(effective_depth.get())];
     active_request
         .optional_prediction_session()
-        .ok_or_else(|| fatal_engine_error("active prediction request state disappeared"))?
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error("active prediction request state disappeared")
+        })?
         .projected_sequential_full_attention_growth_bytes(
             full_attention_bytes_per_layer_token,
             &sequential_update_token_counts,
@@ -97,7 +102,9 @@ pub(in crate::qwen3_5) fn verification_transient_array_bytes(
             Qwen3_5SamplingStrategy::TopKTopP { .. }
         ),
     )
-    .map_err(|_| fatal_engine_error("MTP verification transient arrays overflowed"))
+    .map_err(|_| {
+        inference_execution::fatal_engine_error("MTP verification transient arrays overflowed")
+    })
 }
 
 pub(in crate::qwen3_5) fn verification_boundary_snapshot_bytes(
@@ -108,12 +115,12 @@ pub(in crate::qwen3_5) fn verification_boundary_snapshot_bytes(
         .decoder_cache_layout()
         .boundary_snapshot_payload_byte_count()
         .map_err(|decoder_cache_layout_error| {
-            fatal_engine_error(format!(
+            inference_execution::fatal_engine_error(format!(
                 "failed to project target verification-window workspace: {decoder_cache_layout_error}"
             ))
         })?
         .checked_mul(usize::from(effective_depth.get()))
-        .ok_or_else(|| fatal_engine_error("target verification boundary workspace overflowed"))
+        .ok_or_else(|| inference_execution::fatal_engine_error("target verification boundary workspace overflowed"))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -131,7 +138,11 @@ pub(in crate::qwen3_5) fn attempt_prediction_proposal_and_verification(
         .record_counter(PerformanceCounter::MtpAdmittedAttemptCount, 1);
     let requested_depth = active_request
         .optional_prediction_session()
-        .ok_or_else(|| fatal_engine_error("MTP request session disappeared before proposal"))?
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error(
+                "MTP request session disappeared before proposal",
+            )
+        })?
         .requested_depth();
     active_request.performance_attribution_mut().record_counter(
         PerformanceCounter::MtpRequestedDepthTotal,
@@ -187,10 +198,16 @@ fn attempt_greedy_prediction_proposal_and_verification(
 ) -> Result<MtpVerificationDecision, InferenceEngineError> {
     let mut prediction_request = active_request
         .take_optional_prediction_session()
-        .ok_or_else(|| fatal_engine_error("MTP request session disappeared before proposal"))?;
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error(
+                "MTP request session disappeared before proposal",
+            )
+        })?;
     let target_hidden_seed = prediction_request
         .take_target_hidden_states()
-        .ok_or_else(|| fatal_engine_error("MTP proposal lost its target hidden seed"))?;
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error("MTP proposal lost its target hidden seed")
+        })?;
     // Two retained frontiers keep commit repair and operational rollback independent. Commit
     // repair consumes its frontier only after a rejection leaves proposal state too far ahead.
     let predictor_commit_checkpoint = prediction_request
@@ -271,7 +288,7 @@ fn attempt_greedy_prediction_proposal_and_verification(
                 }
                 Err(_) => {
                     log_first_compiled_window_engagement("declined", 0.0);
-                    forward_target_verification_window_with_performance_attribution(
+                    target_verification::forward_target_verification_window_with_performance_attribution(
                         model,
                         &verifier_input_token_ids,
                         target_verify_start_position_tokens,
@@ -317,13 +334,17 @@ fn attempt_greedy_prediction_proposal_and_verification(
         &verification_output.target_token_ids,
         end_of_sequence_token_ids,
     )
-    .map_err(|_| fatal_engine_error("MTP verification returned inconsistent bounded vectors"))?;
+    .map_err(|_| {
+        inference_execution::fatal_engine_error(
+            "MTP verification returned inconsistent bounded vectors",
+        )
+    })?;
     if decision.was_eos_truncated() {
         active_request
             .performance_attribution_mut()
             .record_counter(PerformanceCounter::MtpEosTruncatedPrefixCount, 1);
     }
-    let commit_outcome = commit_accepted_mtp_prefix(
+    let commit_outcome = accepted_prefix_commit::commit_accepted_mtp_prefix(
         model,
         active_request,
         target_verify_start_position_tokens,

@@ -6,7 +6,7 @@ use std::path::{Component, Path};
 
 use serde::Deserialize;
 
-use super::classified_artifacts::immutable_model_revision;
+use super::classified_artifacts;
 use crate::{
     LagunaRootChatTemplateSource, LagunaStandaloneChatTemplateState,
     select_laguna_root_chat_template, validate_laguna_standalone_chat_template_role,
@@ -113,7 +113,7 @@ pub(super) fn discover_model_metadata(
     }
 
     let model_size_bytes = validate_indexed_payload(model_directory)?;
-    let revision = immutable_model_revision(model_directory)?;
+    let revision = classified_artifacts::immutable_model_revision(model_directory)?;
     if !is_immutable_revision(&revision) {
         return None;
     }

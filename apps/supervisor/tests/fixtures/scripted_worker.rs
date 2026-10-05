@@ -10,7 +10,6 @@ use astronomical_ipc_protocol::{
 mod scripted_worker_chat;
 mod scripted_worker_image;
 
-use scripted_worker_chat::{send_accepted_chat, send_activity_transition, send_simple_completion};
 use scripted_worker_image::{
     ScriptedImageCommandOutcome, handle_image_command, image_capabilities, send_failed_image,
 };
@@ -100,7 +99,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 let request_id = generation_command.request_id;
                 match generation_command.model.as_str() {
                     "astronomical/accepted-chat-fixture" => {
-                        send_accepted_chat(request_id, &mut event_writer).await?;
+                        scripted_worker_chat::send_accepted_chat(request_id, &mut event_writer)
+                            .await?;
                     }
                     "astronomical/malformed-output-fixture" => {
                         event_writer
@@ -174,7 +174,11 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         cancellation_mlx_telemetry = CancellationMlxTelemetry::Clear;
                     }
                     "astronomical/activity-transition-fixture" => {
-                        send_activity_transition(request_id, &mut event_writer).await?;
+                        scripted_worker_chat::send_activity_transition(
+                            request_id,
+                            &mut event_writer,
+                        )
+                        .await?;
                     }
                     "astronomical/duplicate-generation-preparation-fixture" => {
                         let generation_preparation_event =
@@ -388,7 +392,10 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             .await?;
                     }
                     "astronomical/exit-after-chat-admission-fixture" => return Ok(()),
-                    _ => send_simple_completion(request_id, &mut event_writer).await?,
+                    _ => {
+                        scripted_worker_chat::send_simple_completion(request_id, &mut event_writer)
+                            .await?
+                    }
                 }
             }
             WorkerCommand::Cancel { request_id } => {

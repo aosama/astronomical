@@ -5,9 +5,10 @@ use super::rest_support::{
     get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
     required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
 };
-use crate::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
+use crate::openai_rest;
+use crate::openai_rest::E2E_TIMEOUT;
 use crate::support::openai_client::LocalOpenAiClient;
-use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
+use crate::support::serving_rest;
 
 // Issue #657 guard: report the block-aligned dense restore without double-counting
 // or dropping its contribution from the public usage surface.
@@ -32,14 +33,15 @@ async fn run_dense_cached_token_report_journey() {
     write_cache_pressure_worker_config(configured_worker_home.path(), &model_directory, None);
     let prepared_romeo_and_juliet_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
-    let model_artifact_rest_server = launch_serving_rest_server_for_model_with_memory_limit(
-        cache_pressure_model_id(),
-        model_directory,
-        Some(configured_worker_home.path()),
-        Some(performance_log_directory.path()),
-        None,
-    )
-    .await;
+    let model_artifact_rest_server =
+        serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
+            cache_pressure_model_id(),
+            model_directory,
+            Some(configured_worker_home.path()),
+            Some(performance_log_directory.path()),
+            None,
+        )
+        .await;
     let server_address = model_artifact_rest_server.server_address;
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
 
@@ -114,7 +116,7 @@ async fn run_dense_cached_token_report_journey() {
         &final_status_document,
     );
 
-    stop_serving_rest_server(model_artifact_rest_server).await;
+    openai_rest::stop_serving_rest_server(model_artifact_rest_server).await;
     eprintln!(
         "{acceptance_log_prefix} status=success prompt_tokens={} cached_tokens={warm_cached_token_count}",
         warm_response.prompt_token_count,

@@ -1,11 +1,11 @@
 use astronomical_model_serving::{K2HorizonMoVAConfig, K2HorizonMoVALayerKind};
 
-use super::support::family_member_config_json;
+use super::support;
 
 #[test]
 fn should_parse_family_knobs_without_baking_in_one_artifact_geometry() {
     let config = K2HorizonMoVAConfig::from_json_bytes(
-        family_member_config_json(3, &[0, 1], 8, 4).as_bytes(),
+        support::family_member_config_json(3, &[0, 1], 8, 4).as_bytes(),
     )
     .expect("family config should parse");
     assert_eq!(config.num_hidden_layers(), 3);
@@ -27,9 +27,10 @@ fn should_parse_family_knobs_without_baking_in_one_artifact_geometry() {
 
 #[test]
 fn should_treat_zero_mova_experts_as_sparse_feed_forward_without_value_experts() {
-    let config =
-        K2HorizonMoVAConfig::from_json_bytes(family_member_config_json(2, &[0], 4, 0).as_bytes())
-            .expect("family config should parse");
+    let config = K2HorizonMoVAConfig::from_json_bytes(
+        support::family_member_config_json(2, &[0], 4, 0).as_bytes(),
+    )
+    .expect("family config should parse");
     assert_eq!(
         config.layer_kind(1),
         K2HorizonMoVALayerKind::SparseFeedForward
@@ -39,7 +40,7 @@ fn should_treat_zero_mova_experts_as_sparse_feed_forward_without_value_experts()
 #[test]
 fn should_reject_non_affine_quantization_and_unknown_model_type() {
     let mut document: serde_json::Value =
-        serde_json::from_str(&family_member_config_json(2, &[0], 4, 2)).expect("json");
+        serde_json::from_str(&support::family_member_config_json(2, &[0], 4, 2)).expect("json");
     document["model_type"] = serde_json::json!("llama");
     assert!(K2HorizonMoVAConfig::from_json_bytes(document.to_string().as_bytes()).is_err());
     document["model_type"] = serde_json::json!("k2_horizon_mova");
@@ -54,7 +55,7 @@ fn should_reject_declared_knobs_the_serving_path_does_not_implement() {
         ("query_key_norm", serde_json::json!(true)),
     ] {
         let mut document: serde_json::Value =
-            serde_json::from_str(&family_member_config_json(2, &[0], 4, 2)).expect("json");
+            serde_json::from_str(&support::family_member_config_json(2, &[0], 4, 2)).expect("json");
         document[knob_name] = knob_value;
         let parse_error = K2HorizonMoVAConfig::from_json_bytes(document.to_string().as_bytes())
             .expect_err("a declared-but-unimplemented knob must fail closed");
@@ -64,7 +65,7 @@ fn should_reject_declared_knobs_the_serving_path_does_not_implement() {
         );
     }
     let mut document: serde_json::Value =
-        serde_json::from_str(&family_member_config_json(2, &[0], 4, 2)).expect("json");
+        serde_json::from_str(&support::family_member_config_json(2, &[0], 4, 2)).expect("json");
     document["num_shared_experts"] = serde_json::json!(2);
     assert!(K2HorizonMoVAConfig::from_json_bytes(document.to_string().as_bytes()).is_err());
     document["num_shared_experts"] = serde_json::json!(0);
@@ -82,7 +83,7 @@ fn should_reject_declared_knobs_the_serving_path_does_not_implement() {
 #[test]
 fn should_reject_a_member_that_declares_no_rope_theta() {
     let mut document: serde_json::Value =
-        serde_json::from_str(&family_member_config_json(2, &[0], 4, 2)).expect("json");
+        serde_json::from_str(&support::family_member_config_json(2, &[0], 4, 2)).expect("json");
     document
         .as_object_mut()
         .expect("config document")

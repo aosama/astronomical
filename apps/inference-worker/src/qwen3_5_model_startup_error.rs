@@ -7,7 +7,7 @@ use astronomical_model_serving::{
 };
 use thiserror::Error;
 
-use crate::worker_startup_error::bound_public_model_load_failure_reason;
+use crate::worker_startup_error;
 
 /// Failure produced while constructing the Qwen family processor and engine.
 #[derive(Debug, Error)]
@@ -54,6 +54,8 @@ impl Qwen3_5ModelStartupError {
                 "model initialization failed".to_owned()
             }
         };
-        bound_public_model_load_failure_reason(unbounded_public_model_load_failure_reason)
+        worker_startup_error::bound_public_model_load_failure_reason(
+            unbounded_public_model_load_failure_reason,
+        )
     }
 }

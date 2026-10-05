@@ -123,7 +123,6 @@ fn extract_named_attribute_value(after_name_keyword: &str) -> Option<(&str, &str
 
 #[cfg(test)]
 mod foreign_syntax_unit_tests {
-    use super::normalize_foreign_tool_call_syntax;
 
     #[test]
     fn should_rewrite_invoke_and_named_parameter_tags() {
@@ -135,7 +134,7 @@ mod foreign_syntax_unit_tests {
             "<",
             "/parameter>",
         );
-        let normalized = normalize_foreign_tool_call_syntax(foreign);
+        let normalized = super::normalize_foreign_tool_call_syntax(foreign);
         assert!(normalized.starts_with(concat!("<", "function=find_character>")));
         assert!(normalized.contains(concat!("<", "parameter=name>Romeo")));
     }

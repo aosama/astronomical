@@ -7,7 +7,7 @@ use astronomical_model_serving::{
 };
 use serde_json::json;
 
-use crate::common::qwen3_5_moe::persistent_visual_embedding_model_contract;
+use crate::common::qwen3_5_moe;
 
 #[test]
 fn should_accept_a_well_formed_bfloat16_visual_embedding_file() {
@@ -26,7 +26,8 @@ fn should_accept_a_well_formed_bfloat16_visual_embedding_file() {
 
     let visual_embedding_file =
         File::open(&visual_embedding_file_path).expect("the visual file should open");
-    let persistent_visual_embedding_model_contract = persistent_visual_embedding_model_contract();
+    let persistent_visual_embedding_model_contract =
+        qwen3_5_moe::persistent_visual_embedding_model_contract();
     let visual_embedding_file_header = PersistentVisualEmbeddingFileHeader::read_from_file(
         &visual_embedding_file,
         &visual_embedding_file_path,
@@ -64,7 +65,8 @@ fn should_reject_a_visual_file_whose_filename_does_not_match_its_metadata_digest
 
     let visual_embedding_file =
         File::open(&mismatched_file_path).expect("the visual file should open");
-    let persistent_visual_embedding_model_contract = persistent_visual_embedding_model_contract();
+    let persistent_visual_embedding_model_contract =
+        qwen3_5_moe::persistent_visual_embedding_model_contract();
     let header_result = PersistentVisualEmbeddingFileHeader::read_from_file(
         &visual_embedding_file,
         &mismatched_file_path,

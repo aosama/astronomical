@@ -15,8 +15,8 @@ use crate::{
     Qwen3_5ThinkingBudgetState,
 };
 
-use super::super::text::sampler::build_qwen3_5_sampled_token;
-use super::{fatal_engine_error, qwen3_5_runtime_error};
+use super::super::text::sampler;
+use super::qwen3_5_runtime_error;
 use crate::qwen3_5::multi_token_prediction::{
     MultiTokenPredictionRequestAllocationCheckpoint, Qwen3_5MultiTokenPredictionRequest,
 };
@@ -228,14 +228,14 @@ impl Qwen3_5EngineRequest {
                     top_k,
                     top_p_thousandths,
                     ..
-                } => build_qwen3_5_sampled_token(
+                } => sampler::build_qwen3_5_sampled_token(
                     model,
                     logits,
                     temperature_thousandths,
                     top_p_thousandths,
                     top_k,
                     sampling_random_state.as_mut().ok_or_else(|| {
-                        fatal_engine_error("sampled request lost its random state")
+                        super::fatal_engine_error("sampled request lost its random state")
                     })?,
                 ),
             },
@@ -256,7 +256,7 @@ impl Qwen3_5EngineRequest {
     ) -> Result<MlxArray, InferenceEngineError> {
         self.random_state
             .take()
-            .ok_or_else(|| fatal_engine_error("sampled request lost its random state"))
+            .ok_or_else(|| super::fatal_engine_error("sampled request lost its random state"))
     }
 
     /// Returns the keyed sampling stream after a decode operation used it.
@@ -271,12 +271,13 @@ impl Qwen3_5EngineRequest {
         &mut self,
         forwarded_token_count: usize,
     ) -> Result<(), InferenceEngineError> {
-        let forwarded_token_count = u32::try_from(forwarded_token_count)
-            .map_err(|_| fatal_engine_error("forwarded token count exceeds the u32 range"))?;
+        let forwarded_token_count = u32::try_from(forwarded_token_count).map_err(|_| {
+            super::fatal_engine_error("forwarded token count exceeds the u32 range")
+        })?;
         self.next_position_tokens = self
             .next_position_tokens
             .checked_add(forwarded_token_count)
-            .ok_or_else(|| fatal_engine_error("model position counter overflowed"))?;
+            .ok_or_else(|| super::fatal_engine_error("model position counter overflowed"))?;
         Ok(())
     }
 
@@ -365,7 +366,9 @@ impl Qwen3_5EngineRequest {
         self.thinking_budget_state
             .next_forced_transition_token_id()
             .map_err(|source| {
-                fatal_engine_error(format!("invalid Qwen3.5 thinking-budget state: {source}"))
+                super::fatal_engine_error(format!(
+                    "invalid Qwen3.5 thinking-budget state: {source}"
+                ))
             })
     }
 
@@ -376,7 +379,9 @@ impl Qwen3_5EngineRequest {
         self.thinking_budget_state
             .observe_committed_token(committed_token_id)
             .map_err(|source| {
-                fatal_engine_error(format!("invalid Qwen3.5 thinking-budget state: {source}"))
+                super::fatal_engine_error(format!(
+                    "invalid Qwen3.5 thinking-budget state: {source}"
+                ))
             })
     }
 

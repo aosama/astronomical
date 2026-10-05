@@ -11,7 +11,7 @@ use crate::memory::budget::ram::{
     CONTEXT_TOKEN_BUCKET_WIDTH, MlxRamBudget, context_token_bucket,
     scale_bytes_proportionally_to_token_count,
 };
-use crate::memory::reclamation::required_complete_residency_activation_headroom_bytes;
+use crate::memory::reclamation;
 
 impl MlxRamBudget {
     /// Activation headroom for one planned operation.
@@ -51,7 +51,7 @@ impl MlxRamBudget {
                 // for a multi-token prefill working set; three layers is the
                 // measured first-chunk overshoot on that shape. Keep the
                 // learned high-water when it is larger.
-                required_complete_residency_activation_headroom_bytes(
+                reclamation::required_complete_residency_activation_headroom_bytes(
                     self.model_geometry
                         .largest_complete_expert_layer_bytes
                         .saturating_mul(3),
@@ -64,7 +64,7 @@ impl MlxRamBudget {
                 if self.has_decode_activation_measurement {
                     self.decode_activation_headroom_bytes
                 } else if self.has_prefill_activation_measurement {
-                    required_complete_residency_activation_headroom_bytes(
+                    reclamation::required_complete_residency_activation_headroom_bytes(
                         self.model_geometry.largest_complete_expert_layer_bytes,
                         self.prefill_activation_global_high_water_bytes(),
                     )
@@ -73,7 +73,7 @@ impl MlxRamBudget {
                     // decode completes, prefill high-water is the only live
                     // evidence preventing warm fill from occupying transient
                     // space that the first token immediately needs back.
-                    required_complete_residency_activation_headroom_bytes(
+                    reclamation::required_complete_residency_activation_headroom_bytes(
                         self.model_geometry.largest_complete_expert_layer_bytes,
                         0,
                     )

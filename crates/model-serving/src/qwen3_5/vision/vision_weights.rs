@@ -4,7 +4,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::{TensorDtype, TensorProfile};
 
-use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact, qwen3_5_vision_tensor_profiles};
+use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Strict tensor binding for the Qwen3.5 vision tower.
@@ -42,7 +42,7 @@ impl Qwen3_5VisionWeights {
                 description: "validated visual sidecar has no vision configuration",
             })?
             .clone();
-        let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(&vision_config);
+        let vision_tensor_profiles = super::qwen3_5_vision_tensor_profiles(&vision_config);
         let vision_sidecar_file_names = validated_artifact
             .shard_index()
             .vision_sidecar_file_names()
@@ -130,7 +130,7 @@ impl Qwen3_5VisionWeights {
         model_shards: &[MlxSafetensors],
         vision_tensor_name_to_shard_index: &HashMap<String, usize>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(vision_config);
+        let vision_tensor_profiles = super::qwen3_5_vision_tensor_profiles(vision_config);
         let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
         for tensor_profile in &vision_tensor_profiles {

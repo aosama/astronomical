@@ -8,31 +8,34 @@ use astronomical_model_serving::{
 use serde_json::{Value, json};
 
 use super::artifact_support::SyntheticLagunaArtifact;
-use super::support::{config_bytes, config_value, normalize};
+use super::support;
 use super::text_support::{POOLSIDE_TEMPLATE, SyntheticLagunaTextArtifact};
 
 #[test]
 fn should_default_omitted_execution_dtype_to_bfloat16() {
-    let mut omitted_dtype_config = config_value(2);
+    let mut omitted_dtype_config = support::config_value(2);
     omitted_dtype_config
         .as_object_mut()
         .expect("the fixture should be an object")
         .remove("torch_dtype");
 
-    let omitted_dtype_contract = normalize(omitted_dtype_config);
-    let mut explicit_bfloat16_config = config_value(2);
+    let omitted_dtype_contract = support::normalize(omitted_dtype_config);
+    let mut explicit_bfloat16_config = support::config_value(2);
     explicit_bfloat16_config["torch_dtype"] = json!("bfloat16");
 
     assert_eq!(
         omitted_dtype_contract.model().execution_dtype(),
         LagunaExecutionDtype::Bfloat16
     );
-    assert_eq!(omitted_dtype_contract, normalize(explicit_bfloat16_config));
+    assert_eq!(
+        omitted_dtype_contract,
+        support::normalize(explicit_bfloat16_config)
+    );
 }
 
 #[test]
 fn should_accept_dtype_as_the_torch_dtype_alias() {
-    let mut alias_config = config_value(2);
+    let mut alias_config = support::config_value(2);
     alias_config
         .as_object_mut()
         .expect("the fixture should be an object")
@@ -40,22 +43,23 @@ fn should_accept_dtype_as_the_torch_dtype_alias() {
     alias_config["dtype"] = json!("bf16");
 
     assert_eq!(
-        normalize(alias_config).model().execution_dtype(),
+        support::normalize(alias_config).model().execution_dtype(),
         LagunaExecutionDtype::Bfloat16
     );
 
-    let mut conflicting_alias_config = config_value(2);
+    let mut conflicting_alias_config = support::config_value(2);
     conflicting_alias_config["torch_dtype"] = json!("float16");
     conflicting_alias_config["dtype"] = json!("bfloat16");
     assert!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&conflicting_alias_config)).is_err(),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&conflicting_alias_config))
+            .is_err(),
         "conflicting dtype aliases must not silently pick one meaning"
     );
 }
 
 #[test]
 fn should_ignore_unknown_config_envelope_fields() {
-    let mut config_with_unused_envelope = config_value(3);
+    let mut config_with_unused_envelope = support::config_value(3);
     config_with_unused_envelope
         .as_object_mut()
         .expect("the fixture should be an object")
@@ -64,7 +68,7 @@ fn should_ignore_unknown_config_envelope_fields() {
     config_with_unused_envelope["unused_publisher_metadata"] = json!({"keep": true});
     config_with_unused_envelope["generation_config"] = json!({"unused_sidecar": true});
 
-    let normalized_contract = normalize(config_with_unused_envelope);
+    let normalized_contract = support::normalize(config_with_unused_envelope);
     assert_eq!(
         normalized_contract.model().execution_dtype(),
         LagunaExecutionDtype::Bfloat16

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use astronomical_config::resolve_model_id;
 use astronomical_ipc_protocol::ChatGenerationCommand;
 use sha2::{Digest, Sha256};
 use tokenizers::Tokenizer;
@@ -9,10 +8,12 @@ use crate::{PerformanceAttribution, PerformanceOperation, Qwen3_5InferenceReques
 
 use super::{Qwen3_5ImageProcessor, Qwen3_5PromptRenderer, ValidatedQwen3_5Artifact};
 
-use super::context_token_validation::validate_context_token_count;
-use super::sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
+use super::context_token_validation;
+use super::sampler_config;
+use super::sampler_config::Qwen3_5SamplerConfig;
 use super::token_decoder::Qwen3_5TokenDecoder;
-use super::token_ids::{Qwen3_5TokenIds, discover_token_ids};
+use super::token_ids;
+use super::token_ids::Qwen3_5TokenIds;
 use super::tokenizer_error::Qwen3_5TokenizerError;
 
 const THINKING_BUDGET_TRANSITION_TEXT: &str = "\n\nConsidering the limited time by the user, I have to give the solution based on the thinking directly now.\n";
@@ -88,7 +89,7 @@ impl Qwen3_5Tokenizer {
     ) -> Result<Self, Qwen3_5TokenizerError> {
         let tokenizer = Tokenizer::from_bytes(tokenizer_bytes)
             .map_err(|source| Qwen3_5TokenizerError::LoadTokenizer { source })?;
-        let token_ids = discover_token_ids(&tokenizer)
+        let token_ids = token_ids::discover_token_ids(&tokenizer)
             .map_err(|source| Qwen3_5TokenizerError::DiscoverTokenIds { source })?;
         let tokenizer_vocabulary_size =
             u32::try_from(tokenizer.get_vocab_size(true)).map_err(|_| {
@@ -119,7 +120,7 @@ impl Qwen3_5Tokenizer {
             model_vocabulary_size,
             maximum_position_count,
             advertised_context_window,
-            model_sampler_config: discover_sampler_config(None),
+            model_sampler_config: sampler_config::discover_sampler_config(None),
             token_ids,
             model_id: model_id.to_owned(),
             image_processor,
@@ -161,7 +162,7 @@ impl Qwen3_5Tokenizer {
             image_processor,
         )?;
         tokenizer.model_sampler_config =
-            discover_sampler_config(validated_artifact.generation_config_bytes());
+            sampler_config::discover_sampler_config(validated_artifact.generation_config_bytes());
         Ok(tokenizer)
     }
 
@@ -335,8 +336,10 @@ impl Qwen3_5Tokenizer {
         // Resolve the requested model ID against the loaded model's leaf-only ID.
         // Clients may send "org/model-name" (e.g. "astronomical/fake-mixture-of-experts")
         // while internally the model ID is just the leaf name (e.g. "fake-mixture-of-experts").
-        let resolved_requested_model_id =
-            resolve_model_id(&chat_generation_command.model, &[self.model_id.as_str()]);
+        let resolved_requested_model_id = astronomical_config::resolve_model_id(
+            &chat_generation_command.model,
+            &[self.model_id.as_str()],
+        );
         if resolved_requested_model_id != self.model_id {
             return Err(Qwen3_5TokenizerError::ModelIdMismatch {
                 actual_model_id: chat_generation_command.model.clone(),
@@ -417,7 +420,7 @@ impl Qwen3_5Tokenizer {
                     .map_err(|source| Qwen3_5TokenizerError::EncodePrompt { source })
             },
         )?;
-        validate_context_token_count(
+        context_token_validation::validate_context_token_count(
             input_token_ids.len(),
             usize::from(chat_generation_command.settings.max_output_tokens),
             self.maximum_position_count as usize,

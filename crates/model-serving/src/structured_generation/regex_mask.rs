@@ -13,7 +13,7 @@ use regex_automata::dfa::{Automaton, dense};
 use regex_automata::util::primitives::StateID;
 use regex_automata::{Input, MatchKind};
 
-use crate::structured_generation::normalize_token_piece;
+use crate::structured_generation;
 
 const MAXIMUM_CACHED_STATES: usize = 64;
 
@@ -73,7 +73,7 @@ impl RegexTokenMask {
     fn compute_allowed_token_ids(&self) -> Arc<Vec<u32>> {
         let mut allowed_token_ids = Vec::new();
         for (token_id, token_piece) in self.vocabulary_pieces.iter().enumerate() {
-            let normalized_piece = normalize_token_piece(token_piece);
+            let normalized_piece = structured_generation::normalize_token_piece(token_piece);
             if normalized_piece.is_empty() || !self.piece_is_viable(&normalized_piece) {
                 continue;
             }

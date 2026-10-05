@@ -2,7 +2,7 @@
 
 use super::ResidentExpertWeight;
 use super::demand_ledger::DecodeDemandLedger;
-use super::eviction::evict_coldest_experts;
+use super::eviction;
 use super::resident_set::ResidentExpertSet;
 
 /// Family-neutral decode cache. The unit of ownership is one expert.
@@ -122,7 +122,7 @@ impl<W: ResidentExpertWeight> DecodeExpertCache<W> {
         if total_payload_bytes <= self.ceiling_bytes {
             return Vec::new();
         }
-        let eviction = evict_coldest_experts(
+        let eviction = eviction::evict_coldest_experts(
             &mut self.layers,
             &self.ledger,
             total_payload_bytes.saturating_sub(self.ceiling_bytes),

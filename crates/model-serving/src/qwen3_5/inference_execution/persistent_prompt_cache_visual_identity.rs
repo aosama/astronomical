@@ -9,8 +9,7 @@ use crate::{
     plan_qwen3_5_visual_prompt_cache_block_inputs,
 };
 
-use super::super::model::memory_admission::invalid_request_error;
-use super::fatal_engine_error;
+use super::super::model::memory_admission;
 
 pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentity {
     pub(super) ordered_image_visual_embedding_row_counts: Vec<usize>,
@@ -60,11 +59,11 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
             .try_fold(0_usize, |accumulated_visual_row_count, image_row_count| {
                 accumulated_visual_row_count.checked_add(*image_row_count)
             })
-            .ok_or_else(|| fatal_engine_error("processed image token count overflowed"))?;
+            .ok_or_else(|| super::fatal_engine_error("processed image token count overflowed"))?;
         if has_processed_visual_images
             && visual_identity_input.prompt_image_pad_token_count != expected_visual_row_count
         {
-            return Err(invalid_request_error(
+            return Err(memory_admission::invalid_request_error(
                 "image pad token count does not match processed image token count",
             ));
         }
@@ -74,7 +73,7 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
             let block_token_count = visual_identity_input
                 .persistent_prompt_cache
                 .ok_or_else(|| {
-                    fatal_engine_error(
+                    super::fatal_engine_error(
                         "persistent prompt cache disappeared during visual identity planning",
                     )
                 })?
@@ -94,7 +93,7 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
                     },
                 )
                 .map_err(|visual_identity_plan_error| {
-                    invalid_request_error(format!(
+                    memory_admission::invalid_request_error(format!(
                         "visual prompt-cache identity planning failed: {visual_identity_plan_error}"
                     ))
                 })?

@@ -5,7 +5,7 @@ use std::io::Cursor;
 use image::ImageEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
-use super::{Flux2KleinImageEncodingError, flux2_klein_reference_rgb_u8};
+use super::Flux2KleinImageEncodingError;
 
 pub struct Flux2KleinPngEncoder;
 
@@ -15,7 +15,7 @@ impl Flux2KleinPngEncoder {
         height_pixels: u32,
         decoded_rgb_values: &[f32],
     ) -> Result<Vec<u8>, Flux2KleinImageEncodingError> {
-        let rgb_bytes = flux2_klein_reference_rgb_u8(decoded_rgb_values)?;
+        let rgb_bytes = super::flux2_klein_reference_rgb_u8(decoded_rgb_values)?;
         Self::encode_rgb8(width_pixels, height_pixels, &rgb_bytes)
     }
 

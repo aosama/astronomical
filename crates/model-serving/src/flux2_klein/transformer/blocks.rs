@@ -2,7 +2,7 @@
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use super::math::{apply_rope, fp32_layer_norm, fp32_rms_norm, linear, swiglu};
+use super::math;
 use super::weights::Flux2KleinBlockWeights;
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use astronomical_mlx_c_rust::MlxArray;
@@ -127,7 +127,7 @@ pub(super) fn single_stream_block(
         &modulations[1],
         geometry.normalization_epsilon(),
     )?;
-    let fused = linear(
+    let fused = math::linear(
         runtime,
         &normalized,
         weights.tensor(&format!("{prefix}.to_qkv_mlp_proj.weight"))?,
@@ -154,9 +154,9 @@ pub(super) fn single_stream_block(
         rope_cosines,
         rope_sines,
     )?;
-    let mlp = swiglu(runtime, &mlp_fused, feed_forward_width)?;
+    let mlp = math::swiglu(runtime, &mlp_fused, feed_forward_width)?;
     let parallel = runtime.concatenate_axis(&[&attention, &mlp], 2)?;
-    let projected = linear(
+    let projected = math::linear(
         runtime,
         &parallel,
         weights.tensor(&format!("{prefix}.to_out.weight"))?,
@@ -178,32 +178,32 @@ fn joint_attention(
     rope_cosines: &MlxArray,
     rope_sines: &MlxArray,
 ) -> Result<(MlxArray, MlxArray), Flux2KleinTransformerError> {
-    let image_q = linear(
+    let image_q = math::linear(
         runtime,
         image,
         weights.tensor(&format!("{prefix}.attn.to_q.weight"))?,
     )?;
-    let image_k = linear(
+    let image_k = math::linear(
         runtime,
         image,
         weights.tensor(&format!("{prefix}.attn.to_k.weight"))?,
     )?;
-    let image_v = linear(
+    let image_v = math::linear(
         runtime,
         image,
         weights.tensor(&format!("{prefix}.attn.to_v.weight"))?,
     )?;
-    let text_q = linear(
+    let text_q = math::linear(
         runtime,
         text,
         weights.tensor(&format!("{prefix}.attn.add_q_proj.weight"))?,
     )?;
-    let text_k = linear(
+    let text_k = math::linear(
         runtime,
         text,
         weights.tensor(&format!("{prefix}.attn.add_k_proj.weight"))?,
     )?;
-    let text_v = linear(
+    let text_v = math::linear(
         runtime,
         text,
         weights.tensor(&format!("{prefix}.attn.add_v_proj.weight"))?,
@@ -244,12 +244,12 @@ fn joint_attention(
         &[1, 1, 1],
     )?;
     Ok((
-        linear(
+        math::linear(
             runtime,
             &image_attention,
             weights.tensor(&format!("{prefix}.attn.to_out.0.weight"))?,
         )?,
-        linear(
+        math::linear(
             runtime,
             &text_attention,
             weights.tensor(&format!("{prefix}.attn.to_add_out.weight"))?,
@@ -272,25 +272,25 @@ fn joint_attention_with_stream_norms(
     let text_k = shaped_heads(runtime, geometry, text_qkv.1)?;
     let image_q = shaped_heads(runtime, geometry, image_qkv.0)?;
     let image_k = shaped_heads(runtime, geometry, image_qkv.1)?;
-    let text_q = fp32_rms_norm(
+    let text_q = math::fp32_rms_norm(
         runtime,
         &text_q,
         weights.tensor(&format!("{prefix}.attn.norm_added_q.weight"))?,
         geometry.normalization_epsilon(),
     )?;
-    let text_k = fp32_rms_norm(
+    let text_k = math::fp32_rms_norm(
         runtime,
         &text_k,
         weights.tensor(&format!("{prefix}.attn.norm_added_k.weight"))?,
         geometry.normalization_epsilon(),
     )?;
-    let image_q = fp32_rms_norm(
+    let image_q = math::fp32_rms_norm(
         runtime,
         &image_q,
         weights.tensor(&format!("{prefix}.attn.norm_q.weight"))?,
         geometry.normalization_epsilon(),
     )?;
-    let image_k = fp32_rms_norm(
+    let image_k = math::fp32_rms_norm(
         runtime,
         &image_k,
         weights.tensor(&format!("{prefix}.attn.norm_k.weight"))?,
@@ -324,13 +324,13 @@ fn self_attention(
     rope_cosines: &MlxArray,
     rope_sines: &MlxArray,
 ) -> Result<MlxArray, Flux2KleinTransformerError> {
-    let queries = fp32_rms_norm(
+    let queries = math::fp32_rms_norm(
         runtime,
         &shaped_heads(runtime, geometry, queries)?,
         weights.tensor(&format!("{prefix}.norm_q.weight"))?,
         geometry.normalization_epsilon(),
     )?;
-    let keys = fp32_rms_norm(
+    let keys = math::fp32_rms_norm(
         runtime,
         &shaped_heads(runtime, geometry, keys)?,
         weights.tensor(&format!("{prefix}.norm_k.weight"))?,
@@ -357,8 +357,8 @@ fn attention(
     rope_cosines: &MlxArray,
     rope_sines: &MlxArray,
 ) -> Result<MlxArray, Flux2KleinTransformerError> {
-    let rotated_queries = apply_rope(runtime, queries, rope_cosines, rope_sines)?;
-    let rotated_keys = apply_rope(runtime, keys, rope_cosines, rope_sines)?;
+    let rotated_queries = math::apply_rope(runtime, queries, rope_cosines, rope_sines)?;
+    let rotated_keys = math::apply_rope(runtime, keys, rope_cosines, rope_sines)?;
     let q = runtime.transpose_axes(&rotated_queries, &[0, 2, 1, 3])?;
     let k = runtime.transpose_axes(&rotated_keys, &[0, 2, 1, 3])?;
     let v = runtime.transpose_axes(values, &[0, 2, 1, 3])?;
@@ -404,13 +404,13 @@ fn feed_forward(
     input: &MlxArray,
     width: usize,
 ) -> Result<MlxArray, Flux2KleinTransformerError> {
-    let fused = linear(
+    let fused = math::linear(
         runtime,
         input,
         weights.tensor(&format!("{prefix}.linear_in.weight"))?,
     )?;
-    let activated = swiglu(runtime, &fused, width as i32)?;
-    linear(
+    let activated = math::swiglu(runtime, &fused, width as i32)?;
+    math::linear(
         runtime,
         &activated,
         weights.tensor(&format!("{prefix}.linear_out.weight"))?,
@@ -424,7 +424,7 @@ fn modulated_layer_norm(
     scale: &MlxArray,
     epsilon: f32,
 ) -> Result<MlxArray, Flux2KleinTransformerError> {
-    let normalized = fp32_layer_norm(runtime, input, epsilon)?;
+    let normalized = math::fp32_layer_norm(runtime, input, epsilon)?;
     let one_plus_scale = runtime.add(&runtime.full(&[], 1.0, scale.dtype())?, scale)?;
     Ok(runtime.add(&runtime.multiply(&normalized, &one_plus_scale)?, shift)?)
 }

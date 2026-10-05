@@ -8,7 +8,7 @@ use crate::aligned_expert_pack::{
     ALIGNED_EXPERT_PACK_SEGMENT_ALIGNMENT_BYTES, AlignedExpertPackError,
     AlignedExpertPackTensorDescriptor,
 };
-use crate::aligned_expert_pack_layout::validate_segment_extent;
+use crate::aligned_expert_pack_layout;
 use serde::{Deserialize, Serialize};
 
 /// One tensor-major segment holding a single expert's payload.
@@ -126,7 +126,7 @@ pub(super) fn validate_source_file_range_for_expert(
             tensor_name: tensor_descriptor.tensor_name.clone(),
         });
     }
-    validate_segment_extent(
+    aligned_expert_pack_layout::validate_segment_extent(
         &AlignedExpertPackTensorDescriptor {
             tensor_name: tensor_descriptor.tensor_name.clone(),
             projection_name: tensor_descriptor.projection_name.clone(),

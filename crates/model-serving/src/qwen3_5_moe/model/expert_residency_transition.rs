@@ -38,7 +38,7 @@ use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5ResidentExpertWeights;
-use crate::qwen3_5_moe::expert_residency::maximum_resident_gate_up_fusion_transient_payload_bytes;
+use crate::qwen3_5_moe::expert_residency;
 use crate::{
     CompleteResidencyDecision, CompleteResidencyRequirements, PerformanceAttribution,
     PerformanceOperation, required_complete_residency_activation_headroom_bytes,
@@ -119,7 +119,9 @@ impl Qwen3_5Model {
         let observed_transient_high_water_bytes =
             expert_pager.observed_transient_high_water_bytes();
         let gate_up_fusion_transient_payload_bytes =
-            maximum_resident_gate_up_fusion_transient_payload_bytes(expert_pager.layer_plans())?;
+            expert_residency::maximum_resident_gate_up_fusion_transient_payload_bytes(
+                expert_pager.layer_plans(),
+            )?;
         // Promotion replaces paged pages with complete weights. Prefill's
         // three-layer weight heuristic is not extra RAM on top of that payload;
         // only fusion transients and measured decode working set coexist with it.

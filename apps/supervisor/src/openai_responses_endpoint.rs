@@ -16,8 +16,9 @@ use axum::{
 };
 use futures_util::stream;
 
-use crate::application::{ApplicationState, allocate_chat_request_id};
-use crate::openai_responses_translation::translate_openai_responses_request_parts;
+use crate::application;
+use crate::application::ApplicationState;
+use crate::openai_responses_translation;
 use crate::{
     ChatGenerationStreamEvent, GenerationStartError, OpenAiResponsesCollector,
     OpenAiResponsesStreamEncoder,
@@ -88,21 +89,25 @@ pub(crate) async fn create_response(
         temperature: request_parts.temperature.is_some(),
         top_p: request_parts.top_p.is_some(),
     };
-    let request_id = match allocate_chat_request_id(&application_state.next_chat_request_id) {
-        Some(request_id) => request_id,
-        None => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(OpenAiErrorResponse::service_unavailable(
-                    "the local request identifier space is exhausted",
-                    Some("request_id_exhausted"),
-                )),
-            )
-                .into_response();
-        }
-    };
+    let request_id =
+        match application::allocate_chat_request_id(&application_state.next_chat_request_id) {
+            Some(request_id) => request_id,
+            None => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(OpenAiErrorResponse::service_unavailable(
+                        "the local request identifier space is exhausted",
+                        Some("request_id_exhausted"),
+                    )),
+                )
+                    .into_response();
+            }
+        };
     let mut chat_generation_command =
-        match translate_openai_responses_request_parts(RequestId::new(request_id), request_parts) {
+        match openai_responses_translation::translate_openai_responses_request_parts(
+            RequestId::new(request_id),
+            request_parts,
+        ) {
             Ok(chat_generation_command) => chat_generation_command,
             Err(translation_error) => {
                 return invalid_request_response(

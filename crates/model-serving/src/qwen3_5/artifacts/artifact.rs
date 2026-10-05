@@ -13,14 +13,14 @@ use crate::artifact_validation::{
 use super::artifact_helpers::{
     captured_required_file_bytes, read_required_file_bytes, required_file,
 };
-use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
+use super::artifact_inventory;
 use super::sidecar_declaration::{
     MTP_CANONICAL_PREFIX, Qwen3_5MtpSidecarCandidate, Qwen3_5MtpSidecarDeclaration,
 };
-use super::tensor_spec::qwen3_5_language_tensor_profiles;
+use super::tensor_spec;
 use super::validated_artifact::ValidatedQwen3_5Artifact;
 use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
-use super::vision_validation::validate_vision_tower_inventory;
+use super::vision_validation;
 use super::{
     OptiQMetadata, OptiQMetadataError, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5VisionConfig,
 };
@@ -29,7 +29,7 @@ use super::{
     Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract, Qwen3_5MtpContractError,
     Qwen3_5MtpTargetOnlyReason,
 };
-use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
+use crate::qwen3_5::multi_token_prediction;
 
 /// Validates the complete Qwen3.5 artifact before any native allocation.
 ///
@@ -147,7 +147,7 @@ impl Qwen3_5ArtifactValidator {
             canonical_tensor_names.extend(candidate.canonical_names().cloned());
         }
         config.resolve_unquantized_modules_from_shard_index(&canonical_tensor_names);
-        let language_tensor_profiles = qwen3_5_language_tensor_profiles(&config);
+        let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config);
         let mut shard_index =
             Qwen3_5ShardIndex::from_json_bytes(&shard_index_bytes, &language_tensor_profiles)?;
         let absent_optional_mtp_shard_file_names = shard_index
@@ -159,14 +159,16 @@ impl Qwen3_5ArtifactValidator {
         for absent_optional_mtp_shard_file_name in absent_optional_mtp_shard_file_names {
             shard_index.omit_optional_mtp_shard_file(&absent_optional_mtp_shard_file_name);
         }
-        let validated_vision_tower_storage =
-            validate_vision_tower_inventory(&shard_index, vision_config.as_ref())?;
+        let validated_vision_tower_storage = vision_validation::validate_vision_tower_inventory(
+            &shard_index,
+            vision_config.as_ref(),
+        )?;
         let has_separate_vision_sidecar = validated_vision_tower_storage.has_separate_sidecar();
         let vision_tensor_profiles = vision_config
             .as_ref()
             .map(qwen3_5_vision_tensor_profiles)
             .unwrap_or_default();
-        let mut mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&config);
+        let mut mtp_tensor_profiles = multi_token_prediction::qwen3_5_mtp_tensor_profiles(&config);
         // Packed switch_mlp profiles describe the resident MTP expert layout.
         // A sidecar that stores per-expert 2D tensors omits those names; drop the
         // packed profiles so validation does not require a layout the sidecar
@@ -216,7 +218,7 @@ impl Qwen3_5ArtifactValidator {
         let has_invalid_declared_sidecar = config.sidecar_mtp_file().is_some()
             && had_sidecar_candidate
             && validated_mtp_sidecar.is_none();
-        let mut tensor_inventory = build_index_tensor_inventory(&shard_index)?;
+        let mut tensor_inventory = artifact_inventory::build_index_tensor_inventory(&shard_index)?;
         if !has_sidecar_collision && let Some(sidecar) = validated_mtp_sidecar.as_ref() {
             for location in sidecar.inventory.locations().cloned() {
                 tensor_inventory.insert(location).map_err(|_| {
@@ -285,7 +287,7 @@ impl Qwen3_5ArtifactValidator {
         let mut recognized_tensor_profiles = language_tensor_profiles.clone();
         recognized_tensor_profiles.extend(mtp_tensor_profiles.clone());
         recognized_tensor_profiles.extend(vision_tensor_profiles.clone());
-        let mut source_id_by_file_name = source_id_by_file_name(&shard_index)?;
+        let mut source_id_by_file_name = artifact_inventory::source_id_by_file_name(&shard_index)?;
         let mut safetensors_sources = HashMap::new();
         let mut total_payload_bytes = 0_u64;
         let mut embedded_mtp_profile_validation_failed = false;

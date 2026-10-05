@@ -1,8 +1,9 @@
 //! Multi-token prediction feedback-injection handling.
 
 use crate::InferenceEngineError;
+use crate::qwen3_5::inference_execution;
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 pub(in crate::qwen3_5) fn restore_queued_prediction_prefix_before_injection(
@@ -22,7 +23,9 @@ pub(in crate::qwen3_5) fn restore_queued_prediction_prefix_before_injection(
             multi_token_prediction_request.take_public_verified_frontier()
         })
         .ok_or_else(|| {
-            fatal_engine_error("queued prediction drafts lost their public target frontier")
+            inference_execution::fatal_engine_error(
+                "queued prediction drafts lost their public target frontier",
+            )
         })?;
     active_request.measure_operation_with_request(
         crate::PerformanceOperation::MtpQueuedFrontierRestoration,
@@ -62,7 +65,9 @@ pub(in crate::qwen3_5) fn projected_injected_prediction_growth_bytes(
         .config()
         .full_attention_key_value_state_bytes_per_layer_token()
         .ok_or_else(|| {
-            fatal_engine_error("prediction full-attention bytes per layer token overflowed")
+            inference_execution::fatal_engine_error(
+                "prediction full-attention bytes per layer token overflowed",
+            )
         })?;
     multi_token_prediction_request
         .projected_full_attention_growth_bytes(

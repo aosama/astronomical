@@ -1,11 +1,9 @@
 use astronomical_config::AstronomicalConfig;
 
-use super::write_config;
-
 #[test]
 fn should_disable_completion_attribution_by_default() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
+    super::write_config(
         temporary_home_directory.path(),
         r#"{
           "$schema":"./astronomical-config.schema.json",
@@ -23,7 +21,7 @@ fn should_disable_completion_attribution_by_default() {
 #[test]
 fn should_enable_completion_attribution_when_explicitly_configured() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
+    super::write_config(
         temporary_home_directory.path(),
         r#"{
           "$schema":"./astronomical-config.schema.json",

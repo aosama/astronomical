@@ -10,13 +10,13 @@ use astronomical_supervisor::{
 };
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::supervisor::launch_test_executor;
+use crate::common::supervisor;
 
 #[tokio::test]
 async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event() {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
-    let worker_executor = launch_test_executor(worker_executable_path)
+    let worker_executor = supervisor::launch_test_executor(worker_executable_path)
         .await
         .expect("the worker-backed executor should launch the fixture worker");
     let health_deadline = Instant::now() + Duration::from_secs(2);

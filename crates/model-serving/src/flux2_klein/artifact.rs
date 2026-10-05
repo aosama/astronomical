@@ -15,7 +15,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::artifact_text_validation::{
     TEXT_GENERATION_CONFIG_FILE_NAME, TEXT_INDEX_FILE_NAME, validate_text_artifacts,
 };
-use super::inventory::{validate_transformer_inventory, validate_vae_inventory};
+use super::inventory;
 use super::{
     Flux2KleinConfigError, Flux2KleinPipelineConfig, Flux2KleinSchedulerConfig,
     Flux2KleinTensorInventory, Flux2KleinTextEncoderConfig, Flux2KleinTransformerConfig,
@@ -355,13 +355,13 @@ impl Flux2KleinArtifactValidator {
             validate_text_artifacts(model_directory, &document_files)?;
         let (transformer, transformer_raw_inventory) =
             open_weights(model_directory, TRANSFORMER_FILE_NAME)?;
-        let transformer_inventory = validate_transformer_inventory(
+        let transformer_inventory = inventory::validate_transformer_inventory(
             TRANSFORMER_FILE_NAME,
             transformer_raw_inventory,
             &transformer_config,
         )?;
         let (vae, vae_raw_inventory) = open_weights(model_directory, VAE_FILE_NAME)?;
-        let vae_inventory = validate_vae_inventory(VAE_FILE_NAME, vae_raw_inventory)?;
+        let vae_inventory = inventory::validate_vae_inventory(VAE_FILE_NAME, vae_raw_inventory)?;
         // `flux-2-klein-4b.safetensors` is an alternate single-file packaging,
         // not a second owner in the authoritative Diffusers component graph.
         Ok(ValidatedFlux2KleinArtifact {

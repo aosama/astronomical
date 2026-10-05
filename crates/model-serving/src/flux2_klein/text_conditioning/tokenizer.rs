@@ -6,7 +6,8 @@ use std::os::unix::fs::FileExt;
 
 use tokenizers::Tokenizer;
 
-use super::batch::{Flux2KleinPreparedTextBatch, prepare_token_rows};
+use super::batch;
+use super::batch::Flux2KleinPreparedTextBatch;
 use super::error::Flux2KleinTextConditioningError;
 
 const TOKENIZER_DESCRIPTOR_NAME: &str = "tokenizer/tokenizer.json";
@@ -44,7 +45,7 @@ impl Flux2KleinTokenizer {
                 .map_err(|source| Flux2KleinTextConditioningError::PromptTokenization { source })?;
             encoded_prompt_rows.push(encoding.get_ids().to_vec());
         }
-        prepare_token_rows(encoded_prompt_rows)
+        batch::prepare_token_rows(encoded_prompt_rows)
     }
 }
 

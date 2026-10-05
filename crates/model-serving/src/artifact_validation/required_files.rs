@@ -4,8 +4,9 @@ use std::io;
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 
-use super::shared_blob_resolution::resolve_verified_shared_hub_blob_path;
-use super::validated_artifact::{ValidatedRequiredFile, validated_file_identity};
+use super::shared_blob_resolution;
+use super::validated_artifact;
+use super::validated_artifact::ValidatedRequiredFile;
 use super::{ArtifactValidationError, RequiredFileProfile, ValidatedWeightsFile};
 
 const CAPTURE_BUFFER_SIZE_BYTES: usize = 64 * 1024;
@@ -195,7 +196,9 @@ pub(crate) fn validate_required_file(
                 source,
             },
         )?;
-    if validated_file_identity(&final_file_metadata) != validated_file_identity(&file_metadata) {
+    if validated_artifact::validated_file_identity(&final_file_metadata)
+        != validated_artifact::validated_file_identity(&file_metadata)
+    {
         return Err(ArtifactValidationError::ValidatedFileIdentityChanged {
             file_name: required_file_profile.file_name.clone(),
         });
@@ -203,7 +206,7 @@ pub(crate) fn validate_required_file(
 
     Ok(ValidatedRequiredFile::new(
         file,
-        validated_file_identity(&file_metadata),
+        validated_artifact::validated_file_identity(&file_metadata),
         required_file_profile.file_name.clone(),
         actual_size_bytes,
         captured_bytes,
@@ -297,12 +300,13 @@ fn resolve_hugging_face_snapshot_blob_path(
     // snapshot file can legitimately resolve past this entry's `blobs/`. Accept
     // that layout only for a blob the snapshot tree record authenticates.
     if let Some(hub_root_directory) = model_cache_directory.parent()
-        && let Some(verified_shared_blob_path) = resolve_verified_shared_hub_blob_path(
-            hub_root_directory,
-            model_directory,
-            &canonical_blob_path,
-            required_file_name,
-        )?
+        && let Some(verified_shared_blob_path) =
+            shared_blob_resolution::resolve_verified_shared_hub_blob_path(
+                hub_root_directory,
+                model_directory,
+                &canonical_blob_path,
+                required_file_name,
+            )?
     {
         return Ok(Some(verified_shared_blob_path));
     }

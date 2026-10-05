@@ -14,7 +14,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use astronomical_config::{ModelFamily, classify_model_directory};
+use astronomical_config::ModelFamily;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition,
     RequestId,
@@ -113,7 +113,7 @@ fn run_bounded_acceptance(test_name: &str) {
 fn validate_reference_artifact() {
     let model_directory = resolve_reference_model_directory();
     assert_eq!(
-        classify_model_directory(&model_directory)
+        astronomical_config::classify_model_directory(&model_directory)
             .expect("the reference config should be readable"),
         Some(ModelFamily::Laguna)
     );

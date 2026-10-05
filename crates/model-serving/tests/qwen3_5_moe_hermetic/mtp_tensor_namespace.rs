@@ -3,7 +3,7 @@ use astronomical_model_serving::{
     qwen3_5_mtp_tensor_profiles,
 };
 
-use crate::common::qwen3_5_moe::frozen_ornith_1_0_optiq_config_bytes;
+use crate::common::qwen3_5_moe;
 
 fn assert_mtp_namespace_covers_required_modules(
     mtp_tensor_names: &std::collections::BTreeSet<String>,
@@ -63,8 +63,9 @@ fn assert_affine_module_is_native_or_packed(
 
 #[test]
 fn should_build_the_complete_one_layer_qwen_quantized_mtp_tensor_namespace() {
-    let optiq_config = Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_optiq_config_bytes())
-        .expect("the OptiQ configuration should parse");
+    let optiq_config =
+        Qwen3_5Config::from_json_bytes(&qwen3_5_moe::frozen_ornith_1_0_optiq_config_bytes())
+            .expect("the OptiQ configuration should parse");
     let expected_tensor_names = qwen3_5_mtp_tensor_names(&optiq_config);
 
     assert!(!expected_tensor_names.is_empty());
@@ -78,8 +79,9 @@ fn should_build_the_complete_one_layer_qwen_quantized_mtp_tensor_namespace() {
 
 #[test]
 fn should_describe_quantized_or_native_mtp_affine_modules_from_config() {
-    let optiq_config = Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_optiq_config_bytes())
-        .expect("the OptiQ configuration should parse");
+    let optiq_config =
+        Qwen3_5Config::from_json_bytes(&qwen3_5_moe::frozen_ornith_1_0_optiq_config_bytes())
+            .expect("the OptiQ configuration should parse");
     let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&optiq_config);
 
     assert!(!mtp_tensor_profiles.is_empty());
@@ -96,8 +98,9 @@ fn should_describe_quantized_or_native_mtp_affine_modules_from_config() {
 
 #[test]
 fn should_describe_an_index_resolved_native_mtp_projection_without_affine_companions() {
-    let mut optiq_config = Qwen3_5Config::from_json_bytes(&frozen_ornith_1_0_optiq_config_bytes())
-        .expect("the OptiQ configuration should parse");
+    let mut optiq_config =
+        Qwen3_5Config::from_json_bytes(&qwen3_5_moe::frozen_ornith_1_0_optiq_config_bytes())
+            .expect("the OptiQ configuration should parse");
     let native_mtp_module_name = "language_model.mtp.layers.0.self_attn.q_proj";
     let shard_tensor_names = [format!("{native_mtp_module_name}.weight")]
         .into_iter()

@@ -18,7 +18,7 @@ use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_moe::model::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::qwen3_5_moe::model::cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
 use crate::qwen3_5_moe::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use crate::qwen3_5_moe::model::routing::qwen3_5_moe_unsorted_expert_weighted_sum;
+use crate::qwen3_5_moe::model::routing;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -128,7 +128,7 @@ impl Qwen3_5Model {
                 // order consumes the same values in the same order as the
                 // single-page path, so mixed serving cannot change generated
                 // tokens through floating-point reassociation.
-                let sparse_expert_output = qwen3_5_moe_unsorted_expert_weighted_sum(
+                let sparse_expert_output = routing::qwen3_5_moe_unsorted_expert_weighted_sum(
                     &self.runtime,
                     &combined_output,
                     selected_scores,

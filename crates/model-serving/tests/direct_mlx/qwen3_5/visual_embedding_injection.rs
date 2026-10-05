@@ -1,4 +1,3 @@
-use astronomical_model_serving::qwen3_5_inject_visual_embeddings;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -32,15 +31,16 @@ async fn should_replace_chunk_image_pad_runs_with_the_matching_visual_embedding_
         .expect("the visual embeddings should be valid");
     let chunk_token_ids = [10, 248_056, 248_056, 11, 248_056, 12];
 
-    let (injected_embeddings, injected_visual_embedding_count) = qwen3_5_inject_visual_embeddings(
-        &runtime,
-        &text_embeddings,
-        &chunk_token_ids,
-        &visual_embeddings,
-        1,
-        248_056,
-    )
-    .expect("the chunk image-pad runs should receive ordered visual embeddings");
+    let (injected_embeddings, injected_visual_embedding_count) =
+        astronomical_model_serving::qwen3_5_inject_visual_embeddings(
+            &runtime,
+            &text_embeddings,
+            &chunk_token_ids,
+            &visual_embeddings,
+            1,
+            248_056,
+        )
+        .expect("the chunk image-pad runs should receive ordered visual embeddings");
 
     assert_eq!(injected_visual_embedding_count, 3);
     assert_eq!(
@@ -76,15 +76,16 @@ async fn should_continue_the_visual_embedding_cursor_across_two_prefill_chunks()
     let first_chunk_text_embeddings = runtime
         .array_from_f32(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], &[1, 4, 2])
         .expect("the first chunk text embeddings should be valid");
-    let (first_injected_embeddings, first_injected_count) = qwen3_5_inject_visual_embeddings(
-        &runtime,
-        &first_chunk_text_embeddings,
-        &first_chunk_token_ids,
-        &visual_embeddings,
-        0,
-        248_056,
-    )
-    .expect("the first chunk should consume the first three visual embeddings");
+    let (first_injected_embeddings, first_injected_count) =
+        astronomical_model_serving::qwen3_5_inject_visual_embeddings(
+            &runtime,
+            &first_chunk_text_embeddings,
+            &first_chunk_token_ids,
+            &visual_embeddings,
+            0,
+            248_056,
+        )
+        .expect("the first chunk should consume the first three visual embeddings");
     let second_chunk_token_ids = [248_056, 248_056, 248_056, 11];
     let second_chunk_text_embeddings = runtime
         .array_from_f32(
@@ -92,15 +93,16 @@ async fn should_continue_the_visual_embedding_cursor_across_two_prefill_chunks()
             &[1, 4, 2],
         )
         .expect("the second chunk text embeddings should be valid");
-    let (second_injected_embeddings, second_injected_count) = qwen3_5_inject_visual_embeddings(
-        &runtime,
-        &second_chunk_text_embeddings,
-        &second_chunk_token_ids,
-        &visual_embeddings,
-        first_injected_count,
-        248_056,
-    )
-    .expect("the second chunk should continue the visual embedding cursor");
+    let (second_injected_embeddings, second_injected_count) =
+        astronomical_model_serving::qwen3_5_inject_visual_embeddings(
+            &runtime,
+            &second_chunk_text_embeddings,
+            &second_chunk_token_ids,
+            &visual_embeddings,
+            first_injected_count,
+            248_056,
+        )
+        .expect("the second chunk should continue the visual embedding cursor");
 
     assert_eq!(first_injected_count, 3);
     assert_eq!(second_injected_count, 3);

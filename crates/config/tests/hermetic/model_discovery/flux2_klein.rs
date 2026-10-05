@@ -8,8 +8,6 @@ use astronomical_config::{
 };
 use serde_json::{Value, json};
 
-use super::{discover_configured_models, write_minimal_model_config, write_required_model_files};
-
 const CANONICAL_MODEL_ID: &str = "FLUX.2-klein-4B";
 const PROVIDER_MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const REVIEWED_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
@@ -22,7 +20,7 @@ fn should_discover_the_reviewed_distilled_bf16_flux2_klein_profile_with_typed_ca
         .join("Locally-Renamed-Flux-Artifact");
     write_executable_flux2_klein_artifact(&model_directory);
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .first()
@@ -64,7 +62,7 @@ fn should_discover_klein_when_the_immutable_revision_is_not_the_catalog_pin() {
     write_executable_flux2_klein_artifact(&model_directory);
     invalidate_artifact(&model_directory, InvalidArtifact::WrongRevision);
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .first()
@@ -95,7 +93,7 @@ fn should_discover_klein_from_library_provenance_without_huggingface_cache_metad
     )
     .expect("Library provenance should be written");
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .first()
@@ -209,7 +207,7 @@ fn should_reject_malformed_wrong_profile_license_or_revision_evidence() {
         invalidate_artifact(&model_directory, invalid_artifact);
 
         assert!(
-            discover_configured_models(&temporary_directory)[0]
+            super::discover_configured_models(&temporary_directory)[0]
                 .discovered_models
                 .is_empty(),
             "discovery must reject {invalid_artifact:?}"
@@ -228,11 +226,11 @@ fn should_stop_at_a_pipeline_root_instead_of_discovering_nested_component_config
         r#"{"_class_name":"UnsupportedPipeline"}"#,
     )
     .expect("unsupported pipeline index should be written");
-    write_minimal_model_config(&nested_component_directory, "qwen3_5", 4_096);
-    write_required_model_files(&nested_component_directory);
+    super::write_minimal_model_config(&nested_component_directory, "qwen3_5", 4_096);
+    super::write_required_model_files(&nested_component_directory);
 
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty()
     );

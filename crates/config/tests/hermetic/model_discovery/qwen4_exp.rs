@@ -12,8 +12,6 @@ use astronomical_config::{
     discover_classified_model_artifacts,
 };
 
-use super::{discover_configured_models, write_required_model_files};
-
 const CONFIG_JSON: &str = r#"{
     "model_type": "qwen4_exp",
     "text_config": {
@@ -27,7 +25,7 @@ fn write_family_fixture(model_directory: &std::path::Path, model_type: &str) {
     fs::create_dir_all(model_directory).expect("model directory should be created");
     let config = CONFIG_JSON.replace("qwen4_exp", model_type);
     fs::write(model_directory.join("config.json"), config).expect("model config should be written");
-    write_required_model_files(model_directory);
+    super::write_required_model_files(model_directory);
 }
 
 #[test]
@@ -42,7 +40,7 @@ fn should_classify_the_conditional_generation_wrapper_without_advertising_it() {
         Some(ModelFamily::Qwen4Exp)
     );
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty(),
         "recognized qwen4_exp artifacts must stay unpublished until serving exists"

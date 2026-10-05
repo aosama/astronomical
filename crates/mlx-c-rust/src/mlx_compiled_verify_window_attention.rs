@@ -1,5 +1,5 @@
 use super::VerifyWindowInputReader;
-use super::trunk::{quantized_matmul, take_affine, trace_feed_forward_tail};
+use super::trunk;
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_ops as ops;
 
@@ -28,10 +28,10 @@ pub(super) fn trace_full_attention_layer(
     let keys_slab = reader.take()?;
     let values_slab = reader.take()?;
     let input_normalization_weight = reader.take()?;
-    let query_projection = take_affine(reader)?;
-    let key_projection = take_affine(reader)?;
-    let value_projection = take_affine(reader)?;
-    let output_projection = take_affine(reader)?;
+    let query_projection = trunk::take_affine(reader)?;
+    let key_projection = trunk::take_affine(reader)?;
+    let value_projection = trunk::take_affine(reader)?;
+    let output_projection = trunk::take_affine(reader)?;
     let query_normalization_weight = reader.take()?;
     let key_normalization_weight = reader.take()?;
 
@@ -47,7 +47,7 @@ pub(super) fn trace_full_attention_layer(
         &input_normalization_weight,
         epsilon,
     )?;
-    let query_and_gate = quantized_matmul(
+    let query_and_gate = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.query,
         &normalized_input,
@@ -77,7 +77,7 @@ pub(super) fn trace_full_attention_layer(
         &output_gate,
         &[1, row_count, query_head_count * head_dimension],
     )?;
-    let keys = quantized_matmul(
+    let keys = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.key,
         &normalized_input,
@@ -88,7 +88,7 @@ pub(super) fn trace_full_attention_layer(
         &keys,
         &[1, row_count, key_value_head_count, head_dimension],
     )?;
-    let values = quantized_matmul(
+    let values = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.value,
         &normalized_input,
@@ -184,14 +184,14 @@ pub(super) fn trace_full_attention_layer(
     )?;
     let gate_weights = ops::sigmoid(gpu_stream, &output_gate)?;
     let gated_output = ops::multiply(gpu_stream, &attention_output, &gate_weights)?;
-    let projected_output = quantized_matmul(
+    let projected_output = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.output,
         &gated_output,
         &output_projection,
     )?;
     let attention_residual = ops::add(gpu_stream, &hidden_states, &projected_output)?;
-    let layer_output = trace_feed_forward_tail(
+    let layer_output = trunk::trace_feed_forward_tail(
         gpu_stream,
         geometry,
         reader,

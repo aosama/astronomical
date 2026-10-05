@@ -14,7 +14,7 @@ use astronomical_model_serving::{
     initialize_laguna_model_with_serving_settings,
 };
 
-use crate::qwen3_5_model_startup::initialize_qwen3_5_model;
+use crate::qwen3_5_model_startup;
 
 /// Creates the concrete family processor and engine for a selected model directory.
 #[doc(hidden)]
@@ -100,24 +100,25 @@ impl
                 let (generation_processor, qwen3_5_engine) =
                     tokio::task::spawn_blocking(move || {
                         let chunking = model_configuration.chunking.clone();
-                        let (generation_processor, qwen3_5_engine) = initialize_qwen3_5_model(
-                            model_directory_path,
-                            effective_mlx_memory_ceiling_bytes,
-                            allocator_cache_memory_limit_bytes,
-                            prompt_cache_config,
-                            model_configuration.model_id,
-                            model_configuration.maximum_context_tokens,
-                            model_configuration.maximum_output_tokens,
-                            model_configuration.mtp_enabled,
-                            model_configuration.mtp_draft_depth,
-                            persistent_prompt_cache_enabled,
-                            performance_attribution_enabled,
-                            performance_attribution_log_path,
-                            chunking,
-                        )
-                        .map_err(|startup_error| {
-                            startup_error.public_model_load_failure_reason()
-                        })?;
+                        let (generation_processor, qwen3_5_engine) =
+                            qwen3_5_model_startup::initialize_qwen3_5_model(
+                                model_directory_path,
+                                effective_mlx_memory_ceiling_bytes,
+                                allocator_cache_memory_limit_bytes,
+                                prompt_cache_config,
+                                model_configuration.model_id,
+                                model_configuration.maximum_context_tokens,
+                                model_configuration.maximum_output_tokens,
+                                model_configuration.mtp_enabled,
+                                model_configuration.mtp_draft_depth,
+                                persistent_prompt_cache_enabled,
+                                performance_attribution_enabled,
+                                performance_attribution_log_path,
+                                chunking,
+                            )
+                            .map_err(|startup_error| {
+                                startup_error.public_model_load_failure_reason()
+                            })?;
                         Ok::<_, String>((generation_processor, qwen3_5_engine))
                     })
                     .await

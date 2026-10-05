@@ -9,8 +9,8 @@ use serde_json::Value;
 use crate::serving_acceptance::chat::openai_rest::{
     get_endpoint, launch_serving_rest_server_for_model, stop_serving_rest_server,
 };
+use crate::support::serving_rest;
 use crate::support::serving_rest::ServingRestServer;
-use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
 
 pub(super) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const MAXIMUM_COMPACT_SOURCE_CHARACTERS: usize = 800;
@@ -60,7 +60,7 @@ pub(super) async fn launch_streaming_model_rest_server_with_attribution()
         "[aligned-expert-packs] launching isolated Development REST for {STREAMING_MODEL_ID} with attribution and memory cap"
     );
     let isolated_development_home = attribution_enabled_isolated_home();
-    let rest_server = launch_serving_rest_server_for_model_with_memory_limit(
+    let rest_server = serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
         STREAMING_MODEL_ID,
         streaming_model_directory(),
         Some(isolated_development_home.path()),

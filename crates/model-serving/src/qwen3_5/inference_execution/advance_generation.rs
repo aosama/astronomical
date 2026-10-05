@@ -16,8 +16,8 @@ use super::completed_forward_memory::{
     capture_completed_forward_memory_observation, collect_completed_forward_memory_snapshot,
     record_completed_adaptive_ram_growth,
 };
-use super::generated_token_emission::synchronize_generated_token_id;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::generated_token_emission;
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::qwen3_5::multi_token_prediction::{
     forward_initial_target_token_with_prediction_state,
     forward_next_target_token_with_prediction_state, take_queued_prediction_token,
@@ -28,11 +28,13 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let mut active_request = self.active_request.take().ok_or_else(|| {
-            fatal_engine_error("Qwen3.5 generation advance requested without an active request")
+            super::fatal_engine_error(
+                "Qwen3.5 generation advance requested without an active request",
+            )
         })?;
         if active_request.request_id != request_id {
             self.active_request = Some(active_request);
-            return Err(fatal_engine_error(
+            return Err(super::fatal_engine_error(
                 "Qwen3.5 generation request correlation mismatch",
             ));
         }
@@ -100,7 +102,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry()?;
             // The telemetry carries the residency derived from its own reconciled
             // breakdown, so the announced claim and snapshot describe one instant
@@ -127,7 +129,7 @@ impl Qwen3_5EngineState {
         if active_request.is_forcing_thinking_transition()
             && active_request.has_queued_prediction_tokens()
         {
-            return Err(fatal_engine_error(
+            return Err(super::fatal_engine_error(
                 "MTP verification crossed a forced thinking-budget boundary",
             ));
         }
@@ -142,7 +144,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let completed_forward_memory = if !self.adaptive_ram_growth_guard_enabled {
                 None
             } else {
@@ -178,7 +180,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let forced_generated_token = active_request
                 .performance_attribution
                 .measure_operation(
@@ -212,7 +214,9 @@ impl Qwen3_5EngineState {
                     let sparse_experts_are_paged = self
                         .model
                         .as_ref()
-                        .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                        .ok_or_else(|| {
+                            super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                        })?
                         .sparse_experts_are_paged();
                     let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
                         1,
@@ -232,7 +236,7 @@ impl Qwen3_5EngineState {
                     let streamed_expert_page_bytes_before_growth =
                         admitted_baseline.streamed_expert_page_bytes;
                     let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
                     // This log is the first-token decode seam. After the restore
                     // above, `sparse_experts_are_paged` tells whether generation
@@ -319,8 +323,10 @@ impl Qwen3_5EngineState {
             }
         };
 
-        let current_generated_token_id =
-            synchronize_generated_token_id(active_request, &current_generated_token)?;
+        let current_generated_token_id = generated_token_emission::synchronize_generated_token_id(
+            active_request,
+            &current_generated_token,
+        )?;
         if let Some(model) = self.model.as_ref() {
             // Hot-expert warming (issue #372) must never take the adaptive
             // growth guard's headroom: the learned transient reserve is what
@@ -389,7 +395,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let completed_forward_memory = if self.adaptive_ram_growth_guard_enabled {
                 Some(capture_completed_forward_memory_observation(model)?)
             } else {
@@ -420,7 +426,7 @@ impl Qwen3_5EngineState {
         let sparse_experts_are_paged = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .sparse_experts_are_paged();
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
             1,
@@ -441,7 +447,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         // Prefetch samples the successor before this token is accepted. A live
         // mask must see the commit first or Juliet/Romeo prefixes stay allowed.
         let mut generated_token_emission = if active_request.structured_generation.is_some() {

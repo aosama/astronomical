@@ -3,15 +3,16 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::PerformanceAttribution;
-use crate::gpu_token_sampling::build_sampled_token;
+use crate::gpu_token_sampling;
 use crate::k2_horizon_mova::K2HorizonMoVAInferenceRequest;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAConfig;
 
-use super::decoder::{K2HorizonMoVAKvState, forward_layer};
+use super::decoder;
+use super::decoder::K2HorizonMoVAKvState;
 
 use super::error::K2HorizonMoVAExecutionError;
 use super::fused_expert_decode::FusedExpertDecodeKernels;
-use super::ops::grouped_rms_norm;
+use super::ops;
 use super::weights::K2HorizonMoVAWeights;
 use astronomical_mlx_c_rust::{
     MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
@@ -81,7 +82,7 @@ impl K2HorizonMoVAModel {
                     ),
                 }
             })?;
-            let layer_output = forward_layer(
+            let layer_output = decoder::forward_layer(
                 &self.runtime,
                 &self.config,
                 &hidden_states,
@@ -98,7 +99,7 @@ impl K2HorizonMoVAModel {
             )?;
             hidden_states = layer_output;
         }
-        let hidden_states = grouped_rms_norm(
+        let hidden_states = ops::grouped_rms_norm(
             &self.runtime,
             &hidden_states,
             &self.weights.final_norm,
@@ -153,7 +154,7 @@ impl K2HorizonMoVAModel {
         request: &K2HorizonMoVAInferenceRequest,
         random_state: &mut MlxArray,
     ) -> Result<u32, K2HorizonMoVAExecutionError> {
-        let sampled = build_sampled_token(
+        let sampled = gpu_token_sampling::build_sampled_token(
             &self.runtime,
             logits,
             request.temperature_thousandths(),

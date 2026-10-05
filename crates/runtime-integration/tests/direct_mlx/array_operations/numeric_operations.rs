@@ -1,10 +1,10 @@
 use astronomical_mlx_c_rust::MlxDtype;
 
-use crate::common::runtime_test_support::{assert_f32_close, runtime};
+use crate::common::runtime_test_support;
 
 #[test]
 fn should_multiply_owned_float32_arrays_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let left = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[2, 2])
         .expect("the left matrix should be valid");
@@ -27,7 +27,7 @@ fn should_multiply_owned_float32_arrays_on_the_runtime_stream() {
 
 #[test]
 fn should_apply_fused_addmm_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let bias = runtime
         .array_from_f32(&[10.0, 20.0], &[2])
         .expect("the addmm bias should be valid");
@@ -52,7 +52,7 @@ fn should_apply_fused_addmm_on_the_runtime_stream() {
 
 #[test]
 fn should_create_zero_filled_float32_arrays_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
 
     let zeros = runtime
         .zeros(&[2, 3], MlxDtype::Float32)
@@ -69,7 +69,7 @@ fn should_create_zero_filled_float32_arrays_on_the_runtime_stream() {
 
 #[test]
 fn should_apply_unweighted_rms_normalization_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let hidden_states = runtime
         .array_from_f32(&[3.0, 4.0], &[1, 2])
         .expect("the hidden states should be valid");
@@ -78,7 +78,7 @@ fn should_apply_unweighted_rms_normalization_on_the_runtime_stream() {
         .rms_norm_without_weight(&hidden_states, 0.0)
         .expect("unweighted RMS normalization should build a valid graph");
 
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &normalized_states
             .to_vec_f32()
             .expect("the normalized states should evaluate as float32"),
@@ -88,7 +88,7 @@ fn should_apply_unweighted_rms_normalization_on_the_runtime_stream() {
 
 #[test]
 fn should_apply_subtract_and_divide_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let left = runtime
         .array_from_f32(&[8.0, 9.0], &[2])
         .expect("the left vector should be valid");
@@ -119,7 +119,7 @@ fn should_apply_subtract_and_divide_on_the_runtime_stream() {
 
 #[test]
 fn should_apply_unary_math_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let signed_values = runtime
         .array_from_f32(&[1.0, 2.0], &[2])
         .expect("the signed vector should be valid");
@@ -146,13 +146,13 @@ fn should_apply_unary_math_on_the_runtime_stream() {
             .expect("the negated vector should evaluate as float32"),
         vec![-1.0, -2.0]
     );
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &exponential_values
             .to_vec_f32()
             .expect("the exponential vector should evaluate as float32"),
         &[1.0, 2.0],
     );
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &logarithm_values
             .to_vec_f32()
             .expect("the logarithm vector should evaluate as float32"),
@@ -162,7 +162,7 @@ fn should_apply_unary_math_on_the_runtime_stream() {
 
 #[test]
 fn should_reduce_sum_and_max_along_one_axis() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let matrix = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3])
         .expect("the matrix should be valid");
@@ -192,7 +192,7 @@ fn should_reduce_sum_and_max_along_one_axis() {
 
 #[test]
 fn should_take_values_along_one_axis() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let routing_scores = runtime
         .array_from_f32(&[1.0, 5.0, 3.0, 2.0, 4.0, 0.0, 7.0, 6.0], &[2, 4])
         .expect("the routing score matrix should be valid");
@@ -215,7 +215,7 @@ fn should_take_values_along_one_axis() {
 
 #[test]
 fn should_put_selected_values_and_copy_uint32_indices_contiguously() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let destination = runtime
         .array_from_f32(&[0.0; 4], &[1, 4])
         .expect("the scatter destination should be valid");
@@ -246,7 +246,7 @@ fn should_put_selected_values_and_copy_uint32_indices_contiguously() {
 
 #[test]
 fn should_scatter_add_duplicate_row_indices_instead_of_overwriting() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let destination = runtime
         .zeros(&[3, 2], MlxDtype::Float32)
         .expect("the scatter destination should be valid");
@@ -271,7 +271,7 @@ fn should_scatter_add_duplicate_row_indices_instead_of_overwriting() {
 
 #[test]
 fn should_return_contiguous_top_values_along_one_axis() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let routing_scores = runtime
         .array_from_f32(&[1.0, 5.0, 3.0, 2.0, 4.0, 0.0, 7.0, 6.0], &[2, 4])
         .expect("the routing score matrix should be valid");
@@ -291,7 +291,7 @@ fn should_return_contiguous_top_values_along_one_axis() {
 
 #[test]
 fn should_copy_strided_top_indices_and_select_scores() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let routing_scores = runtime
         .array_from_f32(&[1.0, 5.0, 3.0, 2.0, 4.0, 0.0, 7.0, 6.0], &[2, 4])
         .expect("the routing score matrix should be valid");
@@ -330,7 +330,7 @@ fn should_copy_strided_top_indices_and_select_scores() {
 
 #[test]
 fn should_apply_grouped_conv1d_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let input = runtime
         .array_from_f32(&[1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0], &[1, 4, 2])
         .expect("the conv1d input should be valid");
@@ -353,7 +353,7 @@ fn should_apply_grouped_conv1d_on_the_runtime_stream() {
 
 #[test]
 fn should_apply_conv3d_on_the_runtime_stream() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let input = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], &[1, 2, 2, 2, 1])
         .expect("the conv3d input should be valid");

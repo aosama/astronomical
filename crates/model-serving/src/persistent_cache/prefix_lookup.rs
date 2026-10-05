@@ -8,7 +8,7 @@
 //! for forward processing, even when the prompt ends exactly on a block
 //! boundary.
 
-use super::partial_tail_probe::probe_restorable_partial_tail_block;
+use super::partial_tail_probe;
 use crate::{
     PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
     PersistentPromptCacheModelContract,
@@ -336,16 +336,18 @@ impl PersistentPromptCachePrefixLookup {
             // A prompt shorter than one complete block can still reuse a root
             // tail published by a previous turn with the same short prefix.
             if probe_partial_tail_blocks {
-                if let Some(restored_partial_tail_block_key) = probe_restorable_partial_tail_block(
-                    persistent_prompt_cache_model_contract,
-                    prompt_tokens,
-                    &[],
-                    false,
-                    allow_exact_block_boundary_restore,
-                    block_causal_inputs,
-                    &persistent_prompt_cache_kv_block_exists,
-                    &persistent_prompt_cache_recurrent_snapshot_exists,
-                ) {
+                if let Some(restored_partial_tail_block_key) =
+                    partial_tail_probe::probe_restorable_partial_tail_block(
+                        persistent_prompt_cache_model_contract,
+                        prompt_tokens,
+                        &[],
+                        false,
+                        allow_exact_block_boundary_restore,
+                        block_causal_inputs,
+                        &persistent_prompt_cache_kv_block_exists,
+                        &persistent_prompt_cache_recurrent_snapshot_exists,
+                    )
+                {
                     let restored_token_count = restored_partial_tail_block_key.token_count();
                     lookup_diagnostics
                         .record_restored_partial_tail_block_token_count(restored_token_count);
@@ -478,7 +480,7 @@ impl PersistentPromptCachePrefixLookup {
         // turn published that suffix as a tail, restore it on top of the
         // complete-block chain so only the uncached suffix is prefilled.
         let restored_partial_tail_block_key = if probe_partial_tail_blocks {
-            probe_restorable_partial_tail_block(
+            partial_tail_probe::probe_restorable_partial_tail_block(
                 persistent_prompt_cache_model_contract,
                 prompt_tokens,
                 &matched_persistent_prompt_cache_block_keys,

@@ -3,15 +3,15 @@ use astronomical_model_serving::{
     load_laguna_expert_page, sorted_expert_weighted_sum_kernel,
 };
 
-use super::page_artifact::{filled, paging_plan, test_runtime, write_sparse_artifact};
+use super::page_artifact;
 
 #[tokio::test]
 async fn should_stream_complete_and_routed_pages_with_matching_gathered_swiglu() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("page test directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (_artifact, plan) = paging_plan(model_directory.path());
-    let runtime = test_runtime();
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (_artifact, plan) = page_artifact::paging_plan(model_directory.path());
+    let runtime = page_artifact::test_runtime();
     let mut performance_attribution = PerformanceAttribution::enabled();
     let sparse_layer = &plan.sparse_layers()[0];
     let complete_page = load_laguna_expert_page(
@@ -42,14 +42,14 @@ async fn should_stream_complete_and_routed_pages_with_matching_gathered_swiglu()
             .is_some()
     );
 
-    let hidden_states = filled(&runtime, &[1, 2, 4], 0.2);
+    let hidden_states = page_artifact::filled(&runtime, &[1, 2, 4], 0.2);
     let complete_indices = runtime
         .array_from_u32(&[0, 0], &[1, 2])
         .expect("complete indices");
     let routed_indices = runtime
         .array_from_u32(&[0, 0], &[1, 2])
         .expect("routed indices");
-    let scores = filled(&runtime, &[1, 2, 1], 1.0);
+    let scores = page_artifact::filled(&runtime, &[1, 2, 1], 1.0);
     let kernel = sorted_expert_weighted_sum_kernel().expect("reduction kernel");
     let complete_output = forward_paged_routed_swiglu(
         &runtime,
@@ -88,9 +88,9 @@ async fn should_stream_complete_and_routed_pages_with_matching_gathered_swiglu()
 async fn should_concatenate_per_expert_shards_into_one_compact_page() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("per-expert page test directory");
-    write_sparse_artifact(model_directory.path(), true);
-    let (_artifact, plan) = paging_plan(model_directory.path());
-    let runtime = test_runtime();
+    page_artifact::write_sparse_artifact(model_directory.path(), true);
+    let (_artifact, plan) = page_artifact::paging_plan(model_directory.path());
+    let runtime = page_artifact::test_runtime();
     let mut performance_attribution = PerformanceAttribution::enabled();
     let complete_page = load_laguna_expert_page(
         &runtime,
@@ -111,15 +111,15 @@ async fn should_concatenate_per_expert_shards_into_one_compact_page() {
 async fn should_fail_closed_when_a_page_source_shard_disappears() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("missing-shard page test directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (_artifact, plan) = paging_plan(model_directory.path());
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (_artifact, plan) = page_artifact::paging_plan(model_directory.path());
     std::fs::remove_file(
         model_directory
             .path()
             .join("model-00001-of-00002.safetensors"),
     )
     .expect("the first shard should be removable");
-    let runtime = test_runtime();
+    let runtime = page_artifact::test_runtime();
     let mut performance_attribution = PerformanceAttribution::disabled();
     let rejection = load_laguna_expert_page(
         &runtime,

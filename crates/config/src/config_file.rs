@@ -6,10 +6,10 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::AstronomicalConfigError;
 use crate::config_document::UserConfigFile;
-use crate::duplicate_key_json::parse_json_rejecting_duplicates;
-use crate::legacy_config_migration::migrate_legacy_config;
-use crate::{AstronomicalConfigError, maximum_mlx_memory_gb_to_bytes};
+use crate::duplicate_key_json;
+use crate::legacy_config_migration;
 
 const CONFIG_SCHEMA_FILE_NAME: &str = "astronomical-config.schema.json";
 const CONFIG_SCHEMA_BYTES: &[u8] =
@@ -26,10 +26,14 @@ pub(crate) fn read_user_config_file(
             return create_first_run_config(&config_file_path);
         }
     };
-    let mut config_json = parse_json_rejecting_duplicates(&config_file_path, &config_file_bytes)?;
+    let mut config_json =
+        duplicate_key_json::parse_json_rejecting_duplicates(&config_file_path, &config_file_bytes)?;
     if config_json.get("schema_version").is_none() {
-        let mut migrated_user_config =
-            migrate_legacy_config(&config_file_path, &config_file_bytes, config_json)?;
+        let mut migrated_user_config = legacy_config_migration::migrate_legacy_config(
+            &config_file_path,
+            &config_file_bytes,
+            config_json,
+        )?;
         persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config, false)?;
         return Ok(migrated_user_config);
     }
@@ -190,7 +194,7 @@ pub(crate) fn validate_user_config_file(
         }
     }
     if let Some(maximum_mlx_memory_gb) = user_config_file.runtime.maximum_mlx_memory_gb {
-        maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
+        crate::maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
     }
     user_config_file.validate()
 }

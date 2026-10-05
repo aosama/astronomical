@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use super::safetensors_dtype::dtype_bits_per_element;
+use super::safetensors_dtype;
 use super::{
     ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorFeature, TensorInventory,
     TensorLocation, TensorProfile, TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile,
@@ -311,7 +311,7 @@ fn validate_physical_metadata(
                     .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)
             })?;
         let expected_bits = element_count
-            .checked_mul(dtype_bits_per_element(
+            .checked_mul(safetensors_dtype::dtype_bits_per_element(
                 &metadata.dtype,
                 file_name,
                 stored_name,

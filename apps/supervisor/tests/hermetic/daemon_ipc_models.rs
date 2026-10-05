@@ -4,7 +4,6 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_config::leaf_model_id;
 use astronomical_ipc_protocol::{
     DaemonIpcClient, DaemonRequest, DaemonResponse, DaemonWorkerStatus,
 };
@@ -216,7 +215,8 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
     let bundled_catalog =
         DownloadCatalog::load_bundled().expect("the bundled release catalog should load in tests");
     let first_catalog_entry = &bundled_catalog.entries()[0];
-    let requestable_model_id = leaf_model_id(first_catalog_entry.huggingface_id()).to_owned();
+    let requestable_model_id =
+        astronomical_config::leaf_model_id(first_catalog_entry.huggingface_id()).to_owned();
 
     // A requestable leaf id is accepted and normalized to the catalog entry's
     // requestable id.

@@ -11,7 +11,7 @@ use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_graph::VerifyWindowGdnKernelSet;
 use crate::mlx_compiled_verify_window_ops as ops;
 use crate::{MlxArray, MlxDtype, MlxStream, raw};
-use crate::{MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, apply_metal_kernel_in_graph};
+use crate::{MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
 
 /// The stable float32 decay formula and sigmoid update rates, mirroring the
 /// compiled eager graphs op for op.
@@ -100,7 +100,7 @@ pub(super) fn trace_fused_gated_delta(
     let convolution_dimension = geometry.linear_convolution_dimension();
     let rolling_row_count = geometry.linear_convolution_kernel_dimension() - 1;
     let prework_kernel = kernels.prework_kernel.ok_or(1)?;
-    let prework_outputs = apply_metal_kernel_in_graph(
+    let prework_outputs = crate::apply_metal_kernel_in_graph(
         prework_kernel,
         &[
             mixed_queries_keys_values,
@@ -181,7 +181,7 @@ pub(super) fn trace_fused_gated_delta(
     let checkpoint_count = row_count - 1;
     let checkpoint_count_input = MlxArray::from_i32(&[checkpoint_count], &[]).map_err(|_| 1)?;
     let checkpoint_kernel = kernels.checkpoint_kernel.ok_or(1)?;
-    let checkpoint_outputs = apply_metal_kernel_in_graph(
+    let checkpoint_outputs = crate::apply_metal_kernel_in_graph(
         checkpoint_kernel,
         &[
             &queries,

@@ -39,10 +39,10 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::Qwen3_5ExecutionError;
-use super::attention_execution::sequential_causal_attention;
+use super::attention_execution;
 use super::decoder_layer_weights::Qwen3_5FullAttentionWeights;
 use super::model::Qwen3_5Model;
-use super::tensor_slicing::slice_last_dimension;
+use super::tensor_slicing;
 use crate::decoder_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
 use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
@@ -97,7 +97,7 @@ pub fn qwen3_5_full_attention_step(
         && paged_prefill_execution_mode
             == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
     let attention_output = if should_process_query_rows_sequentially {
-        sequential_causal_attention(
+        attention_execution::sequential_causal_attention(
             runtime,
             rotated_queries,
             active_keys,
@@ -321,7 +321,7 @@ impl Qwen3_5Model {
 
         // The first half of each packed vector is Q, the vector that asks what
         // information the current token should retrieve from the context.
-        let queries = slice_last_dimension(
+        let queries = tensor_slicing::slice_last_dimension(
             &self.runtime,
             &query_projection,
             0,
@@ -330,7 +330,7 @@ impl Qwen3_5Model {
 
         // The second half is the output gate. It is not part of the QK score;
         // it controls the attention output after the value vectors are blended.
-        let output_gate = slice_last_dimension(
+        let output_gate = tensor_slicing::slice_last_dimension(
             &self.runtime,
             &query_projection,
             attention_head_dimension,

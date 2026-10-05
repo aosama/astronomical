@@ -14,12 +14,12 @@ use crate::qwen3_5::model::weights_validation::{
     validate_bound_tensor, validate_quantized_tensor_bits,
 };
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model, Qwen3_5Weights};
-use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
+use crate::qwen3_5::multi_token_prediction;
 use crate::qwen3_5::{
     Qwen3_5Config, Qwen3_5FeedForwardArchitecture, Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex,
 };
-use crate::qwen3_5_moe::artifacts::tensor_spec::is_sparse_selected_expert_tensor_name;
-use crate::qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights;
+use crate::qwen3_5_moe;
+use crate::qwen3_5_moe::artifacts::tensor_spec;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const MTP_NORMALIZATION_REPAIR_MARGIN: f32 = 0.4;
@@ -63,7 +63,8 @@ impl Qwen3_5MtpWeights {
         model_shards: &[MlxSafetensors],
         auxiliary_mtp_sources: HashMap<TensorSourceId, MlxSafetensors>,
     ) -> Result<Option<Self>, Qwen3_5ExecutionError> {
-        let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(qwen3_5_config);
+        let mtp_tensor_profiles =
+            multi_token_prediction::qwen3_5_mtp_tensor_profiles(qwen3_5_config);
         if mtp_tensor_profiles.is_empty()
             || !mtp_tensor_profiles
                 .iter()
@@ -76,7 +77,7 @@ impl Qwen3_5MtpWeights {
             Qwen3_5FeedForwardArchitecture::MixtureOfExperts => mtp_tensor_profiles
                 .into_iter()
                 .filter(|tensor_profile| {
-                    !is_sparse_selected_expert_tensor_name(&tensor_profile.name)
+                    !tensor_spec::is_sparse_selected_expert_tensor_name(&tensor_profile.name)
                 })
                 .collect(),
         };
@@ -148,7 +149,7 @@ impl Qwen3_5MtpWeights {
                 ),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
                     Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(
-                        bind_qwen3_5_moe_feed_forward_weights(
+                        qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights(
                             &mut bound_mtp_tensors,
                             qwen3_5_config,
                             mtp_layer_prefix,

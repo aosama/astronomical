@@ -2,7 +2,7 @@ use super::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertShardManifest, QuantizedExpertSourceInterval,
     QuantizedExpertTensorRange, QuantizedTensorSource,
 };
-use super::quantized_expert_validation::{validate_source_intervals, validate_virtual_intervals};
+use super::quantized_expert_validation;
 use std::collections::BTreeSet;
 
 /// Groups source intervals by shard file and builds compact shard manifests.
@@ -62,8 +62,11 @@ pub fn build_source_manifests(
 
         let mut ordered_source_intervals = source_intervals;
         ordered_source_intervals.sort_by_key(|interval| interval.source_file_offset);
-        validate_source_intervals(&ordered_source_intervals, 0)?;
-        validate_virtual_intervals(&ordered_source_intervals, virtual_payload_offset)?;
+        quantized_expert_validation::validate_source_intervals(&ordered_source_intervals, 0)?;
+        quantized_expert_validation::validate_virtual_intervals(
+            &ordered_source_intervals,
+            virtual_payload_offset,
+        )?;
         source_manifests.push(QuantizedExpertShardManifest {
             source_file,
             tensor_ranges,

@@ -6,7 +6,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use crate::common::laguna::{bind_tiny_weights, tiny_mixed_contract};
+use crate::common::laguna;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -26,8 +26,8 @@ fn test_runtime() -> MlxRuntime {
 async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_decode() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    let contract = tiny_mixed_contract();
-    let weights = bind_tiny_weights(&runtime, &contract);
+    let contract = laguna::tiny_mixed_contract();
+    let weights = laguna::bind_tiny_weights(&runtime, &contract);
     let model = LagunaModel::new(
         contract,
         weights,
@@ -117,8 +117,8 @@ async fn should_grow_full_state_and_bound_sliding_state_through_prefill_and_deco
 async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_one_graph() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    let contract = tiny_mixed_contract();
-    let weights = bind_tiny_weights(&runtime, &contract);
+    let contract = laguna::tiny_mixed_contract();
+    let weights = laguna::bind_tiny_weights(&runtime, &contract);
     // The documented production default keeps a resident multi-token prefill on
     // one lazy tape (zero interval), so the submission test configures the
     // configurable resident interval explicitly.
@@ -174,10 +174,10 @@ async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_o
         1
     );
 
-    let lazy_tape_contract = tiny_mixed_contract();
+    let lazy_tape_contract = laguna::tiny_mixed_contract();
     let lazy_tape_model = LagunaModel::new(
         lazy_tape_contract.clone(),
-        bind_tiny_weights(&runtime, &lazy_tape_contract),
+        laguna::bind_tiny_weights(&runtime, &lazy_tape_contract),
         crate::common::test_worker_kernel_capabilities(&runtime),
     )
     .expect("the comparison model should construct")
@@ -204,7 +204,7 @@ async fn should_submit_intermediate_prefill_layers_and_keep_resident_decode_as_o
 async fn should_reject_a_missing_canonical_weight() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();
-    let contract = tiny_mixed_contract();
+    let contract = laguna::tiny_mixed_contract();
     let empty = HashMap::new();
     let rejection = LagunaNativeWeights::bind(&runtime, empty, &contract);
     assert!(rejection.is_err());

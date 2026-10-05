@@ -5,7 +5,7 @@ use astronomical_experimental_aligned_expert_packs::{
     streaming_model_id_for,
 };
 
-use super::aligned_expert_pack::write_synthetic_expert_source_for_layer;
+use super::aligned_expert_pack;
 
 #[test]
 fn should_publish_a_self_sufficient_per_expert_streaming_model() {
@@ -19,11 +19,11 @@ fn should_publish_a_self_sufficient_per_expert_streaming_model() {
         b"{\"model_type\":\"qwen3_5_moe\"}",
     )
     .expect("the synthetic config should be writable");
-    let first_layer_plan = write_synthetic_expert_source_for_layer(
+    let first_layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
         &source_model_directory.join("model-00001-of-00002.safetensors"),
         0,
     );
-    let second_layer_plan = write_synthetic_expert_source_for_layer(
+    let second_layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
         &source_model_directory.join("model-00002-of-00002.safetensors"),
         1,
     );
@@ -110,7 +110,7 @@ fn should_reuse_a_valid_streaming_model_revision() {
     let source_model_directory = temporary_directory.path().join("synthetic-model");
     fs::create_dir(&source_model_directory)
         .expect("the synthetic source model directory should be creatable");
-    let layer_plan = write_synthetic_expert_source_for_layer(
+    let layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
         &source_model_directory.join("model.safetensors"),
         0,
     );

@@ -7,7 +7,7 @@ use crate::{
     PersistentVisualEmbeddingModelContract,
 };
 
-use super::persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup;
+use super::persistent_prompt_cache_startup_logging;
 use super::{
     Qwen3_5EngineState, Qwen3_5MtpRuntimeState, fatal_engine_error, qwen3_5_runtime_error,
 };
@@ -186,7 +186,7 @@ impl Qwen3_5EngineState {
                                 "required visual prompt-state storage scan failed: {visual_embedding_scan_error}"
                             )));
                         }
-                        log_persistent_prompt_cache_startup_cleanup(
+                        persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup(
                             "target",
                             &persistent_prompt_cache,
                         );

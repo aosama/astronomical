@@ -9,7 +9,7 @@
 use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf, process::Command};
 
 use astronomical_ipc_protocol::ChatGenerationCompletionReason;
-use astronomical_supervisor::{ChatGenerationStreamEvent, build_application};
+use astronomical_supervisor::ChatGenerationStreamEvent;
 use axum::{
     body::Body,
     http::{Request, StatusCode, header},
@@ -104,10 +104,11 @@ async fn should_serve_every_endpoint_path_the_local_api_page_documents() {
         }
         .expect("a documented request should be a valid request");
 
-        let response = build_application(ScriptedExecutor::ready(Vec::new()))
-            .oneshot(request)
-            .await
-            .expect("the application should answer a documented path");
+        let response =
+            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()))
+                .oneshot(request)
+                .await
+                .expect("the application should answer a documented path");
 
         assert_ne!(
             response.status(),
@@ -124,7 +125,7 @@ async fn should_answer_the_verification_command_the_local_api_page_publishes() {
         .find(|block| block.contains("curl ") && block.contains("/chat/completions"))
         .expect("the local API page should publish a chat completion command");
 
-    let application = build_application(ScriptedExecutor::ready(vec![
+    let application = astronomical_supervisor::build_application(ScriptedExecutor::ready(vec![
         ChatGenerationStreamEvent::TextFragment("done".to_owned()),
         ChatGenerationStreamEvent::Completed {
             prompt_token_count: 3,

@@ -1,7 +1,7 @@
 use crate::artifact_validation::TensorProfile;
 use crate::qwen3_5::Qwen3_5Config;
 
-use super::moe_tensor_spec::append_qwen3_5_mtp_affine_tensor_profiles;
+use super::moe_tensor_spec;
 
 pub(crate) fn append_qwen3_5_dense_mtp_tensor_profiles(
     mtp_tensor_profiles: &mut Vec<TensorProfile>,
@@ -15,7 +15,7 @@ pub(crate) fn append_qwen3_5_dense_mtp_tensor_profiles(
         ("up_proj", dense_intermediate_size, hidden_size),
         ("down_proj", hidden_size, dense_intermediate_size),
     ] {
-        append_qwen3_5_mtp_affine_tensor_profiles(
+        moe_tensor_spec::append_qwen3_5_mtp_affine_tensor_profiles(
             mtp_tensor_profiles,
             &format!("{mtp_layer_prefix}.mlp.{projection_name}"),
             &[output_dimension],

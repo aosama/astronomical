@@ -8,7 +8,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::STATE_DIMENSION_TOKEN_AXIS;
-use super::append_only_attention_state_operations::{active_view, build_updated_storage};
+use super::append_only_attention_state_operations;
 use astronomical_mlx_c_rust::MlxArray;
 
 const QUANTIZED_STATE_OPERATION: &str = "update the in-memory quantized full-attention KV state";
@@ -247,7 +247,7 @@ fn grow_slab(
     previous_token_count: i32,
     growth_tokens: i32,
 ) -> Result<QuantizedSlab, MlxRuntimeError> {
-    let packed = build_updated_storage(
+    let packed = append_only_attention_state_operations::build_updated_storage(
         runtime,
         current_slab.map(|slab| &slab.packed),
         &quantized_update.packed,
@@ -255,7 +255,7 @@ fn grow_slab(
         growth_tokens,
     )?
     .retain()?;
-    let scales = build_updated_storage(
+    let scales = append_only_attention_state_operations::build_updated_storage(
         runtime,
         current_slab.map(|slab| &slab.scales),
         &quantized_update.scales,
@@ -263,7 +263,7 @@ fn grow_slab(
         growth_tokens,
     )?
     .retain()?;
-    let biases = build_updated_storage(
+    let biases = append_only_attention_state_operations::build_updated_storage(
         runtime,
         current_slab.map(|slab| &slab.biases),
         &quantized_update.biases,
@@ -285,9 +285,21 @@ fn active_slab_views(
     active_token_count: i32,
 ) -> Result<QuantizedTensorViews, MlxRuntimeError> {
     Ok(QuantizedTensorViews {
-        packed: active_view(runtime, &slab.packed, active_token_count)?,
-        scales: active_view(runtime, &slab.scales, active_token_count)?,
-        biases: active_view(runtime, &slab.biases, active_token_count)?,
+        packed: append_only_attention_state_operations::active_view(
+            runtime,
+            &slab.packed,
+            active_token_count,
+        )?,
+        scales: append_only_attention_state_operations::active_view(
+            runtime,
+            &slab.scales,
+            active_token_count,
+        )?,
+        biases: append_only_attention_state_operations::active_view(
+            runtime,
+            &slab.biases,
+            active_token_count,
+        )?,
     })
 }
 

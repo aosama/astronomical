@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights};
-use super::forward_contract::validate_forward_input;
+use super::forward_contract;
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use super::{
     Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel, Qwen3_5Weights,
@@ -305,7 +305,7 @@ impl Qwen3_5Model {
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let token_count = validate_forward_input(
+        let token_count = forward_contract::validate_forward_input(
             token_ids,
             starting_position_tokens,
             None,

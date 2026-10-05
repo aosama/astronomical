@@ -32,8 +32,8 @@
 //! performance_throughput_tests -- --ignored --exact`.
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
-use crate::performance_throughput::support::{ThroughputJourney, run_journey_with_timeout};
-use crate::support::resident_sparse_moe_model_id;
+use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
+use crate::support;
 
 /// The short warmup: a ~1,000-token Romeo and Juliet opening, continued for a
 /// short passage, that spins up first-use JIT kernels before the measured run.
@@ -84,5 +84,5 @@ fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() 
         measured_output_tokens: MEASURED_MAXIMUM_OUTPUT_TOKENS,
         temperature_thousandths: TEMPERATURE_THOUSANDTHS,
     };
-    run_journey_with_timeout(resident_sparse_moe_model_id(), journey);
+    throughput_support::run_journey_with_timeout(support::resident_sparse_moe_model_id(), journey);
 }

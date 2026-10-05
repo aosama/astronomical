@@ -41,7 +41,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::quantized_expert_validation::validate_expert_ids;
+use super::quantized_expert_validation;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 
 /// Segment alignment and header size of the per-expert pack layout. These
@@ -369,7 +369,7 @@ pub(crate) fn validate_routed_expert_ids(
     expert_ids: &[usize],
     expert_capacity: usize,
 ) -> Result<Vec<usize>, StreamingExpertPackError> {
-    validate_expert_ids(expert_ids, expert_capacity).map_err(|error| {
+    quantized_expert_validation::validate_expert_ids(expert_ids, expert_capacity).map_err(|error| {
         StreamingExpertPackError::ExpertIdValidation {
             description: error.to_string(),
         }

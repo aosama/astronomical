@@ -6,13 +6,11 @@ use astronomical_ipc_protocol::{
     WorkerModelCapabilitiesValidationError, decode_command, decode_event,
 };
 
-use super::{model_swapped_event_json, valid_image_generation_command, valid_png_bytes};
-
 #[test]
 fn should_serialize_generated_image_bytes_as_base64_json() {
     let generated_image = GeneratedImage {
         mime_type: "image/png".to_owned(),
-        encoded_bytes: valid_png_bytes(1, 1),
+        encoded_bytes: super::valid_png_bytes(1, 1),
     };
 
     let serialized_image =
@@ -29,7 +27,7 @@ fn should_serialize_generated_image_bytes_as_base64_json() {
 
 #[test]
 fn should_reject_invalid_image_generation_commands_and_settings() {
-    let valid_command = valid_image_generation_command();
+    let valid_command = super::valid_image_generation_command();
     let invalid_commands = [
         (
             ImageGenerationCommand {
@@ -135,9 +133,9 @@ fn should_reject_invalid_image_generation_commands_and_settings() {
     let maximum_seed_command = ImageGenerationCommand {
         settings: ImageGenerationSettings {
             seed: u64::MAX,
-            ..valid_image_generation_command().settings
+            ..super::valid_image_generation_command().settings
         },
-        ..valid_image_generation_command()
+        ..super::valid_image_generation_command()
     };
     assert_eq!(maximum_seed_command.validate(), Ok(()));
 }
@@ -146,7 +144,7 @@ fn should_reject_invalid_image_generation_commands_and_settings() {
 fn should_reject_whitespace_only_image_inputs_before_worker_execution() {
     for (field_name, field_value) in [("model", "  "), ("prompt", "\t\n")] {
         let mut serialized_command = serde_json::to_value(WorkerCommand::GenerateImage(
-            valid_image_generation_command(),
+            super::valid_image_generation_command(),
         ))
         .expect("image command should serialize");
         serialized_command[field_name] = serde_json::json!(field_value);
@@ -224,7 +222,7 @@ fn should_reject_malformed_image_capabilities_at_the_wire_boundary() {
     ];
 
     for (image_capabilities, expected_error) in malformed_capabilities {
-        let serialized_event = model_swapped_event_json(serde_json::json!({
+        let serialized_event = super::model_swapped_event_json(serde_json::json!({
             "chat": null,
             "image_generation": image_capabilities
         }));
@@ -235,7 +233,7 @@ fn should_reject_malformed_image_capabilities_at_the_wire_boundary() {
         ));
     }
 
-    let serialized_event = model_swapped_event_json(serde_json::json!({
+    let serialized_event = super::model_swapped_event_json(serde_json::json!({
         "chat": null,
         "image_generation": null
     }));

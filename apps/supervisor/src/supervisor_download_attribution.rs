@@ -7,7 +7,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::library::{is_valid_huggingface_id, is_valid_immutable_revision};
+use crate::library;
 
 const MAXIMUM_RELATIVE_PATH_BYTES: usize = 1_024;
 
@@ -27,13 +27,13 @@ impl SupervisorDownloadMeasurementDetail {
     ) -> io::Result<Self> {
         let huggingface_id = huggingface_id.into();
         let revision = revision.into();
-        if !is_valid_huggingface_id(&huggingface_id) {
+        if !library::is_valid_huggingface_id(&huggingface_id) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "supervisor attribution requires a validated Hugging Face identity",
             ));
         }
-        if !is_valid_immutable_revision(&revision) {
+        if !library::is_valid_immutable_revision(&revision) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "supervisor attribution requires a validated immutable revision",

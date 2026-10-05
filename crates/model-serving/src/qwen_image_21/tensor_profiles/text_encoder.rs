@@ -2,7 +2,7 @@
 //! tower. The T2I path executes only the language model; the tower is still part of the
 //! reviewed file, so the profile covers both.
 
-use super::{QwenImage21TensorProfile, quantized_linear};
+use super::QwenImage21TensorProfile;
 use crate::qwen_image_21::configuration::QwenImage21TextEncoderConfig;
 
 /// Expected physical tensors of the Qwen3-VL text encoder (1438 tensors), language model and
@@ -23,7 +23,7 @@ pub fn text_encoder_tensor_profiles(
         * config.vision_spatial_merge_size as usize;
     let mut profiles = Vec::new();
 
-    quantized_linear(
+    super::quantized_linear(
         &mut profiles,
         "language_model.lm_head",
         config.vocab_size,
@@ -31,7 +31,7 @@ pub fn text_encoder_tensor_profiles(
         bits,
         group,
     );
-    quantized_linear(
+    super::quantized_linear(
         &mut profiles,
         "language_model.model.embed_tokens",
         config.vocab_size,
@@ -42,7 +42,7 @@ pub fn text_encoder_tensor_profiles(
 
     for layer_index in 0..config.num_hidden_layers {
         let layer = format!("language_model.model.layers.{layer_index}");
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{layer}.self_attn.q_proj"),
             hidden,
@@ -50,7 +50,7 @@ pub fn text_encoder_tensor_profiles(
             bits,
             group,
         );
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{layer}.self_attn.k_proj"),
             kv_dim,
@@ -58,7 +58,7 @@ pub fn text_encoder_tensor_profiles(
             bits,
             group,
         );
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{layer}.self_attn.v_proj"),
             kv_dim,
@@ -66,7 +66,7 @@ pub fn text_encoder_tensor_profiles(
             bits,
             group,
         );
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{layer}.self_attn.o_proj"),
             hidden,
@@ -91,7 +91,7 @@ pub fn text_encoder_tensor_profiles(
             vec![hidden],
         ));
         for projection in ["mlp.gate_proj", "mlp.up_proj"] {
-            quantized_linear(
+            super::quantized_linear(
                 &mut profiles,
                 &format!("{layer}.{projection}"),
                 config.intermediate_size,
@@ -100,7 +100,7 @@ pub fn text_encoder_tensor_profiles(
                 group,
             );
         }
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{layer}.mlp.down_proj"),
             hidden,
@@ -130,7 +130,7 @@ pub fn text_encoder_tensor_profiles(
         "vision_tower.patch_embed.proj.bias",
         vec![vision_hidden],
     ));
-    quantized_linear(
+    super::quantized_linear(
         &mut profiles,
         "vision_tower.pos_embed",
         config.vision_num_position_embeddings,
@@ -143,7 +143,7 @@ pub fn text_encoder_tensor_profiles(
         let block = format!("vision_tower.blocks.{block_index}");
         // Quantized linears in the tower keep their original linear bias (`.bias`) in addition
         // to the per-group dequantization bias (`.biases`).
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{block}.attn.qkv"),
             vision_qkv,
@@ -155,7 +155,7 @@ pub fn text_encoder_tensor_profiles(
             &format!("{block}.attn.qkv.bias"),
             vec![vision_qkv],
         ));
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{block}.attn.proj"),
             vision_hidden,
@@ -167,7 +167,7 @@ pub fn text_encoder_tensor_profiles(
             &format!("{block}.attn.proj.bias"),
             vec![vision_hidden],
         ));
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{block}.mlp.linear_fc1"),
             config.vision_intermediate_size,
@@ -208,7 +208,7 @@ pub fn text_encoder_tensor_profiles(
         "vision_tower.deepstack_merger_list.2",
         "vision_tower.merger",
     ] {
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{merger_prefix}.linear_fc1"),
             merger_input,
@@ -220,7 +220,7 @@ pub fn text_encoder_tensor_profiles(
             &format!("{merger_prefix}.linear_fc1.bias"),
             vec![merger_input],
         ));
-        quantized_linear(
+        super::quantized_linear(
             &mut profiles,
             &format!("{merger_prefix}.linear_fc2"),
             hidden,

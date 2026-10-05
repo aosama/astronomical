@@ -1,6 +1,6 @@
 use std::os::raw::c_int;
 
-use crate::mlx_compiled_graph::{array_from_vector, graph_output_array, set_graph_output};
+use crate::mlx_compiled_graph;
 use crate::{MlxArrayVector, MlxStream, raw};
 
 /// Builds the shapeless compiled graph for Qwen3-VL rotate-half rotary embedding.
@@ -27,23 +27,23 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
     if output_vector.is_null() || unsafe { raw::mlx_vector_array_size(input_vector) } != 5 {
         return 1;
     }
-    let attention_states = match array_from_vector(input_vector, 0) {
+    let attention_states = match mlx_compiled_graph::array_from_vector(input_vector, 0) {
         Ok(attention_states) => attention_states,
         Err(get_status) => return get_status,
     };
-    let rotary_cosines = match array_from_vector(input_vector, 1) {
+    let rotary_cosines = match mlx_compiled_graph::array_from_vector(input_vector, 1) {
         Ok(rotary_cosines) => rotary_cosines,
         Err(get_status) => return get_status,
     };
-    let rotary_sines = match array_from_vector(input_vector, 2) {
+    let rotary_sines = match mlx_compiled_graph::array_from_vector(input_vector, 2) {
         Ok(rotary_sines) => rotary_sines,
         Err(get_status) => return get_status,
     };
-    let first_half = match array_from_vector(input_vector, 3) {
+    let first_half = match mlx_compiled_graph::array_from_vector(input_vector, 3) {
         Ok(first_half) => first_half,
         Err(get_status) => return get_status,
     };
-    let second_half = match array_from_vector(input_vector, 4) {
+    let second_half = match mlx_compiled_graph::array_from_vector(input_vector, 4) {
         Ok(second_half) => second_half,
         Err(get_status) => return get_status,
     };
@@ -52,7 +52,7 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Err(_) => return 1,
     };
     let output_dtype = unsafe { raw::mlx_array_dtype(attention_states.raw()) };
-    let negative_second_half = match graph_output_array(|output_array| {
+    let negative_second_half = match mlx_compiled_graph::graph_output_array(|output_array| {
         // SAFETY: The input and stream are live, and the output is uniquely writable.
         unsafe { raw::mlx_negative(output_array, second_half.raw(), gpu_stream.raw()) }
     }) {
@@ -63,7 +63,7 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Ok(rotated_inputs) => rotated_inputs,
         Err(_) => return 1,
     };
-    let rotated_states = match graph_output_array(|output_array| {
+    let rotated_states = match mlx_compiled_graph::graph_output_array(|output_array| {
         // SAFETY: The vector and stream are live, and the output is uniquely writable.
         unsafe {
             raw::mlx_concatenate_axis(output_array, rotated_inputs.raw(), 2, gpu_stream.raw())
@@ -72,7 +72,7 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Ok(rotated_states) => rotated_states,
         Err(build_status) => return build_status,
     };
-    let cosine_component = match graph_output_array(|output_array| {
+    let cosine_component = match mlx_compiled_graph::graph_output_array(|output_array| {
         // SAFETY: Inputs and stream are live, and the output is uniquely writable.
         unsafe {
             raw::mlx_multiply(
@@ -86,7 +86,7 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Ok(cosine_component) => cosine_component,
         Err(build_status) => return build_status,
     };
-    let sine_component = match graph_output_array(|output_array| {
+    let sine_component = match mlx_compiled_graph::graph_output_array(|output_array| {
         // SAFETY: Inputs and stream are live, and the output is uniquely writable.
         unsafe {
             raw::mlx_multiply(
@@ -100,7 +100,7 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Ok(sine_component) => sine_component,
         Err(build_status) => return build_status,
     };
-    let summed_components = match graph_output_array(|output_array| {
+    let summed_components = match mlx_compiled_graph::graph_output_array(|output_array| {
         // SAFETY: Inputs and stream are live, and the output is uniquely writable.
         unsafe {
             raw::mlx_add(
@@ -114,7 +114,7 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Ok(summed_components) => summed_components,
         Err(build_status) => return build_status,
     };
-    let rotated_states_output = match graph_output_array(|output_array| {
+    let rotated_states_output = match mlx_compiled_graph::graph_output_array(|output_array| {
         // SAFETY: The input and stream are live, and the output is uniquely writable.
         unsafe {
             raw::mlx_astype(
@@ -129,5 +129,5 @@ pub(crate) unsafe extern "C" fn build_vision_rope_graph(
         Err(build_status) => return build_status,
     };
     // SAFETY: The output vector is unique and live for this callback.
-    unsafe { set_graph_output(output_vector, &rotated_states_output) }
+    unsafe { mlx_compiled_graph::set_graph_output(output_vector, &rotated_states_output) }
 }

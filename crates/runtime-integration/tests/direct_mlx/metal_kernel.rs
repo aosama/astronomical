@@ -1,11 +1,11 @@
 //! Direct GPU contracts for Astronomical's owned MLX custom Metal-kernel boundary.
 
-use crate::common::runtime_test_support::{assert_f32_close, runtime};
+use crate::common::runtime_test_support;
 use astronomical_mlx_c_rust::{MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
 
 #[test]
 fn should_apply_a_custom_metal_kernel_to_an_mlx_array() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let source_values = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[2, 2])
         .expect("the source values should be valid");
@@ -35,7 +35,7 @@ fn should_apply_a_custom_metal_kernel_to_an_mlx_array() {
     let copied_values = copied_outputs
         .pop()
         .expect("the custom Metal kernel should return one output");
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &copied_values
             .to_vec_f32()
             .expect("the copied values should evaluate"),
@@ -45,7 +45,7 @@ fn should_apply_a_custom_metal_kernel_to_an_mlx_array() {
 
 #[test]
 fn should_apply_a_custom_metal_kernel_with_a_scalar_integer_input() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let source_values = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[2, 2])
         .expect("the source values should be valid");
@@ -78,7 +78,7 @@ fn should_apply_a_custom_metal_kernel_with_a_scalar_integer_input() {
     let shifted_values = shifted_outputs
         .pop()
         .expect("the custom Metal kernel should return one output");
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &shifted_values
             .to_vec_f32()
             .expect("the shifted values should evaluate"),
@@ -88,7 +88,7 @@ fn should_apply_a_custom_metal_kernel_with_a_scalar_integer_input() {
 
 #[test]
 fn should_apply_a_custom_metal_kernel_with_a_small_uint32_output() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let source_values = runtime
         .array_from_u32(&[u32::MAX, 0, 0], &[3])
         .expect("the uint32 source values should be valid");
@@ -127,7 +127,7 @@ fn should_apply_a_custom_metal_kernel_with_a_small_uint32_output() {
 
 #[test]
 fn should_execute_same_name_different_source_kernels_in_one_evaluation_group() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let source_values = runtime
         .array_from_f32(&[0.0, 1.0, 2.0, 3.0], &[4])
         .expect("the shared source values should be valid");
@@ -185,13 +185,13 @@ fn should_execute_same_name_different_source_kernels_in_one_evaluation_group() {
     runtime
         .evaluate_arrays(&[&doubled_values, &shifted_values])
         .expect("both same-name kernels should evaluate in one group");
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &doubled_values
             .to_vec_f32()
             .expect("the doubled values should be readable"),
         &[0.0, 2.0, 4.0, 6.0],
     );
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &shifted_values
             .to_vec_f32()
             .expect("the shifted values should be readable"),
@@ -201,7 +201,7 @@ fn should_execute_same_name_different_source_kernels_in_one_evaluation_group() {
 
 #[test]
 fn should_preserve_evaluated_state_after_a_custom_metal_kernel_failure() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let source_values = runtime
         .array_from_f32(&vec![3.0; 1_024], &[1_024])
         .expect("the source values should be valid");
@@ -234,7 +234,7 @@ fn should_preserve_evaluated_state_after_a_custom_metal_kernel_failure() {
     runtime
         .evaluate_arrays(&[&invalid_output])
         .expect_err("invalid Metal source should fail during evaluation");
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &bystander_values
             .to_vec_f32()
             .expect("the bystander values should remain readable"),
@@ -247,7 +247,7 @@ fn should_preserve_evaluated_state_after_a_custom_metal_kernel_failure() {
     let fresh_computed_values = runtime
         .multiply_scalar(&fresh_source_values, 3.0)
         .expect("fresh computation should build after the failure");
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &fresh_computed_values
             .to_vec_f32()
             .expect("fresh computation should evaluate after the failure"),

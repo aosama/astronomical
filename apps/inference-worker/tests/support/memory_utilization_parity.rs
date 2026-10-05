@@ -9,7 +9,7 @@ use std::{fs, net::SocketAddr, path::Path};
 use serde_json::Value;
 use tokio::time::{Duration, Instant, sleep};
 
-use super::serving_rest::get_json_endpoint;
+use super::serving_rest;
 
 const NAMED_HEADROOM_FIELDS: [&str; 4] = [
     "reserved_model_core_slack_bytes",
@@ -117,7 +117,7 @@ pub(crate) async fn wait_for_status_memory_ceiling_utilization(
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut last_poll_log_at = Instant::now() - Duration::from_secs(1);
     loop {
-        let status_document = get_json_endpoint(server_address, "/v1/status").await;
+        let status_document = serving_rest::get_json_endpoint(server_address, "/v1/status").await;
         let observed_snapshot = &status_document["mlx_memory_snapshot"];
         if last_poll_log_at.elapsed() >= Duration::from_secs(1) {
             eprintln!(

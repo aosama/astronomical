@@ -18,7 +18,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::resnet::QwenImage21VaeResnetBlock;
-use super::tensor_shape::as_i32;
+use super::tensor_shape;
 use astronomical_mlx_c_rust::MlxArray;
 
 /// Nearest-neighbor replication factor per spatial axis (`factor_s` in the reference).
@@ -60,9 +60,9 @@ impl QwenImage21VaeDupUpShortcut {
         let shape = input.shape();
         let (batch, height, width) = (shape[0], shape[1], shape[2]);
         let input_channels = shape[3];
-        let channel_repeats = as_i32(self.channel_repeats, "dup-up channel repeats")?;
-        let output_channels = as_i32(self.output_channels, "dup-up output channels")?;
-        let temporal_factor = as_i32(self.temporal_factor, "dup-up temporal factor")?;
+        let channel_repeats = tensor_shape::as_i32(self.channel_repeats, "dup-up channel repeats")?;
+        let output_channels = tensor_shape::as_i32(self.output_channels, "dup-up output channels")?;
+        let temporal_factor = tensor_shape::as_i32(self.temporal_factor, "dup-up temporal factor")?;
 
         // `repeat_interleave(repeats, dim=channel)`: channel j becomes `repeats` copies of
         // channel j // repeats.
@@ -98,10 +98,16 @@ impl QwenImage21VaeDupUpShortcut {
         // channel last: `(h, a) → row`, `(w, b) → column`.
         let arranged = runtime.transpose_axes(&frame, &[0, 1, 4, 2, 5, 3])?;
         let rows = height
-            .checked_mul(as_i32(SPATIAL_UPSAMPLE_FACTOR, "spatial factor")?)
+            .checked_mul(tensor_shape::as_i32(
+                SPATIAL_UPSAMPLE_FACTOR,
+                "spatial factor",
+            )?)
             .ok_or_else(|| QwenImage21VaeError::invalid_geometry("dup-up row overflow"))?;
         let columns = width
-            .checked_mul(as_i32(SPATIAL_UPSAMPLE_FACTOR, "spatial factor")?)
+            .checked_mul(tensor_shape::as_i32(
+                SPATIAL_UPSAMPLE_FACTOR,
+                "spatial factor",
+            )?)
             .ok_or_else(|| QwenImage21VaeError::invalid_geometry("dup-up column overflow"))?;
         let upsampled = runtime.reshape(&arranged, &[batch, rows, columns, output_channels])?;
         upsampled.evaluate()?;

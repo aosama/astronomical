@@ -10,7 +10,7 @@ use astronomical_model_serving::{
 };
 use serde_json::{Map, Value, json};
 
-use super::support::{config_bytes, config_value};
+use super::support;
 
 pub(super) const SYNTHETIC_LAGUNA_MODEL_ID: &str = "synthetic-laguna";
 pub(super) const MODEL_EOS_TOKEN_ID: u32 = 2;
@@ -128,7 +128,7 @@ impl SyntheticLagunaTextArtifact {
         &self,
     ) -> Result<LagunaTextArtifactDescriptor, astronomical_model_serving::LagunaTextArtifactError>
     {
-        let model_config_bytes = config_bytes(&self.model_config);
+        let model_config_bytes = support::config_bytes(&self.model_config);
         let tokenizer_bytes =
             serde_json::to_vec(&self.tokenizer).expect("the synthetic tokenizer should serialize");
         let tokenizer_config_bytes = serde_json::to_vec(&self.tokenizer_config)
@@ -216,7 +216,7 @@ pub(super) fn template_with_defaults(
 }
 
 fn model_config_value(maximum_position_count: u32) -> Value {
-    let mut model_config = config_value(1);
+    let mut model_config = support::config_value(1);
     model_config["vocab_size"] = json!(SYNTHETIC_VOCABULARY_SIZE);
     model_config["hidden_size"] = json!(16);
     model_config["intermediate_size"] = json!(32);

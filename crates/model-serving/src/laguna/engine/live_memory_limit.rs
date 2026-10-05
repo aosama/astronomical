@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::execution::LagunaInferenceExecution;
-use super::memory::laguna_ram_budget_snapshot;
+use super::memory;
 
 impl LagunaInferenceExecution {
     pub(super) fn apply_mlx_memory_limit(
@@ -127,7 +127,7 @@ impl LagunaInferenceExecution {
             .active_request
             .as_ref()
             .map_or(0, |active_request| active_request.context_token_count);
-        let updated_retained_expert_ceiling_bytes = laguna_ram_budget_snapshot(
+        let updated_retained_expert_ceiling_bytes = memory::laguna_ram_budget_snapshot(
             &updated_mlx_ram_budget,
             MemoryPhase::Prefill,
             context_token_count,

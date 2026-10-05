@@ -5,7 +5,7 @@ use std::time::Duration;
 use serde_json::json;
 use tokio::time::timeout;
 
-use super::http::assert_laguna_is_advertised;
+use super::http;
 use super::validate::{
     compact_romeo_and_juliet_source, laguna_xs_public_model_id, resolve_reference_model_directory,
 };
@@ -38,7 +38,7 @@ async fn run_decode_streaming_journey() {
     )
     .await;
     let server_address = rest_server.server_address;
-    assert_laguna_is_advertised(server_address, public_model_id).await;
+    http::assert_laguna_is_advertised(server_address, public_model_id).await;
     let source_excerpt = compact_romeo_and_juliet_source();
 
     eprintln!("[laguna-decode-streaming] phase=generate model={public_model_id}");

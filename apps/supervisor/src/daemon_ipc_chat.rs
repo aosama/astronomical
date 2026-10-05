@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_config::{AstronomicalInstancePaths, leaf_model_id, near_model_matches};
+use astronomical_config::AstronomicalInstancePaths;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, DaemonResponse, DaemonTransportError, RequestId, StreamingResponseWriter,
@@ -166,9 +166,10 @@ fn ipc_generation_rejection_reason(
         .map(String::as_str)
         .collect();
     let requested_is_known = known_model_ids.contains(&requested_model_id)
-        || known_model_ids.contains(&leaf_model_id(requested_model_id));
+        || known_model_ids.contains(&astronomical_config::leaf_model_id(requested_model_id));
     if !requested_is_known {
-        let suggested_model_ids = near_model_matches(requested_model_id, &known_model_ids);
+        let suggested_model_ids =
+            astronomical_config::near_model_matches(requested_model_id, &known_model_ids);
         return Some(unknown_model_rejection_reason(
             requested_model_id,
             &suggested_model_ids,

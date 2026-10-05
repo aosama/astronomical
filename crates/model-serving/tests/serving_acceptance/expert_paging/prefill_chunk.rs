@@ -4,8 +4,8 @@ use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Model};
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::timeout;
 
-use super::compact_prefill::maximum_absolute_difference;
-use super::prompt::prepare_reproduced_long_prompt_token_ids;
+use super::compact_prefill;
+use super::prompt;
 
 const ACCEPTANCE_PROMPT_TOKEN_COUNT: usize = 4_097;
 const ACCEPTANCE_OUTPUT_TOKEN_COUNT: u16 = 512;
@@ -25,7 +25,7 @@ async fn should_preserve_exact_final_prefill_logits_between_fixed_prefill_sizes(
 async fn assert_exact_final_prefill_logit_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let configured_model_directory = crate::common::configured_large_sparse_moe_model_directory();
-    let prompt_token_ids = prepare_reproduced_long_prompt_token_ids(
+    let prompt_token_ids = prompt::prepare_reproduced_long_prompt_token_ids(
         ACCEPTANCE_PROMPT_TOKEN_COUNT,
         ACCEPTANCE_OUTPUT_TOKEN_COUNT,
     );
@@ -62,8 +62,10 @@ async fn assert_exact_final_prefill_logit_parity() {
             &prompt_token_ids,
             4_096,
         );
-    let maximum_absolute_logit_delta =
-        maximum_absolute_difference(&baseline_final_logits, &candidate_final_logits);
+    let maximum_absolute_logit_delta = compact_prefill::maximum_absolute_difference(
+        &baseline_final_logits,
+        &candidate_final_logits,
+    );
     assert!(
         maximum_absolute_logit_delta.is_finite(),
         "full-chunk logit delta must remain finite"

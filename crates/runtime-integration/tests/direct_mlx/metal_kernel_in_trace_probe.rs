@@ -6,7 +6,7 @@ use astronomical_mlx_c_rust::{
     set_graph_output,
 };
 
-use crate::common::runtime_test_support::{assert_f32_close, runtime};
+use crate::common::runtime_test_support;
 
 const COMPILE_OPERATION: &str = "compile the metal-kernel-in-trace probe graph";
 const ELEMENT_COUNT: usize = 3;
@@ -35,7 +35,7 @@ fn with_pinned_kernel<R>(kernel: &MlxMetalKernel, trace_work: impl FnOnce() -> R
 /// primitive, so the kernel must outlive the graph.
 #[test]
 fn should_apply_a_fused_metal_kernel_inside_a_compiled_trace() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let kernel = MlxMetalKernel::new(
         "probe_fused_scale_offset",
         &["input", "factor"],
@@ -85,7 +85,7 @@ fn should_apply_a_fused_metal_kernel_inside_a_compiled_trace() {
         let values = float32_output
             .to_vec_f32()
             .expect("the output should read back");
-        assert_f32_close(&values, &[3.0, 5.0, 9.0]);
+        runtime_test_support::assert_f32_close(&values, &[3.0, 5.0, 9.0]);
     }
 }
 

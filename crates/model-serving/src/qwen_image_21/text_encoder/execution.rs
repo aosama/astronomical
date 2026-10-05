@@ -11,10 +11,11 @@ use std::fs::File;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
-use crate::qwen_image_21::mlx_math::attention_scale;
+use crate::qwen_image_21::mlx_math;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::blocks::{EncoderBlockContext, build_causal_mask, build_rope_tables, forward_layer};
+use super::blocks;
+use super::blocks::EncoderBlockContext;
 use super::weights::{HEAD_WIDTH, LAYER_COUNT, QwenImage21TextEncoderWeights};
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
@@ -66,13 +67,13 @@ impl QwenImage21TextEncoder {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, QwenImage21EngineError> {
         let sequence_length = token_ids.len();
-        let (rope_cosines, rope_sines) = build_rope_tables(runtime, sequence_length)?;
-        let causal_mask = build_causal_mask(runtime, sequence_length)?;
+        let (rope_cosines, rope_sines) = blocks::build_rope_tables(runtime, sequence_length)?;
+        let causal_mask = blocks::build_causal_mask(runtime, sequence_length)?;
         let context = EncoderBlockContext {
             rope_cosines: &rope_cosines,
             rope_sines: &rope_sines,
             causal_mask: &causal_mask,
-            attention_scale: attention_scale(HEAD_WIDTH)?,
+            attention_scale: mlx_math::attention_scale(HEAD_WIDTH)?,
         };
 
         let mut hidden_states = performance_attribution.measure_operation(
@@ -87,7 +88,7 @@ impl QwenImage21TextEncoder {
         for layer_weights in self.weights.layers() {
             let advanced = performance_attribution.measure_operation(
                 PerformanceOperation::ImageQwenLayerGraphConstruction,
-                |_| forward_layer(runtime, layer_weights, &hidden_states, &context),
+                |_| blocks::forward_layer(runtime, layer_weights, &hidden_states, &context),
             )?;
             performance_attribution.measure_operation(
                 PerformanceOperation::ImageQwenLayerSynchronizationWait,

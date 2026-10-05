@@ -7,8 +7,6 @@ use astronomical_config::{
 };
 use serde_json::{Value, json};
 
-use super::discover_configured_models;
-
 const CANONICAL_MODEL_ID: &str = "Qwen-Image-2.1-MLX-4bit";
 const PROVIDER_MODEL_ID: &str = "mlx-community/Qwen-Image-2.1-MLX-4bit";
 const REVIEWED_REVISION: &str = "4db4e8c0c0e7a1debf0320415bec8388e888494c";
@@ -58,7 +56,8 @@ fn should_advertise_a_verified_qwen_image_2_1_artifact_as_image_generation() {
     let model_directory = temporary_directory.path().join("Qwen-Image-Artifact");
     write_qwen_image_21_artifact(&model_directory);
 
-    let discovered_models = &discover_configured_models(&temporary_directory)[0].discovered_models;
+    let discovered_models =
+        &super::discover_configured_models(&temporary_directory)[0].discovered_models;
     let discovered_model = discovered_models
         .iter()
         .find(|discovered_model| discovered_model.model_family == ModelFamily::QwenImage21)

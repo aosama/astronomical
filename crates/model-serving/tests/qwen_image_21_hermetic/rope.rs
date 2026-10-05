@@ -1,7 +1,7 @@
 //! Hermetic tests for the 3-axis RoPE, compared against the reference frequencies and axis
 //! indices for the fixed 16-token joint layout.
 
-use astronomical_model_serving::{QwenImage21Rope, frequencies_for_tests};
+use astronomical_model_serving::QwenImage21Rope;
 use serde_json::Value;
 
 use super::support::{
@@ -65,7 +65,11 @@ fn assert_matches_oracle(computed: &(Vec<f32>, Vec<f32>), oracle: &Value) {
 #[test]
 fn should_match_the_diffusers_oracle_frequencies_exactly() {
     let rope = QwenImage21Rope::default();
-    let computed = frequencies_for_tests(&rope, &test_img_shapes(), &test_image_pad_mask());
+    let computed = astronomical_model_serving::frequencies_for_tests(
+        &rope,
+        &test_img_shapes(),
+        &test_image_pad_mask(),
+    );
     assert_matches_oracle(&computed, &rope_oracle());
 }
 

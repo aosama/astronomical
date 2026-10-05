@@ -1,4 +1,4 @@
-use astronomical_model_serving::{Qwen3_5VisionConfig, qwen3_5_vision_tensor_profiles};
+use astronomical_model_serving::Qwen3_5VisionConfig;
 
 const FROZEN_VISION_CONFIG_JSON: &str = r#"{
     "architectures": ["Qwen3_5MoeForConditionalGeneration"],
@@ -61,7 +61,8 @@ const FROZEN_VISION_CONFIG_JSON: &str = r#"{
 fn should_generate_the_complete_ornith_vision_tensor_profile() {
     let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
         .expect("the frozen Ornith 1.0 vision config should parse");
-    let vision_tensor_profiles = qwen3_5_vision_tensor_profiles(&vision_config);
+    let vision_tensor_profiles =
+        astronomical_model_serving::qwen3_5_vision_tensor_profiles(&vision_config);
 
     // 333 total tensors: 27 blocks x 12 + 3 patch/pos + 6 merger
     assert_eq!(

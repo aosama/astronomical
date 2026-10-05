@@ -14,7 +14,7 @@ use super::engine_prompt_cache::{
     generate_token_ids, require_persistent_prompt_cache_acceptance_completion,
     wait_for_persistent_prompt_cache_blocks,
 };
-use super::large_prefill_prompt::representative_long_generation_prompt_token_ids;
+use super::large_prefill_prompt;
 
 const CACHE_RESTORE_PEAK_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 const CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS: u32 = 8_192;
@@ -45,7 +45,7 @@ async fn run_cache_restore_peak_acceptance() {
         .expect("the installed model should validate before prompt preparation");
     let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the installed tokenizer should load before prompt preparation");
-    let prompt_token_ids = representative_long_generation_prompt_token_ids(
+    let prompt_token_ids = large_prefill_prompt::representative_long_generation_prompt_token_ids(
         &prompt_tokenizer,
         validated_artifact.model_id(),
     );

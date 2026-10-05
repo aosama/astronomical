@@ -1,6 +1,6 @@
 use crate::artifact_validation::TensorProfile;
 use crate::qwen3_5::Qwen3_5Config;
-use crate::qwen3_5::artifacts::tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles;
+use crate::qwen3_5::artifacts::tensor_spec;
 
 pub(crate) fn append_qwen3_5_dense_mlp_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
@@ -27,7 +27,7 @@ pub(crate) fn append_qwen3_5_dense_mlp_tensor_profiles(
         ),
     ] {
         let projection_module_name = format!("{dense_mlp_prefix}.{projection_name}");
-        append_qwen3_5_quantized_affine_tensor_profiles(
+        tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles(
             tensor_profiles,
             &projection_module_name,
             &[output_dimension],

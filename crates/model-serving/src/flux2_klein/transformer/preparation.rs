@@ -3,7 +3,7 @@
 use super::Flux2KleinTransformerError;
 use super::blocks::{DoubleStreamState, ModulationSet};
 use super::execution::{Flux2KleinForwardState, Flux2KleinTransformer, ForwardBlockState};
-use super::math::{linear, rope_frequencies, timestep_embedding};
+use super::math;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Clone, Copy)]
@@ -67,12 +67,12 @@ impl Flux2KleinTransformer {
         self.validate_inputs(inputs)?;
         let timestep_embedding =
             self.build_timestep_embedding(inputs.timestep, inputs.image_hidden_states.dtype())?;
-        let image_projection = linear(
+        let image_projection = math::linear(
             &self.runtime,
             inputs.image_hidden_states,
             self.weights.tensor("x_embedder.weight")?,
         )?;
-        let text_projection = linear(
+        let text_projection = math::linear(
             &self.runtime,
             inputs.text_hidden_states,
             self.weights.tensor("context_embedder.weight")?,
@@ -124,19 +124,19 @@ impl Flux2KleinTransformer {
         timestep: &MlxArray,
         activation_dtype: MlxDtype,
     ) -> Result<MlxArray, Flux2KleinTransformerError> {
-        let sinusoidal = timestep_embedding(
+        let sinusoidal = math::timestep_embedding(
             &self.runtime,
             timestep,
             self.geometry.timestep_embedding_width(),
         )?;
         let sinusoidal = self.runtime.astype(&sinusoidal, activation_dtype)?;
-        let first = linear(
+        let first = math::linear(
             &self.runtime,
             &sinusoidal,
             self.weights
                 .tensor("time_guidance_embed.timestep_embedder.linear_1.weight")?,
         )?;
-        linear(
+        math::linear(
             &self.runtime,
             &self.runtime.silu(&first)?,
             self.weights
@@ -150,19 +150,19 @@ impl Flux2KleinTransformer {
     ) -> Result<ModulationSet, Flux2KleinTransformerError> {
         let activated = self.runtime.silu(timestep_embedding)?;
         Ok(ModulationSet {
-            image_double: linear(
+            image_double: math::linear(
                 &self.runtime,
                 &activated,
                 self.weights
                     .tensor("double_stream_modulation_img.linear.weight")?,
             )?,
-            text_double: linear(
+            text_double: math::linear(
                 &self.runtime,
                 &activated,
                 self.weights
                     .tensor("double_stream_modulation_txt.linear.weight")?,
             )?,
-            single: linear(
+            single: math::linear(
                 &self.runtime,
                 &activated,
                 self.weights
@@ -176,8 +176,9 @@ impl Flux2KleinTransformer {
         text_ids: &MlxArray,
         image_ids: &MlxArray,
     ) -> Result<(MlxArray, MlxArray), Flux2KleinTransformerError> {
-        let (text_cos, text_sin) = rope_frequencies(&self.runtime, text_ids, &self.geometry)?;
-        let (image_cos, image_sin) = rope_frequencies(&self.runtime, image_ids, &self.geometry)?;
+        let (text_cos, text_sin) = math::rope_frequencies(&self.runtime, text_ids, &self.geometry)?;
+        let (image_cos, image_sin) =
+            math::rope_frequencies(&self.runtime, image_ids, &self.geometry)?;
         Ok((
             self.runtime.concatenate_axis(&[&text_cos, &image_cos], 0)?,
             self.runtime.concatenate_axis(&[&text_sin, &image_sin], 0)?,

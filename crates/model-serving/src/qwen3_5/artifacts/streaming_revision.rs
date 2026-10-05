@@ -25,17 +25,17 @@ use crate::qwen3_5::artifacts::artifact_helpers::{
 use crate::qwen3_5::artifacts::artifact_inventory::{
     build_index_tensor_inventory, source_id_by_file_name,
 };
-use crate::qwen3_5::artifacts::tensor_spec::qwen3_5_language_tensor_profiles;
+use crate::qwen3_5::artifacts::tensor_spec;
 use crate::qwen3_5::artifacts::validated_artifact::ValidatedQwen3_5Artifact;
 use crate::qwen3_5::artifacts::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
-use crate::qwen3_5::artifacts::vision_validation::validate_vision_tower_inventory;
+use crate::qwen3_5::artifacts::vision_validation;
 use crate::qwen3_5::artifacts::{
     OptiQMetadata, Qwen3_5Config, Qwen3_5ShardIndex, Qwen3_5VisionConfig,
 };
 use crate::qwen3_5::artifacts::{
     Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5MtpArtifactCapability,
 };
-use crate::qwen3_5::multi_token_prediction::qwen3_5_mtp_tensor_profiles;
+use crate::qwen3_5::multi_token_prediction;
 
 /// On-disk format version of a converted per-expert streaming revision.
 const STREAMING_REVISION_FORMAT_VERSION: u32 = 3;
@@ -194,7 +194,7 @@ impl Qwen3_5ArtifactValidator {
                 serde_json::Value::String("resident.safetensors".to_owned()),
             );
         }
-        for tensor_profile in qwen3_5_language_tensor_profiles(&config) {
+        for tensor_profile in tensor_spec::qwen3_5_language_tensor_profiles(&config) {
             if tensor_profile.name.contains(".mlp.switch_mlp.") {
                 weight_map
                     .entry(tensor_profile.name.clone())
@@ -238,17 +238,19 @@ impl Qwen3_5ArtifactValidator {
         let canonical_tensor_names =
             Qwen3_5ShardIndex::extract_language_tensor_names_from_json(&index_bytes)?;
         config.resolve_unquantized_modules_from_shard_index(&canonical_tensor_names);
-        let language_tensor_profiles = qwen3_5_language_tensor_profiles(&config);
+        let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config);
         let shard_index =
             Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)?;
-        let validated_vision_tower_storage =
-            validate_vision_tower_inventory(&shard_index, vision_config.as_ref())?;
+        let validated_vision_tower_storage = vision_validation::validate_vision_tower_inventory(
+            &shard_index,
+            vision_config.as_ref(),
+        )?;
         let has_separate_vision_sidecar = validated_vision_tower_storage.has_separate_sidecar();
         let vision_tensor_profiles = vision_config
             .as_ref()
             .map(qwen3_5_vision_tensor_profiles)
             .unwrap_or_default();
-        let mtp_tensor_profiles = qwen3_5_mtp_tensor_profiles(&config);
+        let mtp_tensor_profiles = multi_token_prediction::qwen3_5_mtp_tensor_profiles(&config);
         let mut tensor_inventory = build_index_tensor_inventory(&shard_index)?;
         let sparse_expert_names: BTreeSet<String> = language_tensor_profiles
             .iter()

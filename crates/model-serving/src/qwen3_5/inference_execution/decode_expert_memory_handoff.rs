@@ -36,7 +36,7 @@ use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase, PerformanceOperation};
 
 use super::super::model::Qwen3_5Model;
-use super::{Qwen3_5EngineState, fatal_engine_error};
+use super::Qwen3_5EngineState;
 
 impl Qwen3_5EngineState {
     /// Reconciles retained ownership with the leftover ceiling after prefill.
@@ -50,7 +50,9 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<(), InferenceEngineError> {
         let Some(model) = self.model.as_mut() else {
-            return Err(fatal_engine_error("Qwen3.5 engine lost its loaded model"));
+            return Err(super::fatal_engine_error(
+                "Qwen3.5 engine lost its loaded model",
+            ));
         };
         // Prefill pressure protects the remaining prompt by installing a
         // temporary retained-page ceiling. That cap must die here. Decode uses
