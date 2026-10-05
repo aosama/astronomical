@@ -205,14 +205,20 @@ fn should_preserve_host_backed_capacity_rejection_error_details() {
     let host_values = vec![0.0_f32; (GRAPH_DIMENSION as usize) * (GRAPH_DIMENSION as usize)];
     let host_backed_rejection = runtime
         .array_from_f32(&host_values, &[GRAPH_DIMENSION, GRAPH_DIMENSION])
+        .map_err(MlxRuntimeError::from)
         .expect_err("host-backed allocation should reject above the allowed active memory");
     assert_capacity_error(&host_backed_rejection);
     eprintln!("[mlx-c-memory-contract] status=success phase=host_backed_capacity_rejection");
 }
 
+// Operation wrappers live on the bindings context and return the captured
+// MlxCError; the runtime boundary classifies the allocator patch's active
+// memory ceiling marker into the typed rejection during this conversion.
 fn evaluate_oversized_array(runtime: &MlxRuntime) -> Result<(), MlxRuntimeError> {
     let oversized_array = runtime.zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)?;
-    runtime.evaluate_arrays(&[&oversized_array])
+    runtime
+        .evaluate_arrays(&[&oversized_array])
+        .map_err(MlxRuntimeError::from)
 }
 
 fn assert_capacity_error(runtime_error: &MlxRuntimeError) {

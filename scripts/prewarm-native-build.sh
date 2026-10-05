@@ -12,7 +12,7 @@ set -eu
 
 readonly SCRIPT_PREFIX="[prewarm-native-build]"
 
-profile_name=""
+profile_names=""
 repository_root=""
 progress_tail_pid=""
 progress_file=""
@@ -49,7 +49,7 @@ while [ "$#" -gt 0 ]; do
                 usage
                 exit 2
             fi
-            profile_name="$2"
+            profile_names="${profile_names:+${profile_names} }$2"
             shift 2
             ;;
         --repository-root)
@@ -69,7 +69,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-if [ -z "${profile_name}" ]; then
+if [ -z "${profile_names}" ]; then
     print_error "missing required argument --profile <profile-name>"
     usage
     exit 2
@@ -91,7 +91,7 @@ export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="${progress_file}"
 ( exec tail -f "${progress_file}" ) &
 progress_tail_pid=$!
 prewarm_started_at="$(date +%s)"
-print_status "status=start profile=${profile_name} started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+print_status "status=start profiles=${profile_names} started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Provision the bindgen header extraction before anything builds. The
 # MLX-C bindings crate's build script resolves its headers from this
@@ -106,9 +106,18 @@ fi
 print_status "status=provision-bindgen-headers success elapsed_seconds=$(( $(date +%s) - provision_started_at ))"
 
 native_build_exit_code=0
-cargo run -p astronomical-native-build-tool -- \
-    --profile "${profile_name}" \
-    --repository-root "${repository_root}" || native_build_exit_code=$?
+for profile_name in ${profile_names}; do
+    profile_started_at="$(date +%s)"
+    print_status "status=native-build start profile=${profile_name}"
+    cargo run -p astronomical-native-build-tool -- \
+        --profile "${profile_name}" \
+        --repository-root "${repository_root}" || {
+        native_build_exit_code=$?
+        break
+    }
+    print_status \
+        "status=native-build success profile=${profile_name} elapsed_seconds=$(( $(date +%s) - profile_started_at ))"
+done
 
 prewarm_elapsed_seconds=$(( $(date +%s) - prewarm_started_at ))
 if [ "${native_build_exit_code}" -eq 0 ]; then
