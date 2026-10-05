@@ -12,7 +12,7 @@ use super::disk_store_file::{
     remove_cache_owned_file_or_confirm_absent,
 };
 use super::disk_store_index::TrackedPersistentPromptCacheFile;
-use super::disk_store_scan::scan_current_format_directory;
+use super::disk_store_scan;
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 use super::{
     PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
@@ -145,7 +145,7 @@ impl PersistentPromptCacheDiskStore {
         let mut startup_cleanup_evidence = PersistentPromptCacheStartupCleanupEvidence::default();
         {
             let mut tracked_files = self.lock_tracked_files();
-            scan_current_format_directory(
+            disk_store_scan::scan_current_format_directory(
                 &self.visual_embeddings_directory,
                 PersistentPromptCacheFileKind::VisualEmbedding,
                 &mut tracked_files,

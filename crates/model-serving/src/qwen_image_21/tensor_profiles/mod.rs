@@ -15,7 +15,7 @@
 //! of the causal 3D VAE is handled by the separate `time_conv` 1x1 convolutions, not by a fifth
 //! kernel dimension.
 
-use super::configuration::{quantized_group_count, quantized_row_count};
+use super::configuration;
 
 /// One expected physical tensor of a weight component.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,8 +52,8 @@ pub(super) fn quantized_linear(
     bits: u32,
     group_size: u32,
 ) {
-    let rows = quantized_row_count(in_features, bits);
-    let groups = quantized_group_count(in_features, group_size);
+    let rows = configuration::quantized_row_count(in_features, bits);
+    let groups = configuration::quantized_group_count(in_features, group_size);
     profiles.push(QwenImage21TensorProfile {
         tensor_name: format!("{prefix}.weight"),
         dtype: "U32",

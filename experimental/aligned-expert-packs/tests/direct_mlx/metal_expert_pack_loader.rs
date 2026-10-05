@@ -7,7 +7,6 @@ use astronomical_runtime_integration::{
     MlxMetalExpertPackOutputTensor,
 };
 
-use super::runtime;
 use astronomical_mlx_c_rust::MlxDtype;
 
 #[test]
@@ -18,7 +17,7 @@ fn should_record_metal_io_completion_metrics_without_an_explicit_wait() {
     let source_pack_path = temporary_directory.path().join("attributed.expert-pack");
     fs::write(&source_pack_path, vec![0x5A_u8; PACK_BYTE_COUNT])
         .expect("the test should write a synthetic expert pack");
-    let runtime = runtime();
+    let runtime = super::runtime();
     let metal_expert_pack_load_metrics =
         Arc::new(MlxMetalExpertPackLoadMetricsAccumulator::default());
 
@@ -83,7 +82,7 @@ fn should_load_a_file_range_into_an_mlx_owned_metal_buffer_before_gpu_use() {
     fs::write(&source_pack_path, source_pack_bytes)
         .expect("the test should write a synthetic expert pack");
 
-    let runtime = runtime();
+    let runtime = super::runtime();
     let metal_expert_pack_load = runtime
         .load_metal_expert_pack_ranges(
             &source_pack_path,
@@ -137,7 +136,7 @@ fn should_reject_a_metal_expert_pack_range_that_exceeds_its_source_file() {
     fs::write(&source_pack_path, vec![0_u8; 64 * 1024])
         .expect("the test should write a synthetic expert pack");
 
-    let load_outcome = runtime().load_metal_expert_pack_ranges(
+    let load_outcome = super::runtime().load_metal_expert_pack_ranges(
         &source_pack_path,
         &[MlxMetalExpertPackOutputTensor::new(
             vec![16_384],
@@ -162,7 +161,7 @@ fn should_release_attribution_ownership_when_metal_io_submission_is_rejected() {
     let metal_expert_pack_load_metrics =
         Arc::new(MlxMetalExpertPackLoadMetricsAccumulator::default());
 
-    let load_outcome = runtime().load_metal_expert_pack_ranges(
+    let load_outcome = super::runtime().load_metal_expert_pack_ranges(
         &source_pack_path,
         &[MlxMetalExpertPackOutputTensor::new(
             vec![16_384],
@@ -188,7 +187,7 @@ fn should_release_an_inflight_metal_load_without_an_explicit_completion_wait() {
     let source_pack_path = temporary_directory.path().join("inflight.expert-pack");
     fs::write(&source_pack_path, vec![0x5A_u8; PACK_BYTE_COUNT])
         .expect("the test should write a synthetic expert pack");
-    let runtime = runtime();
+    let runtime = super::runtime();
 
     for repetition_index in 0..4 {
         let metal_expert_pack_load = runtime
@@ -236,7 +235,7 @@ fn should_assemble_noncontiguous_ranges_into_multiple_mlx_owned_output_buffers()
     )
     .expect("the test should write a noncontiguous synthetic expert pack");
     let range_byte_count = VALUES_PER_RANGE * std::mem::size_of::<u32>();
-    let runtime = runtime();
+    let runtime = super::runtime();
 
     let metal_expert_pack_load = runtime
         .load_metal_expert_pack_ranges(

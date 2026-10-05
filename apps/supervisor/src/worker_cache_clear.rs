@@ -5,8 +5,8 @@ use astronomical_ipc_protocol::WorkerEvent;
 use tokio::sync::{Semaphore, oneshot};
 use tokio::time::{Instant, timeout};
 
-use crate::worker_containment::contain_worker_failure;
-use crate::worker_event_handler::handle_worker_event;
+use crate::worker_containment;
+use crate::worker_event_handler;
 use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, GenerationQueueDepth,
@@ -63,7 +63,7 @@ pub(super) async fn apply_prompt_cache_clear(
                     bytes_freed,
                 });
             }
-            handle_worker_event(
+            worker_event_handler::handle_worker_event(
                 worker_event,
                 health_snapshot,
                 is_ready,
@@ -79,7 +79,7 @@ pub(super) async fn apply_prompt_cache_clear(
         Ok(Ok(clear_outcome)) => Ok(clear_outcome),
         Ok(Err(clear_error)) => {
             tracing::error!(error = %clear_error, "worker prompt-cache clear failed");
-            contain_worker_failure(
+            worker_containment::contain_worker_failure(
                 worker_process,
                 health_snapshot,
                 active_generation,
@@ -94,7 +94,7 @@ pub(super) async fn apply_prompt_cache_clear(
             let timeout_error = WorkerControlError::PromptCacheClearTimeout {
                 cache_clear_timeout_millis,
             };
-            contain_worker_failure(
+            worker_containment::contain_worker_failure(
                 worker_process,
                 health_snapshot,
                 active_generation,

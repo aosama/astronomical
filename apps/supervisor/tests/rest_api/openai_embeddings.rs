@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use astronomical_config::{
     DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
 };
-use astronomical_supervisor::{EmbeddingsExecutionError, build_application_with_discovered_models};
+use astronomical_supervisor::EmbeddingsExecutionError;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
@@ -21,7 +21,10 @@ const ROMEO_LINE: &str = "O Romeo, Romeo, wherefore art thou Romeo?";
 async fn should_embed_romeo_and_juliet_through_the_public_http_journey() {
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_commands = executor.received_embeddings_commands();
-    let application = build_application_with_discovered_models(executor, vec![embedding_model()]);
+    let application = astronomical_supervisor::build_application_with_discovered_models(
+        executor,
+        vec![embedding_model()],
+    );
 
     let response = application
         .oneshot(embeddings_request(valid_request_document()))
@@ -54,7 +57,10 @@ async fn should_embed_romeo_and_juliet_through_the_public_http_journey() {
 async fn should_reject_a_chat_model_before_embeddings_dispatch() {
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_commands = executor.received_embeddings_commands();
-    let application = build_application_with_discovered_models(executor, vec![chat_model()]);
+    let application = astronomical_supervisor::build_application_with_discovered_models(
+        executor,
+        vec![chat_model()],
+    );
 
     let response = application
         .oneshot(embeddings_request(serde_json::json!({
@@ -83,7 +89,10 @@ async fn should_reject_a_chat_model_before_embeddings_dispatch() {
 async fn should_reject_empty_input_before_embeddings_dispatch() {
     let executor = ScriptedExecutor::ready(Vec::new());
     let received_commands = executor.received_embeddings_commands();
-    let application = build_application_with_discovered_models(executor, vec![embedding_model()]);
+    let application = astronomical_supervisor::build_application_with_discovered_models(
+        executor,
+        vec![embedding_model()],
+    );
 
     let response = application
         .oneshot(embeddings_request(serde_json::json!({
@@ -113,7 +122,10 @@ async fn should_not_expose_worker_embeddings_failure_reasons_or_local_paths() {
             reason: format!("native execution failed while mapping {fictional_private_path}"),
         },
     ));
-    let application = build_application_with_discovered_models(executor, vec![embedding_model()]);
+    let application = astronomical_supervisor::build_application_with_discovered_models(
+        executor,
+        vec![embedding_model()],
+    );
 
     let response = application
         .oneshot(embeddings_request(valid_request_document()))

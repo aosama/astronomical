@@ -23,7 +23,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::qwen_image_21::{component_weights_path, shared_journey_runtime};
+use crate::common::qwen_image_21;
 
 /// The whole journey must finish inside this budget; the wrapper fails it otherwise.
 const VAE_DECODE_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
@@ -60,10 +60,11 @@ fn journey_latents(runtime: &MlxRuntime) -> astronomical_mlx_c_rust::MlxArray {
 async fn should_decode_a_latent_grid_into_deterministic_clamped_rgba_pixels() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(VAE_DECODE_JOURNEY_TIMEOUT, async {
-        let runtime = shared_journey_runtime();
+        let runtime = qwen_image_21::shared_journey_runtime();
         let decoder = QwenImage21VaeDecoder::load(
             &runtime,
-            File::open(component_weights_path("vae")).expect("the VAE weights should open"),
+            File::open(qwen_image_21::component_weights_path("vae"))
+                .expect("the VAE weights should open"),
         )
         .expect("the Qwen-Image-2.1 VAE decoder should load from the real artifact");
 
@@ -120,10 +121,11 @@ fn decoded_pixel_count() -> usize {
 async fn should_reject_a_latent_grid_with_the_wrong_channel_count() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(VAE_DECODE_JOURNEY_TIMEOUT, async {
-        let runtime = shared_journey_runtime();
+        let runtime = qwen_image_21::shared_journey_runtime();
         let decoder = QwenImage21VaeDecoder::load(
             &runtime,
-            File::open(component_weights_path("vae")).expect("the VAE weights should open"),
+            File::open(qwen_image_21::component_weights_path("vae"))
+                .expect("the VAE weights should open"),
         )
         .expect("the Qwen-Image-2.1 VAE decoder should load from the real artifact");
 

@@ -4,7 +4,7 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::convolution::as_i32;
+use super::convolution;
 use super::decoder::BATCH_NORM_EPSILON;
 use super::{
     FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, Flux2KleinPackedLatentLayout, Flux2KleinVaeDecodeMode,
@@ -103,7 +103,7 @@ impl Flux2KleinVaeDecoder {
         let packed_spatial_shape = to_i32_shape(layout.packed_spatial_shape())?;
         let packed_spatial = runtime.reshape(packed_latents, &packed_spatial_shape)?;
         let epsilon = runtime.full(
-            &[as_i32(
+            &[convolution::as_i32(
                 FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT,
                 "BatchNorm channels",
             )?],
@@ -191,7 +191,7 @@ fn to_i32_shape<const DIMENSIONS: usize>(
 ) -> Result<[i32; DIMENSIONS], Flux2KleinVaeError> {
     let mut converted = [0_i32; DIMENSIONS];
     for (dimension_index, dimension) in shape.into_iter().enumerate() {
-        converted[dimension_index] = as_i32(dimension, "latent dimension")?;
+        converted[dimension_index] = convolution::as_i32(dimension, "latent dimension")?;
     }
     Ok(converted)
 }

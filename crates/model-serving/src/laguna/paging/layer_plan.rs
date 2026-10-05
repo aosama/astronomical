@@ -11,7 +11,7 @@ use crate::memory::ExpertLayerGeometry;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaPagingError;
-use super::page_manifest::build_laguna_expert_page_manifest;
+use super::page_manifest;
 use super::source_slices::{
     compact_trailing_shape, expert_source_slices, map_dtype, parameter_name, projection_name,
 };
@@ -181,7 +181,7 @@ impl LagunaSparseLayerPagingPlan {
     /// Builds the complete-layer multi-token prefill page for every expert.
     pub fn complete_layer_page(&self) -> Result<QuantizedExpertPageManifest, LagunaPagingError> {
         let complete_expert_ids = (0..self.expert_capacity).collect::<Vec<_>>();
-        build_laguna_expert_page_manifest(self, &complete_expert_ids)
+        page_manifest::build_laguna_expert_page_manifest(self, &complete_expert_ids)
     }
 
     /// Builds a routed one-token decode page for the supplied ascending expert IDs.
@@ -189,7 +189,7 @@ impl LagunaSparseLayerPagingPlan {
         &self,
         expert_ids: &[usize],
     ) -> Result<QuantizedExpertPageManifest, LagunaPagingError> {
-        build_laguna_expert_page_manifest(self, expert_ids)
+        page_manifest::build_laguna_expert_page_manifest(self, expert_ids)
     }
 
     /// Returns family-neutral geometry keyed by the dense paging slot.

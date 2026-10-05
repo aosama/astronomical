@@ -3,7 +3,6 @@ use astronomical_ipc_protocol::{
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ChatToolDefinition, RequestId,
 };
 use astronomical_rest_contract::OpenAiResponsesRequest;
-use astronomical_supervisor::translate_openai_responses_request;
 
 #[test]
 fn should_translate_string_input_into_one_user_chat_message() {
@@ -18,8 +17,9 @@ fn should_translate_string_input_into_one_user_chat_message() {
     )
     .expect("the Responses request should deserialize");
 
-    let chat_generation_command = translate_openai_responses_request(RequestId::new(700), request)
-        .expect("the Responses request should translate");
+    let chat_generation_command =
+        astronomical_supervisor::translate_openai_responses_request(RequestId::new(700), request)
+            .expect("the Responses request should translate");
 
     assert_eq!(
         chat_generation_command,
@@ -64,8 +64,9 @@ fn should_translate_summary_reasoning_and_function_loop_replay() {
     )
     .expect("the function-loop request should deserialize");
 
-    let chat_generation_command = translate_openai_responses_request(RequestId::new(701), request)
-        .expect("the manual function loop should translate");
+    let chat_generation_command =
+        astronomical_supervisor::translate_openai_responses_request(RequestId::new(701), request)
+            .expect("the manual function loop should translate");
 
     assert_eq!(
         chat_generation_command.messages,

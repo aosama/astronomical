@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use astronomical_cli::{CliCommand, RespondArguments, UsageError, parse_command};
+use astronomical_cli::{CliCommand, RespondArguments, UsageError};
 
 /// Bound for every protocol stage in these tests: generous for a stub
 /// daemon on loopback, short enough that a hung exchange fails the test
@@ -26,7 +26,7 @@ pub const SOCKET_FILE_NAME: &str = "ipc.sock";
 pub fn parse(arguments: &[&str]) -> Result<CliCommand, UsageError> {
     let process_arguments =
         std::iter::once(OsString::from("astronomical")).chain(arguments.iter().map(OsString::from));
-    parse_command(process_arguments)
+    astronomical_cli::parse_command(process_arguments)
 }
 
 /// A unique temporary directory per test: pid plus nanos so parallel tests

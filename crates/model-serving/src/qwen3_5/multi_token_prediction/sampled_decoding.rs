@@ -7,15 +7,16 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_mlx_c_rust::MlxArray;
 
+use crate::qwen3_5::inference_execution;
 use crate::qwen3_5::inference_execution::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5::inference_execution::{fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 use crate::qwen3_5::model::Qwen3_5Model;
 use crate::{InferenceEngineError, PerformanceCounter};
 
-use super::accepted_prefix_commit::commit_accepted_mtp_prefix;
-use super::decode::{record_mtp_outcome, restore_complete_attempt_state};
+use super::MtpVerificationDecision;
+use super::accepted_prefix_commit;
+use super::decode;
 use super::sampled_verification::MtpSampledSamplingSettings;
-use super::{MtpVerificationDecision, qwen3_5_mtp_sampled_verification_decision};
 use crate::memory::MtpDraftDepth;
 
 #[allow(clippy::too_many_arguments)]
@@ -59,10 +60,16 @@ fn run_sampled_prediction_attempt(
 ) -> Result<MtpVerificationDecision, InferenceEngineError> {
     let mut prediction_request = active_request
         .take_optional_prediction_session()
-        .ok_or_else(|| fatal_engine_error("MTP request session disappeared before proposal"))?;
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error(
+                "MTP request session disappeared before proposal",
+            )
+        })?;
     let target_hidden_seed = prediction_request
         .take_target_hidden_states()
-        .ok_or_else(|| fatal_engine_error("MTP proposal lost its target hidden seed"))?;
+        .ok_or_else(|| {
+            inference_execution::fatal_engine_error("MTP proposal lost its target hidden seed")
+        })?;
     // Two retained frontiers keep commit repair and operational rollback independent. Commit
     // repair consumes its frontier only after a rejection leaves proposal state too far ahead.
     let predictor_commit_checkpoint = prediction_request
@@ -138,7 +145,7 @@ fn run_sampled_prediction_attempt(
     let verified_sampled_output = match verification {
         Ok(verified_sampled_output) => verified_sampled_output,
         Err(verification_error) => {
-            restore_complete_attempt_state(
+            decode::restore_complete_attempt_state(
                 active_request,
                 target_state_checkpoint,
                 predictor_rollback_checkpoint,
@@ -155,20 +162,24 @@ fn run_sampled_prediction_attempt(
         }
     };
     active_request.advance_position(verifier_input_token_ids.len())?;
-    let decision = qwen3_5_mtp_sampled_verification_decision(
+    let decision = super::qwen3_5_mtp_sampled_verification_decision(
         effective_depth,
         &draft_token_ids,
         &verified_sampled_output.accepted_coin_flags,
         Some(verified_sampled_output.post_prefix_token_id),
         end_of_sequence_token_ids,
     )
-    .map_err(|_| fatal_engine_error("MTP sampled verification returned inconsistent vectors"))?;
+    .map_err(|_| {
+        inference_execution::fatal_engine_error(
+            "MTP sampled verification returned inconsistent vectors",
+        )
+    })?;
     if decision.was_eos_truncated() {
         active_request
             .performance_attribution_mut()
             .record_counter(PerformanceCounter::MtpEosTruncatedPrefixCount, 1);
     }
-    let commit_outcome = commit_accepted_mtp_prefix(
+    let commit_outcome = accepted_prefix_commit::commit_accepted_mtp_prefix(
         model,
         active_request,
         target_verify_start_position_tokens,
@@ -181,7 +192,7 @@ fn run_sampled_prediction_attempt(
         verified_sampled_output.target_forward_output,
     );
     if let Err(commit_error) = commit_outcome {
-        restore_complete_attempt_state(
+        decode::restore_complete_attempt_state(
             active_request,
             target_state_checkpoint,
             predictor_rollback_checkpoint,
@@ -196,6 +207,6 @@ fn run_sampled_prediction_attempt(
             effective_depth,
         ));
     }
-    record_mtp_outcome(active_request, &decision);
+    decode::record_mtp_outcome(active_request, &decision);
     Ok(decision)
 }

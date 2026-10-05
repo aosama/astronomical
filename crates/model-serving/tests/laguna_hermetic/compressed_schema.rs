@@ -8,7 +8,7 @@ use super::compressed_artifact_support::{
     PUBLISHED_M1_NVFP4_QUANTIZATION_CONFIG, published_m1_nvfp4_dense_fixture,
     published_m1_nvfp4_sparse_fixture,
 };
-use super::support::{config_bytes, config_value};
+use super::support;
 
 #[test]
 fn should_apply_published_nvfp4_only_to_selected_feed_forward_modules() {
@@ -101,10 +101,10 @@ fn should_reject_unsupported_or_contradictory_compressed_semantics() {
     cases.push(unsupported_ignore);
 
     for quantization_config in cases {
-        let mut config = config_value(1);
+        let mut config = support::config_value(1);
         config["quantization_config"] = quantization_config;
         assert!(matches!(
-            LagunaTargetNormalizer::normalize(&config_bytes(&config)),
+            LagunaTargetNormalizer::normalize(&support::config_bytes(&config)),
             Err(LagunaNormalizationError::UnsupportedQuantizationValue { .. })
                 | Err(LagunaNormalizationError::ConflictingQuantizationDocuments)
         ));

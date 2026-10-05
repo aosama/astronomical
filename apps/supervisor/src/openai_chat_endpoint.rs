@@ -19,7 +19,8 @@ use crate::{
     openai_chat_stream::OpenAiChatStreamEncoder,
 };
 
-use crate::application::{ApplicationState, allocate_chat_request_id};
+use crate::application;
+use crate::application::ApplicationState;
 
 pub(crate) async fn create_chat_completion(
     State(application_state): State<ApplicationState>,
@@ -147,19 +148,20 @@ pub(crate) async fn create_chat_completion(
         temperature: request_parts.temperature.is_some(),
         top_p: request_parts.top_p.is_some(),
     };
-    let request_id = match allocate_chat_request_id(&application_state.next_chat_request_id) {
-        Some(request_id) => request_id,
-        None => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(OpenAiErrorResponse::service_unavailable(
-                    "the local request identifier space is exhausted",
-                    Some("request_id_exhausted"),
-                )),
-            )
-                .into_response();
-        }
-    };
+    let request_id =
+        match application::allocate_chat_request_id(&application_state.next_chat_request_id) {
+            Some(request_id) => request_id,
+            None => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(OpenAiErrorResponse::service_unavailable(
+                        "the local request identifier space is exhausted",
+                        Some("request_id_exhausted"),
+                    )),
+                )
+                    .into_response();
+            }
+        };
     let mut chat_generation_command =
         match crate::openai_chat_translation::translate_openai_chat_completion_request_parts(
             RequestId::new(request_id),

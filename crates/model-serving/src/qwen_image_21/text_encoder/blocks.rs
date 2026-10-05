@@ -5,7 +5,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
-use crate::qwen_image_21::mlx_math::{apply_rope_half_split, fp32_rms_norm, masked_attention};
+use crate::qwen_image_21::mlx_math;
 
 use super::weights::{
     HEAD_WIDTH, KEY_VALUE_HEAD_COUNT, QUERY_HEAD_COUNT, QwenImage21TextEncoderLayerWeights,
@@ -34,7 +34,7 @@ pub(super) fn forward_layer(
     context: &EncoderBlockContext<'_>,
 ) -> Result<MlxArray, QwenImage21EngineError> {
     let residual = hidden_states;
-    let normalized = fp32_rms_norm(
+    let normalized = mlx_math::fp32_rms_norm(
         runtime,
         hidden_states,
         &weights.input_layernorm,
@@ -44,7 +44,7 @@ pub(super) fn forward_layer(
     let hidden_after_attention = runtime.add(residual, &attention_output)?;
 
     let residual = &hidden_after_attention;
-    let normalized = fp32_rms_norm(
+    let normalized = mlx_math::fp32_rms_norm(
         runtime,
         &hidden_after_attention,
         &weights.post_attention_layernorm,
@@ -97,15 +97,17 @@ fn forward_attention(
 
     // QK-norm over the head axis, then rope — both per token, so they run in the
     // `(batch, tokens, heads, width)` layout before the head-major transpose.
-    let query_heads = fp32_rms_norm(runtime, &query_heads, &weights.query_norm, RMS_NORM_EPSILON)?;
-    let key_heads = fp32_rms_norm(runtime, &key_heads, &weights.key_norm, RMS_NORM_EPSILON)?;
-    let query_heads = apply_rope_half_split(
+    let query_heads =
+        mlx_math::fp32_rms_norm(runtime, &query_heads, &weights.query_norm, RMS_NORM_EPSILON)?;
+    let key_heads =
+        mlx_math::fp32_rms_norm(runtime, &key_heads, &weights.key_norm, RMS_NORM_EPSILON)?;
+    let query_heads = mlx_math::apply_rope_half_split(
         runtime,
         &query_heads,
         context.rope_cosines,
         context.rope_sines,
     )?;
-    let key_heads = apply_rope_half_split(
+    let key_heads = mlx_math::apply_rope_half_split(
         runtime,
         &key_heads,
         context.rope_cosines,
@@ -121,7 +123,7 @@ fn forward_attention(
     let repeated_keys = runtime.repeat_axis(&key_heads, group_factor, 1)?;
     let repeated_values = runtime.repeat_axis(&value_heads, group_factor, 1)?;
 
-    let attended = masked_attention(
+    let attended = mlx_math::masked_attention(
         runtime,
         &query_heads,
         &repeated_keys,

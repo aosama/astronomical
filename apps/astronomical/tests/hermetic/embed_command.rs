@@ -8,7 +8,7 @@ use std::{
 };
 
 use astronomical_cli::errors::EmbedError;
-use astronomical_cli::{CliCommand, EmbedArguments, EmbedDependencies, UsageError, run_embed};
+use astronomical_cli::{CliCommand, EmbedArguments, EmbedDependencies, UsageError};
 use astronomical_ipc_protocol::EmbeddingsFailureReason;
 use tokio::time::timeout;
 
@@ -133,7 +133,7 @@ async fn should_embed_a_text_argument_into_one_json_vector_document() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(
+        astronomical_cli::run_embed(
             &embed_arguments(Some("hello"), None, None),
             &mut embed_dependencies,
         ),
@@ -184,7 +184,7 @@ async fn should_embed_text_from_a_file() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(
+        astronomical_cli::run_embed(
             &embed_arguments(None, Some(input_file_path), None),
             &mut embed_dependencies,
         ),
@@ -224,7 +224,7 @@ async fn should_embed_text_from_stdin() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
+        astronomical_cli::run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
     )
     .await
     .expect("the embed journey should finish inside the test timeout");
@@ -256,7 +256,7 @@ async fn should_report_a_missing_daemon_as_not_running_for_embed() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(
+        astronomical_cli::run_embed(
             &embed_arguments(Some("hello"), None, None),
             &mut embed_dependencies,
         ),
@@ -299,7 +299,7 @@ async fn should_reject_embed_when_no_model_is_available() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
+        astronomical_cli::run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
     )
     .await
     .expect("the embed journey should finish inside the test timeout");
@@ -338,7 +338,7 @@ async fn should_refuse_a_chat_only_model_for_embed() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
+        astronomical_cli::run_embed(&embed_arguments(None, None, None), &mut embed_dependencies),
     )
     .await
     .expect("the embed journey should finish inside the test timeout");
@@ -375,7 +375,7 @@ async fn should_fail_with_the_worker_reason_when_embeddings_fail() {
 
     let embed_outcome = timeout(
         TEST_TIMEOUT,
-        run_embed(
+        astronomical_cli::run_embed(
             &embed_arguments(Some("a very long text"), None, None),
             &mut embed_dependencies,
         ),

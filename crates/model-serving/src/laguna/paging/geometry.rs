@@ -1,4 +1,4 @@
-use crate::memory::rotating_prefill_transient_token_count;
+use crate::memory;
 use crate::memory::{
     CompleteResidencyDecision, CompleteResidencyRequirements, CurrentExpertLayerResidency,
     ExpertResidencyPlan, MemoryPhase, plan_expert_residency,
@@ -48,7 +48,7 @@ pub fn laguna_sliding_prefill_transient_token_count(
     window_token_count: u32,
     chunk_token_count: u32,
 ) -> Result<u32, LagunaPagingError> {
-    rotating_prefill_transient_token_count(window_token_count, chunk_token_count)
+    memory::rotating_prefill_transient_token_count(window_token_count, chunk_token_count)
         .map_err(|_| LagunaPagingError::InvalidSlidingTransient)
 }
 

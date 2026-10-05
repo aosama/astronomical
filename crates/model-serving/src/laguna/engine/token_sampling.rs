@@ -3,7 +3,8 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::{LagunaModel, LagunaSamplerConfig, LagunaSamplingStrategy};
-use crate::sampling_seed::{current_time_millis_since_unix_epoch, resolve_sampling_seed};
+use crate::sampling_seed;
+use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use crate::{InferenceEngineError, PerformanceAttribution};
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -28,8 +29,10 @@ fn random_state_for_sampler(
             reason: "Laguna min_p sampling is not implemented".to_owned(),
         });
     }
-    let sampling_seed =
-        resolve_sampling_seed(sampler_config.seed(), current_time_millis_since_unix_epoch);
+    let sampling_seed = sampling_seed::resolve_sampling_seed(
+        sampler_config.seed(),
+        current_time_millis_since_unix_epoch,
+    );
     runtime
         .random_key(sampling_seed)
         .map_err(|runtime_error| InferenceEngineError::Fatal {

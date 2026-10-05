@@ -2,11 +2,11 @@ use astronomical_ipc_protocol::ChatToolDefinition;
 use astronomical_model_serving::{LagunaOutputEvent, LagunaOutputParser};
 
 use super::super::text_support::SyntheticLagunaTextArtifact;
-use super::support::literary_output_parser_starting_in_reasoning;
+use super::support;
 
 #[test]
 fn should_start_in_reasoning_for_a_prompt_owned_opening_think_marker() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(true);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(true);
 
     let output_events = output_parser
         .push_fragment("Compare their motives</think>The contrast is decisive.")
@@ -23,7 +23,7 @@ fn should_start_in_reasoning_for_a_prompt_owned_opening_think_marker() {
 
 #[test]
 fn should_parse_reasoning_text_and_tool_markers_fragmented_at_every_boundary() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(true);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(true);
 
     assert_eq!(
         output_parser
@@ -65,7 +65,7 @@ fn should_parse_reasoning_text_and_tool_markers_fragmented_at_every_boundary() {
 
 #[test]
 fn should_emit_multiple_poolside_tool_calls_in_source_order() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -236,7 +236,7 @@ fn should_keep_a_json_array_argument_as_an_array_when_object_keys_repeat() {
 
 #[test]
 fn should_forward_an_undeclared_poolside_function_to_the_client() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment("<tool_call>invent_ending</tool_call>")
@@ -254,7 +254,7 @@ fn should_forward_an_undeclared_poolside_function_to_the_client() {
 
 #[test]
 fn should_recover_a_poolside_call_that_dropped_the_opening_argument_bracket() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -274,7 +274,7 @@ fn should_recover_a_poolside_call_that_dropped_the_opening_argument_bracket() {
 
 #[test]
 fn should_forward_a_closed_tool_call_when_argument_markers_cannot_be_salvaged() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -294,7 +294,7 @@ fn should_forward_a_closed_tool_call_when_argument_markers_cannot_be_salvaged() 
 
 #[test]
 fn should_preserve_a_bounded_undeclared_poolside_tool_argument_for_client_validation() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -317,7 +317,7 @@ fn should_preserve_a_bounded_undeclared_poolside_tool_argument_for_client_valida
 
 #[test]
 fn should_forward_a_declared_call_when_a_required_argument_is_missing() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -339,7 +339,7 @@ fn should_forward_a_declared_call_when_a_required_argument_is_missing() {
 
 #[test]
 fn should_forward_a_duplicate_poolside_tool_argument_with_the_last_value() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -362,7 +362,7 @@ fn should_forward_a_duplicate_poolside_tool_argument_with_the_last_value() {
 
 #[test]
 fn should_forward_a_closed_tool_call_missing_its_required_argument() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment("<tool_call>find_character</tool_call>")
@@ -380,7 +380,7 @@ fn should_forward_a_closed_tool_call_missing_its_required_argument() {
 
 #[test]
 fn should_forward_an_unclosed_poolside_tool_call_when_generation_finishes() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
     assert!(
         output_parser
             .push_fragment("<tool_call>find_character<arg_key>name</arg_key><arg_value>Romeo")
@@ -404,7 +404,7 @@ fn should_forward_an_unclosed_poolside_tool_call_when_generation_finishes() {
 
 #[test]
 fn should_forward_a_closed_call_when_argument_markers_are_nested() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
 
     let output_events = output_parser
         .push_fragment(
@@ -426,7 +426,7 @@ fn should_forward_a_closed_call_when_argument_markers_are_nested() {
 
 #[test]
 fn should_salvage_an_oversized_tool_argument_without_aborting_generation() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(false);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(false);
     output_parser
         .push_fragment("<tool_call>find_character<arg_key>name</arg_key><arg_value>")
         .expect("the parser should enter argument-value state");
@@ -466,7 +466,7 @@ fn should_salvage_an_oversized_tool_argument_without_aborting_generation() {
 
 #[test]
 fn should_finish_streamed_reasoning_without_requiring_a_model_owned_closing_marker() {
-    let mut output_parser = literary_output_parser_starting_in_reasoning(true);
+    let mut output_parser = support::literary_output_parser_starting_in_reasoning(true);
 
     assert_eq!(
         output_parser

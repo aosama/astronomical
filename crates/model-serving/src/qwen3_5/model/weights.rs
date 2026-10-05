@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights;
+use crate::qwen3_5_moe;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::weights_validation::{validate_bound_tensor, validate_quantized_tensor_bits};
+use super::weights_validation;
 use super::{
     Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact,
     decoder_layer_weights::{
@@ -117,8 +117,8 @@ impl Qwen3_5Weights {
                 }
             })?;
             let tensor = model_shard.tensor(&tensor_profile.name)?;
-            validate_bound_tensor(tensor_profile, &tensor)?;
-            validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
+            weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
+            weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
             let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidTensor {
                     tensor_name: tensor_profile.name.clone(),
@@ -275,7 +275,7 @@ fn take_decoder_layer_weights(
         ),
         Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(
-                bind_qwen3_5_moe_feed_forward_weights(
+                qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights(
                     bound_tensors,
                     qwen3_5_config,
                     &decoder_layer_prefix,

@@ -2,7 +2,6 @@
 
 use std::sync::{Arc, RwLock, atomic::AtomicU64};
 
-use astronomical_config::discover_models;
 use axum::Router;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -55,7 +54,7 @@ pub fn build_application_with_library_download(
     download_catalog: Arc<DownloadCatalog>,
     library_download_coordinator: Arc<LibraryDownloadCoordinator>,
 ) -> Router {
-    let discovered_models = discover_models(&[library_download_coordinator
+    let discovered_models = astronomical_config::discover_models(&[library_download_coordinator
         .models_directory()
         .to_path_buf()])
     .map(|directory_scans| {

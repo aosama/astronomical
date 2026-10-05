@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use astronomical_supervisor::{DownloadCatalog, build_application_with_download_catalog};
+use astronomical_supervisor::DownloadCatalog;
 use axum::{
     body::{Body, to_bytes},
     http::{Method, Request, StatusCode, header},
@@ -48,7 +48,7 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
     timeout(Duration::from_secs(5), async {
         let download_catalog = DownloadCatalog::parse_json(VALID_CATALOG_JSON)
             .expect("the fictional REST catalog should parse");
-        let application = build_application_with_download_catalog(
+        let application = astronomical_supervisor::build_application_with_download_catalog(
             ScriptedExecutor::unavailable(),
             download_catalog,
         );
@@ -153,7 +153,7 @@ async fn should_reject_catalog_mutation_and_leave_unknown_library_paths_unmatche
             ),
             (Method::GET, "/v1/library/unknown", StatusCode::NOT_FOUND),
         ] {
-            let application = build_application_with_download_catalog(
+            let application = astronomical_supervisor::build_application_with_download_catalog(
                 ScriptedExecutor::ready(Vec::new()),
                 download_catalog.clone(),
             );

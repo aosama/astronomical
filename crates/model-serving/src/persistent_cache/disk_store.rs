@@ -18,7 +18,7 @@ use super::disk_store_global_quota::{
     prepare_prompt_cache_directory_tree, remove_retired_speculative_prefill_cache_directories,
 };
 use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
-use super::disk_store_scan::scan_current_format_block_directories;
+use super::disk_store_scan;
 use super::model_contract::PersistentPromptCacheModelContract;
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 use astronomical_mlx_c_rust::MlxArray;
@@ -112,7 +112,7 @@ impl PersistentPromptCacheDiskStore {
             &mut startup_cleanup_evidence,
         )?;
         let mut tracked_files = PersistentPromptCacheDiskStoreIndex::default();
-        scan_current_format_block_directories(
+        disk_store_scan::scan_current_format_block_directories(
             &blocks_directory,
             &mut tracked_files,
             &model_contract,

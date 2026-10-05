@@ -3,12 +3,12 @@
 //! Pure CPU tests: they exercise the CLI surface that CI and the local
 //! pre-warm scripts rely on, without touching CMake or the native build store.
 
-use astronomical_native_build_tool::{NativeBuildToolArguments, parse_arguments};
+use astronomical_native_build_tool::NativeBuildToolArguments;
 
 const FICTIONAL_REPOSITORY_ROOT: &str = "/tmp/astronomical-native-build-tool-fixture";
 
 fn parse_with_profile(profile_name: &str) -> Result<NativeBuildToolArguments, String> {
-    parse_arguments(&[
+    astronomical_native_build_tool::parse_arguments(&[
         "--profile".to_owned(),
         profile_name.to_owned(),
         "--repository-root".to_owned(),
@@ -61,7 +61,7 @@ fn should_reject_unknown_profile_name() {
 
 #[test]
 fn should_reject_missing_profile_argument() {
-    let parse_error = parse_arguments(&[
+    let parse_error = astronomical_native_build_tool::parse_arguments(&[
         "--repository-root".to_owned(),
         FICTIONAL_REPOSITORY_ROOT.to_owned(),
     ])
@@ -72,15 +72,18 @@ fn should_reject_missing_profile_argument() {
 
 #[test]
 fn should_reject_missing_repository_root_argument() {
-    let parse_error = parse_arguments(&["--profile".to_owned(), "core".to_owned()])
-        .expect_err("a missing --repository-root argument should be rejected");
+    let parse_error = astronomical_native_build_tool::parse_arguments(&[
+        "--profile".to_owned(),
+        "core".to_owned(),
+    ])
+    .expect_err("a missing --repository-root argument should be rejected");
 
     assert!(parse_error.contains("missing required argument --repository-root"));
 }
 
 #[test]
 fn should_reject_relative_repository_root() {
-    let parse_error = parse_arguments(&[
+    let parse_error = astronomical_native_build_tool::parse_arguments(&[
         "--profile".to_owned(),
         "core".to_owned(),
         "--repository-root".to_owned(),
@@ -93,7 +96,7 @@ fn should_reject_relative_repository_root() {
 
 #[test]
 fn should_reject_unsupported_argument() {
-    let parse_error = parse_arguments(&[
+    let parse_error = astronomical_native_build_tool::parse_arguments(&[
         "--profile".to_owned(),
         "core".to_owned(),
         "--repository-root".to_owned(),

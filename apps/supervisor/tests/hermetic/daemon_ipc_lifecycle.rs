@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
     DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcClient, DaemonRequest,
     DaemonResponse,
 };
-use astronomical_supervisor::{DaemonIpcService, start_daemon_ipc_service};
+use astronomical_supervisor::DaemonIpcService;
 use tokio::time::timeout;
 
 use crate::common::daemon_ipc::{
@@ -25,7 +25,7 @@ async fn should_answer_handshake_with_application_identity_on_the_instance_socke
 
     let daemon_ipc_service: DaemonIpcService = timeout(
         HANDSHAKE_TEST_TIMEOUT,
-        start_daemon_ipc_service(
+        astronomical_supervisor::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
             &supervisor_attribution_log,
@@ -79,7 +79,7 @@ async fn should_remove_the_daemon_socket_file_on_shutdown() {
 
     let daemon_ipc_service: DaemonIpcService = timeout(
         HANDSHAKE_TEST_TIMEOUT,
-        start_daemon_ipc_service(
+        astronomical_supervisor::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
             &supervisor_attribution_log,
@@ -117,7 +117,7 @@ async fn should_refuse_a_second_daemon_listener_on_the_same_socket() {
 
     let running_service: DaemonIpcService = timeout(
         HANDSHAKE_TEST_TIMEOUT,
-        start_daemon_ipc_service(
+        astronomical_supervisor::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
             &supervisor_attribution_log,
@@ -129,7 +129,7 @@ async fn should_refuse_a_second_daemon_listener_on_the_same_socket() {
 
     let second_service_start = timeout(
         HANDSHAKE_TEST_TIMEOUT,
-        start_daemon_ipc_service(
+        astronomical_supervisor::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
             &supervisor_attribution_log,

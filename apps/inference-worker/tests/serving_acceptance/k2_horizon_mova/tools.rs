@@ -3,7 +3,7 @@
 use serde_json::json;
 use tokio::time::timeout;
 
-use crate::serving_acceptance::chat::openai_rest::post_chat_completion;
+use crate::serving_acceptance::chat::openai_rest;
 
 use super::support::{
     JOURNEY_TIMEOUT, assert_k2_is_advertised, compact_romeo_and_juliet_source,
@@ -24,7 +24,7 @@ async fn run_tool_journey() {
     assert_k2_is_advertised(server_address).await;
     let model_id = public_model_id();
     eprintln!("[k2-horizon-mova] phase=tools model={model_id}");
-    let tool_response = post_chat_completion(
+    let tool_response = openai_rest::post_chat_completion(
         server_address,
         json!({
             "model": model_id,

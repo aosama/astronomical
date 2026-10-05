@@ -6,9 +6,10 @@
 //! inside the source-size budget. As a child module it reaches the parent's
 //! private helpers and plan vocabulary directly.
 
+use super::validation;
 use super::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass, checked_sum,
+    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
     compare_partial_coverage, release_order,
 };
 use crate::memory::MemoryPhase;
@@ -111,10 +112,10 @@ pub(super) fn foundation_and_overlay_plan(
         layer_targets.push(target);
     }
     let reserved_routed_overlay_bytes =
-        checked_sum(routed_floor_bytes.iter().enumerate().filter_map(
+        validation::checked_sum(routed_floor_bytes.iter().enumerate().filter_map(
             |(layer_index, floor_bytes)| (!complete_targets[layer_index]).then_some(*floor_bytes),
         ))?;
-    let target_capacity_bytes = checked_sum(geometries.iter().map(|geometry| {
+    let target_capacity_bytes = validation::checked_sum(geometries.iter().map(|geometry| {
         if complete_targets[geometry.layer_index] {
             geometry.complete_layer_payload_bytes
         } else {

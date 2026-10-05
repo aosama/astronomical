@@ -7,14 +7,15 @@ use astronomical_experimental_aligned_expert_packs::{
 };
 use astronomical_runtime_integration::MlxMetalExpertPackLoadRange;
 
-use super::aligned_expert_pack::write_synthetic_expert_source_for_layer;
+use super::aligned_expert_pack;
 
 #[test]
 fn should_store_one_expert_slice_bit_exactly_in_its_own_file() {
     let temporary_directory =
         tempfile::tempdir().expect("the test should create a temporary directory");
     let source_file_path = temporary_directory.path().join("expert-source.bin");
-    let layer_plan = write_synthetic_expert_source_for_layer(&source_file_path, 0);
+    let layer_plan =
+        aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_file_path, 0);
     let pack_path = temporary_directory.path().join("0.apack");
     let source_bytes =
         fs::read(&source_file_path).expect("the synthetic source should be readable");
@@ -60,7 +61,8 @@ fn should_reject_a_pack_built_for_a_foreign_expert_id() {
     let temporary_directory =
         tempfile::tempdir().expect("the test should create a temporary directory");
     let source_file_path = temporary_directory.path().join("expert-source.bin");
-    let layer_plan = write_synthetic_expert_source_for_layer(&source_file_path, 0);
+    let layer_plan =
+        aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_file_path, 0);
     let pack_path = temporary_directory.path().join("0.apack");
     build_per_expert_pack(
         &pack_path,
@@ -100,7 +102,8 @@ fn should_load_one_expert_file_into_the_selected_page_slot() {
     let temporary_directory =
         tempfile::tempdir().expect("the test should create a temporary directory");
     let source_file_path = temporary_directory.path().join("expert-source.bin");
-    let layer_plan = write_synthetic_expert_source_for_layer(&source_file_path, 0);
+    let layer_plan =
+        aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_file_path, 0);
     let pack_path = temporary_directory.path().join("1.apack");
     let pack_header = build_per_expert_pack(
         &pack_path,

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use astronomical_model_serving::{LagunaDecoderState, LagunaModel, PerformanceAttribution};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use crate::common::laguna::{bind_tiny_weights, tiny_mixed_contract};
+use crate::common::laguna;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -38,8 +38,8 @@ fn test_runtime() -> MlxRuntime {
 }
 
 fn mixed_model(runtime: &MlxRuntime) -> LagunaModel {
-    let contract = tiny_mixed_contract();
-    let weights = bind_tiny_weights(runtime, &contract);
+    let contract = laguna::tiny_mixed_contract();
+    let weights = laguna::bind_tiny_weights(runtime, &contract);
     LagunaModel::new(
         contract,
         weights,

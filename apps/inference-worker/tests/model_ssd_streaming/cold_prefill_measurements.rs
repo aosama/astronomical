@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_inference_worker::worker_startup::sample_iogpu_wired_limit_bytes;
+use astronomical_inference_worker::worker_startup;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
@@ -123,7 +123,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         Path::new(&production_worker_executable_path),
         &configured_model_directory,
     );
-    let maximum_gpu_wired_memory_bytes = sample_iogpu_wired_limit_bytes()
+    let maximum_gpu_wired_memory_bytes = worker_startup::sample_iogpu_wired_limit_bytes()
         .await
         .expect("the machine GPU wired-memory limit should be available");
 

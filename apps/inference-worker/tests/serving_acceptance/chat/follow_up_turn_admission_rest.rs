@@ -19,7 +19,7 @@ use super::openai_rest::{
 use super::thinking_budget_support::{
     MAXIMUM_OUTPUT_TOKEN_COUNT, ROMEO_AND_JULIET_SOURCE, write_thinking_budget_acceptance_config,
 };
-use crate::small_dense_model::configured_deployment_litmus_model;
+use crate::small_dense_model;
 
 /// The complete Romeo and Juliet fixture spans several 2,048-token prefill
 /// chunks, which is what teaches the adaptive budget its chunk-shaped
@@ -35,7 +35,7 @@ fn long_romeo_and_juliet_prompt() -> String {
 #[ignore = "launches the production REST surface and smallest configured Qwen3.5 model"]
 async fn should_admit_the_follow_up_turn_after_a_long_successful_prefill() {
     tokio::time::timeout(E2E_TIMEOUT, async {
-        let selected_model = configured_deployment_litmus_model();
+        let selected_model = small_dense_model::configured_deployment_litmus_model();
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(
                 &selected_model.model_directory,

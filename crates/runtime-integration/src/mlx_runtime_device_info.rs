@@ -4,7 +4,7 @@ use crate::{
     MlxRuntimeError,
     mlx_runtime::{check_status, configure_metallib_path, configured_metallib_path},
 };
-use astronomical_mlx_c_rust::{install_non_terminating_error_handler, raw};
+use astronomical_mlx_c_rust::raw;
 
 const MAXIMUM_RECOMMENDED_WORKING_SET_SIZE_DEVICE_INFO_KEY: &[u8] =
     b"max_recommended_working_set_size\0";
@@ -18,7 +18,7 @@ const MAXIMUM_RECOMMENDED_WORKING_SET_SIZE_DEVICE_INFO_KEY: &[u8] =
 /// MLX process residency set. Worker startup uses it only when
 /// `iogpu.wired_limit_mb` reports the zero-valued default-policy sentinel.
 pub fn maximum_recommended_gpu_working_set_size_bytes() -> Result<usize, MlxRuntimeError> {
-    install_non_terminating_error_handler();
+    astronomical_mlx_c_rust::install_non_terminating_error_handler();
     let metallib_path = configured_metallib_path()?;
     configure_metallib_path(&metallib_path)?;
     // SAFETY: `MLX_GPU` with index 0 is the same default GPU target used by the

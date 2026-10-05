@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use super::fatal::report_fatal_engine_error;
+use super::fatal;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{GeneratedToken, ImageGenerationEngine, InferenceEngine, InferenceEngineError};
@@ -54,7 +54,12 @@ where
                     return Ok(None);
                 }
                 Err(engine_error) => {
-                    return report_fatal_engine_error(request_id, engine_error, event_writer).await;
+                    return fatal::report_fatal_engine_error(
+                        request_id,
+                        engine_error,
+                        event_writer,
+                    )
+                    .await;
                 }
             }
         };
@@ -193,7 +198,7 @@ where
                             return Ok(None);
                         }
                         Err(engine_error) => {
-                            return report_fatal_engine_error(
+                            return fatal::report_fatal_engine_error(
                                 request_id,
                                 engine_error,
                                 event_writer,

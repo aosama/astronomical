@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::block_format::PERSISTENT_PROMPT_CACHE_FORMAT_VERSION;
 use super::block_key::PersistentPromptCacheBlockKey;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
-use super::disk_store_file::{hex_encode, remove_cache_owned_file_or_confirm_absent};
+use super::disk_store_file;
 use super::model_contract::PersistentPromptCacheModelContract;
 
 pub(crate) const BLOCK_MANIFEST_FILE_NAME: &str = "manifest.json";
@@ -44,10 +44,10 @@ impl PersistentPromptCacheBlockManifest {
     ) -> Self {
         Self {
             format_version: PERSISTENT_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
-            block_hash: hex_encode(persistent_prompt_cache_block_key.block_hash()),
+            block_hash: disk_store_file::hex_encode(persistent_prompt_cache_block_key.block_hash()),
             block_index: persistent_prompt_cache_block_key.block_index(),
             parent_block_hash: parent_persistent_prompt_cache_block_key
-                .map(|parent_block_key| hex_encode(parent_block_key.block_hash())),
+                .map(|parent_block_key| disk_store_file::hex_encode(parent_block_key.block_hash())),
             storage_contract_fingerprint: persistent_prompt_cache_model_contract
                 .storage_contract_fingerprint_hex(),
             has_sequence_state: persistent_prompt_cache_model_contract.has_sequence_state(),
@@ -93,7 +93,7 @@ impl PersistentPromptCacheBlockManifest {
         // state files and this manifest are durable.
         let manifest_file_path = staging_block_directory.join(BLOCK_MANIFEST_FILE_NAME);
         let temporary_manifest_file_path = staging_block_directory.join("manifest.json.tmp");
-        remove_cache_owned_file_or_confirm_absent(&temporary_manifest_file_path)?;
+        disk_store_file::remove_cache_owned_file_or_confirm_absent(&temporary_manifest_file_path)?;
         let manifest_bytes = serde_json::to_vec(self).map_err(|source| {
             PersistentPromptCacheDiskStoreError::SerializeBlockManifest { source }
         })?;
@@ -107,14 +107,18 @@ impl PersistentPromptCacheBlockManifest {
                 source,
             })?;
         if let Err(source) = temporary_manifest_file.write_all(&manifest_bytes) {
-            remove_cache_owned_file_or_confirm_absent(&temporary_manifest_file_path)?;
+            disk_store_file::remove_cache_owned_file_or_confirm_absent(
+                &temporary_manifest_file_path,
+            )?;
             return Err(PersistentPromptCacheDiskStoreError::WriteTempFile {
                 temp_file_path: temporary_manifest_file_path,
                 source,
             });
         }
         if let Err(source) = temporary_manifest_file.sync_all() {
-            remove_cache_owned_file_or_confirm_absent(&temporary_manifest_file_path)?;
+            disk_store_file::remove_cache_owned_file_or_confirm_absent(
+                &temporary_manifest_file_path,
+            )?;
             return Err(PersistentPromptCacheDiskStoreError::SynchronizeTempFile {
                 temp_file_path: temporary_manifest_file_path,
                 source,
@@ -127,7 +131,9 @@ impl PersistentPromptCacheBlockManifest {
                 block_file_path: manifest_file_path.clone(),
                 source,
             };
-            remove_cache_owned_file_or_confirm_absent(&temporary_manifest_file_path)?;
+            disk_store_file::remove_cache_owned_file_or_confirm_absent(
+                &temporary_manifest_file_path,
+            )?;
             return Err(rename_error);
         }
         Ok(manifest_file_path)

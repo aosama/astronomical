@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::image_input::{decode_image_url, validate_image_url_scheme};
+use crate::image_input;
 use crate::{
     MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH, OpenAiChatCompletionValidationError, OpenAiImageInput,
 };
@@ -204,7 +204,7 @@ impl OpenAiMessageContent {
                         OpenAiContentPart::Text { text } => combined_text.push_str(&text),
                         OpenAiContentPart::Refusal { refusal } => combined_text.push_str(&refusal),
                         OpenAiContentPart::ImageUrl { image_url } => {
-                            decoded_images.push(decode_image_url(&image_url.url)?);
+                            decoded_images.push(image_input::decode_image_url(&image_url.url)?);
                         }
                         OpenAiContentPart::InputAudio { .. }
                         | OpenAiContentPart::VideoUrl { .. } => {
@@ -248,7 +248,7 @@ impl OpenAiContentPart {
         match self {
             Self::Text { text: _ } => Ok(()),
             Self::Refusal { refusal: _ } => Ok(()),
-            Self::ImageUrl { image_url } => validate_image_url_scheme(&image_url.url),
+            Self::ImageUrl { image_url } => image_input::validate_image_url_scheme(&image_url.url),
             Self::InputAudio { .. } => Err(
                 OpenAiChatCompletionValidationError::UnsupportedContentPart {
                     content_part_type: "input_audio",

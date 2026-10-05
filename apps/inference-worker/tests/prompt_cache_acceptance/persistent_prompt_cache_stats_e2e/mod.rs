@@ -27,10 +27,8 @@ mod http_transport;
 mod live_progress;
 mod scenario;
 
-use scenario::{five_thousand_word_case, run_cache_stats_e2e_with_timeout};
-
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads Ornith and exercises the persistent prompt cache end-to-end with a 5K-word Romeo and Juliet prompt"]
 async fn should_observe_a_cache_miss_then_a_cache_hit_with_5k_romeo_and_juliet_words() {
-    run_cache_stats_e2e_with_timeout(five_thousand_word_case()).await;
+    scenario::run_cache_stats_e2e_with_timeout(scenario::five_thousand_word_case()).await;
 }

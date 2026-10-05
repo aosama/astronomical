@@ -6,9 +6,10 @@ use super::rest_support::{
     get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
     required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
 };
-use crate::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
+use crate::openai_rest;
+use crate::openai_rest::E2E_TIMEOUT;
 use crate::support::openai_client::LocalOpenAiClient;
-use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
+use crate::support::serving_rest;
 
 // This suite is the user-facing acceptance boundary for cache-pressure behavior: a client sends
 // a long OpenAI Chat request, the real worker publishes reusable state, and the next identical
@@ -59,14 +60,15 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
     // Romeo-and-Juliet fixture near the cache boundary before it is sent as ordinary text.
     let prepared_romeo_and_juliet_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, cacheable_prompt_token_count);
-    let model_artifact_rest_server = launch_serving_rest_server_for_model_with_memory_limit(
-        cache_pressure_model_id(),
-        model_directory,
-        Some(configured_worker_home.path()),
-        Some(performance_log_directory.path()),
-        maximum_mlx_memory_bytes,
-    )
-    .await;
+    let model_artifact_rest_server =
+        serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
+            cache_pressure_model_id(),
+            model_directory,
+            Some(configured_worker_home.path()),
+            Some(performance_log_directory.path()),
+            maximum_mlx_memory_bytes,
+        )
+        .await;
     let server_address = model_artifact_rest_server.server_address;
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
 
@@ -200,7 +202,7 @@ async fn run_persistent_prompt_cache_memory_rest_journey(
         &acceptance_log_prefix,
         "final_status",
     );
-    stop_serving_rest_server(model_artifact_rest_server).await;
+    openai_rest::stop_serving_rest_server(model_artifact_rest_server).await;
     eprintln!(
         "{acceptance_log_prefix} status=success cold_output_characters={} warm_output_characters={} restored_prompt_tokens={restored_prompt_token_count}",
         cold_response.streamed_output_character_count,

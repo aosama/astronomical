@@ -1,4 +1,5 @@
-use crate::common::mtp_depth_release_gate::{MtpDepthMeasurement, validate_mtp_depth_release_gate};
+use crate::common::mtp_depth_release_gate;
+use crate::common::mtp_depth_release_gate::MtpDepthMeasurement;
 
 const EXPECTED_OUTPUT_TOKEN_COUNT: usize = 1_024;
 const TARGET_TOKEN_FINGERPRINT: u64 = 0xA57A_0A1C;
@@ -47,7 +48,7 @@ fn should_accept_target_authoritative_memory_safe_end_to_end_depth_evidence() {
         depth_three,
     ] = passing_measurements();
 
-    validate_mtp_depth_release_gate(
+    mtp_depth_release_gate::validate_mtp_depth_release_gate(
         &target_before,
         &target_after,
         &depth_one,
@@ -69,7 +70,7 @@ fn should_reject_a_depth_that_changes_target_authoritative_output() {
     ] = passing_measurements();
     depth_three.generated_token_fingerprint = TARGET_TOKEN_FINGERPRINT.wrapping_add(1);
 
-    let rejection = validate_mtp_depth_release_gate(
+    let rejection = mtp_depth_release_gate::validate_mtp_depth_release_gate(
         &target_before,
         &target_after,
         &depth_one,
@@ -96,7 +97,7 @@ fn should_reject_depth_three_when_it_does_not_beat_every_shallower_control() {
     ] = passing_measurements();
     depth_three.total_request_elapsed_seconds = 8.5;
 
-    let rejection = validate_mtp_depth_release_gate(
+    let rejection = mtp_depth_release_gate::validate_mtp_depth_release_gate(
         &target_before,
         &target_after,
         &depth_one,

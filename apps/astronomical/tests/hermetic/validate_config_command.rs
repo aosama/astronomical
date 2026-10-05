@@ -10,12 +10,12 @@ use astronomical_cli::{
 };
 use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
-use super::test_support::parse;
+use super::test_support;
 
 fn parsed_validate_config(arguments: &[&str]) -> astronomical_cli::ValidateConfigArguments {
     let mut full_arguments = vec!["validate", "config"];
     full_arguments.extend_from_slice(arguments);
-    match parse(&full_arguments) {
+    match test_support::parse(&full_arguments) {
         Ok(astronomical_cli::CliCommand::ValidateConfig(validate_arguments)) => validate_arguments,
         other => panic!("expected validate config command, got {other:?}"),
     }
@@ -93,14 +93,15 @@ fn should_parse_stable_instance_flag() {
 
 #[test]
 fn should_reject_unknown_instance_name() {
-    let usage_error =
-        parse(&["validate", "config", "--instance", "beta"]).expect_err("unknown instance");
+    let usage_error = test_support::parse(&["validate", "config", "--instance", "beta"])
+        .expect_err("unknown instance");
     assert!(usage_error.to_string().contains("stable"));
 }
 
 #[test]
 fn should_reject_validate_without_config_noun() {
-    let usage_error = parse(&["validate", "models"]).expect_err("only config is supported");
+    let usage_error =
+        test_support::parse(&["validate", "models"]).expect_err("only config is supported");
     assert!(usage_error.to_string().contains("config"));
 }
 

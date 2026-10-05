@@ -5,14 +5,16 @@
 //! the quoted opener as prose, stream the reasoning, and still deliver the
 //! model's real tool call that follows the think close.
 
-use super::support::{DECLARED_CHARACTER_FUNCTION, ROMEO_ARGUMENTS_JSON, literary_declared_tools};
+use super::support;
+use super::support::{DECLARED_CHARACTER_FUNCTION, ROMEO_ARGUMENTS_JSON};
 use super::{THINK_END, TOOL_CALL_END, TOOL_CALL_START};
 use astronomical_model_serving::{Qwen3_5OutputEvent, Qwen3_5OutputParser};
 
 #[test]
 fn should_resync_when_quoted_prose_markers_hijack_the_tool_call_state() {
-    let mut parser = Qwen3_5OutputParser::new_after_thinking_prefix(&literary_declared_tools())
-        .expect("Romeo and Juliet literary tools should construct a Qwen3.5 parser");
+    let mut parser =
+        Qwen3_5OutputParser::new_after_thinking_prefix(&support::literary_declared_tools())
+            .expect("Romeo and Juliet literary tools should construct a Qwen3.5 parser");
 
     let reasoning_prose = "The diffstat shows the consolidation. The normalizer rewrites \
 markers like `<invoke name=...>` into the Qwen grammar before parsing. Let me verify the wiring.";

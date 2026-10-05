@@ -9,7 +9,7 @@
 //! The affine layout matches the published table: 4-bit values packed into
 //! unsigned 32-bit words, one scale and one bias per group of 32.
 
-use super::{DeterministicValues, assert_f32_close, oracle_test_runtime};
+use super::DeterministicValues;
 
 /// Geometry for one lookup-row decode row set.
 pub(crate) struct RowGeometry {
@@ -91,7 +91,7 @@ pub(crate) fn host_dequantize(
 #[tokio::test]
 async fn should_match_gpu_dequantized_lookup_rows_against_host_reference() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = oracle_test_runtime();
+    let runtime = super::oracle_test_runtime();
     let mut values = DeterministicValues::new(0x3F7C);
     let geometry = RowGeometry {
         row_count: 4,
@@ -144,7 +144,7 @@ async fn should_match_gpu_dequantized_lookup_rows_against_host_reference() {
     let gpu_rows = dequantized.to_vec_f32().expect("rows should copy");
 
     let host = host_dequantize(&packed, &scales, &biases, &geometry);
-    assert_f32_close(
+    super::assert_f32_close(
         &gpu_rows,
         &host,
         1.0e-4,

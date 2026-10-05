@@ -69,7 +69,6 @@ pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 
 use config_document::UserConfigFile;
-use config_file::read_user_config_file;
 
 pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_000_000_000;
@@ -134,7 +133,8 @@ impl AstronomicalConfig {
     pub fn load_from_instance_paths(
         instance_paths: AstronomicalInstancePaths,
     ) -> Result<Self, AstronomicalConfigError> {
-        let user_config_file = read_user_config_file(instance_paths.config_file_path())?;
+        let user_config_file =
+            config_file::read_user_config_file(instance_paths.config_file_path())?;
         let configuration_generation = configuration_generation::configuration_generation(
             &instance_paths.config_file_path(),
             &user_config_file,

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, Qwen3_5Model, qwen3_5_runtime_error};
-use crate::qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure;
+use crate::qwen3_5_moe;
 
 /// Comfort margin below the active-memory ceiling at which block publication
 /// stops wiping the MLX allocator cache. Publication materializes tens of MB;
@@ -297,7 +297,7 @@ impl Qwen3_5EngineState {
                     active_request.performance_attribution.measure_operation(
                         PerformanceOperation::ExpertRetentionReclamation,
                         |_performance_attribution| {
-                            reclaim_retained_experts_for_request_memory_pressure(
+                            qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure(
                                 model,
                                 active_memory_deficit_bytes,
                             )

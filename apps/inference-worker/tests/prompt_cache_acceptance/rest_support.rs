@@ -7,7 +7,7 @@ use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 
-use crate::openai_rest::get_endpoint;
+use crate::openai_rest;
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 
 pub(crate) fn cache_pressure_model_id() -> &'static str {
@@ -190,7 +190,7 @@ pub(crate) fn assistant_message(content: &str) -> Value {
 }
 
 pub(crate) async fn get_json_endpoint(server_address: SocketAddr, endpoint_path: &str) -> Value {
-    let http_response = get_endpoint(server_address, endpoint_path).await;
+    let http_response = openai_rest::get_endpoint(server_address, endpoint_path).await;
     assert!(
         http_response.starts_with("HTTP/1.1 200 OK"),
         "the {endpoint_path} endpoint should return success: {http_response}"

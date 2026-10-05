@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 
 use crate::MlxRuntimeError;
 
-use super::error_handling::lock_unpoisoned;
+use super::error_handling;
 
 static RUNTIME_METALLIB_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -108,7 +108,7 @@ pub(crate) fn configured_metallib_path() -> Result<PathBuf, MlxRuntimeError> {
 }
 
 pub(crate) fn configure_metallib_path(metallib_path: &Path) -> Result<(), MlxRuntimeError> {
-    let mut configured_path = lock_unpoisoned(&RUNTIME_METALLIB_PATH);
+    let mut configured_path = error_handling::lock_unpoisoned(&RUNTIME_METALLIB_PATH);
     if let Some(existing_path) = configured_path.as_ref() {
         if existing_path != metallib_path {
             return Err(MlxRuntimeError::MetallibAlreadyConfigured {

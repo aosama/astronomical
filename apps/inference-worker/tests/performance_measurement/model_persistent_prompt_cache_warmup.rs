@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use astronomical_inference_worker::worker_startup::sample_iogpu_wired_limit_bytes;
+use astronomical_inference_worker::worker_startup;
 use serde_json::{Value, json};
 use tokio::time::{Instant, timeout};
 
@@ -51,7 +51,7 @@ async fn run_persistent_prompt_cache_warmup_e2e(
     persistent_prompt_cache_warmup_case: PersistentPromptCacheWarmupCase,
 ) {
     let benchmark_started_at = Instant::now();
-    let maximum_gpu_wired_memory_bytes = sample_iogpu_wired_limit_bytes()
+    let maximum_gpu_wired_memory_bytes = worker_startup::sample_iogpu_wired_limit_bytes()
         .await
         .expect("the machine GPU wired-memory limit should be available");
     let source_document =

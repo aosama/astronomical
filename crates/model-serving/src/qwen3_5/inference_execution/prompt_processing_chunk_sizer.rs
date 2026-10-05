@@ -2,8 +2,6 @@
 
 mod configuration;
 
-use configuration::prompt_processing_chunk_size_tokens_from_u32;
-
 pub use configuration::Qwen3_5PromptProcessingChunkSizerError;
 
 /// Owns fixed Qwen3.5 chunk sizing and deterministic memory-capacity reduction.
@@ -29,11 +27,11 @@ impl Qwen3_5PromptProcessingChunkSizer {
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     ) -> Result<Self, Qwen3_5PromptProcessingChunkSizerError> {
         let fixed_prompt_processing_chunk_size_tokens =
-            prompt_processing_chunk_size_tokens_from_u32(
+            configuration::prompt_processing_chunk_size_tokens_from_u32(
                 fixed_prompt_processing_chunk_size_tokens,
             )?;
         let ssd_streaming_prompt_processing_chunk_size_tokens =
-            prompt_processing_chunk_size_tokens_from_u32(
+            configuration::prompt_processing_chunk_size_tokens_from_u32(
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
             )?;
         Ok(Self {

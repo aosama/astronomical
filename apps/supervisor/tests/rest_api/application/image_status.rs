@@ -2,18 +2,19 @@
 //! each cross-language progress shape remains small and directly reviewable.
 
 use astronomical_ipc_protocol::ImageGenerationPhase;
-use astronomical_supervisor::{ActiveRequestProgress, WorkerActivity, build_application};
+use astronomical_supervisor::{ActiveRequestProgress, WorkerActivity};
 use axum::{
     body::{Body, to_bytes},
     http::Request,
 };
 use tower::ServiceExt;
 
-use super::observatory_contracts::{ContractScriptedExecutor, ready_health_snapshot_with_model};
+use super::observatory_contracts;
+use super::observatory_contracts::ContractScriptedExecutor;
 
 #[tokio::test]
 async fn should_expose_image_generation_progress_with_completed_and_total_steps_when_active() {
-    let mut health_snapshot = ready_health_snapshot_with_model();
+    let mut health_snapshot = observatory_contracts::ready_health_snapshot_with_model();
     health_snapshot.activity = WorkerActivity::ImageGeneration;
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::ImageGeneration {
         phase: ImageGenerationPhase::Denoising,
@@ -21,7 +22,9 @@ async fn should_expose_image_generation_progress_with_completed_and_total_steps_
         total_steps: 4,
         elapsed_millis: 1_000,
     });
-    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+    let application = astronomical_supervisor::build_application(ContractScriptedExecutor::ready(
+        health_snapshot,
+    ));
     let response = application
         .oneshot(
             Request::builder()

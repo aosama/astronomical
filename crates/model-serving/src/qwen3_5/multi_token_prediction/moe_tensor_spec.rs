@@ -2,7 +2,7 @@
 
 use crate::TensorProfile;
 use crate::qwen3_5::Qwen3_5Config;
-use crate::qwen3_5::artifacts::tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles;
+use crate::qwen3_5::artifacts::tensor_spec;
 pub(crate) use crate::qwen3_5::artifacts::tensor_spec::qwen3_5_tensor_profile;
 
 /// Appends quantized-affine tensor profiles for one MTP module.
@@ -15,7 +15,7 @@ pub(crate) fn append_qwen3_5_mtp_affine_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,
 ) {
     let quantization_profile = qwen3_5_config.quantization_profile_for_module(module_name);
-    append_qwen3_5_quantized_affine_tensor_profiles(
+    tensor_spec::append_qwen3_5_quantized_affine_tensor_profiles(
         mtp_tensor_profiles,
         module_name,
         leading_dimensions,

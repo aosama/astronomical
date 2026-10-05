@@ -1,4 +1,4 @@
-use super::http_transport::get_endpoint;
+use super::http_transport;
 use super::*;
 
 /// Sends a streaming chat completion and prints live progress as SSE chunks
@@ -41,7 +41,8 @@ pub(super) async fn post_chat_completion_with_live_progress(
             status_interval.tick().await; // skip the immediate first tick
             loop {
                 status_interval.tick().await;
-                let status_response = get_endpoint(server_address, "/v1/status").await;
+                let status_response =
+                    http_transport::get_endpoint(server_address, "/v1/status").await;
                 let status_body = status_response.split("\r\n\r\n").nth(1).unwrap_or("");
                 eprintln!("{log_prefix} {phase_label} status-poll: {status_body}");
             }
@@ -87,7 +88,7 @@ pub(super) async fn post_chat_completion_with_live_progress(
 pub(super) async fn wait_until_ready(server_address: SocketAddr, log_prefix: &str) {
     let readiness_started_at = Instant::now();
     for readiness_attempt in 1..=READY_ATTEMPT_LIMIT {
-        let readiness_response = get_endpoint(server_address, "/ready").await;
+        let readiness_response = http_transport::get_endpoint(server_address, "/ready").await;
         if readiness_response.starts_with("HTTP/1.1 200 OK") {
             eprintln!(
                 "{log_prefix} model worker ready after {readiness_attempt} attempts in {:.1}s",

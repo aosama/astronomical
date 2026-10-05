@@ -11,7 +11,7 @@ use super::persistent_prompt_cache_disk_store_support::{
     persistent_prompt_cache_block_key_for_seed, runtime_with_shared_limits,
     synthetic_kv_block_tensors, synthetic_recurrent_snapshot_tensors,
 };
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 use astronomical_mlx_c_rust::MlxDtype;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
@@ -152,7 +152,7 @@ async fn should_retry_the_same_captured_arrays_after_releasing_artificial_active
         let block_key = persistent_prompt_cache_block_key_for_seed(0);
         let mut sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
         let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
-        let model_contract = persistent_prompt_cache_model_contract();
+        let model_contract = qwen3_5_moe::persistent_prompt_cache_model_contract();
         let sequence_tensor_layout = model_contract
             .decoder_cache_layout()
             .sequence_tensor_layouts()

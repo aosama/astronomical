@@ -13,7 +13,6 @@ use super::{
     DownloadFileDigest, HuggingFaceManifest,
     download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision},
 };
-use path_validation::{has_path_hierarchy_conflict, is_safe_relative_path};
 
 pub(crate) const MAXIMUM_DOWNLOAD_JOB_BYTES: usize = 8_000_000;
 const MAXIMUM_DOWNLOAD_JOB_FILE_COUNT: usize = 65_536;
@@ -209,11 +208,14 @@ impl DownloadJob {
         let mut expected_bytes_total = 0_u64;
         let mut completed_bytes_total = 0_u64;
         for (file_index, download_file) in self.files.iter().enumerate() {
-            if !is_safe_relative_path(&download_file.relative_path) {
+            if !path_validation::is_safe_relative_path(&download_file.relative_path) {
                 return Err(DownloadJobError::UnsafeRelativePath { file_index });
             }
             let normalized_relative_path = download_file.relative_path.to_ascii_lowercase();
-            if has_path_hierarchy_conflict(&normalized_relative_paths, &normalized_relative_path) {
+            if path_validation::has_path_hierarchy_conflict(
+                &normalized_relative_paths,
+                &normalized_relative_path,
+            ) {
                 return Err(DownloadJobError::FilePathHierarchyConflict);
             }
             if !normalized_relative_paths.insert(normalized_relative_path) {

@@ -1,8 +1,6 @@
 //! Hermetic tests for the Qwen-Image-2.1 zero-centered RMSNorm, compared against the diffusers
 //! reference reimplementation in `norm_fixture.rs`.
 
-use astronomical_model_serving::zero_center_rms_norm;
-
 use super::norm_fixture::{
     NORM_DIM, NORM_EPS, NORM_INPUT, NORM_WEIGHT, ORACLE_NORM_OUT, ORACLE_NORM_ZERO_WEIGHT,
 };
@@ -12,7 +10,8 @@ const NORM_TOLERANCE: f32 = 1e-5;
 
 #[test]
 fn should_match_the_diffusers_zero_centered_rms_norm() {
-    let computed = zero_center_rms_norm(&NORM_INPUT, &NORM_WEIGHT, NORM_EPS);
+    let computed =
+        astronomical_model_serving::zero_center_rms_norm(&NORM_INPUT, &NORM_WEIGHT, NORM_EPS);
     assert_eq!(
         computed.len(),
         NORM_DIM,
@@ -33,7 +32,8 @@ fn should_use_unit_scale_when_the_stored_weight_is_zero() {
     // the whole point of zero-centering: a freshly-initialized norm is the identity up to the RMS
     // rescale. A missing `+ 1` would zero the output here.
     let zero_weight = [0.0f32; NORM_DIM];
-    let computed = zero_center_rms_norm(&NORM_INPUT, &zero_weight, NORM_EPS);
+    let computed =
+        astronomical_model_serving::zero_center_rms_norm(&NORM_INPUT, &zero_weight, NORM_EPS);
     for (channel, (&value, &oracle)) in computed
         .iter()
         .zip(ORACLE_NORM_ZERO_WEIGHT.iter())
@@ -58,9 +58,11 @@ fn should_use_unit_scale_when_the_stored_weight_is_zero() {
 fn should_scale_each_channel_by_its_own_weight_plus_one() {
     // The effective per-channel scale is (weight + 1); two channels whose weights differ by delta
     // must have outputs differing by that same factor on the shared normalized value.
-    let computed = zero_center_rms_norm(&NORM_INPUT, &NORM_WEIGHT, NORM_EPS);
+    let computed =
+        astronomical_model_serving::zero_center_rms_norm(&NORM_INPUT, &NORM_WEIGHT, NORM_EPS);
     let zero_weight = [0.0f32; NORM_DIM];
-    let baseline = zero_center_rms_norm(&NORM_INPUT, &zero_weight, NORM_EPS);
+    let baseline =
+        astronomical_model_serving::zero_center_rms_norm(&NORM_INPUT, &zero_weight, NORM_EPS);
     for channel in 0..NORM_DIM {
         let expected = baseline[channel] * (NORM_WEIGHT[channel] + 1.0);
         let diff = (computed[channel] - expected).abs();

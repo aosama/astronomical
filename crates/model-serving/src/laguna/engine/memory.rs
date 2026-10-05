@@ -3,7 +3,8 @@
 use astronomical_runtime_integration::{MlxMemorySnapshot, MlxRuntime};
 
 use crate::laguna::{LagunaDecoderState, LagunaModel};
-use crate::memory::{MemoryCeilingUtilization, context_token_bucket};
+use crate::memory;
+use crate::memory::MemoryCeilingUtilization;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxActiveMemoryBreakdown, MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetMeasurement,
@@ -39,7 +40,7 @@ pub(super) fn admit_laguna_forward_memory(
     let adaptive_ram_growth_context = match memory_phase {
         MemoryPhase::Prefill => AdaptiveRamGrowthContext::prefill(
             forward_token_count,
-            context_token_bucket(context_token_count_after_forward),
+            memory::context_token_bucket(context_token_count_after_forward),
             false,
             false,
             sparse_experts_are_paged,

@@ -11,8 +11,9 @@
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_forward_dispatch::PrefillForwardError;
-use super::prompt_prefill_errors::{PromptPrefillChunkAttemptError, prefill_execution_error};
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::prompt_prefill_errors;
+use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 use crate::{PerformanceCounter, Qwen3_5PersistentPromptCacheBoundaryCheckpoint};
 
@@ -66,7 +67,7 @@ impl Qwen3_5EngineState {
             let operation_token_count = u64::try_from(plan.prefill_token_count).unwrap_or(u64::MAX);
             self.model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
                 .republish_prefill_residency_plan_after_demotion(
                     input_token_count,
                     operation_token_count,
@@ -89,7 +90,7 @@ impl Qwen3_5EngineState {
         ) {
             Ok(dispatch_outcome) => dispatch_outcome,
             Err(PrefillForwardError::Execution(execution_error)) => {
-                return Err(prefill_execution_error(
+                return Err(prompt_prefill_errors::prefill_execution_error(
                     execution_error,
                     prefill_request_checkpoint,
                 ));
@@ -116,7 +117,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
 
         // Test-only: force a capacity rejection after the forward succeeds.
         if std::mem::take(&mut active_request.force_next_prefill_capacity_rejection_for_tests) {

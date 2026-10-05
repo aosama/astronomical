@@ -4,14 +4,15 @@
 
 use std::{io::Write, path::PathBuf};
 
-use astronomical_cli::{CliCommand, StatusDependencies, run_status};
+use astronomical_cli::{CliCommand, StatusDependencies};
 use astronomical_ipc_protocol::DaemonWorkerStatus;
 use tokio::time::timeout;
 
 use super::stub_daemon::{
     StubDaemonConfig, StubInstalledModel, spawn_stub_daemon, stub_download_job,
 };
-use super::test_support::{SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, parse};
+use super::test_support;
+use super::test_support::{SOCKET_FILE_NAME, TEST_TIMEOUT};
 
 fn status_dependencies<'a>(
     candidate_socket_paths: Vec<PathBuf>,
@@ -26,12 +27,12 @@ fn status_dependencies<'a>(
 
 #[test]
 fn should_parse_status_as_a_plain_verb() {
-    assert_eq!(parse(&["status"]), Ok(CliCommand::Status));
+    assert_eq!(test_support::parse(&["status"]), Ok(CliCommand::Status));
 }
 
 #[tokio::test]
 async fn should_report_a_ready_worker_with_resident_model_and_default() {
-    let test_directory = fresh_test_directory("status", "ready");
+    let test_directory = test_support::fresh_test_directory("status", "ready");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
@@ -44,9 +45,12 @@ async fn should_report_a_ready_worker_with_resident_model_and_default() {
     let mut stdout = Vec::new();
     let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
 
-    let status_outcome = timeout(TEST_TIMEOUT, run_status(&mut status_dependencies))
-        .await
-        .expect("the status journey should finish inside the test timeout");
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
     status_outcome.expect("the status journey should complete against the stub daemon");
     let rendered_stdout = String::from_utf8_lossy(&stdout);
     assert!(
@@ -67,7 +71,7 @@ async fn should_report_a_ready_worker_with_resident_model_and_default() {
 
 #[tokio::test]
 async fn should_report_a_loading_worker_without_a_resident_model() {
-    let test_directory = fresh_test_directory("status", "loading");
+    let test_directory = test_support::fresh_test_directory("status", "loading");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
@@ -79,9 +83,12 @@ async fn should_report_a_loading_worker_without_a_resident_model() {
     let mut stdout = Vec::new();
     let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
 
-    let status_outcome = timeout(TEST_TIMEOUT, run_status(&mut status_dependencies))
-        .await
-        .expect("the status journey should finish inside the test timeout");
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
     status_outcome.expect("the status journey should complete against the stub daemon");
     let rendered_stdout = String::from_utf8_lossy(&stdout);
     assert!(
@@ -98,7 +105,7 @@ async fn should_report_a_loading_worker_without_a_resident_model() {
 
 #[tokio::test]
 async fn should_report_an_unavailable_worker() {
-    let test_directory = fresh_test_directory("status", "unavailable");
+    let test_directory = test_support::fresh_test_directory("status", "unavailable");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
@@ -110,9 +117,12 @@ async fn should_report_an_unavailable_worker() {
     let mut stdout = Vec::new();
     let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
 
-    let status_outcome = timeout(TEST_TIMEOUT, run_status(&mut status_dependencies))
-        .await
-        .expect("the status journey should finish inside the test timeout");
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
     status_outcome.expect("the status journey should complete against the stub daemon");
     let rendered_stdout = String::from_utf8_lossy(&stdout);
     assert!(
@@ -125,7 +135,7 @@ async fn should_report_an_unavailable_worker() {
 
 #[tokio::test]
 async fn should_report_an_active_download_with_decimal_gigabytes() {
-    let test_directory = fresh_test_directory("status", "downloading");
+    let test_directory = test_support::fresh_test_directory("status", "downloading");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
@@ -143,9 +153,12 @@ async fn should_report_an_active_download_with_decimal_gigabytes() {
     let mut stdout = Vec::new();
     let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
 
-    let status_outcome = timeout(TEST_TIMEOUT, run_status(&mut status_dependencies))
-        .await
-        .expect("the status journey should finish inside the test timeout");
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
     status_outcome.expect("the status journey should complete against the stub daemon");
     let rendered_stdout = String::from_utf8_lossy(&stdout);
     assert!(
@@ -158,7 +171,7 @@ async fn should_report_an_active_download_with_decimal_gigabytes() {
 
 #[tokio::test]
 async fn should_report_a_failed_download_job() {
-    let test_directory = fresh_test_directory("status", "failed-download");
+    let test_directory = test_support::fresh_test_directory("status", "failed-download");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
         socket_path.clone(),
@@ -176,9 +189,12 @@ async fn should_report_a_failed_download_job() {
     let mut stdout = Vec::new();
     let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
 
-    let status_outcome = timeout(TEST_TIMEOUT, run_status(&mut status_dependencies))
-        .await
-        .expect("the status journey should finish inside the test timeout");
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
     status_outcome.expect("the status journey should complete against the stub daemon");
     let rendered_stdout = String::from_utf8_lossy(&stdout);
     assert!(
@@ -191,14 +207,17 @@ async fn should_report_a_failed_download_job() {
 
 #[tokio::test]
 async fn should_report_a_missing_daemon_as_not_running_for_status() {
-    let test_directory = fresh_test_directory("status", "not-running");
+    let test_directory = test_support::fresh_test_directory("status", "not-running");
     let mut stdout = Vec::new();
     let mut status_dependencies =
         status_dependencies(vec![test_directory.join(SOCKET_FILE_NAME)], &mut stdout);
 
-    let status_outcome = timeout(TEST_TIMEOUT, run_status(&mut status_dependencies))
-        .await
-        .expect("the status journey should finish inside the test timeout");
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
     assert!(
         matches!(
             status_outcome,

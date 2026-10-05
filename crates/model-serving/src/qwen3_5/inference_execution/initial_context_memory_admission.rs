@@ -3,14 +3,14 @@
 //! Workspace composition and demote-or-admit live in `memory/`. This module
 //! measures request facts and records a rejection when the request cannot fit.
 
-use crate::qwen3_5::model::memory_admission::invalid_request_error;
+use crate::qwen3_5::model::memory_admission;
 use crate::{
     InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceAttributionOutcome,
     request_context_temporary_workspace_bytes,
 };
 use astronomical_ipc_protocol::RequestId;
 
-use super::{Qwen3_5EngineState, fatal_engine_error};
+use super::Qwen3_5EngineState;
 
 impl Qwen3_5EngineState {
     pub(super) fn admit_initial_generation_context_or_record_rejection(
@@ -53,7 +53,9 @@ impl Qwen3_5EngineState {
         let context_growth_bytes = total_context_tokens
             .checked_mul(self.context_memory_reservation_bytes_per_token)
             .ok_or_else(|| {
-                invalid_request_error("generation context memory reservation overflowed")
+                memory_admission::invalid_request_error(
+                    "generation context memory reservation overflowed",
+                )
             })?;
         let (
             prefill_activation_workspace_bytes,
@@ -63,7 +65,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let complete_experts_are_resident = model.resident_expert_weights.is_some();
             // Layer-weight activation heuristics and the SSD stream slot already
             // live inside the seated active snapshot. Adding them again stacks
@@ -84,22 +86,23 @@ impl Qwen3_5EngineState {
                         .maximum_prompt_processing_chunk_size_tokens(),
                 )
                 .unwrap_or(u64::MAX);
-                let prefill_activation_workspace_bytes = usize::try_from(
-                    ram_budget.activation_headroom_bytes(
+                let prefill_activation_workspace_bytes =
+                    usize::try_from(ram_budget.activation_headroom_bytes(
                         MemoryPhase::Prefill,
                         planned_prefill_operation_token_count,
-                    ),
-                )
-                .map_err(|_| {
-                    invalid_request_error("prefill activation workspace exceeds the platform range")
-                })?;
+                    ))
+                    .map_err(|_| {
+                        memory_admission::invalid_request_error(
+                            "prefill activation workspace exceeds the platform range",
+                        )
+                    })?;
                 let complete_layer_scratch_bytes = usize::try_from(
                     ram_budget
                         .model_geometry()
                         .largest_complete_expert_layer_bytes,
                 )
                 .map_err(|_| {
-                    invalid_request_error(
+                    memory_admission::invalid_request_error(
                         "complete-layer scratch reservation exceeds the platform range",
                     )
                 })?;
@@ -119,7 +122,9 @@ impl Qwen3_5EngineState {
             complete_layer_scratch_bytes,
         )
         .ok_or_else(|| {
-            invalid_request_error("generation context workspace reservation overflowed")
+            memory_admission::invalid_request_error(
+                "generation context workspace reservation overflowed",
+            )
         })?;
         crate::memory::log_generation_context_workspace_reservation(
             total_context_tokens,

@@ -7,7 +7,7 @@ use astronomical_model_serving::{
 };
 
 use super::persistent_prompt_cache_disk_store_support::*;
-use crate::common::qwen3_5_moe::persistent_visual_embedding_model_contract;
+use crate::common::qwen3_5_moe;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
@@ -38,7 +38,7 @@ async fn should_save_and_load_one_visual_embedding_file() {
         .load_visual_embedding(
             &runtime,
             &visual_embedding_key,
-            &persistent_visual_embedding_model_contract(),
+            &qwen3_5_moe::persistent_visual_embedding_model_contract(),
         )
         .expect("the cache should load visual embeddings")
         .expect("the saved visual embedding should be present");
@@ -116,7 +116,7 @@ async fn should_untrack_invalid_visual_embedding_load_and_accept_replacement() {
     let load_result = cache.load_visual_embedding(
         &runtime,
         &visual_embedding_key,
-        &persistent_visual_embedding_model_contract(),
+        &qwen3_5_moe::persistent_visual_embedding_model_contract(),
     );
 
     assert!(matches!(
@@ -131,7 +131,7 @@ async fn should_untrack_invalid_visual_embedding_load_and_accept_replacement() {
         .load_visual_embedding(
             &runtime,
             &visual_embedding_key,
-            &persistent_visual_embedding_model_contract(),
+            &qwen3_5_moe::persistent_visual_embedding_model_contract(),
         )
         .expect("the replacement visual embedding should load")
         .expect("the replacement visual embedding should be tracked");

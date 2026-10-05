@@ -8,7 +8,7 @@ use astronomical_mlx_c_rust::{
     clear_allocator_cache, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
 };
 
-use super::error_handling::lock_unpoisoned;
+use super::error_handling;
 
 static RUNTIME_MEMORY_LIMITS: Mutex<Option<MlxMemoryLimits>> = Mutex::new(None);
 
@@ -22,7 +22,7 @@ impl MlxRuntime {
         &mut self,
         memory_limits: MlxMemoryLimits,
     ) -> Result<(), MlxRuntimeError> {
-        let mut configured_limits = lock_unpoisoned(&RUNTIME_MEMORY_LIMITS);
+        let mut configured_limits = error_handling::lock_unpoisoned(&RUNTIME_MEMORY_LIMITS);
         if let Some(existing_limits) = *configured_limits
             && existing_limits != self.memory_limits
         {
@@ -107,7 +107,7 @@ impl MlxRuntime {
 pub(super) fn configure_runtime_memory_limits(
     memory_limits: MlxMemoryLimits,
 ) -> Result<(), MlxRuntimeError> {
-    let mut configured_limits = lock_unpoisoned(&RUNTIME_MEMORY_LIMITS);
+    let mut configured_limits = error_handling::lock_unpoisoned(&RUNTIME_MEMORY_LIMITS);
     if let Some(existing_limits) = *configured_limits {
         if existing_limits != memory_limits {
             return Err(MlxRuntimeError::RuntimeAlreadyConfigured {

@@ -9,7 +9,8 @@ use crate::laguna::LagunaSamplerConfig;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::error::LagunaExecutionError;
-use super::model::{LagunaModel, last_token_vocabulary_logits};
+use super::model;
+use super::model::LagunaModel;
 use astronomical_mlx_c_rust::MlxArray;
 
 impl LagunaModel {
@@ -23,7 +24,7 @@ impl LagunaModel {
         random_state: &mut MlxArray,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<u32, LagunaExecutionError> {
-        let last_token_logits = last_token_vocabulary_logits(runtime, logits)?;
+        let last_token_logits = model::last_token_vocabulary_logits(runtime, logits)?;
         let vocabulary_size = last_token_logits.shape().first().copied().ok_or_else(|| {
             LagunaExecutionError::invalid_geometry("Laguna logits are missing a vocabulary axis")
         })?;

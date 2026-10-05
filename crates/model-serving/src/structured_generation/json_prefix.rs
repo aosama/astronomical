@@ -218,17 +218,17 @@ fn skip_ws(bytes: &[u8], mut index: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{JsonPrefixStatus, status};
+    use super::JsonPrefixStatus;
 
     #[test]
     fn should_treat_empty_text_as_an_incomplete_json_prefix() {
-        assert_eq!(status(""), JsonPrefixStatus::Incomplete);
+        assert_eq!(super::status(""), JsonPrefixStatus::Incomplete);
     }
 
     #[test]
     fn should_accept_a_complete_romeo_object() {
         assert_eq!(
-            status(r#"{"speaker":"Juliet","play":"Romeo and Juliet"}"#),
+            super::status(r#"{"speaker":"Juliet","play":"Romeo and Juliet"}"#),
             JsonPrefixStatus::Complete
         );
     }
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn should_keep_an_open_object_incomplete() {
         assert_eq!(
-            status(r#"{"speaker":"Juliet""#),
+            super::status(r#"{"speaker":"Juliet""#),
             JsonPrefixStatus::Incomplete
         );
     }
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn should_reject_prose_that_is_not_json() {
         assert_eq!(
-            status("Two households, both alike in dignity."),
+            super::status("Two households, both alike in dignity."),
             JsonPrefixStatus::Invalid
         );
     }

@@ -10,7 +10,7 @@ use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance
 use serde_json::{Value, json};
 use tokio::time::{Duration, Instant, sleep};
 
-use crate::support::serving_rest::get_json_endpoint;
+use crate::support::serving_rest;
 
 use super::{LOG_MARKER, MAXIMUM_OUTPUT_TOKEN_COUNT};
 
@@ -76,7 +76,7 @@ pub(super) async fn wait_for_idle_status(server_address: SocketAddr, request_lab
     let wait_started_at = Instant::now();
     let mut last_log_at = wait_started_at - STATUS_LOG_INTERVAL;
     loop {
-        let status_document = get_json_endpoint(server_address, "/v1/status").await;
+        let status_document = serving_rest::get_json_endpoint(server_address, "/v1/status").await;
         if last_log_at.elapsed() >= STATUS_LOG_INTERVAL {
             eprintln!(
                 "{LOG_MARKER} phase={request_label} status=progress elapsed_seconds={:.3} activity={} expert_memory_mode={} active_gb={:.3}",
@@ -309,7 +309,7 @@ pub(super) async fn wait_for_settled_resident_status(
     let settle_started_at = Instant::now();
     let mut last_log_at = settle_started_at - STATUS_LOG_INTERVAL;
     let settled_status = loop {
-        let status_document = get_json_endpoint(server_address, "/v1/status").await;
+        let status_document = serving_rest::get_json_endpoint(server_address, "/v1/status").await;
         if let Some((claimed, measured)) = expert_reporting_gap_bytes(&status_document) {
             panic!(
                 "{request_label} reported contradictory expert residency while settling: claimed={claimed} measured={measured} status={status_document}"

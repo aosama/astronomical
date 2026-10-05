@@ -1,4 +1,4 @@
-use super::support::{command_with_tool_schema, standard_settings, user_messages};
+use super::support;
 use astronomical_ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatGenerationValidationError, ChatMessage, ChatToolChoice,
@@ -34,7 +34,7 @@ fn should_reject_a_second_tool_result_for_the_same_assistant_tool_call() {
         ],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -52,7 +52,7 @@ fn should_reject_duplicate_declared_tool_names() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(65),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: vec![
             ChatToolDefinition {
                 name: "glob".to_owned(),
@@ -66,7 +66,7 @@ fn should_reject_duplicate_declared_tool_names() {
             },
         ],
         tool_choice: ChatToolChoice::Auto,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -84,12 +84,12 @@ fn should_reject_a_forced_tool_choice_for_an_undeclared_function() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(66),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::Function {
             name: "glob".to_owned(),
         },
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -109,10 +109,10 @@ fn should_reject_required_tool_choice_before_prompt_rendering() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(79),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::Required,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -128,7 +128,7 @@ fn should_reject_a_declared_forced_tool_choice_before_prompt_rendering() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(80),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: vec![ChatToolDefinition {
             name: "glob".to_owned(),
             description: None,
@@ -137,7 +137,7 @@ fn should_reject_a_declared_forced_tool_choice_before_prompt_rendering() {
         tool_choice: ChatToolChoice::Function {
             name: "glob".to_owned(),
         },
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -153,7 +153,7 @@ fn should_reject_a_tool_schema_deeper_than_the_worker_limit() {
     let deeply_nested_schema = (0..33).fold("{}".to_owned(), |nested_schema, _| {
         format!(r#"{{"items":{nested_schema}}}"#)
     });
-    let chat_generation_command = command_with_tool_schema(67, deeply_nested_schema);
+    let chat_generation_command = support::command_with_tool_schema(67, deeply_nested_schema);
 
     assert!(matches!(
         chat_generation_command.validate(),
@@ -168,7 +168,7 @@ fn should_reject_a_tool_schema_deeper_than_the_worker_limit() {
 #[test]
 fn should_accept_a_large_tool_schema_when_the_ipc_frame_fits() {
     let oversized_schema = format!(r#"{{"description":"{}"}}"#, "x".repeat(32 * 1024));
-    let chat_generation_command = command_with_tool_schema(68, oversized_schema);
+    let chat_generation_command = support::command_with_tool_schema(68, oversized_schema);
 
     chat_generation_command
         .validate()
@@ -181,7 +181,7 @@ fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(69),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: vec![
             ChatToolDefinition {
                 name: "glob".to_owned(),
@@ -195,7 +195,7 @@ fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
             },
         ],
         tool_choice: ChatToolChoice::Auto,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -213,7 +213,7 @@ fn should_reject_an_empty_chat_history_before_worker_preprocessing() {
         messages: Vec::new(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -237,7 +237,7 @@ fn should_accept_large_chat_history_without_worker_message_count_cap() {
             .collect(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -252,7 +252,7 @@ fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(82),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: (0..250)
             .map(|tool_number| ChatToolDefinition {
                 name: format!("tool_{tool_number}"),
@@ -261,7 +261,7 @@ fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
             })
             .collect(),
         tool_choice: ChatToolChoice::Auto,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -276,12 +276,12 @@ fn should_reject_a_zero_structured_chat_output_token_budget() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(71),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
             max_output_tokens: 0,
-            ..standard_settings()
+            ..support::standard_settings()
         },
         qwen_thinking_channel_seed: None,
         structured_generation: None,
@@ -301,12 +301,12 @@ fn should_accept_large_structured_chat_output_budget_for_model_context_admission
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(72),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: ChatGenerationSettings {
             max_output_tokens: 20_000,
-            ..standard_settings()
+            ..support::standard_settings()
         },
         qwen_thinking_channel_seed: None,
         structured_generation: None,
@@ -326,7 +326,7 @@ fn should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_th
         }],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -367,7 +367,7 @@ fn should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_
         ],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -406,7 +406,7 @@ fn should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame
             parameters_json: format!(r#"{{"description":"{}"}}"#, "x".repeat(16 * 1024)),
         }],
         tool_choice: ChatToolChoice::Auto,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -425,14 +425,14 @@ fn should_accept_a_large_tool_description_when_the_ipc_frame_fits() {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(77),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
-        messages: user_messages(),
+        messages: support::user_messages(),
         tools: vec![ChatToolDefinition {
             name: "glob".to_owned(),
             description: Some("x".repeat(8 * 1024 + 1)),
             parameters_json: "{}".to_owned(),
         }],
         tool_choice: ChatToolChoice::Auto,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -460,7 +460,7 @@ fn should_accept_a_large_assistant_tool_call_id_when_the_ipc_frame_fits() {
         }],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
@@ -489,7 +489,7 @@ fn should_accept_large_assistant_tool_call_arguments_when_the_ipc_frame_fits() {
         }],
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
-        settings: standard_settings(),
+        settings: support::standard_settings(),
         qwen_thinking_channel_seed: None,
         structured_generation: None,
     };

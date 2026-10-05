@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 use serde_json::{Map, Value};
 
 use super::LagunaTextArtifactError;
-use super::artifact_documents::bounded_artifact_text;
+use super::artifact_documents;
 
 pub(crate) const MAXIMUM_TEMPLATE_BYTES: usize = 512 * 1024;
 pub(crate) const MAXIMUM_TEMPLATE_SOURCE_COUNT: usize = 16;
@@ -207,7 +207,7 @@ fn validate_include_name(include_name: &str) -> Result<(), LagunaTextArtifactErr
             .all(|component| matches!(component, Component::Normal(_)));
     if !is_artifact_local {
         return Err(LagunaTextArtifactError::TemplateIncludeTraversal {
-            include_name: bounded_artifact_text(include_name),
+            include_name: artifact_documents::bounded_artifact_text(include_name),
         });
     }
     Ok(())
@@ -238,7 +238,7 @@ pub(super) fn required_parser_id(
     if parser_id != SUPPORTED_PARSER_ID {
         return Err(LagunaTextArtifactError::UnsupportedParserId {
             field_name: field_name.to_owned(),
-            parser_id: bounded_artifact_text(parser_id),
+            parser_id: artifact_documents::bounded_artifact_text(parser_id),
         });
     }
     Ok(parser_id.to_owned())

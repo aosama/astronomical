@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use astronomical_inference_worker::worker_startup::run_bootstrapped_worker;
+use astronomical_inference_worker::worker_startup;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
@@ -81,7 +81,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let (worker_to_test, test_from_worker) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let worker_task = tokio::task::spawn_local(async move {
-        run_bootstrapped_worker(worker_from_test, worker_to_test)
+        worker_startup::run_bootstrapped_worker(worker_from_test, worker_to_test)
             .await
             .expect("the in-process worker should run successfully");
     });

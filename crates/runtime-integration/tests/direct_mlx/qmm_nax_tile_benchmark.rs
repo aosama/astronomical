@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 const WARMUP_ITERATIONS: usize = 4;
@@ -30,7 +30,7 @@ const TILE_CANDIDATES: [(usize, usize, usize, usize, usize); 5] = [
 #[test]
 #[ignore = "measures NAX qmm tile variants on real GPU kernels; run via scripts/run-bounded-cargo-test.sh"]
 fn should_measure_nax_qmm_tile_variants_for_transposed_prefill_shapes() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
 
     for (output_rows, input_columns) in PROJECTION_SHAPES {
         let quantized_weights = build_quantized_weights(&runtime, output_rows, input_columns);

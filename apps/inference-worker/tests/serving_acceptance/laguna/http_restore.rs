@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::net::SocketAddr;
 use tokio::time::timeout;
 
-use super::http::assert_laguna_is_advertised;
+use super::http;
 use super::validate::{
     bounded_romeo_and_juliet_source, laguna_xs_public_model_id, resolve_reference_model_directory,
 };
@@ -45,7 +45,7 @@ async fn run_repeated_http_restore() {
     )
     .await;
     let server_address = rest_server.server_address;
-    assert_laguna_is_advertised(server_address, public_model_id).await;
+    http::assert_laguna_is_advertised(server_address, public_model_id).await;
     let source_excerpt = bounded_romeo_and_juliet_source();
     let request_body = json!({
         "model": public_model_id,

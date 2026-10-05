@@ -9,7 +9,7 @@ use astronomical_experimental_aligned_expert_packs::{
     validate_aligned_expert_pack_payload,
 };
 
-use super::aligned_expert_pack::write_synthetic_expert_source_for_layer;
+use super::aligned_expert_pack;
 
 #[test]
 fn should_publish_a_complete_aligned_expert_pack_set_after_every_layer_validates() {
@@ -20,8 +20,8 @@ fn should_publish_a_complete_aligned_expert_pack_set_after_every_layer_validates
     let first_source_path = model_directory.join("first-source.bin");
     let second_source_path = model_directory.join("second-source.bin");
     let layer_plans = vec![
-        write_synthetic_expert_source_for_layer(&first_source_path, 0),
-        write_synthetic_expert_source_for_layer(&second_source_path, 1),
+        aligned_expert_pack::write_synthetic_expert_source_for_layer(&first_source_path, 0),
+        aligned_expert_pack::write_synthetic_expert_source_for_layer(&second_source_path, 1),
     ];
     let preparer = AlignedExpertPackPreparer::from_layer_plans(
         &model_directory,
@@ -67,10 +67,14 @@ fn should_resume_from_a_valid_layer_left_in_the_staging_revision() {
         tempfile::tempdir().expect("the test should create a temporary directory");
     let model_directory = temporary_directory.path().join("synthetic-model");
     fs::create_dir(&model_directory).expect("the synthetic model directory should be creatable");
-    let first_layer_plan =
-        write_synthetic_expert_source_for_layer(&model_directory.join("first-source.bin"), 0);
-    let second_layer_plan =
-        write_synthetic_expert_source_for_layer(&model_directory.join("second-source.bin"), 1);
+    let first_layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
+        &model_directory.join("first-source.bin"),
+        0,
+    );
+    let second_layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
+        &model_directory.join("second-source.bin"),
+        1,
+    );
     let staging_revision_directory = model_directory
         .join(".astronomical-aligned-expert-packs")
         .join(".revision-1.preparing");
@@ -128,10 +132,14 @@ fn should_rebuild_a_staged_layer_when_its_payload_no_longer_matches_the_source()
         tempfile::tempdir().expect("the test should create a temporary directory");
     let model_directory = temporary_directory.path().join("synthetic-model");
     fs::create_dir(&model_directory).expect("the synthetic model directory should be creatable");
-    let first_layer_plan =
-        write_synthetic_expert_source_for_layer(&model_directory.join("first-source.bin"), 0);
-    let second_layer_plan =
-        write_synthetic_expert_source_for_layer(&model_directory.join("second-source.bin"), 1);
+    let first_layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
+        &model_directory.join("first-source.bin"),
+        0,
+    );
+    let second_layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(
+        &model_directory.join("second-source.bin"),
+        1,
+    );
     let staging_revision_directory = model_directory
         .join(".astronomical-aligned-expert-packs")
         .join(".revision-1.preparing");
@@ -206,7 +214,7 @@ fn should_reuse_a_complete_valid_revision_without_rewriting_layers() {
         &model_directory,
         "synthetic-model",
         "revision-1",
-        vec![write_synthetic_expert_source_for_layer(&source_path, 0)],
+        vec![aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_path, 0)],
     )
     .expect("the synthetic preparation should plan");
     let first_report = preparer
@@ -243,7 +251,7 @@ fn should_reject_a_complete_revision_whose_payload_no_longer_matches_the_source(
     let model_directory = temporary_directory.path().join("synthetic-model");
     fs::create_dir(&model_directory).expect("the synthetic model directory should be creatable");
     let source_path = model_directory.join("source.bin");
-    let layer_plan = write_synthetic_expert_source_for_layer(&source_path, 0);
+    let layer_plan = aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_path, 0);
     let preparer = AlignedExpertPackPreparer::from_layer_plans(
         &model_directory,
         "synthetic-model",
@@ -293,7 +301,7 @@ fn should_reject_a_concurrent_preparer_for_the_same_model_revision() {
         &model_directory,
         "synthetic-model",
         "revision-1",
-        vec![write_synthetic_expert_source_for_layer(&source_path, 0)],
+        vec![aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_path, 0)],
     )
     .expect("the synthetic preparation should plan");
     let pack_root_directory = model_directory.join(".astronomical-aligned-expert-packs");
@@ -329,7 +337,7 @@ fn should_require_replace_before_rebuilding_an_invalid_final_revision() {
         &model_directory,
         "synthetic-model",
         "revision-1",
-        vec![write_synthetic_expert_source_for_layer(&source_path, 0)],
+        vec![aligned_expert_pack::write_synthetic_expert_source_for_layer(&source_path, 0)],
     )
     .expect("the synthetic preparation should plan");
     let invalid_final_revision = model_directory

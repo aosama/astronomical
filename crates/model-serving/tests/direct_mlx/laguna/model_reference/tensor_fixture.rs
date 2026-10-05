@@ -10,7 +10,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::rows::ReferenceRow;
-use super::tensor_identity::{affine_profile, global, layer_id, with_component};
+use super::tensor_identity;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) struct ReferenceTensorInventories {
@@ -35,14 +35,14 @@ pub(super) fn build_tensor_inventories(
         &mut inventories,
         runtime,
         contract,
-        global(LagunaGlobalTensorRole::TokenEmbedding),
+        tensor_identity::global(LagunaGlobalTensorRole::TokenEmbedding),
         &[vocabulary_size, hidden_size],
         row.activation_dtype,
         3,
     );
     insert_vector(
         &mut inventories,
-        global(LagunaGlobalTensorRole::FinalNormalization),
+        tensor_identity::global(LagunaGlobalTensorRole::FinalNormalization),
         norm(runtime, hidden_size, row.activation_dtype, 5),
     );
     if !contract.model().has_tied_embeddings() {
@@ -50,7 +50,7 @@ pub(super) fn build_tensor_inventories(
             &mut inventories,
             runtime,
             contract,
-            global(LagunaGlobalTensorRole::OutputHead),
+            tensor_identity::global(LagunaGlobalTensorRole::OutputHead),
             &[vocabulary_size, hidden_size],
             row.activation_dtype,
             7,
@@ -107,7 +107,7 @@ fn insert_attention_tensors(
     ] {
         insert_vector(
             inventories,
-            layer_id(layer_index, role),
+            tensor_identity::layer_id(layer_index, role),
             norm(runtime, hidden_size, activation_dtype, seed + layer_index),
         );
     }
@@ -117,7 +117,7 @@ fn insert_attention_tensors(
     ] {
         insert_vector(
             inventories,
-            layer_id(layer_index, role),
+            tensor_identity::layer_id(layer_index, role),
             norm(
                 runtime,
                 attention.head_dimension() as i32,
@@ -141,7 +141,7 @@ fn insert_attention_tensors(
             inventories,
             runtime,
             contract,
-            layer_id(layer_index, LagunaLayerTensorRole::Attention(projection)),
+            tensor_identity::layer_id(layer_index, LagunaLayerTensorRole::Attention(projection)),
             &[output_width, input_width],
             activation_dtype,
             seed + layer_index,
@@ -159,7 +159,7 @@ fn insert_attention_tensors(
             inventories,
             runtime,
             contract,
-            layer_id(
+            tensor_identity::layer_id(
                 layer_index,
                 LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Gate),
             ),
@@ -201,7 +201,7 @@ fn insert_dense_tensors(
             inventories,
             runtime,
             contract,
-            layer_id(
+            tensor_identity::layer_id(
                 layer_index,
                 LagunaLayerTensorRole::DenseFeedForward(projection),
             ),
@@ -228,7 +228,7 @@ fn insert_moe_tensors(
         inventories,
         runtime,
         contract,
-        layer_id(layer_index, LagunaLayerTensorRole::Router),
+        tensor_identity::layer_id(layer_index, LagunaLayerTensorRole::Router),
         &[expert_count, hidden_size],
         row.activation_dtype,
         67 + layer_index,
@@ -246,7 +246,7 @@ fn insert_moe_tensors(
             .expect("router correction bias should construct");
         insert_vector(
             inventories,
-            layer_id(layer_index, LagunaLayerTensorRole::RouterCorrectionBias),
+            tensor_identity::layer_id(layer_index, LagunaLayerTensorRole::RouterCorrectionBias),
             correction_bias,
         );
     }
@@ -271,7 +271,7 @@ fn insert_moe_tensors(
             inventories,
             runtime,
             contract,
-            layer_id(layer_index, LagunaLayerTensorRole::RoutedExpert(projection)),
+            tensor_identity::layer_id(layer_index, LagunaLayerTensorRole::RoutedExpert(projection)),
             &shape,
             row.activation_dtype,
             seed + layer_index,
@@ -302,7 +302,7 @@ fn insert_moe_tensors(
             inventories,
             runtime,
             contract,
-            layer_id(layer_index, LagunaLayerTensorRole::SharedExpert(projection)),
+            tensor_identity::layer_id(layer_index, LagunaLayerTensorRole::SharedExpert(projection)),
             &shape,
             row.activation_dtype,
             seed + layer_index,
@@ -320,7 +320,7 @@ fn insert_matrix(
     seed: usize,
 ) {
     let source_weight = deterministic(runtime, shape, dtype, seed);
-    let reference_weight = match affine_profile(contract, tensor_id) {
+    let reference_weight = match tensor_identity::affine_profile(contract, tensor_id) {
         Some((bits, group_size)) => {
             let (packed_weight, scales, biases) = runtime
                 .quantize_affine(&source_weight, group_size, bits)
@@ -341,12 +341,12 @@ fn insert_matrix(
             );
             insert_unique(
                 &mut inventories.production_tensors,
-                with_component(tensor_id, LagunaTensorComponent::Scales),
+                tensor_identity::with_component(tensor_id, LagunaTensorComponent::Scales),
                 scales,
             );
             insert_unique(
                 &mut inventories.production_tensors,
-                with_component(tensor_id, LagunaTensorComponent::Biases),
+                tensor_identity::with_component(tensor_id, LagunaTensorComponent::Biases),
                 biases,
             );
             inventories

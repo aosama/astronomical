@@ -3,8 +3,10 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use super::output::{worker_expert_residency_snapshot, worker_memory_snapshot};
-use super::support::{ModelFactory, WorkerRuntimeError, engine_generation_error};
+use super::output;
+use super::output::worker_expert_residency_snapshot;
+use super::support;
+use super::support::{ModelFactory, WorkerRuntimeError};
 use crate::{
     ImageGenerationEngine, InferenceEngine, InferenceEngineError, ModelGenerationProcessor,
 };
@@ -118,7 +120,7 @@ where
                         mlx_memory_snapshot: mlx_memory_limit_adjustment
                             .mlx_memory_telemetry()
                             .map(|mlx_memory_telemetry| {
-                                worker_memory_snapshot(
+                                output::worker_memory_snapshot(
                                     MlxMemorySnapshotSource::MemoryLimitAdjusted,
                                     mlx_memory_telemetry,
                                 )
@@ -151,7 +153,7 @@ where
                 )
                 .await
             }
-            Err(engine_error) => Err(engine_generation_error(engine_error)),
+            Err(engine_error) => Err(support::engine_generation_error(engine_error)),
         }
     }
 

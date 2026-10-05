@@ -3,7 +3,7 @@
 use std::{collections::HashMap, env, error::Error, path::PathBuf, sync::Arc, time::Duration};
 
 use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
-use astronomical_supervisor::{GenerationPerformanceLog, WorkerHandle, build_application};
+use astronomical_supervisor::{GenerationPerformanceLog, WorkerHandle};
 use tokio::net::TcpListener;
 
 const TEST_WORKER_EXECUTABLE_PATH_ENVIRONMENT_VARIABLE: &str =
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Arc::new(HashMap::new()),
     )
     .await?;
-    let application = build_application(worker_handle.clone());
+    let application = astronomical_supervisor::build_application(worker_handle.clone());
 
     println!("astronomicald listening on http://{bound_supervisor_address}");
 

@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::qwen3_5::{Qwen3_5Config, Qwen3_5MtpContract, Qwen3_5ShardIndex};
 
-use super::tensor_namespace::qwen3_5_mtp_tensor_names;
+use super::tensor_namespace;
 use crate::memory::MtpDraftDepth;
 
 /// Bounded artifact reason that keeps optional MTP target-only.
@@ -143,7 +143,7 @@ impl Qwen3_5MtpArtifactCapability {
                 .iter()
                 .any(|tensor_name| tensor_name.contains(".mlp.switch_mlp."))
         {
-            let mut fused_expected = qwen3_5_mtp_tensor_names(qwen3_5_config)
+            let mut fused_expected = tensor_namespace::qwen3_5_mtp_tensor_names(qwen3_5_config)
                 .into_iter()
                 .filter(|tensor_name| !tensor_name.contains(".mlp.switch_mlp."))
                 .collect::<BTreeSet<_>>();
@@ -157,7 +157,7 @@ impl Qwen3_5MtpArtifactCapability {
             )
         } else {
             (
-                qwen3_5_mtp_tensor_names(qwen3_5_config),
+                tensor_namespace::qwen3_5_mtp_tensor_names(qwen3_5_config),
                 Qwen3_5MtpExpertsLayout::PackedSwitchMlp,
             )
         };

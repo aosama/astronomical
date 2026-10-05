@@ -13,7 +13,7 @@ use super::ops::{
     attention_gate, dense_fused_swiglu, dense_swiglu, gathered_fused_swiglu,
     gathered_value_experts, grouped_rms_norm, merge_heads, reshape_heads, route_k2_experts,
 };
-use super::quantized_attention::quantized_scaled_dot_product_attention;
+use super::quantized_attention;
 use super::weights::{
     K2HorizonMoVADenseAttentionWeights, K2HorizonMoVADenseMlpWeights, K2HorizonMoVALayerWeights,
     K2HorizonMoVAMoVAAttentionWeights, K2HorizonMoVASparseMlpWeights,
@@ -393,7 +393,7 @@ fn finish_attention(
                         description: format!("K2 Horizon MoVA KV update failed: {update_error}"),
                     },
                 )?;
-            quantized_scaled_dot_product_attention(
+            quantized_attention::quantized_scaled_dot_product_attention(
                 runtime,
                 config,
                 &queries,

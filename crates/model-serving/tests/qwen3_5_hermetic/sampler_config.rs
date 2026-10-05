@@ -1,5 +1,3 @@
-use astronomical_model_serving::discover_sampler_config;
-
 #[test]
 fn should_use_temperature_top_p_and_top_k_from_model_generation_configuration() {
     let model_generation_configuration = br#"{
@@ -8,7 +6,8 @@ fn should_use_temperature_top_p_and_top_k_from_model_generation_configuration() 
         "top_k": 20
     }"#;
 
-    let model_sampler_configuration = discover_sampler_config(Some(model_generation_configuration));
+    let model_sampler_configuration =
+        astronomical_model_serving::discover_sampler_config(Some(model_generation_configuration));
 
     assert_eq!(model_sampler_configuration.temperature_thousandths, 600);
     assert_eq!(model_sampler_configuration.top_p_thousandths, 950);
@@ -17,7 +16,7 @@ fn should_use_temperature_top_p_and_top_k_from_model_generation_configuration() 
 
 #[test]
 fn should_use_product_sampling_defaults_only_when_the_model_has_no_generation_configuration() {
-    let model_sampler_configuration = discover_sampler_config(None);
+    let model_sampler_configuration = astronomical_model_serving::discover_sampler_config(None);
 
     assert_eq!(model_sampler_configuration.temperature_thousandths, 1_000);
     assert_eq!(model_sampler_configuration.top_p_thousandths, 950);
@@ -30,7 +29,8 @@ fn should_preserve_a_model_declared_zero_temperature() {
     // acceptance from silently changing a deterministic model into randomized sampling.
     let model_generation_configuration = br#"{"temperature": 0, "top_p": 0.9, "top_k": 40}"#;
 
-    let model_sampler_configuration = discover_sampler_config(Some(model_generation_configuration));
+    let model_sampler_configuration =
+        astronomical_model_serving::discover_sampler_config(Some(model_generation_configuration));
 
     assert_eq!(model_sampler_configuration.temperature_thousandths, 0);
     assert_eq!(model_sampler_configuration.top_p_thousandths, 900);

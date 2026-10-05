@@ -6,7 +6,7 @@ use tokio::{
     time::{Instant, sleep, timeout},
 };
 
-use super::daemon_process::{terminate_daemon, write_instance_config};
+use super::daemon_process;
 
 const DAEMON_STARTUP_PREFIX: &str = "astronomicald listening on http://";
 const WORKER_STDERR_DIAGNOSTIC: &str = "stderr-probe worker observed visible stderr";
@@ -19,7 +19,7 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
         std::env::var("CARGO_BIN_EXE_astronomical-supervisor-stderr-probe-worker")
             .expect("Cargo should provide the stderr-probe worker fixture path");
     let development_state_directory = tempfile::tempdir().expect("state should be created");
-    write_instance_config(development_state_directory.path());
+    daemon_process::write_instance_config(development_state_directory.path());
     let synthetic_bundle_executable_directory = development_state_directory.path().join("bin");
     std::fs::create_dir(&synthetic_bundle_executable_directory)
         .expect("the synthetic bundle executable directory should be created");
@@ -62,7 +62,7 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
     assert!(supervisor_log_text.contains("worker process exited after closing its event stream"));
     assert!(supervisor_log_text.contains("exit code 0"));
     assert!(supervisor_log_text.contains(WORKER_STDERR_DIAGNOSTIC));
-    terminate_daemon(&daemon_process);
+    daemon_process::terminate_daemon(&daemon_process);
     let _daemon_exit_status = daemon_process
         .wait()
         .await

@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{Qwen3_5Tokenizer, Qwen3_5TokenizerError};
 
-use crate::common::qwen3_5_moe::frozen_ornith_1_0_image_processor;
+use crate::common::qwen3_5_moe;
 
 const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
 const ORNITH_MAXIMUM_POSITION_COUNT: u32 = 262_144;
@@ -21,7 +21,7 @@ fn should_reject_a_thinking_budget_that_cannot_fit_its_transition_and_visible_an
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let preparation_error = tokenizer
@@ -66,7 +66,7 @@ fn should_clamp_the_thinking_allowance_to_fit_the_requested_output_budget() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let transition_token_count = tokenizer.forced_thinking_transition_token_ids().len();
@@ -117,7 +117,7 @@ fn should_keep_a_thinking_allowance_that_already_fits_its_output_budget() {
         SYNTHETIC_MODEL_ID,
         ORNITH_VOCABULARY_SIZE,
         ORNITH_MAXIMUM_POSITION_COUNT,
-        frozen_ornith_1_0_image_processor(),
+        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
     )
     .expect("the synthetic tokenizer should load");
     let transition_token_count = tokenizer.forced_thinking_transition_token_ids().len();

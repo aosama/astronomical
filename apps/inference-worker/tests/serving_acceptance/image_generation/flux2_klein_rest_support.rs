@@ -16,7 +16,7 @@ use astronomical_supervisor::{
 use serde_json::Value;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle, time::sleep};
 
-use crate::support::http::send_http_request;
+use crate::support::http;
 
 const READY_ATTEMPT_LIMIT: u8 = 70;
 
@@ -230,7 +230,7 @@ fn parse_image_attribution_reports(report_text: &str) -> Vec<Value> {
 }
 
 pub(crate) async fn get_status(server_address: SocketAddr) -> serde_json::Value {
-    let response = send_http_request(
+    let response = http::send_http_request(
         server_address,
         format!("GET /v1/status HTTP/1.1\r\nHost: {server_address}\r\nConnection: close\r\n\r\n"),
     )
@@ -239,7 +239,7 @@ pub(crate) async fn get_status(server_address: SocketAddr) -> serde_json::Value 
 }
 
 pub(crate) async fn post_image(server_address: SocketAddr, request_body: String) -> String {
-    send_http_request(
+    http::send_http_request(
         server_address,
         format!(
             "POST /v1/images/generations HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",

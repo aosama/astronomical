@@ -15,14 +15,12 @@ mod build_native_store;
 mod build_parallelism;
 mod build_progress;
 
-use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
 use build_native_compile::{
     NATIVE_ARCHIVE_VARIABLES, NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE,
     NATIVE_DEPENDENCY_CACHE_VARIABLE, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
     build_pinned_native_runtime, native_build_store_directory, native_parallel_job_count,
     required_path_variable, resolve_native_build_identity, write_native_build_status,
 };
-use build_native_linking::configure_rust_linking;
 use build_native_store::{NativeBuildProfile, NativeBuildStore};
 use build_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 
@@ -69,14 +67,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             &native_build_progress,
         )
     })?;
-    remove_legacy_cargo_native_build_directory(&output_directory)?;
+    build_legacy_native_output::remove_legacy_cargo_native_build_directory(&output_directory)?;
     write_native_build_status(&native_build_artifacts)?;
     native_build_progress.record_build_completion(
         native_build_artifacts.was_built(),
         native_build_started_at.elapsed(),
     );
 
-    configure_rust_linking(&native_build_artifacts, native_build_profile)?;
+    build_native_linking::configure_rust_linking(&native_build_artifacts, native_build_profile)?;
     emit_native_source_rerun_contracts(
         &manifest_directory,
         &native_source_directory,

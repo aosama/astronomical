@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::{DiscoveredModelError, ModelFamily, classify_model_directory};
-use crate::{decode_huggingface_cache_directory_name, leaf_model_id};
+use super::{DiscoveredModelError, ModelFamily};
 
 const MAXIMUM_CLASSIFIED_SCAN_DEPTH: usize = 4;
 const MAXIMUM_REVISION_METADATA_BYTES: u64 = 4_096;
@@ -66,7 +65,7 @@ fn scan_classified_artifacts(
     if current_directory.join("config.json").is_file()
         || current_directory.join("model_index.json").is_file()
     {
-        if let Ok(Some(model_family)) = classify_model_directory(current_directory)
+        if let Ok(Some(model_family)) = super::classify_model_directory(current_directory)
             && let Some(model_id) = model_identity(current_directory)
         {
             classified_artifacts.push(ClassifiedModelArtifact {
@@ -112,8 +111,10 @@ pub fn requestable_model_id(model_directory: &Path) -> Option<String> {
         else {
             continue;
         };
-        if let Some(decoded_model_id) = decode_huggingface_cache_directory_name(directory_name) {
-            return Some(leaf_model_id(&decoded_model_id).to_owned());
+        if let Some(decoded_model_id) =
+            crate::decode_huggingface_cache_directory_name(directory_name)
+        {
+            return Some(crate::leaf_model_id(&decoded_model_id).to_owned());
         }
     }
     model_directory
@@ -130,7 +131,7 @@ fn model_identity(model_directory: &Path) -> Option<String> {
         else {
             continue;
         };
-        if let Some(model_id) = decode_huggingface_cache_directory_name(directory_name) {
+        if let Some(model_id) = crate::decode_huggingface_cache_directory_name(directory_name) {
             return Some(model_id);
         }
     }
@@ -216,7 +217,7 @@ pub(super) fn immutable_file_revision(
             ancestor
                 .file_name()
                 .and_then(|file_name| file_name.to_str())
-                .and_then(decode_huggingface_cache_directory_name)
+                .and_then(crate::decode_huggingface_cache_directory_name)
                 .is_some()
         })
         .then(|| model_directory.file_name()?.to_str().map(str::to_owned))

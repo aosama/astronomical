@@ -3,13 +3,13 @@ use astronomical_mlx_c_rust::{
     set_graph_output_vector,
 };
 
-use crate::common::runtime_test_support::{assert_f32_close, runtime};
+use crate::common::runtime_test_support;
 
 const COMPILE_OPERATION: &str = "compile the multi-output contract graph";
 
 #[test]
 fn should_replay_one_compiled_graph_with_two_ordered_outputs() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let compiled_graph =
         MlxCompiledMultiOutputGraph::new(build_two_output_graph, COMPILE_OPERATION, true)
             .expect("the two-output graph should compile");
@@ -32,14 +32,14 @@ fn should_replay_one_compiled_graph_with_two_ordered_outputs() {
         let squared_values = outputs[1]
             .to_vec_f32()
             .expect("the squared output should read back");
-        assert_f32_close(&doubled_values, &[2.0, 4.0, 8.0]);
-        assert_f32_close(&squared_values, &[1.0, 4.0, 16.0]);
+        runtime_test_support::assert_f32_close(&doubled_values, &[2.0, 4.0, 8.0]);
+        runtime_test_support::assert_f32_close(&squared_values, &[1.0, 4.0, 16.0]);
     }
 }
 
 #[test]
 fn should_reject_an_apply_that_returns_no_outputs() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let compiled_graph =
         MlxCompiledMultiOutputGraph::new(build_no_output_graph, COMPILE_OPERATION, true)
             .expect("the empty graph should compile");

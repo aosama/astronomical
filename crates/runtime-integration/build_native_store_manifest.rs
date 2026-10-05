@@ -12,7 +12,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-use super::{NativeBuildProfile, store_schema_version};
+use super::NativeBuildProfile;
 
 pub(super) fn validate_entry(
     entry_directory: &Path,
@@ -30,7 +30,7 @@ pub(super) fn validate_entry(
     let manifest_text = fs::read_to_string(&manifest_path)?;
     let expected_prefix = format!(
         "schema={}\nidentity={native_identity}\nprofile={}\n",
-        store_schema_version(),
+        super::store_schema_version(),
         native_build_profile.identity_name()
     );
     let payload_manifest = manifest_text
@@ -49,7 +49,7 @@ pub(super) fn write_manifest(
 ) -> Result<(), Box<dyn Error>> {
     let manifest_text = format!(
         "schema={}\nidentity={native_identity}\nprofile={}\n{}",
-        store_schema_version(),
+        super::store_schema_version(),
         native_build_profile.identity_name(),
         payload_manifest_text(payload_directory)?
     );

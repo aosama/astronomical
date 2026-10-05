@@ -1,11 +1,11 @@
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::runtime_test_support::{assert_bfloat16_arrays_match, runtime};
+use crate::common::runtime_test_support;
 use astronomical_mlx_c_rust::{MlxCompiledSwiGlu, MlxDtype};
 
 #[test]
 fn should_reuse_one_shapeless_compiled_swiglu_across_sequence_lengths() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let compiled_swiglu =
         MlxCompiledSwiGlu::new().expect("the shapeless SwiGLU graph should compile");
 
@@ -49,5 +49,9 @@ fn assert_compiled_swiglu_matches_reference(
         .expect("the compiled SwiGLU should accept the runtime sequence length");
 
     assert_eq!(compiled_output.shape(), shape);
-    assert_bfloat16_arrays_match(runtime, &compiled_output, &reference_output);
+    runtime_test_support::assert_bfloat16_arrays_match(
+        runtime,
+        &compiled_output,
+        &reference_output,
+    );
 }

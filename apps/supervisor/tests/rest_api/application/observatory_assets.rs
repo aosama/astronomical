@@ -1,4 +1,3 @@
-use astronomical_supervisor::build_application;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
@@ -25,7 +24,8 @@ const EXPECTED_CONNECT_SCRIPT_MARKER: &str = "src=\"/connect.js\"";
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_index_html_at_root() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -85,7 +85,8 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
         "/connect",
         "/settings",
     ] {
-        let application = build_application(ScriptedExecutor::ready(Vec::new()));
+        let application =
+            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
                 Request::builder()
@@ -116,7 +117,8 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
 #[tokio::test]
 async fn should_not_serve_removed_memory_cache_and_optimizer_destinations() {
     for removed_observatory_path in ["/memory", "/cache", "/optimizer"] {
-        let application = build_application(ScriptedExecutor::ready(Vec::new()));
+        let application =
+            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
                 Request::builder()
@@ -137,7 +139,8 @@ async fn should_not_serve_removed_memory_cache_and_optimizer_destinations() {
 
 #[tokio::test]
 async fn should_return_not_found_for_an_unknown_rest_path() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -153,7 +156,8 @@ async fn should_return_not_found_for_an_unknown_rest_path() {
 
 #[tokio::test]
 async fn should_expose_the_chat_transcript_as_a_named_live_region() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -177,7 +181,8 @@ async fn should_expose_the_chat_transcript_as_a_named_live_region() {
 
 #[tokio::test]
 async fn should_expose_named_observatory_navigation_and_overview_region() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -217,7 +222,8 @@ async fn should_expose_named_observatory_navigation_and_overview_region() {
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_javascript_with_correct_content_type() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -251,7 +257,8 @@ async fn should_serve_the_embedded_observatory_javascript_with_correct_content_t
 
 #[tokio::test]
 async fn should_serve_the_embedded_compact_overview_javascript() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -281,7 +288,8 @@ async fn should_serve_the_embedded_compact_overview_javascript() {
 
 #[tokio::test]
 async fn should_serve_the_embedded_connection_material_script() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -318,7 +326,8 @@ async fn should_serve_the_embedded_connection_material_script() {
 
 #[tokio::test]
 async fn should_serve_the_embedded_memory_control_script() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -343,7 +352,8 @@ async fn should_serve_the_embedded_memory_control_script() {
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_playground_javascript() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
@@ -371,7 +381,8 @@ async fn should_serve_the_embedded_observatory_playground_javascript() {
 
 #[tokio::test]
 async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_type() {
-    let application = build_application(ScriptedExecutor::ready(Vec::new()));
+    let application =
+        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()

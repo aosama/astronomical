@@ -5,7 +5,7 @@ use crate::serving_acceptance::chat::openai_rest::{
     E2E_TIMEOUT, assert_successful_streaming_chat_response, image_chat_request_body_for_model,
     run_serving_chat_request_for_model,
 };
-use crate::support::http::streamed_model_text_from_chat_response;
+use crate::support::http;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the dense vision e2e fixture through REST and checks the synthetic-red fixture"]
@@ -32,7 +32,7 @@ async fn should_name_the_red_fixture_through_chat_completions() {
     .expect("the dense vision REST journey must finish within 115 seconds");
 
     assert_successful_streaming_chat_response(&chat_response);
-    let streamed_model_text = streamed_model_text_from_chat_response(&chat_response);
+    let streamed_model_text = http::streamed_model_text_from_chat_response(&chat_response);
     let matched_red_term = assert_streamed_model_text_mentions_red(&streamed_model_text);
     eprintln!("[e2e] dense-vision synthetic-red semantic match term={matched_red_term}");
 }

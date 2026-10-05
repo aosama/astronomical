@@ -8,7 +8,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::rows::ReferenceRow;
-use super::tensor_fixture::build_tensor_inventories;
+use super::tensor_fixture;
 use astronomical_mlx_c_rust::MlxArray;
 
 pub(super) struct ReferenceFixture {
@@ -22,7 +22,7 @@ pub(super) fn build_fixture(runtime: &MlxRuntime, row: &ReferenceRow) -> Referen
         &serde_json::to_vec(&row.target_config).expect("reference config should serialize"),
     )
     .unwrap_or_else(|error| panic!("{} should normalize: {error}", row.row_name));
-    let inventories = build_tensor_inventories(runtime, &contract, row);
+    let inventories = tensor_fixture::build_tensor_inventories(runtime, &contract, row);
     let weights = LagunaNativeWeights::bind(runtime, inventories.production_tensors, &contract)
         .unwrap_or_else(|error| panic!("{} weights should bind: {error:?}", row.row_name));
     let model = LagunaModel::new(

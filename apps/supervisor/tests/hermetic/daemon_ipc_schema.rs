@@ -152,26 +152,28 @@ async fn should_reject_a_chat_generate_request_with_an_unparseable_schema() {
 /// canonical re-serialization.
 #[test]
 fn should_validate_chat_schema_constraints_directly() {
-    use astronomical_supervisor::daemon_ipc_chat_schema::validated_chat_schema_constraint;
+    use astronomical_supervisor::daemon_ipc_chat_schema;
 
     let oversize_schema_text = format!("{{\"values\":[\"{}\"]}}", "x".repeat(70_000));
-    let oversize_error = validated_chat_schema_constraint(&oversize_schema_text)
-        .expect_err("oversize should reject");
+    let oversize_error =
+        daemon_ipc_chat_schema::validated_chat_schema_constraint(&oversize_schema_text)
+            .expect_err("oversize should reject");
     assert!(
         oversize_error.contains("65536-byte limit"),
         "the oversize reason should state the bound: {oversize_error}"
     );
 
-    let array_schema_error =
-        validated_chat_schema_constraint("[1,2,3]").expect_err("a non-object schema should reject");
+    let array_schema_error = daemon_ipc_chat_schema::validated_chat_schema_constraint("[1,2,3]")
+        .expect_err("a non-object schema should reject");
     assert!(
         array_schema_error.contains("one JSON object"),
         "the non-object reason should state the object rule: {array_schema_error}"
     );
 
     let spaced_schema_text = "{ \"type\": \"object\" }";
-    let validated_constraint = validated_chat_schema_constraint(spaced_schema_text)
-        .expect("a valid object schema should accept");
+    let validated_constraint =
+        daemon_ipc_chat_schema::validated_chat_schema_constraint(spaced_schema_text)
+            .expect("a valid object schema should accept");
     assert_eq!(
         validated_constraint,
         StructuredGenerationConstraint::JsonSchema {

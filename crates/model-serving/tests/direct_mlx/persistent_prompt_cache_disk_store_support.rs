@@ -7,7 +7,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -23,7 +23,7 @@ pub(super) fn open_persistent_prompt_cache_disk_store(
             persistent_prompt_cache_directory.path().to_path_buf(),
             global_prompt_cache_maximum_size_bytes,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
 }
 
@@ -55,14 +55,14 @@ pub(super) fn persistent_prompt_cache_block_key_for_seed(
     token_seed: u32,
 ) -> PersistentPromptCacheBlockKey {
     PersistentPromptCacheBlockKey::for_root_block(
-        &persistent_prompt_cache_model_contract(),
+        &qwen3_5_moe::persistent_prompt_cache_model_contract(),
         &block_tokens_for_seed(token_seed),
     )
     .expect("the test should hash the block tokens")
 }
 
 pub(super) fn block_tokens_for_seed(token_seed: u32) -> Vec<u32> {
-    (0..persistent_prompt_cache_model_contract().block_token_count())
+    (0..qwen3_5_moe::persistent_prompt_cache_model_contract().block_token_count())
         .map(|token_offset| token_seed + token_offset as u32)
         .collect()
 }
@@ -70,10 +70,10 @@ pub(super) fn block_tokens_for_seed(token_seed: u32) -> Vec<u32> {
 pub(super) fn synthetic_kv_block_tensors(runtime: &MlxRuntime) -> HashMap<String, MlxArray> {
     synthetic_tensors_for_contract(
         runtime,
-        &persistent_prompt_cache_model_contract()
+        &qwen3_5_moe::persistent_prompt_cache_model_contract()
             .decoder_cache_layout()
             .sequence_tensor_layouts(),
-        persistent_prompt_cache_model_contract().block_token_count(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract().block_token_count(),
     )
 }
 
@@ -82,10 +82,10 @@ pub(super) fn synthetic_recurrent_snapshot_tensors(
 ) -> HashMap<String, MlxArray> {
     synthetic_tensors_for_contract(
         runtime,
-        &persistent_prompt_cache_model_contract()
+        &qwen3_5_moe::persistent_prompt_cache_model_contract()
             .decoder_cache_layout()
             .boundary_tensor_layouts(),
-        persistent_prompt_cache_model_contract().block_token_count(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract().block_token_count(),
     )
 }
 

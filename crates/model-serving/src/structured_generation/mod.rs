@@ -194,8 +194,6 @@ mod tests {
 
     use astronomical_ipc_protocol::StructuredGenerationConstraint;
 
-    use super::normalize_token_piece;
-
     fn compile_regex(
         pattern: &str,
         vocabulary_pieces: Vec<String>,
@@ -325,7 +323,7 @@ mod tests {
 
     #[test]
     fn should_normalize_byte_order_marks_of_space_in_regex_pieces() {
-        assert_eq!(normalize_token_piece("Ġhello"), " hello");
+        assert_eq!(super::normalize_token_piece("Ġhello"), " hello");
     }
 
     #[test]

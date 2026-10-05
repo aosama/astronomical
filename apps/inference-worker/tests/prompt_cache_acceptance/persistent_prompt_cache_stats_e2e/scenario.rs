@@ -1,5 +1,5 @@
-use super::http_transport::{get_cache_stats_json, get_endpoint, log_cache_directory_contents};
-use super::live_progress::{post_chat_completion_with_live_progress, wait_until_ready};
+use super::http_transport;
+use super::live_progress;
 use super::*;
 
 /// Parameterizes the E2E cache stats test so the same runner covers both the
@@ -124,7 +124,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
     });
     let server_task = tokio::spawn(async move { server.await });
 
-    wait_until_ready(server_address, log_prefix).await;
+    live_progress::wait_until_ready(server_address, log_prefix).await;
 
     // ── Phase 1: first request — should be a cache miss ──
     let phase_one_started_at = Instant::now();
@@ -132,7 +132,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         "{log_prefix} phase 1: sending first {}K-word request (expecting cache miss)",
         cache_stats_e2e_case.prompt_word_count / 1_000
     );
-    let first_chat_response = post_chat_completion_with_live_progress(
+    let first_chat_response = live_progress::post_chat_completion_with_live_progress(
         server_address,
         cache_stats_e2e_case.prompt,
         cache_stats_e2e_case.maximum_output_tokens,
@@ -154,7 +154,8 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         "the first chat stream should finish cleanly: {first_chat_response}"
     );
 
-    let cache_stats_after_first_request = get_cache_stats_json(server_address).await;
+    let cache_stats_after_first_request =
+        http_transport::get_cache_stats_json(server_address).await;
     eprintln!(
         "{log_prefix} phase 1: cache stats after first request = {}",
         serde_json::to_string_pretty(&cache_stats_after_first_request)
@@ -194,7 +195,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
     );
 
     // Check what was saved to disk after phase 1.
-    log_cache_directory_contents(
+    http_transport::log_cache_directory_contents(
         &persistent_prompt_cache_directory_path,
         &format!(
             "{log_prefix} after phase 1 (expecting sequence state and boundary snapshot files)"
@@ -207,7 +208,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         "{log_prefix} phase 2: sending the same {}K-word request (expecting cache hit)",
         cache_stats_e2e_case.prompt_word_count / 1_000
     );
-    let second_chat_response = post_chat_completion_with_live_progress(
+    let second_chat_response = live_progress::post_chat_completion_with_live_progress(
         server_address,
         cache_stats_e2e_case.prompt,
         cache_stats_e2e_case.maximum_output_tokens,
@@ -229,7 +230,8 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         "the second chat stream should finish cleanly: {second_chat_response}"
     );
 
-    let cache_stats_after_second_request = get_cache_stats_json(server_address).await;
+    let cache_stats_after_second_request =
+        http_transport::get_cache_stats_json(server_address).await;
     eprintln!(
         "{log_prefix} phase 2: cache stats after second request = {}",
         serde_json::to_string_pretty(&cache_stats_after_second_request)
@@ -269,9 +271,9 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
             "{log_prefix} DIAGNOSTIC: full cache stats JSON = {}",
             serde_json::to_string_pretty(&cache_stats_after_second_request).unwrap_or_default()
         );
-        let status_response = get_endpoint(server_address, "/v1/status").await;
+        let status_response = http_transport::get_endpoint(server_address, "/v1/status").await;
         eprintln!("{log_prefix} DIAGNOSTIC: /v1/status = {status_response}");
-        log_cache_directory_contents(
+        http_transport::log_cache_directory_contents(
             &persistent_prompt_cache_directory_path,
             &format!("{log_prefix} DIAGNOSTIC: after phase 2 miss"),
         );

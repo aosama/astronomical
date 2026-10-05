@@ -5,8 +5,8 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::Instant;
 
-use crate::worker_event_handler::handle_worker_event;
-use crate::worker_health::publish_health;
+use crate::worker_event_handler;
+use crate::worker_health;
 use crate::worker_loop_types::ActiveWorkerRequest;
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, WorkerControlError, WorkerHealthSnapshot,
@@ -71,7 +71,7 @@ pub(super) async fn wait_for_model_swap(
                                 )
                             })
                             .unwrap_or((0, 0, 1));
-                        publish_health(
+                        worker_health::publish_health(
                             health_snapshot,
                             WorkerHealthSnapshot::ready_without_model_with_memory_limits(
                                 mlx_memory_ceilings.0,
@@ -123,7 +123,7 @@ pub(super) async fn wait_for_model_swap(
                             false
                         };
                     if !is_staged_runtime_acknowledgement {
-                        handle_worker_event(
+                        worker_event_handler::handle_worker_event(
                             interleaved_worker_event,
                             health_snapshot,
                             is_ready,

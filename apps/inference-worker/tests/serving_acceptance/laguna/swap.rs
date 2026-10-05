@@ -16,7 +16,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
-use super::http::assert_laguna_is_advertised;
+use super::http;
 use super::validate::{
     compact_romeo_and_juliet_source, laguna_xs_public_model_id, resolve_reference_model_directory,
 };
@@ -54,7 +54,8 @@ async fn run_family_swap_journey() {
         ),
     ]);
     let rest_server = launch_multi_model_server(model_directories).await;
-    assert_laguna_is_advertised(rest_server.server_address, laguna_xs_public_model_id()).await;
+    http::assert_laguna_is_advertised(rest_server.server_address, laguna_xs_public_model_id())
+        .await;
     for (model_id, phase) in [
         (small_dense_model_id, "qwen"),
         (laguna_xs_public_model_id(), "laguna-xs"),

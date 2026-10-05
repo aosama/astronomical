@@ -2,7 +2,6 @@ use astronomical_ipc_protocol::ExpertMemoryMode;
 
 use crate::ExpertResidencyTelemetry;
 use crate::MlxActiveMemoryBreakdown;
-use crate::classify_expert_memory_mode;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
@@ -62,7 +61,7 @@ impl Qwen3_5Model {
                         .statistics()
                         .resident_payload_byte_count
                 });
-        classify_expert_memory_mode(
+        crate::classify_expert_memory_mode(
             self.resident_expert_weights.is_some(),
             self.expert_pager.is_some(),
             retained_paged_expert_payload_bytes,

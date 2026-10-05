@@ -4,7 +4,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{RequestId, WorkerEvent, WorkerRuntimeFeatureConfiguration};
 use tokio::time::timeout;
 
-use crate::chat_generation_executor::try_send_stream_event;
+use crate::chat_generation_executor;
 use crate::worker_health::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
     publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
@@ -385,7 +385,7 @@ pub(super) fn fail_active_generation(
 ) {
     match active_request.take() {
         Some(ActiveWorkerRequest::Chat(failed_generation)) => {
-            let _send_outcome = try_send_stream_event(
+            let _send_outcome = chat_generation_executor::try_send_stream_event(
                 &failed_generation.stream_event_sender,
                 ChatGenerationStreamEvent::Error(error_code),
             );

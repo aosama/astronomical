@@ -19,7 +19,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::generation_performance_log::unix_epoch_millis;
+use crate::generation_performance_log;
 
 /// Maximum number of bytes of arguments JSON recorded verbatim. Arguments at or
 /// under this cap are written in full so polluted keys (`content`, `hash`,
@@ -237,7 +237,7 @@ pub(crate) fn record_completion_at_now(
     completed_tool_calls: &[CompletedToolCall],
 ) {
     log.record_completion(
-        unix_epoch_millis(),
+        generation_performance_log::unix_epoch_millis(),
         request_id,
         model_id,
         completion_reason,

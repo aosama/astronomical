@@ -1,11 +1,12 @@
 use astronomical_model_serving::{LagunaArtifactValidationError, LagunaArtifactValidator};
 
-use super::compressed_artifact_support::{CompressedFixtureFormat, dense_fixture};
+use super::compressed_artifact_support;
+use super::compressed_artifact_support::CompressedFixtureFormat;
 
 #[test]
 fn should_require_complete_scalar_fp8_key_value_cache_metadata() {
     let missing_directory = tempfile::tempdir().expect("the test should create a directory");
-    let mut missing_fixture = dense_fixture(
+    let mut missing_fixture = compressed_artifact_support::dense_fixture(
         "",
         CompressedFixtureFormat::BlockFp8 {
             block_row_extent: 128,
@@ -24,7 +25,7 @@ fn should_require_complete_scalar_fp8_key_value_cache_metadata() {
         ("model.layers.0.self_attn.v_scale", "F32", vec![2]),
     ] {
         let malformed_directory = tempfile::tempdir().expect("the test should create a directory");
-        let mut malformed_fixture = dense_fixture(
+        let mut malformed_fixture = compressed_artifact_support::dense_fixture(
             "",
             CompressedFixtureFormat::BlockFp8 {
                 block_row_extent: 128,

@@ -7,9 +7,10 @@ use super::rest_support::{
     read_performance_records, required_u64, send_streaming_chat_request, user_message,
     write_cache_pressure_worker_config,
 };
-use crate::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
+use crate::openai_rest;
+use crate::openai_rest::E2E_TIMEOUT;
 use crate::support::openai_client::LocalOpenAiClient;
-use crate::support::serving_rest::launch_serving_rest_server_for_model_with_memory_limit;
+use crate::support::serving_rest;
 
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
@@ -32,14 +33,15 @@ async fn run_append_only_rest_journey() {
     write_cache_pressure_worker_config(configured_worker_home.path(), &model_directory, None);
     let prepared_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
-    let model_artifact_rest_server = launch_serving_rest_server_for_model_with_memory_limit(
-        cache_pressure_model_id(),
-        model_directory,
-        Some(configured_worker_home.path()),
-        Some(performance_log_directory.path()),
-        None,
-    )
-    .await;
+    let model_artifact_rest_server =
+        serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
+            cache_pressure_model_id(),
+            model_directory,
+            Some(configured_worker_home.path()),
+            Some(performance_log_directory.path()),
+            None,
+        )
+        .await;
     let server_address = model_artifact_rest_server.server_address;
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
 
@@ -133,7 +135,7 @@ async fn run_append_only_rest_journey() {
     let final_status = get_json_endpoint(server_address, "/v1/status").await;
     assert_worker_health_and_memory(&final_status);
 
-    stop_serving_rest_server(model_artifact_rest_server).await;
+    openai_rest::stop_serving_rest_server(model_artifact_rest_server).await;
     eprintln!(
         "{acceptance_log_prefix} status=success cold_prompt_tokens={} restored_tokens={expected_restored_token_count} restored_blocks={expected_restored_block_count} warm_prompt_tokens={}",
         cold_response.prompt_token_count, warm_response.prompt_token_count,

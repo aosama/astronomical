@@ -10,7 +10,7 @@ use astronomical_model_serving::{
     initialize_laguna_execution_with_serving_settings,
 };
 
-use super::page_artifact::{write_sparse_artifact, write_sparse_artifact_with_maximum_position};
+use super::page_artifact;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
@@ -19,7 +19,7 @@ use crate::common::{
 async fn should_start_a_laguna_engine_from_a_validated_artifact_and_generate_tokens() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("Laguna startup directory");
-    write_sparse_artifact(model_directory.path(), false);
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
     let attribution_directory = tempfile::tempdir().expect("Laguna attribution directory");
     let attribution_log_path = attribution_directory
         .path()
@@ -127,7 +127,7 @@ async fn should_start_a_laguna_engine_from_a_validated_artifact_and_generate_tok
 async fn should_fail_model_loading_when_required_prompt_cache_cannot_initialize() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("Laguna startup directory");
-    write_sparse_artifact(model_directory.path(), false);
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
     let cache_parent = tempfile::tempdir().expect("prompt-cache parent directory");
     let invalid_cache_root = cache_parent.path().join("regular-file-cache-root");
     fs::write(&invalid_cache_root, b"not a directory")
@@ -156,7 +156,11 @@ async fn should_fail_model_loading_when_required_prompt_cache_cannot_initialize(
 async fn should_publish_then_restore_an_admitted_romeo_and_juliet_prompt_prefix() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("Laguna prompt-cache model directory");
-    write_sparse_artifact_with_maximum_position(model_directory.path(), false, 1_024);
+    page_artifact::write_sparse_artifact_with_maximum_position(
+        model_directory.path(),
+        false,
+        1_024,
+    );
     let cache_directory = tempfile::tempdir().expect("Laguna prompt-cache directory");
     let mut chunking = crate::common::standard_worker_chunking_configuration();
     chunking.fixed_prompt_processing_chunk_size_tokens = 256;

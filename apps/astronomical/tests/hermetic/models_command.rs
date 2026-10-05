@@ -3,7 +3,7 @@
 
 use std::{io::Write, path::PathBuf};
 
-use astronomical_cli::{CliCommand, ModelsCommand, ModelsDependencies, UsageError, run_models};
+use astronomical_cli::{CliCommand, ModelsCommand, ModelsDependencies, UsageError};
 use tokio::time::timeout;
 
 use super::stub_daemon::{
@@ -114,7 +114,7 @@ async fn should_list_installed_models_with_the_resident_marker() {
 
     let models_outcome = timeout(
         TEST_TIMEOUT,
-        run_models(&ModelsCommand::List, &mut models_dependencies),
+        astronomical_cli::run_models(&ModelsCommand::List, &mut models_dependencies),
     )
     .await
     .expect("the models journey should finish inside the test timeout");
@@ -151,7 +151,7 @@ async fn should_render_the_catalog_with_local_states() {
 
     let models_outcome = timeout(
         TEST_TIMEOUT,
-        run_models(&ModelsCommand::Supported, &mut models_dependencies),
+        astronomical_cli::run_models(&ModelsCommand::Supported, &mut models_dependencies),
     )
     .await
     .expect("the models journey should finish inside the test timeout");
@@ -187,7 +187,7 @@ async fn should_show_and_set_the_default_model() {
             models_dependencies(vec![socket_path.clone()], &mut stdout, &mut stderr);
         let models_outcome = timeout(
             TEST_TIMEOUT,
-            run_models(
+            astronomical_cli::run_models(
                 &ModelsCommand::Default { model_id: None },
                 &mut models_dependencies,
             ),
@@ -208,7 +208,7 @@ async fn should_show_and_set_the_default_model() {
             models_dependencies(vec![socket_path.clone()], &mut stdout, &mut stderr);
         let models_outcome = timeout(
             TEST_TIMEOUT,
-            run_models(
+            astronomical_cli::run_models(
                 &ModelsCommand::Default {
                     model_id: Some("test/ready-model".to_owned()),
                 },
@@ -229,7 +229,7 @@ async fn should_show_and_set_the_default_model() {
             models_dependencies(vec![socket_path.clone()], &mut stdout, &mut stderr);
         let models_outcome = timeout(
             TEST_TIMEOUT,
-            run_models(
+            astronomical_cli::run_models(
                 &ModelsCommand::Default { model_id: None },
                 &mut models_dependencies,
             ),
@@ -276,7 +276,7 @@ async fn should_download_a_missing_model_before_persisting_the_default() {
 
     let models_outcome = timeout(
         TEST_TIMEOUT,
-        run_models(
+        astronomical_cli::run_models(
             &ModelsCommand::Default {
                 model_id: Some("test/downloaded-model".to_owned()),
             },
@@ -330,7 +330,7 @@ async fn should_download_a_missing_model_with_live_progress() {
 
     let models_outcome = timeout(
         TEST_TIMEOUT,
-        run_models(
+        astronomical_cli::run_models(
             &ModelsCommand::Download {
                 model_id: "test/downloaded-model".to_owned(),
             },
@@ -364,7 +364,7 @@ async fn should_fail_to_download_a_model_outside_the_catalog() {
 
     let models_outcome = timeout(
         TEST_TIMEOUT,
-        run_models(
+        astronomical_cli::run_models(
             &ModelsCommand::Download {
                 model_id: "test/not-in-catalog".to_owned(),
             },
