@@ -10,8 +10,8 @@
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_graph::VerifyWindowGdnKernelSet;
 use crate::mlx_compiled_verify_window_ops as ops;
+use crate::{MlxArray, MlxDtype, MlxStream, raw};
 use crate::{MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, apply_metal_kernel_in_graph};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, MlxStream, raw};
 
 /// The stable float32 decay formula and sigmoid update rates, mirroring the
 /// compiled eager graphs op for op.

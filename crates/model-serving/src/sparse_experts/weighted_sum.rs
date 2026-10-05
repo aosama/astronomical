@@ -4,14 +4,13 @@
 //! and never materializes `[tokens, top_k, hidden]`. Unsorted reduction multiplies
 //! the original assignment tensor by the original scores.
 
-use astronomical_runtime_integration::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
-    MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::error::SparseExpertError;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
+};
 
 const OPERATION: &str = "reduce stacked expert outputs";
 const SORTED_EXPERT_WEIGHTED_SUM_SOURCE: &str = r#"
@@ -34,13 +33,15 @@ const SORTED_EXPERT_WEIGHTED_SUM_SOURCE: &str = r#"
 "#;
 
 /// Builds the retained Metal kernel for sorted expert reduction.
-pub fn sorted_expert_weighted_sum_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
+pub fn sorted_expert_weighted_sum_kernel()
+-> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
     MlxMetalKernel::new(
         "sorted_expert_weighted_sum",
         &["sorted_outputs", "inverse_order", "scores"],
         &["weighted_outputs"],
         SORTED_EXPERT_WEIGHTED_SUM_SOURCE,
     )
+    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 /// Reduces unsorted `[..., K, D]` outputs by original assignment scores.

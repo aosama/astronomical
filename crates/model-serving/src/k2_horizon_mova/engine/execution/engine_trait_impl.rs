@@ -8,9 +8,7 @@
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerEvent};
-use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime,
-};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::{K2HorizonMoVAActiveGeneration, K2HorizonMoVAInferenceExecution};
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
@@ -25,6 +23,7 @@ use crate::{
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceOperation,
 };
 use crate::{sorted_expert_weighted_sum_kernel, worker_process_kernel_capabilities};
+use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu};
 
 impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
     type Request = K2HorizonMoVAInferenceRequest;

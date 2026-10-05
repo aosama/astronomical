@@ -1,13 +1,13 @@
 use std::time::Duration;
 
-use astronomical_runtime_integration::{MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use super::resident_gate_up_fusion_support::*;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledSwiGlu};
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(115);
 

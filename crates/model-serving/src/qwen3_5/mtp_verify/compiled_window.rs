@@ -15,13 +15,6 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::{
-    MlxCompiledVerifyWindowGraph, VerifyWindowFullAttentionQuantization,
-    VerifyWindowGatedDeltaQuantization, VerifyWindowGdnKernelSet, VerifyWindowGeometry,
-    VerifyWindowLayerKind, VerifyWindowLayerQuantization, VerifyWindowQuantizationPair,
-    VerifyWindowTrunkQuantization,
-};
-
 use crate::decoder_cache::{DecoderCacheLayerLayout, DecoderCacheState};
 use crate::qwen3_5::decoder::RequestDecoderStateStack;
 use crate::qwen3_5::model::Qwen3_5Model;
@@ -35,7 +28,12 @@ use crate::qwen3_5::mtp_verify::window_abi_assembly::{
 use crate::qwen3_5::mtp_verify::window_state_leaves::{
     WindowStateLeaves, WindowStateUpdate, extract_window_input_leaves, install_window_output_leaves,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxCompiledVerifyWindowGraph, VerifyWindowFullAttentionQuantization,
+    VerifyWindowGatedDeltaQuantization, VerifyWindowGdnKernelSet, VerifyWindowGeometry,
+    VerifyWindowLayerKind, VerifyWindowLayerQuantization, VerifyWindowQuantizationPair,
+    VerifyWindowTrunkQuantization,
+};
 
 /// The supported window row counts (draft depth plus one).
 pub(crate) const SUPPORTED_ROW_COUNTS: [i32; 3] = [2, 3, 4];

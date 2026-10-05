@@ -1,9 +1,9 @@
-use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxDtype;
+use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxDtype};
 
 // Qwen3.5 vision tower geometry: hidden 1152 over 16 heads is head dimension 72.
 const HEAD_COUNT: i32 = 16;

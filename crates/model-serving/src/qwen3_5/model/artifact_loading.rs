@@ -4,9 +4,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
-use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxRuntime,
-};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::artifact_validation::TensorDeclarationOrigin;
 use crate::kernel_capability::{CustomMetalKernelFamily, worker_process_kernel_capabilities};
@@ -21,7 +19,7 @@ use super::{
     ValidatedQwen3_5Artifact,
 };
 use crate::qwen3_5::multi_token_prediction::bind_optional_weights;
-use astronomical_mlx_c_rust::MlxDtype;
+use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
 
 impl Qwen3_5Model {
     /// Loads a model without diagnostic performance attribution.

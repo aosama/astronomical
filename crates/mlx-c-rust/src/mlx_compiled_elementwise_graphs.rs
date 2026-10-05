@@ -1,15 +1,16 @@
 use std::os::raw::c_int;
 
+use crate::MlxBindingsContext;
 use crate::mlx_compiled_attention_output_gate::build_attention_output_gate_graph;
 use crate::mlx_compiled_sparse_shared_expert_combination::build_sparse_shared_expert_combination_graph;
 use crate::mlx_compiled_vision_rope::build_vision_rope_graph;
+use crate::{MlxArray, MlxStream, raw};
 use crate::{
-    MlxRuntime, MlxRuntimeError,
+    MlxCError,
     mlx_compiled_graph::{
         MlxCompiledGraph, array_from_vector, graph_output_array, set_graph_output,
     },
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
 
 const APPLY_ATTENTION_OUTPUT_GATE_OPERATION: &str = "apply the compiled MLX attention output gate";
 const COMPILE_ATTENTION_OUTPUT_GATE_OPERATION: &str =
@@ -47,7 +48,7 @@ pub struct MlxCompiledElementwiseGraphs {
 
 impl MlxCompiledElementwiseGraphs {
     /// Creates reusable compiled graphs for elementwise model composites.
-    pub fn new() -> Result<Self, MlxRuntimeError> {
+    pub fn new() -> Result<Self, MlxCError> {
         Ok(Self {
             attention_output_gate: MlxCompiledGraph::new(
                 build_attention_output_gate_graph,
@@ -88,14 +89,14 @@ impl MlxCompiledElementwiseGraphs {
     }
 }
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies `attention_output * sigmoid(output_gate_logits)` as one compiled composite.
     pub fn apply_compiled_attention_output_gate(
         &self,
         compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
         attention_output: &MlxArray,
         output_gate_logits: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs.attention_output_gate.apply(
             &[attention_output, output_gate_logits],
             APPLY_ATTENTION_OUTPUT_GATE_OPERATION,
@@ -109,7 +110,7 @@ impl MlxRuntime {
         sparse_expert_output: &MlxArray,
         shared_expert_output: &MlxArray,
         shared_expert_gate_logits: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs
             .sparse_shared_expert_combination
             .apply(
@@ -128,7 +129,7 @@ impl MlxRuntime {
         compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
         up_states: &MlxArray,
         gate_states: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs
             .precise_swiglu
             .apply(&[up_states, gate_states], APPLY_PRECISE_SWIGLU_OPERATION)
@@ -141,7 +142,7 @@ impl MlxRuntime {
         decay_rate_logarithm: &MlxArray,
         decay_interval_inputs: &MlxArray,
         decay_interval_bias: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs.gated_delta_decay.apply(
             &[
                 decay_rate_logarithm,
@@ -163,7 +164,7 @@ impl MlxRuntime {
         &self,
         compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
         input: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs
             .fused_silu
             .apply(&[input], APPLY_FUSED_SILU_OPERATION)
@@ -180,7 +181,7 @@ impl MlxRuntime {
         &self,
         compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
         input: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs
             .fused_softplus
             .apply(&[input], APPLY_FUSED_SOFTPLUS_OPERATION)
@@ -202,7 +203,7 @@ impl MlxRuntime {
         rotary_sines: &MlxArray,
         first_half: &MlxArray,
         second_half: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         compiled_elementwise_graphs.vision_rope.apply(
             &[
                 attention_states,

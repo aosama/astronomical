@@ -1,7 +1,7 @@
 use std::ffi::{CString, NulError};
 
-use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxCError, MlxDtype, MlxStream, raw};
+use crate::MlxBindingsContext;
+use crate::{MlxArray, MlxArrayVector, MlxCError, MlxDtype, MlxStream, error::check_status, raw};
 
 /// Output shape and dtype requested from one custom Metal kernel launch.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,7 +46,7 @@ impl MlxMetalKernel {
         input_names: &[&str],
         output_names: &[&str],
         kernel_source: &str,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         Self::new_with_header(kernel_name, input_names, output_names, "", kernel_source)
     }
 
@@ -56,7 +56,7 @@ impl MlxMetalKernel {
         output_names: &[&str],
         kernel_header: &str,
         kernel_source: &str,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         Self::new_with_options(
             kernel_name,
             input_names,
@@ -74,10 +74,10 @@ impl MlxMetalKernel {
         kernel_header: &str,
         kernel_source: &str,
         has_atomic_outputs: bool,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         const OPERATION: &str = "create an MLX custom Metal kernel";
         if input_names.is_empty() || output_names.is_empty() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description: "custom Metal kernels must declare at least one input and output"
                     .to_owned(),
@@ -102,7 +102,7 @@ impl MlxMetalKernel {
             )
         };
         if raw_kernel.ctx.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description: "MLX returned an empty custom Metal kernel handle".to_owned(),
             });
@@ -124,7 +124,7 @@ impl Drop for MlxMetalKernel {
     }
 }
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies one owned custom Metal kernel on the runtime's GPU stream.
     pub fn apply_metal_kernel(
         &self,
@@ -134,7 +134,7 @@ impl MlxRuntime {
         grid: [i32; 3],
         thread_group: [i32; 3],
         template_arguments: &[MlxMetalKernelTemplateArgument],
-    ) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+    ) -> Result<Vec<MlxArray>, MlxCError> {
         self.apply_metal_kernel_with_output_initialization(
             kernel,
             input_arrays,
@@ -156,7 +156,7 @@ impl MlxRuntime {
         thread_group: [i32; 3],
         template_arguments: &[MlxMetalKernelTemplateArgument],
         output_initial_value: Option<f32>,
-    ) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+    ) -> Result<Vec<MlxArray>, MlxCError> {
         const OPERATION: &str = "apply an MLX custom Metal kernel";
         validate_kernel_launch(input_arrays, output_specs, grid, thread_group)?;
         let input_vector = MlxArrayVector::new(input_arrays)?;
@@ -178,7 +178,7 @@ impl MlxRuntime {
         check_status(status, OPERATION)?;
         let output_count = output_vector.len();
         if output_count != output_specs.len() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description: format!(
                     "custom Metal kernel returned {output_count} outputs but {} were requested",
@@ -189,13 +189,13 @@ impl MlxRuntime {
         (0..output_count)
             .map(|output_index| output_vector.array_at(output_index, OPERATION))
             .collect::<Result<Vec<_>, MlxCError>>()
-            .map_err(MlxRuntimeError::from)
+            .map_err(MlxCError::from)
     }
 }
 
 /// Applies one custom Metal kernel inside a compiled-graph trace.
 ///
-/// Identical to [`MlxRuntime::apply_metal_kernel`] minus the runtime handle:
+/// Identical to [`MlxBindingsContext::apply_metal_kernel`] minus the runtime handle:
 /// compiled-graph builders run without a runtime, on the stream the trace is
 /// being built for. Errors surface as plain status codes; the input contract
 /// (row-contiguous arrays, validated launch dimensions) is the builder's
@@ -258,13 +258,13 @@ impl MlxMetalKernelConfig {
         grid: [i32; 3],
         thread_group: [i32; 3],
         output_initial_value: Option<f32>,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         const OPERATION: &str = "configure an MLX custom Metal kernel";
         // SAFETY: The runtime error handler is installed before model loading,
         // and MLX returns one owned config handle.
         let raw_config = unsafe { raw::mlx_fast_metal_kernel_config_new() };
         if raw_config.ctx.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description: "MLX returned an empty custom Metal kernel config".to_owned(),
             });
@@ -322,7 +322,7 @@ impl MlxMetalKernelConfig {
     fn add_template_arguments(
         &self,
         template_arguments: &[MlxMetalKernelTemplateArgument],
-    ) -> Result<(), MlxRuntimeError> {
+    ) -> Result<(), MlxCError> {
         const OPERATION: &str = "configure an MLX custom Metal kernel";
         for template_argument in template_arguments {
             match *template_argument {
@@ -389,7 +389,7 @@ struct MlxStringVector {
 }
 
 impl MlxStringVector {
-    fn new(strings: &[&str], operation: &'static str) -> Result<Self, MlxRuntimeError> {
+    fn new(strings: &[&str], operation: &'static str) -> Result<Self, MlxCError> {
         let c_strings = strings
             .iter()
             .map(|source_string| c_string(source_string, operation, "string vector entry"))
@@ -403,7 +403,7 @@ impl MlxStringVector {
             raw::mlx_vector_string_new_data(string_pointers.as_mut_ptr(), string_pointers.len())
         };
         if raw_vector.ctx.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation,
                 description: "MLX returned an empty string vector handle".to_owned(),
             });
@@ -430,10 +430,10 @@ fn validate_kernel_launch(
     output_specs: &[MlxMetalKernelOutput],
     grid: [i32; 3],
     thread_group: [i32; 3],
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "apply an MLX custom Metal kernel";
     if input_arrays.is_empty() || output_specs.is_empty() {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "custom Metal kernel launches require at least one input and output"
                 .to_owned(),
@@ -442,7 +442,7 @@ fn validate_kernel_launch(
     if grid.iter().any(|dimension| *dimension <= 0)
         || thread_group.iter().any(|dimension| *dimension <= 0)
     {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "custom Metal kernel grid and threadgroup dimensions must be positive"
                 .to_owned(),
@@ -455,7 +455,7 @@ fn c_string(
     source_text: &str,
     operation: &'static str,
     value_description: &'static str,
-) -> Result<CString, MlxRuntimeError> {
+) -> Result<CString, MlxCError> {
     CString::new(source_text).map_err(|source| nul_error(operation, value_description, source))
 }
 
@@ -463,8 +463,8 @@ fn nul_error(
     operation: &'static str,
     value_description: &'static str,
     source: NulError,
-) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+) -> MlxCError {
+    MlxCError {
         operation,
         description: format!("{value_description} contains an interior NUL byte: {source}"),
     }

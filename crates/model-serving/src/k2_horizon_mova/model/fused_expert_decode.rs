@@ -20,10 +20,7 @@
 //! Decode-only by contract: callers route single-token batches here and keep
 //! chunked prefill on the standard gathered path.
 
-use astronomical_runtime_integration::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
-    MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::PerformanceAttribution;
 
@@ -32,7 +29,9 @@ use super::error::K2HorizonMoVAExecutionError;
 
 mod kernel_sources;
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
+};
 use kernel_sources::{
     FUSED_DECODE_KERNEL_HEADER, ROUTED_DOWN_KERNEL_SOURCE, ROUTED_GATE_UP_KERNEL_SOURCE,
     VALUE_EXPERT_KERNEL_SOURCE,
@@ -266,7 +265,7 @@ impl FusedExpertDecodeKernels {
                 [THREADGROUP_SIZE, 1, 1],
                 &gate_up_arguments,
             )
-            .map_err(execution_error)?;
+            .map_err(|error| execution_error(MlxRuntimeError::from(error)))?;
         let mut swiglu_outputs = swiglu_hidden;
         let swiglu_hidden =
             swiglu_outputs
@@ -447,7 +446,7 @@ fn apply_fused_reduce_kernel(
             &arguments,
             Some(0.0),
         )
-        .map_err(execution_error)?;
+        .map_err(|error| execution_error(MlxRuntimeError::from(error)))?;
     outputs
         .pop()
         .ok_or_else(|| K2HorizonMoVAExecutionError::InvalidExecution {

@@ -1,12 +1,11 @@
-use astronomical_runtime_integration::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
-    MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::{Qwen3_5ExecutionError, Qwen3_5Model};
 use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
+};
 
 // Adapted from an upstream open-source Qwen3.5 target-verification QMV
 // kernel (see third-party/THIRD_PARTY_NOTICES for the provenance and license).
@@ -212,7 +211,8 @@ impl Qwen3_5TargetVerificationProjection {
 
 /// Builds the retained custom Metal kernel used by eligible target-verification
 /// projections.
-pub fn target_verification_quantized_linear_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
+pub fn target_verification_quantized_linear_kernel()
+-> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
     MlxMetalKernel::new_with_header(
         "astronomical_qwen3_5_target_verification_quantized_linear",
         &[
@@ -225,6 +225,7 @@ pub fn target_verification_quantized_linear_kernel() -> Result<MlxMetalKernel, M
         TARGET_VERIFICATION_QUANTIZED_LINEAR_HEADER,
         TARGET_VERIFICATION_QUANTIZED_LINEAR_SOURCE,
     )
+    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 /// Projects one multi-token target-verification window through the specialized
