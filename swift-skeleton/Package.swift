@@ -10,6 +10,11 @@ let package: Package = Package(
     platforms: [
         .macOS(.v15)
     ],
+    dependencies: [
+        // Wave 3 — the Metal acceleration substrate under crates/mlx-c-rust.
+        // Pinned to the upstream release; never a developer-local checkout.
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.32.3")
+    ],
     targets: [
         // Wave 1 — crates/config
         .target(
@@ -30,7 +35,15 @@ let package: Package = Package(
         // Wave 3 — crates/runtime-integration
         .target(name: "RuntimeIntegration"),
         // Wave 3 — crates/model-serving
-        .target(name: "ModelServing"),
+        .target(
+            name: "ModelServing",
+            dependencies: [
+                "IpcProtocol",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXFast", package: "mlx-swift"),
+                .product(name: "MLXLinalg", package: "mlx-swift")
+            ]),
         // Wave 3 — apps/inference-worker
         .executableTarget(name: "InferenceWorker"),
         // One test target per module, mirroring Sources/.
