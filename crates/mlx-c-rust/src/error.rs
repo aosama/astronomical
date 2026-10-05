@@ -7,6 +7,11 @@
 //! active memory ceiling) is runtime policy and stays in
 //! `astronomical-runtime-integration`, which converts `MlxCError` values at
 //! its own boundary.
+//!
+//! Payload trampolines cannot return Rust errors across the C ABI, so they
+//! park their typed failure in a separate thread-local slot and return
+//! nonzero; status translation prefers that parked failure because it is the
+//! root cause, while MLX-C's status text only reports that a callback errored.
 
 use std::{
     cell::RefCell,
@@ -26,6 +31,15 @@ thread_local! {
     /// calling thread. Thread-local storage preserves that operation pairing
     /// without allowing concurrent worker calls to consume each other's errors.
     static LAST_MLX_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+thread_local! {
+    /// A failure raised inside a payload trampoline, parked for the caller's
+    /// status translation. Routing it through MLX's own captured-error
+    /// channel instead would let any nested MLX call on the same thread
+    /// overwrite it before the caller observes the nonzero status, so the
+    /// trampoline stores the typed failure here and returns nonzero.
+    static LAST_CLOSURE_ERROR: RefCell<Option<MlxCError>> = const { RefCell::new(None) };
 }
 
 /// One failed MLX-C operation: what was attempted and what MLX-C reported.
@@ -61,7 +75,15 @@ pub fn install_non_terminating_error_handler() {
 pub fn check_status(status: i32, operation: &'static str) -> Result<(), MlxCError> {
     if status == 0 {
         clear_captured_mlx_error();
+        clear_closure_error();
         return Ok(());
+    }
+    if let Some(failure) = take_closure_error() {
+        // The parked trampoline failure is the root cause; the status-side
+        // description is consumed too so it cannot leak into a later
+        // operation's error on this thread.
+        clear_captured_mlx_error();
+        return Err(failure);
     }
     let description = take_captured_mlx_error()
         .unwrap_or_else(|| format!("MLX C returned status {status} without an error message"));
@@ -87,6 +109,35 @@ pub fn clear_captured_mlx_error() {
     LAST_MLX_ERROR.with(|last_error| {
         if let Ok(mut writable_error) = last_error.try_borrow_mut() {
             *writable_error = None;
+        }
+    });
+}
+
+/// Parks a payload-closure failure for the calling thread's status check.
+pub fn set_closure_error(failure: MlxCError) {
+    LAST_CLOSURE_ERROR.with(|last_failure| {
+        if let Ok(mut writable_failure) = last_failure.try_borrow_mut() {
+            *writable_failure = Some(failure);
+        }
+    });
+}
+
+/// Takes the parked payload-closure failure for the calling thread, if any.
+#[must_use]
+pub fn take_closure_error() -> Option<MlxCError> {
+    LAST_CLOSURE_ERROR.with(|last_failure| {
+        last_failure
+            .try_borrow_mut()
+            .ok()
+            .and_then(|mut writable_failure| writable_failure.take())
+    })
+}
+
+/// Discards the parked payload-closure failure for the calling thread.
+pub fn clear_closure_error() {
+    LAST_CLOSURE_ERROR.with(|last_failure| {
+        if let Ok(mut writable_failure) = last_failure.try_borrow_mut() {
+            *writable_failure = None;
         }
     });
 }

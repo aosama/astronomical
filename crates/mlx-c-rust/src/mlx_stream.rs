@@ -33,6 +33,13 @@ impl MlxStream {
         }
         Ok(Self(raw_stream))
     }
+
+    pub(crate) fn from_live_raw(
+        raw_stream: raw::mlx_stream,
+        operation: &'static str,
+    ) -> Result<Self, MlxCError> {
+        Self::from_raw(raw_stream, operation)
+    }
 }
 
 impl Drop for MlxStream {

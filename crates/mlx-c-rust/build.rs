@@ -21,31 +21,18 @@ const DEFAULT_NATIVE_DEPENDENCY_CACHE_SUFFIX: &str =
 const EXTRACTION_TREE_MLX_C: &str = "mlx_c-src";
 const COMPLETION_MARKER_FILE_NAME: &str = "complete";
 
-const BINDGEN_FUNCTION_ALLOWLIST: &str = concat!(
-    "mlx_(set_error_handler|metal_set_metallib_path|version|string_(new|data|free)|clear_cache|",
-    "device_(new_type|free)|device_info_(new|get|get_size|free)|",
-    "compile|closure_(new|new_func|free|apply)|",
-    "get_(active_memory|cache_memory|memory_limit|peak_memory)|reset_peak_memory|set_(cache|memory)_limit|",
-    "array_(new|new_data|free|eval|detach|shape|ndim|dtype|size|nbytes|data_(float32|uint8|uint32)|item_uint32|set)|",
-    "default_(cpu|gpu)_stream_new|stream_free|synchronize|",
-    "(add(mm)?|arange|argmax_axis|argpartition_axis|argsort_axis|astype|broadcast_to|clip|concatenate_axis|contiguous|conv(1d|2d|3d)|cos|cumsum_axis|dequantize|divide|erf|exp|expand_dims|floor_divide|full|gather_(mm|qmm)|greater|greater_equal|log1p|logaddexp|matmul|pad|power|",
-    "max_axis|multiply|negative|put_along_axis|scatter_add_single|quantize|quantized_matmul|repeat_axis|reshape|sigmoid|sin|slice(_update)?|softmax_axis|sqrt|subtract|sum_axis|tanh|less|",
-    "squeeze_axis|stack_axis|take_along_axis|take_axis|topk_axis|transpose_axes|where|zeros)|",
-    "fast_(rms_norm|layer_norm|rope(_dynamic)?|scaled_dot_product_attention)|fast_metal_kernel(_config)?_(new|free|apply|add_output_arg|set_grid|set_thread_group|set_init_value|add_template_arg_(dtype|int|bool))|random_(categorical|key|normal|split)|eval|async_eval|",
-    "vector_array_(new|new_data|free|get|size|set_value|set_data)|vector_string_(new_data|free)|io_(reader|writer)_(new|free)|",
-    "save_safetensors_writer|",
-    "load_safetensors_reader|map_string_to_array_(new|free|get)|",
-    "map_string_to_array_insert|map_string_to_string_(new|free|insert))|",
-    "astronomical_metal_expert_loader_(start|wait|free)"
-);
+const BINDGEN_FUNCTION_ALLOWLIST: &str =
+    "mlx_.*|astronomical_metal_expert_loader_(start|wait|free)";
 
-const BINDGEN_TYPE_ALLOWLIST: &str = concat!(
-    "mlx_(error_handler_func|string|array|dtype|stream|closure|device|device_info|device_type|io_reader|io_vtable|",
-    "optional_(dtype|float|int)|vector_array|vector_string|fast_metal_kernel(_config)?|map_string_to_array|map_string_to_string)|",
-    "astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle)"
-);
+const BINDGEN_TYPE_ALLOWLIST: &str =
+    "mlx_.*|astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle)";
 
 const EXPERT_LOADER_HEADER_REPOSITORY_RELATIVE_PATH: &str = "crates/runtime-integration/native/experimental/aligned_expert_packs/astronomical_metal_expert_loader.h";
+
+/// The generated inventory module consumed by `raw.rs`; it exposes the exact
+/// bridged symbol sets the coverage contract compares against the pinned
+/// headers.
+const BRIDGED_INVENTORY_FILE_NAME: &str = "bridged_inventory.rs";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let manifest_directory = required_path_variable("CARGO_MANIFEST_DIR")?;
@@ -96,7 +83,83 @@ fn main() -> Result<(), Box<dyn Error>> {
         .allowlist_type(BINDGEN_TYPE_ALLOWLIST)
         .generate_comments(false)
         .generate()?;
+    let bindings_content = bindings.to_string();
+    write_bridged_inventory(&bindings_content, &output_directory)?;
     bindings.write_to_file(output_directory.join("mlx_c_bindings.rs"))?;
+    Ok(())
+}
+
+/// Extracts the bridged `mlx_*` functions and types from the generated
+/// bindings and emits them as public constant slices so the coverage contract
+/// can compare the bridge against the pinned headers without re-running
+/// bindgen.
+fn write_bridged_inventory(
+    bindings_content: &str,
+    output_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let identifier_end = |segment: &str| {
+        segment
+            .find(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .unwrap_or(segment.len())
+    };
+    let mut bridged_functions: Vec<String> = bindings_content
+        .split("pub fn ")
+        .skip(1)
+        .map(|segment| &segment[..identifier_end(segment)])
+        .filter(|name| name.starts_with("mlx_"))
+        .map(str::to_owned)
+        .collect();
+    bridged_functions.sort();
+    bridged_functions.dedup();
+
+    // bindgen 0.73 skips C variadic functions; the hand-written declaration
+    // in `raw.rs` restores the one variadic MLX-C entry point.
+    bridged_functions.push("mlx_error".to_owned());
+
+    let mut bridged_types: Vec<String> = ["pub struct ", "pub enum ", "pub union ", "pub type "]
+        .iter()
+        .flat_map(|marker| {
+            bindings_content
+                .split(marker)
+                .skip(1)
+                .map(|segment| &segment[..identifier_end(segment)])
+                .filter(|name| name.starts_with("mlx_"))
+                .map(str::to_owned)
+                .collect::<Vec<String>>()
+        })
+        .collect();
+    // bindgen aliases constified C enums through `pub use self::mlx_x_ as
+    // mlx_x;`; the alias is the name the headers expose, so it belongs in the
+    // inventory alongside the tag.
+    for alias_segment in bindings_content.split("pub use self::").skip(1) {
+        let Some((_tag, alias_with_rest)) = alias_segment.split_once(" as ") else {
+            continue;
+        };
+        let alias = &alias_with_rest[..identifier_end(alias_with_rest)];
+        if alias.starts_with("mlx_") {
+            bridged_types.push(alias.to_owned());
+        }
+    }
+    bridged_types.sort();
+    bridged_types.dedup();
+
+    let inventory_source = format!(
+        "// Generated by this crate's build script from the bindgen output.\n\
+         // Every listed symbol exists in the compiled bridge; the coverage\n\
+         // contract compares this inventory against the pinned headers.\n\n\
+         /// Every MLX-C function bridged by the generated raw declarations.\n\
+         pub const BRIDGED_FUNCTIONS: [&str; {}] = {:?};\n\n\
+         /// Every MLX-C type bridged by the generated raw declarations.\n\
+         pub const BRIDGED_TYPES: [&str; {}] = {:?};\n",
+        bridged_functions.len(),
+        bridged_functions,
+        bridged_types.len(),
+        bridged_types,
+    );
+    std::fs::write(
+        output_directory.join(BRIDGED_INVENTORY_FILE_NAME),
+        inventory_source,
+    )?;
     Ok(())
 }
 
