@@ -163,6 +163,15 @@ To bump a pinned dependency:
 
 ## Bindgen headers and the C surface diff
 
+The MLX-C binding surface spans two crates. `crates/mlx-c-rust` owns the
+raw bindgen declarations, the captured-error translation, the owned handle
+types, the per-worker bindings context, and every operation wrapper family;
+it builds from the provisioned headers only and never invokes CMake.
+`crates/runtime-integration` owns the Astronomical policy over that
+boundary — memory-limit enforcement, metallib resolution and verification,
+the safetensors vtable policies, and native build orchestration — and links
+the bindings crate against the pinned native image.
+
 `scripts/provision-bindgen-headers.sh` extracts the pinned MLX and MLX-C
 archives from the verified native dependency cache and applies the same patch
 pipeline as the native build (the patch list is parsed from the native
