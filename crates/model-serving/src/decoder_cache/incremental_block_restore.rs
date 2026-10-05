@@ -117,10 +117,10 @@ fn concatenated_block_slab(
     let mut headroom_shape = restored_shape.clone();
     headroom_shape[STATE_DIMENSION_TOKEN_AXIS] = growth_headroom_tokens;
     let headroom = runtime.zeros(&headroom_shape, restored_tensor.dtype())?;
-    runtime.concatenate_axis(
+    Ok(runtime.concatenate_axis(
         &[&restored_tensor, &headroom],
         STATE_DIMENSION_TOKEN_AXIS as i32,
-    )
+    )?)
 }
 
 /// Concatenates block slices along the token axis and validates the result
@@ -162,7 +162,7 @@ fn zero_padded_slab(
     let mut headroom_shape = slab_shape.clone();
     headroom_shape[STATE_DIMENSION_TOKEN_AXIS] = headroom_tokens;
     let headroom = runtime.zeros(&headroom_shape, slab.dtype())?;
-    runtime.concatenate_axis(&[&slab, &headroom], STATE_DIMENSION_TOKEN_AXIS as i32)
+    Ok(runtime.concatenate_axis(&[&slab, &headroom], STATE_DIMENSION_TOKEN_AXIS as i32)?)
 }
 
 fn validate_restore_bounds(

@@ -303,7 +303,7 @@ fn slice_token_range(
     starts[STATE_DIMENSION_TOKEN_AXIS] = start_tokens;
     stops[STATE_DIMENSION_TOKEN_AXIS] = end_tokens;
     let strides = vec![1; starts.len()];
-    runtime.slice(tensor, &starts, &stops, &strides)
+    Ok(runtime.slice(tensor, &starts, &stops, &strides)?)
 }
 
 fn quantized_state_error(description: &'static str) -> MlxRuntimeError {

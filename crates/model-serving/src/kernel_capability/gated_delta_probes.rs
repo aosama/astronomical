@@ -107,12 +107,14 @@ fn patterned_rank_four(
             ],
         )
         .and_then(|array| runtime.astype(&array, MlxDtype::BFloat16))
+        .map_err(MlxRuntimeError::from)
 }
 
 fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Result<Vec<f32>, MlxRuntimeError> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32().map_err(MlxRuntimeError::from))
+        .and_then(|float32_array| float32_array.to_vec_f32())
+        .map_err(MlxRuntimeError::from)
 }
 
 fn execution_error(error: MlxRuntimeError) -> KernelCapabilityError {
@@ -370,6 +372,7 @@ fn scale_scalar(runtime: &MlxRuntime, scale_divisor: f32) -> Result<MlxArray, Ml
     runtime
         .array_from_f32(&[scale_divisor.recip()], &[])
         .and_then(|array| runtime.astype(&array, MlxDtype::BFloat16))
+        .map_err(MlxRuntimeError::from)
 }
 
 /// The composed public-MLX prework reference for the probe: rolling concat,

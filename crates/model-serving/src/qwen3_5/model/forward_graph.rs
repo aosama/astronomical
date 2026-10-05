@@ -503,10 +503,10 @@ pub(super) fn pre_final_normalization_hidden_state_at(
             description: "hidden-state row index is outside the target forward output".to_owned(),
         });
     }
-    runtime.slice(
+    Ok(runtime.slice(
         pre_final_normalization_hidden_states,
         &[0, token_position_index, 0],
         &[1, token_position_index + 1, hidden_state_shape[2]],
         &[1, 1, 1],
-    )
+    )?)
 }

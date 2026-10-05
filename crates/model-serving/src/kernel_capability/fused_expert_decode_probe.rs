@@ -63,15 +63,27 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
         let hidden = self
             .runtime
             .array_from_f32(&hidden_values(), &[1, PROBE_INPUT_DIMENSION as i32])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let indices = self
             .runtime
             .array_from_u32(&[0, 1], &[1, PROBE_ASSIGNMENT_COUNT as i32])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let scores = self
             .runtime
             .array_from_f32(&[1.0, 0.5], &[1, PROBE_ASSIGNMENT_COUNT as i32])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         // Expert zero scales and biases every nibble by (2, 1); expert one by
         // (3, 0). Every output row holds the same weight row, so the expected
         // reduction is the same dot per output index.
@@ -85,15 +97,27 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
                     words_per_group() as i32,
                 ],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let scales = self
             .runtime
             .array_from_f32(&[2.0, 2.0, 3.0, 3.0], &[2, 2, 1])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let biases = self
             .runtime
             .array_from_f32(&[1.0, 1.0, 0.0, 0.0], &[2, 2, 1])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let value_experts = K2HorizonMoVAAffineLinear::new(
             packed,
             scales,
@@ -144,15 +168,27 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
         let hidden = self
             .runtime
             .array_from_f32(&hidden_values(), &[1, PROBE_INPUT_DIMENSION as i32])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let indices = self
             .runtime
             .array_from_u32(&[0, 1], &[1, PROBE_ASSIGNMENT_COUNT as i32])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let scores = self
             .runtime
             .array_from_f32(&[1.0, 0.5], &[1, PROBE_ASSIGNMENT_COUNT as i32])
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let fused_rows = (PROBE_INTERMEDIATE_DIMENSION * 2) as i32;
         let gate_up_packed = self
             .runtime
@@ -164,21 +200,33 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
                     words_per_group() as i32,
                 ],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let gate_up_scales = self
             .runtime
             .array_from_f32(
                 &probe_scales_both_experts(fused_rows as usize),
                 &[2, fused_rows, 1],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let gate_up_biases = self
             .runtime
             .array_from_f32(
                 &vec![1.0; PROBE_EXPERT_COUNT * fused_rows as usize],
                 &[2, fused_rows, 1],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let switch_gate_up = K2HorizonMoVAAffineLinear::new(
             gate_up_packed,
             gate_up_scales,
@@ -197,21 +245,33 @@ impl FusedQuantizedExpertDecodeProbe<'_> {
                     words_per_group() as i32,
                 ],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let down_scales = self
             .runtime
             .array_from_f32(
                 &probe_scales_both_experts(PROBE_DOWN_OUTPUT_DIMENSION),
                 &[2, PROBE_DOWN_OUTPUT_DIMENSION as i32, 1],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let down_biases = self
             .runtime
             .array_from_f32(
                 &[0.0; PROBE_EXPERT_COUNT * PROBE_DOWN_OUTPUT_DIMENSION],
                 &[2, PROBE_DOWN_OUTPUT_DIMENSION as i32, 1],
             )
-            .map_err(probe_execution)?;
+            .map_err(|error| {
+                probe_execution(astronomical_runtime_integration::MlxRuntimeError::from(
+                    error,
+                ))
+            })?;
         let switch_down = K2HorizonMoVAAffineLinear::new(
             down_packed,
             down_scales,

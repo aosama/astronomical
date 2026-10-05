@@ -69,7 +69,7 @@ pub fn router_weighted_expert_inputs(
     let expanded_scores = runtime.expand_dims(selected_scores, -1)?;
     let weighted_hidden_states = runtime.multiply(&expanded_hidden_states, &expanded_scores)?;
     let activation_dtype_inputs = runtime.astype(&weighted_hidden_states, hidden_states.dtype())?;
-    runtime.expand_dims(&activation_dtype_inputs, -2)
+    Ok(runtime.expand_dims(&activation_dtype_inputs, -2)?)
 }
 
 /// Reduces sorted gather outputs with original scores through the inverse map.
@@ -117,7 +117,7 @@ fn unsorted_expert_weighted_sum_inner(
     // for numerical stability. Restore the expert activation dtype only after
     // accumulation so one-token MoE decode cannot widen every following layer
     // to Float32 and disable MLX's low-precision matrix kernels.
-    runtime.astype(&float32_accumulated_output, selected_expert_outputs.dtype())
+    Ok(runtime.astype(&float32_accumulated_output, selected_expert_outputs.dtype())?)
 }
 
 fn sorted_expert_weighted_sum_inner(
@@ -217,7 +217,7 @@ fn empty_weighted_outputs(
         weighted_output_shape.pop();
     }
     weighted_output_shape.push(output_dimension);
-    runtime.zeros(&weighted_output_shape, expert_outputs.dtype())
+    Ok(runtime.zeros(&weighted_output_shape, expert_outputs.dtype())?)
 }
 
 fn geometry_error(description: &'static str) -> MlxRuntimeError {

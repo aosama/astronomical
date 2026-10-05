@@ -1,7 +1,8 @@
-use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxArray;
+use crate::MlxBindingsContext;
+use crate::{MlxCError, MlxDtype, error::check_status, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Samples normal noise from one explicit request-owned PRNG key.
     pub fn random_normal(
         &self,
@@ -10,7 +11,7 @@ impl MlxRuntime {
         mean: f32,
         standard_deviation: f32,
         request_key: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "sample request-keyed MLX normal noise";
         validate_random_key(request_key)?;
         validate_random_normal_arguments(shape, dtype, mean, standard_deviation)?;
@@ -38,7 +39,7 @@ impl MlxRuntime {
         logits: &MlxArray,
         axis: i32,
         seed: u64,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_categorical_arguments(logits, axis)?;
         let random_key = self.random_key(seed)?;
         self.categorical_sample_with_key(logits, axis, &random_key)
@@ -50,7 +51,7 @@ impl MlxRuntime {
         logits: &MlxArray,
         axis: i32,
         random_key: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_categorical_arguments(logits, axis)?;
         validate_random_key(random_key)?;
         self.output_array("sample MLX categorical logits", |output, stream| {
@@ -63,7 +64,7 @@ impl MlxRuntime {
     }
 
     /// Creates the same two-word PRNG state as `mlx.core.random.seed`.
-    pub fn random_key(&self, seed: u64) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn random_key(&self, seed: u64) -> Result<MlxArray, MlxCError> {
         self.output_array("create MLX random key", |output, _stream| {
             // SAFETY: The output handle is uniquely writable and the seed is copied by value.
             unsafe { raw::mlx_random_key(output, seed) }
@@ -74,7 +75,7 @@ impl MlxRuntime {
     pub fn split_random_key(
         &self,
         random_state: &MlxArray,
-    ) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
+    ) -> Result<(MlxArray, MlxArray), MlxCError> {
         validate_random_key(random_state)?;
         let mut next_random_state = MlxArray::empty();
         let mut sample_key = MlxArray::empty();
@@ -100,7 +101,7 @@ fn validate_random_normal_arguments(
     dtype: MlxDtype,
     mean: f32,
     standard_deviation: f32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "sample request-keyed MLX normal noise";
     if !matches!(
         dtype,
@@ -132,7 +133,7 @@ fn validate_random_normal_arguments(
     Ok(())
 }
 
-fn validate_categorical_arguments(logits: &MlxArray, axis: i32) -> Result<(), MlxRuntimeError> {
+fn validate_categorical_arguments(logits: &MlxArray, axis: i32) -> Result<(), MlxCError> {
     const OPERATION: &str = "sample MLX categorical logits";
     if !matches!(
         logits.dtype(),
@@ -155,7 +156,7 @@ fn validate_categorical_arguments(logits: &MlxArray, axis: i32) -> Result<(), Ml
     Ok(())
 }
 
-fn validate_random_key(random_key: &MlxArray) -> Result<(), MlxRuntimeError> {
+fn validate_random_key(random_key: &MlxArray) -> Result<(), MlxCError> {
     if random_key.dtype() != MlxDtype::UInt32 || random_key.shape() != [2] {
         return Err(runtime_operation_error(
             "use an MLX random key",
@@ -165,8 +166,8 @@ fn validate_random_key(random_key: &MlxArray) -> Result<(), MlxRuntimeError> {
     Ok(())
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

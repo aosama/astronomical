@@ -1,13 +1,10 @@
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxArrayVector, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Reorders array dimensions using an explicit complete permutation.
-    pub fn transpose_axes(
-        &self,
-        input: &MlxArray,
-        axes: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn transpose_axes(&self, input: &MlxArray, axes: &[i32]) -> Result<MlxArray, MlxCError> {
         self.output_array("transpose MLX array axes", |output, stream| {
             // SAFETY: Axes remain borrowed for this copying graph operation.
             unsafe {
@@ -17,7 +14,7 @@ impl MlxRuntime {
     }
 
     /// Reshapes an array without changing its logical element count.
-    pub fn reshape(&self, input: &MlxArray, shape: &[i32]) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn reshape(&self, input: &MlxArray, shape: &[i32]) -> Result<MlxArray, MlxCError> {
         self.output_array("reshape an MLX array", |output, stream| {
             // SAFETY: Shape remains borrowed for this copying graph operation.
             unsafe { raw::mlx_reshape(output, input.raw(), shape.as_ptr(), shape.len(), stream) }
@@ -35,7 +32,7 @@ impl MlxRuntime {
         input: &MlxArray,
         indices: &MlxArray,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("take values from an MLX array axis", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_take_axis(output, input.raw(), indices.raw(), axis, stream) }
@@ -48,7 +45,7 @@ impl MlxRuntime {
         input: &MlxArray,
         indices: &MlxArray,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("take MLX values along an axis", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_take_along_axis(output, input.raw(), indices.raw(), axis, stream) }
@@ -62,7 +59,7 @@ impl MlxRuntime {
         indices: &MlxArray,
         values: &MlxArray,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_put_along_axis_arguments(input, indices, values, axis)?;
         self.output_array("put MLX values along an axis", |output, stream| {
             // SAFETY: Inputs and stream are live, axis and shapes were
@@ -93,7 +90,7 @@ impl MlxRuntime {
         indices: &MlxArray,
         updates: &MlxArray,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("scatter-add values into an MLX array", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe {
@@ -116,9 +113,9 @@ impl MlxRuntime {
     /// strides of a slice view over an evaluated parent. The flat reshape
     /// forces one contiguous materialization for strided views and is a
     /// zero-copy view for arrays that are already contiguous.
-    pub fn array_to_vec_f32(&self, array: &MlxArray) -> Result<Vec<f32>, MlxRuntimeError> {
+    pub fn array_to_vec_f32(&self, array: &MlxArray) -> Result<Vec<f32>, MlxCError> {
         let flat = self.reshape(array, &[-1])?;
-        flat.to_vec_f32().map_err(MlxRuntimeError::from)
+        flat.to_vec_f32().map_err(MlxCError::from)
     }
 
     /// Slices an array with one static start, stop, and stride per axis.
@@ -128,7 +125,7 @@ impl MlxRuntime {
         starts: &[i32],
         stops: &[i32],
         strides: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_static_slice(input, starts, stops, strides)?;
         self.output_array("slice an MLX array", |output, stream| {
             // SAFETY: Slice bounds remain borrowed for this graph-building call,
@@ -161,7 +158,7 @@ impl MlxRuntime {
         starts: &[i32],
         stops: &[i32],
         strides: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_static_slice(source, starts, stops, strides)?;
         self.output_array("update an MLX array slice", |output, stream| {
             // SAFETY: Source, update, and stream are live; slice vectors match
@@ -184,7 +181,7 @@ impl MlxRuntime {
     }
 
     /// Inserts one singleton dimension.
-    pub fn expand_dims(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn expand_dims(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxCError> {
         self.output_array("expand an MLX array dimension", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_expand_dims(output, input.raw(), axis, stream) }
@@ -192,11 +189,7 @@ impl MlxRuntime {
     }
 
     /// Concatenates arrays through MLX-C `mlx_concatenate_axis`.
-    pub fn concatenate_axis(
-        &self,
-        arrays: &[&MlxArray],
-        axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn concatenate_axis(&self, arrays: &[&MlxArray], axis: i32) -> Result<MlxArray, MlxCError> {
         let array_vector = MlxArrayVector::new(arrays)?;
         self.output_array("concatenate MLX arrays", |output, stream| {
             // SAFETY: The vector and stream are live and output is uniquely writable.
@@ -205,11 +198,7 @@ impl MlxRuntime {
     }
 
     /// Broadcasts an array to a validated static shape.
-    pub fn broadcast_to(
-        &self,
-        input: &MlxArray,
-        shape: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn broadcast_to(&self, input: &MlxArray, shape: &[i32]) -> Result<MlxArray, MlxCError> {
         validate_static_shape("broadcast an MLX array", shape)?;
         let broadcast_values =
             self.output_array("broadcast an MLX array", |output_array, stream| {
@@ -237,7 +226,7 @@ impl MlxRuntime {
         input: &MlxArray,
         repeat_count: i32,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_repeat_axis_arguments(input, repeat_count, axis)?;
         self.output_array("repeat MLX values along an axis", |output_array, stream| {
             // SAFETY: Input and stream are live, scalar arguments were validated,
@@ -247,7 +236,7 @@ impl MlxRuntime {
     }
 
     /// Stacks arrays with identical shapes along one new axis.
-    pub fn stack_axis(&self, arrays: &[&MlxArray], axis: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn stack_axis(&self, arrays: &[&MlxArray], axis: i32) -> Result<MlxArray, MlxCError> {
         validate_stack_axis_arguments(arrays, axis)?;
         let array_vector = MlxArrayVector::new(arrays)?;
         self.output_array(
@@ -261,7 +250,7 @@ impl MlxRuntime {
     }
 
     /// Removes one existing singleton axis.
-    pub fn squeeze_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn squeeze_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxCError> {
         validate_squeeze_axis_arguments(input, axis)?;
         self.output_array("squeeze one MLX singleton axis", |output_array, stream| {
             // SAFETY: Input and stream are live, axis was validated to name a
@@ -276,16 +265,16 @@ fn validate_static_slice(
     starts: &[i32],
     stops: &[i32],
     strides: &[i32],
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     let rank = input.shape().len();
     if starts.len() != rank || stops.len() != rank || strides.len() != rank {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: "slice an MLX array",
             description: "slice starts, stops, and strides must match the input rank".to_owned(),
         });
     }
     if strides.contains(&0) {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: "slice an MLX array",
             description: "slice strides must be nonzero".to_owned(),
         });
@@ -298,12 +287,12 @@ fn validate_put_along_axis_arguments(
     indices: &MlxArray,
     values: &MlxArray,
     axis: i32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "put MLX values along an axis";
     let input_shape = input.shape();
     let index_shape = indices.shape();
     if input.dtype() != values.dtype() || index_shape != values.shape() {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "input/value dtypes and index/value shapes must match".to_owned(),
         });
@@ -319,17 +308,17 @@ fn validate_put_along_axis_arguments(
             | MlxDtype::Int32
             | MlxDtype::Int64
     ) {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "put-along-axis indices must have an integral dtype".to_owned(),
         });
     }
-    let rank = i32::try_from(input_shape.len()).map_err(|_| MlxRuntimeError::RuntimeOperation {
+    let rank = i32::try_from(input_shape.len()).map_err(|_| MlxCError {
         operation: OPERATION,
         description: "input rank exceeds the MLX integer range".to_owned(),
     })?;
     if rank == 0 || index_shape.len() != input_shape.len() || axis < -rank || axis >= rank {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "axis and index rank must match the destination array".to_owned(),
         });
@@ -342,7 +331,7 @@ fn validate_put_along_axis_arguments(
             dimension_index != normalized_axis && *dimension != input_shape[dimension_index]
         })
     {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "non-selected dimensions must match the destination shape".to_owned(),
         });
@@ -350,7 +339,7 @@ fn validate_put_along_axis_arguments(
     Ok(())
 }
 
-fn validate_static_shape(operation: &'static str, shape: &[i32]) -> Result<(), MlxRuntimeError> {
+fn validate_static_shape(operation: &'static str, shape: &[i32]) -> Result<(), MlxCError> {
     if shape.iter().any(|dimension_size| *dimension_size < 0) {
         return Err(runtime_operation_error(
             operation,
@@ -377,7 +366,7 @@ fn validate_repeat_axis_arguments(
     input: &MlxArray,
     repeat_count: i32,
     axis: i32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "repeat MLX values along an axis";
     if repeat_count <= 0 {
         return Err(runtime_operation_error(
@@ -397,7 +386,7 @@ fn validate_repeat_axis_arguments(
     Ok(())
 }
 
-fn validate_stack_axis_arguments(arrays: &[&MlxArray], axis: i32) -> Result<(), MlxRuntimeError> {
+fn validate_stack_axis_arguments(arrays: &[&MlxArray], axis: i32) -> Result<(), MlxCError> {
     const OPERATION: &str = "stack MLX arrays along a new axis";
     let first_array = arrays
         .first()
@@ -424,7 +413,7 @@ fn validate_stack_axis_arguments(arrays: &[&MlxArray], axis: i32) -> Result<(), 
     Ok(())
 }
 
-fn validate_squeeze_axis_arguments(input: &MlxArray, axis: i32) -> Result<(), MlxRuntimeError> {
+fn validate_squeeze_axis_arguments(input: &MlxArray, axis: i32) -> Result<(), MlxCError> {
     const OPERATION: &str = "squeeze one MLX singleton axis";
     let input_shape = input.shape();
     let rank = i32::try_from(input_shape.len())
@@ -448,8 +437,8 @@ fn validate_squeeze_axis_arguments(input: &MlxArray, axis: i32) -> Result<(), Ml
     Ok(())
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

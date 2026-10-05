@@ -106,11 +106,7 @@ fn peak_memory_bytes(runtime: &MlxRuntime) -> u64 {
 fn bf16_reference_vec(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float_array| {
-            float_array
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|float_array| float_array.to_vec_f32())
         .expect("the bfloat16 slab should read back as float32")
 }
 

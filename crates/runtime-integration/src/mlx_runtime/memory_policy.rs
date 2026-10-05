@@ -81,7 +81,8 @@ impl MlxRuntime {
     /// Waits for submitted work on the runtime GPU stream to complete.
     pub fn synchronize_gpu_stream(&self) -> Result<(), MlxRuntimeError> {
         // SAFETY: The runtime owns this live GPU stream for the worker lifetime.
-        let synchronization_status = unsafe { raw::mlx_synchronize(self.gpu_stream.raw()) };
+        let synchronization_status =
+            unsafe { raw::mlx_synchronize(self.context.gpu_stream().raw()) };
         check_status(synchronization_status, "synchronize the MLX GPU stream")
     }
 

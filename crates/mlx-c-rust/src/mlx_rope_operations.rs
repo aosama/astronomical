@@ -1,7 +1,8 @@
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies the nontraditional Llama rotary embedding.
     pub fn rope(
         &self,
@@ -9,7 +10,7 @@ impl MlxRuntime {
         dimensions: i32,
         base: f32,
         offset_tokens: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         let optional_base = raw::mlx_optional_float {
             value: base,
             has_value: true,
@@ -40,14 +41,14 @@ impl MlxRuntime {
         token_position_offsets: &MlxArray,
         dimensions: i32,
         base: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         let input_shape = input.shape();
         if input_shape.len() != 4
             || input_shape[0] != 1
             || token_position_offsets.shape() != [input_shape[2]]
             || token_position_offsets.dtype() != MlxDtype::Int32
         {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "apply MLX rotary embedding at token positions",
                 description: "input must be one rank-four sequence with one int32 offset per token"
                     .to_owned(),
@@ -90,7 +91,7 @@ impl MlxRuntime {
         frequency_denominators: &MlxArray,
         scale: f32,
         offset_tokens: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_rope_dimensions(input, dimensions, frequency_denominators, scale)?;
         let no_base = raw::mlx_optional_float {
             value: 0.0,
@@ -126,10 +127,10 @@ impl MlxRuntime {
         dimensions: i32,
         frequency_denominators: &MlxArray,
         scale: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         let input_shape = input.shape();
         if input_shape.len() != 4 || input_shape[0] != 1 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "apply custom MLX rotary embedding at token positions",
                 description: "input must be one rank-four sequence".to_owned(),
             });
@@ -138,7 +139,7 @@ impl MlxRuntime {
         if token_position_offsets.shape() != [input_shape[2]]
             || token_position_offsets.dtype() != MlxDtype::Int32
         {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "apply custom MLX rotary embedding at token positions",
                 description: "token positions must be int32 with one offset per token".to_owned(),
             });
@@ -178,36 +179,36 @@ fn validate_rope_dimensions(
     dimensions: i32,
     frequency_denominators: &MlxArray,
     scale: f32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "validate MLX rotary embedding dimensions";
     if dimensions <= 0 || dimensions % 2 != 0 {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "rotary dimensions must be positive and even".to_owned(),
         });
     }
     let frequency_shape = frequency_denominators.shape();
     if frequency_shape.as_slice() != [dimensions / 2] {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "frequency denominators must contain one value per rotary pair".to_owned(),
         });
     }
     if frequency_denominators.dtype() != MlxDtype::Float32 {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "frequency denominators must be Float32".to_owned(),
         });
     }
     if !scale.is_finite() || scale <= 0.0 {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "rotary position scale must be positive and finite".to_owned(),
         });
     }
     let input_shape = input.shape();
     if input_shape.len() != 4 || dimensions > input_shape[3] {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "rotary input must be rank four and contain the rotary width".to_owned(),
         });

@@ -1,11 +1,12 @@
 //! Validated elementwise math wrappers over the pinned MLX-C operations.
 
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies the elementwise square root while preserving lazy evaluation.
-    pub fn sqrt(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn sqrt(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         validate_floating_array(input, "apply MLX square root")?;
         self.output_array("apply MLX square root", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
@@ -19,7 +20,7 @@ impl MlxRuntime {
         input: &MlxArray,
         minimum: f32,
         maximum: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "clip an MLX array";
         validate_floating_array(input, OPERATION)?;
         if !minimum.is_finite() || !maximum.is_finite() || minimum > maximum {
@@ -47,10 +48,7 @@ impl MlxRuntime {
     }
 }
 
-fn validate_floating_array(
-    input: &MlxArray,
-    operation: &'static str,
-) -> Result<(), MlxRuntimeError> {
+fn validate_floating_array(input: &MlxArray, operation: &'static str) -> Result<(), MlxCError> {
     if !matches!(
         input.dtype(),
         MlxDtype::Float16 | MlxDtype::Float32 | MlxDtype::BFloat16
@@ -63,8 +61,8 @@ fn validate_floating_array(
     Ok(())
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

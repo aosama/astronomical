@@ -368,13 +368,13 @@ fn write_token_slot(
     ring_write_index: i32,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let shape = stored.shape();
-    runtime.slice_update(
+    Ok(runtime.slice_update(
         stored,
         new_tokens,
         &[0, 0, ring_write_index, 0],
         &[shape[0], shape[1], ring_write_index + 1, shape[3]],
         &[1, 1, 1, 1],
-    )
+    )?)
 }
 
 fn append_optional(
@@ -393,7 +393,7 @@ fn concatenate_tokens(
     left: &MlxArray,
     right: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    runtime.concatenate_axis(&[left, right], TOKEN_AXIS as i32)
+    Ok(runtime.concatenate_axis(&[left, right], TOKEN_AXIS as i32)?)
 }
 
 fn take_last_tokens(
@@ -420,12 +420,12 @@ fn slice_tokens(
     stop_token: i32,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let shape = tokens.shape();
-    runtime.slice(
+    Ok(runtime.slice(
         tokens,
         &[0, 0, start_token, 0],
         &[shape[0], shape[1], stop_token, shape[3]],
         &[1, 1, 1, 1],
-    )
+    )?)
 }
 
 fn token_count(tokens: &MlxArray) -> Result<i32, MlxRuntimeError> {

@@ -102,7 +102,7 @@ pub(super) fn qwen3_5_moe_remap_expert_page_slots(
         &page_manifest.page_slot_by_global_expert_id,
         &[expert_capacity],
     )?;
-    runtime.take_axis(&page_slots, selected_indices, 0)
+    Ok(runtime.take_axis(&page_slots, selected_indices, 0)?)
 }
 
 fn validate_cached_plus_streamed_page_route(
@@ -176,7 +176,7 @@ fn assignment_position_array(
             "compact assignment count exceeds the MLX shape range",
         )
     })?;
-    runtime.array_from_u32(&assignment_positions, &[compact_assignment_count])
+    Ok(runtime.array_from_u32(&assignment_positions, &[compact_assignment_count])?)
 }
 
 fn cached_plus_streamed_page_route_error(description: &str) -> MlxRuntimeError {

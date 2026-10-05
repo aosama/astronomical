@@ -1,9 +1,10 @@
-use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::{MlxArray, MlxArrayVector};
+use crate::{MlxCError, MlxDtype, error::check_status, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Builds lazy matrix multiplication on the runtime's GPU stream.
-    pub fn matmul(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn matmul(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("multiply MLX arrays", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_matmul(output, left.raw(), right.raw(), stream) }
@@ -21,9 +22,9 @@ impl MlxRuntime {
         left_indices: Option<&MlxArray>,
         right_indices: Option<&MlxArray>,
         sorted_indices: bool,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         if left_indices.is_none() && right_indices.is_none() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: "build dense gather_mm",
                 description: "at least one matrix-batch index array is required".to_owned(),
             });
@@ -60,7 +61,7 @@ impl MlxRuntime {
         right: &MlxArray,
         alpha: f32,
         beta: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("apply fused MLX addmm", |output, stream| {
             // SAFETY: Arrays and stream are live and output is uniquely writable.
             unsafe {
@@ -78,7 +79,7 @@ impl MlxRuntime {
     }
 
     /// Casts an array while preserving lazy evaluation.
-    pub fn astype(&self, input: &MlxArray, dtype: MlxDtype) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn astype(&self, input: &MlxArray, dtype: MlxDtype) -> Result<MlxArray, MlxCError> {
         self.output_array("cast an MLX array", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_astype(output, input.raw(), dtype.to_raw(), stream) }
@@ -91,7 +92,7 @@ impl MlxRuntime {
         input: &MlxArray,
         weight: &MlxArray,
         epsilon: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX RMS normalization", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_fast_rms_norm(output, input.raw(), weight.raw(), epsilon, stream) }
@@ -103,7 +104,7 @@ impl MlxRuntime {
         &self,
         input: &MlxArray,
         epsilon: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array(
             "apply unweighted MLX RMS normalization",
             |output, stream| {
@@ -132,7 +133,7 @@ impl MlxRuntime {
         weight: &MlxArray,
         bias: &MlxArray,
         epsilon: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX LayerNorm", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe {
@@ -149,7 +150,7 @@ impl MlxRuntime {
     }
 
     /// Adds two broadcast-compatible arrays.
-    pub fn add(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn add(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("add MLX arrays", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_add(output, left.raw(), right.raw(), stream) }
@@ -157,7 +158,7 @@ impl MlxRuntime {
     }
 
     /// Subtracts two broadcast-compatible arrays.
-    pub fn subtract(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn subtract(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("subtract MLX arrays", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_subtract(output, left.raw(), right.raw(), stream) }
@@ -165,7 +166,7 @@ impl MlxRuntime {
     }
 
     /// Divides two broadcast-compatible arrays.
-    pub fn divide(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn divide(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("divide MLX arrays", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_divide(output, left.raw(), right.raw(), stream) }
@@ -173,11 +174,7 @@ impl MlxRuntime {
     }
 
     /// Applies elementwise floor division to broadcast-compatible arrays.
-    pub fn floor_divide(
-        &self,
-        left: &MlxArray,
-        right: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn floor_divide(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("floor-divide MLX arrays", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_floor_divide(output, left.raw(), right.raw(), stream) }
@@ -185,7 +182,7 @@ impl MlxRuntime {
     }
 
     /// Negates every element in an array.
-    pub fn negative(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn negative(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("negate an MLX array", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_negative(output, input.raw(), stream) }
@@ -193,7 +190,7 @@ impl MlxRuntime {
     }
 
     /// Applies the elementwise natural exponential.
-    pub fn exp(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn exp(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX exp", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_exp(output, input.raw(), stream) }
@@ -201,7 +198,7 @@ impl MlxRuntime {
     }
 
     /// Applies the elementwise natural logarithm of one plus the input.
-    pub fn log1p(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn log1p(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX log1p", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_log1p(output, input.raw(), stream) }
@@ -209,11 +206,7 @@ impl MlxRuntime {
     }
 
     /// Applies the numerically stable elementwise `log(exp(left) + exp(right))`.
-    pub fn logaddexp(
-        &self,
-        left: &MlxArray,
-        right: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn logaddexp(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX logaddexp", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_logaddexp(output, left.raw(), right.raw(), stream) }
@@ -221,7 +214,7 @@ impl MlxRuntime {
     }
 
     /// Multiplies two broadcast-compatible arrays.
-    pub fn multiply(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn multiply(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("multiply MLX arrays elementwise", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_multiply(output, left.raw(), right.raw(), stream) }
@@ -229,22 +222,14 @@ impl MlxRuntime {
     }
 
     /// Multiplies an array by a scalar represented in the array's dtype.
-    pub fn multiply_scalar(
-        &self,
-        input: &MlxArray,
-        scalar: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn multiply_scalar(&self, input: &MlxArray, scalar: f32) -> Result<MlxArray, MlxCError> {
         let float_scalar = self.array_from_f32(&[scalar], &[])?;
         let typed_scalar = self.astype(&float_scalar, input.dtype())?;
         self.multiply(input, &typed_scalar)
     }
 
     /// Compares two broadcast-compatible arrays elementwise.
-    pub fn greater_equal(
-        &self,
-        left: &MlxArray,
-        right: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn greater_equal(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("compare MLX arrays", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_greater_equal(output, left.raw(), right.raw(), stream) }
@@ -252,7 +237,7 @@ impl MlxRuntime {
     }
 
     /// Compares two broadcast-compatible arrays elementwise for strict greater-than.
-    pub fn greater(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn greater(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array(
             "compare MLX arrays for strict greater-than",
             |output, stream| {
@@ -263,7 +248,7 @@ impl MlxRuntime {
     }
 
     /// Compares two broadcast-compatible arrays elementwise for strict less-than.
-    pub fn less(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn less(&self, left: &MlxArray, right: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array(
             "compare MLX arrays for strict less-than",
             |output, stream| {
@@ -280,7 +265,7 @@ impl MlxRuntime {
         axis: i32,
         reverse: bool,
         inclusive: bool,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("compute MLX cumulative sum", |output, stream| {
             // mlx-c v0.7.0 splits the axis-taking variant into mlx_cumsum_axis;
             // the dtype stays absent, preserving the previous float-identity
@@ -310,7 +295,7 @@ impl MlxRuntime {
         condition: &MlxArray,
         when_true: &MlxArray,
         when_false: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("select values with an MLX mask", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe {
@@ -326,7 +311,7 @@ impl MlxRuntime {
     }
 
     /// Applies precise softmax along one axis.
-    pub fn softmax_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn softmax_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX softmax", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_softmax_axis(output, input.raw(), axis, true, stream) }
@@ -339,7 +324,7 @@ impl MlxRuntime {
         input: &MlxArray,
         axis: i32,
         keep_dimensions: bool,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("sum MLX array values along an axis", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_sum_axis(output, input.raw(), axis, keep_dimensions, stream) }
@@ -352,7 +337,7 @@ impl MlxRuntime {
         input: &MlxArray,
         axis: i32,
         keep_dimensions: bool,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("max MLX array values along an axis", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_max_axis(output, input.raw(), axis, keep_dimensions, stream) }
@@ -360,7 +345,7 @@ impl MlxRuntime {
     }
 
     /// Applies the elementwise sigmoid function.
-    pub fn sigmoid(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn sigmoid(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX sigmoid", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_sigmoid(output, input.raw(), stream) }
@@ -368,7 +353,7 @@ impl MlxRuntime {
     }
 
     /// Returns argmax indices along one axis.
-    pub fn argmax_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn argmax_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxCError> {
         self.output_array("compute MLX argmax", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_argmax_axis(output, input.raw(), axis, false, stream) }
@@ -381,7 +366,7 @@ impl MlxRuntime {
         input: &MlxArray,
         kth: i32,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array("compute MLX argpartition", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_argpartition_axis(output, input.raw(), kth, axis, stream) }
@@ -389,7 +374,7 @@ impl MlxRuntime {
     }
 
     /// Returns indices that sort values along one axis in ascending order.
-    pub fn argsort_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn argsort_axis(&self, input: &MlxArray, axis: i32) -> Result<MlxArray, MlxCError> {
         self.output_array("compute MLX argsort", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_argsort_axis(output, input.raw(), axis, stream) }
@@ -402,7 +387,7 @@ impl MlxRuntime {
         input: &MlxArray,
         count: i32,
         axis: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         let top_values = self.output_array("compute MLX top-k values", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_topk_axis(output, input.raw(), count, axis, stream) }
@@ -411,7 +396,7 @@ impl MlxRuntime {
     }
 
     /// Evaluates a bounded group together so KV state does not retain prior graphs.
-    pub fn evaluate_arrays(&self, arrays: &[&MlxArray]) -> Result<(), MlxRuntimeError> {
+    pub fn evaluate_arrays(&self, arrays: &[&MlxArray]) -> Result<(), MlxCError> {
         let array_vector = MlxArrayVector::new(arrays)?;
         // SAFETY: The vector retains all live arrays for this synchronous evaluation.
         let status = unsafe { raw::mlx_eval(array_vector.raw()) };
@@ -423,7 +408,7 @@ impl MlxRuntime {
     /// A later host read waits if execution is still in flight. Dependent graphs
     /// can be built and submitted meanwhile, keeping CPU graph construction and
     /// GPU execution overlapped.
-    pub fn async_eval_arrays(&self, arrays: &[&MlxArray]) -> Result<(), MlxRuntimeError> {
+    pub fn async_eval_arrays(&self, arrays: &[&MlxArray]) -> Result<(), MlxCError> {
         let array_vector = MlxArrayVector::new(arrays)?;
         // SAFETY: The vector retains all live arrays for this asynchronous evaluation.
         let status = unsafe { raw::mlx_async_eval(array_vector.raw()) };
@@ -431,24 +416,19 @@ impl MlxRuntime {
     }
 
     /// Materializes one uint32 array contiguously and copies its bounded values.
-    pub fn copy_u32_values(&self, input: &MlxArray) -> Result<Vec<u32>, MlxRuntimeError> {
+    pub fn copy_u32_values(&self, input: &MlxArray) -> Result<Vec<u32>, MlxCError> {
         let contiguous_values = self.build_contiguous_row_major_copy(input)?;
-        contiguous_values
-            .to_vec_u32()
-            .map_err(MlxRuntimeError::from)
+        contiguous_values.to_vec_u32().map_err(MlxCError::from)
     }
 
     /// Materializes one uint8 array contiguously and copies it in one host transfer.
-    pub fn copy_u8_values(&self, input: &MlxArray) -> Result<Vec<u8>, MlxRuntimeError> {
+    pub fn copy_u8_values(&self, input: &MlxArray) -> Result<Vec<u8>, MlxCError> {
         let contiguous_values = self.build_contiguous_row_major_copy(input)?;
-        contiguous_values.to_vec_u8().map_err(MlxRuntimeError::from)
+        contiguous_values.to_vec_u8().map_err(MlxCError::from)
     }
 
     /// Builds a lazy row-major contiguous copy without evaluating it.
-    pub fn build_contiguous_row_major_copy(
-        &self,
-        input: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn build_contiguous_row_major_copy(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.contiguous_row_major(input, "build an MLX row-major contiguous copy")
     }
 
@@ -456,18 +436,23 @@ impl MlxRuntime {
         &self,
         input: &MlxArray,
         operation: &'static str,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array(operation, |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_contiguous(output, input.raw(), false, stream) }
         })
     }
 
-    pub(crate) fn output_array(
+    /// Runs one MLX operation through a populated output-array callback.
+    ///
+    /// Public for the wrapper families that still live in the runtime policy crate
+    /// during the wrapper-move passes; revisit the visibility in the close-out
+    /// audit once every family has moved.
+    pub fn output_array(
         &self,
         operation: &'static str,
         build_graph: impl FnOnce(*mut raw::mlx_array, raw::mlx_stream) -> i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         let mut output = MlxArray::empty();
         let status = build_graph(output.raw_mut(), self.gpu_stream().raw());
         check_status(status, operation)?;

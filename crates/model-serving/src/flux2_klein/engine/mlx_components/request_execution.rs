@@ -339,7 +339,7 @@ fn build_keyed_initial_latents(
 ) -> Result<MlxArray, astronomical_runtime_integration::MlxRuntimeError> {
     let key = runtime.random_key(seed)?;
     let noise = runtime.random_normal(shape, MlxDtype::BFloat16, 0.0, 1.0, &key)?;
-    runtime.multiply_scalar(&noise, initial_sigma as f32)
+    Ok(runtime.multiply_scalar(&noise, initial_sigma as f32)?)
 }
 
 /// Exposes production shape, schedule, and keyed-noise construction to external acceptance.
@@ -396,5 +396,5 @@ fn flux2_klein_euler_update(
     let float32_model_output = runtime.astype(model_output, MlxDtype::Float32)?;
     let scaled_model_output = runtime.multiply_scalar(&float32_model_output, delta_sigma)?;
     let float32_updated_sample = runtime.add(&float32_sample, &scaled_model_output)?;
-    runtime.astype(&float32_updated_sample, MlxDtype::BFloat16)
+    Ok(runtime.astype(&float32_updated_sample, MlxDtype::BFloat16)?)
 }

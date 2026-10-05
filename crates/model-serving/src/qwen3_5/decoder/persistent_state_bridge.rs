@@ -213,9 +213,13 @@ impl RequestDecoderStateStack {
         // Evaluate every retained or concatenated array before the next prefill forward. This
         // places malformed restored state at a single explicit GPU boundary instead of letting
         // lazy MLX evaluation attribute a later request failure to unrelated model work.
-        runtime.evaluate_arrays(&restored_tensors).map_err(
-            PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState,
-        )
+        runtime
+            .evaluate_arrays(&restored_tensors)
+            .map_err(|captured_error| {
+                PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState(
+                    MlxRuntimeError::from(captured_error),
+                )
+            })
     }
 }
 
@@ -252,7 +256,11 @@ fn materialize_restored_layer_tensors(
         })?;
     runtime
         .evaluate_arrays(&[first_tensor, second_tensor])
-        .map_err(PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState)
+        .map_err(|captured_error| {
+            PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState(
+                MlxRuntimeError::from(captured_error),
+            )
+        })
 }
 
 fn validate_persistent_prompt_cache_block_range(
@@ -331,7 +339,7 @@ pub(super) fn slice_full_attention_block(
             |source| PersistentPromptCacheStateBridgeError::SliceLayerTensor {
                 layer_index,
                 tensor_role,
-                source,
+                source: MlxRuntimeError::from(source),
             },
         )
 }

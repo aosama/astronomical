@@ -71,7 +71,7 @@ fn build_causal_sliding_window_mask_inner(
     // `where(causal, window, false)` is boolean AND without numeric casts.
     let false_mask = runtime.zeros(&[query_token_count, key_token_count], MlxDtype::Bool)?;
     let combined_mask = runtime.where_select(&causal_mask, &window_mask, &false_mask)?;
-    runtime.reshape(&combined_mask, &[1, 1, query_token_count, key_token_count])
+    Ok(runtime.reshape(&combined_mask, &[1, 1, query_token_count, key_token_count])?)
 }
 
 fn mask_error(description: &'static str) -> MlxRuntimeError {

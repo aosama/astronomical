@@ -80,7 +80,9 @@ impl HyperConnectionExecutor {
         // normalization multiplies by the weight directly, so the reference
         // adds one before the fused operation.
         let ones = runtime.array_from_f32(&vec![1.0_f32; hyper as usize], &[hyper])?;
-        runtime.add(norm_weights, &ones)
+        runtime
+            .add(norm_weights, &ones)
+            .map_err(MlxRuntimeError::from)
     }
 
     /// Grouped RMSNorm over each stream with the checkpoint's additive
@@ -101,11 +103,13 @@ impl HyperConnectionExecutor {
                 self.validate_hyper_shape("hyper-connection normalization", hyper_input)?;
                 self.validate_hyper_shape("hyper-connection normalization", norm_weights)?;
                 let shifted_weights = self.shifted_norm_weights(runtime, norm_weights)?;
-                runtime.rms_norm(
-                    hyper_input,
-                    &shifted_weights,
-                    self.plan.rms_norm_epsilon as f32,
-                )
+                runtime
+                    .rms_norm(
+                        hyper_input,
+                        &shifted_weights,
+                        self.plan.rms_norm_epsilon as f32,
+                    )
+                    .map_err(MlxRuntimeError::from)
             },
         )
     }
@@ -268,7 +272,9 @@ impl HyperConnectionExecutor {
                     runtime.reshape(block_output, &[token_count, 1, width as i32])?;
                 let scaled = runtime.multiply(&expanded_output, &injection)?;
                 let combined = runtime.add(&residual, &scaled)?;
-                runtime.reshape(&combined, &[token_count, hyper])
+                runtime
+                    .reshape(&combined, &[token_count, hyper])
+                    .map_err(MlxRuntimeError::from)
             },
         )
     }
@@ -299,7 +305,9 @@ impl HyperConnectionExecutor {
                 )?;
                 let summed = runtime.sum_axis(&grouped, 1, false)?;
                 let divisor = runtime.array_from_f32(&vec![self.plan.stream_count as f32], &[1])?;
-                runtime.divide(&summed, &divisor)
+                runtime
+                    .divide(&summed, &divisor)
+                    .map_err(MlxRuntimeError::from)
             },
         )
     }
@@ -338,10 +346,12 @@ impl HyperConnectionExecutor {
                 )?;
                 let expanded = runtime.reshape(block_output, &[token_count, 1, width as i32])?;
                 let combined = runtime.add(&grouped, &expanded)?;
-                runtime.reshape(
-                    &combined,
-                    &[token_count, (self.plan.stream_count * width) as i32],
-                )
+                runtime
+                    .reshape(
+                        &combined,
+                        &[token_count, (self.plan.stream_count * width) as i32],
+                    )
+                    .map_err(MlxRuntimeError::from)
             },
         )
     }
@@ -383,6 +393,8 @@ impl HyperConnectionExecutor {
             )?);
         }
         let stacked = runtime.stack_axis(&normalized_parts.iter().collect::<Vec<_>>(), 1)?;
-        runtime.reshape(&stacked, input_shape.as_slice())
+        runtime
+            .reshape(&stacked, input_shape.as_slice())
+            .map_err(MlxRuntimeError::from)
     }
 }

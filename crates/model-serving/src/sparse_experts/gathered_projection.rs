@@ -95,16 +95,18 @@ pub fn gather_expert_projection(
     // while its surrounding router and shared-expert work remain family-owned.
     performance_attribution.measure_operation(PerformanceOperation::GatheredExpertExecution, |_| {
         match projection {
-            StackedExpertProjection::Dense { transposed_weights } => runtime.gather_dense_matmul(
-                activations,
-                transposed_weights,
-                // No explicit left index is needed: each activation batch row
-                // already corresponds to its assignment position.
-                None,
-                // The right index chooses one matrix from the expert axis.
-                Some(selected_expert_indices),
-                assignment_order.uses_sorted_indices(),
-            ),
+            StackedExpertProjection::Dense { transposed_weights } => runtime
+                .gather_dense_matmul(
+                    activations,
+                    transposed_weights,
+                    // No explicit left index is needed: each activation batch row
+                    // already corresponds to its assignment position.
+                    None,
+                    // The right index chooses one matrix from the expert axis.
+                    Some(selected_expert_indices),
+                    assignment_order.uses_sorted_indices(),
+                )
+                .map_err(MlxRuntimeError::from),
             StackedExpertProjection::Affine {
                 packed_weights,
                 scales,

@@ -49,7 +49,7 @@ impl K2HorizonMoVAAffineLinear {
             self.bits,
         )?;
         match &self.dense_bias {
-            Some(dense_bias) => runtime.add(&projected, dense_bias),
+            Some(dense_bias) => Ok(runtime.add(&projected, dense_bias)?),
             None => Ok(projected),
         }
     }
