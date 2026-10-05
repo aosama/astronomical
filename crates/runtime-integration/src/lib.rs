@@ -6,7 +6,6 @@ mod experimental;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
-mod mlx_attention_operations;
 #[cfg(feature = "mlx")]
 mod mlx_bounded_safetensors_read_concurrency;
 #[cfg(feature = "mlx")]
@@ -43,13 +42,10 @@ mod mlx_metal_kernel;
 mod mlx_metallib_path;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
-mod mlx_nvfp4_operations;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
-mod mlx_quantization_construction;
 #[cfg(feature = "mlx")]
-mod mlx_quantized_operations;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]

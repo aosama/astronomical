@@ -93,42 +93,43 @@ pub fn gather_expert_projection(
     // Keep attribution around the exact neutral operation. Every family now
     // reports gathered projection construction under the same catalog entry,
     // while its surrounding router and shared-expert work remain family-owned.
-    performance_attribution.measure_operation(PerformanceOperation::GatheredExpertExecution, |_| {
-        match projection {
-            StackedExpertProjection::Dense { transposed_weights } => runtime
-                .gather_dense_matmul(
+    performance_attribution
+        .measure_operation(PerformanceOperation::GatheredExpertExecution, |_| {
+            match projection {
+                StackedExpertProjection::Dense { transposed_weights } => runtime
+                    .gather_dense_matmul(
+                        activations,
+                        transposed_weights,
+                        // No explicit left index is needed: each activation batch row
+                        // already corresponds to its assignment position.
+                        None,
+                        // The right index chooses one matrix from the expert axis.
+                        Some(selected_expert_indices),
+                        assignment_order.uses_sorted_indices(),
+                    ),
+                StackedExpertProjection::Affine {
+                    packed_weights,
+                    scales,
+                    biases,
+                    group_size,
+                    bits,
+                } => runtime.gather_quantized_matmul_affine(
                     activations,
-                    transposed_weights,
-                    // No explicit left index is needed: each activation batch row
-                    // already corresponds to its assignment position.
+                    packed_weights,
+                    scales,
+                    biases,
+                    // As in the dense path, activation rows are already arranged
+                    // for their assignment positions; only experts are gathered.
                     None,
-                    // The right index chooses one matrix from the expert axis.
                     Some(selected_expert_indices),
+                    // Checkpoint affine weights are `[expert, output, packed_input]`,
+                    // so MLX logically transposes each selected matrix for x @ Wᵀ.
+                    true,
+                    group_size,
+                    bits,
                     assignment_order.uses_sorted_indices(),
-                )
-                .map_err(MlxRuntimeError::from),
-            StackedExpertProjection::Affine {
-                packed_weights,
-                scales,
-                biases,
-                group_size,
-                bits,
-            } => runtime.gather_quantized_matmul_affine(
-                activations,
-                packed_weights,
-                scales,
-                biases,
-                // As in the dense path, activation rows are already arranged
-                // for their assignment positions; only experts are gathered.
-                None,
-                Some(selected_expert_indices),
-                // Checkpoint affine weights are `[expert, output, packed_input]`,
-                // so MLX logically transposes each selected matrix for x @ Wᵀ.
-                true,
-                group_size,
-                bits,
-                assignment_order.uses_sorted_indices(),
-            ),
-        }
-    })
+                ),
+            }
+        })
+        .map_err(MlxRuntimeError::from)
 }

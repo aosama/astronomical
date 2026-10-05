@@ -6,13 +6,13 @@
 //! `MlxArrayVector`, `MlxStream`), the per-worker bindings context
 //! (`MlxBindingsContext`: GPU stream and linked version), and the operation
 //! wrapper families (creation, shape, padding, elementwise math, activation,
-//! normalization, convolution, random, rope, and the general operation set).
-//! It contains no Astronomical runtime policy: memory limits, the metallib
-//! path selection, and the wrapper families that remain (quantized,
-//! attention, compiled graphs, Metal kernels) stay in
-//! `astronomical-runtime-integration`, which links this crate against the
-//! pinned native image and converts `MlxCError` values into its own typed
-//! runtime errors at its boundary.
+//! normalization, convolution, random, rope, quantized operations,
+//! quantization construction, NVFP4, attention, and the general operation
+//! set). It contains no Astronomical runtime policy: memory limits, the
+//! metallib path selection, and the wrapper families that remain (compiled
+//! graphs, Metal kernels) stay in `astronomical-runtime-integration`, which
+//! links this crate against the pinned native image and converts `MlxCError`
+//! values into its own typed runtime errors at its boundary.
 //!
 //! # Why this crate ships no standalone test binaries
 //!
@@ -29,13 +29,17 @@
 mod mlx_activation_operations;
 mod mlx_array;
 mod mlx_array_vector;
+mod mlx_attention_operations;
 mod mlx_bindings_context;
 mod mlx_convolution_operations;
 mod mlx_creation_operations;
 mod mlx_elementwise_math_operations;
 mod mlx_normalization_operations;
+mod mlx_nvfp4_operations;
 mod mlx_operations;
 mod mlx_padding_operations;
+mod mlx_quantization_construction;
+mod mlx_quantized_operations;
 mod mlx_random_operations;
 mod mlx_rope_operations;
 mod mlx_shape_operations;
