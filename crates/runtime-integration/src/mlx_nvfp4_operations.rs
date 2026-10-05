@@ -78,6 +78,7 @@ impl MlxRuntime {
                 )
             }
         })
+        .map_err(MlxRuntimeError::from)
     }
 
     /// Builds an NVFP4 matrix multiplication using MLX's native packed representation.
@@ -114,6 +115,7 @@ impl MlxRuntime {
                 )
             }
         })
+        .map_err(MlxRuntimeError::from)
     }
 }
 

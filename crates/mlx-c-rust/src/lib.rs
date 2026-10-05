@@ -2,13 +2,17 @@
 //!
 //! This crate owns exactly one responsibility: the MLX-C C ABI translated
 //! into idiomatic Rust. It holds the bindgen-generated raw declarations, the
-//! captured-error machinery, and the owned handle types (`MlxArray`,
-//! `MlxDtype`, `MlxArrayVector`, `MlxStream`) whose validity rules are
-//! inseparable from the C contract they wrap. It contains no Astronomical
-//! runtime policy: memory limits, the metallib path selection, and every
-//! operation wrapper live in `astronomical-runtime-integration`, which links
-//! this crate against the pinned native image and converts `MlxCError`
-//! values into its own typed runtime errors at its boundary.
+//! captured-error machinery, the owned handle types (`MlxArray`, `MlxDtype`,
+//! `MlxArrayVector`, `MlxStream`), the per-worker bindings context
+//! (`MlxBindingsContext`: GPU stream and linked version), and the operation
+//! wrapper families (creation, shape, padding, elementwise math, activation,
+//! normalization, convolution, random, rope, and the general operation set).
+//! It contains no Astronomical runtime policy: memory limits, the metallib
+//! path selection, and the wrapper families that remain (quantized,
+//! attention, compiled graphs, Metal kernels) stay in
+//! `astronomical-runtime-integration`, which links this crate against the
+//! pinned native image and converts `MlxCError` values into its own typed
+//! runtime errors at its boundary.
 //!
 //! # Why this crate ships no standalone test binaries
 //!
@@ -22,8 +26,19 @@
 //! `astronomical-runtime-integration`'s and `astronomical-model-serving`'s
 //! test trees, which link the native image already.
 
+mod mlx_activation_operations;
 mod mlx_array;
 mod mlx_array_vector;
+mod mlx_bindings_context;
+mod mlx_convolution_operations;
+mod mlx_creation_operations;
+mod mlx_elementwise_math_operations;
+mod mlx_normalization_operations;
+mod mlx_operations;
+mod mlx_padding_operations;
+mod mlx_random_operations;
+mod mlx_rope_operations;
+mod mlx_shape_operations;
 mod mlx_stream;
 
 pub mod error;
@@ -35,4 +50,5 @@ pub use error::{
 };
 pub use mlx_array::{MlxArray, MlxDtype};
 pub use mlx_array_vector::MlxArrayVector;
+pub use mlx_bindings_context::MlxBindingsContext;
 pub use mlx_stream::MlxStream;

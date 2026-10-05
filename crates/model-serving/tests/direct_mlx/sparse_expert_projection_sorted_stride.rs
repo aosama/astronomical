@@ -30,11 +30,7 @@ fn test_runtime() -> MlxRuntime {
 fn evaluated_float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| {
-            float32_array
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|float32_array| float32_array.to_vec_f32())
         .expect("the gathered projection should evaluate as float32")
 }
 

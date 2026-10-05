@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use crate::{MlxMemoryLimits, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxStream, install_non_terminating_error_handler};
+use astronomical_mlx_c_rust::{MlxBindingsContext, install_non_terminating_error_handler};
 
-use super::{MlxRuntime, memory_policy, metallib, version};
+use super::{MlxRuntime, memory_policy, metallib};
 
 impl MlxRuntime {
     /// Installs the non-terminating error handler before any fallible MLX call
@@ -13,20 +13,18 @@ impl MlxRuntime {
         let metallib_path = metallib::configured_metallib_path()?;
         metallib::configure_metallib_path(&metallib_path)?;
         memory_policy::configure_runtime_memory_limits(memory_limits)?;
-        let version = version::read_mlx_version()?;
-        let gpu_stream = MlxStream::default_gpu()?;
+        let context = MlxBindingsContext::new().map_err(MlxRuntimeError::from)?;
         Ok(Self {
-            gpu_stream,
+            context,
             memory_limits,
             metallib_path,
-            version,
         })
     }
 
     /// Returns the linked upstream MLX version.
     #[must_use]
     pub fn version(&self) -> &str {
-        &self.version
+        self.context.version()
     }
 
     /// Returns the memory policy applied during initialization.

@@ -6,29 +6,30 @@
 //! kernel selection, and BF16 rounding; do not replace their internals with Rust
 //! scalar math over copied device values.
 
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies numerically stable softplus through MLX `logaddexp(input, 0)`.
     ///
     /// This matches MLX's `nn.softplus`, which delegates to `logaddexp(x, 0)`.
     /// The naive `log1p(exp(x))` overflows to infinity for large positive
     /// inputs (x > ~88 in float32), which corrupts gated-delta decay values
     /// during long-context prefill.
-    pub fn softplus(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn softplus(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         let zero_scalar = self.zeros(&[], input.dtype())?;
         self.logaddexp(input, &zero_scalar)
     }
 
     /// Applies the SiLU activation as `x * sigmoid(x)` on the MLX stream.
-    pub fn silu(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn silu(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         let sigmoid_weights = self.sigmoid(input)?;
         self.multiply(input, &sigmoid_weights)
     }
 
     /// Applies the elementwise tanh function on the MLX stream.
-    pub fn tanh(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn tanh(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX tanh", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_tanh(output, input.raw(), stream) }
@@ -36,7 +37,7 @@ impl MlxRuntime {
     }
 
     /// Applies the elementwise error function through MLX-C `mlx_erf`.
-    pub fn erf(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn erf(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX error function", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_erf(output, input.raw(), stream) }
@@ -44,7 +45,7 @@ impl MlxRuntime {
     }
 
     /// Applies the elementwise cosine through MLX-C `mlx_cos`.
-    pub fn cos(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn cos(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX cosine", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_cos(output, input.raw(), stream) }
@@ -52,7 +53,7 @@ impl MlxRuntime {
     }
 
     /// Applies the elementwise sine through MLX-C `mlx_sin`.
-    pub fn sin(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn sin(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX sine", |output, stream| {
             // SAFETY: Input and stream are live and output is uniquely writable.
             unsafe { raw::mlx_sin(output, input.raw(), stream) }
@@ -64,11 +65,7 @@ impl MlxRuntime {
     /// Using `mlx_power(x, 3)` rather than spelling `x*x*x` is deliberate. MLX's
     /// power kernel follows a different BF16 rounding path, and the vision GELU
     /// parity reference was generated with that operation.
-    pub fn power(
-        &self,
-        bases: &MlxArray,
-        exponents: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn power(&self, bases: &MlxArray, exponents: &MlxArray) -> Result<MlxArray, MlxCError> {
         self.output_array("apply MLX power", |output, stream| {
             // SAFETY: Inputs and stream are live and output is uniquely writable.
             unsafe { raw::mlx_power(output, bases.raw(), exponents.raw(), stream) }
@@ -80,7 +77,7 @@ impl MlxRuntime {
     /// Formula: `0.5*x*(1 + erf(x/sqrt(2)))`. MLX-C exposes `mlx_erf` but no
     /// single exact-GELU C entry point, so this composes `mlx_multiply`,
     /// `mlx_add`, and `mlx_erf`. The Qwen3.5 vision patch merger requires exact GELU.
-    pub fn gelu(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn gelu(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         let scaled_input = self.multiply_scalar(input, std::f32::consts::FRAC_1_SQRT_2)?;
         let error_function_values = self.erf(&scaled_input)?;
         // Cast 1.0 to the input dtype before addition. Leaving it Float32 would
@@ -95,7 +92,7 @@ impl MlxRuntime {
     /// Applies the GELU activation using the PyTorch tanh approximation.
     ///
     /// `GELU(x) = 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))`
-    pub fn gelu_tanh(&self, input: &MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn gelu_tanh(&self, input: &MlxArray) -> Result<MlxArray, MlxCError> {
         let sqrt_two_over_pi = 0.797_884_6_f32;
         let cubic_coefficient = 0.044715_f32;
         // The scalar exponent broadcasts over the input. Keep `x + 0.044715*x^3`
@@ -120,7 +117,7 @@ impl MlxRuntime {
         &self,
         attention_output: &MlxArray,
         gate_logits: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_softplus_attention_gate_shapes(attention_output, gate_logits)?;
         // Float32 preserves stable softplus for low-precision logits; cast the
         // gate back before multiplication so activations retain their dtype.
@@ -134,18 +131,18 @@ impl MlxRuntime {
 fn validate_softplus_attention_gate_shapes(
     attention_output: &MlxArray,
     gate_logits: &MlxArray,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "apply the softplus attention output gate";
     let attention_output_shape = attention_output.shape();
     let gate_logits_shape = gate_logits.shape();
     if attention_output_shape.is_empty() || gate_logits_shape.is_empty() {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "attention output and gate logits must have positive rank".to_owned(),
         });
     }
     if gate_logits_shape.len() > attention_output_shape.len() {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation: OPERATION,
             description: "gate logits rank must not exceed the attention output rank".to_owned(),
         });
@@ -154,7 +151,7 @@ fn validate_softplus_attention_gate_shapes(
     for (gate_axis_index, gate_axis_length) in gate_logits_shape.iter().enumerate() {
         let attention_axis_length = attention_output_shape[rank_offset + gate_axis_index];
         if *gate_axis_length != 1 && *gate_axis_length != attention_axis_length {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description: "gate logits must broadcast to the attention output".to_owned(),
             });

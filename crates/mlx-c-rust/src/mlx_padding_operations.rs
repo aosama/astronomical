@@ -1,9 +1,10 @@
 //! Validated axis-specific padding for lazy MLX tensors.
 
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies axis-specific constant padding, including asymmetric image padding.
     pub fn pad(
         &self,
@@ -12,7 +13,7 @@ impl MlxRuntime {
         low_padding: &[i32],
         high_padding: &[i32],
         pad_value: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "pad an MLX array";
         validate_padding_arguments(input, axes, low_padding, high_padding, pad_value)?;
         let float_pad_value = self.array_from_f32(&[pad_value], &[])?;
@@ -45,7 +46,7 @@ fn validate_padding_arguments(
     low_padding: &[i32],
     high_padding: &[i32],
     pad_value: f32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "pad an MLX array";
     if axes.is_empty() || axes.len() != low_padding.len() || axes.len() != high_padding.len() {
         return Err(runtime_operation_error(
@@ -104,8 +105,8 @@ fn validate_padding_arguments(
     Ok(())
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

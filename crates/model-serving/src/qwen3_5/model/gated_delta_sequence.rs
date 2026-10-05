@@ -244,7 +244,7 @@ fn slice_rank_four_token(
         &[1, token_index + 1, head_count, head_dimension],
         &[1, 1, 1, 1],
     )?;
-    runtime.squeeze_axis(&sliced_token, 1)
+    Ok(runtime.squeeze_axis(&sliced_token, 1)?)
 }
 
 fn slice_rank_three_token(
@@ -259,5 +259,5 @@ fn slice_rank_three_token(
         &[1, token_index + 1, head_count],
         &[1, 1, 1],
     )?;
-    runtime.squeeze_axis(&sliced_token, 1)
+    Ok(runtime.squeeze_axis(&sliced_token, 1)?)
 }

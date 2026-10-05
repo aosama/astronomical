@@ -40,7 +40,7 @@ pub(super) fn combine_sparse_and_shared_experts(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let shared_expert_gate = runtime.sigmoid(shared_expert_gate_logits)?;
     let gated_shared_expert_output = runtime.multiply(shared_expert_output, &shared_expert_gate)?;
-    runtime.add(sparse_expert_output, &gated_shared_expert_output)
+    Ok(runtime.add(sparse_expert_output, &gated_shared_expert_output)?)
 }
 
 fn validate_combination_shapes(

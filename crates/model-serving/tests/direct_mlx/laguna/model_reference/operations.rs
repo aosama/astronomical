@@ -141,7 +141,7 @@ pub(super) fn reference_forward(
     )?;
     if contract.model().has_tied_embeddings() {
         let transposed = runtime.transpose_axes(embedding, &[1, 0])?;
-        runtime.matmul(&terminal, &transposed)
+        Ok(runtime.matmul(&terminal, &transposed)?)
     } else {
         linear(
             runtime,
@@ -205,7 +205,7 @@ fn reference_attention(
             layer_id(layer_index, LagunaLayerTensorRole::Attention(projection)),
             hidden,
         )?;
-        runtime.reshape(&projected, &[batch, token_count, heads, head_dimension])
+        Ok(runtime.reshape(&projected, &[batch, token_count, heads, head_dimension])?)
     };
     let queries = runtime.rms_norm(
         &project(LagunaAttentionProjection::Query, query_heads)?,
@@ -331,12 +331,12 @@ fn apply_rope(
     offset: i32,
 ) -> Result<MlxArray, MlxRuntimeError> {
     match rope {
-        LagunaRopeDescriptor::Default(descriptor) => runtime.rope(
+        LagunaRopeDescriptor::Default(descriptor) => Ok(runtime.rope(
             input,
             descriptor.rotary_dimension() as i32,
             descriptor.rope_theta() as f32,
             offset,
-        ),
+        )?),
         LagunaRopeDescriptor::Yarn(descriptor) => {
             let frequencies = compute_yarn_rope_frequency_denominators(
                 descriptor.rope_theta(),
@@ -357,13 +357,13 @@ fn apply_rope(
                 descriptor.rotary_dimension() as i32,
                 descriptor.attention_factor() as f32,
             )?;
-            runtime.rope_with_custom_frequencies(
+            Ok(runtime.rope_with_custom_frequencies(
                 &prepared,
                 descriptor.rotary_dimension() as i32,
                 &frequency_array,
                 1.0,
                 offset,
-            )
+            )?)
         }
     }
 }
@@ -376,7 +376,7 @@ fn scale_rotary_prefix(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let shape = input.shape();
     if rotary_dimension >= shape[3] {
-        return runtime.multiply_scalar(input, factor);
+        return Ok(runtime.multiply_scalar(input, factor)?);
     }
     let scaled = runtime.multiply_scalar(input, factor)?;
     let prefix = runtime.slice(
@@ -386,7 +386,7 @@ fn scale_rotary_prefix(
         &[1, 1, 1, 1],
     )?;
     let tail = runtime.slice(input, &[0, 0, 0, rotary_dimension], &shape, &[1, 1, 1, 1])?;
-    runtime.concatenate_axis(&[&prefix, &tail], 3)
+    Ok(runtime.concatenate_axis(&[&prefix, &tail], 3)?)
 }
 
 fn append(
@@ -400,7 +400,7 @@ fn append(
                 .retain()
                 .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
         },
-        |previous| runtime.concatenate_axis(&[previous, current], 2),
+        |previous| Ok(runtime.concatenate_axis(&[previous, current], 2)?),
     )
 }
 
@@ -442,7 +442,7 @@ fn linear(
     input: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let weight = tensor(tensors, tensor_id);
-    runtime.matmul(input, &runtime.transpose_axes(weight, &[1, 0])?)
+    Ok(runtime.matmul(input, &runtime.transpose_axes(weight, &[1, 0])?)?)
 }
 
 fn tensor(tensors: &HashMap<LagunaTensorId, MlxArray>, tensor_id: LagunaTensorId) -> &MlxArray {

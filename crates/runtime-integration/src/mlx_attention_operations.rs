@@ -106,6 +106,7 @@ impl MlxRuntime {
                 )
             }
         })
+        .map_err(MlxRuntimeError::from)
     }
 }
 

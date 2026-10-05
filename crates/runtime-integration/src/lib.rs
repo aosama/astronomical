@@ -3,7 +3,6 @@
 #[cfg(feature = "experimental-aligned-expert-packs")]
 mod experimental;
 #[cfg(feature = "mlx")]
-mod mlx_activation_operations;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
@@ -33,34 +32,26 @@ mod mlx_compiled_verify_window_ops;
 #[cfg(feature = "mlx")]
 mod mlx_compiled_vision_rope;
 #[cfg(feature = "mlx")]
-mod mlx_convolution_operations;
 #[cfg(feature = "mlx")]
-mod mlx_creation_operations;
 #[cfg(feature = "mlx")]
 mod mlx_descriptor_file_reader;
 #[cfg(feature = "mlx")]
-mod mlx_elementwise_math_operations;
 #[cfg(feature = "mlx")]
 mod mlx_metal_capture;
 #[cfg(feature = "mlx")]
 mod mlx_metal_kernel;
 mod mlx_metallib_path;
 #[cfg(feature = "mlx")]
-mod mlx_normalization_operations;
 #[cfg(feature = "mlx")]
 mod mlx_nvfp4_operations;
 #[cfg(feature = "mlx")]
-mod mlx_operations;
 #[cfg(feature = "mlx")]
-mod mlx_padding_operations;
 #[cfg(feature = "mlx")]
 mod mlx_quantization_construction;
 #[cfg(feature = "mlx")]
 mod mlx_quantized_operations;
 #[cfg(feature = "mlx")]
-mod mlx_random_operations;
 #[cfg(feature = "mlx")]
-mod mlx_rope_operations;
 #[cfg(feature = "mlx")]
 mod mlx_runtime;
 #[cfg(feature = "mlx")]
@@ -73,7 +64,6 @@ mod mlx_safetensors_memory_writer;
 #[cfg(feature = "mlx")]
 mod mlx_safetensors_writer;
 #[cfg(feature = "mlx")]
-mod mlx_shape_operations;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 mod positional_file_read_metrics;

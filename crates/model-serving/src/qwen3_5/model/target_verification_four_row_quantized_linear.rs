@@ -231,5 +231,5 @@ pub(super) fn project_four_row_split_k(
             operation: "project four-row target-verification tokens",
             description: "four-row split-K kernel returned no projected activations".to_owned(),
         })?;
-    runtime.reshape(&projected_rows, &[1, FOUR_ROW_COUNT, output_dimension])
+    Ok(runtime.reshape(&projected_rows, &[1, FOUR_ROW_COUNT, output_dimension])?)
 }

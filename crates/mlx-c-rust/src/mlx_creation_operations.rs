@@ -1,36 +1,25 @@
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Copies float32 values into a new owned MLX array after validating shape arithmetic.
-    pub fn array_from_f32(
-        &self,
-        values: &[f32],
-        shape: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
-        MlxArray::from_f32(values, shape).map_err(MlxRuntimeError::from)
+    pub fn array_from_f32(&self, values: &[f32], shape: &[i32]) -> Result<MlxArray, MlxCError> {
+        MlxArray::from_f32(values, shape).map_err(MlxCError::from)
     }
 
     /// Copies int32 values into a new owned MLX array after validating shape arithmetic.
-    pub fn array_from_i32(
-        &self,
-        values: &[i32],
-        shape: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
-        MlxArray::from_i32(values, shape).map_err(MlxRuntimeError::from)
+    pub fn array_from_i32(&self, values: &[i32], shape: &[i32]) -> Result<MlxArray, MlxCError> {
+        MlxArray::from_i32(values, shape).map_err(MlxCError::from)
     }
 
     /// Copies uint32 values into a new owned MLX array after validating shape arithmetic.
-    pub fn array_from_u32(
-        &self,
-        values: &[u32],
-        shape: &[i32],
-    ) -> Result<MlxArray, MlxRuntimeError> {
-        MlxArray::from_u32(values, shape).map_err(MlxRuntimeError::from)
+    pub fn array_from_u32(&self, values: &[u32], shape: &[i32]) -> Result<MlxArray, MlxCError> {
+        MlxArray::from_u32(values, shape).map_err(MlxCError::from)
     }
 
     /// Creates an int32 half-open range with unit stride.
-    pub fn arange_i32(&self, start: i32, stop: i32) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn arange_i32(&self, start: i32, stop: i32) -> Result<MlxArray, MlxCError> {
         self.output_array("create an MLX integer range", |output_array, stream| {
             // SAFETY: Scalar arguments are copied and output is uniquely writable.
             unsafe {
@@ -47,12 +36,7 @@ impl MlxRuntime {
     }
 
     /// Creates a float32 half-open range with an explicit stride.
-    pub fn arange_f32(
-        &self,
-        start: f64,
-        stop: f64,
-        stride: f64,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn arange_f32(&self, start: f64, stop: f64, stride: f64) -> Result<MlxArray, MlxCError> {
         self.output_array("create an MLX float32 range", |output_array, stream| {
             // SAFETY: Scalar arguments are copied and output is uniquely writable.
             unsafe {
@@ -69,7 +53,7 @@ impl MlxRuntime {
     }
 
     /// Creates a zero-filled MLX array with a validated static shape.
-    pub fn zeros(&self, shape: &[i32], dtype: MlxDtype) -> Result<MlxArray, MlxRuntimeError> {
+    pub fn zeros(&self, shape: &[i32], dtype: MlxDtype) -> Result<MlxArray, MlxCError> {
         validate_creation_shape("create a zero-filled MLX array", shape)?;
         self.output_array("create a zero-filled MLX array", |output_array, stream| {
             // SAFETY: Shape remains borrowed for this graph-building call, dtype
@@ -92,7 +76,7 @@ impl MlxRuntime {
         shape: &[i32],
         fill_value: f32,
         dtype: MlxDtype,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "create a filled MLX array";
         validate_creation_shape(OPERATION, shape)?;
         if !matches!(
@@ -100,7 +84,7 @@ impl MlxRuntime {
             MlxDtype::Float16 | MlxDtype::Float32 | MlxDtype::BFloat16
         ) || !fill_value.is_finite()
         {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: OPERATION,
                 description: "fill value must be finite and dtype must be supported floating point"
                     .to_owned(),
@@ -124,9 +108,9 @@ impl MlxRuntime {
     }
 }
 
-fn validate_creation_shape(operation: &'static str, shape: &[i32]) -> Result<(), MlxRuntimeError> {
+fn validate_creation_shape(operation: &'static str, shape: &[i32]) -> Result<(), MlxCError> {
     if shape.iter().any(|dimension_size| *dimension_size < 0) {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation,
             description: "array dimensions must be nonnegative".to_owned(),
         });
@@ -139,7 +123,7 @@ fn validate_creation_shape(operation: &'static str, shape: &[i32]) -> Result<(),
             element_count.checked_mul(dimension_size)
         });
     if element_count.is_none() {
-        return Err(MlxRuntimeError::RuntimeOperation {
+        return Err(MlxCError {
             operation,
             description: "array element count overflows usize".to_owned(),
         });

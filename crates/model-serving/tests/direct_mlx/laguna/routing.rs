@@ -135,19 +135,11 @@ async fn should_change_gathered_scores_when_positive_softcap_is_enabled() {
             .expect("positive softcap should route");
     let uncapped = runtime
         .astype(&uncapped_scores, astronomical_mlx_c_rust::MlxDtype::Float32)
-        .and_then(|scores| {
-            scores
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|scores| scores.to_vec_f32())
         .expect("uncapped scores should evaluate");
     let capped = runtime
         .astype(&capped_scores, astronomical_mlx_c_rust::MlxDtype::Float32)
-        .and_then(|scores| {
-            scores
-                .to_vec_f32()
-                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
-        })
+        .and_then(|scores| scores.to_vec_f32())
         .expect("capped scores should evaluate");
     assert!(uncapped[0] > capped[0]);
 }

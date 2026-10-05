@@ -97,7 +97,7 @@ pub(super) fn reference_moe(
         return Ok(scaled_routed_output);
     }
     let shared_output = shared_expert(runtime, tensors, layer_index, hidden_states)?;
-    runtime.add(&scaled_routed_output, &shared_output)
+    Ok(runtime.add(&scaled_routed_output, &shared_output)?)
 }
 
 fn select_experts(
@@ -123,7 +123,7 @@ fn select_experts(
                 .retain()
                 .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
         },
-        |bias| runtime.add(&original_scores, bias),
+        |bias| Ok(runtime.add(&original_scores, bias)?),
     )?;
     // Stable argsort is intentionally different from production's argpartition.
     // It also gives deterministic lower-index ordering when equal scores occur.
@@ -160,7 +160,7 @@ fn gathered_expert_linear(
     let transposed_weights = runtime.transpose_axes(&selected_weights, &transpose_axes)?;
     let matrix_inputs = runtime.expand_dims(assignment_inputs, -2)?;
     let projected = runtime.matmul(&matrix_inputs, &transposed_weights)?;
-    runtime.squeeze_axis(&projected, -2)
+    Ok(runtime.squeeze_axis(&projected, -2)?)
 }
 
 fn shared_expert(
@@ -200,7 +200,7 @@ fn dense_linear(
     weight: &MlxArray,
     input: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    runtime.matmul(input, &runtime.transpose_axes(weight, &[1, 0])?)
+    Ok(runtime.matmul(input, &runtime.transpose_axes(weight, &[1, 0])?)?)
 }
 
 fn tensor(tensors: &HashMap<LagunaTensorId, MlxArray>, tensor_id: LagunaTensorId) -> &MlxArray {
