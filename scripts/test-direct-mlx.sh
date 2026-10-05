@@ -2,6 +2,10 @@
 
 # Runs only the direct-MLX contract binaries so unrelated hermetic and
 # model-artifact acceptance modules never enter this direct-MLX graph.
+# The same single Cargo invocation also compiles and runs the hermetic
+# MLX-C coverage contract binary, so bridge drift against the pinned
+# headers fails this lane instead of shipping silently; that binary is
+# CPU-only and finishes in seconds, keeping the lane inside its budget.
 
 set -eu
 
@@ -41,6 +45,7 @@ if "$timeout_executable" --foreground -k 5s 120s \
         --package astronomical-runtime-integration \
         --features astronomical-model-serving/direct-mlx,astronomical-runtime-integration/mlx \
         --test direct_mlx_tests \
+        --test mlx_c_coverage_contract_tests \
         -- \
         --test-threads=1
 then

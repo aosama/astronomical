@@ -237,7 +237,11 @@ phase_cargo_core() {
     # Hosted CI cannot execute the direct-MLX lane; the 2026-08-26 Laguna
     # residency regression proved behavioral breaks ship silently without it.
     # The lane owns a disposable target separate from the shared graph, so it
-    # overlaps the hermetic suite run instead of queueing behind it.
+    # overlaps the hermetic suite run instead of queueing behind it. Its one
+    # Cargo invocation also runs the hermetic MLX-C coverage contract binary,
+    # which is why this gate carries no separate coverage-contract step: a
+    # plain Cargo step here would block on the target lock the core phase
+    # holds and die at its 120-second bound.
     DIRECT_MLX_LANE_PROCESS_ID=""
     launch_direct_mlx_lane
     run_rust_exit_status=0
