@@ -4,9 +4,11 @@ use crate::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
     allocator_cache_exceeds_reclaim_threshold,
 };
-use astronomical_mlx_c_rust::raw;
+use astronomical_mlx_c_rust::{
+    clear_allocator_cache, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
+};
 
-use super::{check_status, error_handling::lock_unpoisoned};
+use super::error_handling::lock_unpoisoned;
 
 static RUNTIME_MEMORY_LIMITS: Mutex<Option<MlxMemoryLimits>> = Mutex::new(None);
 
@@ -41,49 +43,34 @@ impl MlxRuntime {
 
     /// Reads the active allocator limit currently enforced by MLX.
     pub fn configured_memory_limit_bytes(&self) -> Result<usize, MlxRuntimeError> {
-        read_memory_metric(raw::mlx_get_memory_limit, "read the MLX memory limit")
+        astronomical_mlx_c_rust::memory_limit_bytes().map_err(MlxRuntimeError::from)
     }
 
     /// Samples process-local MLX allocator bytes.
     pub fn memory_snapshot(&self) -> Result<MlxMemorySnapshot, MlxRuntimeError> {
         Ok(MlxMemorySnapshot {
-            active_memory_bytes: read_memory_metric(
-                raw::mlx_get_active_memory,
-                "read MLX active memory",
-            )?,
-            allocator_cache_memory_bytes: read_memory_metric(
-                raw::mlx_get_cache_memory,
-                "read MLX allocator-cache memory",
-            )?,
-            peak_memory_bytes: read_memory_metric(
-                raw::mlx_get_peak_memory,
-                "read MLX peak memory",
-            )?,
+            active_memory_bytes: astronomical_mlx_c_rust::active_memory_bytes()
+                .map_err(MlxRuntimeError::from)?,
+            allocator_cache_memory_bytes: astronomical_mlx_c_rust::cache_memory_bytes()
+                .map_err(MlxRuntimeError::from)?,
+            peak_memory_bytes: astronomical_mlx_c_rust::peak_memory_bytes()
+                .map_err(MlxRuntimeError::from)?,
         })
     }
 
     /// Resets MLX's process-local peak active-memory counter.
     pub fn reset_peak_memory(&self) -> Result<(), MlxRuntimeError> {
-        // SAFETY: The process-global error handler is installed during runtime
-        // initialization and `mlx_reset_peak_memory` has no pointer arguments.
-        let status = unsafe { raw::mlx_reset_peak_memory() };
-        check_status(status, "reset MLX peak memory")
+        reset_peak_memory().map_err(MlxRuntimeError::from)
     }
 
     /// Releases reclaimable MLX allocator-cache allocations.
     pub fn clear_allocator_cache(&self) -> Result<(), MlxRuntimeError> {
-        // SAFETY: The process-global error handler is installed during runtime
-        // initialization and `mlx_clear_cache` has no pointer arguments.
-        let status = unsafe { raw::mlx_clear_cache() };
-        check_status(status, "clear the MLX allocator cache")
+        clear_allocator_cache().map_err(MlxRuntimeError::from)
     }
 
     /// Waits for submitted work on the runtime GPU stream to complete.
     pub fn synchronize_gpu_stream(&self) -> Result<(), MlxRuntimeError> {
-        // SAFETY: The runtime owns this live GPU stream for the worker lifetime.
-        let synchronization_status =
-            unsafe { raw::mlx_synchronize(self.context.gpu_stream().raw()) };
-        check_status(synchronization_status, "synchronize the MLX GPU stream")
+        synchronize(self.context.gpu_stream()).map_err(MlxRuntimeError::from)
     }
 
     /// Waits for the runtime GPU stream before releasing reclaimable allocations.
@@ -149,52 +136,17 @@ pub(super) fn configure_runtime_memory_limits(
 /// Neither control runs `sysctl` or changes `iogpu.wired_limit_mb`. Rollback
 /// preserves the previous process policy if the allocator-cache control fails.
 fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
-    let mut previous_memory_limit_bytes = 0;
-    // SAFETY: The output points to initialized writable storage and the
-    // non-terminating handler is installed before this function is reached.
-    let memory_status = unsafe {
-        raw::mlx_set_memory_limit(
-            &mut previous_memory_limit_bytes,
-            memory_limits.active_memory_limit_bytes,
-        )
-    };
-    check_status(memory_status, "set the MLX active memory limit")?;
+    let previous_memory_limit_bytes =
+        set_memory_limit(memory_limits.active_memory_limit_bytes).map_err(MlxRuntimeError::from)?;
 
-    let mut previous_allocator_cache_limit_bytes = 0;
-    // SAFETY: The output points to initialized writable storage and the cache
-    // limit is bounded by the active-memory limit validated above.
-    let allocator_cache_status = unsafe {
-        raw::mlx_set_cache_limit(
-            &mut previous_allocator_cache_limit_bytes,
-            memory_limits.allocator_cache_memory_limit_bytes,
-        )
-    };
-    if let Err(allocator_cache_error) = check_status(
-        allocator_cache_status,
-        "set the MLX allocator cache memory limit",
-    ) {
-        let mut ignored_current_limit_bytes = 0;
-        // SAFETY: This best-effort rollback restores the previous valid limit
-        // using writable output storage after the handler has been installed.
-        unsafe {
-            raw::mlx_set_memory_limit(
-                &mut ignored_current_limit_bytes,
-                previous_memory_limit_bytes,
-            );
-        }
+    if let Err(allocator_cache_error) =
+        set_cache_limit(memory_limits.allocator_cache_memory_limit_bytes)
+            .map_err(MlxRuntimeError::from)
+    {
+        // Best-effort rollback restores the previous valid limit after the
+        // handler has been installed; nothing depends on the restore result.
+        let _ = set_memory_limit(previous_memory_limit_bytes);
         return Err(allocator_cache_error);
     }
     Ok(())
-}
-
-fn read_memory_metric(
-    metric_reader: unsafe extern "C" fn(*mut usize) -> i32,
-    operation: &'static str,
-) -> Result<usize, MlxRuntimeError> {
-    let mut metric_bytes = 0;
-    // SAFETY: Every accepted reader is an MLX C memory getter with the same
-    // ABI and receives a valid pointer to writable `usize` storage.
-    let status = unsafe { metric_reader(&mut metric_bytes) };
-    check_status(status, operation)?;
-    Ok(metric_bytes)
 }

@@ -46,6 +46,8 @@ mod mlx_compiled_vision_rope;
 mod mlx_convolution_operations;
 mod mlx_creation_operations;
 mod mlx_elementwise_math_operations;
+mod mlx_memory_controls;
+mod mlx_metal;
 mod mlx_metal_capture;
 mod mlx_metal_kernel;
 mod mlx_normalization_operations;
@@ -87,6 +89,11 @@ pub use mlx_compiled_verify_window_geometry::{
 pub use mlx_compiled_verify_window_graph::{
     MlxCompiledVerifyWindowGraph, VerifyWindowGdnKernelSet,
 };
+pub use mlx_memory_controls::{
+    active_memory_bytes, cache_memory_bytes, clear_allocator_cache, memory_limit_bytes,
+    peak_memory_bytes, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
+};
+pub use mlx_metal::set_metallib_path;
 pub use mlx_metal_kernel::{
     MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
     apply_metal_kernel_in_graph,
