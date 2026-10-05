@@ -1,0 +1,34 @@
+--- a/mlx/c/array.h
++++ b/mlx/c/array.h
+@@ -242,6 +242,12 @@
+ int mlx_array_eval(mlx_array arr);
+ 
+ /**
++ * Detach the array from its graph, dropping primitive, inputs, and siblings
++ * while keeping the realized buffer.
++ */
++int mlx_array_detach(mlx_array arr);
++
++/**
+  * Access the value of a scalar array.
+  */
+ int mlx_array_item_bool(bool* res, const mlx_array arr);
+--- a/mlx/c/array.cpp
++++ b/mlx/c/array.cpp
+@@ -355,6 +355,16 @@
+   return 0;
+ }
+ 
++extern "C" int mlx_array_detach(mlx_array arr) {
++  try {
++    mlx_array_get_(arr).detach();
++  } catch (std::exception& e) {
++    mlx_error(e.what());
++    return 1;
++  }
++  return 0;
++}
++
+ extern "C" int mlx_array_item_bool(bool* res, const mlx_array arr) {
+   try {
+     *res = mlx_array_get_(arr).item<bool>();

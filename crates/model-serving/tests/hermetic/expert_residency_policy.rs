@@ -4,8 +4,8 @@ use astronomical_model_serving::{
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
     hot_expert_warm_slot_count, plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
-    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
-    should_enact_planned_expert_release,
+    retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
+    should_commit_mandatory_routed_page, should_enact_planned_expert_release,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -185,6 +185,31 @@ fn should_keep_already_seated_complete_layers_when_leftover_budget_tightens() {
         retained_complete_layer_ceiling_after_prefill_budget_refresh(0, 0),
         0
     );
+}
+
+#[test]
+fn should_keep_all_resident_expert_pages_when_learned_budget_tightens_between_requests() {
+    let resident_complete_and_warm_table_payload_bytes = 100;
+    let tighter_leftover_expert_budget_bytes = 80;
+    let richer_leftover_expert_budget_bytes = 120;
+    assert_eq!(
+        retained_resident_ceiling_after_budget_refresh(
+            tighter_leftover_expert_budget_bytes,
+            resident_complete_and_warm_table_payload_bytes,
+        ),
+        resident_complete_and_warm_table_payload_bytes,
+        "learned context-reserve growth must not evict warm tables a previous \
+         request already paid to read (issue #955)"
+    );
+    assert_eq!(
+        retained_resident_ceiling_after_budget_refresh(
+            richer_leftover_expert_budget_bytes,
+            resident_complete_and_warm_table_payload_bytes,
+        ),
+        richer_leftover_expert_budget_bytes,
+        "a richer leftover budget must still admit additional expert pages"
+    );
+    assert_eq!(retained_resident_ceiling_after_budget_refresh(0, 0), 0);
 }
 
 #[test]

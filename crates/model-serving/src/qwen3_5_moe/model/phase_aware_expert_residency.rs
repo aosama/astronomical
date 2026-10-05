@@ -6,8 +6,7 @@ use crate::{
     ExpertLayerGeometry, ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution,
     PerformanceCounter, PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,
     plan_expert_residency, publish_request_stable_residency_plan,
-    retained_complete_layer_ceiling_after_prefill_budget_refresh,
-    should_enact_planned_expert_release,
+    retained_resident_ceiling_after_budget_refresh, should_enact_planned_expert_release,
 };
 
 impl Qwen3_5Model {
@@ -148,30 +147,25 @@ impl Qwen3_5Model {
             .first()
             .map(|geometry| geometry.expert_capacity)
             .unwrap_or(0);
-        let current_complete_layer_payload_bytes = retained_experts
-            .borrow()
-            .topology_snapshot(expert_capacity)
-            .iter()
-            .filter(|residency| residency.class == RetainedExpertPageClass::StableCompleteLayer)
-            .map(|residency| residency.payload_bytes)
-            .fold(0_u64, u64::saturating_add);
         // Leftover can shrink after a chunk or a decode token because learned
         // context reserve grew. Planning and cache eviction against that smaller
-        // number discards a complete layer this request already paid to read.
-        // Floor at current complete payload so only a real capacity failure may
-        // shrink — Prefill, GenerationPreparation, and Decode share this rule.
-        let retained_page_ceiling_bytes =
-            retained_complete_layer_ceiling_after_prefill_budget_refresh(
-                retained_expert_ceiling_bytes,
-                current_complete_layer_payload_bytes,
-            );
+        // number discards a complete layer or a warm table this request already
+        // paid to read. Floor at all resident payload so only a real capacity
+        // failure may shrink — Prefill, GenerationPreparation, and Decode share
+        // this rule (issue #955).
+        let current_residencies = retained_experts.borrow().topology_snapshot(expert_capacity);
+        let current_residency_payload_bytes: u64 = current_residencies
+            .iter()
+            .map(|residency| residency.payload_bytes)
+            .fold(0_u64, u64::saturating_add);
+        let retained_page_ceiling_bytes = retained_resident_ceiling_after_budget_refresh(
+            retained_expert_ceiling_bytes,
+            current_residency_payload_bytes,
+        );
         let budget_reclamation = retained_experts
             .borrow_mut()
             .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes);
         record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
-        let current_residencies = retained_experts.borrow().topology_snapshot(expert_capacity);
-        let current_residency_payload_bytes: u64 =
-            current_residencies.iter().map(|r| r.payload_bytes).sum();
         tracing::info!(
             current_residency_count = current_residencies.len(),
             current_residency_payload_bytes,
