@@ -7,10 +7,12 @@ use crate::memory::RetainedExpertPageClass;
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-const WARM_SLOT_COUNT: usize = 8;
-const EXPERT_CAPACITY: usize = 16;
+pub(super) const WARM_SLOT_COUNT: usize = 8;
+pub(super) const EXPERT_CAPACITY: usize = 16;
+/// One expert of `streamed_weights`: 2x4 float32 arrays x 3 projections.
+pub(super) const STREAMED_PER_EXPERT_PAYLOAD_BYTES: u64 = 48;
 
-fn test_runtime() -> MlxRuntime {
+pub(super) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
             .expect("the warm-cache test memory limits should be valid"),
@@ -20,9 +22,23 @@ fn test_runtime() -> MlxRuntime {
 
 /// Two-row native projections: the streamed routed-set shape.
 fn streamed_weights(runtime: &MlxRuntime) -> Qwen3_5PagedExpertWeights {
+    streamed_weights_for_expert_count(runtime, 2)
+}
+
+/// Native projections sized to one routed set so expert rows match ids.
+pub(super) fn streamed_weights_for_expert_count(
+    runtime: &MlxRuntime,
+    expert_count: usize,
+) -> Qwen3_5PagedExpertWeights {
     let projection = |fill: f32| {
         runtime
-            .array_from_f32(&vec![fill; 8], &[2, 4])
+            .array_from_f32(
+                &vec![fill; expert_count * 4],
+                &[
+                    i32::try_from(expert_count).expect("the expert count fits i32"),
+                    4,
+                ],
+            )
             .expect("the test projection should be valid")
     };
     Qwen3_5PagedExpertWeights {
@@ -39,7 +55,7 @@ fn streamed_weights(runtime: &MlxRuntime) -> Qwen3_5PagedExpertWeights {
 }
 
 #[test]
-fn should_create_a_padded_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
+fn should_grow_a_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
     let runtime = test_runtime();
     let mut cache = RetainedExpertCache::new(1);
     // Production ceilings are set by the residency plan refresh; the tests
@@ -55,7 +71,7 @@ fn should_create_a_padded_warm_table_from_the_first_decode_miss_and_serve_later_
         .expect("the first warm flush should succeed");
     assert_eq!(written_count, 2);
 
-    // The warm table holds the policy capacity, not just the routed rows.
+    // The warm table starts at the routed set size, holding only real experts.
     let residencies = cache.topology_snapshot(EXPERT_CAPACITY);
     assert_eq!(residencies.len(), 1);
     assert_eq!(
@@ -76,7 +92,7 @@ fn should_create_a_padded_warm_table_from_the_first_decode_miss_and_serve_later_
     // A routed set the table does not fully cover is a miss.
     assert!(cache.packed_page(0, &[7, 11], EXPERT_CAPACITY).is_none());
 
-    // Free slots fill before any eviction, growing the hot set.
+    // The table grows to fit demonstrated demand before any eviction.
     cache
         .queue_pending_routed_expert_insert(0, &[11, 13], &weights, WARM_SLOT_COUNT)
         .expect("the second warm insert should queue");
@@ -210,4 +226,190 @@ fn should_count_warm_inserts_only_for_hot_expert_warming() {
         .flush_pending_inserts(&runtime)
         .expect("the warm flush should succeed");
     assert_eq!(cache.warm_expert_insert_count, 2);
+}
+
+const HOT_SET_EXPERT_COUNT: usize = 2;
+const SIBLING_LAYER_COUNT: usize = 3;
+
+/// Two sequential routed sets on one layer drive the table from its routed
+/// size to its first growth, mirroring a layer's first two decode tokens.
+fn warm_two_tokens(
+    cache: &mut RetainedExpertCache,
+    runtime: &MlxRuntime,
+    layer_index: usize,
+    first_routed_expert_ids: &[usize],
+    second_routed_expert_ids: &[usize],
+) {
+    let weights = streamed_weights(runtime);
+    cache
+        .queue_pending_routed_expert_insert(
+            layer_index,
+            first_routed_expert_ids,
+            &weights,
+            WARM_SLOT_COUNT,
+        )
+        .expect("the first-token warm insert should queue");
+    let first_written_count = cache
+        .flush_pending_inserts(runtime)
+        .expect("the first-token warm flush should succeed");
+    assert_eq!(first_written_count, HOT_SET_EXPERT_COUNT as u64);
+    cache
+        .queue_pending_routed_expert_insert(
+            layer_index,
+            second_routed_expert_ids,
+            &weights,
+            WARM_SLOT_COUNT,
+        )
+        .expect("the second-token warm insert should queue");
+    let second_written_count = cache
+        .flush_pending_inserts(runtime)
+        .expect("the second-token warm flush should succeed");
+    assert_eq!(second_written_count, HOT_SET_EXPERT_COUNT as u64);
+}
+
+/// Issue #955, mechanism pin (mid-pyramid): warming must scale with
+/// demonstrated demand. A table that starts at the routed set and grows only
+/// when full leaves budget headroom for sibling layers after the first
+/// tokens; eager full-capacity padding consumed the entire budget with
+/// mostly-zero tables, the per-token slot resize then reported zero
+/// affordable slots, and every later token re-streamed its experts from disk.
+#[test]
+fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are_barely_filled() {
+    let runtime = test_runtime();
+    let mut probe_cache = RetainedExpertCache::new(1);
+    probe_cache.update_maximum_resident_payload_bytes(u64::MAX >> 1);
+    warm_two_tokens(&mut probe_cache, &runtime, 0, &[7, 9], &[11, 13]);
+    let grown_table_payload_bytes = probe_cache.statistics().resident_payload_byte_count;
+    drop(probe_cache);
+    // The ceiling affords two grown tables plus one fresh routed-size table.
+    let routed_size_table_payload_bytes = grown_table_payload_bytes / 2;
+    let ceiling_bytes = 2 * grown_table_payload_bytes + routed_size_table_payload_bytes;
+    let mut cache = RetainedExpertCache::new(SIBLING_LAYER_COUNT);
+    cache.update_maximum_resident_payload_bytes(ceiling_bytes);
+
+    warm_two_tokens(&mut cache, &runtime, 0, &[7, 9], &[11, 13]);
+    warm_two_tokens(&mut cache, &runtime, 1, &[7, 9], &[11, 13]);
+
+    // The first two layers warmed through their growth; the third layer's
+    // routed set is exactly as hot and must still fit the budget.
+    cache
+        .queue_pending_routed_expert_insert(
+            2,
+            &[7, 9],
+            &streamed_weights(&runtime),
+            WARM_SLOT_COUNT,
+        )
+        .expect("the sibling-layer warm insert should queue");
+    let sibling_written_count = cache
+        .flush_pending_inserts(&runtime)
+        .expect("the sibling-layer warm flush should succeed");
+    assert_eq!(
+        sibling_written_count, HOT_SET_EXPERT_COUNT as u64,
+        "the third layer's routed set must still warm after the first two \
+         layers warmed two tokens each"
+    );
+    let residencies = cache.topology_snapshot(EXPERT_CAPACITY);
+    assert_eq!(residencies.len(), SIBLING_LAYER_COUNT);
+    assert!(cache.statistics().resident_payload_byte_count <= ceiling_bytes);
+}
+
+/// Issue #955 fallback: when the budget refuses a table's growth, the insert
+/// must still land through least-read eviction inside the existing capacity
+/// instead of dropping the routed experts entirely.
+#[test]
+fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
+    let runtime = test_runtime();
+    let mut cache = RetainedExpertCache::new(1);
+    let weights = streamed_weights(&runtime);
+    // Two routed-size inserts grow the table 2 -> 4; the ceiling then refuses
+    // any further growth, so the third new routed set must evict.
+    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache
+        .queue_pending_routed_expert_insert(0, &[1, 2], &weights, WARM_SLOT_COUNT)
+        .expect("the first warm insert should queue");
+    cache
+        .flush_pending_inserts(&runtime)
+        .expect("the first warm flush should succeed");
+    cache
+        .queue_pending_routed_expert_insert(0, &[3, 4], &weights, WARM_SLOT_COUNT)
+        .expect("the second warm insert should queue");
+    cache
+        .flush_pending_inserts(&runtime)
+        .expect("the second warm flush should succeed");
+    let grown_table_payload_bytes = cache.statistics().resident_payload_byte_count;
+    // Budget admits the current table but not its doubling.
+    cache.update_maximum_resident_payload_bytes(grown_table_payload_bytes);
+
+    for _read in 0..3 {
+        cache.record_routed_reads(0, &[1, 2]);
+    }
+    cache
+        .queue_pending_routed_expert_insert(0, &[5, 6], &weights, WARM_SLOT_COUNT)
+        .expect("the growth-refused warm insert should queue");
+    let written_count = cache
+        .flush_pending_inserts(&runtime)
+        .expect("the growth-refused warm flush should succeed");
+    assert_eq!(
+        written_count, 2,
+        "both routed experts must warm via eviction"
+    );
+    let retained_expert_ids = cache.topology_snapshot(EXPERT_CAPACITY)[0]
+        .retained_expert_ids
+        .clone();
+    assert!(retained_expert_ids.contains(&1) && retained_expert_ids.contains(&2));
+    assert!(retained_expert_ids.contains(&5) && retained_expert_ids.contains(&6));
+    assert_eq!(
+        u64::try_from(retained_expert_ids.len()).unwrap_or(0) * STREAMED_PER_EXPERT_PAYLOAD_BYTES,
+        cache.topology_snapshot(EXPERT_CAPACITY)[0].payload_bytes,
+        "eviction inside a growth-refused table must stay payload-net-constant"
+    );
+}
+
+/// Issue #955 classification boundary: the complete-layer floors and the
+/// pressure reclamation paths treat a warm table that grew to hold every
+/// expert of its layer as a pinned complete layer, while strictly partial
+/// tables stay elastic and yield under request pressure. Cross-request
+/// retention (issue #955) relies on this boundary deciding which tables the
+/// pressure paths may reclaim, never on finalization releasing tables
+/// outright.
+#[test]
+fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() {
+    let runtime = test_runtime();
+    let mut cache = RetainedExpertCache::new(2);
+    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    let weights = streamed_weights(&runtime);
+
+    // Layer 0 stays partial (elastic); layer 1 receives every expert
+    // (pinned complete).
+    cache
+        .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
+        .expect("the partial warm insert should queue");
+    let every_expert_of_layer_one: Vec<usize> = (0..EXPERT_CAPACITY).collect();
+    let complete_layer_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
+    cache
+        .queue_pending_routed_expert_insert(
+            1,
+            &every_expert_of_layer_one,
+            &complete_layer_weights,
+            EXPERT_CAPACITY,
+        )
+        .expect("the complete warm insert should queue");
+    cache
+        .flush_pending_inserts(&runtime)
+        .expect("the warm flush should succeed");
+
+    let residencies = cache.topology_snapshot(EXPERT_CAPACITY);
+    let residency_class_by_layer: Vec<(usize, RetainedExpertPageClass)> = residencies
+        .iter()
+        .map(|residency| (residency.layer_index, residency.class))
+        .collect();
+    assert_eq!(
+        residency_class_by_layer,
+        vec![
+            (0, RetainedExpertPageClass::ElasticRoutedExperts),
+            (1, RetainedExpertPageClass::StableCompleteLayer),
+        ],
+        "a filled warm table must classify as pinned complete so cross-request \
+         retention can protect it"
+    );
 }

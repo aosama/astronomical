@@ -71,36 +71,6 @@ impl Qwen3_5Model {
             })
     }
 
-    /// Releases every elastic (hot-expert warmed) retained table without
-    /// touching pinned complete layers. Request finalization uses this so one
-    /// request's decode warming cannot crowd the next request's prefill
-    /// admission under a tight memory ceiling. Returns released payload bytes.
-    pub(crate) fn release_elastic_routed_tables(&self) -> u64 {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
-            return 0;
-        };
-        let mut cache = retained_experts.borrow_mut();
-        let mut released_payload_bytes = 0_u64;
-        // The real expert capacity decides the elastic/complete classification:
-        // a table holding every expert is a pinned complete layer and must
-        // survive; only strictly partial tables are warm-table elastic.
-        let expert_capacity = self
-            .expert_pager
-            .as_ref()
-            .and_then(|expert_pager| expert_pager.layer_plans().first())
-            .map_or(0, |layer_plan| layer_plan.expert_capacity);
-        for residency in cache.topology_snapshot(expert_capacity) {
-            // Warm tables are elastic by class; complete layers are pinned by
-            // the request-stable contract and must survive finalization.
-            if residency.class == crate::RetainedExpertPageClass::ElasticRoutedExperts
-                && cache.remove_layer(residency.layer_index)
-            {
-                released_payload_bytes =
-                    released_payload_bytes.saturating_add(residency.payload_bytes);
-            }
-        }
-        released_payload_bytes
-    }
     /// Constrains retained experts to the strict-ceiling capacity left by one
     /// concrete forward admission. Returns whether owned arrays were released.
     pub(crate) fn limit_expert_retention_for_admitted_forward(
