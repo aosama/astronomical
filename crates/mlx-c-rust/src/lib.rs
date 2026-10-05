@@ -4,15 +4,17 @@
 //! into idiomatic Rust. It holds the bindgen-generated raw declarations, the
 //! captured-error machinery, the owned handle types (`MlxArray`, `MlxDtype`,
 //! `MlxArrayVector`, `MlxStream`), the per-worker bindings context
-//! (`MlxBindingsContext`: GPU stream and linked version), and the operation
-//! wrapper families (creation, shape, padding, elementwise math, activation,
+//! (`MlxBindingsContext`: GPU stream and linked version), and every operation
+//! wrapper family: creation, shape, padding, elementwise math, activation,
 //! normalization, convolution, random, rope, quantized operations,
-//! quantization construction, NVFP4, attention, and the general operation
-//! set). It contains no Astronomical runtime policy: memory limits, the
-//! metallib path selection, and the wrapper families that remain (compiled
-//! graphs, Metal kernels) stay in `astronomical-runtime-integration`, which
-//! links this crate against the pinned native image and converts `MlxCError`
-//! values into its own typed runtime errors at its boundary.
+//! quantization construction, NVFP4, attention, the compiled-graph family,
+//! the Metal kernels and capture, and the general operation set. It contains
+//! no Astronomical runtime policy: memory limits, the metallib path
+//! selection and verification, the safetensors vtable policies, and the
+//! process I/O accounting stay in `astronomical-runtime-integration` and its
+//! consumers, which link this crate against the pinned native image and
+//! convert `MlxCError` values into their own typed runtime errors at their
+//! boundaries.
 //!
 //! # Why this crate ships no standalone test binaries
 //!
@@ -31,9 +33,21 @@ mod mlx_array;
 mod mlx_array_vector;
 mod mlx_attention_operations;
 mod mlx_bindings_context;
+mod mlx_compiled_attention_output_gate;
+mod mlx_compiled_elementwise_graphs;
+mod mlx_compiled_graph;
+mod mlx_compiled_multi_output_graph;
+mod mlx_compiled_sparse_shared_expert_combination;
+mod mlx_compiled_swiglu;
+mod mlx_compiled_verify_window_geometry;
+mod mlx_compiled_verify_window_graph;
+mod mlx_compiled_verify_window_ops;
+mod mlx_compiled_vision_rope;
 mod mlx_convolution_operations;
 mod mlx_creation_operations;
 mod mlx_elementwise_math_operations;
+mod mlx_metal_capture;
+mod mlx_metal_kernel;
 mod mlx_normalization_operations;
 mod mlx_nvfp4_operations;
 mod mlx_operations;
@@ -55,4 +69,26 @@ pub use error::{
 pub use mlx_array::{MlxArray, MlxDtype};
 pub use mlx_array_vector::MlxArrayVector;
 pub use mlx_bindings_context::MlxBindingsContext;
+pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
+pub use mlx_compiled_graph::{
+    MlxGraphBuilder, array_from_vector, graph_output_array, set_graph_output,
+    set_graph_output_vector,
+};
+pub use mlx_compiled_multi_output_graph::MlxCompiledMultiOutputGraph;
+pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
+pub use mlx_compiled_verify_window_geometry::{
+    VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
+    VerifyWindowFullAttentionQuantization, VerifyWindowFullAttentionWeightSlot,
+    VerifyWindowGatedDeltaQuantization, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
+    VerifyWindowInputSlot, VerifyWindowLayerKind, VerifyWindowLayerQuantization,
+    VerifyWindowLayerWeightSlot, VerifyWindowQuantizationPair, VerifyWindowTrunkQuantization,
+    VerifyWindowTrunkWeightSlot, verify_window_input_slots,
+};
+pub use mlx_compiled_verify_window_graph::{
+    MlxCompiledVerifyWindowGraph, VerifyWindowGdnKernelSet,
+};
+pub use mlx_metal_kernel::{
+    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
+    apply_metal_kernel_in_graph,
+};
 pub use mlx_stream::MlxStream;

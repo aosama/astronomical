@@ -25,15 +25,13 @@
 
 use std::cell::Cell;
 
+use crate::MlxBindingsContext;
 use crate::mlx_compiled_verify_window_geometry::{
     VerifyWindowGeometry, VerifyWindowLayerKind, verify_window_input_slots,
 };
 use crate::mlx_compiled_verify_window_ops as ops;
-use crate::{
-    MlxCompiledMultiOutputGraph, MlxMetalKernel, MlxRuntime, MlxRuntimeError,
-    set_graph_output_vector,
-};
-use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
+use crate::{MlxArray, MlxStream, raw};
+use crate::{MlxCError, MlxCompiledMultiOutputGraph, MlxMetalKernel, set_graph_output_vector};
 #[path = "mlx_compiled_verify_window_attention.rs"]
 mod attention;
 #[path = "mlx_compiled_verify_window_gdn.rs"]
@@ -110,7 +108,7 @@ impl MlxCompiledVerifyWindowGraph {
     pub fn new(
         geometry: VerifyWindowGeometry,
         gdn_kernels: VerifyWindowGdnKernelSet<'_>,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         let input_slot_count = verify_window_input_slots(&geometry).len();
         let compiled_graph = with_build_context(&geometry, gdn_kernels, || {
             // Static shapes only: the row count is fixed per graph and the
@@ -141,7 +139,7 @@ impl MlxCompiledVerifyWindowGraph {
     }
 }
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies the compiled verification window and returns its ordered
     /// outputs. The geometry stays pinned for the call so a shape-change
     /// re-trace inside MLX can reach it.
@@ -150,9 +148,9 @@ impl MlxRuntime {
         compiled_window: &MlxCompiledVerifyWindowGraph,
         graph_inputs: &[&MlxArray],
         gdn_kernels: VerifyWindowGdnKernelSet<'_>,
-    ) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+    ) -> Result<Vec<MlxArray>, MlxCError> {
         if graph_inputs.len() != compiled_window.input_slot_count {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: APPLY_VERIFY_WINDOW_OPERATION,
                 description: format!(
                     "the verification window expects {} inputs but received {}",

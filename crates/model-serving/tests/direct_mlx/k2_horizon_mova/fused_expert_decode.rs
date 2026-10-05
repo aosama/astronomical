@@ -10,12 +10,12 @@ use astronomical_model_serving::{
     FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, gathered_fused_swiglu,
     gathered_value_experts,
 };
-use astronomical_runtime_integration::{MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 
 const PROBE_EXPERT_COUNT: i32 = 8;
 const PROBE_FF_INTERMEDIATE: i32 = 768;

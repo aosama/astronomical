@@ -1,9 +1,8 @@
 use std::cell::Cell;
 
-use astronomical_mlx_c_rust::{MlxDtype, MlxStream, raw};
-use astronomical_runtime_integration::{
-    MlxCompiledMultiOutputGraph, MlxGraphBuilder, MlxMetalKernel, MlxMetalKernelOutput,
-    MlxMetalKernelTemplateArgument, apply_metal_kernel_in_graph, array_from_vector,
+use astronomical_mlx_c_rust::{
+    MlxCompiledMultiOutputGraph, MlxDtype, MlxGraphBuilder, MlxMetalKernel, MlxMetalKernelOutput,
+    MlxMetalKernelTemplateArgument, MlxStream, apply_metal_kernel_in_graph, array_from_vector, raw,
     set_graph_output,
 };
 

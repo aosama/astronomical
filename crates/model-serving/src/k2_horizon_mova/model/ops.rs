@@ -1,8 +1,6 @@
 //! Family-owned grouped RMSNorm, K2 router, and attention-gate math.
 
-use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime, MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::PerformanceAttribution;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAAttentionGateFunc;
@@ -14,7 +12,9 @@ use crate::sparse_experts::{
 
 use super::affine::K2HorizonMoVAAffineLinear;
 use super::error::K2HorizonMoVAExecutionError;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxMetalKernel,
+};
 
 pub fn grouped_rms_norm(
     runtime: &MlxRuntime,

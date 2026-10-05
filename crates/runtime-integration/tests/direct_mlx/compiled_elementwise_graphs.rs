@@ -1,11 +1,11 @@
 use std::time::{Duration, Instant};
 
-use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support::{
     assert_bfloat16_arrays_match, assert_f32_close, runtime, stable_softplus_reference,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
 #[test]
 fn should_gate_full_attention_output_with_one_shapeless_compiled_graph() {
@@ -178,11 +178,13 @@ fn should_measure_warmed_one_token_precise_swiglu_paths() {
         MEASUREMENT_ITERATION_COUNT,
         MAXIMUM_MEASUREMENT_DURATION,
         || {
-            runtime.apply_compiled_precise_swiglu(
-                &compiled_elementwise_graphs,
-                &up_states,
-                &gate_states,
-            )
+            runtime
+                .apply_compiled_precise_swiglu(
+                    &compiled_elementwise_graphs,
+                    &up_states,
+                    &gate_states,
+                )
+                .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
         },
     );
 
