@@ -6,7 +6,12 @@
 # rebuilds in CI. The policy keeps the newest entries per cache family: the
 # newest on the default branch plus the newest across feature-branch refs, so
 # an in-flight pull request keeps its warm cache while stale toolchain
-# generations are removed.
+# generations are removed. On top of the count policy, sccache entries above a
+# decimal 5 GB ceiling are deleted even when newest: a generation that large
+# cannot restore inside the one-minute cache segment timeout and only hastens
+# the 10 GB eviction that kills the native-build cache. Count alone cannot
+# bound the budget because each sccache generation inherits the whole previous
+# directory through the restore-key prefix chain.
 #
 # Usage:
 #   scripts/prune-ci-caches.sh [--dry-run] [--repo owner/name]
@@ -28,6 +33,10 @@ CACHE_KEY_PREFIX="astronomical-v2-"
 # flip-flops between compatibility identities and both must stay warm.
 NATIVE_BUILD_KEEP_COUNT=2
 DEFAULT_KEEP_COUNT=1
+# Size ceilings are family-scoped because only sccache generations ratchet
+# upward; 0 disables the ceiling for families that own bounded artifacts.
+SCCACHE_MAX_ENTRY_BYTES=5000000000
+DEFAULT_MAX_ENTRY_BYTES=0
 
 DRY_RUN=0
 REPOSITORY="${GITHUB_REPOSITORY:-}"
@@ -99,6 +108,14 @@ keep_count_for_family() {
     fi
 }
 
+max_entry_bytes_for_family() {
+    family_name="$1"
+    case "$family_name" in
+        sccache) echo "$SCCACHE_MAX_ENTRY_BYTES" ;;
+        *) echo "$DEFAULT_MAX_ENTRY_BYTES" ;;
+    esac
+}
+
 # The family is the token between the astronomical-v2- prefix and the runner
 # platform segment (every key embeds -macOS- on this repository's runners).
 family_of_key() {
@@ -126,13 +143,18 @@ for FAMILY in $FAMILIES; do
         continue
 
     KEEP_COUNT="$(keep_count_for_family "$FAMILY")"
+    MAX_ENTRY_BYTES="$(max_entry_bytes_for_family "$FAMILY")"
     FAMILY_DELETED_COUNT=0
+    FAMILY_OVERSIZED_DELETED_COUNT=0
     FAMILY_FREED_BYTES=0
 
     # Newest first within each ref class; keep the newest KEEP_COUNT entries on
-    # the default branch and the newest KEEP_COUNT entries across all other refs.
+    # the default branch and the newest KEEP_COUNT entries across all other
+    # refs. Entries above the family's size ceiling are deleted first, even
+    # when they are the newest, because they can never restore within budget.
     DELETION_IDS="$(LC_ALL=C sort -t"$(printf '\t')" -k4,4r "$FAMILY_LIST_PATH" |
-        awk -F'\t' -v default_ref="$DEFAULT_BRANCH_REF" -v keep_count="$KEEP_COUNT" '
+        awk -F'\t' -v default_ref="$DEFAULT_BRANCH_REF" -v keep_count="$KEEP_COUNT" -v size_ceiling="$MAX_ENTRY_BYTES" '
+            size_ceiling > 0 && ($5 + 0) > size_ceiling { print $1; next }
             $3 == default_ref { kept_main++; if (kept_main <= keep_count) next }
             $3 != default_ref { kept_other++; if (kept_other <= keep_count) next }
             { print $1 }
@@ -142,16 +164,27 @@ for FAMILY in $FAMILIES; do
         CACHE_SIZE_BYTES="$(
             awk -F'\t' -v cache_id="$CACHE_ID" '$1 == cache_id { print $5; exit }' "$FAMILY_LIST_PATH"
         )"
+        if [ "$MAX_ENTRY_BYTES" -gt 0 ] && [ "$CACHE_SIZE_BYTES" -gt "$MAX_ENTRY_BYTES" ]; then
+            DELETION_REASON="oversize"
+        else
+            DELETION_REASON="surplus"
+        fi
         if [ "$DRY_RUN" -eq 1 ]; then
-            echo "[cache-prune] family=$FAMILY action=would-delete cache_id=$CACHE_ID size_bytes=$CACHE_SIZE_BYTES"
+            echo "[cache-prune] family=$FAMILY action=would-delete reason=$DELETION_REASON cache_id=$CACHE_ID size_bytes=$CACHE_SIZE_BYTES"
             FAMILY_DELETED_COUNT=$((FAMILY_DELETED_COUNT + 1))
             FAMILY_FREED_BYTES=$((FAMILY_FREED_BYTES + CACHE_SIZE_BYTES))
+            if [ "$DELETION_REASON" = "oversize" ]; then
+                FAMILY_OVERSIZED_DELETED_COUNT=$((FAMILY_OVERSIZED_DELETED_COUNT + 1))
+            fi
             continue
         fi
         if gh cache delete "$CACHE_ID" -R "$REPOSITORY" 2>"$WORK_DIRECTORY/delete-error.txt"; then
             FAMILY_DELETED_COUNT=$((FAMILY_DELETED_COUNT + 1))
             FAMILY_FREED_BYTES=$((FAMILY_FREED_BYTES + CACHE_SIZE_BYTES))
-            echo "[cache-prune] family=$FAMILY action=deleted cache_id=$CACHE_ID size_bytes=$CACHE_SIZE_BYTES"
+            if [ "$DELETION_REASON" = "oversize" ]; then
+                FAMILY_OVERSIZED_DELETED_COUNT=$((FAMILY_OVERSIZED_DELETED_COUNT + 1))
+            fi
+            echo "[cache-prune] family=$FAMILY action=deleted reason=$DELETION_REASON cache_id=$CACHE_ID size_bytes=$CACHE_SIZE_BYTES"
         else
             # A 404 here means the cache vanished between listing and deletion;
             # warn visibly but keep pruning the rest of the family.
@@ -161,7 +194,7 @@ for FAMILY in $FAMILIES; do
     done
 
     FAMILY_ELAPSED_SECONDS=$(( $(date +%s) - FAMILY_STARTED_AT ))
-    echo "[cache-prune] family=$FAMILY status=complete deleted=$FAMILY_DELETED_COUNT freed_bytes=$FAMILY_FREED_BYTES elapsed_seconds=$FAMILY_ELAPSED_SECONDS"
+    echo "[cache-prune] family=$FAMILY status=complete deleted=$FAMILY_DELETED_COUNT oversized_deleted=$FAMILY_OVERSIZED_DELETED_COUNT freed_bytes=$FAMILY_FREED_BYTES elapsed_seconds=$FAMILY_ELAPSED_SECONDS"
     TOTAL_DELETED_COUNT=$((TOTAL_DELETED_COUNT + FAMILY_DELETED_COUNT))
     TOTAL_FREED_BYTES=$((TOTAL_FREED_BYTES + FAMILY_FREED_BYTES))
 done

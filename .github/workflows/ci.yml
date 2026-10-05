@@ -124,6 +124,12 @@ jobs:
             printf 'ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE=%s\n' "$native_build_status_file"
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
+            # Cap the disk cache so one generation cannot outgrow the 10 GB
+            # repository cache budget or the one-minute cache segment timeout;
+            # sccache enforces the cap on writes and every default-branch build
+            # writes new artifacts. The cap must exist before the first server
+            # start because sccache reads it once at startup.
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "3G"
             # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
           } >> "$GITHUB_ENV"
           printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"
@@ -366,7 +372,12 @@ jobs:
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
       - name: Save sccache-cache
         id: sccache-cache-save
-        if: ${{ !cancelled() && steps.sccache-cache.outputs.cache-hit != 'true' }}
+        # Pull-request saves are merge-ref-scoped duplicates of the
+        # default-branch entry: pull requests restore from the default branch
+        # anyway, so skipping the pull-request save halves the sccache share of
+        # the 10 GB repository cache budget at the cost of recompiling a pull
+        # request's own new artifacts on each run.
+        if: ${{ !cancelled() && steps.sccache-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save
@@ -376,8 +387,9 @@ jobs:
       - name: Prune surplus CI caches
         # Multiple sccache generations exceed the 10 GB repository cache limit,
         # which makes GitHub evict the small native-build cache and forces the
-        # next run into a silent multi-minute CMake rebuild. Tolerated failures
-        # keep read-only fork-PR tokens from failing the job.
+        # next run into a silent multi-minute CMake rebuild. The prune policy
+        # also deletes sccache entries above a size ceiling even when newest.
+        # Tolerated failures keep read-only fork-PR tokens from failing the job.
         if: ${{ !cancelled() }}
         continue-on-error: true
         env:
