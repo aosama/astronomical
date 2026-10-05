@@ -114,8 +114,8 @@ pub use residency::{
     classify_expert_memory_mode, complete_layer_indexes_required_before_decode,
     hot_expert_warm_slot_count, plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
-    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
-    should_enact_planned_expert_release,
+    retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
+    should_commit_mandatory_routed_page, should_enact_planned_expert_release,
 };
 pub use telemetry::{MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 pub use utilization::MemoryCeilingUtilization;

@@ -26,7 +26,7 @@ const BINDGEN_FUNCTION_ALLOWLIST: &str = concat!(
     "device_(new_type|free)|device_info_(new|get|get_size|free)|",
     "compile|closure_(new|new_func|free|apply)|",
     "get_(active_memory|cache_memory|memory_limit|peak_memory)|reset_peak_memory|set_(cache|memory)_limit|",
-    "array_(new|new_data|free|eval|shape|ndim|dtype|size|nbytes|data_(float32|uint8|uint32)|item_uint32|set)|",
+    "array_(new|new_data|free|eval|detach|shape|ndim|dtype|size|nbytes|data_(float32|uint8|uint32)|item_uint32|set)|",
     "default_(cpu|gpu)_stream_new|stream_free|synchronize|",
     "(add(mm)?|arange|argmax_axis|argpartition_axis|argsort_axis|astype|broadcast_to|clip|concatenate_axis|contiguous|conv(1d|2d|3d)|cos|cumsum_axis|dequantize|divide|erf|exp|expand_dims|floor_divide|full|gather_(mm|qmm)|greater|greater_equal|log1p|logaddexp|matmul|pad|power|",
     "max_axis|multiply|negative|put_along_axis|scatter_add_single|quantize|quantized_matmul|repeat_axis|reshape|sigmoid|sin|slice(_update)?|softmax_axis|sqrt|subtract|sum_axis|tanh|less|",

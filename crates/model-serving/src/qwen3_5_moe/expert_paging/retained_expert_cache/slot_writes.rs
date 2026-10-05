@@ -26,13 +26,12 @@ impl RetainedReferenceOk for Qwen3_5PagedExpertWeights {
 
 /// Builds a zero-padded warm-table owner with `warm_slot_count` expert rows.
 ///
-/// Decode warm tables must hold more slots than one token's routed set, or
-/// every new token would churn the table. The streamed page has exactly the
-/// routed rows, so the table is allocated zero-filled at the policy capacity
-/// and the routed rows are written into the leading slots afterward. Every
-/// projection component (packed weight, scales, biases) needs its own padded
-/// twin; quantization metadata is copied verbatim from the streamed page
-/// because the slots must stay bit-compatible with future streamed rows.
+/// Growth and fresh padded tables share this constructor: the destination is
+/// zero-filled at the requested capacity and callers copy real expert rows
+/// into their slots afterward. Every projection component (packed weight,
+/// scales, biases) needs its own padded twin; quantization metadata is copied
+/// verbatim from the source because the slots must stay bit-compatible with
+/// future streamed rows.
 pub(super) fn create_warm_table_weights(
     runtime: &MlxRuntime,
     streamed_weights: &Qwen3_5PagedExpertWeights,
@@ -113,6 +112,31 @@ fn pad_array_to_warm_capacity(
     };
     *expert_axis = slot_count_i32;
     Ok(runtime.zeros(&warm_shape, streamed_array.dtype())?)
+}
+
+/// Evaluates then detaches every array of one warm-table owner.
+///
+/// Row-writes leave the table arrays with lazy graphs whose inputs pin each
+/// source buffer — the streamed page of a fill, the retired tensor of a
+/// growth — for the table's lifetime. Evaluating first materializes the
+/// writes; detaching then strips the provenance so those sources free. The
+/// buffer stays valid for later reads and writes.
+pub(super) fn materialize_and_detach_table_weights(
+    runtime: &MlxRuntime,
+    weights: &Qwen3_5PagedExpertWeights,
+) -> Result<(), MlxRuntimeError> {
+    let mut array_references = Vec::new();
+    weights.append_array_references(&mut array_references);
+    runtime.evaluate_arrays(&array_references)?;
+    for array in array_references {
+        array
+            .detach()
+            .map_err(|error| MlxRuntimeError::RuntimeOperation {
+                operation: "detach a warm table from its lazy graph",
+                description: error.to_string(),
+            })?;
+    }
+    Ok(())
 }
 
 /// Writes one expert row from `streamed_weights` into `slot` of the table's
