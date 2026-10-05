@@ -7,10 +7,11 @@
 //! BF16 inputs. Model code should shape/pad/segment tensors, not reproduce this
 //! math. Callers can select unmasked, causal, or explicit array-mask execution.
 
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Applies MLX-C fused unmasked attention over `[batch, heads, length, width]`.
     ///
     /// Q heads may be a multiple of K/V heads for grouped-query attention.
@@ -20,7 +21,7 @@ impl MlxRuntime {
         keys: &MlxArray,
         values: &MlxArray,
         scale: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_attention_arguments(queries, keys, values, scale)?;
         self.scaled_dot_product_attention_with_mode(
             queries,
@@ -40,7 +41,7 @@ impl MlxRuntime {
         keys: &MlxArray,
         values: &MlxArray,
         scale: f32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_attention_arguments(queries, keys, values, scale)?;
         self.scaled_dot_product_attention_with_mode(
             queries,
@@ -61,7 +62,7 @@ impl MlxRuntime {
         values: &MlxArray,
         scale: f32,
         mask: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_masked_attention_arguments(queries, keys, values, scale, mask)?;
         self.scaled_dot_product_attention_with_mode(
             queries,
@@ -85,7 +86,7 @@ impl MlxRuntime {
         mask_mode: *const std::ffi::c_char,
         mask_array: raw::mlx_array,
         operation: &'static str,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         self.output_array(operation, |output, stream| {
             // SAFETY: Inputs and stream are live, mode is a static C string,
             // mask/sinks are valid MLX handles, and output is uniquely writable.
@@ -106,7 +107,7 @@ impl MlxRuntime {
                 )
             }
         })
-        .map_err(MlxRuntimeError::from)
+        .map_err(MlxCError::from)
     }
 }
 
@@ -115,7 +116,7 @@ fn validate_attention_arguments(
     keys: &MlxArray,
     values: &MlxArray,
     scale: f32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "apply scaled dot-product attention";
     if !scale.is_finite() {
         return Err(runtime_operation_error(
@@ -178,7 +179,7 @@ fn validate_masked_attention_arguments(
     values: &MlxArray,
     scale: f32,
     mask: &MlxArray,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "apply masked scaled dot-product attention";
     validate_attention_arguments(queries, keys, values, scale)?;
     let mask_shape = mask.shape();
@@ -214,8 +215,8 @@ fn validate_masked_attention_arguments(
     Ok(())
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }
