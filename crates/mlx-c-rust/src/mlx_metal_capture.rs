@@ -12,22 +12,22 @@
 
 use std::ffi::{CString, c_char, c_int};
 
-use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
+use crate::MlxBindingsContext;
+use crate::{MlxCError, error::check_status};
 
 unsafe extern "C" {
     fn mlx_metal_start_capture(path: *const c_char) -> c_int;
     fn mlx_metal_stop_capture() -> c_int;
 }
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Starts a Metal GPU capture writing an Xcode `.gputrace` bundle at `capture_path`.
-    pub fn start_metal_capture(&self, capture_path: &str) -> Result<(), MlxRuntimeError> {
+    pub fn start_metal_capture(&self, capture_path: &str) -> Result<(), MlxCError> {
         const OPERATION: &str = "start an MLX Metal capture";
-        let capture_path =
-            CString::new(capture_path).map_err(|source| MlxRuntimeError::RuntimeOperation {
-                operation: OPERATION,
-                description: format!("capture path contains an interior NUL byte: {source}"),
-            })?;
+        let capture_path = CString::new(capture_path).map_err(|source| MlxCError {
+            operation: OPERATION,
+            description: format!("capture path contains an interior NUL byte: {source}"),
+        })?;
         // SAFETY: The path is a live NUL-terminated string for the duration of
         // this call; MLX copies it before returning.
         let status = unsafe { mlx_metal_start_capture(capture_path.as_ptr()) };
@@ -35,7 +35,7 @@ impl MlxRuntime {
     }
 
     /// Stops the active Metal GPU capture, finalizing the `.gputrace` bundle.
-    pub fn stop_metal_capture(&self) -> Result<(), MlxRuntimeError> {
+    pub fn stop_metal_capture(&self) -> Result<(), MlxCError> {
         const OPERATION: &str = "stop an MLX Metal capture";
         // SAFETY: The runtime owns the live GPU stream for the worker lifetime;
         // stopping a capture is safe and idempotent with respect to that stream.

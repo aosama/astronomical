@@ -1,8 +1,8 @@
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 use astronomical_model_serving::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step,
 };
-use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
@@ -364,7 +364,7 @@ fn slice_rank_three_token(
 fn apply_fused_gated_delta_chunk(
     runtime: &MlxRuntime,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
-    gated_delta_kernel: &astronomical_runtime_integration::MlxMetalKernel,
+    gated_delta_kernel: &astronomical_mlx_c_rust::MlxMetalKernel,
     decay_rate_logarithm: &MlxArray,
     decay_interval_bias: &MlxArray,
     token_count: i32,

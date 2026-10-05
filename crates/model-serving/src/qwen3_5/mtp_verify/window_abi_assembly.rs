@@ -10,18 +10,18 @@
 //! convolution, next recurrent state]`, full-attention layers contribute
 //! `[rotated new keys, new values]`.
 //!
-use astronomical_runtime_integration::{
-    VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot, VerifyWindowFullAttentionWeightSlot,
-    VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry, VerifyWindowInputSlot,
-    VerifyWindowLayerWeightSlot, VerifyWindowTrunkWeightSlot, verify_window_input_slots,
-};
 
 use crate::qwen3_5::model::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderLayerWeights,
 };
 
 use super::window_state_leaves::{WindowStateLeaves, WindowStateUpdate};
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{
+    MlxArray, VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
+    VerifyWindowFullAttentionWeightSlot, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
+    VerifyWindowInputSlot, VerifyWindowLayerWeightSlot, VerifyWindowTrunkWeightSlot,
+    verify_window_input_slots,
+};
 
 /// Everything one apply needs beside the model's resident weights.
 pub(crate) struct VerifyWindowAttemptInputs<'a> {
@@ -156,7 +156,7 @@ pub(crate) fn read_window_outputs(
         .layer_kinds()
         .iter()
         .filter(|layer_kind| {
-            **layer_kind == astronomical_runtime_integration::VerifyWindowLayerKind::GatedDelta
+            **layer_kind == astronomical_mlx_c_rust::VerifyWindowLayerKind::GatedDelta
         })
         .count();
     let expected_output_count =
@@ -178,7 +178,7 @@ pub(crate) fn read_window_outputs(
     let mut layer_updates = Vec::with_capacity(geometry.layer_kinds().len());
     for layer_index in 0..geometry.layer_kinds().len() {
         match geometry.layer_kinds()[layer_index] {
-            astronomical_runtime_integration::VerifyWindowLayerKind::GatedDelta => {
+            astronomical_mlx_c_rust::VerifyWindowLayerKind::GatedDelta => {
                 let convolution = output_iterator.next().ok_or_else(|| {
                     format!("layer {layer_index} is missing its rolling-convolution output")
                 })?;
@@ -203,7 +203,7 @@ pub(crate) fn read_window_outputs(
                     boundary_recurrent_states,
                 });
             }
-            astronomical_runtime_integration::VerifyWindowLayerKind::FullAttention => {
+            astronomical_mlx_c_rust::VerifyWindowLayerKind::FullAttention => {
                 let keys = output_iterator.next().ok_or_else(|| {
                     format!("layer {layer_index} is missing its rotated-keys output")
                 })?;

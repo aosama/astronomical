@@ -11,34 +11,7 @@ mod mlx_bounded_safetensors_read_concurrency;
 #[cfg(feature = "mlx")]
 mod mlx_bounded_safetensors_reader;
 #[cfg(feature = "mlx")]
-mod mlx_compiled_attention_output_gate;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_elementwise_graphs;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_graph;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_multi_output_graph;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_sparse_shared_expert_combination;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_swiglu;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_verify_window_geometry;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_verify_window_graph;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_verify_window_ops;
-#[cfg(feature = "mlx")]
-mod mlx_compiled_vision_rope;
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
 mod mlx_descriptor_file_reader;
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-mod mlx_metal_capture;
-#[cfg(feature = "mlx")]
-mod mlx_metal_kernel;
 mod mlx_metallib_path;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
@@ -69,36 +42,6 @@ pub use experimental::{
     MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics,
     MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadMetricsSnapshot,
     MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
-};
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_graph::{
-    MlxGraphBuilder, array_from_vector, graph_output_array, set_graph_output,
-    set_graph_output_vector,
-};
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_multi_output_graph::MlxCompiledMultiOutputGraph;
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_verify_window_geometry::{
-    VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
-    VerifyWindowFullAttentionQuantization, VerifyWindowFullAttentionWeightSlot,
-    VerifyWindowGatedDeltaQuantization, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
-    VerifyWindowInputSlot, VerifyWindowLayerKind, VerifyWindowLayerQuantization,
-    VerifyWindowLayerWeightSlot, VerifyWindowQuantizationPair, VerifyWindowTrunkQuantization,
-    VerifyWindowTrunkWeightSlot, verify_window_input_slots,
-};
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_verify_window_graph::MlxCompiledVerifyWindowGraph;
-#[cfg(feature = "mlx")]
-pub use mlx_compiled_verify_window_graph::VerifyWindowGdnKernelSet;
-#[cfg(feature = "mlx")]
-pub use mlx_metal_kernel::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    apply_metal_kernel_in_graph,
 };
 pub use mlx_metallib_path::resolve_mlx_metallib_path;
 #[cfg(feature = "mlx")]

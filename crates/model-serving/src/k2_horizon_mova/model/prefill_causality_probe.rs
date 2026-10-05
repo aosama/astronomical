@@ -13,8 +13,7 @@ use std::time::Duration;
 use astronomical_config::AstronomicalConfig;
 use astronomical_ipc_protocol::{ChatMessage, ChatToolChoice};
 use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMemoryLimits, MlxRuntime,
-    maximum_recommended_gpu_working_set_size_bytes,
+    MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
 
 use crate::PerformanceAttribution;
@@ -22,7 +21,9 @@ use crate::PerformanceAttribution;
 use super::K2HorizonMoVAKvState;
 use super::K2HorizonMoVAWeights;
 use super::model::K2HorizonMoVAModel;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype,
+};
 
 const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),

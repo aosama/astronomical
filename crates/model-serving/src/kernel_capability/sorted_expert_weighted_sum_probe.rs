@@ -6,7 +6,7 @@
 //! including the all-zeros signature of a silently dropped dispatch — each
 //! map to a distinct typed capability error.
 
-use astronomical_runtime_integration::{MlxMetalKernel, MlxRuntime, MlxRuntimeError};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,
@@ -15,6 +15,7 @@ use crate::performance_attribution::PerformanceAttribution;
 use crate::sparse_experts::{
     sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
 };
+use astronomical_mlx_c_rust::MlxMetalKernel;
 
 // Expected reduction of the fixed probe inputs, proven by the existing
 // direct-MLX sorted-reduction contracts: the inverse order maps token 0 to

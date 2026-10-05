@@ -29,11 +29,10 @@
 //! `exp` intrinsic a separately-compiled launch does not reproduce bit-for-bit,
 //! so float16 falls back to the composed path rather than risk diverging bits.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
-use astronomical_runtime_integration::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
-    MlxRuntimeError,
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// Rolling convolution rows retained across steps: conv kernel size minus one.
 const KEPT_STATE_ROW_COUNT: i32 = 3;
@@ -68,7 +67,7 @@ pub struct GdnDecodePreworkOutput {
 /// floats.
 pub fn qwen3_5_gdn_decode_prework_kernel(
     rms_norm_epsilon: f32,
-) -> Result<MlxMetalKernel, MlxRuntimeError> {
+) -> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
     MlxMetalKernel::new(
         "astronomical_qwen3_5_gdn_decode_prework",
         &[
@@ -81,6 +80,7 @@ pub fn qwen3_5_gdn_decode_prework_kernel(
         &["queries", "keys", "values", "next_convolution_state"],
         &gdn_decode_prework_kernel_source(rms_norm_epsilon),
     )
+    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 /// Applies the fused decode prework. The token count comes from the mixed

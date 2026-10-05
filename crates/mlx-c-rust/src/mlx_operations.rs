@@ -444,11 +444,7 @@ impl MlxBindingsContext {
     }
 
     /// Runs one MLX operation through a populated output-array callback.
-    ///
-    /// Public for the wrapper families that still live in the runtime policy crate
-    /// during the wrapper-move passes; revisit the visibility in the close-out
-    /// audit once every family has moved.
-    pub fn output_array(
+    pub(crate) fn output_array(
         &self,
         operation: &'static str,
         build_graph: impl FnOnce(*mut raw::mlx_array, raw::mlx_stream) -> i32,

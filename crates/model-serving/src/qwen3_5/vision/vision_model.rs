@@ -11,7 +11,7 @@
 //! MLX-C entry points in `mlx-c/mlx/c/ops.h` or `mlx-c/mlx/c/fast.h`; this code
 //! owns only model-specific graph assembly and image-boundary segmentation.
 
-use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use std::cell::Cell;
 
 use super::vision_attention::{Qwen3_5VisionPaddingZeroCache, qwen3_5_vision_self_attention};
@@ -20,7 +20,7 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
     Qwen3_5VisionWeights, ValidatedQwen3_5Artifact,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 
 const LAYER_NORM_EPSILON: f32 = 1e-6;
 

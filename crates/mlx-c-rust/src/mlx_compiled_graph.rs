@@ -1,7 +1,6 @@
 use std::os::raw::c_int;
 
-use crate::{MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxCError, raw};
+use crate::{MlxArray, MlxArrayVector, MlxCError, error::check_status, raw};
 
 /// The MLX C closure ABI every compiled-graph builder follows: it receives the
 /// output vector to populate and the input vector to read, and returns zero on
@@ -29,7 +28,7 @@ impl MlxCompiledGraph {
         graph_builder: MlxGraphBuilder,
         compile_operation: &'static str,
         shapeless: bool,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         let source_closure = MlxClosure::from_function(graph_builder, compile_operation)?;
         let mut compiled_closure = MlxClosure::empty();
         // SAFETY: Both closure handles are live and uniquely owned. MLX copies
@@ -46,7 +45,7 @@ impl MlxCompiledGraph {
         &self,
         graph_inputs: &[&MlxArray],
         apply_operation: &'static str,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         let input_vector = MlxArrayVector::new(graph_inputs)?;
         let mut output_vector = MlxArrayVector::empty(apply_operation)?;
         // SAFETY: The compiled closure and input vector remain live for the
@@ -60,7 +59,7 @@ impl MlxCompiledGraph {
         };
         check_status(apply_status, apply_operation)?;
         if output_vector.len() != 1 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: apply_operation,
                 description: format!(
                     "compiled MLX graph returned {} outputs instead of one",
@@ -70,7 +69,7 @@ impl MlxCompiledGraph {
         }
         output_vector
             .array_at(0, apply_operation)
-            .map_err(MlxRuntimeError::from)
+            .map_err(MlxCError::from)
     }
 
     /// Applies the compiled graph and returns every output it produced.
@@ -81,7 +80,7 @@ impl MlxCompiledGraph {
         &self,
         graph_inputs: &[&MlxArray],
         apply_operation: &'static str,
-    ) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+    ) -> Result<Vec<MlxArray>, MlxCError> {
         let input_vector = MlxArrayVector::new(graph_inputs)?;
         let mut output_vector = MlxArrayVector::empty(apply_operation)?;
         // SAFETY: The compiled closure and input vector remain live for the
@@ -96,7 +95,7 @@ impl MlxCompiledGraph {
         check_status(apply_status, apply_operation)?;
         let output_count = output_vector.len();
         if output_count == 0 {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: apply_operation,
                 description: "compiled MLX graph returned no outputs".to_owned(),
             });
@@ -104,7 +103,7 @@ impl MlxCompiledGraph {
         (0..output_count)
             .map(|output_index| output_vector.array_at(output_index, apply_operation))
             .collect::<Result<Vec<_>, MlxCError>>()
-            .map_err(MlxRuntimeError::from)
+            .map_err(MlxCError::from)
     }
 }
 
@@ -185,11 +184,11 @@ impl MlxClosure {
     fn from_function(
         graph_builder: MlxGraphBuilder,
         compile_operation: &'static str,
-    ) -> Result<Self, MlxRuntimeError> {
+    ) -> Result<Self, MlxCError> {
         // SAFETY: The callback has static lifetime and follows the MLX C closure ABI.
         let raw_closure = unsafe { raw::mlx_closure_new_func(Some(graph_builder)) };
         if raw_closure.ctx.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: compile_operation,
                 description: "MLX returned an empty closure handle".to_owned(),
             });
@@ -205,9 +204,9 @@ impl MlxClosure {
         &mut self.raw_closure
     }
 
-    fn require_populated(&self, compile_operation: &'static str) -> Result<(), MlxRuntimeError> {
+    fn require_populated(&self, compile_operation: &'static str) -> Result<(), MlxCError> {
         if self.raw_closure.ctx.is_null() {
-            return Err(MlxRuntimeError::RuntimeOperation {
+            return Err(MlxCError {
                 operation: compile_operation,
                 description: "MLX left the compiled closure handle empty".to_owned(),
             });

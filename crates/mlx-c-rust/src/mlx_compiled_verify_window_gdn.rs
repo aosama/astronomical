@@ -12,7 +12,7 @@ use super::{VerifyWindowGdnKernelSet, VerifyWindowInputReader};
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_ops as ops;
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, MlxStream, raw};
+use crate::{MlxArray, MlxDtype, MlxStream, raw};
 
 #[path = "mlx_compiled_verify_window_gdn_recurrence.rs"]
 mod recurrence;
