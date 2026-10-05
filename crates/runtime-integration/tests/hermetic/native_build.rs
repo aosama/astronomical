@@ -18,19 +18,18 @@ fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
 }
 
 #[test]
-fn should_allowlist_the_pinned_mlx_c_flux_primitives() {
-    for required_binding in [
-        "data_(float32|uint8|uint32)",
-        "conv(1d|2d|3d)",
-        "|clip|",
-        "|full|",
-        "|pad|",
-        "|sqrt|",
-        "random_(categorical|key|normal|split)",
+fn should_allowlist_the_complete_mlx_c_surface_and_the_expert_loader_primitives() {
+    // The bridge contract guarantees the complete MLX C surface, not a
+    // hand-picked subset: both allowlists must keep leading with the broad
+    // mlx_.* pattern so narrowing them back fails here instead of silently
+    // un-bridging functions the coverage inventory already declares.
+    for required_allowlist in [
+        "\"mlx_.*|astronomical_metal_expert_loader_(start|wait|free)\"",
+        "\"mlx_.*|astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle)\"",
     ] {
         assert!(
-            BINDGEN_CONFIGURATION.contains(required_binding),
-            "the narrow bindgen surface must include {required_binding}"
+            BINDGEN_CONFIGURATION.contains(required_allowlist),
+            "the bindgen allowlist must stay complete: {required_allowlist}"
         );
     }
 }

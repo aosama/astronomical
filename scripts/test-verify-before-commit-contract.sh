@@ -112,7 +112,8 @@ timeout --foreground -k 5s 120s \
     cargo --verbose test \
         --package astronomical-model-serving \
         --features astronomical-model-serving/direct-mlx \
-        --test direct_mlx_tests
+        --test direct_mlx_tests \
+        --test mlx_c_coverage_contract_tests
 SCRIPT
     chmod +x "${sandbox_scripts_directory}/test-direct-mlx.sh"
 }
@@ -240,6 +241,10 @@ main() {
     }
     grep -F -- '--features astronomical-model-serving/direct-mlx' "$cargo_log" >/dev/null || {
         print_error "the direct-MLX lane did not run through the disposable Cargo target coordinator"
+        exit 1
+    }
+    grep -F -- '--test mlx_c_coverage_contract_tests' "$cargo_log" >/dev/null || {
+        print_error "the direct-MLX lane did not enforce the MLX-C coverage contract"
         exit 1
     }
     grep -F 'check --package astronomical-runtime-integration --features mlx-memory-contract-probe --all-targets' "$cargo_log" >/dev/null || {

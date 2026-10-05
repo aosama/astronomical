@@ -248,12 +248,12 @@ pub fn apply_metal_kernel_in_graph(
 }
 
 #[derive(Debug)]
-struct MlxMetalKernelConfig {
+pub struct MlxMetalKernelConfig {
     raw_config: raw::mlx_fast_metal_kernel_config,
 }
 
 impl MlxMetalKernelConfig {
-    fn new(
+    pub fn new(
         output_specs: &[MlxMetalKernelOutput],
         grid: [i32; 3],
         thread_group: [i32; 3],
@@ -371,6 +371,14 @@ impl MlxMetalKernelConfig {
             }
         }
         Ok(())
+    }
+
+    /// Toggles MLX's verbose logging for this kernel launch.
+    pub fn set_verbose(&mut self, verbose: bool) -> Result<(), MlxCError> {
+        const OPERATION: &str = "configure MLX custom Metal kernel logging";
+        // SAFETY: The config handle is live and the flag is a plain value.
+        let status = unsafe { raw::mlx_fast_metal_kernel_config_set_verbose(self.raw(), verbose) };
+        check_status(status, OPERATION)
     }
 }
 

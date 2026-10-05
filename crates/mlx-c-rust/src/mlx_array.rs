@@ -68,7 +68,7 @@ impl MlxDtype {
 /// Owned MLX array handle released exactly once through the official C API.
 #[derive(Debug)]
 pub struct MlxArray {
-    raw_array: raw::mlx_array,
+    pub(crate) raw_array: raw::mlx_array,
 }
 
 impl MlxArray {
@@ -176,8 +176,9 @@ impl MlxArray {
         &mut self.raw_array
     }
 
-    /// Validates that a returned handle is populated, translating the captured
-    /// MLX-C description into a typed failure.
+    /// Validates that a returned handle is populated, translating a parked
+    /// payload-closure failure or the captured MLX-C description into a typed
+    /// failure.
     ///
     /// This is a pure translation: Astronomical-specific error classification
     /// (for example the active memory ceiling) is runtime policy and happens
@@ -186,7 +187,12 @@ impl MlxArray {
     pub fn require_populated(&self, operation: &'static str) -> Result<(), MlxCError> {
         if !self.is_empty() {
             clear_captured_mlx_error();
+            crate::error::clear_closure_error();
             return Ok(());
+        }
+        if let Some(failure) = crate::error::take_closure_error() {
+            clear_captured_mlx_error();
+            return Err(failure);
         }
         let description = take_captured_mlx_error()
             .unwrap_or_else(|| "MLX returned an empty array handle".to_owned());
