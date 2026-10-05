@@ -244,6 +244,21 @@ impl MlxArray {
         check_status(status, "evaluate an MLX array")
     }
 
+    /// Strips the lazy graph (primitive, inputs, siblings) while keeping the
+    /// realized buffer.
+    ///
+    /// MLX retains every input of an array's graph for the array's lifetime,
+    /// so a retained cache built from row-writes pins each source buffer —
+    /// streamed pages and retired tables — in active memory forever. Callers
+    /// must evaluate first: detaching before evaluation discards the
+    /// unrealized graph and leaves the buffer unwritten.
+    pub fn detach(&self) -> Result<(), MlxCError> {
+        // SAFETY: `self` owns a live handle and MLX detachment does not
+        // retain any Rust borrow beyond this call.
+        let status = unsafe { raw::mlx_array_detach(self.raw_array) };
+        check_status(status, "detach an MLX array")
+    }
+
     /// Evaluates and copies a contiguous float32 array into Rust-owned memory.
     ///
     /// MLX keeps a slice of an evaluated parent as a strided view over the
