@@ -4,21 +4,20 @@ use astronomical_model_serving::{
     ExpertMemoryMode, LagunaDecoderState, LagunaModel, PerformanceAttribution,
 };
 
-use super::super::page_artifact::{paging_plan, test_runtime, write_sparse_artifact};
-use super::bind_core_page_weights;
+use super::super::page_artifact;
 
 #[tokio::test]
 async fn should_demote_native_experts_and_recover_complete_residency_through_bounded_pages() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("resident demotion model directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
     let complete_layer_payload_bytes = plan.sparse_layers()[0]
         .complete_layer_payload_byte_count()
         .expect("complete layer bytes should be exact");
-    let runtime = test_runtime();
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
-    let weights = bind_core_page_weights(&runtime, &contract, true)
+    let weights = super::bind_core_page_weights(&runtime, &contract, true)
         .expect("resident Laguna weights should bind");
     let mut model = LagunaModel::new(
         contract,

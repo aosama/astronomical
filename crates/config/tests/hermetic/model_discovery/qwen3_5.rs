@@ -2,8 +2,6 @@ use std::fs;
 
 use astronomical_config::ModelCapabilities;
 
-use super::{discover_configured_models, write_minimal_model_config, write_required_model_files};
-
 const IMMUTABLE_PROVIDER_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// Writes the config and tokenizer for a dense Qwen vision fixture.
@@ -58,13 +56,13 @@ fn should_discover_supported_text_and_vision_qwen_models() {
     let vision_model_directory = temporary_directory.path().join("VisionModel-OptiQ-4bit");
     fs::create_dir_all(&text_model_directory).expect("text model directory should be created");
     fs::create_dir_all(&vision_model_directory).expect("vision model directory should be created");
-    write_minimal_model_config(&text_model_directory, "qwen3_5_moe", 262_144);
-    write_minimal_model_config(&vision_model_directory, "qwen3_5_moe_vision", 262_144);
-    write_required_model_files(&text_model_directory);
-    write_required_model_files(&vision_model_directory);
+    super::write_minimal_model_config(&text_model_directory, "qwen3_5_moe", 262_144);
+    super::write_minimal_model_config(&vision_model_directory, "qwen3_5_moe_vision", 262_144);
+    super::write_required_model_files(&text_model_directory);
+    super::write_required_model_files(&vision_model_directory);
     write_embedded_vision_model_files(&vision_model_directory);
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
 
     assert_eq!(directory_scans.len(), 1);
     assert_eq!(directory_scans[0].discovered_models.len(), 2);
@@ -94,8 +92,8 @@ fn should_retain_provider_identity_and_revision_for_a_published_qwen_model() {
         .join("Published-Qwen");
     fs::create_dir_all(model_directory.join(".cache/huggingface/download"))
         .expect("published model directories should be created");
-    write_minimal_model_config(&model_directory, "qwen3_5_moe", 262_144);
-    write_required_model_files(&model_directory);
+    super::write_minimal_model_config(&model_directory, "qwen3_5_moe", 262_144);
+    super::write_required_model_files(&model_directory);
     fs::write(
         model_directory.join(".cache/huggingface/download/config.json.metadata"),
         format!("{IMMUTABLE_PROVIDER_REVISION}\n"),
@@ -110,7 +108,7 @@ fn should_retain_provider_identity_and_revision_for_a_published_qwen_model() {
     .expect("Library provider identity should be written");
 
     let discovered_model =
-        &discover_configured_models(&temporary_directory)[0].discovered_models[0];
+        &super::discover_configured_models(&temporary_directory)[0].discovered_models[0];
 
     assert_eq!(
         discovered_model.provider_model_id.as_deref(),
@@ -136,7 +134,7 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
         dense_model_config_json.to_string(),
     )
     .expect("dense model config should be written");
-    write_required_model_files(&dense_model_directory);
+    super::write_required_model_files(&dense_model_directory);
     fs::write(
         dense_model_directory.join("optiq/optiq_vision.safetensors"),
         [],
@@ -145,7 +143,7 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
     fs::write(dense_model_directory.join("optiq/mtp.safetensors"), [])
         .expect("optional MTP sidecar should be written");
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
         .discovered_models
         .iter()
@@ -164,7 +162,7 @@ fn should_allow_a_missing_mtp_only_file_with_an_arbitrary_name() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let model_directory = temporary_directory.path().join("MoeQwen3_5-4bit");
     fs::create_dir_all(&model_directory).expect("model directory should be created");
-    write_minimal_model_config(&model_directory, "qwen3_5_moe", 131_072);
+    super::write_minimal_model_config(&model_directory, "qwen3_5_moe", 131_072);
     fs::write(model_directory.join("tokenizer.json"), "{}").expect("tokenizer should be written");
     fs::write(model_directory.join("model-00001.safetensors"), [])
         .expect("target model shard should be written");
@@ -174,7 +172,7 @@ fn should_allow_a_missing_mtp_only_file_with_an_arbitrary_name() {
     )
     .expect("model index should be written");
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
 
     assert_eq!(directory_scans[0].discovered_models.len(), 1);
 }
@@ -191,7 +189,7 @@ fn should_discover_dense_qwen3_5_embedded_and_sidecar_vision_models() {
     write_dense_qwen3_5_vision_model_files(&sidecar_model_directory);
     write_separate_vision_model_files(&sidecar_model_directory);
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
 
     assert_eq!(directory_scans[0].discovered_models.len(), 2);
     assert!(
@@ -216,7 +214,7 @@ fn should_skip_a_dense_qwen3_5_model_with_an_indexed_but_missing_vision_sidecar(
         .expect("vision sidecar should be removed");
 
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty()
     );
@@ -229,12 +227,12 @@ fn should_skip_unsupported_and_incomplete_model_directories() {
     let incomplete_model_directory = temporary_directory.path().join("IncompleteModel");
     fs::create_dir_all(&unsupported_model_directory).expect("model directory should be created");
     fs::create_dir_all(&incomplete_model_directory).expect("model directory should be created");
-    write_minimal_model_config(&unsupported_model_directory, "llama", 4_096);
-    write_required_model_files(&unsupported_model_directory);
-    write_minimal_model_config(&incomplete_model_directory, "qwen3_5_moe", 262_144);
+    super::write_minimal_model_config(&unsupported_model_directory, "llama", 4_096);
+    super::write_required_model_files(&unsupported_model_directory);
+    super::write_minimal_model_config(&incomplete_model_directory, "qwen3_5_moe", 262_144);
 
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty()
     );
@@ -245,7 +243,7 @@ fn should_measure_unique_model_shard_bytes_during_discovery() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let model_directory = temporary_directory.path().join("MeasuredModel");
     fs::create_dir_all(&model_directory).expect("model directory should be created");
-    write_minimal_model_config(&model_directory, "qwen3_5_moe", 262_144);
+    super::write_minimal_model_config(&model_directory, "qwen3_5_moe", 262_144);
     fs::write(model_directory.join("tokenizer.json"), "{}").expect("tokenizer should be written");
     fs::write(
         model_directory.join("model-00001.safetensors"),
@@ -266,7 +264,7 @@ fn should_measure_unique_model_shard_bytes_during_discovery() {
     )
     .expect("safetensors index should be written");
 
-    let directory_scans = discover_configured_models(&temporary_directory);
+    let directory_scans = super::discover_configured_models(&temporary_directory);
 
     assert_eq!(
         directory_scans[0].discovered_models[0].model_size_bytes,

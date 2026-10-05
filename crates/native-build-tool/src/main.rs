@@ -2,18 +2,18 @@
 
 use std::process::ExitCode;
 
-use astronomical_native_build_tool::{NATIVE_BUILD_TOOL_PREFIX, parse_arguments, run_native_build};
+use astronomical_native_build_tool::NATIVE_BUILD_TOOL_PREFIX;
 
 fn main() -> ExitCode {
     let command_line_arguments: Vec<String> = std::env::args().skip(1).collect();
-    let arguments = match parse_arguments(&command_line_arguments) {
+    let arguments = match astronomical_native_build_tool::parse_arguments(&command_line_arguments) {
         Ok(arguments) => arguments,
         Err(argument_error) => {
             eprintln!("{NATIVE_BUILD_TOOL_PREFIX} {argument_error}");
             return ExitCode::from(2);
         }
     };
-    match run_native_build(&arguments) {
+    match astronomical_native_build_tool::run_native_build(&arguments) {
         Ok(native_build_outcome) => {
             let outcome_name = if native_build_outcome.was_built() {
                 "built"

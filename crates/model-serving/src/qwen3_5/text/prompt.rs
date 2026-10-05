@@ -2,7 +2,7 @@ use astronomical_ipc_protocol::{ChatAssistantToolCall, ChatMessage, ChatToolDefi
 use serde_json::Value;
 use thiserror::Error;
 
-use super::template_safe_content::append_template_safe_content;
+use super::template_safe_content;
 
 const IM_END: &str = "<|im_end|>";
 const IM_START: &str = "<|im_start|>";
@@ -116,7 +116,10 @@ impl Qwen3_5PromptRenderer {
                         }
                         rendered_prompt.push_str(VISION_END);
                     }
-                    append_template_safe_content(&mut rendered_prompt, content.trim());
+                    template_safe_content::append_template_safe_content(
+                        &mut rendered_prompt,
+                        content.trim(),
+                    );
                     rendered_prompt.push_str(IM_END);
                     rendered_prompt.push('\n');
                 }
@@ -166,7 +169,10 @@ impl Qwen3_5PromptRenderer {
         rendered_correction.push_str("user\n");
         rendered_correction.push_str(TOOL_RESPONSE_START);
         rendered_correction.push('\n');
-        append_template_safe_content(&mut rendered_correction, correction_text.trim());
+        template_safe_content::append_template_safe_content(
+            &mut rendered_correction,
+            correction_text.trim(),
+        );
         rendered_correction.push('\n');
         rendered_correction.push_str(TOOL_RESPONSE_END);
         rendered_correction.push_str(IM_END);
@@ -211,7 +217,10 @@ fn render_tool_system_preamble(
     rendered_prompt.push_str(TOOLS_START);
     for tool in tools {
         rendered_prompt.push('\n');
-        append_template_safe_content(rendered_prompt, &render_tool_definition(tool)?);
+        template_safe_content::append_template_safe_content(
+            rendered_prompt,
+            &render_tool_definition(tool)?,
+        );
     }
     rendered_prompt.push('\n');
     rendered_prompt.push_str(TOOLS_END);
@@ -220,7 +229,10 @@ fn render_tool_system_preamble(
         let trimmed_system_content = content.trim();
         if !trimmed_system_content.is_empty() {
             rendered_prompt.push_str("\n\n");
-            append_template_safe_content(rendered_prompt, trimmed_system_content);
+            template_safe_content::append_template_safe_content(
+                rendered_prompt,
+                trimmed_system_content,
+            );
         }
     }
     rendered_prompt.push_str(IM_END);
@@ -239,11 +251,11 @@ fn render_assistant_message(
     rendered_prompt.push_str("assistant\n");
     rendered_prompt.push_str(THINK_START);
     rendered_prompt.push('\n');
-    append_template_safe_content(rendered_prompt, reasoning_content.trim());
+    template_safe_content::append_template_safe_content(rendered_prompt, reasoning_content.trim());
     rendered_prompt.push('\n');
     rendered_prompt.push_str(THINK_END);
     rendered_prompt.push_str("\n\n");
-    append_template_safe_content(rendered_prompt, trimmed_content);
+    template_safe_content::append_template_safe_content(rendered_prompt, trimmed_content);
 
     for (tool_call_index, tool_call) in tool_calls.iter().enumerate() {
         if tool_call_index == 0 && !trimmed_content.is_empty() {
@@ -273,9 +285,15 @@ fn render_assistant_tool_call(
         rendered_prompt.push_str(TOOL_CALL_START);
         rendered_prompt.push('\n');
         rendered_prompt.push_str("<function=");
-        append_template_safe_content(rendered_prompt, &tool_call.function.name);
+        template_safe_content::append_template_safe_content(
+            rendered_prompt,
+            &tool_call.function.name,
+        );
         rendered_prompt.push_str(">\n");
-        append_template_safe_content(rendered_prompt, &tool_call.function.arguments_json);
+        template_safe_content::append_template_safe_content(
+            rendered_prompt,
+            &tool_call.function.arguments_json,
+        );
         rendered_prompt.push_str("\n</function>\n");
         rendered_prompt.push_str(TOOL_CALL_END);
         return Ok(());
@@ -284,13 +302,16 @@ fn render_assistant_tool_call(
     rendered_prompt.push_str(TOOL_CALL_START);
     rendered_prompt.push('\n');
     rendered_prompt.push_str("<function=");
-    append_template_safe_content(rendered_prompt, &tool_call.function.name);
+    template_safe_content::append_template_safe_content(rendered_prompt, &tool_call.function.name);
     rendered_prompt.push_str(">\n");
     for (argument_name, argument_value) in argument_values {
         rendered_prompt.push_str("<parameter=");
-        append_template_safe_content(rendered_prompt, &argument_name);
+        template_safe_content::append_template_safe_content(rendered_prompt, &argument_name);
         rendered_prompt.push_str(">\n");
-        append_template_safe_content(rendered_prompt, &render_parameter_value(&argument_value)?);
+        template_safe_content::append_template_safe_content(
+            rendered_prompt,
+            &render_parameter_value(&argument_value)?,
+        );
         rendered_prompt.push_str("\n</parameter>\n");
     }
     rendered_prompt.push_str("</function>\n");
@@ -315,7 +336,7 @@ fn render_tool_response(
     rendered_prompt.push('\n');
     rendered_prompt.push_str(TOOL_RESPONSE_START);
     rendered_prompt.push('\n');
-    append_template_safe_content(rendered_prompt, content);
+    template_safe_content::append_template_safe_content(rendered_prompt, content);
     rendered_prompt.push('\n');
     rendered_prompt.push_str(TOOL_RESPONSE_END);
 
@@ -383,7 +404,7 @@ fn append_chat_message(rendered_prompt: &mut String, role: &str, content: &str) 
     rendered_prompt.push_str(IM_START);
     rendered_prompt.push_str(role);
     rendered_prompt.push('\n');
-    append_template_safe_content(rendered_prompt, content);
+    template_safe_content::append_template_safe_content(rendered_prompt, content);
     rendered_prompt.push_str(IM_END);
     rendered_prompt.push('\n');
 }

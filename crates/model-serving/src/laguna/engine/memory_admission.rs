@@ -1,6 +1,6 @@
 //! Request-level Laguna context admission before decoder or cache arrays allocate.
 
-use crate::laguna::laguna_decoder_cache_layout;
+use crate::laguna;
 use crate::laguna::{LagunaDecoderState, LagunaModel};
 use crate::{
     ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionDecision,
@@ -57,7 +57,7 @@ pub(super) fn admit_generation_context(
 ) -> Result<(), InferenceEngineError> {
     for _admission_attempt in 0..3 {
         let decoder_cache_layout =
-            laguna_decoder_cache_layout(model.contract()).map_err(|layout_error| {
+            laguna::laguna_decoder_cache_layout(model.contract()).map_err(|layout_error| {
                 InferenceEngineError::InvalidRequest {
                     reason: format!("Laguna context geometry is invalid: {layout_error}"),
                 }

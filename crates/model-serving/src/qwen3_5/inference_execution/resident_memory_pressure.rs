@@ -7,7 +7,7 @@
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
-use crate::qwen3_5::model::adaptive_ram_growth_logging::log_adaptive_ram_growth_pressure;
+use crate::qwen3_5::model::adaptive_ram_growth_logging;
 use crate::qwen3_5::model::memory_admission::{
     context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
     validate_context_memory_admission,
@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 pub(super) struct Qwen3_5ResidentAdaptiveGrowthDemotion {
     pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
@@ -41,7 +41,7 @@ impl Qwen3_5EngineState {
         let target_expert_payload_bytes_before_context_admission = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
         // Demote only when this exact operation would otherwise fail. Smaller
@@ -50,7 +50,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             model.resident_expert_weights.is_some()
                 && !context_memory_admission_fits_without_expert_reclamation(
                     model,
@@ -64,7 +64,7 @@ impl Qwen3_5EngineState {
         if resident_model_requires_demotion {
             self.model
                 .as_mut()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
                 .demote_resident_experts_to_paging(
                     Qwen3_5ExpertResidencyTransitionReason::RequestAdmission,
                     performance_attribution,
@@ -74,7 +74,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let context_admission_outcome = performance_attribution.measure_operation(
             PerformanceOperation::MemoryAdmissionSnapshot,
             |_performance_attribution| {
@@ -108,7 +108,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         if model.resident_expert_weights.is_none() {
             return Ok(None);
         }
@@ -124,7 +124,7 @@ impl Qwen3_5EngineState {
         let mut disabled_transition_attribution = PerformanceAttribution::disabled();
         self.model
             .as_mut()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .demote_resident_experts_to_paging(
                 Qwen3_5ExpertResidencyTransitionReason::RequestPressure,
                 &mut disabled_transition_attribution,
@@ -136,7 +136,7 @@ impl Qwen3_5EngineState {
         let model_after_demotion = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let memory_snapshot = model_after_demotion
             .runtime()
             .memory_snapshot()
@@ -164,7 +164,7 @@ impl Qwen3_5EngineState {
                     "adaptive RAM growth rejected after resident expert demotion: {adaptive_ram_growth_projection_error}"
                 ))
             })?;
-        log_adaptive_ram_growth_pressure(
+        adaptive_ram_growth_logging::log_adaptive_ram_growth_pressure(
             &projection,
             resident_expert_statistics_before_demotion,
             model_after_demotion.expert_weight_memory_cache_statistics(),

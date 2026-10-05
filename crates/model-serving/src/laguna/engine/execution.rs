@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::active_generation::LagunaActiveGeneration;
-use super::memory::complete_laguna_forward_memory_observation;
+use super::memory;
 use super::prefill_capacity_recovery::LagunaPrefillFailureInjection;
 
 /// Deferred Laguna construction that must run on the MLX owner thread.
@@ -372,7 +372,7 @@ impl MlxInferenceExecution for LagunaInferenceExecution {
                     &mut active_request.random_state,
                     performance_attribution,
                 )?;
-                complete_laguna_forward_memory_observation(
+                memory::complete_laguna_forward_memory_observation(
                     runtime,
                     model,
                     adaptive_ram_growth_guard,

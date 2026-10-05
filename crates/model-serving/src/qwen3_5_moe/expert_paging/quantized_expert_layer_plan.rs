@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use crate::expert_paging::quantized_expert_manifest::{
     ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
 };
-use crate::expert_paging::quantized_expert_validation::validate_quantization_contract;
+use crate::expert_paging::quantized_expert_validation;
 use crate::expert_paging::safetensors_header::{
     SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry,
 };
@@ -221,7 +221,7 @@ pub(crate) fn projection_storage_contract(
         .map_err(|_| ExpertManifestError::InvalidBits)?;
     let quantization_group_size = i32::try_from(projection_quantization_profile.group_size)
         .map_err(|_| ExpertManifestError::InvalidGroupSize)?;
-    validate_quantization_contract(
+    quantized_expert_validation::validate_quantization_contract(
         quantization_bits,
         quantization_group_size,
         QuantizationMode::Affine,

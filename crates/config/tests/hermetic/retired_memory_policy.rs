@@ -1,11 +1,9 @@
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError};
 
-use super::write_config;
-
 #[test]
 fn should_reject_retired_expert_paging_enabled_field() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
+    super::write_config(
         temporary_home_directory.path(),
         r#"{
           "expert_paging_enabled": true
@@ -30,7 +28,7 @@ fn should_reject_retired_expert_paging_enabled_field() {
 #[test]
 fn should_reject_retired_expert_weight_memory_cache_maximum_size_field() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
+    super::write_config(
         temporary_home_directory.path(),
         r#"{
           "expert_weight_memory_cache_maximum_size_gb": 4
@@ -83,7 +81,7 @@ fn should_reject_every_retired_consumer_configuration_field() {
     ] {
         let temporary_home_directory =
             tempfile::tempdir().expect("temporary home should be created");
-        write_config(temporary_home_directory.path(), retired_field_configuration);
+        super::write_config(temporary_home_directory.path(), retired_field_configuration);
 
         let configuration_error =
             AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())

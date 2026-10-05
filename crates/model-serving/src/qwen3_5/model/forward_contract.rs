@@ -1,4 +1,4 @@
-use super::error::invalid_request_decoder_state;
+use super::error;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::DecoderCacheState;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
@@ -34,13 +34,13 @@ fn collect_evaluation_arrays<'state>(
                 recurrent,
             }) if convolution.state().is_some() && recurrent.state().is_some() => {
                 let convolution = convolution.state().ok_or_else(|| {
-                    invalid_request_decoder_state(
+                    error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the convolution state array",
                     )
                 })?;
                 let recurrent = recurrent.state().ok_or_else(|| {
-                    invalid_request_decoder_state(
+                    error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the recurrent state array",
                     )
@@ -54,13 +54,13 @@ fn collect_evaluation_arrays<'state>(
                 if attention.keys_state().is_some() && attention.values_state().is_some() =>
             {
                 let attention_keys = attention.keys_state().ok_or_else(|| {
-                    invalid_request_decoder_state(
+                    error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the attention key state array",
                     )
                 })?;
                 let attention_values = attention.values_state().ok_or_else(|| {
-                    invalid_request_decoder_state(
+                    error::invalid_request_decoder_state(
                         layer_index,
                         "model forward did not populate the attention value state array",
                     )
@@ -71,7 +71,7 @@ fn collect_evaluation_arrays<'state>(
                 }
             }
             _ => {
-                return Err(invalid_request_decoder_state(
+                return Err(error::invalid_request_decoder_state(
                     layer_index,
                     "model forward did not populate both required state arrays",
                 ));

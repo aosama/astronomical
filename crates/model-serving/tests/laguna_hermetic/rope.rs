@@ -3,11 +3,11 @@ use astronomical_model_serving::{
 };
 use serde_json::json;
 
-use super::support::{config_bytes, config_value, normalize};
+use super::support;
 
 #[test]
 fn should_normalize_flat_default_and_yarn_rope_without_pinned_context_equality() {
-    let default_contract = normalize(config_value(2));
+    let default_contract = support::normalize(support::config_value(2));
     assert!(matches!(
         default_contract.layers()[0].attention().rope(),
         LagunaRopeDescriptor::Default(_)
@@ -20,10 +20,10 @@ fn should_normalize_flat_default_and_yarn_rope_without_pinned_context_equality()
         64
     );
 
-    let mut yarn_config = config_value(2);
+    let mut yarn_config = support::config_value(2);
     yarn_config["max_position_embeddings"] = json!(50_000);
     yarn_config["rope_parameters"] = yarn_parameters(2.0, 8_192, 0.5, 500_000.0);
-    let yarn_contract = normalize(yarn_config);
+    let yarn_contract = support::normalize(yarn_config);
     let LagunaRopeDescriptor::Yarn(yarn) = yarn_contract.layers()[0].attention().rope() else {
         panic!("flat YaRN parameters should normalize");
     };
@@ -34,7 +34,7 @@ fn should_normalize_flat_default_and_yarn_rope_without_pinned_context_equality()
 
 #[test]
 fn should_select_nested_per_kind_rope_for_the_active_attention_kind() {
-    let mut config = config_value(2);
+    let mut config = support::config_value(2);
     config["layer_types"] = json!(["full", "sliding"]);
     config["sliding_window"] = json!(512);
     config["rope_parameters"] = json!({
@@ -45,7 +45,7 @@ fn should_select_nested_per_kind_rope_for_the_active_attention_kind() {
             "partial_rotary_factor": 1.0
         }
     });
-    let contract = normalize(config);
+    let contract = support::normalize(config);
 
     assert!(matches!(
         contract.layers()[0].attention().rope(),
@@ -63,7 +63,7 @@ fn should_select_nested_per_kind_rope_for_the_active_attention_kind() {
 
 #[test]
 fn should_apply_sliding_override_before_flat_and_flat_before_legacy_rope() {
-    let mut config = config_value(2);
+    let mut config = support::config_value(2);
     config["layer_types"] = json!(["full", "sliding"]);
     config["sliding_window"] = json!(512);
     config["rope_parameters"] = json!({
@@ -77,7 +77,7 @@ fn should_apply_sliding_override_before_flat_and_flat_before_legacy_rope() {
         "partial_rotary_factor": 1.0
     });
     config["rope_scaling"] = yarn_parameters(9.0, 1_024, 0.25, 33_000.0);
-    let contract = normalize(config);
+    let contract = support::normalize(config);
 
     assert_eq!(
         contract.layers()[0].attention().rope().rope_theta(),
@@ -91,7 +91,7 @@ fn should_apply_sliding_override_before_flat_and_flat_before_legacy_rope() {
 
 #[test]
 fn should_use_legacy_scaling_with_top_level_theta_and_partial_fallbacks() {
-    let mut config = config_value(1);
+    let mut config = support::config_value(1);
     assert!(
         config
             .as_object_mut()
@@ -109,7 +109,7 @@ fn should_use_legacy_scaling_with_top_level_theta_and_partial_fallbacks() {
         "beta_fast": 32.0,
         "attention_factor": 1.2
     });
-    let contract = normalize(config);
+    let contract = support::normalize(config);
 
     let LagunaRopeDescriptor::Yarn(yarn) = contract.layers()[0].attention().rope() else {
         panic!("legacy YaRN should normalize");
@@ -127,18 +127,18 @@ fn should_reject_non_integral_odd_zero_and_unsupported_rotary_declarations() {
         ("rope_theta", json!(-1.0)),
     ];
     for (field_name, invalid_value) in invalid_rows {
-        let mut config = config_value(1);
+        let mut config = support::config_value(1);
         config["rope_parameters"][field_name] = invalid_value;
         assert!(matches!(
-            LagunaTargetNormalizer::normalize(&config_bytes(&config)),
+            LagunaTargetNormalizer::normalize(&support::config_bytes(&config)),
             Err(LagunaNormalizationError::InvalidRopeValue { .. })
         ));
     }
 
-    let mut unsupported = config_value(1);
+    let mut unsupported = support::config_value(1);
     unsupported["rope_parameters"]["rope_type"] = json!("longrope");
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&unsupported)),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&unsupported)),
         Err(LagunaNormalizationError::UnsupportedValue { .. })
     ));
 }

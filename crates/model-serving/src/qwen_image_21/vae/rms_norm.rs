@@ -11,7 +11,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
-use super::tensor_shape::{as_i32, validate_shape};
+use super::tensor_shape;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 /// `torch.nn.functional.normalize` clamps the L2 norm at this floor before dividing.
@@ -32,7 +32,7 @@ impl QwenImage21VaeRmsNorm {
         channels: usize,
     ) -> Result<Self, QwenImage21VaeError> {
         let gamma = tensors.tensor(&format!("{prefix}.gamma"))?;
-        validate_shape(prefix, "gamma", &gamma, &[channels])?;
+        tensor_shape::validate_shape(prefix, "gamma", &gamma, &[channels])?;
         Ok(Self {
             channels,
             scale: (channels as f64).sqrt() as f32,
@@ -46,7 +46,8 @@ impl QwenImage21VaeRmsNorm {
         input: &MlxArray,
     ) -> Result<MlxArray, QwenImage21VaeError> {
         let shape = input.shape();
-        if shape.len() != 4 || shape[3] != as_i32(self.channels, "RMS norm channels")? {
+        if shape.len() != 4 || shape[3] != tensor_shape::as_i32(self.channels, "RMS norm channels")?
+        {
             return Err(QwenImage21VaeError::invalid_geometry(format!(
                 "RMS norm expected NHWC channels {}, received {shape:?}",
                 self.channels

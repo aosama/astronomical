@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use astronomical_supervisor::build_application;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
@@ -15,7 +14,8 @@ use crate::common::ScriptedExecutor;
 #[tokio::test]
 async fn should_serve_a_labelled_library_destination_at_its_deep_link() {
     timeout(Duration::from_secs(5), async {
-        let application = build_application(ScriptedExecutor::ready(Vec::new()));
+        let application =
+            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
                 Request::builder()
@@ -80,7 +80,8 @@ fn opening_tag_with_attribute<'a>(html_document: &'a str, attribute: &str) -> &'
 #[tokio::test]
 async fn should_serve_the_embedded_library_javascript() {
     timeout(Duration::from_secs(5), async {
-        let application = build_application(ScriptedExecutor::ready(Vec::new()));
+        let application =
+            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
                 Request::builder()

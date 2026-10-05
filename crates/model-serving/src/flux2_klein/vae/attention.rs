@@ -2,7 +2,7 @@
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use super::convolution::as_i32;
+use super::convolution;
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinGroupNorm, Flux2KleinVaeError};
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -64,7 +64,8 @@ impl Flux2KleinVaeMiddleAttention {
         input: &MlxArray,
     ) -> Result<MlxArray, Flux2KleinVaeError> {
         let shape = input.shape();
-        if shape.len() != 4 || shape[3] != as_i32(self.channels, "attention channels")? {
+        if shape.len() != 4 || shape[3] != convolution::as_i32(self.channels, "attention channels")?
+        {
             return Err(Flux2KleinVaeError::latent_geometry(format!(
                 "middle attention expected NHWC channels {}, received {shape:?}",
                 self.channels
@@ -77,7 +78,7 @@ impl Flux2KleinVaeMiddleAttention {
         let sequence_length = shape[1]
             .checked_mul(shape[2])
             .ok_or_else(|| Flux2KleinVaeError::latent_geometry("attention sequence overflow"))?;
-        let channels = as_i32(self.channels, "attention channels")?;
+        let channels = convolution::as_i32(self.channels, "attention channels")?;
         let query_heads = runtime.transpose_axes(
             &runtime.reshape(&query, &[shape[0], sequence_length, 1, channels])?,
             &[0, 2, 1, 3],

@@ -5,8 +5,6 @@ use std::fs;
 #[path = "../../build_legacy_native_output.rs"]
 mod build_legacy_native_output;
 
-use build_legacy_native_output::remove_legacy_cargo_native_build_directory;
-
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build_native_compile.rs");
 const BINDGEN_CONFIGURATION: &str = include_str!("../../../mlx-c-rust/build.rs");
@@ -48,7 +46,7 @@ fn should_remove_only_the_retired_native_tree_from_the_current_cargo_output() {
     fs::write(&retained_bindings, "bindings")
         .expect("the test should create retained binding evidence");
 
-    remove_legacy_cargo_native_build_directory(cargo_output.path())
+    build_legacy_native_output::remove_legacy_cargo_native_build_directory(cargo_output.path())
         .expect("the exact retired native directory should be removable");
 
     assert!(!legacy_native_output.exists());
@@ -70,8 +68,9 @@ fn should_refuse_a_symbolic_link_at_the_retired_native_output_boundary() {
     )
     .expect("the test should create a symbolic-link boundary");
 
-    let cleanup_error = remove_legacy_cargo_native_build_directory(cargo_output.path())
-        .expect_err("symbolic-link cleanup must be refused");
+    let cleanup_error =
+        build_legacy_native_output::remove_legacy_cargo_native_build_directory(cargo_output.path())
+            .expect_err("symbolic-link cleanup must be refused");
 
     assert!(cleanup_error.to_string().contains("refusing"));
     assert!(unowned_evidence.is_file());

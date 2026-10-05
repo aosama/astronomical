@@ -10,14 +10,14 @@ use crate::sparse_experts::{
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
 use super::super::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
-use super::cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots;
+use super::cached_plus_streamed_page_route;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use super::output_combination::combine_sparse_and_shared_experts;
+use super::output_combination;
 use super::routing::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_unsorted_expert_weighted_sum,
 };
-use crate::sparse_experts::should_use_sorted_expert_reduction;
+use crate::sparse_experts;
 
 /// Per-assignment routed expert rows before any weighted reduction.
 pub(super) enum RoutedExpertAssignmentOutputs {
@@ -46,12 +46,13 @@ impl Qwen3_5Model {
         performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
             |performance_attribution| {
-                let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
-                    &self.runtime,
-                    selected_indices,
-                    sorted_unique_expert_ids,
-                    page_manifest,
-                )?;
+                let page_slot_indices =
+                    cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
+                        &self.runtime,
+                        selected_indices,
+                        sorted_unique_expert_ids,
+                        page_manifest,
+                    )?;
                 let hidden_shape = hidden_states.shape();
                 let batch_size = hidden_shape[0];
                 let token_count = hidden_shape[1];
@@ -128,12 +129,13 @@ impl Qwen3_5Model {
         let paged_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
             |performance_attribution| {
-                let page_slot_indices = qwen3_5_moe_remap_expert_page_slots(
-                    &self.runtime,
-                    selected_indices,
-                    sorted_unique_expert_ids,
-                    page_manifest,
-                )?;
+                let page_slot_indices =
+                    cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
+                        &self.runtime,
+                        selected_indices,
+                        sorted_unique_expert_ids,
+                        page_manifest,
+                    )?;
                 let sparse_output = self.forward_moe_with_streamed_weights(
                     hidden_states,
                     paged_expert_weights,
@@ -211,7 +213,7 @@ impl Qwen3_5Model {
     ) -> Result<RoutedExpertAssignmentOutputs, Qwen3_5ExecutionError> {
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let sorted_assignments = if should_use_sorted_expert_reduction(
+        let sorted_assignments = if sparse_experts::should_use_sorted_expert_reduction(
             selected_expert_indices.element_count(),
             self.sorted_expert_weighted_sum_kernel.is_some(),
         ) {
@@ -365,7 +367,7 @@ impl Qwen3_5Model {
                     &shared_gate_logits,
                 )?);
         }
-        Ok(combine_sparse_and_shared_experts(
+        Ok(output_combination::combine_sparse_and_shared_experts(
             &self.runtime,
             sparse_expert_output,
             &shared_output,

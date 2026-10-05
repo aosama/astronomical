@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use crate::{TensorDtype, TensorProfile};
 
-use super::dense_tensor_spec::append_qwen3_5_dense_mtp_tensor_profiles;
+use super::dense_tensor_spec;
 use super::moe_tensor_spec::{
     append_qwen3_5_moe_mtp_tensor_profiles, append_qwen3_5_mtp_affine_tensor_profiles,
     qwen3_5_tensor_profile,
@@ -89,12 +89,14 @@ pub fn qwen3_5_mtp_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<Tensor
         vec![hidden_size],
     ));
     match qwen3_5_config.feed_forward_architecture() {
-        Qwen3_5FeedForwardArchitecture::Dense => append_qwen3_5_dense_mtp_tensor_profiles(
-            &mut mtp_tensor_profiles,
-            &mtp_layer_prefix,
-            hidden_size,
-            qwen3_5_config,
-        ),
+        Qwen3_5FeedForwardArchitecture::Dense => {
+            dense_tensor_spec::append_qwen3_5_dense_mtp_tensor_profiles(
+                &mut mtp_tensor_profiles,
+                &mtp_layer_prefix,
+                hidden_size,
+                qwen3_5_config,
+            )
+        }
         Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
             append_qwen3_5_moe_mtp_tensor_profiles(
                 &mut mtp_tensor_profiles,

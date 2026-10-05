@@ -16,7 +16,7 @@ use astronomical_model_serving::{
 };
 
 use crate::aligned_expert_pack_preparer::AlignedExpertPackPreparationError;
-use crate::revision_manifest::resident_file_entry;
+use crate::revision_manifest;
 
 /// Publishes `resident.safetensors` into the staging revision: every
 /// non-expert tensor from the source language shards, copied byte-for-byte
@@ -154,7 +154,10 @@ pub(super) fn append_declared_resident_files(
         if file_name_text == "manifest.json" {
             continue;
         }
-        resident_files.push(resident_file_entry(revision_directory, &file_name_text)?);
+        resident_files.push(revision_manifest::resident_file_entry(
+            revision_directory,
+            &file_name_text,
+        )?);
     }
     Ok(())
 }

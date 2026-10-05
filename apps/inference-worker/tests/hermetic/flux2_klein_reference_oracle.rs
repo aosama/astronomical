@@ -4,7 +4,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
 use serde_json::{Value, json};
 
-use crate::flux2_klein_reference_oracle::{ExpectedFluxReference, FluxReferenceOracle, sha256_hex};
+use crate::flux2_klein_reference_oracle;
+use crate::flux2_klein_reference_oracle::{ExpectedFluxReference, FluxReferenceOracle};
 
 const MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const MODEL_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
@@ -192,7 +193,7 @@ fn valid_bundle() -> Value {
         "diffusers_source_revision": "2f7e0154a9db246e95c9ede43edba7db5b130805",
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
-        "prompt_sha256": sha256_hex(PROMPT.as_bytes()),
+        "prompt_sha256": flux2_klein_reference_oracle::sha256_hex(PROMPT.as_bytes()),
         "width": 2,
         "height": 2,
         "seed": 7,

@@ -1,4 +1,3 @@
-use astronomical_model_serving::qwen3_5_apply_top_p_mask;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -31,8 +30,13 @@ async fn should_keep_the_candidate_that_crosses_the_top_p_threshold() {
         .array_from_f32(&candidate_logits, &[1, 1, 20])
         .expect("the candidate logits should be valid");
 
-    let masked_logits = qwen3_5_apply_top_p_mask(&runtime, &probability_array, &logit_array, 600)
-        .expect("top-p filtering should build a valid MLX graph");
+    let masked_logits = astronomical_model_serving::qwen3_5_apply_top_p_mask(
+        &runtime,
+        &probability_array,
+        &logit_array,
+        600,
+    )
+    .expect("top-p filtering should build a valid MLX graph");
     let masked_logit_values = masked_logits
         .to_vec_f32()
         .expect("the masked logits should evaluate as float32");

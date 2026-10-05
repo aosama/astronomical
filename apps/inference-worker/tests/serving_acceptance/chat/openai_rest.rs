@@ -2,8 +2,8 @@ use std::{net::SocketAddr, time::Duration};
 
 use serde_json::json;
 
-use crate::small_dense_model::configured_deployment_litmus_model;
-use crate::support::http::send_http_request;
+use crate::small_dense_model;
+use crate::support::http;
 
 pub(crate) use crate::support::serving_rest::{
     ServingRestServer, launch_serving_rest_server_for_model, stop_serving_rest_server,
@@ -69,7 +69,7 @@ async fn run_model_artifact_request_and_return_response_with_server(
 }
 
 pub(crate) async fn run_deployed_rest_surface_litmus() {
-    let selected_deployment_litmus_model = configured_deployment_litmus_model();
+    let selected_deployment_litmus_model = small_dense_model::configured_deployment_litmus_model();
     let deployment_litmus_model_id = selected_deployment_litmus_model.model_id;
     let model_artifact_rest_server = launch_serving_rest_server_for_model(
         &deployment_litmus_model_id,
@@ -134,7 +134,7 @@ async fn launch_serving_rest_server() -> ServingRestServer {
     launch_serving_rest_server_for_model(model_id(), configured_model_directory, None, None).await
 }
 pub(crate) async fn get_endpoint(server_address: SocketAddr, endpoint_path: &str) -> String {
-    send_http_request(
+    http::send_http_request(
         server_address,
         format!(
             "GET {endpoint_path} HTTP/1.1\r\nHost: {server_address}\r\nConnection: close\r\n\r\n"
@@ -151,7 +151,7 @@ pub(crate) async fn post_chat_completion(
         "POST /v1/chat/completions HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",
         request_body.len()
     );
-    send_http_request(server_address, request_text).await
+    http::send_http_request(server_address, request_text).await
 }
 
 pub(crate) async fn post_responses_completion(
@@ -162,7 +162,7 @@ pub(crate) async fn post_responses_completion(
         "POST /v1/responses HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",
         request_body.len()
     );
-    send_http_request(server_address, request_text).await
+    http::send_http_request(server_address, request_text).await
 }
 
 pub(crate) fn text_chat_request_body() -> String {

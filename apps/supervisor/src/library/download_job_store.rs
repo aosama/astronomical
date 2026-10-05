@@ -13,7 +13,7 @@ use super::download_job_store_filesystem::{
     ensure_descendant_directory_or_absent, metadata_without_symlink, remove_directory_if_empty,
     remove_file_if_present, safely_join_existing_path, synchronize_directory,
 };
-use super::download_job_store_lock::acquire_existing_store_transaction_lock;
+use super::download_job_store_lock;
 use super::{DownloadJob, DownloadJobState, DownloadJobStoreError};
 
 const DOWNLOAD_JOB_FILE_NAME: &str = ".download-job.json";
@@ -113,8 +113,10 @@ impl DownloadJobStore {
             return Err(DownloadJobStoreError::JobDocumentTooLarge);
         }
         self.prepare_models_directory()?;
-        let _transaction_lock = acquire_existing_store_transaction_lock(&self.models_directory)?
-            .ok_or(DownloadJobStoreError::OperationLockUnavailable)?;
+        let _transaction_lock = download_job_store_lock::acquire_existing_store_transaction_lock(
+            &self.models_directory,
+        )?
+        .ok_or(DownloadJobStoreError::OperationLockUnavailable)?;
         let temporary_job_file_path = self.write_temporary_job(&serialized_job)?;
         let job_file_path = self.job_file_path();
         match fs::hard_link(&temporary_job_file_path, &job_file_path) {
@@ -173,8 +175,10 @@ impl DownloadJobStore {
         replacement_job: &DownloadJob,
     ) -> Result<(), DownloadJobStoreError> {
         let _operation_guard = self.lock_operations()?;
-        let _transaction_lock = acquire_existing_store_transaction_lock(&self.models_directory)?
-            .ok_or(DownloadJobStoreError::JobNotFound)?;
+        let _transaction_lock = download_job_store_lock::acquire_existing_store_transaction_lock(
+            &self.models_directory,
+        )?
+        .ok_or(DownloadJobStoreError::JobNotFound)?;
         let current_job = self
             .load_unlocked()?
             .ok_or(DownloadJobStoreError::JobNotFound)?;
@@ -210,7 +214,9 @@ impl DownloadJobStore {
     ) -> Result<Option<DownloadJob>, DownloadJobStoreError> {
         let _operation_guard = self.lock_operations()?;
         let Some(_transaction_lock) =
-            acquire_existing_store_transaction_lock(&self.models_directory)?
+            download_job_store_lock::acquire_existing_store_transaction_lock(
+                &self.models_directory,
+            )?
         else {
             return Ok(None);
         };
@@ -237,7 +243,9 @@ impl DownloadJobStore {
     ) -> Result<Option<DownloadJob>, DownloadJobStoreError> {
         let _operation_guard = self.lock_operations()?;
         let Some(_transaction_lock) =
-            acquire_existing_store_transaction_lock(&self.models_directory)?
+            download_job_store_lock::acquire_existing_store_transaction_lock(
+                &self.models_directory,
+            )?
         else {
             return Ok(None);
         };
@@ -263,7 +271,9 @@ impl DownloadJobStore {
     pub fn cancel_current_job(&self) -> Result<bool, DownloadJobStoreError> {
         let _operation_guard = self.lock_operations()?;
         let Some(_transaction_lock) =
-            acquire_existing_store_transaction_lock(&self.models_directory)?
+            download_job_store_lock::acquire_existing_store_transaction_lock(
+                &self.models_directory,
+            )?
         else {
             return Ok(false);
         };

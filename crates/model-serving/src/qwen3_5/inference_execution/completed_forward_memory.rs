@@ -19,7 +19,7 @@
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::qwen3_5::model::Qwen3_5Model;
-use crate::qwen3_5_moe::model::record_expert_reclamation_attribution;
+use crate::qwen3_5_moe::model;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
@@ -130,7 +130,7 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
             &memory_snapshot_after_growth,
             promoted_expert_page_stream_bytes,
         );
-        record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
+        model::record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
     }
     Ok(CompletedForwardMemoryObservation {
         mlx_memory_snapshot: memory_snapshot_after_growth,

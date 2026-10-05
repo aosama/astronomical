@@ -7,7 +7,7 @@
 
 use astronomical_model_serving::{LagunaOutputEvent, LagunaOutputParserError};
 
-use super::support::literary_output_parser;
+use super::support;
 
 const DECLARED_FUNCTION_NAME: &str = "find_character";
 const UNDECLARED_FUNCTION_NAME: &str = "inspect_verse";
@@ -26,7 +26,7 @@ enum ClosedEnvelopeExpectation {
 #[test]
 fn should_honor_the_fail_open_contract_for_every_closed_marker_defect() {
     for closed_envelope_case in closed_envelope_cases() {
-        let mut output_parser = literary_output_parser();
+        let mut output_parser = support::literary_output_parser();
         let parse_outcome = output_parser.push_fragment(closed_envelope_case.poolside_fragment);
         assert_closed_envelope_outcome(
             closed_envelope_case.marker_defect,
@@ -48,7 +48,7 @@ fn should_honor_the_fail_open_contract_for_every_closed_marker_defect() {
 #[test]
 fn should_forward_unclosed_envelopes_when_generation_finishes() {
     for unclosed_envelope_case in unclosed_envelope_cases() {
-        let mut output_parser = literary_output_parser();
+        let mut output_parser = support::literary_output_parser();
         let push_outcome = output_parser
             .push_fragment(unclosed_envelope_case.poolside_fragment)
             .unwrap_or_else(|parser_error| {
@@ -82,7 +82,7 @@ fn should_forward_unclosed_envelopes_when_generation_finishes() {
 #[test]
 fn should_treat_missing_tool_call_open_as_visible_text_not_a_tool_call() {
     for visible_text_case in missing_tool_call_open_cases() {
-        let mut output_parser = literary_output_parser();
+        let mut output_parser = support::literary_output_parser();
         let output_events = output_parser
             .push_fragment(visible_text_case.poolside_fragment)
             .unwrap_or_else(|parser_error| {
@@ -116,7 +116,7 @@ fn should_treat_missing_tool_call_open_as_visible_text_not_a_tool_call() {
 fn should_forward_every_logged_live_tool_call_abort_as_a_harness_tool_call() {
     // Shapes copied from Development worker aborts, with literary fixture paths.
     for live_abort_case in logged_live_tool_call_abort_cases() {
-        let mut output_parser = literary_output_parser();
+        let mut output_parser = support::literary_output_parser();
         let output_events = output_parser
             .push_fragment(live_abort_case.poolside_fragment)
             .unwrap_or_else(|parser_error| {

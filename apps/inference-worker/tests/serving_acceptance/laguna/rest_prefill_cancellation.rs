@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use tokio::time::{sleep, timeout};
 
-use super::http::opencode_shaped_chat_request_body;
+use super::http;
 use super::validate::{
     compact_romeo_and_juliet_source, full_romeo_and_juliet_source, laguna_xs_public_model_id,
     resolve_reference_model_directory,
@@ -53,7 +53,7 @@ async fn run_cancellation_journey() {
     assert_successful_streaming_chat_response(&warm_response);
 
     let long_request_body =
-        opencode_shaped_chat_request_body(public_model_id, full_romeo_and_juliet_source(), 8);
+        http::opencode_shaped_chat_request_body(public_model_id, full_romeo_and_juliet_source(), 8);
     let long_request_task = tokio::spawn(post_chat_completion(server_address, long_request_body));
     wait_for_incomplete_prefill(server_address).await;
     eprintln!("[laguna-rest-cancel] phase=disconnect");

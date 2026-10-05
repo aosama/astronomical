@@ -6,7 +6,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::convolution::validate_shape;
+use super::convolution;
 use super::{
     FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT,
     Flux2KleinChannelLastConv2d, Flux2KleinGroupNorm, Flux2KleinPackedLatentLayout,
@@ -65,13 +65,13 @@ impl Flux2KleinVaeDecoder {
     fn bind(runtime: &MlxRuntime, tensors: &MlxSafetensors) -> Result<Self, Flux2KleinVaeError> {
         let running_mean = tensors.tensor("bn.running_mean")?;
         let running_variance = tensors.tensor("bn.running_var")?;
-        validate_shape(
+        convolution::validate_shape(
             "bn",
             "running_mean",
             &running_mean,
             &[FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT],
         )?;
-        validate_shape(
+        convolution::validate_shape(
             "bn",
             "running_var",
             &running_variance,

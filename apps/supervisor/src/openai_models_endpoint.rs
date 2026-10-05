@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::application::ApplicationState;
-use astronomical_config::{DiscoveredModel, ModelCapabilities, resolve_model_id};
+use astronomical_config::{DiscoveredModel, ModelCapabilities};
 use astronomical_ipc_protocol::WorkerModelCapabilities;
 use astronomical_rest_contract::{
     OpenAiEmbeddingModelParts, OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel,
@@ -60,7 +60,8 @@ pub(crate) async fn retrieve_model(
         .iter()
         .map(OpenAiModel::id)
         .collect::<Vec<_>>();
-    let resolved_model_id = resolve_model_id(&requested_model_id, &known_model_ids);
+    let resolved_model_id =
+        astronomical_config::resolve_model_id(&requested_model_id, &known_model_ids);
 
     match advertised_models
         .into_iter()

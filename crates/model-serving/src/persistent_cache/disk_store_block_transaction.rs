@@ -34,7 +34,7 @@ use super::disk_store_file::{
 use super::disk_store_index::{
     TrackedPersistentPromptCacheBlock, TrackedPersistentPromptCacheFile,
 };
-use super::retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint;
+use super::retention_policy;
 use astronomical_mlx_c_rust::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
@@ -407,7 +407,7 @@ impl PersistentPromptCacheDiskStore {
             return None;
         }
         let parent_block_key = parent_block_key?;
-        if persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
+        if retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
             parent_block_key.block_index(),
             self.model_contract.common_prefix_checkpoint_stride_blocks(),
         ) || self.total_size_bytes().saturating_add(child_size_bytes)

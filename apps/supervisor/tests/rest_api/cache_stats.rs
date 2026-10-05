@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState, WorkerEvent};
-use astronomical_supervisor::{WorkerHealthSnapshot, WorkerHealthStatus, build_application};
+use astronomical_supervisor::{WorkerHealthSnapshot, WorkerHealthStatus};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
@@ -44,7 +44,8 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
     );
     health_snapshot.persistent_prompt_cache_stats =
         Some(POPULATED_PERSISTENT_PROMPT_CACHE_STATS_EVENT.clone());
-    let application = build_application(StatsScriptedExecutor::ready(health_snapshot));
+    let application =
+        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -116,7 +117,8 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
 #[tokio::test]
 async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
     let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
-    let application = build_application(StatsScriptedExecutor::ready(health_snapshot));
+    let application =
+        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -181,7 +183,8 @@ async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
 #[tokio::test]
 async fn should_return_200_ok_with_json_content_type_for_cache_stats() {
     let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
-    let application = build_application(StatsScriptedExecutor::ready(health_snapshot));
+    let application =
+        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -236,7 +239,8 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
         persistent_prompt_cache_visual_embedding_rows_loaded: 0,
         persistent_prompt_cache_partial_tail_hits: 0,
     });
-    let application = build_application(StatsScriptedExecutor::ready(health_snapshot));
+    let application =
+        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()

@@ -11,9 +11,9 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use super::quantized_expert_validation::validate_expert_ids;
+use super::quantized_expert_validation;
 use super::safetensors_header::{SafetensorsDtype, SafetensorsHeaderError};
-use super::source_manifests::build_source_manifests;
+use super::source_manifests;
 
 /// Typed failures during manifest construction and validation.
 #[derive(Debug, Error)]
@@ -435,9 +435,12 @@ pub fn build_quantized_expert_page_manifest_from_plan(
     layer_plan: &QuantizedExpertLayerPlan,
     expert_ids: &[usize],
 ) -> Result<QuantizedExpertPageManifest, ExpertManifestError> {
-    let normalized_expert_ids = validate_expert_ids(expert_ids, layer_plan.expert_capacity)?;
-    let source_manifests =
-        build_source_manifests(&layer_plan.tensor_sources, &normalized_expert_ids)?;
+    let normalized_expert_ids =
+        quantized_expert_validation::validate_expert_ids(expert_ids, layer_plan.expert_capacity)?;
+    let source_manifests = source_manifests::build_source_manifests(
+        &layer_plan.tensor_sources,
+        &normalized_expert_ids,
+    )?;
     let payload_byte_count = source_manifests.iter().map(|m| m.payload_byte_count).sum();
     let page_slot_by_global_expert_id =
         build_page_slot_by_global_expert_id(&normalized_expert_ids, layer_plan.expert_capacity)?;

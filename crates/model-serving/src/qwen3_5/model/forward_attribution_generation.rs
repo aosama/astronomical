@@ -8,7 +8,7 @@
 use crate::PerformanceAttribution;
 use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 
-use super::forward_contract::validate_generated_token_forward;
+use super::forward_contract;
 use super::model::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
@@ -49,7 +49,7 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        validate_generated_token_forward(
+        forward_contract::validate_generated_token_forward(
             generated_token,
             starting_position_tokens,
             request_decoder_state.layer_count(),
@@ -100,7 +100,7 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        validate_generated_token_forward(
+        forward_contract::validate_generated_token_forward(
             generated_token,
             starting_position_tokens,
             request_decoder_state.layer_count(),

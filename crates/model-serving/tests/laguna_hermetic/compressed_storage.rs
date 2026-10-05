@@ -9,8 +9,8 @@ use safetensors::Dtype;
 use serde_json::json;
 
 use super::artifact_support::{FIRST_SHARD_FILE_NAME, SyntheticTensor};
-use super::compressed_artifact_support::{CompressedFixtureFormat, dense_fixture, sparse_fixture};
-use super::support::{config_bytes, config_value};
+use super::compressed_artifact_support::{self, CompressedFixtureFormat};
+use super::support;
 
 #[test]
 fn should_normalize_each_evidenced_exact_storage_profile_and_format_location() {
@@ -52,9 +52,9 @@ fn should_normalize_each_evidenced_exact_storage_profile_and_format_location() {
     ];
 
     for (quantization_document, expected_variant) in documents {
-        let mut config = config_value(1);
+        let mut config = support::config_value(1);
         config["quantization_config"] = quantization_document;
-        let storage = LagunaTargetNormalizer::normalize(&config_bytes(&config))
+        let storage = LagunaTargetNormalizer::normalize(&support::config_bytes(&config))
             .expect("the evidenced exact storage profile should normalize")
             .storage()
             .clone();
@@ -147,10 +147,10 @@ fn should_reject_format_conflicts_unknown_formats_and_asymmetric_packed_storage(
         }),
     ];
     for malformed_document in malformed_documents {
-        let mut config = config_value(1);
+        let mut config = support::config_value(1);
         config["quantization_config"] = malformed_document;
         assert!(matches!(
-            LagunaTargetNormalizer::normalize(&config_bytes(&config)),
+            LagunaTargetNormalizer::normalize(&support::config_bytes(&config)),
             Err(LagunaNormalizationError::UnsupportedStorageEncoding { .. })
                 | Err(LagunaNormalizationError::UnsupportedQuantizationValue { .. })
                 | Err(LagunaNormalizationError::ConflictingQuantizationDocuments)
@@ -160,7 +160,7 @@ fn should_reject_format_conflicts_unknown_formats_and_asymmetric_packed_storage(
 
 #[test]
 fn should_compare_top_level_and_group_formats_across_quantization_copies() {
-    let mut equivalent_config = config_value(1);
+    let mut equivalent_config = support::config_value(1);
     equivalent_config["quantization"] = json!({
         "quant_method": "compressed-tensors",
         "format": "nvfp4-pack-quantized",
@@ -176,7 +176,7 @@ fn should_compare_top_level_and_group_formats_across_quantization_copies() {
         }}
     });
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&equivalent_config))
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&equivalent_config))
             .expect("equivalent format locations should normalize")
             .storage(),
         LagunaStorageDescriptor::Compressed(compressed)
@@ -191,7 +191,7 @@ fn should_compare_top_level_and_group_formats_across_quantization_copies() {
         "weights": {"num_bits": 8, "type": "float"}
     });
     assert!(matches!(
-        LagunaTargetNormalizer::normalize(&config_bytes(&equivalent_config)),
+        LagunaTargetNormalizer::normalize(&support::config_bytes(&equivalent_config)),
         Err(LagunaNormalizationError::ConflictingQuantizationDocuments)
     ));
 }
@@ -213,7 +213,8 @@ fn should_preserve_symmetric_packed_codes_scales_and_derived_bias_recipe() {
         ),
     ] {
         let model_directory = tempfile::tempdir().expect("the test should create a directory");
-        dense_fixture(namespace_prefix, format).write(model_directory.path());
+        compressed_artifact_support::dense_fixture(namespace_prefix, format)
+            .write(model_directory.path());
         let artifact = validate(model_directory.path());
         let weight = descriptor(&artifact, LagunaTensorComponent::Weight);
         let scales = descriptor(&artifact, LagunaTensorComponent::Scales);
@@ -298,9 +299,9 @@ fn should_preserve_native_and_future_exact_storage_without_conversion() {
         ),
     ] {
         for fixture in [
-            dense_fixture("", format),
-            sparse_fixture(false, format),
-            sparse_fixture(true, format),
+            compressed_artifact_support::dense_fixture("", format),
+            compressed_artifact_support::sparse_fixture(false, format),
+            compressed_artifact_support::sparse_fixture(true, format),
         ] {
             let model_directory = tempfile::tempdir().expect("the test should create a directory");
             fixture.write(model_directory.path());
@@ -367,7 +368,8 @@ fn should_retain_stacked_and_per_expert_source_layouts_for_each_exact_recipe() {
             (true, LagunaCanonicalSourceLayout::PerExpert, 2),
         ] {
             let model_directory = tempfile::tempdir().expect("the test should create a directory");
-            sparse_fixture(is_per_expert, format).write(model_directory.path());
+            compressed_artifact_support::sparse_fixture(is_per_expert, format)
+                .write(model_directory.path());
             let artifact = validate(model_directory.path());
             let routed_weight = artifact
                 .tensor_contract()
@@ -419,7 +421,7 @@ fn should_retain_stacked_and_per_expert_source_layouts_for_each_exact_recipe() {
 #[test]
 fn should_filter_only_evidenced_attention_scale_metadata_from_model_weights() {
     let model_directory = tempfile::tempdir().expect("the test should create a directory");
-    let fixture = dense_fixture(
+    let fixture = compressed_artifact_support::dense_fixture(
         "",
         CompressedFixtureFormat::BlockFp8 {
             block_row_extent: 128,
@@ -461,7 +463,10 @@ fn should_reject_missing_wrong_or_asymmetric_compressed_sidecars() {
     ];
     for malformed_case in cases {
         let model_directory = tempfile::tempdir().expect("the test should create a directory");
-        let mut fixture = dense_fixture("", CompressedFixtureFormat::SymmetricPackedI32);
+        let mut fixture = compressed_artifact_support::dense_fixture(
+            "",
+            CompressedFixtureFormat::SymmetricPackedI32,
+        );
         match malformed_case {
             "missing_scale" => {
                 fixture.remove_tensor_completely("model.layers.0.self_attn.q_proj.weight_scale")
@@ -528,7 +533,7 @@ fn should_reject_wrong_physical_shapes_and_dtypes_for_every_exact_encoding() {
         ),
     ] {
         let shape_directory = tempfile::tempdir().expect("the test should create a directory");
-        let mut shape_fixture = dense_fixture("", format);
+        let mut shape_fixture = compressed_artifact_support::dense_fixture("", format);
         shape_fixture.tensor_mut(tensor_name).shape = malformed_shape;
         shape_fixture.write(shape_directory.path());
         assert!(matches!(
@@ -537,7 +542,7 @@ fn should_reject_wrong_physical_shapes_and_dtypes_for_every_exact_encoding() {
         ));
 
         let dtype_directory = tempfile::tempdir().expect("the test should create a directory");
-        let mut dtype_fixture = dense_fixture("", format);
+        let mut dtype_fixture = compressed_artifact_support::dense_fixture("", format);
         dtype_fixture.tensor_mut(tensor_name).dtype = malformed_dtype;
         dtype_fixture.write(dtype_directory.path());
         assert!(matches!(

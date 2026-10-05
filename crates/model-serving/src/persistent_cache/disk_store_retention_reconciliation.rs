@@ -14,7 +14,7 @@ use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
     PersistentPromptCacheFileKind, remove_cache_owned_file_or_confirm_absent, synchronize_directory,
 };
-use super::retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint;
+use super::retention_policy;
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 
 impl PersistentPromptCacheDiskStore {
@@ -74,7 +74,7 @@ impl PersistentPromptCacheDiskStore {
             // points even when they have children; all other parent boundaries
             // may be reconstructed from their sequence chain and newer boundary.
             if !block_hashes_with_committed_children.contains(&block_hash)
-                || persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
+                || retention_policy::persistent_prompt_cache_boundary_is_common_prefix_checkpoint(
                     tracked_block.block_index,
                     self.model_contract.common_prefix_checkpoint_stride_blocks(),
                 )

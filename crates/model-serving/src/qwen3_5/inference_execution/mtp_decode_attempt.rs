@@ -10,13 +10,13 @@ use crate::qwen3_5::multi_token_prediction::{
 };
 use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceCounter};
 
+use super::Qwen3_5EngineState;
 use super::advance_generation::ActiveRequestAdvance;
 use super::completed_forward_memory::{
     collect_completed_forward_memory_snapshot, record_completed_adaptive_ram_growth,
 };
 use super::engine_request::Qwen3_5EngineRequest;
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
-use super::{Qwen3_5EngineState, fatal_engine_error};
 
 impl Qwen3_5EngineState {
     pub(super) fn attempt_mtp_decode_window(
@@ -63,12 +63,13 @@ impl Qwen3_5EngineState {
         let mut candidate_depth_value = window_clamped_depth.get();
         let mut last_rejected_memory_projection = None;
         while candidate_depth_value >= MtpDraftDepth::MINIMUM {
-            let candidate_depth = MtpDraftDepth::new(candidate_depth_value)
-                .map_err(|_| fatal_engine_error("candidate MTP depth is outside 1 through 3"))?;
+            let candidate_depth = MtpDraftDepth::new(candidate_depth_value).map_err(|_| {
+                super::fatal_engine_error("candidate MTP depth is outside 1 through 3")
+            })?;
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let prediction_history_growth_bytes =
                 projected_verification_window_memory_growth_bytes(
                     model,
@@ -83,7 +84,9 @@ impl Qwen3_5EngineState {
             // Attribution records them on separate counters so one owner cannot hide the other.
             let verification_workspace_bytes = boundary_snapshot_bytes
                 .checked_add(verification_transient_array_bytes)
-                .ok_or_else(|| fatal_engine_error("MTP verification workspace overflowed"))?;
+                .ok_or_else(|| {
+                    super::fatal_engine_error("MTP verification workspace overflowed")
+                })?;
             let growth_context = AdaptiveRamGrowthContext::decode(
                 usize::from(candidate_depth.get()) + 1,
                 true,
@@ -139,7 +142,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let decision = attempt_prediction_proposal_and_verification(
                 model,
                 active_request,

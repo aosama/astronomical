@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::tensor_spec::validate_language_tensor_names;
+use super::tensor_spec;
 use crate::artifact_validation::TensorProfile;
 
 pub const MAXIMUM_INDEX_BYTES: usize = 1024 * 1024;
@@ -80,7 +80,10 @@ impl Qwen3_5ShardIndex {
             }
             // Other tensor prefixes (e.g., "mtp.") are silently skipped.
         }
-        validate_language_tensor_names(&language_tensor_names, language_tensor_profiles)?;
+        tensor_spec::validate_language_tensor_names(
+            &language_tensor_names,
+            language_tensor_profiles,
+        )?;
 
         let vision_only_shard_file_names = vision_shard_file_names
             .difference(&language_or_mtp_shard_file_names)

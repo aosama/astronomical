@@ -13,7 +13,7 @@ use crate::{
 use astronomical_ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
-use crate::worker::run_worker;
+use crate::worker;
 use crate::worker_loop_types::WorkerLoopCommand;
 use crate::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 
@@ -205,7 +205,7 @@ impl WorkerHandle {
         let active_generation_permits = Arc::new(Semaphore::new(1));
         let generation_queue_permits = Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH));
 
-        tokio::spawn(run_worker(
+        tokio::spawn(worker::run_worker(
             worker_process,
             command_receiver,
             Arc::clone(&health_snapshot),

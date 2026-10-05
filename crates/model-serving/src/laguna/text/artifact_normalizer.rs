@@ -13,9 +13,9 @@ use super::artifact_documents::{
     validate_bidirectional_added_tokens, validate_configured_control_ids,
     validate_optional_matching_id, validate_tokenizer_vocabulary,
 };
-use super::artifact_sampler::normalize_sampler_config;
-use super::artifact_template::{required_parser_id, resolve_template_sources};
-use super::template_contract::derive_template_contract;
+use super::artifact_sampler;
+use super::artifact_template;
+use super::template_contract;
 use super::template_program::LagunaTemplateProgram;
 
 /// Borrowed artifact bytes supplied after canonical Laguna model normalization.
@@ -96,7 +96,7 @@ impl LagunaTextArtifactNormalizer {
             &end_token_ids,
         )?;
 
-        let resolved_template_sources = resolve_template_sources(
+        let resolved_template_sources = artifact_template::resolve_template_sources(
             sources.root_chat_template_source,
             sources.included_template_bytes_by_name,
         )?;
@@ -110,9 +110,12 @@ impl LagunaTextArtifactNormalizer {
             })?;
         // Compilation and semantic probes happen once at startup; requests reuse this program.
         let template_program = LagunaTemplateProgram::compile(resolved_template_sources)?;
-        let template_contract = derive_template_contract(&template_program, &bos_token_content)?;
-        let reasoning_parser_id = required_parser_id(generation_fields, "reasoning_parser")?;
-        let tool_call_parser_id = required_parser_id(generation_fields, "tool_call_parser")?;
+        let template_contract =
+            template_contract::derive_template_contract(&template_program, &bos_token_content)?;
+        let reasoning_parser_id =
+            artifact_template::required_parser_id(generation_fields, "reasoning_parser")?;
+        let tool_call_parser_id =
+            artifact_template::required_parser_id(generation_fields, "tool_call_parser")?;
         let generation_default_thinking_enabled = generation_fields
             .get("default_chat_template_kwargs")
             .and_then(Value::as_object)
@@ -125,7 +128,7 @@ impl LagunaTextArtifactNormalizer {
                     })
             })
             .transpose()?;
-        let sampler_config = normalize_sampler_config(generation_fields)?;
+        let sampler_config = artifact_sampler::normalize_sampler_config(generation_fields)?;
 
         Ok(LagunaTextArtifactDescriptor::new(
             tokenizer,

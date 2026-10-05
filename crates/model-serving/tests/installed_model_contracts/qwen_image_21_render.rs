@@ -26,7 +26,7 @@ use std::time::Duration;
 use astronomical_model_serving::{QwenImage21Pipeline, QwenImage21RenderRequest};
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::common::qwen_image_21::{artifact_directory, shared_journey_runtime};
+use crate::common::qwen_image_21;
 
 const RENDER_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 /// A prompt from the repo's mandated Romeo and Juliet source text.
@@ -45,8 +45,8 @@ const MINIMUM_NEIGHBOR_CORRELATION: f64 = 0.5;
 async fn should_render_a_text_to_image_png_from_the_full_pipeline() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(RENDER_JOURNEY_TIMEOUT, async {
-        let runtime: MlxRuntime = shared_journey_runtime();
-        let pipeline = QwenImage21Pipeline::load(&runtime, &artifact_directory())
+        let runtime: MlxRuntime = qwen_image_21::shared_journey_runtime();
+        let pipeline = QwenImage21Pipeline::load(&runtime, &qwen_image_21::artifact_directory())
             .expect("the full Qwen-Image-2.1 pipeline should load from the real artifact");
 
         let mut observed_steps = 0_usize;

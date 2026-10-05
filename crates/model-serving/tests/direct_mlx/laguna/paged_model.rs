@@ -7,7 +7,7 @@ use astronomical_model_serving::{
     PerformanceAttribution, PerformanceOperation,
 };
 
-use super::page_artifact::{filled, paging_plan, test_runtime, write_sparse_artifact};
+use super::page_artifact;
 
 #[path = "paged_model/demotion.rs"]
 mod demotion;
@@ -35,63 +35,63 @@ fn bind_core_page_weights(
     let mut tensors = HashMap::new();
     tensors.insert(
         weight_id(LagunaGlobalTensorRole::TokenEmbedding),
-        filled(runtime, &[8, 4], 0.05),
+        page_artifact::filled(runtime, &[8, 4], 0.05),
     );
     tensors.insert(
         weight_id(LagunaGlobalTensorRole::FinalNormalization),
-        filled(runtime, &[4], 1.0),
+        page_artifact::filled(runtime, &[4], 1.0),
     );
     tensors.insert(
         weight_id(LagunaGlobalTensorRole::OutputHead),
-        filled(runtime, &[8, 4], 0.05),
+        page_artifact::filled(runtime, &[8, 4], 0.05),
     );
     tensors.insert(
         layer_weight_id(0, LagunaLayerTensorRole::InputNormalization),
-        filled(runtime, &[4], 1.0),
+        page_artifact::filled(runtime, &[4], 1.0),
     );
     tensors.insert(
         layer_weight_id(0, LagunaLayerTensorRole::PostAttentionNormalization),
-        filled(runtime, &[4], 1.0),
+        page_artifact::filled(runtime, &[4], 1.0),
     );
     tensors.insert(
         layer_weight_id(
             0,
             LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Query),
         ),
-        filled(runtime, &[4, 4], 0.05),
+        page_artifact::filled(runtime, &[4, 4], 0.05),
     );
     tensors.insert(
         layer_weight_id(
             0,
             LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Key),
         ),
-        filled(runtime, &[2, 4], 0.05),
+        page_artifact::filled(runtime, &[2, 4], 0.05),
     );
     tensors.insert(
         layer_weight_id(
             0,
             LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Value),
         ),
-        filled(runtime, &[2, 4], 0.05),
+        page_artifact::filled(runtime, &[2, 4], 0.05),
     );
     tensors.insert(
         layer_weight_id(
             0,
             LagunaLayerTensorRole::Attention(LagunaAttentionProjection::Output),
         ),
-        filled(runtime, &[4, 4], 0.05),
+        page_artifact::filled(runtime, &[4, 4], 0.05),
     );
     tensors.insert(
         layer_weight_id(0, LagunaLayerTensorRole::AttentionQueryNormalization),
-        filled(runtime, &[2], 1.0),
+        page_artifact::filled(runtime, &[2], 1.0),
     );
     tensors.insert(
         layer_weight_id(0, LagunaLayerTensorRole::AttentionKeyNormalization),
-        filled(runtime, &[2], 1.0),
+        page_artifact::filled(runtime, &[2], 1.0),
     );
     tensors.insert(
         layer_weight_id(0, LagunaLayerTensorRole::Router),
-        filled(runtime, &[2, 4], 0.1),
+        page_artifact::filled(runtime, &[2, 4], 0.1),
     );
     tensors.insert(
         layer_weight_id(0, LagunaLayerTensorRole::RouterCorrectionBias),
@@ -105,21 +105,21 @@ fn bind_core_page_weights(
                 0,
                 LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Gate),
             ),
-            filled(runtime, &[2, 4, 4], 0.04),
+            page_artifact::filled(runtime, &[2, 4, 4], 0.04),
         );
         tensors.insert(
             layer_weight_id(
                 0,
                 LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Up),
             ),
-            filled(runtime, &[2, 4, 4], 0.05),
+            page_artifact::filled(runtime, &[2, 4, 4], 0.05),
         );
         tensors.insert(
             layer_weight_id(
                 0,
                 LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Down),
             ),
-            filled(runtime, &[2, 4, 4], 0.06),
+            page_artifact::filled(runtime, &[2, 4, 4], 0.06),
         );
     }
     LagunaNativeWeights::bind(runtime, tensors, contract)
@@ -129,9 +129,9 @@ fn bind_core_page_weights(
 async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("paged model directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
-    let runtime = test_runtime();
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
@@ -240,9 +240,9 @@ async fn should_page_prefill_and_decode_through_the_model_and_report_status() {
 async fn should_reject_a_core_only_model_without_a_paging_plan() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("core-only rejection directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, _plan) = paging_plan(model_directory.path());
-    let runtime = test_runtime();
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, _plan) = page_artifact::paging_plan(model_directory.path());
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
@@ -271,9 +271,9 @@ async fn should_reject_a_core_only_model_without_a_paging_plan() {
 async fn should_keep_a_fully_bound_model_resident_even_with_a_paging_plan() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("resident page-plan directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
-    let runtime = test_runtime();
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, true)
         .expect("stacked Laguna experts should bind");
@@ -322,12 +322,12 @@ async fn should_keep_a_fully_bound_model_resident_even_with_a_paging_plan() {
 async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("retain-on-ceiling directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
     let complete_layer_payload_bytes = plan.sparse_layers()[0]
         .complete_layer_payload_byte_count()
         .expect("complete-layer bytes");
-    let runtime = test_runtime();
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
@@ -403,12 +403,12 @@ async fn should_retain_a_complete_layer_when_the_ceiling_fits_and_reuse_it() {
 async fn should_evict_a_retained_layer_when_the_ceiling_drops_to_zero() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("live-ceiling reclaim directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
     let complete_layer_payload_bytes = plan.sparse_layers()[0]
         .complete_layer_payload_byte_count()
         .expect("complete-layer bytes");
-    let runtime = test_runtime();
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
@@ -464,12 +464,12 @@ async fn should_evict_a_retained_layer_when_the_ceiling_drops_to_zero() {
 async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("routed-page retain directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
     let routed_page_payload_bytes = plan.sparse_layers()[0]
         .routed_page_payload_byte_count()
         .expect("routed-page bytes");
-    let runtime = test_runtime();
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");
@@ -552,9 +552,9 @@ async fn should_retain_a_routed_decode_page_when_the_ceiling_fits_only_that_page
 async fn should_restore_decoder_allocation_ownership_after_a_failed_prefill_attempt() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("checkpoint model directory");
-    write_sparse_artifact(model_directory.path(), false);
-    let (artifact, plan) = paging_plan(model_directory.path());
-    let runtime = test_runtime();
+    page_artifact::write_sparse_artifact(model_directory.path(), false);
+    let (artifact, plan) = page_artifact::paging_plan(model_directory.path());
+    let runtime = page_artifact::test_runtime();
     let contract = artifact.target_contract().clone();
     let weights = bind_core_page_weights(&runtime, &contract, false)
         .expect("core Laguna weights should bind without stacked experts");

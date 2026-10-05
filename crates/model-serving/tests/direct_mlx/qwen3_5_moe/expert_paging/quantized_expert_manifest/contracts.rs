@@ -3,7 +3,7 @@
 //! These tests exercise the pure validation functions and the manifest builder
 //! `build_quantized_expert_page_manifest_from_plan` from the expert_paging module.
 
-use super::support::{make_source_interval, synthetic_layer_plan};
+use super::support;
 use astronomical_model_serving::{
     ExpertManifestError, QuantizationMode, QuantizedTensorSource, SafetensorsDtype,
     build_quantized_expert_page_manifest_from_plan, validate_expert_ids,
@@ -191,8 +191,8 @@ fn should_accept_4_bit_8_group_contract() {
 #[test]
 fn should_accept_non_overlapping_source_intervals() {
     let intervals = vec![
-        make_source_interval("gate_proj.weight", 100, 200, 0),
-        make_source_interval("up_proj.weight", 400, 100, 200),
+        support::make_source_interval("gate_proj.weight", 100, 200, 0),
+        support::make_source_interval("up_proj.weight", 400, 100, 200),
     ];
     let result = validate_source_intervals(&intervals, 0);
     assert!(
@@ -205,8 +205,8 @@ fn should_accept_non_overlapping_source_intervals() {
 #[test]
 fn should_reject_overlapping_source_intervals() {
     let intervals = vec![
-        make_source_interval("gate_proj.weight", 100, 350, 0),
-        make_source_interval("up_proj.weight", 300, 100, 350),
+        support::make_source_interval("gate_proj.weight", 100, 350, 0),
+        support::make_source_interval("up_proj.weight", 300, 100, 350),
     ];
     let result = validate_source_intervals(&intervals, 0);
     assert!(
@@ -221,7 +221,7 @@ fn should_reject_overlapping_source_intervals() {
 
 #[test]
 fn should_reject_zero_length_source_interval() {
-    let intervals = vec![make_source_interval("gate_proj.weight", 100, 0, 0)];
+    let intervals = vec![support::make_source_interval("gate_proj.weight", 100, 0, 0)];
     let result = validate_source_intervals(&intervals, 0);
     assert!(
         result.is_err(),
@@ -232,7 +232,12 @@ fn should_reject_zero_length_source_interval() {
 
 #[test]
 fn should_reject_source_interval_when_its_end_offset_overflows() {
-    let source_intervals = vec![make_source_interval("gate_proj.weight", u64::MAX, 1, 0)];
+    let source_intervals = vec![support::make_source_interval(
+        "gate_proj.weight",
+        u64::MAX,
+        1,
+        0,
+    )];
 
     let validation_outcome = validate_source_intervals(&source_intervals, 0);
 
@@ -247,8 +252,8 @@ fn should_reject_source_interval_when_its_end_offset_overflows() {
 #[test]
 fn should_accept_contiguous_virtual_intervals() {
     let intervals = vec![
-        make_source_interval("gate_proj.weight", 100, 200, 0),
-        make_source_interval("up_proj.weight", 400, 100, 200),
+        support::make_source_interval("gate_proj.weight", 100, 200, 0),
+        support::make_source_interval("up_proj.weight", 400, 100, 200),
     ];
     let result = validate_virtual_intervals(&intervals, 300);
     assert!(
@@ -261,9 +266,9 @@ fn should_accept_contiguous_virtual_intervals() {
 #[test]
 fn should_reject_non_contiguous_virtual_intervals() {
     let intervals = vec![
-        make_source_interval("gate_proj.weight", 100, 200, 0),
+        support::make_source_interval("gate_proj.weight", 100, 200, 0),
         // Gap: expected offset 200, actual 250
-        make_source_interval("up_proj.weight", 400, 100, 250),
+        support::make_source_interval("up_proj.weight", 400, 100, 250),
     ];
     let result = validate_virtual_intervals(&intervals, 350);
     assert!(
@@ -278,7 +283,12 @@ fn should_reject_non_contiguous_virtual_intervals() {
 
 #[test]
 fn should_reject_virtual_intervals_shortfall() {
-    let intervals = vec![make_source_interval("gate_proj.weight", 100, 200, 0)];
+    let intervals = vec![support::make_source_interval(
+        "gate_proj.weight",
+        100,
+        200,
+        0,
+    )];
     // Declared 500 bytes but only 200 covered
     let result = validate_virtual_intervals(&intervals, 500);
     assert!(
@@ -294,8 +304,8 @@ fn should_reject_virtual_intervals_shortfall() {
 #[test]
 fn should_reject_virtual_intervals_when_covered_byte_count_overflows() {
     let virtual_intervals = vec![
-        make_source_interval("gate_proj.weight", 0, usize::MAX, 0),
-        make_source_interval("up_proj.weight", 0, 1, u64::MAX),
+        support::make_source_interval("gate_proj.weight", 0, usize::MAX, 0),
+        support::make_source_interval("up_proj.weight", 0, 1, u64::MAX),
     ];
 
     let validation_outcome = validate_virtual_intervals(&virtual_intervals, u64::MAX);
@@ -318,7 +328,7 @@ fn should_reject_virtual_intervals_when_covered_byte_count_overflows() {
 /// the validation that source intervals must not overlap.
 #[test]
 fn should_build_a_native_bfloat16_page_with_only_uncompressed_weight_intervals() {
-    let mut native_bfloat16_layer_plan = synthetic_layer_plan("native_bfloat16_layer");
+    let mut native_bfloat16_layer_plan = support::synthetic_layer_plan("native_bfloat16_layer");
     let native_weight_source = native_bfloat16_layer_plan.tensor_sources.remove(0);
     native_bfloat16_layer_plan.tensor_sources = vec![QuantizedTensorSource {
         tensor_name: native_weight_source.tensor_name,
@@ -353,7 +363,7 @@ fn should_build_a_native_bfloat16_page_with_only_uncompressed_weight_intervals()
 
 #[test]
 fn should_build_page_manifest_from_synthetic_layer_plan_with_two_experts() {
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.0");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.0");
     let result = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[0, 7]);
     assert!(
         result.is_ok(),
@@ -378,7 +388,7 @@ fn should_build_page_manifest_from_synthetic_layer_plan_with_two_experts() {
 
 #[test]
 fn should_map_expert_ids_to_page_slots_correctly() {
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.5");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.5");
     let result = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[3, 5, 7]);
     let manifest = result.unwrap();
     // Page slots are assigned in order of the sorted expert IDs
@@ -389,7 +399,7 @@ fn should_map_expert_ids_to_page_slots_correctly() {
 
 #[test]
 fn should_compute_correct_payload_byte_count() {
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.0");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.0");
     let result = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[0, 1]);
     let manifest = result.unwrap();
     // Payload byte count should be the sum of all source manifest payload bytes
@@ -403,7 +413,7 @@ fn should_compute_correct_payload_byte_count() {
 #[test]
 fn should_rebase_loaded_tensor_names_to_projection_parameter_names() {
     eprintln!("[expert-manifest] status=start case=rebase_tensor_names");
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.0");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.0");
     let manifest = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[0])
         .expect("synthetic layer plan should build a one-expert page manifest");
 
@@ -430,7 +440,7 @@ fn should_rebase_loaded_tensor_names_to_projection_parameter_names() {
 
 #[test]
 fn should_reject_empty_expert_ids_through_manifest() {
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.0");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.0");
     let result = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[]);
     assert!(
         matches!(result, Err(ExpertManifestError::EmptyExpertIds)),
@@ -441,7 +451,7 @@ fn should_reject_empty_expert_ids_through_manifest() {
 
 #[test]
 fn should_reject_non_ascending_expert_ids_through_manifest() {
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.0");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.0");
     let result = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[3, 1, 7]);
     assert!(
         matches!(result, Err(ExpertManifestError::NonAscendingExpertIds)),
@@ -452,7 +462,7 @@ fn should_reject_non_ascending_expert_ids_through_manifest() {
 
 #[test]
 fn should_reject_expert_id_exceeding_capacity_through_manifest() {
-    let layer_plan = synthetic_layer_plan("language_model.model.layers.0");
+    let layer_plan = support::synthetic_layer_plan("language_model.model.layers.0");
     // expert_capacity is 8, so expert ID 8 exceeds it (valid: 0..7)
     let result = build_quantized_expert_page_manifest_from_plan(&layer_plan, &[0, 5, 8]);
     assert!(

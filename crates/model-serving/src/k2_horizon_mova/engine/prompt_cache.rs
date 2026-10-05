@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::k2_horizon_mova::cache_layout::k2_horizon_mova_decoder_cache_layout;
+use crate::k2_horizon_mova::cache_layout;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAConfig;
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
 use crate::{
@@ -31,7 +31,7 @@ pub(super) fn open_prompt_cache_store(
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Arc<PersistentPromptCacheDiskStore>, InferenceEngineError> {
     let decoder_cache_layout =
-        k2_horizon_mova_decoder_cache_layout(config).map_err(|layout_error| {
+        cache_layout::k2_horizon_mova_decoder_cache_layout(config).map_err(|layout_error| {
             InferenceEngineError::Fatal {
                 reason: format!("K2 Horizon MoVA prompt-cache layout is invalid: {layout_error}"),
             }

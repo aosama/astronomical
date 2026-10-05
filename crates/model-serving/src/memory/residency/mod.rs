@@ -42,8 +42,7 @@ pub use request_plan::{
 use crate::memory::MemoryPhase;
 use thiserror::Error;
 
-use foundation_overlay::foundation_and_overlay_plan;
-use validation::{checked_sum, routed_floor_payload_bytes, validate_inputs};
+use validation::routed_floor_payload_bytes;
 
 /// Lifetime and eviction priority of one retained expert page.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -163,7 +162,7 @@ pub fn plan_expert_residency(
     layer_geometries: &[ExpertLayerGeometry],
     current_residencies: &[CurrentExpertLayerResidency],
 ) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
-    let current_by_layer = validate_inputs(
+    let current_by_layer = validation::validate_inputs(
         retained_expert_ceiling_bytes,
         layer_geometries,
         current_residencies,
@@ -185,7 +184,7 @@ pub fn plan_expert_residency(
             &current_by_layer,
         );
     }
-    let complete_model_payload_bytes = checked_sum(
+    let complete_model_payload_bytes = validation::checked_sum(
         layer_geometries
             .iter()
             .map(|geometry| geometry.complete_layer_payload_bytes),
@@ -204,7 +203,7 @@ pub fn plan_expert_residency(
         .iter()
         .map(routed_floor_payload_bytes)
         .collect::<Result<Vec<_>, _>>()?;
-    let all_layer_routed_floor_bytes = checked_sum(routed_floor_bytes.iter().copied())?;
+    let all_layer_routed_floor_bytes = validation::checked_sum(routed_floor_bytes.iter().copied())?;
     if all_layer_routed_floor_bytes > retained_expert_ceiling_bytes {
         return low_budget_partial_plan(
             phase,
@@ -213,7 +212,7 @@ pub fn plan_expert_residency(
             &current_by_layer,
         );
     }
-    foundation_and_overlay_plan(
+    foundation_overlay::foundation_and_overlay_plan(
         phase,
         retained_expert_ceiling_bytes,
         layer_geometries,

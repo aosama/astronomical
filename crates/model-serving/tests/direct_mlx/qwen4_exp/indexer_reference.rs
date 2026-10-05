@@ -13,7 +13,7 @@
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use super::{DeterministicValues, assert_f32_close, f32_array, oracle_test_runtime};
+use super::DeterministicValues;
 use astronomical_mlx_c_rust::MlxDtype;
 
 /// Scoring geometry for one reference row.
@@ -31,12 +31,12 @@ pub(crate) fn explicit_scores(
     keys: &[f32],
     geometry: &IndexerGeometry,
 ) -> Result<Vec<f32>, astronomical_runtime_integration::MlxRuntimeError> {
-    let query_array = f32_array(
+    let query_array = super::f32_array(
         runtime,
         queries,
         &[geometry.token_count as i32, geometry.head_dim as i32],
     )?;
-    let key_array = f32_array(
+    let key_array = super::f32_array(
         runtime,
         keys,
         &[geometry.token_count as i32, geometry.head_dim as i32],
@@ -87,7 +87,7 @@ pub(crate) fn host_top_k(scores: &[f64], budget: usize, token_count: usize) -> V
 #[tokio::test]
 async fn should_match_explicit_indexer_scores_against_host_reference() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let runtime = oracle_test_runtime();
+    let runtime = super::oracle_test_runtime();
     let mut values = DeterministicValues::new(0x1D5A);
     for geometry in [
         IndexerGeometry {
@@ -115,7 +115,7 @@ async fn should_match_explicit_indexer_scores_against_host_reference() {
         // mantissa bits), so a relative bound near 4e-3 is the hardware's
         // honest behavior rather than a loosened check; the dtype assertion
         // above proves the arrays themselves stay f32.
-        assert_f32_close(
+        super::assert_f32_close(
             &gpu_scores,
             &host,
             4.0e-3,
@@ -138,7 +138,7 @@ async fn should_match_host_top_k_selection_including_ties_and_oversized_budgets(
 
     // The same selection computed from GPU scores matches host selection on
     // the same values, proving the GPU path can feed the reference contract.
-    let runtime = oracle_test_runtime();
+    let runtime = super::oracle_test_runtime();
     let mut values = DeterministicValues::new(0x2E6B);
     let geometry = IndexerGeometry {
         token_count: 12,

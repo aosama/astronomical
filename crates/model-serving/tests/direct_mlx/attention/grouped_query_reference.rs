@@ -1,4 +1,4 @@
-use astronomical_model_serving::{PerformanceAttribution, build_causal_sliding_window_mask};
+use astronomical_model_serving::PerformanceAttribution;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -132,7 +132,7 @@ pub(crate) fn assert_attention_matches_operations_reference(
         AttentionVisibility::Full => geometry.prefix_token_count + geometry.query_token_count + 1,
         AttentionVisibility::Sliding { window_size } => window_size,
     };
-    let mask = build_causal_sliding_window_mask(
+    let mask = astronomical_model_serving::build_causal_sliding_window_mask(
         runtime,
         geometry.prefix_token_count,
         geometry.query_token_count,

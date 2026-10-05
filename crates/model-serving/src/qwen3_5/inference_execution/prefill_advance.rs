@@ -26,8 +26,8 @@ use crate::{
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
-use super::super::model::memory_admission::invalid_request_error;
-use super::completed_forward_memory::collect_completed_forward_memory_snapshot;
+use super::super::model::memory_admission;
+use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
     Qwen3_5EngineState, Qwen3_5PromptProcessingChunkSizer, fatal_engine_error,
@@ -179,7 +179,7 @@ impl Qwen3_5EngineState {
                         reason = %reason,
                         "fixed prefill chunk cannot fit under the MLX ceiling after expert-memory admission"
                     );
-                    return Err(invalid_request_error(format!(
+                    return Err(memory_admission::invalid_request_error(format!(
                         "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts: {reason}"
                     )));
                 }
@@ -217,7 +217,7 @@ impl Qwen3_5EngineState {
                             has_retried_current_prefill_chunk_after_reclamation = false;
                             continue;
                         }
-                        return Err(invalid_request_error(format!(
+                        return Err(memory_admission::invalid_request_error(format!(
                             "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts"
                         )));
                     }
@@ -252,7 +252,7 @@ impl Qwen3_5EngineState {
                             has_retried_current_prefill_chunk_after_reclamation = false;
                             continue;
                         }
-                        return Err(invalid_request_error(format!(
+                        return Err(memory_admission::invalid_request_error(format!(
                             "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory after reclaiming elastic experts: {reason}"
                         )));
                     }
@@ -357,7 +357,7 @@ impl Qwen3_5EngineState {
                 .as_millis(),
             "cleared MLX allocator-cache storage after prompt-processing chunk"
         );
-        collect_completed_forward_memory_snapshot(
+        completed_forward_memory::collect_completed_forward_memory_snapshot(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context,
             should_retain_adaptive_ram_growth_observation,

@@ -10,8 +10,6 @@ use thiserror::Error;
 
 use crate::{ChatModelCapabilities, MAX_IPC_FRAME_BYTES, RequestId};
 
-use self::png_validation::validate_png_structure;
-
 const MINIMUM_IMAGE_DIMENSION_PIXELS: u32 = 64;
 const MAXIMUM_IMAGE_DIMENSION_PIXELS: u32 = 16_384;
 const IMAGE_DIMENSION_MULTIPLE_PIXELS: u32 = 8;
@@ -135,7 +133,8 @@ impl GeneratedImage {
         if self.mime_type != PNG_MIME_TYPE {
             return Err(ImageGenerationCompletionValidationError::InvalidMimeType);
         }
-        let validated_png = validate_png_structure(&self.encoded_bytes, MAXIMUM_DECODED_RGB_BYTES)?;
+        let validated_png =
+            png_validation::validate_png_structure(&self.encoded_bytes, MAXIMUM_DECODED_RGB_BYTES)?;
         if validated_png.width_pixels != result_metadata.width_pixels
             || validated_png.height_pixels != result_metadata.height_pixels
         {

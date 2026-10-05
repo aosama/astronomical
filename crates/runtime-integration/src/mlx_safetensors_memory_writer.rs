@@ -1,8 +1,9 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
 
-use crate::mlx_runtime::check_status;
-use crate::mlx_safetensors_writer::{OwnedMetadataMap, OwnedTensorMap, writer_error};
+use crate::mlx_runtime;
+use crate::mlx_safetensors_writer;
+use crate::mlx_safetensors_writer::{OwnedMetadataMap, OwnedTensorMap};
 use crate::{MlxRuntime, MlxRuntimeError};
 use astronomical_mlx_c_rust::{MlxArray, raw};
 
@@ -33,7 +34,7 @@ impl MlxRuntime {
         maximum_serialized_byte_count: usize,
     ) -> Result<Vec<u8>, MlxRuntimeError> {
         if named_arrays.is_empty() {
-            return Err(writer_error(
+            return Err(mlx_safetensors_writer::writer_error(
                 "serialize safetensors",
                 "at least one named array is required",
             ));
@@ -46,7 +47,7 @@ impl MlxRuntime {
         let save_status = unsafe {
             raw::mlx_save_safetensors_writer(memory_writer.raw_writer, tensor_map.0, metadata_map.0)
         };
-        check_status(save_status, "serialize safetensors into bounded memory")?;
+        mlx_runtime::check_status(save_status, "serialize safetensors into bounded memory")?;
         memory_writer.into_bytes()
     }
 }
@@ -83,7 +84,7 @@ impl OwnedMemoryWriter {
             unsafe {
                 drop(Box::from_raw(writer_state));
             }
-            return Err(writer_error(
+            return Err(mlx_safetensors_writer::writer_error(
                 "allocate an MLX memory writer",
                 "MLX returned an empty handle",
             ));
@@ -107,7 +108,7 @@ impl OwnedMemoryWriter {
             });
         }
         if !writer_state.is_good {
-            return Err(writer_error(
+            return Err(mlx_safetensors_writer::writer_error(
                 "serialize safetensors into bounded memory",
                 "the memory writer reported a failure",
             ));

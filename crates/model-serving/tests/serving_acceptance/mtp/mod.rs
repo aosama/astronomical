@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::serving_acceptance::support::mtp_support::run_one_layer_mtp_head_forward_acceptance;
+use crate::serving_acceptance::support::mtp_support;
 
 mod compiled_window_parity;
 mod dense_head;
@@ -20,7 +20,7 @@ const REJECTION_ACCEPTANCE_OUTPUT_TOKEN_COUNT: u16 = 128;
 async fn should_evaluate_the_configured_mtp_head_from_target_pre_normalization_hidden_states() {
     tokio::time::timeout(
         Duration::from_secs(120),
-        run_one_layer_mtp_head_forward_acceptance(
+        mtp_support::run_one_layer_mtp_head_forward_acceptance(
             crate::serving_acceptance::support::configured_depth_one_mtp_model_directory(),
             "configured-moe-mtp-head",
         ),

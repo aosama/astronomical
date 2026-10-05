@@ -7,7 +7,7 @@
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::attention::build_causal_sliding_window_mask;
+use crate::attention;
 use crate::laguna::artifacts::{LagunaAttentionProjection, LagunaLayerTensorRole};
 use crate::laguna::normalization::{
     LagunaAttentionDescriptor, LagunaAttentionKind, LagunaCacheDescriptor, LagunaGatingKind,
@@ -17,7 +17,7 @@ use crate::performance_attribution::{PerformanceAttribution, PerformanceOperatio
 use super::bound_linear::LagunaBoundLinear;
 use super::decoder_state::LagunaDecoderState;
 use super::error::LagunaExecutionError;
-use super::rope_application::apply_layer_rope;
+use super::rope_application;
 use super::weights::LagunaNativeWeights;
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -53,7 +53,7 @@ impl LagunaAttentionMaskCache {
         if let Some(entry_index) = self.entries.iter().position(|entry| entry.key == key) {
             return Ok(&self.entries[entry_index].mask);
         }
-        let mask = build_causal_sliding_window_mask(
+        let mask = attention::build_causal_sliding_window_mask(
             runtime,
             key.first_query_absolute_position,
             key.query_token_count,
@@ -177,14 +177,14 @@ fn forward_attention_inner(
     let transposed_keys = runtime.transpose_axes(&normalized_keys, &[0, 2, 1, 3])?;
     let transposed_values = runtime.transpose_axes(&values, &[0, 2, 1, 3])?;
     let rope_offset = decoder_state.absolute_position(layer_index).unwrap_or(0);
-    let rotated_queries = apply_layer_rope(
+    let rotated_queries = rope_application::apply_layer_rope(
         runtime,
         &transposed_queries,
         attention.rope(),
         rope_offset,
         performance_attribution,
     )?;
-    let rotated_keys = apply_layer_rope(
+    let rotated_keys = rope_application::apply_layer_rope(
         runtime,
         &transposed_keys,
         attention.rope(),

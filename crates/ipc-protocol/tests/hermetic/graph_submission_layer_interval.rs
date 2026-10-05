@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{WorkerChunkingConfiguration, graph_submission_layer_interval};
+use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 
 /// Builds resident and SSD-paged intervals used by the user journey.
 fn graph_submission_chunking(
@@ -27,7 +27,10 @@ fn should_use_resident_prefill_interval_and_keep_decode_on_one_tape() {
 
     assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 0);
     assert_eq!(chunking.graph_submission_layer_interval(1, false), 0);
-    assert_eq!(graph_submission_layer_interval(2_048, false, 0, 1, 3), 0);
+    assert_eq!(
+        astronomical_ipc_protocol::graph_submission_layer_interval(2_048, false, 0, 1, 3),
+        0
+    );
 }
 
 #[test]

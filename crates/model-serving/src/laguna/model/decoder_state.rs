@@ -9,7 +9,7 @@ use crate::decoder_cache::{
 use crate::laguna::normalization::{
     LagunaCacheDescriptor, LagunaExecutionDtype, LagunaTargetContract,
 };
-use crate::memory::rotating_prefill_transient_token_count;
+use crate::memory;
 use crate::performance_attribution::PerformanceAttribution;
 
 use super::error::LagunaExecutionError;
@@ -215,7 +215,7 @@ impl LagunaDecoderState {
                                 )
                             })?;
                         usize::try_from(
-                            rotating_prefill_transient_token_count(
+                            memory::rotating_prefill_transient_token_count(
                                 window_token_count,
                                 chunk_token_count,
                             )

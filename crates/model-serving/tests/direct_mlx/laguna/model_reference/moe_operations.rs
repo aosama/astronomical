@@ -7,7 +7,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::tensor_identity::layer_id;
+use super::tensor_identity;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) fn reference_moe(
@@ -22,11 +22,11 @@ pub(super) fn reference_moe(
         runtime,
         tensor(
             tensors,
-            layer_id(layer_index, LagunaLayerTensorRole::Router),
+            tensor_identity::layer_id(layer_index, LagunaLayerTensorRole::Router),
         ),
         hidden_states,
     )?;
-    let correction_bias = tensors.get(&layer_id(
+    let correction_bias = tensors.get(&tensor_identity::layer_id(
         layer_index,
         LagunaLayerTensorRole::RouterCorrectionBias,
     ));
@@ -50,7 +50,7 @@ pub(super) fn reference_moe(
         runtime,
         tensor(
             tensors,
-            layer_id(
+            tensor_identity::layer_id(
                 layer_index,
                 LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Gate),
             ),
@@ -62,7 +62,7 @@ pub(super) fn reference_moe(
         runtime,
         tensor(
             tensors,
-            layer_id(
+            tensor_identity::layer_id(
                 layer_index,
                 LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Up),
             ),
@@ -75,7 +75,7 @@ pub(super) fn reference_moe(
         runtime,
         tensor(
             tensors,
-            layer_id(
+            tensor_identity::layer_id(
                 layer_index,
                 LagunaLayerTensorRole::RoutedExpert(LagunaExpertProjection::Down),
             ),
@@ -174,7 +174,10 @@ fn shared_expert(
             runtime,
             tensor(
                 tensors,
-                layer_id(layer_index, LagunaLayerTensorRole::SharedExpert(projection)),
+                tensor_identity::layer_id(
+                    layer_index,
+                    LagunaLayerTensorRole::SharedExpert(projection),
+                ),
             ),
             hidden_states,
         )
@@ -186,7 +189,7 @@ fn shared_expert(
         runtime,
         tensor(
             tensors,
-            layer_id(
+            tensor_identity::layer_id(
                 layer_index,
                 LagunaLayerTensorRole::SharedExpert(LagunaExpertProjection::Down),
             ),

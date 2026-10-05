@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-use super::{QwenImage21ConfigError, parse_document, require};
+use super::QwenImage21ConfigError;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -52,56 +52,56 @@ pub struct QwenImage21VaeConfig {
 impl QwenImage21VaeConfig {
     pub fn parse(json_bytes: &[u8]) -> Result<Self, QwenImage21ConfigError> {
         const DOCUMENT: &str = "vae/config.json";
-        let document: VaeDocument = parse_document(json_bytes, DOCUMENT)?;
-        require(
+        let document: VaeDocument = super::parse_document(json_bytes, DOCUMENT)?;
+        super::require(
             document.class_name == "AutoencoderKLQwenImage21",
             DOCUMENT,
             "_class_name",
         )?;
-        require(
+        super::require(
             document.diffusers_version == "0.37.0.dev0",
             DOCUMENT,
             "_diffusers_version",
         )?;
         let z_dim = document.z_dim;
-        require(z_dim == 64, DOCUMENT, "z_dim")?;
-        require(document.attn_scales.is_empty(), DOCUMENT, "attn_scales")?;
-        require(document.base_dim == 96, DOCUMENT, "base_dim")?;
-        require(
+        super::require(z_dim == 64, DOCUMENT, "z_dim")?;
+        super::require(document.attn_scales.is_empty(), DOCUMENT, "attn_scales")?;
+        super::require(document.base_dim == 96, DOCUMENT, "base_dim")?;
+        super::require(
             document.decoder_base_dim == 144,
             DOCUMENT,
             "decoder_base_dim",
         )?;
-        require(document.dim_mult == [1, 2, 4, 8, 8], DOCUMENT, "dim_mult")?;
-        require(document.dropout == 0.0, DOCUMENT, "dropout")?;
-        require(document.in_channels == 4, DOCUMENT, "in_channels")?;
-        require(document.is_residual, DOCUMENT, "is_residual")?;
-        require(document.num_res_blocks == 2, DOCUMENT, "num_res_blocks")?;
-        require(document.out_channels == 4, DOCUMENT, "out_channels")?;
-        require(document.patch_size.is_none(), DOCUMENT, "patch_size")?;
-        require(
+        super::require(document.dim_mult == [1, 2, 4, 8, 8], DOCUMENT, "dim_mult")?;
+        super::require(document.dropout == 0.0, DOCUMENT, "dropout")?;
+        super::require(document.in_channels == 4, DOCUMENT, "in_channels")?;
+        super::require(document.is_residual, DOCUMENT, "is_residual")?;
+        super::require(document.num_res_blocks == 2, DOCUMENT, "num_res_blocks")?;
+        super::require(document.out_channels == 4, DOCUMENT, "out_channels")?;
+        super::require(document.patch_size.is_none(), DOCUMENT, "patch_size")?;
+        super::require(
             document.scale_factor_spatial == 16,
             DOCUMENT,
             "scale_factor_spatial",
         )?;
-        require(
+        super::require(
             document.scale_factor_temporal == 8,
             DOCUMENT,
             "scale_factor_temporal",
         )?;
-        require(
+        super::require(
             document.temporal_downsample == [false, true, true, true],
             DOCUMENT,
             "temperal_downsample",
         )?;
-        require(document.mlx_format, DOCUMENT, "mlx_format")?;
-        require(
+        super::require(document.mlx_format, DOCUMENT, "mlx_format")?;
+        super::require(
             document.latents_mean.len() == z_dim,
             DOCUMENT,
             "latents_mean",
         )?;
-        require(document.latents_std.len() == z_dim, DOCUMENT, "latents_std")?;
-        require(
+        super::require(document.latents_std.len() == z_dim, DOCUMENT, "latents_std")?;
+        super::require(
             document
                 .latents_std
                 .iter()

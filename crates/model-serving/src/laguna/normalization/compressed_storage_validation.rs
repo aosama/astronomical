@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use super::document::bounded_value_label;
+use super::document;
 use super::error::LagunaNormalizationError;
 
 pub(super) fn validate_common_null_defaults(
@@ -259,6 +259,6 @@ pub(super) fn unsupported(
     LagunaNormalizationError::UnsupportedQuantizationValue {
         location: location.to_owned(),
         description,
-        actual_value: bounded_value_label(actual_value),
+        actual_value: document::bounded_value_label(actual_value),
     }
 }

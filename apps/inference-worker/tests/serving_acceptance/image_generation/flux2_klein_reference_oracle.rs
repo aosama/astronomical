@@ -33,8 +33,6 @@ use sha2::{Digest, Sha256};
 #[path = "flux2_klein_reference_oracle/initial_noise.rs"]
 mod initial_noise;
 
-use initial_noise::parse_initial_noise;
-
 const REFERENCE_IMPLEMENTATION: &str = "black-forest-labs/diffusers";
 const BFL_SOURCE_REPOSITORY: &str = "https://github.com/black-forest-labs/flux2";
 pub(crate) const BFL_SOURCE_REVISION: &str = "50fe5162777813d869182b139e83b10743caef15";
@@ -144,7 +142,7 @@ impl FluxReferenceOracle {
         require_equal_u64(bundle_object, "seed", expected.seed)?;
         require_equal_u64(bundle_object, "steps", u64::from(expected.steps))?;
         require_equal_f64(bundle_object, "guidance", expected.guidance)?;
-        let initial_noise_sha256 = parse_initial_noise(bundle_object, expected)?;
+        let initial_noise_sha256 = initial_noise::parse_initial_noise(bundle_object, expected)?;
 
         let (maximum_channel_error, mean_channel_error) = parse_tolerance(bundle_object)?;
         let reference_rgb = parse_reference_rgb(bundle_object, expected.width, expected.height)?;

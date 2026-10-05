@@ -10,7 +10,7 @@ use crate::{
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 /// Immutable decisions computed before memory admission and forward execution.
 ///
@@ -62,7 +62,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let prefill_token_count = prefill_end - prefill_start;
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
@@ -78,7 +78,7 @@ impl Qwen3_5EngineState {
                     .persistent_prompt_cache
                     .as_ref()
                     .ok_or_else(|| {
-                        fatal_engine_error(
+                        super::fatal_engine_error(
                             "eligible prompt-cache capture has no persistent cache owner",
                         )
                     })?
@@ -111,13 +111,13 @@ impl Qwen3_5EngineState {
                     .decoder_cache_layout()
                     .boundary_snapshot_payload_byte_count()
                     .map_err(|error| {
-                        fatal_engine_error(format!(
+                        super::fatal_engine_error(format!(
                             "failed to project boundary checkpoint workspace: {error}"
                         ))
                     })?
                     .checked_mul(intermediate_completed_prefill_chunk_tokens.len())
                     .ok_or_else(|| {
-                        fatal_engine_error("boundary checkpoint workspace bytes overflowed")
+                        super::fatal_engine_error("boundary checkpoint workspace bytes overflowed")
                     })?
             };
 
@@ -137,7 +137,7 @@ impl Qwen3_5EngineState {
         let exact_temporary_workspace_bytes = boundary_checkpoint_workspace_bytes
             .checked_add(direct_publication_workspace_bytes)
             .ok_or_else(|| {
-                fatal_engine_error("prompt-cache publication workspace bytes overflowed")
+                super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
             })?;
 
         let is_terminal_optional_history_capture = active_request.has_optional_prediction_session()
@@ -153,7 +153,7 @@ impl Qwen3_5EngineState {
                     .config()
                     .full_attention_key_value_state_bytes_per_layer_token()
                     .ok_or_else(|| {
-                        fatal_engine_error(
+                        super::fatal_engine_error(
                             "additional full-attention bytes per layer token overflowed",
                         )
                     })?;

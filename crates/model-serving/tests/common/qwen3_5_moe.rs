@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use astronomical_model_serving::PersistentPromptCacheModelContract;
-use astronomical_model_serving::qwen3_5_decoder_cache_layout;
 use astronomical_model_serving::{
     DecoderCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
     ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingModelContract, Qwen3_5Config,
@@ -33,8 +32,12 @@ pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelCon
     PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&frozen_ornith_1_0_config, 256, &decoder_layer_cache_dtypes)
-            .expect("the frozen Ornith 1.0 configuration should build a decoder-cache layout"),
+        astronomical_model_serving::qwen3_5_decoder_cache_layout(
+            &frozen_ornith_1_0_config,
+            256,
+            &decoder_layer_cache_dtypes,
+        )
+        .expect("the frozen Ornith 1.0 configuration should build a decoder-cache layout"),
         frozen_ornith_1_0_config.maximum_position_count() as usize,
         20_000_000_000,
         50_000_000_000,

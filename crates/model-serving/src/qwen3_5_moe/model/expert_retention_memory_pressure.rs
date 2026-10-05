@@ -29,9 +29,9 @@
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
-use crate::{InferenceEngineError, retained_complete_layer_ceiling_after_prefill_budget_refresh};
+use crate::InferenceEngineError;
 
-use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
+use crate::qwen3_5::inference_execution;
 use crate::qwen3_5::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
@@ -45,7 +45,7 @@ impl Qwen3_5Model {
     /// arrays were released.
     pub(crate) fn limit_retained_experts_to(&self, maximum_resident_payload_bytes: u64) -> bool {
         let maximum_resident_payload_bytes =
-            retained_complete_layer_ceiling_after_prefill_budget_refresh(
+            crate::retained_complete_layer_ceiling_after_prefill_budget_refresh(
                 maximum_resident_payload_bytes,
                 self.seated_complete_layer_payload_bytes(),
             );
@@ -80,7 +80,7 @@ impl Qwen3_5Model {
         admitted_forward_reserve_bytes: u64,
     ) -> bool {
         let retained_expert_budget_bytes =
-            retained_complete_layer_ceiling_after_prefill_budget_refresh(
+            crate::retained_complete_layer_ceiling_after_prefill_budget_refresh(
                 self.mlx_ram_budget
                     .borrow()
                     .retained_expert_budget_for_admitted_forward(
@@ -176,13 +176,17 @@ pub(crate) fn reclaim_retained_experts_for_request_memory_pressure(
         // A failed cleanup must not strand the model at a request-scoped frozen
         // ceiling once this recovery attempt has already failed.
         model.resume_expert_retention_after_request_memory_pressure();
-        return Err(qwen3_5_runtime_error(allocator_reclamation_error));
+        return Err(inference_execution::qwen3_5_runtime_error(
+            allocator_reclamation_error,
+        ));
     }
     let memory_snapshot_after_reclamation = match model.runtime().memory_snapshot() {
         Ok(memory_snapshot_after_reclamation) => memory_snapshot_after_reclamation,
         Err(memory_snapshot_error) => {
             model.resume_expert_retention_after_request_memory_pressure();
-            return Err(qwen3_5_runtime_error(memory_snapshot_error));
+            return Err(inference_execution::qwen3_5_runtime_error(
+                memory_snapshot_error,
+            ));
         }
     };
     Ok(Some(memory_snapshot_after_reclamation))

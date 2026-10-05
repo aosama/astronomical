@@ -9,15 +9,16 @@ use crate::laguna::moe::{
     route_laguna_layer_experts, unique_routed_expert_ids,
 };
 use crate::laguna::normalization::{LagunaFeedForwardDescriptor, LagunaLayerDescriptor};
-use crate::laguna::paging::load_laguna_expert_page;
+use crate::laguna::paging;
 use crate::memory::{MemoryPhase, ResidentExpertWeight};
 use crate::performance_attribution::PerformanceAttribution;
 
 use super::LagunaLastExpertForward;
-use super::attention::{LagunaAttentionMaskCache, forward_attention};
+use super::attention;
+use super::attention::LagunaAttentionMaskCache;
 use super::decode_experts;
 use super::decoder_state::LagunaDecoderState;
-use super::dense_feed_forward::dense_swiglu;
+use super::dense_feed_forward;
 use super::error::LagunaExecutionError;
 use super::model::LagunaModel;
 use astronomical_mlx_c_rust::{MlxArray, MlxMetalKernel};
@@ -43,7 +44,7 @@ pub(super) fn forward_decoder_layer(
         weights.layer(layer_index, LagunaLayerTensorRole::InputNormalization)?,
         rms_norm_epsilon,
     )?;
-    let attention_delta = forward_attention(
+    let attention_delta = attention::forward_attention(
         runtime,
         &normalized_input,
         weights,
@@ -64,7 +65,7 @@ pub(super) fn forward_decoder_layer(
         rms_norm_epsilon,
     )?;
     let feed_forward_delta = match layer_descriptor.feed_forward() {
-        LagunaFeedForwardDescriptor::Dense(_) => dense_swiglu(
+        LagunaFeedForwardDescriptor::Dense(_) => dense_feed_forward::dense_swiglu(
             runtime,
             &normalized_after_attention,
             weights,
@@ -318,7 +319,7 @@ fn forward_decode_sparse_feed_forward(
             pending_page_payload_bytes,
             performance_attribution,
         )?;
-        let streamed_page = load_laguna_expert_page(
+        let streamed_page = paging::load_laguna_expert_page(
             runtime,
             sparse_layer_plan,
             &missing_expert_ids,

@@ -5,8 +5,6 @@ use astronomical_config::{
     discover_classified_model_artifacts, requestable_model_id,
 };
 
-use super::{discover_configured_models, write_minimal_model_config, write_required_model_files};
-
 #[test]
 fn should_reject_malformed_duplicate_or_oversized_pipeline_family_markers() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
@@ -44,8 +42,8 @@ fn should_classify_laguna_without_discovering_it_as_executable() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let laguna_model_directory = temporary_directory.path().join("Laguna-XS-Fixture");
     fs::create_dir_all(&laguna_model_directory).expect("Laguna model directory should be created");
-    write_minimal_model_config(&laguna_model_directory, "laguna", 262_144);
-    write_required_model_files(&laguna_model_directory);
+    super::write_minimal_model_config(&laguna_model_directory, "laguna", 262_144);
+    super::write_required_model_files(&laguna_model_directory);
 
     assert_eq!(
         classify_model_directory(&laguna_model_directory)
@@ -53,7 +51,7 @@ fn should_classify_laguna_without_discovering_it_as_executable() {
         Some(ModelFamily::Laguna)
     );
     assert!(
-        discover_configured_models(&temporary_directory)[0]
+        super::discover_configured_models(&temporary_directory)[0]
             .discovered_models
             .is_empty()
     );

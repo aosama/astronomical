@@ -10,8 +10,8 @@ use std::path::{Component, Path};
 
 use thiserror::Error;
 
-use super::bounded_artifact_file::{read_bounded_nonempty_file, read_json};
-use super::classified_artifacts::immutable_file_revision;
+use super::bounded_artifact_file;
+use super::classified_artifacts;
 use super::flux2_klein_documents::{
     PipelineClass, PipelineIndex, SchedulerGeometry, TextEncoderGeometry, TextEncoderIndex,
     TransformerGeometry, VaeGeometry,
@@ -103,7 +103,7 @@ fn verify_model_directory_evidence(
     validate_scheduler_geometry(model_directory)?;
     validate_apache_2_license(model_directory)?;
     for required_sidecar in REQUIRED_SIDECARS {
-        read_bounded_nonempty_file(
+        bounded_artifact_file::read_bounded_nonempty_file(
             &model_directory.join(required_sidecar),
             MAXIMUM_SIDECAR_BYTES,
         )
@@ -119,7 +119,9 @@ fn verify_model_directory_evidence(
     let revision = library_provenance
         .as_ref()
         .map(|(_, recorded_revision)| recorded_revision.clone())
-        .or_else(|| immutable_file_revision(model_directory, "model_index.json"))
+        .or_else(|| {
+            classified_artifacts::immutable_file_revision(model_directory, "model_index.json")
+        })
         .ok_or(Flux2KleinDirectoryVerificationError::MissingRevision)?;
     Ok(Flux2KleinDirectoryEvidence {
         canonical_model_id: CANONICAL_MODEL_ID.to_owned(),
@@ -147,9 +149,11 @@ fn verify_model_directory_evidence(
 fn validate_apache_2_license(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let license_bytes =
-        read_bounded_nonempty_file(&model_directory.join("LICENSE.md"), MAXIMUM_LICENSE_BYTES)
-            .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidLicense)?;
+    let license_bytes = bounded_artifact_file::read_bounded_nonempty_file(
+        &model_directory.join("LICENSE.md"),
+        MAXIMUM_LICENSE_BYTES,
+    )
+    .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidLicense)?;
     let license_text = std::str::from_utf8(&license_bytes)
         .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidLicense)?;
     (license_text.contains("Apache License")
@@ -163,7 +167,7 @@ fn validate_apache_2_license(
 fn validate_pipeline_index(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let pipeline_index: PipelineIndex = read_json(
+    let pipeline_index: PipelineIndex = bounded_artifact_file::read_json(
         &model_directory.join("model_index.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -186,7 +190,7 @@ fn is_exact_distilled_pipeline(pipeline_index: &PipelineIndex) -> bool {
 fn validate_transformer_geometry(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let geometry: TransformerGeometry = read_json(
+    let geometry: TransformerGeometry = bounded_artifact_file::read_json(
         &model_directory.join("transformer/config.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -213,7 +217,7 @@ fn validate_transformer_geometry(
 fn validate_text_encoder_geometry(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let geometry: TextEncoderGeometry = read_json(
+    let geometry: TextEncoderGeometry = bounded_artifact_file::read_json(
         &model_directory.join("text_encoder/config.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -252,9 +256,11 @@ fn validate_text_encoder_geometry(
 fn validate_vae_geometry(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let geometry: VaeGeometry =
-        read_json(&model_directory.join("vae/config.json"), MAXIMUM_JSON_BYTES)
-            .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidVaeConfiguration)?;
+    let geometry: VaeGeometry = bounded_artifact_file::read_json(
+        &model_directory.join("vae/config.json"),
+        MAXIMUM_JSON_BYTES,
+    )
+    .map_err(|_| Flux2KleinDirectoryVerificationError::InvalidVaeConfiguration)?;
     let four_down_blocks = ["DownEncoderBlock2D"; 4];
     let four_up_blocks = ["UpDecoderBlock2D"; 4];
     (geometry.class_name == "AutoencoderKLFlux2"
@@ -282,7 +288,7 @@ fn validate_vae_geometry(
 fn validate_scheduler_geometry(
     model_directory: &Path,
 ) -> Result<(), Flux2KleinDirectoryVerificationError> {
-    let geometry: SchedulerGeometry = read_json(
+    let geometry: SchedulerGeometry = bounded_artifact_file::read_json(
         &model_directory.join("scheduler/scheduler_config.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -309,7 +315,7 @@ fn validate_scheduler_geometry(
 fn measure_modular_weight_bytes(
     model_directory: &Path,
 ) -> Result<u64, Flux2KleinDirectoryVerificationError> {
-    let text_encoder_index: TextEncoderIndex = read_json(
+    let text_encoder_index: TextEncoderIndex = bounded_artifact_file::read_json(
         &model_directory.join("text_encoder/model.safetensors.index.json"),
         MAXIMUM_TEXT_ENCODER_INDEX_BYTES,
     )

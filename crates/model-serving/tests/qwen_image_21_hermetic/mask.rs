@@ -2,13 +2,11 @@
 //! image-block id construction. These are pure integer bookkeeping with no runtime dependency and
 //! are checked against the diffusers reference reimplementation in `mask_fixture.rs`.
 
-use astronomical_model_serving::{build_block_causal_mask, build_image_ids, prefix_segments};
-
 use super::mask_fixture::{
     EXPECTED_IMAGE_IDS, MASK_SEGMENT_COUNT, MASK_SEQ_LEN, ORACLE_MASK, ORACLE_MASK_PADDED,
     PADDED_KEY_INDEX,
 };
-use super::support::{test_image_pad_mask, test_img_shapes};
+use super::support;
 
 const MASK_TOLERANCE: u32 = 0; // exact boolean match against the oracle
 
@@ -17,7 +15,7 @@ fn expected_image_ids() -> Vec<i32> {
 }
 
 fn none_case_mask() -> Vec<bool> {
-    build_block_causal_mask(&expected_image_ids(), None)
+    astronomical_model_serving::build_block_causal_mask(&expected_image_ids(), None)
 }
 
 fn padded_key_valid() -> Vec<bool> {
@@ -45,7 +43,10 @@ fn count_mismatches(mask: &[bool], oracle: &[[u8; MASK_SEQ_LEN]]) -> u32 {
 
 #[test]
 fn should_build_the_expected_image_block_ids() {
-    let ids = build_image_ids(&test_img_shapes(), &test_image_pad_mask());
+    let ids = astronomical_model_serving::build_image_ids(
+        &support::test_img_shapes(),
+        &support::test_image_pad_mask(),
+    );
     assert_eq!(
         ids,
         expected_image_ids(),
@@ -66,7 +67,10 @@ fn should_match_the_diffusers_block_causal_mask() {
 
 #[test]
 fn should_match_the_diffusers_padded_key_mask() {
-    let mask = build_block_causal_mask(&expected_image_ids(), Some(&padded_key_valid()));
+    let mask = astronomical_model_serving::build_block_causal_mask(
+        &expected_image_ids(),
+        Some(&padded_key_valid()),
+    );
     assert_eq!(mask.len(), MASK_SEQ_LEN * MASK_SEQ_LEN);
     assert_eq!(
         count_mismatches(&mask, &ORACLE_MASK_PADDED),
@@ -78,7 +82,10 @@ fn should_match_the_diffusers_padded_key_mask() {
 #[test]
 fn should_keep_padded_columns_all_false_and_other_cells_unchanged() {
     let none_case = none_case_mask();
-    let padded = build_block_causal_mask(&expected_image_ids(), Some(&padded_key_valid()));
+    let padded = astronomical_model_serving::build_block_causal_mask(
+        &expected_image_ids(),
+        Some(&padded_key_valid()),
+    );
 
     // Padded keys are excluded as keys: every padded column is entirely False.
     for padded_index in [8usize, PADDED_KEY_INDEX] {
@@ -109,7 +116,7 @@ fn should_keep_padded_columns_all_false_and_other_cells_unchanged() {
 
 #[test]
 fn should_match_the_diffusers_prefix_segments() {
-    let segments = prefix_segments(&expected_image_ids(), MASK_SEQ_LEN);
+    let segments = astronomical_model_serving::prefix_segments(&expected_image_ids(), MASK_SEQ_LEN);
     assert_eq!(
         segments.len(),
         MASK_SEGMENT_COUNT,

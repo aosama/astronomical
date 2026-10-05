@@ -16,7 +16,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::moe_operations::reference_moe;
+use super::moe_operations;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) struct ReferenceDecoderState {
@@ -113,7 +113,7 @@ pub(super) fn reference_forward(
                 layer_index,
                 &normalized_after_attention,
             )?,
-            LagunaFeedForwardDescriptor::Moe(descriptor) => reference_moe(
+            LagunaFeedForwardDescriptor::Moe(descriptor) => moe_operations::reference_moe(
                 runtime,
                 tensors,
                 layer_index,

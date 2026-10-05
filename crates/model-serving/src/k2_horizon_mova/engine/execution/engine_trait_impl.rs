@@ -16,13 +16,13 @@ use crate::k2_horizon_mova::model::{
     FusedExpertDecodeKernels, K2HorizonMoVAModel, K2HorizonMoVAWeights,
 };
 use crate::k2_horizon_mova::{K2HorizonMoVAInferenceRequest, K2HorizonMoVAThinkingBudgetState};
-use crate::sampling_seed::{current_time_millis_since_unix_epoch, resolve_sampling_seed};
+use crate::sampling_seed;
+use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use crate::{
     CustomMetalKernelFamily, EngineGenerationStart, EngineLoadResult, GeneratedToken,
     GenerationFinalization, InferenceEngineError, MlxInferenceExecution, MlxMemoryLimitAdjustment,
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceOperation,
 };
-use crate::{sorted_expert_weighted_sum_kernel, worker_process_kernel_capabilities};
 use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu};
 
 impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
@@ -70,11 +70,11 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             },
         )?;
         let kernel_capabilities =
-            worker_process_kernel_capabilities(&runtime, &mut performance_attribution);
+            crate::worker_process_kernel_capabilities(&runtime, &mut performance_attribution);
         let sorted_expert_reduction_kernel = if kernel_capabilities
             .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
         {
-            Some(sorted_expert_weighted_sum_kernel().map_err(|error| {
+            Some(crate::sorted_expert_weighted_sum_kernel().map_err(|error| {
                 InferenceEngineError::Fatal {
                     reason: format!(
                         "K2 Horizon MoVA sorted expert reduction kernel failed: {error}"
@@ -178,7 +178,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             .map_err(|error| InferenceEngineError::Fatal {
                 reason: format!("K2 Horizon MoVA KV state is invalid: {error}"),
             })?;
-        let sampling_seed = resolve_sampling_seed(
+        let sampling_seed = sampling_seed::resolve_sampling_seed(
             inference_request.seed(),
             current_time_millis_since_unix_epoch,
         );

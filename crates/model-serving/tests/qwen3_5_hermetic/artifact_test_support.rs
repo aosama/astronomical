@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use astronomical_model_serving::TensorProfile;
 use serde_json::json;
 
-use crate::common::qwen3_5_moe::expected_qwen3_5_language_tensor_profiles;
+use crate::common::qwen3_5_moe;
 
 pub(crate) const FROZEN_LANGUAGE_PAYLOAD_BYTES: u64 = 22_164_699_392;
 const FROZEN_TOTAL_PARAMETERS: u64 = 34_660_608_768;
@@ -17,7 +17,7 @@ pub(crate) const LANGUAGE_SHARD_FILE_NAMES: [&str; 5] = [
 const VISION_SIDECAR_FILE_NAME: &str = "vision/weights.safetensors";
 
 pub(crate) fn frozen_test_index_bytes() -> Vec<u8> {
-    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let language_tensor_profiles = qwen3_5_moe::expected_qwen3_5_language_tensor_profiles();
     frozen_test_index_bytes_with_optional_language_tensor_replacement(
         None,
         &language_tensor_profiles,

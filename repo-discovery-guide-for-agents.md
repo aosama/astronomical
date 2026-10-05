@@ -57,6 +57,7 @@ Astronomical is an Apple Silicon local model runner. The active architecture is 
 
 ## Conventions
 
+- Call free functions through their owning module: import the module, never the bare function (`use crate::support;` then `support::run_journey_with_timeout(...)`), so every call site names its owner. The rule applies to all new and refactored code; the one-time workspace migration that established this shape deliberately scoped itself to workspace-internal functions and left external-crate call sites (tokio, serde, axum, std) untouched to bound churn. See the bare-function-import rule in AGENTS.md.
 - Everything is derived from the constitution `docs/north-star-product-vision.md`; read it as the source of truth.
 - Keep `docs/performance-optimizations-lessons.md` updated with lessons relevant to LLM, VLM, and MLX APIs.
 - Every command and test must emit a live progress indicator; never issue a silent command.

@@ -14,7 +14,8 @@
 use astronomical_runtime_integration::MlxRuntime;
 use std::cell::Cell;
 
-use super::vision_attention::{Qwen3_5VisionPaddingZeroCache, qwen3_5_vision_self_attention};
+use super::vision_attention;
+use super::vision_attention::Qwen3_5VisionPaddingZeroCache;
 use super::vision_rotary_embedding::Qwen3_5VisionRotaryEmbedding;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
@@ -284,7 +285,7 @@ impl Qwen3_5VisionModel {
         let vision_block_prefix = format!("vision_tower.blocks.{vision_block_index}");
         let norm1_output =
             self.layer_norm(runtime, hidden_states, &vision_block_prefix, "norm1")?;
-        let attention_output = qwen3_5_vision_self_attention(
+        let attention_output = vision_attention::qwen3_5_vision_self_attention(
             runtime,
             compiled_elementwise_graphs,
             &self.config,

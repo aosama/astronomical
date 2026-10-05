@@ -1,8 +1,6 @@
-use astronomical_model_serving::flux2_klein_reference_rgb_u8;
-
 #[test]
 fn should_match_the_exact_reference_clamp_scale_and_ties_to_even_conversion() {
-    let rgb = flux2_klein_reference_rgb_u8(&[
+    let rgb = astronomical_model_serving::flux2_klein_reference_rgb_u8(&[
         -2.0,
         -1.0,
         -0.5,
@@ -20,6 +18,11 @@ fn should_match_the_exact_reference_clamp_scale_and_ties_to_even_conversion() {
 
 #[test]
 fn should_reject_non_finite_decoded_pixels_instead_of_hiding_corruption() {
-    assert!(flux2_klein_reference_rgb_u8(&[f32::NAN, 0.0, 0.0]).is_err());
-    assert!(flux2_klein_reference_rgb_u8(&[f32::INFINITY, 0.0, 0.0]).is_err());
+    assert!(
+        astronomical_model_serving::flux2_klein_reference_rgb_u8(&[f32::NAN, 0.0, 0.0]).is_err()
+    );
+    assert!(
+        astronomical_model_serving::flux2_klein_reference_rgb_u8(&[f32::INFINITY, 0.0, 0.0])
+            .is_err()
+    );
 }

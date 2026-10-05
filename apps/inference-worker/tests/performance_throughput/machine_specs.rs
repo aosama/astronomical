@@ -2,7 +2,7 @@
 //! against, so a historical record can be interpreted against the machine that
 //! produced it.
 
-use astronomical_inference_worker::worker_startup::sample_iogpu_wired_limit_bytes;
+use astronomical_inference_worker::worker_startup;
 use serde::Serialize;
 use tokio::time::{Duration, timeout};
 
@@ -38,12 +38,14 @@ impl MachineSpecs {
         let total_memory_bytes = run_sysctl("hw.memsize")
             .await
             .and_then(|value| value.trim().parse::<u64>().ok());
-        let gpu_wired_memory_bytes =
-            timeout(SYSCTL_SAMPLE_TIMEOUT, sample_iogpu_wired_limit_bytes())
-                .await
-                .ok()
-                .and_then(|result| result.ok())
-                .map(|value| value as u64);
+        let gpu_wired_memory_bytes = timeout(
+            SYSCTL_SAMPLE_TIMEOUT,
+            worker_startup::sample_iogpu_wired_limit_bytes(),
+        )
+        .await
+        .ok()
+        .and_then(|result| result.ok())
+        .map(|value| value as u64);
         Self {
             os: std::env::consts::OS,
             arch: std::env::consts::ARCH,

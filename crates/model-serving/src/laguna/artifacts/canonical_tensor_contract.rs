@@ -6,9 +6,10 @@ use super::artifact_error::LagunaArtifactValidationError;
 use super::direct_storage_validation::{
     required_component_storage_dtype, validate_source_dtypes, validate_source_shapes,
 };
-use super::exact_storage_binding::{bind_exact_storage, is_exact_storage_source};
-use super::expected_tensors::{LagunaExpectedTensor, expected_tensors};
-use super::kv_cache_metadata::collect_fp8_kv_cache_metadata;
+use super::exact_storage_binding;
+use super::expected_tensors;
+use super::expected_tensors::LagunaExpectedTensor;
+use super::kv_cache_metadata;
 use super::tensor_assembly::LagunaTensorAssembly;
 use super::tensor_id::{
     LagunaExpertProjection, LagunaLayerTensorRole, LagunaTensorComponent, LagunaTensorId,
@@ -255,7 +256,7 @@ pub(super) fn build_canonical_tensor_contract(
     tensor_name_contract: &LagunaTensorNameContract,
     located_tensors: &BTreeMap<String, LocatedRawTensorDescriptor>,
 ) -> Result<LagunaTensorContract, LagunaArtifactValidationError> {
-    let mut expected_tensors = expected_tensors(target_contract)?;
+    let mut expected_tensors = expected_tensors::expected_tensors(target_contract)?;
     for tensor_id in tensor_name_contract.assemblies().keys().copied() {
         insert_optional_router_correction_bias(target_contract, tensor_id, &mut expected_tensors)?;
     }
@@ -268,7 +269,11 @@ pub(super) fn build_canonical_tensor_contract(
             );
         }
         if !expected_tensors.contains_key(tensor_id)
-            && !is_exact_storage_source(target_contract.storage(), *tensor_id, &expected_tensors)
+            && !exact_storage_binding::is_exact_storage_source(
+                target_contract.storage(),
+                *tensor_id,
+                &expected_tensors,
+            )
         {
             return Err(LagunaArtifactValidationError::UnexpectedCanonicalTensor {
                 tensor_id: *tensor_id,
@@ -279,7 +284,7 @@ pub(super) fn build_canonical_tensor_contract(
     let execution_dtype = execution_dtype(target_contract.model().execution_dtype());
     let mut descriptors = BTreeMap::new();
     for (tensor_id, expected_tensor) in expected_tensors {
-        if let Some(exact_binding) = bind_exact_storage(
+        if let Some(exact_binding) = exact_storage_binding::bind_exact_storage(
             tensor_id,
             &expected_tensor,
             tensor_name_contract,
@@ -340,7 +345,7 @@ pub(super) fn build_canonical_tensor_contract(
             },
         );
     }
-    let non_executable_metadata = collect_fp8_kv_cache_metadata(
+    let non_executable_metadata = kv_cache_metadata::collect_fp8_kv_cache_metadata(
         target_contract.storage(),
         target_contract,
         tensor_name_contract,

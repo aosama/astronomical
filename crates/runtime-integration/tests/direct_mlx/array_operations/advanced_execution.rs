@@ -1,8 +1,8 @@
-use crate::common::runtime_test_support::runtime;
+use crate::common::runtime_test_support;
 
 #[test]
 fn should_apply_unmasked_scaled_dot_product_attention() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let queries = runtime
         .array_from_f32(&[1.0], &[1, 1, 1, 1])
         .expect("the query tensor should be valid");
@@ -26,7 +26,7 @@ fn should_apply_unmasked_scaled_dot_product_attention() {
 
 #[test]
 fn should_apply_causal_scaled_dot_product_attention() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let queries = runtime
         .array_from_f32(&[1.0, 1.0], &[1, 1, 2, 1])
         .expect("the query tensor should be valid");
@@ -50,7 +50,7 @@ fn should_apply_causal_scaled_dot_product_attention() {
 
 #[test]
 fn should_sample_categorical_token_with_a_fixed_key_seed() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let logits = runtime
         .array_from_f32(&[0.0, 0.0, 0.0], &[1, 3])
         .expect("the categorical logits should be valid");
@@ -67,7 +67,7 @@ fn should_sample_categorical_token_with_a_fixed_key_seed() {
 
 #[test]
 fn should_match_the_upstream_seeded_categorical_key_sequence() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let logits = runtime
         .array_from_f32(&[0.0, 1.0, 2.0], &[1, 3])
         .expect("the categorical logits should be valid");
@@ -97,7 +97,7 @@ fn should_match_the_upstream_seeded_categorical_key_sequence() {
 
 #[test]
 fn should_async_evaluate_dependent_arrays_without_losing_their_results() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let source_values = runtime
         .array_from_f32(&[1.0, 2.0, 3.0], &[3])
         .expect("the source values should be valid");
@@ -123,7 +123,7 @@ fn should_async_evaluate_dependent_arrays_without_losing_their_results() {
 
 #[test]
 fn should_replace_only_the_selected_static_slice() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let cache_storage = runtime
         .array_from_f32(&[0.0; 8], &[2, 4])
         .expect("the cache storage should be valid");

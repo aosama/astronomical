@@ -20,9 +20,10 @@
 
 use serde_json::Value;
 
-use super::openai_rest::{E2E_TIMEOUT, stop_serving_rest_server};
-use crate::support::http::send_http_request;
-use crate::support::serving_rest::launch_serving_rest_server_for_embedding_model;
+use super::openai_rest;
+use super::openai_rest::E2E_TIMEOUT;
+use crate::support::http;
+use crate::support::serving_rest;
 
 /// Upstream worked-example queries (exact strings from the model card).
 const WORKED_EXAMPLE_QUERY_TSNE: &str = "search_query: What is TSNE?";
@@ -59,7 +60,7 @@ async fn run_reference_similarity_journey() {
     );
 
     // ── launch server ──────────────────────────────────────────
-    let rest_server = launch_serving_rest_server_for_embedding_model(
+    let rest_server = serving_rest::launch_serving_rest_server_for_embedding_model(
         &selected_model.model_id,
         selected_model.model_directory.clone(),
         768,
@@ -181,7 +182,7 @@ async fn run_reference_similarity_journey() {
     );
 
     eprintln!("[ref-sim 5/5] status=success phase=stop-server");
-    stop_serving_rest_server(rest_server).await;
+    openai_rest::stop_serving_rest_server(rest_server).await;
 }
 
 // ── helpers (copied/adapted from openai_rest + embeddings_rest) ──
@@ -209,7 +210,7 @@ async fn post_embeddings(server_address: std::net::SocketAddr, request_body: Str
         "POST /v1/embeddings HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",
         request_body.len()
     );
-    send_http_request(server_address, request_text).await
+    http::send_http_request(server_address, request_text).await
 }
 
 fn assert_embeddings_list(

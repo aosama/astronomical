@@ -7,7 +7,7 @@
 //! layer emits its next rolling and recurrent states plus per-row boundary
 //! snapshots for verifier-prefix rollback.
 
-use super::trunk::{quantized_matmul, take_affine, trace_feed_forward_tail};
+use super::trunk;
 use super::{VerifyWindowGdnKernelSet, VerifyWindowInputReader};
 use crate::mlx_compiled_verify_window_geometry::VerifyWindowGeometry;
 use crate::mlx_compiled_verify_window_ops as ops;
@@ -16,8 +16,6 @@ use crate::{MlxArray, MlxDtype, MlxStream, raw};
 
 #[path = "mlx_compiled_verify_window_gdn_recurrence.rs"]
 mod recurrence;
-
-use recurrence::{trace_composed_gated_delta, trace_fused_gated_delta};
 
 fn can_trace_fused_gated_delta(
     kernels: VerifyWindowGdnKernelSet<'_>,
@@ -60,15 +58,15 @@ pub(super) fn trace_gated_delta_layer(
     let rolling_state = reader.take()?;
     let recurrent_state = reader.take()?;
     let input_normalization_weight = reader.take()?;
-    let input_queries_keys_values = take_affine(reader)?;
-    let output_gate_projection = take_affine(reader)?;
-    let update_rate_projection = take_affine(reader)?;
-    let decay_interval_projection = take_affine(reader)?;
+    let input_queries_keys_values = trunk::take_affine(reader)?;
+    let output_gate_projection = trunk::take_affine(reader)?;
+    let update_rate_projection = trunk::take_affine(reader)?;
+    let decay_interval_projection = trunk::take_affine(reader)?;
     let convolution_weight = reader.take()?;
     let decay_interval_bias = reader.take()?;
     let decay_rate_logarithm = reader.take()?;
     let normalization_weight = reader.take()?;
-    let output_projection = take_affine(reader)?;
+    let output_projection = trunk::take_affine(reader)?;
 
     let query_normalization_scale = ops::builder_input(*input_vector, 3)?;
     let key_normalization_scale = ops::builder_input(*input_vector, 4)?;
@@ -79,13 +77,13 @@ pub(super) fn trace_gated_delta_layer(
         &input_normalization_weight,
         epsilon,
     )?;
-    let mixed_queries_keys_values = quantized_matmul(
+    let mixed_queries_keys_values = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.input_queries_keys_values,
         &normalized_input,
         &input_queries_keys_values,
     )?;
-    let output_gate_logits = quantized_matmul(
+    let output_gate_logits = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.output_gate,
         &normalized_input,
@@ -96,13 +94,13 @@ pub(super) fn trace_gated_delta_layer(
         &output_gate_logits,
         &[1, row_count, linear_value_head_count, linear_head_dimension],
     )?;
-    let update_logits = quantized_matmul(
+    let update_logits = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.update_rate,
         &normalized_input,
         &update_rate_projection,
     )?;
-    let decay_inputs = quantized_matmul(
+    let decay_inputs = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.decay_interval,
         &normalized_input,
@@ -131,7 +129,7 @@ pub(super) fn trace_gated_delta_layer(
         &mixed_queries_keys_values,
         &recurrent_state,
     ) {
-        trace_fused_gated_delta(
+        recurrence::trace_fused_gated_delta(
             gpu_stream,
             gdn_kernels,
             geometry,
@@ -146,7 +144,7 @@ pub(super) fn trace_gated_delta_layer(
             &decays,
         )?
     } else {
-        trace_composed_gated_delta(
+        recurrence::trace_composed_gated_delta(
             gpu_stream,
             geometry,
             &convolution_input,
@@ -174,14 +172,14 @@ pub(super) fn trace_gated_delta_layer(
         &gated_output,
         &[1, row_count, linear_value_dimension],
     )?;
-    let projected_output = quantized_matmul(
+    let projected_output = trunk::quantized_matmul(
         gpu_stream,
         layer_quantization.output_projection,
         &gated_output,
         &output_projection,
     )?;
     let attention_residual = ops::add(gpu_stream, &hidden_states, &projected_output)?;
-    let layer_output = trace_feed_forward_tail(
+    let layer_output = trunk::trace_feed_forward_tail(
         gpu_stream,
         geometry,
         reader,

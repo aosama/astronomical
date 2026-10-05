@@ -5,13 +5,13 @@ use super::artifact_test_support::{
     FROZEN_LANGUAGE_PAYLOAD_BYTES, LANGUAGE_SHARD_FILE_NAMES, frozen_test_index_bytes,
     frozen_test_index_bytes_with_language_tensor_replacement,
 };
-use crate::common::qwen3_5_moe::expected_qwen3_5_language_tensor_profiles;
+use crate::common::qwen3_5_moe;
 
 const VISION_ONLY_MODEL_SHARD_FILE_NAME: &str = "model-vision-only.safetensors";
 
 #[test]
 fn should_exclude_a_nested_vision_sidecar_from_the_executable_model_shard_inventory() {
-    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let language_tensor_profiles = qwen3_5_moe::expected_qwen3_5_language_tensor_profiles();
     let index_bytes = frozen_test_index_bytes();
 
     let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
@@ -31,7 +31,7 @@ fn should_exclude_a_nested_vision_sidecar_from_the_executable_model_shard_invent
 
 #[test]
 fn should_classify_a_root_vision_only_file_by_tensor_role_instead_of_filename() {
-    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let language_tensor_profiles = qwen3_5_moe::expected_qwen3_5_language_tensor_profiles();
     let mut index_document =
         serde_json::from_slice::<serde_json::Value>(&frozen_test_index_bytes())
             .expect("the frozen synthetic shard index should parse");
@@ -64,7 +64,7 @@ fn should_classify_a_root_vision_only_file_by_tensor_role_instead_of_filename() 
 
 #[test]
 fn should_reject_an_ornith_shard_index_with_an_unexpected_executable_language_tensor_name() {
-    let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
+    let language_tensor_profiles = qwen3_5_moe::expected_qwen3_5_language_tensor_profiles();
     let unexpected_tensor_name = "language_model.model.layers.0.linear_attn.in_proj_qkvz.weight";
     let index_bytes = frozen_test_index_bytes_with_language_tensor_replacement(
         0,

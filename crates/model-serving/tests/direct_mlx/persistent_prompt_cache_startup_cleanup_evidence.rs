@@ -6,7 +6,7 @@ use astronomical_model_serving::{
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
 };
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use crate::common::qwen3_5_moe;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 1_000_000_000;
 
@@ -217,7 +217,7 @@ fn open_store(
             global_prompt_cache_root_directory.to_path_buf(),
             global_prompt_cache_maximum_size_bytes,
         ),
-        persistent_prompt_cache_model_contract(),
+        qwen3_5_moe::persistent_prompt_cache_model_contract(),
     )
     .expect("the prompt cache should open")
 }

@@ -7,8 +7,10 @@ use std::path::Path;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::artifact_validation::TensorDeclarationOrigin;
-use crate::kernel_capability::{CustomMetalKernelFamily, worker_process_kernel_capabilities};
-use crate::qwen3_5_moe::{Qwen3_5ExpertPager, qwen3_5_moe_sorted_expert_weighted_sum_kernel};
+use crate::kernel_capability;
+use crate::kernel_capability::CustomMetalKernelFamily;
+use crate::qwen3_5_moe;
+use crate::qwen3_5_moe::Qwen3_5ExpertPager;
 use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
 };
@@ -18,7 +20,7 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
 };
-use crate::qwen3_5::multi_token_prediction::bind_optional_weights;
+use crate::qwen3_5::multi_token_prediction;
 use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
 
 impl Qwen3_5Model {
@@ -185,7 +187,7 @@ impl Qwen3_5Model {
                 };
                 let weights =
                     Qwen3_5Weights::bind_from_model_shards(&config, &shard_index, model_shards)?;
-                let mtp_weights = bind_optional_weights(
+                let mtp_weights = multi_token_prediction::bind_optional_weights(
                     bind_mtp_weights,
                     &mtp_artifact_capability,
                     &config,
@@ -261,19 +263,20 @@ impl Qwen3_5Model {
                 // process retains the measured sorted-reduction kernel. A
                 // demoted kernel leaves None and every MoE forward takes the
                 // unsorted MLX route for the worker's lifetime.
-                let sorted_expert_weighted_sum_kernel = if worker_process_kernel_capabilities(
-                    &runtime,
-                    performance_attribution,
-                )
-                .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
-                {
-                    Some(qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
-                } else {
-                    tracing::info!(
-                        "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
-                    );
-                    None
-                };
+                let sorted_expert_weighted_sum_kernel =
+                    if kernel_capability::worker_process_kernel_capabilities(
+                        &runtime,
+                        performance_attribution,
+                    )
+                    .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+                    {
+                        Some(qwen3_5_moe::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
+                    } else {
+                        tracing::info!(
+                            "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
+                        );
+                        None
+                    };
                 let retained_experts = RefCell::new(crate::qwen3_5_moe::RetainedExpertCache::new(
                     expert_pager.layer_count(),
                 ));
@@ -316,7 +319,7 @@ impl Qwen3_5Model {
         // demoted kernel is None and the gated-delta dispatch falls back to
         // the ops-based public MLX route for the worker's lifetime — the
         // checkpoint fallback preserves the prompt-cache boundary contract.
-        let gated_delta_kernel = if worker_process_kernel_capabilities(
+        let gated_delta_kernel = if kernel_capability::worker_process_kernel_capabilities(
             &runtime,
             performance_attribution,
         )
@@ -329,19 +332,23 @@ impl Qwen3_5Model {
             );
             None
         };
-        let gated_delta_checkpoint_kernel = if worker_process_kernel_capabilities(
-            &runtime,
-            performance_attribution,
-        )
-        .is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint)
-        {
-            Some(super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel()?)
-        } else {
-            tracing::info!(
-                "gated-delta checkpoint kernel demoted to the MLX ops fallback for this worker process"
-            );
-            None
-        };
+        let gated_delta_checkpoint_kernel =
+            if kernel_capability::worker_process_kernel_capabilities(
+                &runtime,
+                performance_attribution,
+            )
+            .is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint)
+            {
+                Some(
+                    super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel(
+                    )?,
+                )
+            } else {
+                tracing::info!(
+                    "gated-delta checkpoint kernel demoted to the MLX ops fallback for this worker process"
+                );
+                None
+            };
         // The fused decode prework kernel removes roughly thirteen
         // launch-bound dispatches per gated-delta layer at decode shapes.
         // `ASTRONOMICAL_GDN_DECODE_PREWORK=0` forces the composed fallback so
@@ -355,8 +362,11 @@ impl Qwen3_5Model {
                 "fused decode prework kernel disabled by environment for this worker process"
             );
             None
-        } else if worker_process_kernel_capabilities(&runtime, performance_attribution)
-            .is_custom_kernel_supported(CustomMetalKernelFamily::GdnDecodePrework)
+        } else if kernel_capability::worker_process_kernel_capabilities(
+            &runtime,
+            performance_attribution,
+        )
+        .is_custom_kernel_supported(CustomMetalKernelFamily::GdnDecodePrework)
         {
             Some(
                 super::gdn_decode_prework_kernel::qwen3_5_gdn_decode_prework_kernel(
@@ -373,28 +383,31 @@ impl Qwen3_5Model {
         // a GPU may retain one while demoting the other. A demoted kernel is
         // None and the projection dispatch falls back to the token-local MLX
         // route for the worker's lifetime.
-        let target_verification_quantized_linear_kernel = if worker_process_kernel_capabilities(
-            &runtime,
-            performance_attribution,
-        )
-        .is_custom_kernel_supported(CustomMetalKernelFamily::TargetVerificationQuantizedLinear)
-        {
-            Some(
+        let target_verification_quantized_linear_kernel =
+            if kernel_capability::worker_process_kernel_capabilities(
+                &runtime,
+                performance_attribution,
+            )
+            .is_custom_kernel_supported(CustomMetalKernelFamily::TargetVerificationQuantizedLinear)
+            {
+                Some(
                 super::target_verification_quantized_linear::target_verification_quantized_linear_kernel(
                 )?,
             )
-        } else {
-            tracing::info!(
-                "target-verification quantized-linear kernel demoted to the MLX fallback for this worker process"
-            );
-            None
-        };
+            } else {
+                tracing::info!(
+                    "target-verification quantized-linear kernel demoted to the MLX fallback for this worker process"
+                );
+                None
+            };
         let target_verification_four_row_quantized_linear_kernel =
-            if worker_process_kernel_capabilities(&runtime, performance_attribution)
-                .is_custom_kernel_supported(
-                    CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
-                )
-            {
+            if kernel_capability::worker_process_kernel_capabilities(
+                &runtime,
+                performance_attribution,
+            )
+            .is_custom_kernel_supported(
+                CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
+            ) {
                 Some(
                 super::target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel(
                 )?,

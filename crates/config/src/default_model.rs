@@ -8,7 +8,7 @@ use crate::config_file::{
     parse_and_validate_v1, read_existing_config_file_bytes, validate_user_config_file,
     write_adjacent_schema, write_config_file_bytes_atomically,
 };
-use crate::duplicate_key_json::parse_json_rejecting_duplicates;
+use crate::duplicate_key_json;
 use crate::legacy_config_migration::{
     prepare_legacy_config_migration, preserve_legacy_config_backup,
 };
@@ -47,8 +47,10 @@ pub fn prepare_default_model_update(
     let prior_config_bytes = read_existing_config_file_bytes(&config_file_path)?;
     let mut candidate_user_config_file = match prior_config_bytes.as_deref() {
         Some(config_file_bytes) => {
-            let config_json =
-                parse_json_rejecting_duplicates(&config_file_path, config_file_bytes)?;
+            let config_json = duplicate_key_json::parse_json_rejecting_duplicates(
+                &config_file_path,
+                config_file_bytes,
+            )?;
             if config_json.get("schema_version").is_none() {
                 prepare_legacy_config_migration(&config_file_path, config_json)?
             } else {
@@ -83,8 +85,10 @@ pub fn commit_default_model_update(
         return Err(AstronomicalConfigError::ConfigChangedDuringUpdate);
     }
     if let Some(prior_config_bytes) = config_update.prior_config_bytes.as_deref() {
-        let prior_config_json =
-            parse_json_rejecting_duplicates(&config_file_path, prior_config_bytes)?;
+        let prior_config_json = duplicate_key_json::parse_json_rejecting_duplicates(
+            &config_file_path,
+            prior_config_bytes,
+        )?;
         if prior_config_json.get("schema_version").is_none() {
             preserve_legacy_config_backup(&config_file_path, prior_config_bytes)?;
         }

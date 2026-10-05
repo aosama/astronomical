@@ -18,12 +18,12 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use super::output_combination::combine_sparse_and_shared_experts;
+use super::output_combination;
 use super::routing::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_unsorted_expert_weighted_sum,
 };
-use crate::sparse_experts::should_use_sorted_expert_reduction;
+use crate::sparse_experts;
 
 impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
@@ -84,7 +84,7 @@ impl Qwen3_5Model {
         // and the inverse order later restores router-score alignment.
         let expanded_states = self.runtime.expand_dims(hidden_states, -2)?;
         let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let sorted_expert_assignments = if should_use_sorted_expert_reduction(
+        let sorted_expert_assignments = if sparse_experts::should_use_sorted_expert_reduction(
             selected_expert_indices.element_count(),
             self.sorted_expert_weighted_sum_kernel.is_some(),
         ) {
@@ -393,7 +393,7 @@ impl Qwen3_5Model {
                     &shared_gate_logits,
                 )?)
         } else {
-            Ok(combine_sparse_and_shared_experts(
+            Ok(output_combination::combine_sparse_and_shared_experts(
                 &self.runtime,
                 sparse_expert_output,
                 &shared_output,

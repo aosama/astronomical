@@ -1,9 +1,9 @@
-use crate::common::runtime_test_support::{assert_f32_close, runtime};
+use crate::common::runtime_test_support;
 use astronomical_mlx_c_rust::MlxDtype;
 
 #[test]
 fn should_run_flux_vae_asymmetric_padding_and_channel_last_convolution() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let image = runtime
         .array_from_f32(&[1.0, 2.0, 3.0, 4.0], &[1, 2, 2, 1])
         .expect("the channel-last VAE image should be valid");
@@ -30,7 +30,7 @@ fn should_run_flux_vae_asymmetric_padding_and_channel_last_convolution() {
 
 #[test]
 fn should_generate_repeatable_and_seed_distinct_request_local_flux_noise() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let request_key = runtime
         .random_key(42)
         .expect("the request seed should create an MLX key");
@@ -75,7 +75,7 @@ fn should_generate_repeatable_and_seed_distinct_request_local_flux_noise() {
 
 #[test]
 fn should_apply_flux_normalization_and_elementwise_bounds() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let hidden_states = runtime
         .array_from_f32(&[1.0, 3.0], &[1, 2])
         .expect("the hidden states should be valid");
@@ -95,7 +95,7 @@ fn should_apply_flux_normalization_and_elementwise_bounds() {
         .full(&[2, 2], 7.0, MlxDtype::Float32)
         .expect("full should build a valid graph");
 
-    assert_f32_close(
+    runtime_test_support::assert_f32_close(
         &normalized_states
             .to_vec_f32()
             .expect("the normalized states should evaluate"),
@@ -117,7 +117,7 @@ fn should_apply_flux_normalization_and_elementwise_bounds() {
 
 #[test]
 fn should_run_flux_fused_attention_without_exposing_score_matrices() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let queries = runtime
         .array_from_f32(&[1.0, 1.0], &[1, 1, 2, 1])
         .expect("the FLUX query tensor should be valid");
@@ -143,7 +143,7 @@ fn should_run_flux_fused_attention_without_exposing_score_matrices() {
 
 #[test]
 fn should_transfer_evaluated_flux_pixels_as_uint8_without_scalar_reads() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let float_pixels = runtime
         .array_from_f32(&[0.0, 127.0, 255.0, 64.0], &[2, 2])
         .expect("the float pixels should be valid");
@@ -173,7 +173,7 @@ fn should_transfer_evaluated_flux_pixels_as_uint8_without_scalar_reads() {
 
 #[test]
 fn should_reject_invalid_flux_operation_arguments_before_building_graphs() {
-    let runtime = runtime();
+    let runtime = runtime_test_support::runtime();
     let request_key = runtime
         .random_key(7)
         .expect("the request seed should create an MLX key");

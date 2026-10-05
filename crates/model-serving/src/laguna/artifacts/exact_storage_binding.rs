@@ -7,7 +7,7 @@ use super::canonical_tensor_contract::{
     LagunaCanonicalSourceLayout, LagunaCanonicalTensorAssemblyKind, LagunaTensorSourceDescriptor,
     LagunaTensorSourceRole, LocatedRawTensorDescriptor,
 };
-use super::direct_storage_validation::validate_source_dtypes;
+use super::direct_storage_validation;
 use super::exact_storage_validation::{
     validate_block_scales, validate_declared_block_geometry, validate_exact_sources,
     validate_group_scales, validate_last_axis_divided, validate_last_axis_divided_with_dtypes,
@@ -134,7 +134,8 @@ fn bind_symmetric(
             Dtype::U32
         }
         LagunaTensorComponent::Scales | LagunaTensorComponent::Biases => {
-            let source_dtype = validate_source_dtypes(tensor_id, None, &sources)?;
+            let source_dtype =
+                direct_storage_validation::validate_source_dtypes(tensor_id, None, &sources)?;
             validate_group_scales(tensor_id, &source_matrix_shape, 32, source_dtype, &sources)?;
             source_dtype
         }

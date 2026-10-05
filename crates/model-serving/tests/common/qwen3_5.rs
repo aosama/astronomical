@@ -1,11 +1,11 @@
 use astronomical_model_serving::Qwen3_5Config;
 use serde_json::{Value, json};
 
-use super::qwen3_5_moe::frozen_ornith_1_0_optiq_config_bytes;
+use super::qwen3_5_moe;
 
 pub(crate) fn frozen_dense_qwen3_6_config() -> Qwen3_5Config {
     let mut dense_config_document =
-        serde_json::from_slice::<Value>(&frozen_ornith_1_0_optiq_config_bytes())
+        serde_json::from_slice::<Value>(&qwen3_5_moe::frozen_ornith_1_0_optiq_config_bytes())
             .expect("the frozen OptiQ config should decode as JSON");
     dense_config_document["architectures"] = json!(["Qwen3_5ForConditionalGeneration"]);
     dense_config_document["model_type"] = json!("qwen3_5");

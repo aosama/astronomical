@@ -7,9 +7,9 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use super::active_generation::LagunaPrefillRequestCheckpoint;
 use super::execution::LagunaInferenceExecution;
-use super::memory::complete_laguna_forward_memory_observation;
-use crate::laguna::{LagunaModel, laguna_decoder_cache_layout};
-use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
+use super::memory;
+use crate::laguna;
+use crate::laguna::LagunaModel;
 use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, MlxRamBudget, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
@@ -78,7 +78,7 @@ impl LagunaInferenceExecution {
         let initial_chunk_end_token_position_exclusive = persistent_prompt_cache
             .as_ref()
             .map(|store| {
-                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+                crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
                     chunk_start_token_position,
                     requested_chunk_end_token_position_exclusive,
                     store.model_contract.block_token_count(),
@@ -356,7 +356,7 @@ fn forward_one_prompt_chunk(
             }
         })?;
     }
-    complete_laguna_forward_memory_observation(
+    memory::complete_laguna_forward_memory_observation(
         runtime,
         model,
         adaptive_ram_growth_guard,
@@ -391,7 +391,7 @@ fn prompt_cache_publication_workspace_bytes(
         return Ok(0);
     }
     let decoder_cache_layout =
-        laguna_decoder_cache_layout(model.contract()).map_err(|layout_error| {
+        laguna::laguna_decoder_cache_layout(model.contract()).map_err(|layout_error| {
             InferenceEngineError::InvalidRequest {
                 reason: format!(
                     "Laguna prompt-cache publication geometry is invalid: {layout_error}"

@@ -15,7 +15,7 @@ use super::super::chat::openai_rest::{
     get_endpoint, launch_serving_rest_server_for_model, post_chat_completion,
     stop_serving_rest_server,
 };
-use crate::support::isolated_development_home_from_user_config;
+use crate::support;
 
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const OUTPUT_TOKEN_COUNT: u16 = 256;
@@ -42,7 +42,7 @@ async fn run_mtp_ab_journey(
     adjust_isolated_home_config: impl Fn(&std::path::Path),
 ) {
     let model_directory = crate::support::configured_installed_model_directory_by_id(MTP_MODEL_ID);
-    let isolated_development_home = isolated_development_home_from_user_config();
+    let isolated_development_home = support::isolated_development_home_from_user_config();
     adjust_isolated_home_config(isolated_development_home.path());
     // A persistent log directory keeps the worker's attribution records alive
     // after the journey ends, so MTP draft/accept counters can be inspected.

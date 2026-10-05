@@ -19,9 +19,9 @@ use tokenizers::Tokenizer;
 
 use crate::modernbert::artifact::ModernBertArtifact;
 use crate::modernbert::configuration::ModernBertConfiguration;
-use crate::modernbert::forward::embed_token_ids;
-use crate::modernbert::memory_utilization::compose_modernbert_memory_ceiling_utilization;
-use crate::modernbert::tokenizer::encode_embedding_input;
+use crate::modernbert::forward;
+use crate::modernbert::memory_utilization;
+use crate::modernbert::tokenizer;
 use crate::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
@@ -110,12 +110,14 @@ impl ModernBertEmbeddingEngine {
         active_memory_bytes: u64,
         peak_memory_bytes: u64,
     ) -> Option<MemoryCeilingUtilization> {
-        Some(compose_modernbert_memory_ceiling_utilization(
-            self.effective_mlx_memory_ceiling_bytes as u64,
-            active_memory_bytes,
-            self.weights_payload_bytes,
-            peak_memory_bytes.saturating_sub(active_memory_bytes),
-        ))
+        Some(
+            memory_utilization::compose_modernbert_memory_ceiling_utilization(
+                self.effective_mlx_memory_ceiling_bytes as u64,
+                active_memory_bytes,
+                self.weights_payload_bytes,
+                peak_memory_bytes.saturating_sub(active_memory_bytes),
+            ),
+        )
     }
 
     fn memory_telemetry_from_snapshot(
@@ -238,7 +240,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
             |_performance_attribution| {
                 let mut encoded_inputs = Vec::with_capacity(embeddings_command.inputs.len());
                 for input_text in &embeddings_command.inputs {
-                    encoded_inputs.push(encode_embedding_input(
+                    encoded_inputs.push(tokenizer::encode_embedding_input(
                         &loaded_state.tokenizer,
                         &loaded_state.configuration,
                         input_text,
@@ -253,7 +255,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
                 let mut output_embeddings = Vec::with_capacity(encoded_inputs.len());
                 let mut input_token_counts = Vec::with_capacity(encoded_inputs.len());
                 for encoded_input in &encoded_inputs {
-                    output_embeddings.push(embed_token_ids(
+                    output_embeddings.push(forward::embed_token_ids(
                         &loaded_state.runtime,
                         &loaded_state.tensors,
                         &loaded_state.configuration,

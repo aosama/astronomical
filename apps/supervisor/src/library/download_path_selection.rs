@@ -1,6 +1,6 @@
 //! Validated release-authored selection of executable files from an immutable repository tree.
 
-use super::hugging_face_hub_bounds::is_canonical_ascii_path;
+use super::hugging_face_hub_bounds;
 
 const MAXIMUM_INCLUDED_PATH_COUNT: usize = 64;
 const MAXIMUM_INCLUDED_PATH_BYTES: usize = 1_024;
@@ -68,7 +68,10 @@ fn is_valid_included_path(included_path: &str) -> bool {
     if path_without_directory_marker.is_empty() || path_without_directory_marker.ends_with('/') {
         return false;
     }
-    is_canonical_ascii_path(path_without_directory_marker, MAXIMUM_INCLUDED_PATH_BYTES)
+    hugging_face_hub_bounds::is_canonical_ascii_path(
+        path_without_directory_marker,
+        MAXIMUM_INCLUDED_PATH_BYTES,
+    )
 }
 
 fn selectors_overlap(first_path: &str, second_path: &str) -> bool {

@@ -4,17 +4,16 @@ use crate::{
     Qwen3_5ThinkingBudgetState,
 };
 
-use super::super::model::memory_admission::invalid_request_error;
-use super::super::resolve_sampling_seed;
-use super::super::text::sampler::{random_state_for_seed, validate_sampled_strategy};
-use super::super::{RequestDecoderStateStack, plan_qwen3_5_visual_embedding_suffix};
+use super::super::RequestDecoderStateStack;
+use super::super::model::memory_admission;
+use super::super::text::sampler;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::persistent_prompt_cache_visual_identity::{
     Qwen3_5PersistentPromptCacheVisualIdentity, Qwen3_5PersistentPromptCacheVisualIdentityInput,
 };
-use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::memory::MtpDraftDepth;
-use crate::qwen3_5::multi_token_prediction::create_optional_prediction_session;
+use crate::qwen3_5::multi_token_prediction;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 impl Qwen3_5EngineState {
@@ -54,14 +53,14 @@ impl Qwen3_5EngineState {
             natural_reasoning_end_token_ids,
         )
         .map_err(|source| {
-            invalid_request_error(format!(
+            memory_admission::invalid_request_error(format!(
                 "invalid Qwen3.5 thinking-budget configuration: {source}"
             ))
         })?;
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         model.clear_phase_aware_expert_residency_plan();
         let decoder_cache_layout = model.decoder_cache_layout().clone();
         let model_has_optional_prediction_head = model.mtp_weights();
@@ -83,19 +82,28 @@ impl Qwen3_5EngineState {
                     top_p_thousandths,
                     seed,
                 } => {
-                    validate_sampled_strategy(temperature_thousandths, top_k, top_p_thousandths)?;
+                    sampler::validate_sampled_strategy(
+                        temperature_thousandths,
+                        top_k,
+                        top_p_thousandths,
+                    )?;
                     let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
-                    Some(random_state_for_seed(
+                    Some(sampler::random_state_for_seed(
                         model,
-                        resolve_sampling_seed(seed, current_time_millis_since_unix_epoch),
+                        super::super::resolve_sampling_seed(
+                            seed,
+                            current_time_millis_since_unix_epoch,
+                        ),
                     )?)
                 }
             };
             let prompt_token_ids = inference_request.input_token_ids().to_vec();
             let image_pad_token_id = inference_request.image_pad_token_id().ok_or_else(|| {
-                invalid_request_error("generation request is missing the image-pad token ID")
+                memory_admission::invalid_request_error(
+                    "generation request is missing the image-pad token ID",
+                )
             })?;
             let prompt_image_pad_token_count = prompt_token_ids
                 .iter()
@@ -128,23 +136,23 @@ impl Qwen3_5EngineState {
                 if let Some(visual_embedding_values) = inference_request.visual_embeddings() {
                     let visual_embedding_row_count = inference_request.visual_embedding_row_count();
                     if visual_embedding_values.is_empty() || visual_embedding_row_count == 0 {
-                        return Err(fatal_engine_error(
+                        return Err(super::fatal_engine_error(
                             "image request has empty visual embeddings",
                         ));
                     }
                     if prompt_image_pad_token_count != visual_embedding_row_count {
-                        return Err(invalid_request_error(
+                        return Err(memory_admission::invalid_request_error(
                             "image pad token count does not match visual embedding row count",
                         ));
                     }
                     let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
                     let visual_embedding_hidden_size = self
                         .persistent_visual_embedding_model_contract
                         .as_ref()
                         .ok_or_else(|| {
-                            fatal_engine_error(
+                            super::fatal_engine_error(
                                 "Qwen3.5 persistent visual embedding model contract is not loaded",
                             )
                         })?
@@ -152,7 +160,7 @@ impl Qwen3_5EngineState {
                     if visual_embedding_values.len()
                         != visual_embedding_row_count.saturating_mul(visual_embedding_hidden_size)
                     {
-                        return Err(fatal_engine_error(
+                        return Err(super::fatal_engine_error(
                             "visual embedding buffer does not match the expected hidden size",
                         ));
                     }
@@ -163,12 +171,12 @@ impl Qwen3_5EngineState {
                                 visual_embedding_values,
                                 &[
                                     i32::try_from(visual_embedding_row_count).map_err(|_| {
-                                        fatal_engine_error(
+                                        super::fatal_engine_error(
                                             "visual embedding row count exceeds the i32 range",
                                         )
                                     })?,
                                     i32::try_from(visual_embedding_hidden_size).map_err(|_| {
-                                        fatal_engine_error(
+                                        super::fatal_engine_error(
                                             "visual embedding hidden size exceeds the i32 range",
                                         )
                                     })?,
@@ -241,14 +249,14 @@ impl Qwen3_5EngineState {
             {
                 Some(precomputed_visual_embeddings)
             } else if has_processed_visual_images {
-                let visual_embedding_suffix_plan = plan_qwen3_5_visual_embedding_suffix(
+                let visual_embedding_suffix_plan = super::super::plan_qwen3_5_visual_embedding_suffix(
                         &prompt_token_ids,
                         prefill_cursor,
                         &ordered_image_visual_embedding_row_counts,
                         image_pad_token_id,
                     )
                     .map_err(|visual_embedding_suffix_plan_error| {
-                        invalid_request_error(format!(
+                        memory_admission::invalid_request_error(format!(
                             "visual embedding suffix planning failed: {visual_embedding_suffix_plan_error}"
                         ))
                     })?;
@@ -265,24 +273,27 @@ impl Qwen3_5EngineState {
                 .model
                 .as_ref()
                 .is_some_and(|loaded_model| loaded_model.sparse_experts_are_paged());
-            let optional_prediction_session = create_optional_prediction_session(
-                self.mtp_enabled,
-                self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active
-                    && !inference_request.has_structured_generation(),
-                model_has_optional_prediction_head,
-                has_precomputed_visual_embeddings,
-                has_processed_visual_images,
-                sparse_experts_are_paged,
-                prompt_token_ids.len(),
-                persistent_prompt_cache_token_count,
-                self.full_attention_kv_state_growth_tokens,
-                self.mtp_depth_status
-                    .effective_execution_draft_depth
-                    .map(MtpDraftDepth::new)
-                    .transpose()
-                    .map_err(|_| fatal_engine_error("loaded MTP depth is outside 1 through 3"))?,
-            )
-            .map_err(qwen3_5_runtime_error)?;
+            let optional_prediction_session =
+                multi_token_prediction::create_optional_prediction_session(
+                    self.mtp_enabled,
+                    self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active
+                        && !inference_request.has_structured_generation(),
+                    model_has_optional_prediction_head,
+                    has_precomputed_visual_embeddings,
+                    has_processed_visual_images,
+                    sparse_experts_are_paged,
+                    prompt_token_ids.len(),
+                    persistent_prompt_cache_token_count,
+                    self.full_attention_kv_state_growth_tokens,
+                    self.mtp_depth_status
+                        .effective_execution_draft_depth
+                        .map(MtpDraftDepth::new)
+                        .transpose()
+                        .map_err(|_| {
+                            super::fatal_engine_error("loaded MTP depth is outside 1 through 3")
+                        })?,
+                )
+                .map_err(qwen3_5_runtime_error)?;
             let sampling_selects_highest_logit =
                 matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
             let effective_temperature_thousandths = match sampling_strategy {
@@ -351,13 +362,17 @@ impl Qwen3_5EngineState {
                 generation_preparation_announced: false,
                 structured_generation: inference_request.take_structured_generation(),
             });
-            let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor)
-                .map_err(|_| fatal_engine_error("restored prompt prefix exceeds the u32 range"))?;
+            let restored_prompt_prefix_token_count =
+                u32::try_from(prefill_cursor).map_err(|_| {
+                    super::fatal_engine_error("restored prompt prefix exceeds the u32 range")
+                })?;
             Ok(EngineGenerationStart::with_expert_memory_mode(
                 restored_prompt_prefix_token_count,
                 self.model
                     .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+                    .ok_or_else(|| {
+                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?
                     .expert_memory_mode(),
             )
             .with_restored_prompt_prefix_token_count(restored_prompt_prefix_token_count)

@@ -19,7 +19,7 @@ use crate::memory::{
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
 use crate::qwen3_5::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
-use crate::qwen3_5_moe::expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
+use crate::qwen3_5_moe::expert_paging::quantized_expert_layer_plan;
 
 /// Why disk-only RAM measurements could not be composed for this artifact.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -157,7 +157,7 @@ fn expert_layer_plans_from_validated_artifact(
     let mut safetensors_header_by_source_file = HashMap::new();
     for decoder_layer_index in 0..decoder_layer_count {
         let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
-        let layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+        let layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
             model_directory,
             &tensor_name_to_shard_file_name,
             &stored_tensor_name_by_canonical_name,
@@ -169,7 +169,7 @@ fn expert_layer_plans_from_validated_artifact(
         layer_plans.push(layer_plan);
     }
     if include_mtp_sparse_expert_layer {
-        let mtp_layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+        let mtp_layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
             model_directory,
             &tensor_name_to_shard_file_name,
             &stored_tensor_name_by_canonical_name,

@@ -8,7 +8,7 @@ use crate::k2_horizon_mova::expert_geometry::K2HorizonMoVASparseLayerExpertPaylo
 
 use super::affine::K2HorizonMoVAAffineLinear;
 use super::error::K2HorizonMoVAExecutionError;
-use super::weight_binding::load_weights;
+use super::weight_binding;
 use astronomical_mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl K2HorizonMoVAWeights {
         validated_artifact: &ValidatedK2HorizonMoVAArtifact,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, K2HorizonMoVAExecutionError> {
-        load_weights(runtime, validated_artifact, performance_attribution)
+        weight_binding::load_weights(runtime, validated_artifact, performance_attribution)
     }
 }
 

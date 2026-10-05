@@ -11,8 +11,8 @@ use std::path::{Component, Path};
 
 use thiserror::Error;
 
-use super::bounded_artifact_file::{read_bounded_nonempty_file, read_json};
-use super::classified_artifacts::{immutable_file_revision, immutable_model_provenance};
+use super::bounded_artifact_file;
+use super::classified_artifacts;
 use super::qwen_image_21_documents::{
     ComponentSafetensorsIndex, PipelineClass, PipelineIndex, QwenImage21SchedulerGeometry,
     QwenImage21TextEncoderGeometry, QwenImage21TransformerGeometry, QwenImage21VaeGeometry,
@@ -113,11 +113,13 @@ pub fn verify_model_directory(
     validate_processor_files(model_directory)?;
     validate_license_provenance(model_directory)?;
     let model_size_bytes = measure_reviewed_weight_bytes(model_directory)?;
-    let library_provenance = immutable_model_provenance(model_directory);
+    let library_provenance = classified_artifacts::immutable_model_provenance(model_directory);
     let revision = library_provenance
         .as_ref()
         .map(|(_, recorded_revision)| recorded_revision.clone())
-        .or_else(|| immutable_file_revision(model_directory, "model_index.json"))
+        .or_else(|| {
+            classified_artifacts::immutable_file_revision(model_directory, "model_index.json")
+        })
         .ok_or(QwenImage21DirectoryVerificationError::MissingRevision)?;
 
     Ok(QwenImage21DirectoryEvidence {
@@ -155,7 +157,7 @@ fn is_reviewed_pipeline(pipeline_index: &PipelineIndex) -> bool {
 fn validate_pipeline_index(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let pipeline_index: PipelineIndex = read_json(
+    let pipeline_index: PipelineIndex = bounded_artifact_file::read_json(
         &model_directory.join("model_index.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -168,7 +170,7 @@ fn validate_pipeline_index(
 fn validate_transformer_geometry(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let geometry: QwenImage21TransformerGeometry = read_json(
+    let geometry: QwenImage21TransformerGeometry = bounded_artifact_file::read_json(
         &model_directory.join("transformer/config.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -196,7 +198,7 @@ fn validate_transformer_geometry(
 fn validate_text_encoder_geometry(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let geometry: QwenImage21TextEncoderGeometry = read_json(
+    let geometry: QwenImage21TextEncoderGeometry = bounded_artifact_file::read_json(
         &model_directory.join("text_encoder/config.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -236,9 +238,11 @@ fn validate_text_encoder_geometry(
 fn validate_vae_geometry(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let geometry: QwenImage21VaeGeometry =
-        read_json(&model_directory.join("vae/config.json"), MAXIMUM_JSON_BYTES)
-            .map_err(|_| QwenImage21DirectoryVerificationError::InvalidVaeConfiguration)?;
+    let geometry: QwenImage21VaeGeometry = bounded_artifact_file::read_json(
+        &model_directory.join("vae/config.json"),
+        MAXIMUM_JSON_BYTES,
+    )
+    .map_err(|_| QwenImage21DirectoryVerificationError::InvalidVaeConfiguration)?;
     (geometry.class_name == "AutoencoderKLQwenImage21"
         && geometry.attn_scales.is_empty()
         && geometry.base_dim == 96
@@ -268,7 +272,7 @@ fn validate_vae_geometry(
 fn validate_scheduler_geometry(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let geometry: QwenImage21SchedulerGeometry = read_json(
+    let geometry: QwenImage21SchedulerGeometry = bounded_artifact_file::read_json(
         &model_directory.join("scheduler/scheduler_config.json"),
         MAXIMUM_JSON_BYTES,
     )
@@ -296,12 +300,13 @@ fn validate_processor_files(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
     for processor_file in REQUIRED_PROCESSOR_FILES {
-        read_bounded_nonempty_file(&model_directory.join(processor_file), MAXIMUM_SIDECAR_BYTES)
-            .map_err(
-                |_| QwenImage21DirectoryVerificationError::MissingOrInvalidProcessorFile {
-                    processor_file,
-                },
-            )?;
+        bounded_artifact_file::read_bounded_nonempty_file(
+            &model_directory.join(processor_file),
+            MAXIMUM_SIDECAR_BYTES,
+        )
+        .map_err(|_| {
+            QwenImage21DirectoryVerificationError::MissingOrInvalidProcessorFile { processor_file }
+        })?;
     }
     Ok(())
 }
@@ -309,9 +314,11 @@ fn validate_processor_files(
 fn validate_license_provenance(
     model_directory: &Path,
 ) -> Result<(), QwenImage21DirectoryVerificationError> {
-    let readme_bytes =
-        read_bounded_nonempty_file(&model_directory.join("README.md"), MAXIMUM_README_BYTES)
-            .map_err(|_| QwenImage21DirectoryVerificationError::InvalidLicenseProvenance)?;
+    let readme_bytes = bounded_artifact_file::read_bounded_nonempty_file(
+        &model_directory.join("README.md"),
+        MAXIMUM_README_BYTES,
+    )
+    .map_err(|_| QwenImage21DirectoryVerificationError::InvalidLicenseProvenance)?;
     let readme = std::str::from_utf8(&readme_bytes)
         .map_err(|_| QwenImage21DirectoryVerificationError::InvalidLicenseProvenance)?;
     (has_front_matter_value(readme, "license", "other")
@@ -361,8 +368,8 @@ fn measure_component_weight_bytes(
 ) -> Result<u64, QwenImage21DirectoryVerificationError> {
     let component_path = model_directory.join(component_directory);
     let index_path = component_path.join("model.safetensors.index.json");
-    let index: ComponentSafetensorsIndex = read_json(&index_path, MAXIMUM_COMPONENT_INDEX_BYTES)
-        .map_err(
+    let index: ComponentSafetensorsIndex =
+        bounded_artifact_file::read_json(&index_path, MAXIMUM_COMPONENT_INDEX_BYTES).map_err(
             |_| QwenImage21DirectoryVerificationError::InvalidComponentWeightIndex {
                 component: component_error_name,
             },

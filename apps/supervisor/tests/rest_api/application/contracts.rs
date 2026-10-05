@@ -10,14 +10,20 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use super::support::{extract_tool_call_id, get_status, post_chat, post_chat_with_message};
+use super::support;
 use crate::common::{MODEL_ID, ScriptedExecutor};
 
 #[tokio::test]
 async fn should_report_health_readiness_and_the_loaded_model() {
     let application = build_application(ScriptedExecutor::ready(Vec::new()));
-    assert_eq!(get_status(&application, "/health").await, StatusCode::OK);
-    assert_eq!(get_status(&application, "/ready").await, StatusCode::OK);
+    assert_eq!(
+        support::get_status(&application, "/health").await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        support::get_status(&application, "/ready").await,
+        StatusCode::OK
+    );
 
     let models_response = application
         .oneshot(
@@ -51,7 +57,7 @@ async fn should_stream_openai_chat_outputs_and_done() {
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
-    let response_body = post_chat(application).await;
+    let response_body = support::post_chat(application).await;
 
     assert!(response_body.contains(r#""reasoning_content":"inspect first""#));
     assert!(response_body.contains(r#""content":"done""#));
@@ -82,7 +88,7 @@ async fn should_keep_the_openai_stream_open_after_internal_prefill_progress() {
         },
     ]));
 
-    let response_body = post_chat(application).await;
+    let response_body = support::post_chat(application).await;
 
     assert!(response_body.contains(r#""content":"still connected""#));
     assert!(response_body.contains(r#""finish_reason":"stop""#));
@@ -102,7 +108,7 @@ async fn should_accept_a_streaming_chat_request_with_one_large_user_message() {
     ]));
     let large_user_message = "x".repeat(128 * 1024);
 
-    let response_body = post_chat_with_message(application, &large_user_message).await;
+    let response_body = support::post_chat_with_message(application, &large_user_message).await;
 
     assert!(response_body.contains(r#""finish_reason":"stop""#));
     assert!(response_body.ends_with("data: [DONE]\n\n"));
@@ -120,7 +126,7 @@ async fn should_timestamp_openai_chat_chunks_with_current_unix_time() {
         },
     ]));
 
-    let response_body = post_chat(application).await;
+    let response_body = support::post_chat(application).await;
 
     assert!(!response_body.contains(r#""created":0"#));
 }
@@ -181,7 +187,7 @@ async fn should_emit_meaningful_openai_errors_for_each_stream_failure() {
 
     for (stream_failure, expected_code, expected_message) in failure_cases {
         let application = build_application(ScriptedExecutor::ready(vec![stream_failure]));
-        let response_body = post_chat(application).await;
+        let response_body = support::post_chat(application).await;
 
         assert!(response_body.contains(&format!(r#""code":"{expected_code}""#)));
         assert!(response_body.contains(&format!(r#""message":"{expected_message}""#)));
@@ -199,17 +205,17 @@ async fn should_not_reuse_tool_call_ids_across_application_restarts() {
         }]
     };
 
-    let first_response = post_chat(build_application(ScriptedExecutor::ready(
+    let first_response = support::post_chat(build_application(ScriptedExecutor::ready(
         tool_call_stream(),
     )))
     .await;
-    let second_response = post_chat(build_application(ScriptedExecutor::ready(
+    let second_response = support::post_chat(build_application(ScriptedExecutor::ready(
         tool_call_stream(),
     )))
     .await;
 
-    let first_tool_call_id = extract_tool_call_id(&first_response);
-    let second_tool_call_id = extract_tool_call_id(&second_response);
+    let first_tool_call_id = support::extract_tool_call_id(&first_response);
+    let second_tool_call_id = support::extract_tool_call_id(&second_response);
     assert_ne!(first_tool_call_id, second_tool_call_id);
 }
 
@@ -231,7 +237,7 @@ async fn should_send_tool_call_arguments_with_secret_bearing_lines_unredacted_on
             reason: ChatGenerationCompletionReason::ToolCalls,
         },
     ]));
-    let response_body = post_chat(application).await;
+    let response_body = support::post_chat(application).await;
 
     assert!(
         response_body.contains("api_key=sk-secret-123"),

@@ -9,14 +9,14 @@ use astronomical_model_serving::{
     LagunaModel, PerformanceAttribution, WorkerKernelCapabilities,
 };
 
-use crate::common::direct_mlx_test_guard;
+use crate::common;
 use crate::direct_mlx::laguna::affine_moe::{
     affine_sparse_contract, bind_affine_sparse_model, test_runtime,
 };
 
 #[tokio::test]
 async fn should_produce_equal_sparse_logits_when_the_sorted_reduction_kernel_is_demoted() {
-    let _direct_mlx_guard = direct_mlx_test_guard().await;
+    let _direct_mlx_guard = common::direct_mlx_test_guard().await;
     let bounded_demotion_journey = tokio::time::timeout(Duration::from_secs(120), async {
         let runtime = test_runtime();
         // 40 prompt tokens with two experts per token produce 80 assignments,

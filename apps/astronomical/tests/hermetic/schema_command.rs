@@ -7,12 +7,12 @@ use astronomical_cli::{
     run_schema,
 };
 
-use super::test_support::parse;
+use super::test_support;
 
 fn parsed_schema(arguments: &[&str]) -> SchemaArguments {
     let mut full_arguments = vec!["schema"];
     full_arguments.extend_from_slice(arguments);
-    match parse(&full_arguments) {
+    match test_support::parse(&full_arguments) {
         Ok(CliCommand::Schema(schema_arguments)) => schema_arguments,
         other => panic!("expected schema command, got {other:?}"),
     }
@@ -99,28 +99,28 @@ fn should_apply_modifiers_to_the_preceding_property() {
 
 #[test]
 fn should_reject_schema_object_without_name() {
-    let usage_error =
-        parse(&["schema", "object", "--string", "name"]).expect_err("name is required");
+    let usage_error = test_support::parse(&["schema", "object", "--string", "name"])
+        .expect_err("name is required");
     assert!(usage_error.to_string().contains("--name"));
 }
 
 #[test]
 fn should_reject_schema_object_without_properties() {
-    let usage_error = parse(&["schema", "object", "--name", "Empty"])
+    let usage_error = test_support::parse(&["schema", "object", "--name", "Empty"])
         .expect_err("at least one property is required");
     assert!(usage_error.to_string().contains("property"));
 }
 
 #[test]
 fn should_reject_modifier_before_any_property() {
-    let usage_error = parse(&["schema", "object", "--name", "Broken", "--array"])
+    let usage_error = test_support::parse(&["schema", "object", "--name", "Broken", "--array"])
         .expect_err("no property to modify");
     assert!(usage_error.to_string().contains("--array"));
 }
 
 #[test]
 fn should_reject_duplicate_property_path() {
-    let usage_error = parse(&[
+    let usage_error = test_support::parse(&[
         "schema", "object", "--name", "Dupes", "--string", "name", "--int", "name",
     ])
     .expect_err("duplicate property");
@@ -129,7 +129,7 @@ fn should_reject_duplicate_property_path() {
 
 #[test]
 fn should_reject_unknown_schema_flag() {
-    let usage_error = parse(&[
+    let usage_error = test_support::parse(&[
         "schema", "object", "--name", "Weird", "--string", "name", "--long",
     ])
     .expect_err("unknown flag");
@@ -271,13 +271,14 @@ fn should_attach_property_descriptions() {
 
 #[test]
 fn should_reject_schema_without_object_noun() {
-    let usage_error = parse(&["schema", "property"]).expect_err("only object is supported");
+    let usage_error =
+        test_support::parse(&["schema", "property"]).expect_err("only object is supported");
     assert!(usage_error.to_string().contains("object"));
 }
 
 #[test]
 fn should_reject_leaf_property_conflicting_with_nested_path() {
-    let usage_error = parse(&[
+    let usage_error = test_support::parse(&[
         "schema",
         "object",
         "--name",

@@ -10,7 +10,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;
 use tokio::time::{Duration as TokioDuration, MissedTickBehavior, interval, timeout};
 
-use crate::common::generation_progress::await_generation_advance_with_live_progress;
+use crate::common::generation_progress;
 
 fn first_model_id() -> &'static str {
     crate::common::large_sparse_moe_model_id()
@@ -252,7 +252,7 @@ async fn run_bounded_generation(qwen3_5_engine: &mut Qwen3_5Engine, request_id: 
     generation_progress_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
     generation_progress_interval.tick().await;
     loop {
-        let generation_advance_outcome = await_generation_advance_with_live_progress(
+        let generation_advance_outcome = generation_progress::await_generation_advance_with_live_progress(
             qwen3_5_engine.decode_next_token(request_id),
             &mut generation_progress_interval,
             || eprintln!(

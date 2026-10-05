@@ -7,7 +7,7 @@ use super::canonical_tensor_contract::{
     LagunaNonExecutableMetadataDescriptor, LagunaTensorSourceRole, LocatedRawTensorDescriptor,
     resolve_sources,
 };
-use super::exact_storage_validation::validate_scalar_sources;
+use super::exact_storage_validation;
 use super::tensor_id::{
     LagunaAttentionProjection, LagunaLayerTensorRole, LagunaTensorComponent, LagunaTensorId,
 };
@@ -47,7 +47,7 @@ pub(super) fn collect_fp8_kv_cache_metadata(
                 .get(&tensor_id)
                 .ok_or(LagunaArtifactValidationError::ExpectedTensorMissing { tensor_id })?;
             let sources = resolve_sources(tensor_id, assembly, located_tensors, source_role)?;
-            validate_scalar_sources(tensor_id, Dtype::F32, &sources)?;
+            exact_storage_validation::validate_scalar_sources(tensor_id, Dtype::F32, &sources)?;
             metadata.push(LagunaNonExecutableMetadataDescriptor::new(
                 tensor_id, sources,
             ));

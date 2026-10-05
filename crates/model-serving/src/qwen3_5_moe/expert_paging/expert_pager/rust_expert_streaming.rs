@@ -14,7 +14,7 @@ use crate::expert_paging::{
     build_quantized_expert_page_manifest_from_plan, build_streaming_expert_page_manifest,
     load_quantized_expert_page,
 };
-use crate::qwen3_5_moe::expert_paging::paged_expert_weights::build_paged_expert_weights;
+use crate::qwen3_5_moe::expert_paging::paged_expert_weights;
 
 /// Request dimensions needed to attribute one source plan without retaining routes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -125,7 +125,8 @@ impl Qwen3_5ExpertPager {
         };
         // This conversion consumes named tensors from the map. Any absent weight,
         // scale, or bias fails before model execution can observe a partial page.
-        let streamed_weights = build_paged_expert_weights(&mut loaded_tensors, layer_plan)?;
+        let streamed_weights =
+            paged_expert_weights::build_paged_expert_weights(&mut loaded_tensors, layer_plan)?;
         performance_attribution.record_expert_streaming_source_plan(
             layer_index,
             request_shape.route_token_count,

@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 use astronomical_ipc_protocol::ChatToolDefinition;
 use serde_json::Value;
 
-use super::tool_contract::{LagunaDeclaredTool, bounded_text};
+use super::tool_contract;
+use super::tool_contract::LagunaDeclaredTool;
 use super::{LagunaOutputParserError, LagunaTextArtifactDescriptor};
 
 mod salvage;
@@ -69,7 +70,7 @@ impl LagunaOutputParser {
                 .is_some()
             {
                 return Err(LagunaOutputParserError::DuplicateDeclaredTool {
-                    function_name: bounded_text(&tool_definition.name),
+                    function_name: tool_contract::bounded_text(&tool_definition.name),
                 });
             }
         }

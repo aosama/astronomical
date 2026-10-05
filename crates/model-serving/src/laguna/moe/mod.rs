@@ -34,7 +34,7 @@ mod public_router {
     use crate::performance_attribution::PerformanceAttribution;
 
     use super::super::model::LagunaExecutionError;
-    use super::router::route_laguna_experts;
+    use super::router;
     use astronomical_mlx_c_rust::MlxArray;
 
     /// Routes native Laguna logits with the same formula as resident execution.
@@ -46,7 +46,7 @@ mod public_router {
         router_logit_softcap: f64,
     ) -> Result<(MlxArray, MlxArray), LagunaExecutionError> {
         let mut performance_attribution = PerformanceAttribution::disabled();
-        route_laguna_experts(
+        router::route_laguna_experts(
             runtime,
             router_logits,
             correction_bias,

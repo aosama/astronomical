@@ -3,7 +3,7 @@
 //! The seed is untrusted user Markdown. It is escaped with the same reserved-marker
 //! rules as other template content so a seeded `</think>` cannot close the block.
 
-use super::template_safe_content::append_template_safe_content;
+use super::template_safe_content;
 use super::{Qwen3_5PromptRenderer, Qwen3_5Tokenizer, Qwen3_5TokenizerError};
 
 const THINK_END: &str = "</think>";
@@ -17,7 +17,7 @@ pub(crate) fn escaped_qwen_thinking_channel_seed(untrusted_seed: Option<&str>) -
         return None;
     }
     let mut escaped_seed = String::new();
-    append_template_safe_content(&mut escaped_seed, trimmed_seed);
+    template_safe_content::append_template_safe_content(&mut escaped_seed, trimmed_seed);
     Some(escaped_seed)
 }
 

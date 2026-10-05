@@ -22,7 +22,7 @@ use crate::{
 };
 
 use super::super::RequestDecoderStateStack;
-use super::{Qwen3_5EngineState, fatal_engine_error};
+use super::Qwen3_5EngineState;
 /// The cache-specific portion of a newly admitted request's starting state.
 ///
 /// `restored_token_count` drives the prefill cursor, while the u32 field is
@@ -193,7 +193,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
 
         // Lookup already proved every block exists. Load the complete block
         // set, then reconstruct each full-attention layer with one
@@ -219,13 +219,13 @@ impl Qwen3_5EngineState {
                     },
                 )
                 .map_err(|persistent_prompt_cache_error| {
-                    fatal_engine_error(format!(
+                    super::fatal_engine_error(format!(
                         "failed to load persistent prompt-cache KV block {block_index}: \
                          {persistent_prompt_cache_error}"
                     ))
                 })?
                 .ok_or_else(|| {
-                    fatal_engine_error(
+                    super::fatal_engine_error(
                         "persistent prompt-cache KV block was reported as present \
                          but load returned None",
                     )
@@ -250,7 +250,7 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(|persistent_prompt_cache_error| {
-                fatal_engine_error(format!(
+                super::fatal_engine_error(format!(
                     "failed to restore request decoder state from {complete_block_count} \
                      persistent prompt-cache blocks: {persistent_prompt_cache_error}"
                 ))
@@ -262,7 +262,7 @@ impl Qwen3_5EngineState {
             .as_ref()
             .or(last_restored_persistent_prompt_cache_block_key.as_ref())
             .ok_or_else(|| {
-                fatal_engine_error("persistent prompt-cache restore lost snapshot key")
+                super::fatal_engine_error("persistent prompt-cache restore lost snapshot key")
             })?;
         let mut persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
             .measure_operation(
@@ -276,13 +276,13 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(|persistent_prompt_cache_error| {
-                fatal_engine_error(format!(
+                super::fatal_engine_error(format!(
                     "failed to load persistent prompt-cache recurrent snapshot: \
                      {persistent_prompt_cache_error}"
                 ))
             })?
             .ok_or_else(|| {
-                fatal_engine_error(
+                super::fatal_engine_error(
                     "persistent prompt-cache recurrent snapshot was reported as present \
                      but load returned None",
                 )
@@ -298,7 +298,7 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(|persistent_prompt_cache_error| {
-                fatal_engine_error(format!(
+                super::fatal_engine_error(format!(
                     "failed to restore request decoder state from {complete_block_count} \
                      persistent prompt-cache blocks: {persistent_prompt_cache_error}"
                 ))
@@ -313,7 +313,7 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(|persistent_prompt_cache_error| {
-                fatal_engine_error(format!(
+                super::fatal_engine_error(format!(
                     "failed to materialize restored request decoder state from {complete_block_count} \
                      persistent prompt-cache blocks: {persistent_prompt_cache_error}"
                 ))
@@ -324,7 +324,7 @@ impl Qwen3_5EngineState {
                 |_performance_attribution| model.runtime().clear_allocator_cache(),
             )
             .map_err(|runtime_error| {
-                fatal_engine_error(format!(
+                super::fatal_engine_error(format!(
                     "failed to clear allocator memory after persistent prompt-cache restore: \
                      {runtime_error}"
                 ))
@@ -336,7 +336,7 @@ impl Qwen3_5EngineState {
         let remaining_context_token_count = total_context_tokens
             .checked_sub(restored_token_count)
             .ok_or_else(|| {
-                fatal_engine_error(
+                super::fatal_engine_error(
                     "persistent prompt-cache restore exceeded the generation context",
                 )
             })?;
@@ -379,7 +379,9 @@ impl Qwen3_5EngineState {
         );
         let persistent_prompt_cache_token_count =
             u32::try_from(restored_token_count).map_err(|_| {
-                fatal_engine_error("persistent prompt-cache token count exceeds the u32 range")
+                super::fatal_engine_error(
+                    "persistent prompt-cache token count exceeds the u32 range",
+                )
             })?;
         self.persistent_prompt_cache_counters
             .record_cache_hit(restored_token_count);
@@ -502,7 +504,7 @@ fn restored_persistent_prompt_cache_block_key(
         &empty_block_causal_input
     } else {
         block_causal_inputs.get(block_index).ok_or_else(|| {
-            fatal_engine_error(
+            super::fatal_engine_error(
                 "persistent prompt-cache causal input plan does not cover restored block",
             )
         })?
@@ -516,7 +518,7 @@ fn restored_persistent_prompt_cache_block_key(
             block_causal_input,
         )
         .map_err(|_| {
-            fatal_engine_error(
+            super::fatal_engine_error(
                 "persistent prompt-cache block identity construction failed during restore",
             )
         });
@@ -526,7 +528,7 @@ fn restored_persistent_prompt_cache_block_key(
         // child to continue without its parent would make its file identity
         // ambiguous and could join unrelated prompt histories.
         .ok_or_else(|| {
-            fatal_engine_error(
+            super::fatal_engine_error(
                 "persistent prompt-cache block identity chain was lost during restore",
             )
         })?
@@ -535,7 +537,7 @@ fn restored_persistent_prompt_cache_block_key(
             block_causal_input,
         )
         .map_err(|_| {
-            fatal_engine_error(
+            super::fatal_engine_error(
                 "persistent prompt-cache block identity construction failed during restore",
             )
         })

@@ -2,11 +2,11 @@ use astronomical_model_serving::{
     Flux2KleinTransformerConfig, Flux2KleinTransformerGeometry, Flux2KleinTransformerGeometryError,
 };
 
-use super::super::support::transformer_config_json;
+use super::super::support;
 
 #[test]
 fn should_expose_the_exact_official_klein_4b_transformer_geometry() {
-    let config = Flux2KleinTransformerConfig::parse(&transformer_config_json())
+    let config = Flux2KleinTransformerConfig::parse(&support::transformer_config_json())
         .expect("the exact profile configuration should validate first");
     let geometry = Flux2KleinTransformerGeometry::from_config(&config)
         .expect("validated model geometry should construct the execution profile");
