@@ -1,22 +1,26 @@
 # Swift Migration Skeleton
 
-> **Status: INERT.** Every file in this tree is comments only. Nothing here
-> compiles, nothing here is referenced by Cargo, and commits touching only this
-> tree cannot trigger a GitHub Action. This tree exists so the Rust-to-Swift
-> migration layout can be reviewed on its own, before any real Swift lands.
+> **Status: WAVE 1 IN PROGRESS.** `Package.swift` is a real SwiftPM (Swift
+> Package Manager) manifest and the whole tree builds with `swift build`.
+> Ported units carry real Swift code plus hermetic tests; every other file is
+> still a comment-only marker. The tree remains outside Cargo and outside CI
+> scope, so it cannot affect the Rust builds or GitHub Actions.
 
 ## Why this exists
 
-Astronomical is migrating from Rust to Swift. Before wave 1 starts, this
-skeleton fixes the target package layout so module boundaries — what goes
-where — can be agreed on with zero build or CI (Continuous Integration)
-surface.
+Astronomical is migrating from Rust to Swift. The skeleton first fixed the
+target package layout so module boundaries — what goes where — could be
+agreed on with zero build or CI (Continuous Integration) surface. Wave 1 has
+now begun on top of that layout: the manifest is real, the tree builds, and
+units land slice by slice with their tests.
 
-## What keeps this inert (structural guarantees)
+## What keeps this quarantined (structural guarantees)
 
-1. **`Package.swift` is comments only.** It is not a valid SwiftPM (Swift
-   Package Manager) manifest. If anything ever tries to build this tree,
-   packaging fails loudly instead of silently producing artifacts.
+1. **The manifest deliberately lists every skeleton target**, not only the
+   wave being ported, so not-yet-ported modules build as empty modules until
+   their units arrive. `AstronomicalCli` and `InferenceWorker` are declared
+   as executable targets with placeholder entry points that only report
+   "not ported yet" and exit.
 2. **Not a Cargo workspace member.** The root `Cargo.toml` lists members
    explicitly; `swift-skeleton/` is not among them.
 3. **CI builds explicit package paths only.** The workflows invoke Swift
@@ -32,10 +36,19 @@ surface.
 
 ```
 swift-skeleton/
-  Package.swift                  comment-only sketch of the future manifest
+  Package.swift                  real SwiftPM manifest — every skeleton target
   README.md                      this file
   Sources/
-    AstronomicalConfig/          wave 1 — crates/config
+    AstronomicalConfig/          wave 1 — crates/config — partially ported:
+                                  AstronomicalRuntimeInstance,
+                                  AstronomicalInstancePaths, SocketEndpoint,
+                                  FilePath, AstronomicalConfigError, the
+                                  config-file load slice (AstronomicalConfig
+                                  facade, ConfigFileStore, StrictJson, the
+                                  *ConfigFile document structs, and the
+                                  bundled schema resource) are real;
+                                  DefaultModel, RuntimeConfig, and
+                                  ModelDiscovery/ are still markers
       ModelDiscovery/            model_discovery/ (artifact scanning, bounded
                                   reads, classification, effective models,
                                   family shapes)
@@ -99,6 +112,32 @@ Qwen3_5 and Qwen3_5MoE are separate module folders because Rust keeps
 qwen3_5 and qwen3_5_moe as separate trees. Test trees deliberately stay one
 marker per module at the target root.
 
+File-naming rule: SwiftPM compiles a target from every file under its
+directory and rejects duplicate file basenames within one target, so marker
+files inside family subfolders carry family-qualified names (for example
+`Qwen3_5/Model/Qwen35Model.swift`, `Laguna/Text/LagunaText.swift`). The
+directory layout preserves the Rust sub-concern structure; the basename
+carries the family. Entry-point files avoid the name `Main.swift` because
+`@main` is not allowed in a file with that name.
+
+Marker staleness: placeholder files outside `AstronomicalConfig` still say
+`INERT MIGRATION SKELETON — comments only; nothing in this file compiles.`
+from the pre-manifest phase. Their modules now build (as empty modules);
+the wording is refreshed when each wave begins porting that unit.
+
+## Build and test
+
+Run from `swift-skeleton/`:
+
+    swift build
+    perl -e 'alarm 120; exec @ARGV' swift test --filter AstronomicalConfigTests
+
+`swift build` must stay warning-free; compiler warnings are defects. The
+`perl` alarm wrapper enforces the repo-wide 120-second test-timeout cap at
+the command level. Current tests are hermetic CPU (Central Processing Unit)
+tests and finish in milliseconds; real-model GPU (Graphics Processing Unit)
+journeys are not present yet and will run strictly serially when they land.
+
 ## Rust-to-Swift mapping
 
 | Swift module | Rust home today | Wave |
@@ -147,12 +186,13 @@ These rules move with the code, regardless of language:
   assumptions; resolve locations through configuration, environment, or
   platform-standard directories.
 
-## Activation checklist (when wave 1 begins)
+## Activation checklist (wave 1)
 
 Activation must be a deliberate, visible sequence — never a side effect:
 
-1. Replace the comment-only `Package.swift` with a real manifest listing only
-   the wave-1 targets.
+1. Done: `Package.swift` is a real manifest. It deliberately lists every
+   skeleton target — not only wave-1 — so unported modules build as empty
+   modules until their units arrive.
 2. Remove `swift-skeleton/*` from the exempt list in
    `scripts/classify-ci-change-scope.sh` so the tree starts classifying as
    code.
