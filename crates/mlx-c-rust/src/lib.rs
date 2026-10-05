@@ -47,89 +47,29 @@
 //! `astronomical-runtime-integration`'s and `astronomical-model-serving`'s
 //! test trees, which link the native image already.
 
-mod mlx_activation_operations;
-mod mlx_array;
-mod mlx_array_accessors;
-mod mlx_array_creation_operations;
-mod mlx_array_shape_operations;
-mod mlx_array_vector;
-mod mlx_attention_operations;
-mod mlx_bindings_context;
-mod mlx_bindings_support;
-mod mlx_closure_custom_types;
-mod mlx_closure_types;
-mod mlx_compile_operations;
-mod mlx_compiled_attention_output_gate;
-mod mlx_compiled_elementwise_graphs;
-mod mlx_compiled_graph;
-mod mlx_compiled_multi_output_graph;
-mod mlx_compiled_sparse_shared_expert_combination;
-mod mlx_compiled_swiglu;
-mod mlx_compiled_verify_window_geometry;
-mod mlx_compiled_verify_window_graph;
-mod mlx_compiled_verify_window_ops;
-mod mlx_compiled_vision_rope;
-mod mlx_convolution_general_operations;
-mod mlx_convolution_operations;
-mod mlx_creation_operations;
-mod mlx_cumulative_operations;
-mod mlx_device;
-mod mlx_elementwise_math_operations;
-mod mlx_export_domain;
-mod mlx_fast_cuda_kernel;
-mod mlx_fft_operations;
-mod mlx_indexing_operations;
-mod mlx_io_domain;
-mod mlx_linear_algebra_operations;
-mod mlx_map_types;
-mod mlx_math_binary_operations;
-mod mlx_math_unary_operations;
-mod mlx_memory_controls;
-mod mlx_metal;
-mod mlx_metal_capture;
-mod mlx_metal_kernel;
-mod mlx_normalization_operations;
-mod mlx_nvfp4_operations;
-mod mlx_operations;
-mod mlx_padding_operations;
-mod mlx_platform_domain;
-mod mlx_quantization_construction;
-mod mlx_quantized_array_operations;
-mod mlx_quantized_operations;
-mod mlx_random_operations;
-mod mlx_random_sampling_operations;
-mod mlx_reduction_operations;
-mod mlx_rope_operations;
-mod mlx_shape_operations;
-mod mlx_stream;
-mod mlx_stream_domain;
-mod mlx_string;
-mod mlx_vector_types;
+mod bindings;
+mod compile;
+mod metal;
+mod operations;
+mod runtime;
+mod types;
 
 pub mod error;
 pub mod raw;
 
-pub use error::{
-    MlxCError, check_status, clear_captured_mlx_error, install_non_terminating_error_handler,
-    take_captured_mlx_error,
-};
-pub use mlx_array::{MlxArray, MlxDtype};
-pub use mlx_array_vector::MlxArrayVector;
-pub use mlx_bindings_context::MlxBindingsContext;
-pub use mlx_closure_custom_types::{MlxClosureCustom, MlxClosureCustomJvp, MlxClosureCustomVmap};
-pub use mlx_closure_types::{MlxClosure, MlxClosureKwargs, MlxClosureValueAndGrad};
-pub use mlx_compile_operations::{
-    MlxCompileCache, disable_compile, enable_compile, jvp_of_closure, set_compile_mode,
-    value_and_grad_of_closure, vjp_of_closure, vmap_replace, vmap_trace,
-};
-pub use mlx_compiled_elementwise_graphs::MlxCompiledElementwiseGraphs;
-pub use mlx_compiled_graph::{
+pub use bindings::context::MlxBindingsContext;
+pub use compile::elementwise_graphs::MlxCompiledElementwiseGraphs;
+pub use compile::graph::{
     MlxGraphBuilder, array_from_vector, graph_output_array, set_graph_output,
     set_graph_output_vector,
 };
-pub use mlx_compiled_multi_output_graph::MlxCompiledMultiOutputGraph;
-pub use mlx_compiled_swiglu::MlxCompiledSwiGlu;
-pub use mlx_compiled_verify_window_geometry::{
+pub use compile::multi_output_graph::MlxCompiledMultiOutputGraph;
+pub use compile::swiglu::MlxCompiledSwiGlu;
+pub use compile::transforms::{
+    MlxCompileCache, disable_compile, enable_compile, jvp_of_closure, set_compile_mode,
+    value_and_grad_of_closure, vjp_of_closure, vmap_replace, vmap_trace,
+};
+pub use compile::verify_window::geometry::{
     VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
     VerifyWindowFullAttentionQuantization, VerifyWindowFullAttentionWeightSlot,
     VerifyWindowGatedDeltaQuantization, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
@@ -137,40 +77,46 @@ pub use mlx_compiled_verify_window_geometry::{
     VerifyWindowLayerWeightSlot, VerifyWindowQuantizationPair, VerifyWindowTrunkQuantization,
     VerifyWindowTrunkWeightSlot, verify_window_input_slots,
 };
-pub use mlx_compiled_verify_window_graph::{
-    MlxCompiledVerifyWindowGraph, VerifyWindowGdnKernelSet,
+pub use compile::verify_window::graph::{MlxCompiledVerifyWindowGraph, VerifyWindowGdnKernelSet};
+pub use error::{
+    MlxCError, check_status, clear_captured_mlx_error, install_non_terminating_error_handler,
+    take_captured_mlx_error,
 };
-pub use mlx_device::{MlxDeviceHandle, MlxDeviceInfo};
-pub use mlx_export_domain::{
+pub use metal::cuda_kernel::{MlxCudaKernel, MlxCudaKernelConfig};
+pub use metal::kernel::{
+    MlxMetalKernel, MlxMetalKernelConfig, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
+    apply_metal_kernel_in_graph,
+};
+pub use metal::metallib::set_metallib_path;
+pub use runtime::export::{
     GraphOutputFile, MlxFunctionExporter, MlxImportedFunction, MlxNodeNamer, export_function,
     export_function_with_keywords, export_graph_to_dot, print_graph,
 };
-pub use mlx_fast_cuda_kernel::{MlxCudaKernel, MlxCudaKernelConfig};
-pub use mlx_io_domain::{
+pub use runtime::io::{
     MlxIoGguf, MlxIoReader, MlxIoWriter, load_array_from_reader, load_safetensors,
     load_safetensors_from_reader, save_array_to_writer, save_safetensors,
     save_safetensors_to_writer,
 };
-pub use mlx_map_types::{
-    MlxMapStringToArray, MlxMapStringToArrayIterator, MlxMapStringToString,
-    MlxMapStringToStringIterator,
-};
-pub use mlx_memory_controls::{
+pub use runtime::memory::{
     active_memory_bytes, cache_memory_bytes, clear_allocator_cache, memory_limit_bytes,
     peak_memory_bytes, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
 };
-pub use mlx_metal::set_metallib_path;
-pub use mlx_metal_kernel::{
-    MlxMetalKernel, MlxMetalKernelConfig, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-    apply_metal_kernel_in_graph,
-};
-pub use mlx_platform_domain::{
+pub use runtime::platform::{
     MlxDistributedGroup, cuda_is_available, distributed_is_available, initialize_distributed,
     metal_is_available, metallib_path, set_wired_limit,
 };
-pub use mlx_stream::MlxStream;
-pub use mlx_stream_domain::{
+pub use runtime::stream_defaults::{
     MlxStreamThreadLocal, clear_streams, set_default_stream, synchronize_all_defaults,
 };
-pub use mlx_string::MlxString;
-pub use mlx_vector_types::{MlxVectorInt, MlxVectorStream, MlxVectorString, MlxVectorVectorArray};
+pub use types::array::{MlxArray, MlxDtype};
+pub use types::array_vector::MlxArrayVector;
+pub use types::closure_custom::{MlxClosureCustom, MlxClosureCustomJvp, MlxClosureCustomVmap};
+pub use types::closures::{MlxClosure, MlxClosureKwargs, MlxClosureValueAndGrad};
+pub use types::device::{MlxDeviceHandle, MlxDeviceInfo};
+pub use types::maps::{
+    MlxMapStringToArray, MlxMapStringToArrayIterator, MlxMapStringToString,
+    MlxMapStringToStringIterator,
+};
+pub use types::stream::MlxStream;
+pub use types::string::MlxString;
+pub use types::vectors::{MlxVectorInt, MlxVectorStream, MlxVectorString, MlxVectorVectorArray};

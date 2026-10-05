@@ -25,7 +25,7 @@
 //!    restores convolution and recurrent state from these per-row outputs.
 //!
 //! The unsafe graph-builder half of this project lives in runtime-integration
-//! (`mlx_compiled_verify_window_geometry` / `_graph` / `_ops`) because this
+//! (the `mlx-c-rust` verify-window geometry, graph, and ops modules) because this
 //! crate forbids unsafe code; this module owns the safe halves: assembling the
 //! frozen input vector from live weights and state leaves, reading the
 //! ordered outputs, and installing state successors.
