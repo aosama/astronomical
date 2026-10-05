@@ -5,11 +5,10 @@
 //! high without a second full weight stream. Prefill and one-token decode stay
 //! on the existing routes.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
-use astronomical_runtime_integration::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument, MlxRuntime,
-    MlxRuntimeError,
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 const FOUR_ROW_COUNT: i32 = 4;
 const COLUMN_TILE: i32 = 4;
@@ -136,7 +135,8 @@ if (split_part == 0 && simd_lane < ACCUMULATOR_COUNT) {
 }
 "#;
 
-pub fn four_row_split_k_quantized_linear_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
+pub fn four_row_split_k_quantized_linear_kernel()
+-> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
     MlxMetalKernel::new(
         "astronomical_qwen3_5_four_row_split_k_quantized_linear",
         &[
@@ -148,6 +148,7 @@ pub fn four_row_split_k_quantized_linear_kernel() -> Result<MlxMetalKernel, MlxR
         &["projected_activations"],
         FOUR_ROW_SPLIT_K_SOURCE,
     )
+    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 pub(super) fn four_row_split_k_is_eligible(

@@ -79,9 +79,8 @@ async fn probe_elementwise_chains() {
     runtime
         .evaluate_arrays(&[&input, &rolling_state, &weight])
         .expect("the probe operands should evaluate");
-    let compiled_elementwise_graphs =
-        astronomical_runtime_integration::MlxCompiledElementwiseGraphs::new()
-            .expect("the compiled elementwise graphs should build");
+    let compiled_elementwise_graphs = astronomical_mlx_c_rust::MlxCompiledElementwiseGraphs::new()
+        .expect("the compiled elementwise graphs should build");
 
     let probes: Vec<(&str, Box<dyn Fn() -> MlxArray + '_>)> = vec![
         (

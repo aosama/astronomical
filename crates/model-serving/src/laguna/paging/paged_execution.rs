@@ -1,6 +1,6 @@
 //! Gathered SwiGLU over one streamed Laguna expert page.
 
-use astronomical_runtime_integration::{MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::sparse_experts::{
@@ -12,7 +12,7 @@ use crate::laguna::model::LagunaBoundLinear;
 
 use super::error::LagunaPagingError;
 use super::weight_page::LagunaExpertWeightPage;
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxMetalKernel};
 
 const MINIMUM_SORTED_EXPERT_ASSIGNMENTS: usize = 64;
 

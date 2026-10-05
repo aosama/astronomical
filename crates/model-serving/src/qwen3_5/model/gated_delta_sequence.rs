@@ -1,6 +1,4 @@
-use astronomical_runtime_integration::{
-    MlxMetalKernel, MlxMetalKernelOutput, MlxRuntime, MlxRuntimeError,
-};
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_pipelined_kernel::{
     THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
@@ -9,10 +7,11 @@ use super::gated_delta_sequence_contract::{
     GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
     validate_gated_delta_sequence_shapes,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxMetalKernel, MlxMetalKernelOutput};
 
 /// Builds the fused Qwen3.5 gated-delta sequence kernel.
-pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
+pub fn qwen3_5_gated_delta_kernel()
+-> Result<MlxMetalKernel, astronomical_runtime_integration::MlxRuntimeError> {
     let ordinary_kernel_source = gated_delta_pipelined_kernel_source("", "");
     MlxMetalKernel::new(
         "astronomical_qwen3_5_gated_delta_sequence",
@@ -28,6 +27,7 @@ pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
         &["outputs", "next_recurrent_state"],
         &ordinary_kernel_source,
     )
+    .map_err(astronomical_runtime_integration::MlxRuntimeError::from)
 }
 
 /// Applies fused Qwen3.5 gated-delta recurrence across one prompt/decode

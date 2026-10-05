@@ -1,6 +1,6 @@
 //! Operation-local Laguna Mixture-of-Experts: stream a page, then gathered SwiGLU.
 
-use astronomical_runtime_integration::{MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::expert_paging::ExpertWeightPage;
 use crate::laguna::LagunaNativeWeights;
@@ -15,7 +15,7 @@ use crate::performance_attribution::PerformanceAttribution;
 
 use super::resident::shared_expert_swiglu;
 use super::router::route_laguna_experts;
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxMetalKernel};
 
 /// Routes with the resident router, streams one page, scales, and adds the shared expert.
 #[allow(clippy::too_many_arguments)]

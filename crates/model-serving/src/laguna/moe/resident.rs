@@ -1,6 +1,6 @@
 //! Resident Laguna Mixture-of-Experts: gathered SwiGLU plus shared expert.
 
-use astronomical_runtime_integration::{MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::laguna::artifacts::{LagunaExpertProjection, LagunaLayerTensorRole};
 use crate::laguna::normalization::LagunaMoeDescriptor;
@@ -14,7 +14,7 @@ use crate::laguna::LagunaNativeWeights;
 
 use super::router::route_laguna_experts;
 use crate::laguna::model::LagunaExecutionError;
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxMetalKernel};
 
 const MINIMUM_SORTED_EXPERT_ASSIGNMENTS: usize = 64;
 

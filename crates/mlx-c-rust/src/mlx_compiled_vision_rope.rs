@@ -1,7 +1,7 @@
 use std::os::raw::c_int;
 
 use crate::mlx_compiled_graph::{array_from_vector, graph_output_array, set_graph_output};
-use astronomical_mlx_c_rust::{MlxArrayVector, MlxStream, raw};
+use crate::{MlxArrayVector, MlxStream, raw};
 
 /// Builds the shapeless compiled graph for Qwen3-VL rotate-half rotary embedding.
 ///

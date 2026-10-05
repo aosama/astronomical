@@ -1,8 +1,6 @@
 //! Direct Qwen3.5 text execution for the pinned model artifact.
 
-use astronomical_runtime_integration::{
-    MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel, MlxRuntime,
-};
+use astronomical_runtime_integration::MlxRuntime;
 
 use std::cell::RefCell;
 
@@ -25,7 +23,9 @@ use super::{
 };
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpWeights;
-use astronomical_mlx_c_rust::MlxArray;
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
+};
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
 #[derive(Debug)]

@@ -1,11 +1,11 @@
 //! Shape-polymorphism contracts for every retained elementwise MLX compilation.
 
-use astronomical_runtime_integration::{MlxCompiledElementwiseGraphs, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support::{
     assert_bfloat16_arrays_match, assert_f32_close, runtime, stable_softplus_reference,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
 const FEATURE_DIMENSION: i32 = 4;
 
