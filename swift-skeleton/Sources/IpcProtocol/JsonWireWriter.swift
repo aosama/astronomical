@@ -3,21 +3,21 @@ import Foundation;
 /// Compact serde_json-shaped serializer for JsonWireValue trees. Key order is
 /// insertion order, solidus is never escaped, non-finite floats are rejected,
 /// and non-ASCII text passes through as UTF-8 exactly like serde_json.
-internal struct JsonWireWriter {
+public struct JsonWireWriter {
     private var outputText: String = "";
 
-    internal init() {
+    public init() {
     }
 
-    internal var serializedText: String {
+    public var serializedText: String {
         return self.outputText;
     }
 
-    internal var serializedUtf8Bytes: Data {
+    public var serializedUtf8Bytes: Data {
         return Data(self.outputText.utf8);
     }
 
-    internal mutating func appendValue(_ wireValue: JsonWireValue) throws {
+    public mutating func appendValue(_ wireValue: JsonWireValue) throws {
         switch wireValue {
         case .null: self.outputText = self.outputText + "null";
         case let .boolean(booleanValue): self.outputText = self.outputText + (booleanValue ? "true" : "false");
@@ -31,7 +31,7 @@ internal struct JsonWireWriter {
         }
     }
 
-    internal mutating func appendStringValue(_ textValue: String) {
+    public mutating func appendStringValue(_ textValue: String) {
         var escapedText: String = "\"";
         for character in textValue.unicodeScalars {
             switch character {

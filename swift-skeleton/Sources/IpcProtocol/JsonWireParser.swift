@@ -3,11 +3,11 @@ import Foundation;
 /// Strict recursive-descent JSON parser over UTF-8 bytes producing ordered
 /// JsonWireValue trees. Rejects duplicate object keys the way serde struct
 /// deserializers do and enforces the same 128-level recursion cap as serde_json.
-internal enum JsonWireParser {
+public enum JsonWireParser {
 
     private static let maximumRecursionDepth: Int = 128;
 
-    internal static func parseDocument(documentBytes: Data) throws -> JsonWireValue {
+    public static func parseDocument(documentBytes: Data) throws -> JsonWireValue {
         var documentScanner: DocumentScanner = DocumentScanner(documentBytes: Array(documentBytes));
         documentScanner.skipWhitespaceBytes();
         guard documentScanner.isAtEnd == false else {
