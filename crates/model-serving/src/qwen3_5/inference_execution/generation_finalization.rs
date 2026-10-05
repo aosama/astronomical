@@ -119,14 +119,12 @@ impl Qwen3_5EngineState {
         // Otherwise newly admitted pages could compete with memory that is only
         // logically dead but still owned by this request.
         drop(active_request);
-        // Hot-expert warmed tables are request-scoped (issue #372): releasing
-        // them here keeps one request's decode warming from crowding the next
-        // request's prefill admission under a tight memory ceiling. Pinned
-        // complete layers survive; only elastic tables yield.
-        let released_elastic_payload_bytes = self
-            .model
-            .as_ref()
-            .map_or(0, |model| model.release_elastic_routed_tables());
+        // Request-owned lazy arrays are gone. Hot-expert warmed tables stay:
+        // the routed-expert distribution is model-and-domain knowledge, not
+        // request state, so an identical or similar next ask serves from RAM
+        // instead of re-reading its experts (issue #955). The next request's
+        // prefill admission still arbitrates these bytes on demand through the
+        // request-pressure freeze and exact reclamation when it is tight.
         let resumed_after_request_memory_pressure = self
             .model
             .as_ref()
@@ -137,13 +135,12 @@ impl Qwen3_5EngineState {
             tracing::info!(
                 request_id = request_id.value(),
                 resumed_after_request_memory_pressure,
-                released_elastic_payload_bytes,
                 expert_memory_mode = ?model.expert_memory_mode(),
                 retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.resident_payload_byte_count,
                 maximum_retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.maximum_resident_payload_byte_count,
-                "released request-scoped expert retention ceiling"
+                "released request-pressure expert retention and kept warm tables for the next request"
             );
         }
         // `release_request_memory` synchronizes the model stream before clearing

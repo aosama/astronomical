@@ -36,6 +36,7 @@ pub use release::should_enact_planned_expert_release;
 pub use request_plan::{
     RequestExpertLayerRole, RequestExpertResidency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
+    retained_resident_ceiling_after_budget_refresh,
 };
 
 use crate::memory::MemoryPhase;

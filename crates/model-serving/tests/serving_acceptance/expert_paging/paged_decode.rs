@@ -138,12 +138,20 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
             second_generation_report,
             "positional_file_read_call_count",
         );
+        let first_disk_page_read_bytes = counter_amount(
+            first_generation_report,
+            "positional_file_read_byte_count",
+        );
+        let second_disk_page_read_bytes = counter_amount(
+            second_generation_report,
+            "positional_file_read_byte_count",
+        );
         let first_memory_evidence =
             assert_memory_within_policy(first_generation_report, paging_ceiling_bytes);
         let second_memory_evidence =
             assert_memory_within_policy(second_generation_report, paging_ceiling_bytes);
         eprintln!(
-            "[paged-decode 3/4] status=progress first_disk_page_load_count={first_disk_page_load_count} second_disk_page_load_count={second_disk_page_load_count} first_active_plus_allocator_bytes={} second_active_plus_allocator_bytes={} observed_peak_bytes={} allowed_peak_bytes={}",
+            "[paged-decode 3/4] status=progress first_disk_page_load_count={first_disk_page_load_count} second_disk_page_load_count={second_disk_page_load_count} first_disk_page_read_bytes={first_disk_page_read_bytes} second_disk_page_read_bytes={second_disk_page_read_bytes} first_active_plus_allocator_bytes={} second_active_plus_allocator_bytes={} observed_peak_bytes={} allowed_peak_bytes={}",
             first_memory_evidence.active_plus_allocator_bytes,
             second_memory_evidence.active_plus_allocator_bytes,
             first_memory_evidence
@@ -151,9 +159,15 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
                 .max(second_memory_evidence.peak_bytes),
             first_memory_evidence.allowed_peak_bytes,
         );
+        // Call counts measure read fragmentation, not cost; the byte counter
+        // is the honest reuse metric, so the acceptance gate asserts both.
         assert!(
             second_disk_page_load_count <= first_disk_page_load_count,
             "the second Romeo ask must not read more expert pages than the first"
+        );
+        assert!(
+            second_disk_page_read_bytes <= first_disk_page_read_bytes,
+            "the second Romeo ask must not read more expert bytes than the first"
         );
         eprintln!("[paged-decode 4/4] status=success");
     })
