@@ -185,8 +185,13 @@ main() {
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
     mkdir -p "$sandbox_scripts_directory" "$sandbox_cargo_directory" "$external_working_directory"
     cp "${repository_root}/scripts/verify-before-commit.sh" "${sandbox_scripts_directory}/verify-before-commit.sh"
+    # The memory-contract lane gate runs as its real script inside the sandbox
+    # so the contract pins the exact feature world it compiles.
+    cp "${repository_root}/scripts/compile-mlx-memory-contract-lane.sh" \
+        "${sandbox_scripts_directory}/compile-mlx-memory-contract-lane.sh"
     cp "${repository_root}/.cargo/config.toml" "${sandbox_cargo_directory}/config.toml"
     chmod +x "${sandbox_scripts_directory}/verify-before-commit.sh"
+    chmod +x "${sandbox_scripts_directory}/compile-mlx-memory-contract-lane.sh"
     create_fake_commands "$fake_command_directory"
     create_fake_repository_scripts "$sandbox_scripts_directory"
 
@@ -217,8 +222,8 @@ main() {
             run_verification_script "${sandbox_scripts_directory}/verify-before-commit.sh" "$verification_output"
     )
 
-    [ "$(wc -l < "$cargo_log" | tr -d '[:space:]')" -eq 4 ] || {
-        print_error "verification did not use exactly four Cargo invocations including formatting"
+    [ "$(wc -l < "$cargo_log" | tr -d '[:space:]')" -eq 5 ] || {
+        print_error "verification did not use exactly five Cargo invocations including formatting"
         exit 1
     }
     grep -F "fmt --all -- --check|pwd=${sandbox_repository}|target=${custom_target_directory}|wrapper=caller-selected-wrapper" "$cargo_log" >/dev/null || {
@@ -237,6 +242,10 @@ main() {
         print_error "the direct-MLX lane did not run through the disposable Cargo target coordinator"
         exit 1
     }
+    grep -F 'check --package astronomical-runtime-integration --features mlx-memory-contract-probe --all-targets' "$cargo_log" >/dev/null || {
+        print_error "the memory-contract lane gate did not compile the feature-gated lane"
+        exit 1
+    }
     [ ! -e "$sccache_log" ] || {
         print_error "verification invoked sccache"
         exit 1
@@ -251,6 +260,10 @@ main() {
     }
     grep -F '600s|scripts/test-direct-mlx.sh' "$timeout_log" >/dev/null || {
         print_error "the direct-MLX lane did not retain its separate compile-class timeout"
+        exit 1
+    }
+    grep -F '600s|scripts/compile-mlx-memory-contract-lane.sh' "$timeout_log" >/dev/null || {
+        print_error "the memory-contract lane gate did not retain its compile-class timeout"
         exit 1
     }
     grep -F '600s|swift' "$timeout_log" >/dev/null || {
