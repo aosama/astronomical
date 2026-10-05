@@ -171,6 +171,27 @@ pub const fn retained_complete_layer_ceiling_after_prefill_budget_refresh(
     }
 }
 
+/// Floors the retained-page ceiling at every resident expert page, warm
+/// tables included.
+///
+/// A learned budget that tightens between requests (context-reserve growth)
+/// must not proactively discard routing knowledge any more than it discards
+/// seated complete layers: the hot-expert tables cost disk re-reads to rebuild
+/// and the request-pressure paths already reclaim them exactly when a real
+/// forward needs the bytes. Use the complete-layer variant instead where the
+/// caller reclaims under pressure — warm tables are the release valve there.
+#[must_use]
+pub const fn retained_resident_ceiling_after_budget_refresh(
+    leftover_expert_budget_bytes: u64,
+    current_resident_payload_bytes: u64,
+) -> u64 {
+    if leftover_expert_budget_bytes > current_resident_payload_bytes {
+        leftover_expert_budget_bytes
+    } else {
+        current_resident_payload_bytes
+    }
+}
+
 /// Binds leftover packing to the request contract for the current phase.
 ///
 /// Prefill opens once, then only shrinks. Generation, decode, and idle discard
