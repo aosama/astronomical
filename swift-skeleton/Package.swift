@@ -20,8 +20,9 @@ let package: Package = Package(
         ),
         // Wave 1 — crates/ipc-protocol
         .target(name: "IpcProtocol"),
-        // Wave 2 — crates/rest-contract
-        .target(name: "RestContract"),
+        // Wave 2 — crates/rest-contract (decodes over the shared JSON wire
+        // library the way Rust serde derives decode over serde_json).
+        .target(name: "RestContract", dependencies: ["IpcProtocol"]),
         // Wave 2 — apps/supervisor
         .target(name: "Supervisor"),
         // Wave 2 — apps/astronomical
