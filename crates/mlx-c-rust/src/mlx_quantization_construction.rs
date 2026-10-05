@@ -1,16 +1,17 @@
 //! Construction of deterministic affine-quantized MLX weights.
 
-use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::{MlxArray, MlxArrayVector, MlxDtype, raw};
+use crate::{MlxCError, error::check_status};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Quantizes floating-point weights into MLX affine packed rows.
     pub fn quantize_affine(
         &self,
         weights: &MlxArray,
         group_size: i32,
         bits: i32,
-    ) -> Result<(MlxArray, MlxArray, MlxArray), MlxRuntimeError> {
+    ) -> Result<(MlxArray, MlxArray, MlxArray), MlxCError> {
         const OPERATION: &str = "quantize MLX weights with affine parameters";
         validate_quantization_request(weights, group_size, bits, OPERATION)?;
         let optional_group_size = raw::mlx_optional_int {
@@ -55,7 +56,7 @@ fn validate_quantization_request(
     group_size: i32,
     bits: i32,
     operation: &'static str,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     if !matches!(
         weights.dtype(),
         MlxDtype::Float16 | MlxDtype::Float32 | MlxDtype::BFloat16
@@ -92,8 +93,8 @@ fn validate_quantization_request(
     Ok(())
 }
 
-fn operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

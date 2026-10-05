@@ -59,7 +59,7 @@ impl K2HorizonMoVAAffineLinear {
         runtime: &MlxRuntime,
         activations: &MlxArray,
     ) -> Result<MlxArray, MlxRuntimeError> {
-        runtime.quantized_matmul_affine(
+        Ok(runtime.quantized_matmul_affine(
             activations,
             &self.packed_weight,
             &self.scales,
@@ -67,7 +67,7 @@ impl K2HorizonMoVAAffineLinear {
             true,
             self.group_size,
             self.bits,
-        )
+        )?)
     }
 
     #[must_use]

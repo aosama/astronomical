@@ -188,7 +188,7 @@ impl QuantizedFullAttentionKeyValueState {
         let packed = slice_token_range(runtime, &slab.packed, start_tokens, end_tokens)?;
         let scales = slice_token_range(runtime, &slab.scales, start_tokens, end_tokens)?;
         let biases = slice_token_range(runtime, &slab.biases, start_tokens, end_tokens)?;
-        runtime.dequantize_affine(&packed, &scales, &biases, self.group_size, self.bits)
+        Ok(runtime.dequantize_affine(&packed, &scales, &biases, self.group_size, self.bits)?)
     }
 }
 
