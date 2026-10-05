@@ -1,7 +1,8 @@
-use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::MlxCError;
+use crate::{MlxArray, MlxDtype, raw};
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Dequantizes selected affine rows, as required by quantized embedding lookup.
     pub fn dequantize_affine(
         &self,
@@ -10,7 +11,7 @@ impl MlxRuntime {
         biases: &MlxArray,
         group_size: i32,
         bits: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_affine_dequantize_arguments(quantized_weights, scales, biases, group_size, bits)?;
         let optional_group_size = raw::mlx_optional_int {
             value: group_size,
@@ -43,7 +44,7 @@ impl MlxRuntime {
                 )
             }
         })
-        .map_err(MlxRuntimeError::from)
+        .map_err(MlxCError::from)
     }
 
     /// Builds an affine quantized matrix multiplication using parameters supported by MLX.
@@ -57,7 +58,7 @@ impl MlxRuntime {
         transpose_weights: bool,
         group_size: i32,
         bits: i32,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_affine_quantized_matmul_arguments(
             "build affine quantized matmul",
             activations,
@@ -95,7 +96,7 @@ impl MlxRuntime {
                 )
             }
         })
-        .map_err(MlxRuntimeError::from)
+        .map_err(MlxCError::from)
     }
 
     /// Builds selected affine quantized matrix multiplications for MoE experts.
@@ -112,7 +113,7 @@ impl MlxRuntime {
         group_size: i32,
         bits: i32,
         sorted_indices: bool,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         validate_affine_quantized_matmul_arguments(
             "build affine gather_qmm",
             activations,
@@ -157,7 +158,7 @@ impl MlxRuntime {
                 )
             }
         })
-        .map_err(MlxRuntimeError::from)
+        .map_err(MlxCError::from)
     }
 }
 
@@ -167,7 +168,7 @@ fn validate_affine_dequantize_arguments(
     biases: &MlxArray,
     group_size: i32,
     bits: i32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "dequantize selected affine rows";
     if !is_mlx_supported_affine_group_size(group_size) {
         return Err(runtime_operation_error(
@@ -236,7 +237,7 @@ fn validate_affine_quantized_matmul_arguments(
     transpose_weights: bool,
     group_size: i32,
     bits: i32,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     if !is_mlx_supported_affine_group_size(group_size) {
         return Err(runtime_operation_error(
             operation,
@@ -344,7 +345,7 @@ const fn is_mlx_supported_affine_bit_width(bits: i32) -> bool {
 fn validate_gather_quantized_matmul_indices(
     lhs_indices: Option<&MlxArray>,
     rhs_indices: Option<&MlxArray>,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     const OPERATION: &str = "build affine gather_qmm";
     if lhs_indices.is_none() && rhs_indices.is_none() {
         return Err(runtime_operation_error(
@@ -371,7 +372,7 @@ fn validate_gather_quantized_matmul_indices(
     Ok(())
 }
 
-fn positive_last_dimension(shape: &[i32], operation: &'static str) -> Result<i32, MlxRuntimeError> {
+fn positive_last_dimension(shape: &[i32], operation: &'static str) -> Result<i32, MlxCError> {
     shape
         .last()
         .copied()
@@ -384,7 +385,7 @@ fn positive_last_dimension(shape: &[i32], operation: &'static str) -> Result<i32
 fn positive_second_last_dimension(
     shape: &[i32],
     operation: &'static str,
-) -> Result<i32, MlxRuntimeError> {
+) -> Result<i32, MlxCError> {
     shape
         .get(shape.len().saturating_sub(2))
         .copied()
@@ -398,7 +399,7 @@ fn exact_group_count(
     expanded_dimension: i32,
     group_size: i32,
     operation: &'static str,
-) -> Result<i32, MlxRuntimeError> {
+) -> Result<i32, MlxCError> {
     if expanded_dimension % group_size != 0 {
         return Err(runtime_operation_error(
             operation,
@@ -429,8 +430,8 @@ fn is_integral_index_dtype(dtype: MlxDtype) -> bool {
     )
 }
 
-fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn runtime_operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }

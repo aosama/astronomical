@@ -1,17 +1,15 @@
 //! NVFP4 construction and execution through the official MLX C API.
 
-use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, MlxArrayVector, MlxDtype, raw};
+use crate::MlxBindingsContext;
+use crate::{MlxArray, MlxArrayVector, MlxDtype, raw};
+use crate::{MlxCError, error::check_status};
 
 const NVFP4_GROUP_SIZE: i32 = 16;
 const NVFP4_BITS: i32 = 4;
 
-impl MlxRuntime {
+impl MlxBindingsContext {
     /// Quantizes floating-point weights into MLX NVFP4 packed weights and E4M3 scales.
-    pub fn quantize_nvfp4(
-        &self,
-        weights: &MlxArray,
-    ) -> Result<(MlxArray, MlxArray), MlxRuntimeError> {
+    pub fn quantize_nvfp4(&self, weights: &MlxArray) -> Result<(MlxArray, MlxArray), MlxCError> {
         const OPERATION: &str = "quantize MLX weights as NVFP4";
         validate_nvfp4_source_weights(weights, OPERATION)?;
         let mut output_vector = MlxArrayVector::empty(OPERATION)?;
@@ -47,7 +45,7 @@ impl MlxRuntime {
         quantized_weights: &MlxArray,
         scales: &MlxArray,
         output_dtype: MlxDtype,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "dequantize NVFP4 weights";
         validate_nvfp4_storage(quantized_weights, scales, OPERATION)?;
         if !is_supported_nvfp4_float_dtype(output_dtype) {
@@ -78,7 +76,7 @@ impl MlxRuntime {
                 )
             }
         })
-        .map_err(MlxRuntimeError::from)
+        .map_err(MlxCError::from)
     }
 
     /// Builds an NVFP4 matrix multiplication using MLX's native packed representation.
@@ -88,7 +86,7 @@ impl MlxRuntime {
         quantized_weights: &MlxArray,
         scales: &MlxArray,
         transpose_weights: bool,
-    ) -> Result<MlxArray, MlxRuntimeError> {
+    ) -> Result<MlxArray, MlxCError> {
         const OPERATION: &str = "build NVFP4 quantized matmul";
         validate_nvfp4_quantized_matmul(
             activations,
@@ -115,14 +113,14 @@ impl MlxRuntime {
                 )
             }
         })
-        .map_err(MlxRuntimeError::from)
+        .map_err(MlxCError::from)
     }
 }
 
 fn validate_nvfp4_source_weights(
     weights: &MlxArray,
     operation: &'static str,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     if !is_supported_nvfp4_float_dtype(weights.dtype()) {
         return Err(operation_error(
             operation,
@@ -143,7 +141,7 @@ fn validate_nvfp4_storage(
     quantized_weights: &MlxArray,
     scales: &MlxArray,
     operation: &'static str,
-) -> Result<i32, MlxRuntimeError> {
+) -> Result<i32, MlxCError> {
     if quantized_weights.dtype() != MlxDtype::UInt32 {
         return Err(operation_error(
             operation,
@@ -188,7 +186,7 @@ fn validate_nvfp4_quantized_matmul(
     scales: &MlxArray,
     transpose_weights: bool,
     operation: &'static str,
-) -> Result<(), MlxRuntimeError> {
+) -> Result<(), MlxCError> {
     if !is_supported_nvfp4_float_dtype(activations.dtype()) {
         return Err(operation_error(
             operation,
@@ -233,7 +231,7 @@ const fn is_supported_nvfp4_float_dtype(dtype: MlxDtype) -> bool {
     )
 }
 
-fn positive_last_dimension(shape: &[i32], operation: &'static str) -> Result<i32, MlxRuntimeError> {
+fn positive_last_dimension(shape: &[i32], operation: &'static str) -> Result<i32, MlxCError> {
     shape
         .last()
         .copied()
@@ -241,8 +239,8 @@ fn positive_last_dimension(shape: &[i32], operation: &'static str) -> Result<i32
         .ok_or_else(|| operation_error(operation, "array must have a positive tail dimension"))
 }
 
-fn operation_error(operation: &'static str, description: &'static str) -> MlxRuntimeError {
-    MlxRuntimeError::RuntimeOperation {
+fn operation_error(operation: &'static str, description: &'static str) -> MlxCError {
+    MlxCError {
         operation,
         description: description.to_owned(),
     }
