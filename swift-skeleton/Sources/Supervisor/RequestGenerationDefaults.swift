@@ -15,6 +15,18 @@ struct RequestGenerationSettingsPresence {
         self.temperature = generationSettings.temperatureThousandths != nil;
         self.topP = generationSettings.topPThousandths != nil;
     }
+
+    /// The REST surface knows client-supplied settings before translation,
+    /// so it records presence directly from the public request parts.
+    init(
+        maximumOutputTokensRequested: Bool,
+        temperatureRequested: Bool,
+        topPRequested: Bool
+    ) {
+        self.maximumOutputTokens = maximumOutputTokensRequested;
+        self.temperature = temperatureRequested;
+        self.topP = topPRequested;
+    }
 }
 
 /// Applies one canonical model's live request defaults without overriding
