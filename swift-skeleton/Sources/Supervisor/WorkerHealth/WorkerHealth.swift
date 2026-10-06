@@ -74,6 +74,10 @@ public struct WorkerHealthSnapshot: Equatable {
     public var expertResidency: WorkerExpertResidencySnapshot?;
     /// Sparse-expert ownership mode reported by the worker or a swap.
     public var expertMemoryMode: ExpertMemoryMode?;
+    /// A validated memory-ceiling change the worker has not applied yet.
+    public var pendingMlxMemoryCeilingBytes: UInt64?;
+    /// The failure that blocked applying an authored memory ceiling.
+    public var mlxMemoryLimitError: String?;
 
     /// Builds a ready snapshot from the worker's enriched readiness event.
     public static func readyWithModel(
@@ -90,7 +94,9 @@ public struct WorkerHealthSnapshot: Equatable {
             minimumMlxMemoryCeilingBytes: 1,
             latestMlxMemorySnapshot: nil,
             expertResidency: nil,
-            expertMemoryMode: nil);
+            expertMemoryMode: nil,
+            pendingMlxMemoryCeilingBytes: nil,
+            mlxMemoryLimitError: nil);
     }
 
     /// Builds a ready snapshot for an idle worker that has no resident model.
@@ -109,7 +115,9 @@ public struct WorkerHealthSnapshot: Equatable {
             minimumMlxMemoryCeilingBytes: minimumMlxMemoryCeilingBytes,
             latestMlxMemorySnapshot: nil,
             expertResidency: nil,
-            expertMemoryMode: nil);
+            expertMemoryMode: nil,
+            pendingMlxMemoryCeilingBytes: nil,
+            mlxMemoryLimitError: nil);
     }
 
     /// Builds a non-ready snapshot.
@@ -124,7 +132,9 @@ public struct WorkerHealthSnapshot: Equatable {
             minimumMlxMemoryCeilingBytes: 1,
             latestMlxMemorySnapshot: nil,
             expertResidency: nil,
-            expertMemoryMode: nil);
+            expertMemoryMode: nil,
+            pendingMlxMemoryCeilingBytes: nil,
+            mlxMemoryLimitError: nil);
     }
 
     /// Builds a fresh resident-model snapshot without resetting daemon-session

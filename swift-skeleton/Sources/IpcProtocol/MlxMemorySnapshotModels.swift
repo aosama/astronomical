@@ -150,7 +150,7 @@ public struct WorkerMlxMemorySnapshot: Equatable {
         "memory_ceiling_utilization",
     ];
 
-    internal func wireValue() -> JsonWireValue {
+    public func wireValue() -> JsonWireValue {
         var wireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
         wireObject.appendEntry(key: "source", value: self.source.wireValue());
         wireObject.appendEntry(key: "active_memory_bytes", value: .unsignedInteger(self.activeMemoryBytes));
