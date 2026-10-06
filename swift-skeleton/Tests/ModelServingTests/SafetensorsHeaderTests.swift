@@ -80,7 +80,7 @@ final class SafetensorsHeaderTests: XCTestCase {
     }
 
     func testShouldRejectAHeaderThatReachesBeyondTheFileEnd() throws {
-        let (fileHandle, fileSizeBytes): (FileHandle, UInt64) = try Self.openFramedFile(
+        let (fileHandle, _) : (FileHandle, UInt64) = try Self.openFramedFile(
             headerJsonText: #"{"tensor.weight":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}"#,
             payloadByteCount: 1);
         defer { fileHandle.closeFile(); }
