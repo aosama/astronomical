@@ -128,8 +128,13 @@ jobs:
             # repository cache budget or the one-minute cache segment timeout;
             # sccache enforces the cap on writes and every default-branch build
             # writes new artifacts. The cap must exist before the first server
-            # start because sccache reads it once at startup.
-            printf 'SCCACHE_CACHE_SIZE=%s\n' "3G"
+            # start because sccache reads it once at startup. sccache parses
+            # the value as a binary multiple, so 2700M budgets 2.83 decimal GB
+            # of tracked entries: enough headroom below the decimal 3 GB entry
+            # ceiling enforced by scripts/save-sccache-cache.sh and
+            # scripts/prune-ci-caches.sh that the trimmed directory plus
+            # cache-archive overhead stays within budget.
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "2700M"
             # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
           } >> "$GITHUB_ENV"
           printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"
@@ -370,14 +375,31 @@ jobs:
           owner: native-build
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
+      - name: Enforce sccache cache budget
+        id: sccache-budget
+        # A restore that hits the primary key marks cache-hit=true and skips
+        # the save, so an entry written before the sccache cap existed is
+        # restored and re-downloaded forever. This step measures the capped
+        # directory, deletes stored oversize copies of the primary key, and
+        # decides whether the save below runs. Default-branch-only because the
+        # save itself is; when this step is skipped the save output is empty
+        # and the save step is skipped with it.
+        if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/save-sccache-cache.sh "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}"
+        timeout-minutes: 2
       - name: Save sccache-cache
         id: sccache-cache-save
         # Pull-request saves are merge-ref-scoped duplicates of the
         # default-branch entry: pull requests restore from the default branch
         # anyway, so skipping the pull-request save halves the sccache share of
         # the 10 GB repository cache budget at the cost of recompiling a pull
-        # request's own new artifacts on each run.
-        if: ${{ !cancelled() && steps.sccache-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch }}
+        # request's own new artifacts on each run. The budget step above
+        # suppresses a save whenever the stored primary-key entry is already
+        # within budget, and forces one only to replace an oversize entry or
+        # record a new generation.
+        if: ${{ !cancelled() && steps.sccache-budget.outputs.should_save == 'true' }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save
