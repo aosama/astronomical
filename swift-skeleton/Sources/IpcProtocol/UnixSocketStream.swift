@@ -110,6 +110,10 @@ public final class UnixSocketStream: FrameTransport {
         _ = shutdownResult;
     }
 
+    public func closeTransportFileDescriptor() {
+        self.close();
+    }
+
     /// Closes the file descriptor; safe to call repeatedly.
     public func close() -> Void {
         self.lifecycleLock.lock();
