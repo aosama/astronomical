@@ -164,8 +164,6 @@ fn autoregressive_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
-                mtp_enabled: true,
-                mtp_draft_depth: None,
             },
         )),
     }

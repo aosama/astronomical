@@ -131,7 +131,6 @@ fn write_cache_enabled_config(
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 80,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
         "chunking": {
 
             "fixed_prompt_processing_chunk_size_tokens": 8192,

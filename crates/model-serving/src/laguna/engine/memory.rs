@@ -42,7 +42,6 @@ pub(super) fn admit_laguna_forward_memory(
             forward_token_count,
             memory::context_token_bucket(context_token_count_after_forward),
             false,
-            false,
             sparse_experts_are_paged,
         ),
         // The growth guard only observes prefill and decode windows.
@@ -50,7 +49,7 @@ pub(super) fn admit_laguna_forward_memory(
         // memory/phase.rs), and Idle never reaches forward observation because
         // a completed forward always belongs to a work phase.
         MemoryPhase::GenerationPreparation | MemoryPhase::Idle | MemoryPhase::Decode => {
-            AdaptiveRamGrowthContext::decode(forward_token_count, false, sparse_experts_are_paged)
+            AdaptiveRamGrowthContext::decode(forward_token_count, sparse_experts_are_paged)
         }
     };
     let decoder_memory_projection = decoder_state

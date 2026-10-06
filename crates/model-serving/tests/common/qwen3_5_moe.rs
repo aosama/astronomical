@@ -130,8 +130,7 @@ pub fn frozen_ornith_1_0_config_bytes() -> Vec<u8> {
             "num_experts": 256,
             "num_experts_per_tok": 8,
             "moe_intermediate_size": 512,
-            "shared_expert_intermediate_size": 512,
-            "mtp_num_hidden_layers": 1
+            "shared_expert_intermediate_size": 512
         }
     }
     "#;
@@ -199,8 +198,7 @@ pub fn frozen_ornith_1_0_optiq_config_bytes() -> Vec<u8> {
             "num_experts": 256,
             "num_experts_per_tok": 8,
             "moe_intermediate_size": 512,
-            "shared_expert_intermediate_size": 512,
-            "mtp_num_hidden_layers": 1
+            "shared_expert_intermediate_size": 512
         }
     }
     "#;
@@ -331,7 +329,7 @@ fn expected_layer_types() -> Vec<&'static str> {
 
 /// Freezes the funnygeeker/Qwen3.8-35B-A3B-Distill-oQ6e-mtp configuration shape:
 /// a 6-bit affine default with a sparse override map whose unlisted expected
-/// modules (router gates, MTP fusion) are stored as native floating point and
+/// modules (router gates) are stored as native floating point and
 /// resolved through the shard-index scan.
 pub fn frozen_qwen3_8_distill_config_bytes() -> Vec<u8> {
     let config_bytes = br#"
@@ -373,9 +371,7 @@ pub fn frozen_qwen3_8_distill_config_bytes() -> Vec<u8> {
             "num_experts": 256,
             "num_experts_per_tok": 8,
             "moe_intermediate_size": 512,
-            "shared_expert_intermediate_size": 512,
-            "mtp_num_hidden_layers": 1,
-            "mtp_use_dedicated_embeddings": false
+            "shared_expert_intermediate_size": 512
         }
     }
     "#;
@@ -426,18 +422,6 @@ pub fn frozen_qwen3_8_distill_config_bytes() -> Vec<u8> {
     }
     quantization["language_model.model.embed_tokens"] = json!({"group_size": 64, "bits": 8});
     quantization["language_model.lm_head"] = json!({"group_size": 64, "bits": 8});
-    // The single MTP layer mirrors the body: 8-bit attention and shared expert,
-    // default-width switch experts, and an unoverridden native fusion module.
-    for projection_name in ["q_proj", "k_proj", "v_proj", "o_proj"] {
-        quantization[format!("language_model.mtp.layers.0.self_attn.{projection_name}")] =
-            json!({"group_size": 64, "bits": 8});
-    }
-    quantization["language_model.mtp.layers.0.mlp.shared_expert_gate"] =
-        json!({"group_size": 64, "bits": 8});
-    for projection_name in ["gate_proj", "up_proj", "down_proj"] {
-        quantization[format!("language_model.mtp.layers.0.mlp.shared_expert.{projection_name}")] =
-            json!({"group_size": 128, "bits": 8});
-    }
     config_value["quantization"] = quantization.clone();
     config_value["quantization_config"] = quantization;
     config_value["text_config"]["layer_types"] = json!(expected_layer_types());

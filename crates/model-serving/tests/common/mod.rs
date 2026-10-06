@@ -28,7 +28,6 @@ use tokio::{process::Command, time::timeout};
 #[allow(dead_code)]
 pub(crate) mod generation_progress;
 #[allow(dead_code)]
-pub(crate) mod mtp_depth_release_gate;
 #[allow(dead_code)]
 pub(crate) mod qwen3_5;
 pub(crate) mod qwen3_5_moe;
@@ -82,22 +81,6 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
         ),
         (
             CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
-            CustomKernelVerdict::Unsupported(
-                astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
-                    description: forced_demotion_description.to_owned(),
-                },
-            ),
-        ),
-        (
-            CustomMetalKernelFamily::TargetVerificationQuantizedLinear,
-            CustomKernelVerdict::Unsupported(
-                astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
-                    description: forced_demotion_description.to_owned(),
-                },
-            ),
-        ),
-        (
-            CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
             CustomKernelVerdict::Unsupported(
                 astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
                     description: forced_demotion_description.to_owned(),

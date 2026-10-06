@@ -217,9 +217,6 @@ fn publish_staged_model_swap(
         capabilities,
         expert_memory_mode,
         minimum_mlx_memory_ceiling_bytes,
-        mtp_runtime_state,
-        mtp_unavailable_reason,
-        mtp_depth_status,
     } = model_swap_event
     else {
         return Err(WorkerControlError::WorkerProtocolViolation {
@@ -235,11 +232,8 @@ fn publish_staged_model_swap(
         model_id,
         capabilities,
         minimum_mlx_memory_ceiling_bytes,
-        mtp_runtime_state,
-        mtp_unavailable_reason,
         &current_health_snapshot,
-    )
-    .with_mtp_depth_status(mtp_depth_status);
+    );
     replacement_health_snapshot.expert_memory_mode = expert_memory_mode;
     if let Some(runtime_configuration) = runtime_configuration {
         replacement_health_snapshot.worker_runtime_feature_configuration =

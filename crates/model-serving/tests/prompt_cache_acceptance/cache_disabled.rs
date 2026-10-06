@@ -41,7 +41,6 @@ async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
         248_069,
         model_directory.to_path_buf(),
         cache_disabled_chunking_configuration,
-        true,
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine

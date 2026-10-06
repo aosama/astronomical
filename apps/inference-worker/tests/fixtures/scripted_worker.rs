@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatModelCapabilities, MtpRuntimeState, ProtocolReader,
-    ProtocolWriter, WorkerCommand, WorkerEvent,
+    ChatGenerationCompletionReason, ChatModelCapabilities, ProtocolReader, ProtocolWriter,
+    WorkerCommand, WorkerEvent,
 };
 
 #[tokio::main]
@@ -9,9 +9,6 @@ async fn main() {
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());
     if event_writer
         .send_event(&WorkerEvent::Ready {
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: Default::default(),
             model_id: "astronomical/scripted-worker".to_owned(),
             capabilities: ChatModelCapabilities {
                 supports_reasoning: false,

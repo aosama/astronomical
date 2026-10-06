@@ -2,9 +2,8 @@
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, EmbeddingsFailureReason,
-    ImageGenerationFailureReason, MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader,
-    ProtocolWriter, WorkerCommand, WorkerEvent, WorkerModelCapabilities,
-    WorkerRuntimeFeatureConfiguration,
+    ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
+    WorkerCommand, WorkerEvent, WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -59,15 +58,7 @@ where
                 self.minimum_mlx_memory_ceiling_bytes =
                     engine_load_result.minimum_mlx_memory_ceiling_bytes();
                 event_writer
-                    .send_event(
-                        &loaded_model.processor.ready_event(
-                            engine_load_result.mtp_runtime_state(),
-                            engine_load_result
-                                .mtp_unavailable_reason()
-                                .map(String::from),
-                            engine_load_result.mtp_depth_status(),
-                        ),
-                    )
+                    .send_event(&loaded_model.processor.ready_event())
                     .await?;
                 // The menu's expert-mode label must be reported fact from the moment readiness
                 // is published. Without this event the label stays a supervisor-side fallback
@@ -108,9 +99,6 @@ where
                         capabilities: WorkerModelCapabilities::image_generation(
                             image_load_result.capabilities().clone(),
                         ),
-                        mtp_runtime_state: MtpRuntimeState::Disabled,
-                        mtp_unavailable_reason: None,
-                        mtp_depth_status: Default::default(),
                     })
                     .await?;
                 self.emit_mlx_memory_sample(
@@ -135,9 +123,6 @@ where
                         capabilities: WorkerModelCapabilities::embeddings(
                             *embedding_load_result.capabilities(),
                         ),
-                        mtp_runtime_state: MtpRuntimeState::Disabled,
-                        mtp_unavailable_reason: None,
-                        mtp_depth_status: Default::default(),
                     })
                     .await?;
                 self.emit_mlx_memory_sample(

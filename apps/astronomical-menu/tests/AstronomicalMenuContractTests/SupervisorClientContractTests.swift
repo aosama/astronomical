@@ -76,9 +76,7 @@ final class SupervisorClientContractTests: XCTestCase {
                 "experimental_decode_stage_attribution_enabled": false,
                 "experimental_quantized_kv_cache_enabled": false,
                 "experimental_fused_moe_decode_enabled": false
-              },
-              "mtp_enabled": true,
-              "mtp_draft_depth": 3
+              }
             }
           }
         }
@@ -90,8 +88,8 @@ final class SupervisorClientContractTests: XCTestCase {
     XCTAssertEqual(reloadResult.candidateGeneration, reloadResult.effectiveGeneration)
     let loadedModelConfiguration = reloadResult.workerRuntimeFeatureConfiguration?.loadedModel?
       .autoregressiveConfiguration
-    XCTAssertEqual(loadedModelConfiguration?.mtpEnabled, true)
-    XCTAssertEqual(loadedModelConfiguration?.mtpDraftDepth, 3)
+    XCTAssertEqual(
+      loadedModelConfiguration?.maximumContextTokens, 32_768)
   }
 
   func test_should_reject_status_from_the_opposite_runtime_instance() async {

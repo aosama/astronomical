@@ -12,7 +12,6 @@ use std::path::Path;
 use thiserror::Error;
 
 use crate::MlxRamBudgetModelGeometry;
-use crate::artifact_validation::TensorDeclarationOrigin;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::{
     MeasuredExpertLayerPayload, RamBudgetGeometryError,
@@ -113,31 +112,12 @@ fn expert_layer_plans_from_validated_artifact(
     validated_artifact: &ValidatedQwen3_5Artifact,
     model_directory: &Path,
 ) -> Result<Vec<QuantizedExpertLayerPlan>, Qwen3_5RamBudgetGeometryError> {
-    let mut tensor_name_to_shard_file_name: HashMap<String, String> = validated_artifact
+    let tensor_name_to_shard_file_name: HashMap<String, String> = validated_artifact
         .shard_index()
         .language_tensor_name_to_shard_file_name()
         .iter()
-        .chain(
-            validated_artifact
-                .shard_index()
-                .mtp_tensor_name_to_shard_file_name(),
-        )
         .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
         .collect();
-    if let Some(sidecar_file_name) = validated_artifact.mtp_sidecar_file_name() {
-        for location in validated_artifact
-            .tensor_inventory()
-            .locations()
-            .filter(|location| {
-                location.declaration_origin() == TensorDeclarationOrigin::ArchitectureSidecar
-            })
-        {
-            tensor_name_to_shard_file_name.insert(
-                location.canonical_name().to_owned(),
-                sidecar_file_name.to_owned(),
-            );
-        }
-    }
     let stored_tensor_name_by_canonical_name = validated_artifact
         .tensor_inventory()
         .locations()
@@ -148,12 +128,8 @@ fn expert_layer_plans_from_validated_artifact(
             )
         })
         .collect::<HashMap<_, _>>();
-    let include_mtp_sparse_expert_layer = tensor_name_to_shard_file_name
-        .keys()
-        .any(|tensor_name| tensor_name.contains("language_model.mtp.layers.0.mlp.switch_mlp."));
     let decoder_layer_count = validated_artifact.config().layer_count() as usize;
-    let mut layer_plans =
-        Vec::with_capacity(decoder_layer_count + usize::from(include_mtp_sparse_expert_layer));
+    let mut layer_plans = Vec::with_capacity(decoder_layer_count);
     let mut safetensors_header_by_source_file = HashMap::new();
     for decoder_layer_index in 0..decoder_layer_count {
         let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
@@ -167,18 +143,6 @@ fn expert_layer_plans_from_validated_artifact(
         )
         .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
         layer_plans.push(layer_plan);
-    }
-    if include_mtp_sparse_expert_layer {
-        let mtp_layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
-            model_directory,
-            &tensor_name_to_shard_file_name,
-            &stored_tensor_name_by_canonical_name,
-            "language_model.mtp.layers.0.mlp",
-            validated_artifact.config(),
-            &mut safetensors_header_by_source_file,
-        )
-        .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
-        layer_plans.push(mtp_layer_plan);
     }
     Ok(layer_plans)
 }

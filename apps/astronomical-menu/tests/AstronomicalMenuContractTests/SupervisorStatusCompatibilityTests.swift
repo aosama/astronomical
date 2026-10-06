@@ -18,22 +18,6 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
     XCTAssertEqual(statusDocument.progress?.unit, .steps)
   }
 
-  func test_should_decode_complete_mtp_depth_status_without_inventing_application() throws {
-    let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
-      from: Data(#"{"status":"ready","activity":"idle","mtp_enabled":true,"mtp_configured_draft_depth":3,"mtp_artifact_maximum_draft_depth":1,"mtp_artifact_default_draft_depth":null,"mtp_resolved_requested_draft_depth":3,"mtp_capped_draft_depth":1,"mtp_effective_execution_draft_depth":1,"mtp_depth_resolution_reason":"configured MTP draft depth was clamped to the declared artifact maximum"}"#.utf8)
-    )
-
-    XCTAssertEqual(statusDocument.mtpConfiguredDraftDepth, 3)
-    XCTAssertEqual(statusDocument.mtpArtifactMaximumDraftDepth, 1)
-    XCTAssertNil(statusDocument.mtpArtifactDefaultDraftDepth)
-    XCTAssertEqual(statusDocument.mtpResolvedRequestedDraftDepth, 3)
-    XCTAssertEqual(statusDocument.mtpCappedDraftDepth, 1)
-    XCTAssertEqual(statusDocument.mtpEffectiveExecutionDraftDepth, 1)
-    XCTAssertEqual(
-      statusDocument.mtpDepthResolutionReason,
-      "configured MTP draft depth was clamped to the declared artifact maximum")
-  }
   func test_should_decode_a_legacy_status_document_without_new_telemetry_fields() throws {
     let statusDocument = try JSONDecoder().decode(
       SupervisorStatusDocument.self,

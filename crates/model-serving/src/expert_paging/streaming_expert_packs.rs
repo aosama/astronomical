@@ -102,8 +102,7 @@ pub(crate) struct PackTensorDescriptorProbe {
 }
 
 /// Per-expert pack sources for one converted model directory. Indexed exactly
-/// like the pager's layer plans: decoder layers first; an appended MTP layer
-/// (when present) has no streaming sources and keeps the shard path.
+/// like the pager's layer plans: one entry per decoder layer.
 #[derive(Clone, Debug)]
 pub struct StreamingExpertPackSources {
     /// One entry per decoder layer, index == decoder layer index. Each entry

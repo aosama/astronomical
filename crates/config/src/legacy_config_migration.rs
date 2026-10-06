@@ -11,13 +11,12 @@ use serde::Deserialize;
 
 use crate::chunking_config::ChunkingConfigFile;
 use crate::config_document::{
-    AccelerationConfigFile, DiagnosticsConfigFile, GenerationDefaultsConfigFile, ModelConfigFile,
-    MtpConfigFile, PromptCacheConfigFile, RuntimeConfigFile, UserConfigFile,
+    DiagnosticsConfigFile, GenerationDefaultsConfigFile, ModelConfigFile, PromptCacheConfigFile,
+    RuntimeConfigFile, UserConfigFile,
 };
 use crate::config_file::{
-    parse_and_validate_v1, read_existing_config_file_bytes,
-    strip_retired_speculative_prefill_config, write_adjacent_schema,
-    write_config_file_bytes_atomically,
+    parse_and_validate_v1, read_existing_config_file_bytes, strip_retired_config_fields,
+    write_adjacent_schema, write_config_file_bytes_atomically,
 };
 use crate::{AstronomicalConfigError, LogLevel};
 
@@ -141,7 +140,7 @@ pub(crate) fn prepare_legacy_config_migration(
     config_file_path: &Path,
     mut legacy_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
-    strip_retired_speculative_prefill_config(&mut legacy_json);
+    strip_retired_config_fields(&mut legacy_json);
     let legacy_config: LegacyConfigFile =
         serde_json::from_value(legacy_json).map_err(|source| {
             AstronomicalConfigError::ParseConfigFile {
@@ -164,10 +163,7 @@ pub(crate) fn prepare_legacy_config_migration(
 fn discover_model_ids_required_for_migration(
     legacy_config: &LegacyConfigFile,
 ) -> Result<Vec<String>, AstronomicalConfigError> {
-    if legacy_config.max_output_tokens.is_none()
-        && legacy_config.mtp_draft_depth.is_none()
-        && legacy_config.mtp_enabled != Some(false)
-    {
+    if legacy_config.max_output_tokens.is_none() {
         return Ok(Vec::new());
     }
     let directory_scans =
@@ -202,20 +198,6 @@ fn build_migrated_config(
         if let Some(maximum_output_tokens) = legacy_config.max_output_tokens {
             model_config.generation_defaults = Some(GenerationDefaultsConfigFile {
                 maximum_output_tokens: Some(maximum_output_tokens),
-                ..Default::default()
-            });
-        }
-        // The legacy `mtp_enabled` field was written as an explicit operator
-        // intent in both directions: `true` must migrate to an enabled v1
-        // acceleration policy (omission stays off), and `false` must survive
-        // as an explicit opt-out. Dropping `true` silently disabled MTP for
-        // operators who asked for it.
-        if legacy_config.mtp_enabled.is_some() || legacy_config.mtp_draft_depth.is_some() {
-            model_config.acceleration = Some(AccelerationConfigFile {
-                mtp: Some(MtpConfigFile {
-                    enabled: legacy_config.mtp_enabled,
-                    draft_depth: legacy_config.mtp_draft_depth,
-                }),
                 ..Default::default()
             });
         }
@@ -272,12 +254,6 @@ fn validate_legacy_config(legacy_config: &LegacyConfigFile) -> Result<(), Astron
             description: "legacy max_output_tokens must be positive".to_owned(),
         });
     }
-    if legacy_config
-        .mtp_draft_depth
-        .is_some_and(|draft_depth| !(1..=3).contains(&draft_depth))
-    {
-        return Err(AstronomicalConfigError::InvalidMtpDraftDepth);
-    }
     Ok(())
 }
 
@@ -294,9 +270,6 @@ struct LegacyConfigFile {
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     persistent_prompt_cache_enabled: Option<bool>,
     maximum_mlx_memory_gb: Option<u64>,
-    #[serde(default, deserialize_with = "deserialize_present_boolean")]
-    mtp_enabled: Option<bool>,
-    mtp_draft_depth: Option<u8>,
     supervisor: Option<LegacySupervisorConfigFile>,
     prompt_cache_max_size_gb: Option<u64>,
     logging: Option<LegacyLoggingConfigFile>,

@@ -59,7 +59,7 @@ impl Qwen3_5EngineState {
                     })?;
                 let active_memory_breakdown = model.active_memory_breakdown(
                     &active_request.request_decoder_state,
-                    active_request.additional_context_state_payload_bytes(),
+                    0,
                     mlx_active_memory_bytes,
                     0,
                 );

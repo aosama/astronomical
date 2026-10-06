@@ -2,7 +2,6 @@ use std::{future::Future, pin::Pin};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatMessage, ChatModelCapabilities,
-    MtpRuntimeState,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
@@ -285,8 +284,6 @@ impl ChatGenerationExecutor for CopilotResponsesExecutor {
                 max_output_tokens: 20_480,
                 context_window: 262_144,
             },
-            MtpRuntimeState::Disabled,
-            None,
         )
     }
 }

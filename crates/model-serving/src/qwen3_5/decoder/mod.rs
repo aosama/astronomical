@@ -18,8 +18,8 @@ pub use persistent_prompt_cache_boundary_checkpoint::{
 pub use persistent_state_bridge::PersistentPromptCacheStateBridgeError;
 #[cfg(feature = "direct-mlx")]
 pub use request_decoder_state::{
-    Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint, RequestDecoderStateStack,
-    RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
+    RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
+    RequestDecoderStateStackCheckpoint,
 };
 
 pub(crate) use super::configuration::Qwen3_5Config;

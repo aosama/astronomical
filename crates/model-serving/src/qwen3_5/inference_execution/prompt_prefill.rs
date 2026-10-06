@@ -46,7 +46,7 @@ impl Qwen3_5EngineState {
         let admission_outcome = self.execute_prefill_memory_admission(
             active_request,
             plan.adaptive_ram_growth_context,
-            plan.additional_persistent_state_growth_bytes,
+            0,
             plan.exact_temporary_workspace_bytes,
             plan.direct_publication_workspace_bytes,
         )?;

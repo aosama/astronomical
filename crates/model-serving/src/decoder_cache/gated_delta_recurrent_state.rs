@@ -110,14 +110,14 @@ impl GatedDeltaRecurrentState {
             .map_or(0, |state| state.byte_count() as u64)
     }
 
-    /// Retains the current recurrent tensor for MTP rollback.
+    /// Retains the current recurrent tensor for transactional rollback.
     pub fn checkpoint(&self) -> Result<GatedDeltaRecurrentStateCheckpoint, MlxRuntimeError> {
         Ok(GatedDeltaRecurrentStateCheckpoint {
             state: self.state.as_ref().map(MlxArray::retain).transpose()?,
         })
     }
 
-    /// Restores a retained MTP checkpoint.
+    /// Restores a retained checkpoint.
     pub fn restore_checkpoint(&mut self, checkpoint: GatedDeltaRecurrentStateCheckpoint) {
         self.state = checkpoint.state;
     }

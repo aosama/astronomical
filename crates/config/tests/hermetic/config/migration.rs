@@ -24,8 +24,6 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
         "persistent_prompt_cache_enabled": false,
         "prompt_cache_max_size_gb": 20,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
-        "mtp_draft_depth": 2,
         "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 4096,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 1024,
@@ -76,8 +74,6 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
     assert_eq!(migrated_json["prompt_cache"]["enabled"], false);
     assert!(migrated_json.get("max_output_tokens").is_none());
     assert_eq!(model_config.maximum_output_tokens(), 4_096);
-    assert!(!model_config.mtp_enabled());
-    assert_eq!(model_config.mtp_draft_depth(), Some(2));
     assert_eq!(
         model_config
             .chunking()
@@ -94,40 +90,6 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
             .prompt_cache_common_prefix_stride_blocks(),
         8
     );
-}
-
-#[test]
-fn should_migrate_legacy_mtp_enabled_true_to_a_v1_enabled_acceleration_policy() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    let model_root = temporary_home_directory.path().join("models");
-    let model_directory = model_root.join("target");
-    fs::create_dir_all(&model_directory).expect("model directory should be created");
-    super::super::model_discovery::write_minimal_model_config(
-        &model_directory,
-        "qwen3_5_moe",
-        65_536,
-    );
-    super::super::model_discovery::write_required_model_files(&model_directory);
-    let legacy_config_json = serde_json::json!({
-        "model_directories": [model_root],
-        "mtp_enabled": true,
-        "mtp_draft_depth": 3
-    })
-    .to_string();
-    write_config(temporary_home_directory.path(), &legacy_config_json);
-
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("a legacy config that enables MTP should migrate");
-    let model_config = astronomical_config
-        .resolved_model_config("target", 65_536)
-        .expect("the migrated MTP policy should resolve");
-
-    assert!(
-        model_config.mtp_enabled(),
-        "legacy mtp_enabled true must migrate to an enabled v1 MTP acceleration policy"
-    );
-    assert_eq!(model_config.mtp_draft_depth(), Some(3));
 }
 
 #[test]
@@ -196,8 +158,7 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
             "organization/target":{
               "chunking":{"speculative_prefill_draft_forward_tokens":1024},
               "acceleration":{
-                "speculative_prefill":{"draft_model_id":"organization/draft"},
-                "mtp":{"enabled":true,"draft_depth":2}
+                "speculative_prefill":{"draft_model_id":"organization/draft"}
               }
             }
           }
@@ -206,10 +167,10 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
 
     let astronomical_config =
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("retired SpeculativePrefill fields should be stripped before strict parsing");
+            .expect("retired acceleration fields should be stripped before strict parsing");
     let resolved_model = astronomical_config
         .resolved_model_config("organization/target", 65_536)
-        .expect("the remaining MTP policy should resolve");
+        .expect("the surviving model policy should resolve");
     let persisted_json: serde_json::Value = serde_json::from_slice(
         &fs::read(
             temporary_home_directory
@@ -220,8 +181,6 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
     )
     .expect("sanitized config should be JSON");
 
-    assert!(resolved_model.mtp_enabled());
-    assert_eq!(resolved_model.mtp_draft_depth(), Some(2));
     assert!(
         persisted_json["chunking"]
             .get("speculative_prefill_draft_forward_tokens")
@@ -238,8 +197,10 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
             .is_none()
     );
     assert_eq!(
-        persisted_json["models"]["organization/target"]["acceleration"]["mtp"]["draft_depth"],
-        2
+        resolved_model
+            .chunking()
+            .fixed_prompt_processing_chunk_size_tokens(),
+        2_048
     );
 }
 
@@ -247,8 +208,6 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
 fn should_preserve_original_bytes_when_legacy_migration_cannot_preserve_behavior() {
     for legacy_config in [
         r#"{"model_directories":[],"max_output_tokens":4096}"#,
-        r#"{"model_directories":[],"mtp_draft_depth":2}"#,
-        r#"{"model_directories":[],"mtp_enabled":false}"#,
         r#"{"model_directories":[],"supervisor":{"bind_address":"127.0.0.1:12345"}}"#,
     ] {
         let temporary_home_directory =

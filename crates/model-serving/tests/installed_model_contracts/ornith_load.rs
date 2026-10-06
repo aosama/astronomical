@@ -85,7 +85,6 @@ async fn load_and_generate_with_configured_ornith_artifact() {
         model_directory,
         crate::common::standard_worker_chunking_configuration(),
         true,
-        false,
         PerformanceAttribution::enabled(),
         PerformanceAttributionLog::open(
             &performance_attribution_directory

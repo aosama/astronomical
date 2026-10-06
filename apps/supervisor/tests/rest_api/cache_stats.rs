@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::{ChatModelCapabilities, MtpRuntimeState, WorkerEvent};
+use astronomical_ipc_protocol::{ChatModelCapabilities, WorkerEvent};
 use astronomical_supervisor::{WorkerHealthSnapshot, WorkerHealthStatus};
 use axum::{
     body::{Body, to_bytes},
@@ -39,8 +39,6 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        MtpRuntimeState::Disabled,
-        None,
     );
     health_snapshot.persistent_prompt_cache_stats =
         Some(POPULATED_PERSISTENT_PROMPT_CACHE_STATS_EVENT.clone());
@@ -220,8 +218,6 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        MtpRuntimeState::Disabled,
-        None,
     );
     health_snapshot.persistent_prompt_cache_stats = Some(WorkerEvent::PersistentPromptCacheStats {
         persistent_prompt_cache_hits: 2,

@@ -69,15 +69,6 @@ pub use compile::transforms::{
     MlxCompileCache, disable_compile, enable_compile, jvp_of_closure, set_compile_mode,
     value_and_grad_of_closure, vjp_of_closure, vmap_replace, vmap_trace,
 };
-pub use compile::verify_window::geometry::{
-    VerifyWindowAffineSlot, VerifyWindowFeedForwardWeightSlot,
-    VerifyWindowFullAttentionQuantization, VerifyWindowFullAttentionWeightSlot,
-    VerifyWindowGatedDeltaQuantization, VerifyWindowGatedDeltaWeightSlot, VerifyWindowGeometry,
-    VerifyWindowInputSlot, VerifyWindowLayerKind, VerifyWindowLayerQuantization,
-    VerifyWindowLayerWeightSlot, VerifyWindowQuantizationPair, VerifyWindowTrunkQuantization,
-    VerifyWindowTrunkWeightSlot, verify_window_input_slots,
-};
-pub use compile::verify_window::graph::{MlxCompiledVerifyWindowGraph, VerifyWindowGdnKernelSet};
 pub use error::{
     MlxCError, check_status, clear_captured_mlx_error, install_non_terminating_error_handler,
     take_captured_mlx_error,

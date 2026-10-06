@@ -14,8 +14,6 @@ pub struct WorkerAutoregressiveModelConfiguration {
     /// Independent output capability; request defaults remain supervisor-owned.
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
-    pub mtp_enabled: bool,
-    pub mtp_draft_depth: Option<u8>,
 }
 
 /// Path-free autoregressive policy acknowledged after model binding.
@@ -28,8 +26,6 @@ pub struct WorkerLoadedAutoregressiveModelRuntimeConfiguration {
     /// Independent output capability, not the configured request default.
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
-    pub mtp_enabled: bool,
-    pub mtp_draft_depth: Option<u8>,
 }
 
 /// Typed image profile identifier carried without autoregressive placeholders.
@@ -151,8 +147,6 @@ impl WorkerModelConfiguration {
                         maximum_context_tokens: configuration.maximum_context_tokens,
                         maximum_output_tokens: configuration.maximum_output_tokens,
                         chunking: configuration.chunking.clone(),
-                        mtp_enabled: configuration.mtp_enabled,
-                        mtp_draft_depth: configuration.mtp_draft_depth,
                     },
                 )
             }

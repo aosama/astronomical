@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, ImageGenerationCapabilities, MtpRuntimeState, WorkerModelCapabilities,
+    ChatModelCapabilities, ImageGenerationCapabilities, WorkerModelCapabilities,
     WorkerPromptWorkReuse,
 };
 use astronomical_supervisor::{
@@ -84,8 +84,6 @@ async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
         let mut previous_health_snapshot = WorkerHealthSnapshot::ready_with_model(
             "example/old-model".to_owned(),
             model_capabilities.clone(),
-            MtpRuntimeState::Disabled,
-            None,
         );
         previous_health_snapshot.pending_prompt_cache_clear = Some(PendingPromptCacheClear {
             model_id: Some("example/cached-model".to_owned()),
@@ -95,8 +93,6 @@ async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
             "example/new-model".to_owned(),
             model_capabilities,
             1,
-            MtpRuntimeState::Disabled,
-            None,
             &previous_health_snapshot,
         );
 
@@ -159,8 +155,6 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
         astronomical_supervisor::WorkerHealthSnapshot::ready_with_model(
             "first-model".to_owned(),
             capabilities.clone(),
-            MtpRuntimeState::Disabled,
-            None,
         );
     previous_health_snapshot.mlx_memory_ceiling_bytes = 40_000;
     previous_health_snapshot
@@ -172,8 +166,6 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
             "second-model".to_owned(),
             capabilities,
             3_000,
-            MtpRuntimeState::Disabled,
-            None,
             &previous_health_snapshot,
         );
 

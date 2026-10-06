@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatModelCapabilities, MtpRuntimeState, ProtocolReader,
-    ProtocolWriter, WorkerCommand, WorkerEvent,
+    ChatGenerationCompletionReason, ChatModelCapabilities, ProtocolReader, ProtocolWriter,
+    WorkerCommand, WorkerEvent,
 };
 
 #[tokio::main]
@@ -14,9 +14,6 @@ async fn main() {
     tokio::time::sleep(Duration::from_millis(500)).await;
     if event_writer
         .send_event(&WorkerEvent::Ready {
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: Default::default(),
             model_id: "astronomical/test-worker".to_owned(),
             capabilities: ChatModelCapabilities {
                 supports_reasoning: false,

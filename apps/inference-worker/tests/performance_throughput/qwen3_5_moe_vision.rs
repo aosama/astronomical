@@ -84,7 +84,6 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 fn should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput() {
     let journey = ThroughputJourney {
         journey_kind: ThroughputJourneyKind::Vision,
-        mtp_draft_depth: None,
         warmup_input_prompt: WARMUP_INPUT_INSTRUCTION.to_owned() + "\n\n" + ROMEO_AND_JULIET_SOURCE,
         warmup_images: vec![solid_color_png(WARMUP_IMAGE_SIDE_PIXELS)],
         warmup_output_tokens: WARMUP_MAXIMUM_OUTPUT_TOKENS,

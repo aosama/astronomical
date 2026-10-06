@@ -12,8 +12,6 @@ use super::persistent_prompt_cache_visual_identity::{
     Qwen3_5PersistentPromptCacheVisualIdentity, Qwen3_5PersistentPromptCacheVisualIdentityInput,
 };
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::memory::MtpDraftDepth;
-use crate::qwen3_5::multi_token_prediction;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 impl Qwen3_5EngineState {
@@ -63,7 +61,6 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         model.clear_phase_aware_expert_residency_plan();
         let decoder_cache_layout = model.decoder_cache_layout().clone();
-        let model_has_optional_prediction_head = model.mtp_weights();
         self.admit_initial_generation_context_or_record_rejection(
             request_id,
             configured_maximum_output_tokens,
@@ -273,27 +270,6 @@ impl Qwen3_5EngineState {
                 .model
                 .as_ref()
                 .is_some_and(|loaded_model| loaded_model.sparse_experts_are_paged());
-            let optional_prediction_session =
-                multi_token_prediction::create_optional_prediction_session(
-                    self.mtp_enabled,
-                    self.mtp_runtime_state == super::Qwen3_5MtpRuntimeState::Active
-                        && !inference_request.has_structured_generation(),
-                    model_has_optional_prediction_head,
-                    has_precomputed_visual_embeddings,
-                    has_processed_visual_images,
-                    sparse_experts_are_paged,
-                    prompt_token_ids.len(),
-                    persistent_prompt_cache_token_count,
-                    self.full_attention_kv_state_growth_tokens,
-                    self.mtp_depth_status
-                        .effective_execution_draft_depth
-                        .map(MtpDraftDepth::new)
-                        .transpose()
-                        .map_err(|_| {
-                            super::fatal_engine_error("loaded MTP depth is outside 1 through 3")
-                        })?,
-                )
-                .map_err(qwen3_5_runtime_error)?;
             let sampling_selects_highest_logit =
                 matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
             let effective_temperature_thousandths = match sampling_strategy {
@@ -305,14 +281,11 @@ impl Qwen3_5EngineState {
             };
             tracing::info!(
                 request_id = inference_request.request_id().value(),
-                mtp_runtime_state = ?self.mtp_runtime_state,
-                mtp_enabled = self.mtp_enabled,
                 sparse_experts_are_paged,
                 persistent_prompt_cache_is_available,
                 sampling_selects_highest_logit,
                 effective_temperature_thousandths,
-                optional_prediction_session_is_active = optional_prediction_session.is_some(),
-                "resolved optional multi-token prediction request session"
+                "resolved target-only generation request session"
             );
             performance_attribution.record_counter(
                 PerformanceCounter::PromptTokenCount,
@@ -324,9 +297,7 @@ impl Qwen3_5EngineState {
             );
             let target_eligible_prompt_work_token_count =
                 u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);
-            let prompt_prefill_end_exclusive = prompt_token_ids
-                .len()
-                .saturating_sub(usize::from(optional_prediction_session.is_some()));
+            let prompt_prefill_end_exclusive = prompt_token_ids.len();
             let initial_prompt_processing_phase = (prefill_cursor < prompt_prefill_end_exclusive)
                 .then_some(astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target);
             self.active_request = Some(Qwen3_5EngineRequest {
@@ -350,7 +321,6 @@ impl Qwen3_5EngineState {
                 image_pad_token_id,
                 thinking_budget_state,
                 performance_attribution,
-                optional_prediction_session,
                 prompt_work_reuse: astronomical_ipc_protocol::WorkerPromptWorkReuse {
                     target_eligible_token_count: target_eligible_prompt_work_token_count,
                     target_restored_token_count: restored_target_work_token_count,

@@ -13,7 +13,6 @@ const FULL_SUBSYSTEMS: VariantSubsystems = VariantSubsystems {
     linear_attention: true,
     sparse_attention: true,
     hyper_connections: true,
-    multi_token_prediction_declared: false,
 };
 
 fn base_spec(model_id: &'static str) -> Qwen4ExpShapeSpec {
@@ -39,7 +38,6 @@ fn base_spec(model_id: &'static str) -> Qwen4ExpShapeSpec {
         indexer_projection_quantized: true,
         ngram_storage: NgramStorageForm::InlineDotNaming,
         ngram_shard_count: 2,
-        multi_token_prediction_tensors: false,
         subsystems: FULL_SUBSYSTEMS,
         maximum_shard_bytes: 64 * 1024,
     }
@@ -88,18 +86,12 @@ pub fn variant_matrix() -> Vec<Qwen4ExpShapeSpec> {
     let mut manifest = base_spec("variant-ngram-manifest");
     manifest.ngram_storage = NgramStorageForm::InlineDotNamingWithManifest;
     variants.push(manifest);
-    // Declares a prediction head without shipping tensors: one artifact does.
-    let mut headless = base_spec("variant-mtp-declared-without-tensors");
-    headless.subsystems.multi_token_prediction_declared = true;
-    headless.multi_token_prediction_tensors = false;
-    variants.push(headless);
     // Text-only: the optional subsystem groups are absent entirely.
     let mut text_only = base_spec("variant-text-only");
     text_only.subsystems = VariantSubsystems {
         linear_attention: false,
         sparse_attention: false,
         hyper_connections: false,
-        multi_token_prediction_declared: false,
     };
     variants.push(text_only);
     // Convolution axis order flipped: published artifacts disagree on it.

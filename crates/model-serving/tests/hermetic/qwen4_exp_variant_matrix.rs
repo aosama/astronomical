@@ -109,13 +109,6 @@ fn the_matrix_covers_every_published_axis_of_variation() {
             .iter()
             .any(|spec| spec.ngram_storage == NgramStorageForm::InlineDotNamingWithoutBiases)
     );
-    // A variant that declares a prediction head without tensors.
-    assert!(
-        variants
-            .iter()
-            .any(|spec| spec.subsystems.multi_token_prediction_declared
-                && !spec.multi_token_prediction_tensors)
-    );
     // A text-only variant with the optional subsystem groups absent.
     assert!(variants.iter().any(|spec| !spec.subsystems.linear_attention
         && !spec.subsystems.sparse_attention

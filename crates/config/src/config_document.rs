@@ -123,8 +123,6 @@ pub(crate) struct ModelConfigFile {
     pub(crate) generation_defaults: Option<GenerationDefaultsConfigFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) chunking: Option<ChunkingConfigFile>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) acceleration: Option<AccelerationConfigFile>,
 }
 
 impl ModelConfigFile {
@@ -164,9 +162,6 @@ impl ModelConfigFile {
         let effective_chunking =
             ChunkingConfigFile::merged(global_chunking, self.chunking.as_ref());
         crate::ChunkingConfig::resolve(&effective_chunking)?;
-        if let Some(acceleration) = &self.acceleration {
-            acceleration.validate()?;
-        }
         Ok(())
     }
 }
@@ -257,38 +252,8 @@ fn is_representable_in_thousandths(sampling_parameter: f32) -> bool {
     (scaled_sampling_parameter - scaled_sampling_parameter.round()).abs() <= 0.000_1
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct AccelerationConfigFile {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) mtp: Option<MtpConfigFile>,
-}
-
-impl AccelerationConfigFile {
-    fn validate(&self) -> Result<(), AstronomicalConfigError> {
-        if self
-            .mtp
-            .as_ref()
-            .and_then(|mtp| mtp.draft_depth)
-            .is_some_and(|draft_depth| !(1..=3).contains(&draft_depth))
-        {
-            return Err(AstronomicalConfigError::InvalidMtpDraftDepth);
-        }
-        Ok(())
-    }
-}
-
 fn is_valid_model_identity(model_id: &str) -> bool {
     !model_id.is_empty() && model_id.trim() == model_id && !model_id.chars().any(char::is_control)
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct MtpConfigFile {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) draft_depth: Option<u8>,
 }
 
 fn invalid_model_value(

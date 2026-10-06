@@ -10,7 +10,7 @@ use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExec
 
 use super::forward_contract;
 use super::model::Qwen3_5Model;
-use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
+use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Qwen3_5Model {
@@ -91,40 +91,5 @@ impl Qwen3_5Model {
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
             performance_attribution,
         )
-    }
-
-    pub(crate) fn generated_token_forward_with_pre_final_normalization_hidden_states_and_performance_attribution(
-        &self,
-        generated_token: &MlxArray,
-        starting_position_tokens: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        forward_contract::validate_generated_token_forward(
-            generated_token,
-            starting_position_tokens,
-            request_decoder_state.layer_count(),
-            self.config.layer_count() as usize,
-            self.config.maximum_position_count(),
-        )?;
-        let token_indices = self.runtime.astype(generated_token, MlxDtype::Int32)?;
-        let target_forward_output = self.build_target_forward_graph_from_token_indices(
-            &token_indices,
-            1,
-            starting_position_tokens,
-            request_decoder_state,
-            None,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-            performance_attribution,
-            false,
-        )?;
-        self.evaluate_forward_state_with_performance_attribution(
-            target_forward_output.final_logits(),
-            request_decoder_state,
-            performance_attribution,
-        )?;
-        self.runtime
-            .evaluate_arrays(&[target_forward_output.pre_final_normalization_hidden_states()])?;
-        Ok(target_forward_output)
     }
 }

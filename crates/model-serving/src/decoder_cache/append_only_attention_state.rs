@@ -273,8 +273,8 @@ impl FullAttentionKeyValueState {
     ///
     /// This restores the state to an earlier logical length without freeing the
     /// physical slab capacity. The caller must pass a checkpoint offset that was
-    /// recorded before the MTP forward that is being rolled back. This is
-    /// the single rollback primitive for MTP transactional decode: it does not
+    /// recorded before the forward that is being rolled back. This is
+    /// the single rollback primitive for transactional decode: it does not
     /// re-allocate, it only moves the logical offset back so subsequent updates
     /// overwrite the discarded suffix.
     pub fn truncate_to_offset(

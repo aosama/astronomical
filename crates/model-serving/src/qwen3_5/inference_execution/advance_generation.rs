@@ -18,10 +18,6 @@ use super::completed_forward_memory::{
 };
 use super::generated_token_emission;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::qwen3_5::multi_token_prediction::{
-    forward_initial_target_token_with_prediction_state,
-    forward_next_target_token_with_prediction_state, take_queued_prediction_token,
-};
 impl Qwen3_5EngineState {
     pub(super) fn advance_generation(
         &mut self,
@@ -126,47 +122,6 @@ impl Qwen3_5EngineState {
         }
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
-        if active_request.is_forcing_thinking_transition()
-            && active_request.has_queued_prediction_tokens()
-        {
-            return Err(super::fatal_engine_error(
-                "MTP verification crossed a forced thinking-budget boundary",
-            ));
-        }
-        if let Some(queued_prediction_token_id) = take_queued_prediction_token(active_request) {
-            // The prediction path already computed the first observable token,
-            // so no additional first decode forward is required at this boundary.
-            if active_request.generated_token_count == 0
-                && active_request.first_decode_forward_elapsed_millis.is_none()
-            {
-                active_request.first_decode_forward_elapsed_millis = Some(0);
-            }
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            let completed_forward_memory = if !self.adaptive_ram_growth_guard_enabled {
-                None
-            } else {
-                Some(capture_completed_forward_memory_observation(model)?)
-            };
-            let generated_token_emission = self.build_generated_token_emission(
-                model,
-                active_request,
-                queued_prediction_token_id,
-                completed_forward_memory.as_ref(),
-            )?;
-            return if generated_token_emission.is_terminal {
-                Ok(ActiveRequestAdvance::Complete(
-                    generated_token_emission.generated_token,
-                ))
-            } else {
-                Ok(ActiveRequestAdvance::Continue(
-                    generated_token_emission.generated_token,
-                ))
-            };
-        }
-
         let forced_thinking_transition_token_id =
             active_request.next_forced_thinking_transition_token_id()?;
         let mut first_decode_forward_started_at = None;
@@ -218,11 +173,8 @@ impl Qwen3_5EngineState {
                             super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                         })?
                         .sparse_experts_are_paged();
-                    let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
-                        1,
-                        active_request.has_optional_prediction_session(),
-                        sparse_experts_are_paged,
-                    );
+                    let adaptive_ram_growth_context =
+                        AdaptiveRamGrowthContext::decode(1, sparse_experts_are_paged);
                     let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
                         adaptive_ram_growth_context,
                         &mut active_request.performance_attribution,
@@ -250,48 +202,38 @@ impl Qwen3_5EngineState {
                         "starting first decode forward after prompt processing"
                     );
                     first_decode_forward_started_at = Some(Instant::now());
-                    let first_generated_token = if let Some(prediction_token) =
-                        forward_initial_target_token_with_prediction_state(
-                            model,
-                            active_request,
-                            final_prompt_token_id,
-                        )? {
-                        prediction_token
+                    let final_prompt_logits = if model.sparse_experts_are_paged() {
+                        // Paged decode resolves deferred GPU missing-route bitmaps
+                        // on a synchronous completion root before the token is
+                        // observable.
+                        model
+                            .forward_chunk_with_performance_attribution(
+                                &[final_prompt_token_id],
+                                active_request.next_position_tokens,
+                                &mut active_request.request_decoder_state,
+                                &mut active_request.performance_attribution,
+                            )
+                            .map_err(InferenceEngineError::from)?
                     } else {
-                        let final_prompt_logits = if model.sparse_experts_are_paged() {
-                            // Paged decode resolves deferred GPU missing-route bitmaps
-                            // on a synchronous completion root before the token is
-                            // observable.
-                            model
-                                .forward_chunk_with_performance_attribution(
-                                    &[final_prompt_token_id],
-                                    active_request.next_position_tokens,
-                                    &mut active_request.request_decoder_state,
-                                    &mut active_request.performance_attribution,
-                                )
-                                .map_err(InferenceEngineError::from)?
-                        } else {
-                            model
-                                .build_forward_chunk_with_performance_attribution(
-                                    &[final_prompt_token_id],
-                                    active_request.next_position_tokens,
-                                    &mut active_request.request_decoder_state,
-                                    &mut active_request.performance_attribution,
-                                )
-                                .map_err(InferenceEngineError::from)?
-                        };
-                        active_request.advance_position(1)?;
-                        let first_generated_token =
-                            active_request.build_generated_token(model, &final_prompt_logits)?;
-                        // Issue #536/#542: first decode token route history.
-                        // Logits evaluation already materialized the retained
-                        // router arrays; this only copies host identifiers.
-                        model.finalize_route_observation_record(
-                            final_prompt_token_id,
-                            &mut active_request.performance_attribution,
-                        );
-                        first_generated_token
+                        model
+                            .build_forward_chunk_with_performance_attribution(
+                                &[final_prompt_token_id],
+                                active_request.next_position_tokens,
+                                &mut active_request.request_decoder_state,
+                                &mut active_request.performance_attribution,
+                            )
+                            .map_err(InferenceEngineError::from)?
                     };
+                    active_request.advance_position(1)?;
+                    let first_generated_token =
+                        active_request.build_generated_token(model, &final_prompt_logits)?;
+                    // Issue #536/#542: first decode token route history.
+                    // Logits evaluation already materialized the retained
+                    // router arrays; this only copies host identifiers.
+                    model.finalize_route_observation_record(
+                        final_prompt_token_id,
+                        &mut active_request.performance_attribution,
+                    );
                     if !model.sparse_experts_are_paged() {
                         active_request
                             .performance_attribution
@@ -354,7 +296,7 @@ impl Qwen3_5EngineState {
                     decode_context_token_count,
                     1,
                     &active_request.request_decoder_state,
-                    active_request.additional_context_state_payload_bytes(),
+                    0,
                     decode_active_memory_bytes,
                     &mut active_request.performance_attribution,
                 );
@@ -412,27 +354,13 @@ impl Qwen3_5EngineState {
             ));
         }
 
-        if forced_thinking_transition_token_id.is_none() {
-            if let Some(prediction_advance) = self.attempt_mtp_decode_window(
-                request_id,
-                active_request,
-                &current_generated_token,
-                current_generated_token_id,
-            )? {
-                return Ok(prediction_advance);
-            }
-        }
-
         let sparse_experts_are_paged = self
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .sparse_experts_are_paged();
-        let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
-            1,
-            active_request.has_optional_prediction_session(),
-            sparse_experts_are_paged,
-        );
+        let adaptive_ram_growth_context =
+            AdaptiveRamGrowthContext::decode(1, sparse_experts_are_paged);
         let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,
@@ -466,15 +394,7 @@ impl Qwen3_5EngineState {
         } else {
             None
         };
-        let next_generated_token = if let Some(prediction_token) =
-            forward_next_target_token_with_prediction_state(
-                model,
-                active_request,
-                &current_generated_token,
-                current_generated_token_id,
-            )? {
-            prediction_token
-        } else {
+        let next_generated_token = {
             let next_logits = model
                 .build_generated_token_forward_with_performance_attribution(
                     &current_generated_token,

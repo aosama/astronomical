@@ -1,6 +1,6 @@
 use astronomical_model_serving::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheState, DecoderCacheTensorDtype,
-    DecoderCacheTensorLayout, Qwen3_5MtpRequestState, RequestDecoderStateStack,
+    DecoderCacheTensorLayout, RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::sync::MutexGuard;
@@ -104,54 +104,6 @@ async fn should_restore_absent_composite_owners_after_a_failed_first_use_attempt
             .expect("restored empty composite state should project"),
         60
     );
-}
-
-#[tokio::test]
-async fn should_restore_mtp_physical_slab_and_offset_after_failed_growth() {
-    let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let mut mtp_request_state = Qwen3_5MtpRequestState::empty_with_growth_tokens(4)
-        .expect("a positive MTP growth step should create request state");
-    let initial_keys = runtime
-        .array_from_f32(&[1.0; 4], &[1, 1, 4, 1])
-        .expect("the initial MTP keys should be valid");
-    let initial_values = runtime
-        .array_from_f32(&[2.0; 4], &[1, 1, 4, 1])
-        .expect("the initial MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &initial_keys, &initial_values, 0)
-        .expect("the initial MTP update should fill one slab");
-    let allocation_checkpoint = mtp_request_state
-        .allocation_checkpoint()
-        .expect("the populated MTP state should be checkpointable");
-
-    let retry_keys = runtime
-        .array_from_f32(&[3.0], &[1, 1, 1, 1])
-        .expect("the retry MTP keys should be valid");
-    let retry_values = runtime
-        .array_from_f32(&[4.0], &[1, 1, 1, 1])
-        .expect("the retry MTP values should be valid");
-    mtp_request_state
-        .full_attention_key_value_state_mut_for_tests()
-        .update_and_fetch(&runtime, &retry_keys, &retry_values, 4)
-        .expect("the failed-attempt stand-in should grow the MTP slab");
-    assert_eq!(
-        mtp_request_state
-            .full_attention_key_value_state_mut_for_tests()
-            .capacity_tokens(),
-        8
-    );
-
-    mtp_request_state
-        .restore_allocation_checkpoint(allocation_checkpoint)
-        .expect("the MTP allocation checkpoint should restore prior owners");
-    assert_eq!(
-        mtp_request_state
-            .full_attention_key_value_state_mut_for_tests()
-            .capacity_tokens(),
-        4
-    );
-    assert_eq!(mtp_request_state.committed_token_count(), 4);
 }
 
 #[tokio::test]

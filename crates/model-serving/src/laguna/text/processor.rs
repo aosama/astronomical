@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
-    ChatModelCapabilities, ChatToolChoice, MtpDepthStatus, MtpRuntimeState, WorkerEvent,
+    ChatModelCapabilities, ChatToolChoice, WorkerEvent,
 };
 
 use crate::{
@@ -231,12 +231,7 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
     type InferenceRequest = LagunaInferenceRequest;
     type RequestOutput = LagunaRequestOutput;
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         let context_window = self.maximum_context_tokens;
         let max_output_tokens = self.maximum_output_tokens;
         WorkerEvent::Ready {
@@ -250,9 +245,6 @@ impl ModelGenerationProcessor for LagunaGenerationProcessor {
                 context_window,
             }
             .into(),
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
         }
     }
 

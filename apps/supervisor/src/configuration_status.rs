@@ -51,8 +51,6 @@ struct ReadyModelConfigurationSummary {
     temperature: ConfigurationValue<f64>,
     top_p: ConfigurationValue<f64>,
     chunking: ChunkingConfigurationSummary,
-    mtp_enabled: ConfigurationValue<bool>,
-    mtp_draft_depth: ConfigurationValue<u8>,
 }
 
 #[derive(Serialize)]
@@ -151,9 +149,6 @@ impl ConfigurationStatusSummary {
                 resolved_config.as_ref(),
                 worker_health_snapshot.ready_model_id.as_deref(),
                 worker_configuration.and_then(|configuration| configuration.loaded_model.as_ref()),
-                worker_health_snapshot
-                    .mtp_depth_status
-                    .effective_execution_draft_depth,
             ),
             prompt_cache: prompt_cache_summary(configured_config.as_ref(), worker_configuration),
             memory: MemoryConfigurationSummary {
@@ -173,19 +168,14 @@ fn ready_model_summary(
     resolved_config: Option<&ResolvedRuntimeConfig>,
     ready_model_id: Option<&str>,
     effective_model: Option<&WorkerLoadedModelRuntimeConfiguration>,
-    effective_mtp_draft_depth: Option<u8>,
 ) -> Option<ReadyModelConfigurationSummary> {
     let ready_model_id = ready_model_id?;
     let configured_policy =
         configured_config.and_then(|config| config.model_policy_catalog.get(ready_model_id));
     let resolved_policy =
         resolved_config.and_then(|config| config.model_policy_catalog.get(ready_model_id));
-    let configured_worker_model =
-        configured_policy.map(|policy| &policy.worker_model_configuration);
     let effective_model = effective_model.filter(|model| model.model_id() == ready_model_id);
     let effective_autoregressive_model = effective_model.and_then(|model| model.autoregressive());
-    let configured_autoregressive_model =
-        configured_worker_model.and_then(|model| model.autoregressive());
     Some(ReadyModelConfigurationSummary {
         model_id: ready_model_id.to_owned(),
         maximum_context_tokens: ConfigurationValue {
@@ -221,17 +211,6 @@ fn ready_model_summary(
             resolved_policy.and_then(|policy| policy.generation_defaults.top_p_thousandths),
         ),
         chunking: chunking_summary(configured_policy, effective_model),
-        mtp_enabled: ConfigurationValue {
-            configured: configured_policy
-                .and_then(|policy| policy.acceleration_availability.configured_mtp_enabled),
-            default: Some(false),
-            effective: effective_autoregressive_model.map(|model| model.mtp_enabled),
-        },
-        mtp_draft_depth: ConfigurationValue {
-            configured: configured_autoregressive_model.and_then(|model| model.mtp_draft_depth),
-            default: None,
-            effective: effective_mtp_draft_depth,
-        },
     })
 }
 

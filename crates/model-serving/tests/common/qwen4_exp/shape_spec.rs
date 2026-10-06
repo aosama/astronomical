@@ -42,7 +42,6 @@ pub struct VariantSubsystems {
     pub linear_attention: bool,
     pub sparse_attention: bool,
     pub hyper_connections: bool,
-    pub multi_token_prediction_declared: bool,
 }
 
 /// Everything one generated variant needs, declared up front.
@@ -73,8 +72,6 @@ pub struct Qwen4ExpShapeSpec {
     /// Lookup-table storage form.
     pub ngram_storage: NgramStorageForm,
     pub ngram_shard_count: u32,
-    /// Declares a prediction head without shipping tensors when false.
-    pub multi_token_prediction_tensors: bool,
     pub subsystems: VariantSubsystems,
     /// Maximum bytes per shard file; the writer splits tensors across shards
     /// at this boundary, mirroring how published artifacts choose 954 MB or

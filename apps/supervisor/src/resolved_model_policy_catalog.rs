@@ -20,9 +20,7 @@ use astronomical_ipc_protocol::{
 use crate::runtime_model_policy::{
     runtime_model_generation_defaults, worker_chunking_configuration,
 };
-use crate::{
-    RuntimeModelAccelerationAvailability, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
-};
+use crate::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 
 /// Resolves every discovered model into the exact policy sent to the worker.
 pub(super) struct ResolvedModelPolicyCatalog;
@@ -63,12 +61,11 @@ impl ResolvedModelPolicyCatalog {
     ) -> Result<RuntimeModelPolicy, AstronomicalConfigError> {
         let resolved_model_config = user_config
             .resolved_model_config(&discovered_model.model_id, chat_capabilities.context_window)?;
-        let (worker_model_configuration, acceleration_availability) =
-            Self::worker_model_configuration(
-                discovered_model,
-                chat_capabilities,
-                &resolved_model_config,
-            );
+        let worker_model_configuration = Self::worker_model_configuration(
+            discovered_model,
+            chat_capabilities,
+            &resolved_model_config,
+        );
 
         Ok(RuntimeModelPolicy {
             model_directory: discovered_model.model_directory.clone(),
@@ -79,7 +76,6 @@ impl ResolvedModelPolicyCatalog {
                 .copied()
                 .unwrap_or(chat_capabilities.context_window),
             configured_chunking_fields: resolved_model_config.configured_chunking_fields(),
-            acceleration_availability,
             worker_model_configuration,
         })
     }
@@ -88,26 +84,14 @@ impl ResolvedModelPolicyCatalog {
         discovered_model: &DiscoveredModel,
         chat_capabilities: &ChatModelCapabilities,
         resolved_model_config: &ResolvedModelConfig,
-    ) -> (
-        WorkerModelConfiguration,
-        RuntimeModelAccelerationAvailability,
-    ) {
-        let acceleration_availability = RuntimeModelAccelerationAvailability {
-            configured_mtp_enabled: resolved_model_config.configured_mtp_enabled(),
-        };
-
-        (
-            WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
-                model_id: discovered_model.model_id.clone(),
-                maximum_context_tokens: chat_capabilities.context_window,
-                // Worker policy carries model capability rather than a request default.
-                maximum_output_tokens: chat_capabilities.max_output_tokens,
-                chunking: worker_chunking_configuration(resolved_model_config.chunking()),
-                mtp_enabled: resolved_model_config.mtp_enabled(),
-                mtp_draft_depth: resolved_model_config.mtp_draft_depth(),
-            }),
-            acceleration_availability,
-        )
+    ) -> WorkerModelConfiguration {
+        WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
+            model_id: discovered_model.model_id.clone(),
+            maximum_context_tokens: chat_capabilities.context_window,
+            // Worker policy carries model capability rather than a request default.
+            maximum_output_tokens: chat_capabilities.max_output_tokens,
+            chunking: worker_chunking_configuration(resolved_model_config.chunking()),
+        })
     }
 
     fn image_policy(discovered_model: &DiscoveredModel) -> RuntimeModelPolicy {
@@ -154,7 +138,6 @@ impl ResolvedModelPolicyCatalog {
             configured_maximum_context_tokens: None,
             default_maximum_context_tokens: 0,
             configured_chunking_fields: Default::default(),
-            acceleration_availability: Default::default(),
             worker_model_configuration,
         }
     }
@@ -175,7 +158,6 @@ impl ResolvedModelPolicyCatalog {
             configured_maximum_context_tokens: None,
             default_maximum_context_tokens: 0,
             configured_chunking_fields: Default::default(),
-            acceleration_availability: Default::default(),
             worker_model_configuration: WorkerModelConfiguration::Embeddings(
                 WorkerEmbeddingModelConfiguration {
                     model_id: discovered_model.model_id.clone(),

@@ -35,13 +35,8 @@ impl ModelGenerationProcessor for MalformedFinishProcessor {
     type InferenceRequest = ScriptedInferenceRequest;
     type RequestOutput = ();
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
-        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
+    fn ready_event(&self) -> WorkerEvent {
+        ready_event()
     }
 
     fn prepare_chat_generation(
@@ -88,13 +83,8 @@ impl ModelGenerationProcessor for ScriptedChatProcessor {
     type InferenceRequest = ScriptedInferenceRequest;
     type RequestOutput = ();
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
-        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
+    fn ready_event(&self) -> WorkerEvent {
+        ready_event()
     }
 
     fn prepare_chat_generation(
@@ -162,13 +152,8 @@ impl ModelGenerationProcessor for CorrectionRequestingProcessor {
     type InferenceRequest = ScriptedInferenceRequest;
     type RequestOutput = ();
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
-        ready_event_with_load_details(mtp_runtime_state, mtp_unavailable_reason)
+    fn ready_event(&self) -> WorkerEvent {
+        ready_event()
     }
 
     fn prepare_chat_generation(
@@ -235,8 +220,6 @@ pub(crate) struct ScriptedChatEngine {
     fatal_decode_reason: Option<String>,
     pub(super) initial_expert_memory_mode: Option<ExpertMemoryMode>,
     cancelled_generation_finalization: GenerationFinalization,
-    mtp_runtime_state: MtpRuntimeState,
-    mtp_unavailable_reason: Option<String>,
     active_generation_prompt_cache_stats: Option<WorkerEvent>,
     prompt_cache_clear_event: Option<WorkerEvent>,
     pub(super) maximum_allocator_cache_memory_limit_bytes: u64,
@@ -286,8 +269,6 @@ impl ScriptedChatEngine {
             fatal_decode_reason: None,
             initial_expert_memory_mode: None,
             cancelled_generation_finalization: GenerationFinalization::default(),
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
             active_generation_prompt_cache_stats: None,
             prompt_cache_clear_event: None,
             maximum_allocator_cache_memory_limit_bytes: u64::MAX,
@@ -345,16 +326,6 @@ impl ScriptedChatEngine {
         scripted_engine
     }
 
-    pub(super) fn with_mtp_runtime_state(
-        mut self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-    ) -> Self {
-        self.mtp_runtime_state = mtp_runtime_state;
-        self.mtp_unavailable_reason = mtp_unavailable_reason;
-        self
-    }
-
     pub(super) fn cancellation_count(&self) -> Arc<AtomicUsize> {
         Arc::clone(&self.cancellation_count)
     }
@@ -380,14 +351,7 @@ impl InferenceEngine for ScriptedChatEngine {
     type Request = ScriptedInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        let mut engine_load_result = EngineLoadResult::new()
-            .with_expert_memory_mode(self.initial_expert_memory_mode)
-            .with_mtp_runtime_state(self.mtp_runtime_state);
-        if let Some(mtp_unavailable_reason) = self.mtp_unavailable_reason.clone() {
-            engine_load_result =
-                engine_load_result.with_mtp_unavailable_reason(mtp_unavailable_reason);
-        }
-        Ok(engine_load_result)
+        Ok(EngineLoadResult::new().with_expert_memory_mode(self.initial_expert_memory_mode))
     }
 
     async fn start_generation(

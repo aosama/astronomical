@@ -318,7 +318,6 @@ async fn load_memory_acceptance_engine(
         248_069,
         model_directory.to_path_buf(),
         worker_chunking_configuration,
-        true,
     )
     .expect("the engine should accept the prompt-cache configuration");
     qwen3_5_engine

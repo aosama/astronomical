@@ -2,8 +2,8 @@ use std::{error::Error, process::ExitCode, time::Duration};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
-    ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, MtpRuntimeState,
-    ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
+    ChatModelCapabilities, ExpertMemoryMode, MlxMemorySnapshotSource, ProtocolReader,
+    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
     WorkerPromptProcessingPhase,
 };
 
@@ -48,9 +48,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         .unwrap_or_else(|_| DEFAULT_READY_MODEL_ID.to_owned());
     event_writer
         .send_event(&WorkerEvent::Ready {
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: Default::default(),
             model_id: ready_model_id,
             capabilities: astronomical_ipc_protocol::WorkerModelCapabilities::chat_and_image(
                 ChatModelCapabilities {

@@ -150,9 +150,7 @@ pub use openai_responses_translation::{
 pub(crate) use qwen_thinking_channel_seed::load_configured_qwen_thinking_channel_seed;
 pub use qwen_thinking_channel_seed::load_qwen_thinking_channel_seed;
 pub use resolved_configuration_generation::ResolvedConfigurationGeneration;
-pub use runtime_model_policy::{
-    RuntimeModelAccelerationAvailability, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
-};
+pub use runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
 pub use supervisor_performance_attribution::{

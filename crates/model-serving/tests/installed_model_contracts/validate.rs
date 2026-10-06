@@ -236,25 +236,3 @@ fn should_validate_the_large_sparse_moe_artifact() {
         assert!(validated_artifact.supports_image_input());
     }
 }
-
-#[test]
-#[ignore = "requires model_directories to discover a complete supported depth-one MTP artifact"]
-fn should_validate_a_configured_depth_one_mtp_artifact() {
-    let model_directory =
-        crate::serving_acceptance::support::configured_depth_one_mtp_model_directory();
-
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&model_directory, 20_480)
-        .expect("the discovered depth-one MTP artifact should validate");
-
-    let mtp_layer_count = validated_artifact.config().mtp_layer_count();
-    if validated_artifact
-        .mtp_artifact_capability()
-        .is_mtp_capable()
-    {
-        assert!(
-            mtp_layer_count >= 1,
-            "an MTP-capable inventory must declare at least one MTP layer in config"
-        );
-    }
-}
