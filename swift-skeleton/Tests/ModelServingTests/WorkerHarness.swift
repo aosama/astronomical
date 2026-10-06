@@ -102,9 +102,20 @@ final class WorkerHarness {
 
     /// Swaps the journey model in and drains its three lifecycle events.
     func swapJourneyModel() throws -> Void {
-        try self.sendCommand(.swapModel(
+        try self.swapModelIn(
             modelDirectory: "/fictional/models/qwen3.5",
-            modelConfiguration: WorkerHarness.autoregressiveModelConfiguration()));
+            modelConfiguration: WorkerHarness.autoregressiveModelConfiguration());
+    }
+
+    /// Swaps any model in and drains the swap lifecycle events (swap, policy,
+    /// loaded memory sample).
+    func swapModelIn(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> Void {
+        try self.sendCommand(.swapModel(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration));
         _ = try self.expectEvent();
         _ = try self.expectEvent();
         _ = try self.expectEvent();
