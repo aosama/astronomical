@@ -136,6 +136,9 @@ sign_code_object() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
+    # Re-exec through the disposable-target runner: the app build runs several
+    # cargo invocations that must share one owned release CARGO_TARGET_DIR, so
+    # the runner owns the whole script and this guard skips re-nesting.
     if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
         exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
             --lane app-release -- \
