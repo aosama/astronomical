@@ -1,5 +1,9 @@
 import Foundation;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
+
 @testable import AstronomicalConfig;
 
 /**
@@ -8,7 +12,8 @@ import XCTest;
  * resolved_model_config tests. Config may narrow an artifact's capability
  * but never widen it.
  */
-final class ResolvedModelConfigTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResolvedModelConfigTests {
 
     private static let DEFAULT_MODEL_CONFIG_JSON: String =
         "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}";
@@ -21,18 +26,10 @@ final class ResolvedModelConfigTests: XCTestCase {
 
     private var temporaryDirectoryFixture: TemporaryDirectoryFixture?;
 
-    override func tearDown() {
-        guard let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture else {
-            super.tearDown();
-            return;
+    deinit {
+        if let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture {
+            try? fixture.destroy();
         }
-        do {
-            try fixture.destroy();
-        } catch {
-            XCTFail("temporary directory should be removed: \(error)");
-        }
-        self.temporaryDirectoryFixture = nil;
-        super.tearDown();
     }
 
     private func makeTemporaryDirectoryFixture() throws -> TemporaryDirectoryFixture {
@@ -57,7 +54,8 @@ final class ResolvedModelConfigTests: XCTestCase {
         return try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
     }
 
-    func testUnconfiguredModelKeepsArtifactContextAndInternalOutputDefault() throws {
+    @Test
+    func should_keep_the_artifact_context_and_internal_output_default_for_an_unconfigured_model() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: ResolvedModelConfigTests.DEFAULT_MODEL_CONFIG_JSON,
@@ -67,16 +65,17 @@ final class ResolvedModelConfigTests: XCTestCase {
             modelId: "qwen3-model",
             artifactMaximumContextTokens: 32_768);
 
-        XCTAssertNil(resolvedModelConfig.maximumContextTokens());
-        XCTAssertEqual(resolvedModelConfig.maximumOutputTokens(), ResolvedModelConfig.defaultMaximumOutputTokens);
-        XCTAssertFalse(resolvedModelConfig.hasExplicitMaximumOutputTokens());
-        XCTAssertNil(resolvedModelConfig.temperature());
-        XCTAssertNil(resolvedModelConfig.topP());
-        XCTAssertEqual(resolvedModelConfig.chunking(), ChunkingConfig.defaultConfig());
-        XCTAssertFalse(resolvedModelConfig.configuredChunkingFields().fixedPromptProcessingChunkSizeTokens);
+        #expect(resolvedModelConfig.maximumContextTokens() == nil);
+        #expect(resolvedModelConfig.maximumOutputTokens() == ResolvedModelConfig.defaultMaximumOutputTokens);
+        #expect(!resolvedModelConfig.hasExplicitMaximumOutputTokens());
+        #expect(resolvedModelConfig.temperature() == nil);
+        #expect(resolvedModelConfig.topP() == nil);
+        #expect(resolvedModelConfig.chunking() == ChunkingConfig.defaultConfig());
+        #expect(!resolvedModelConfig.configuredChunkingFields().fixedPromptProcessingChunkSizeTokens);
     }
 
-    func testTinyArtifactClampsTheInternalOutputDefaultToOnePromptToken() throws {
+    @Test
+    func should_clamp_a_tiny_artifact_internal_output_default_to_one_prompt_token() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: ResolvedModelConfigTests.DEFAULT_MODEL_CONFIG_JSON,
@@ -86,10 +85,11 @@ final class ResolvedModelConfigTests: XCTestCase {
             modelId: "qwen3-model",
             artifactMaximumContextTokens: 8);
 
-        XCTAssertEqual(resolvedModelConfig.maximumOutputTokens(), 7);
+        #expect(resolvedModelConfig.maximumOutputTokens() == 7);
     }
 
-    func testConfiguredLimitsAndDefaultsInheritAndAreMarkedAsConfigured() throws {
+    @Test
+    func should_inherit_configured_limits_and_defaults_marked_as_configured() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let overrideObject: String =
             "{\"limits\":{\"maximum_context_tokens\":16384},"
@@ -102,14 +102,15 @@ final class ResolvedModelConfigTests: XCTestCase {
             modelId: "qwen3-model",
             artifactMaximumContextTokens: 32_768);
 
-        XCTAssertEqual(resolvedModelConfig.maximumContextTokens(), 16_384);
-        XCTAssertEqual(resolvedModelConfig.maximumOutputTokens(), 4_096);
-        XCTAssertTrue(resolvedModelConfig.hasExplicitMaximumOutputTokens());
-        XCTAssertEqual(resolvedModelConfig.temperature(), 0.5);
-        XCTAssertEqual(resolvedModelConfig.topP(), 0.9);
+        #expect(resolvedModelConfig.maximumContextTokens() == 16_384);
+        #expect(resolvedModelConfig.maximumOutputTokens() == 4_096);
+        #expect(resolvedModelConfig.hasExplicitMaximumOutputTokens());
+        #expect(resolvedModelConfig.temperature() == 0.5);
+        #expect(resolvedModelConfig.topP() == 0.9);
     }
 
-    func testPerModelChunkingOverrideWinsOverGlobalDefaults() throws {
+    @Test
+    func should_let_the_per_model_chunking_override_win_over_global_defaults() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let overrideObject: String =
             "{\"chunking\":{\"fixed_prompt_processing_chunk_size_tokens\":512,"
@@ -122,38 +123,44 @@ final class ResolvedModelConfigTests: XCTestCase {
             modelId: "qwen3-model",
             artifactMaximumContextTokens: 32_768);
 
-        XCTAssertEqual(resolvedModelConfig.chunking().fixedPromptProcessingChunkSizeTokens(), 512);
-        XCTAssertEqual(resolvedModelConfig.chunking().promptCacheCommonPrefixStrideBlocks(), 8);
+        #expect(resolvedModelConfig.chunking().fixedPromptProcessingChunkSizeTokens() == 512);
+        #expect(resolvedModelConfig.chunking().promptCacheCommonPrefixStrideBlocks() == 8);
         // Inherited fields keep the built-in defaults and stay unconfigured.
-        XCTAssertEqual(resolvedModelConfig.chunking().fullAttentionKeyValueGrowthTokens(), 256);
-        XCTAssertFalse(resolvedModelConfig.configuredChunkingFields().fullAttentionKeyValueGrowthTokens);
-        XCTAssertTrue(resolvedModelConfig.configuredChunkingFields().fixedPromptProcessingChunkSizeTokens);
-        XCTAssertTrue(resolvedModelConfig.configuredChunkingFields().promptCacheCommonPrefixStrideBlocks);
+        #expect(resolvedModelConfig.chunking().fullAttentionKeyValueGrowthTokens() == 256);
+        #expect(!resolvedModelConfig.configuredChunkingFields().fullAttentionKeyValueGrowthTokens);
+        #expect(resolvedModelConfig.configuredChunkingFields().fixedPromptProcessingChunkSizeTokens);
+        #expect(resolvedModelConfig.configuredChunkingFields().promptCacheCommonPrefixStrideBlocks);
     }
 
-    func testConfiguredContextAboveTheArtifactMaximumIsRejected() throws {
+    @Test
+    func should_reject_a_configured_context_above_the_artifact_maximum() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let overrideObject: String = "{\"limits\":{\"maximum_context_tokens\":65536}}";
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: ResolvedModelConfigTests.modelOverrideConfigJson(modelOverrideObject: overrideObject),
             fixture: fixture);
 
-        XCTAssertThrowsError(try developmentConfig.resolvedModelConfig(
-            modelId: "qwen3-model",
-            artifactMaximumContextTokens: 32_768)) { (thrownError: any Error) in
-            guard case let AstronomicalConfigError.configuredContextExceedsArtifact(
+        do {
+            _ = try developmentConfig.resolvedModelConfig(
+                modelId: "qwen3-model",
+                artifactMaximumContextTokens: 32_768);
+            Issue.record("expected a context-exceeds-artifact rejection");
+        } catch let configError as AstronomicalConfigError {
+            guard case let .configuredContextExceedsArtifact(
                 modelId,
                 configuredMaximumContextTokens,
-                artifactMaximumContextTokens) = thrownError else {
-                return XCTFail("expected a context-exceeds-artifact rejection, got \(thrownError)");
+                artifactMaximumContextTokens) = configError else {
+                Issue.record(Comment(stringLiteral: "expected a context-exceeds-artifact rejection, got \(configError)"));
+                return;
             }
-            XCTAssertEqual(modelId, "qwen3-model");
-            XCTAssertEqual(configuredMaximumContextTokens, 65_536);
-            XCTAssertEqual(artifactMaximumContextTokens, 32_768);
+            #expect(modelId == "qwen3-model");
+            #expect(configuredMaximumContextTokens == 65_536);
+            #expect(artifactMaximumContextTokens == 32_768);
         }
     }
 
-    func testConfiguredOutputAtOrAboveTheEffectiveContextIsRejected() throws {
+    @Test
+    func should_reject_a_configured_output_at_or_above_the_effective_context() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let overrideObject: String =
             "{\"limits\":{\"maximum_context_tokens\":16384},"
@@ -162,18 +169,22 @@ final class ResolvedModelConfigTests: XCTestCase {
             contents: ResolvedModelConfigTests.modelOverrideConfigJson(modelOverrideObject: overrideObject),
             fixture: fixture);
 
-        XCTAssertThrowsError(try developmentConfig.resolvedModelConfig(
-            modelId: "qwen3-model",
-            artifactMaximumContextTokens: 32_768)) { (thrownError: any Error) in
-            guard case let AstronomicalConfigError.configuredOutputNotSmallerThanContext(
+        do {
+            _ = try developmentConfig.resolvedModelConfig(
+                modelId: "qwen3-model",
+                artifactMaximumContextTokens: 32_768);
+            Issue.record("expected an output-not-smaller-than-context rejection");
+        } catch let configError as AstronomicalConfigError {
+            guard case let .configuredOutputNotSmallerThanContext(
                 modelId,
                 configuredMaximumOutputTokens,
-                effectiveMaximumContextTokens) = thrownError else {
-                return XCTFail("expected an output-not-smaller-than-context rejection, got \(thrownError)");
+                effectiveMaximumContextTokens) = configError else {
+                Issue.record(Comment(stringLiteral: "expected an output-not-smaller-than-context rejection, got \(configError)"));
+                return;
             }
-            XCTAssertEqual(modelId, "qwen3-model");
-            XCTAssertEqual(configuredMaximumOutputTokens, 16_384);
-            XCTAssertEqual(effectiveMaximumContextTokens, 16_384);
+            #expect(modelId == "qwen3-model");
+            #expect(configuredMaximumOutputTokens == 16_384);
+            #expect(effectiveMaximumContextTokens == 16_384);
         }
     }
 }

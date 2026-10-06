@@ -1,7 +1,10 @@
 import CoreGraphics;
 import Foundation;
 import ImageIO;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
 
 @testable import IpcProtocol;
 
@@ -12,7 +15,8 @@ import XCTest;
  * snake_case wire shape, the 32 MiB shared frame budget in both directions,
  * and the semantic contracts `decodeEvent` re-checks at the wire boundary.
  */
-final class MessageCodecTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class MessageCodecTests {
 
     /// Local failure signal for fixtures that cannot be synthesized in-process.
     private enum FixtureError: Error {
@@ -28,18 +32,20 @@ final class MessageCodecTests: XCTestCase {
     private static let OVERSIZED_PROMPT_TEXT: String =
         String(repeating: "a", count: MessageCodecTests.OVERSIZED_PROMPT_BYTE_COUNT);
 
-    func testShouldRoundTripAChatGenerationCommandThroughTheCodec() throws -> Void {
+    @Test
+    func should_round_trip_a_chat_generation_command_through_the_codec() throws -> Void {
         let originalCommand: WorkerCommand = self.makeChatGenerationCommand(promptText: "Explain this Swift function.");
         let serializedCommand: Data = try MessageCodec.encodeCommand(originalCommand);
 
         let decodedCommand: WorkerCommand = try MessageCodec.decodeCommand(serializedCommand);
         let reserializedCommand: Data = try MessageCodec.encodeCommand(decodedCommand);
 
-        XCTAssertEqual(decodedCommand, originalCommand, "the chat command should survive transport unchanged");
-        XCTAssertEqual(reserializedCommand, serializedCommand, "re-encoding the decoded command should be byte-exact");
+        #expect(decodedCommand == originalCommand, "the chat command should survive transport unchanged");
+        #expect(reserializedCommand == serializedCommand, "re-encoding the decoded command should be byte-exact");
     }
 
-    func testShouldRejectAWhitespaceOnlyChatModelIdBeforeWorkerPreprocessing() throws -> Void {
+    @Test
+    func should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing() throws -> Void {
         let commandWithBlankModelId: ChatGenerationCommand = ChatGenerationCommand(
             requestId: RequestId(rawRequestId: 1),
             model: "  ",
@@ -58,38 +64,42 @@ final class MessageCodecTests: XCTestCase {
 
         let decodedCommand: WorkerCommand = try MessageCodec.decodeCommand(serializedCommand);
         guard case let .generate(chatGenerationCommand) = decodedCommand else {
-            return XCTFail("the chat command variant should survive transport");
+            Issue.record("the chat command variant should survive transport");
+            return;
         }
 
         do {
             try chatGenerationCommand.validate();
-            XCTFail("a whitespace-only model id must fail worker-boundary validation");
+            Issue.record("a whitespace-only model id must fail worker-boundary validation");
         } catch let validationError as ChatGenerationValidationError {
-            XCTAssertEqual(validationError, ChatGenerationValidationError.emptyModelId);
+            #expect(validationError == ChatGenerationValidationError.emptyModelId);
         }
     }
 
-    func testShouldRoundTripAReadyEventWithValidModelCapabilities() throws -> Void {
+    @Test
+    func should_round_trip_a_ready_event_with_valid_model_capabilities() throws -> Void {
         let originalEvent: WorkerEvent = self.makeReadyEvent(modelCapabilities: self.makeChatOnlyModelCapabilities());
         let serializedEvent: Data = try MessageCodec.encodeEvent(originalEvent);
 
         let decodedEvent: WorkerEvent = try MessageCodec.decodeEvent(serializedEvent);
 
-        XCTAssertEqual(decodedEvent, originalEvent, "the ready event should survive transport unchanged");
+        #expect(decodedEvent == originalEvent, "the ready event should survive transport unchanged");
     }
 
-    func testShouldRoundTripAModelSwappedEvent() throws -> Void {
+    @Test
+    func should_round_trip_a_model_swapped_event() throws -> Void {
         let originalEvent: WorkerEvent = self.makeModelSwappedEvent(modelCapabilities: self.makeChatOnlyModelCapabilities());
         let serializedEvent: Data = try MessageCodec.encodeEvent(originalEvent);
 
         let decodedEvent: WorkerEvent = try MessageCodec.decodeEvent(serializedEvent);
         let reserializedEvent: Data = try MessageCodec.encodeEvent(decodedEvent);
 
-        XCTAssertEqual(decodedEvent, originalEvent, "the model-swapped event should survive transport unchanged");
-        XCTAssertEqual(reserializedEvent, serializedEvent, "re-encoding the decoded event should be byte-exact");
+        #expect(decodedEvent == originalEvent, "the model-swapped event should survive transport unchanged");
+        #expect(reserializedEvent == serializedEvent, "re-encoding the decoded event should be byte-exact");
     }
 
-    func testShouldRoundTripAnImageGenerationCompletedEventWithAValidPngCompletion() throws -> Void {
+    @Test
+    func should_round_trip_an_image_generation_completed_event_with_a_valid_png_completion() throws -> Void {
         let encodedPngBytes: Array<UInt8> = try self.makeEncodedPngBytes(
             widthPixels: MessageCodecTests.COMPLETION_IMAGE_WIDTH_PIXELS,
             heightPixels: MessageCodecTests.COMPLETION_IMAGE_HEIGHT_PIXELS);
@@ -101,20 +111,22 @@ final class MessageCodecTests: XCTestCase {
         let decodedEvent: WorkerEvent = try MessageCodec.decodeEvent(serializedEvent);
         let reserializedEvent: Data = try MessageCodec.encodeEvent(decodedEvent);
 
-        XCTAssertEqual(decodedEvent, originalEvent, "the image completion should survive transport unchanged");
-        XCTAssertEqual(reserializedEvent, serializedEvent, "re-encoding the decoded completion should be byte-exact");
+        #expect(decodedEvent == originalEvent, "the image completion should survive transport unchanged");
+        #expect(reserializedEvent == serializedEvent, "re-encoding the decoded completion should be byte-exact");
     }
 
-    func testShouldRoundTripADaemonHandshakeRequestThroughTheCodec() throws -> Void {
+    @Test
+    func should_round_trip_a_daemon_handshake_request_through_the_codec() throws -> Void {
         let originalRequest: DaemonRequest = DaemonRequest.handshake;
         let serializedRequest: Data = try MessageCodec.encodeDaemonRequest(originalRequest);
 
         let decodedRequest: DaemonRequest = try MessageCodec.decodeDaemonRequest(serializedRequest);
 
-        XCTAssertEqual(decodedRequest, originalRequest, "the daemon handshake should survive transport unchanged");
+        #expect(decodedRequest == originalRequest, "the daemon handshake should survive transport unchanged");
     }
 
-    func testShouldRoundTripADaemonHandshakeResponseThroughTheCodec() throws -> Void {
+    @Test
+    func should_round_trip_a_daemon_handshake_response_through_the_codec() throws -> Void {
         let originalResponse: DaemonResponse = DaemonResponse.handshakeAccepted(
             protocolVersion: 1,
             applicationName: MessageCodecTests.FAKE_APPLICATION_NAME);
@@ -123,20 +135,22 @@ final class MessageCodecTests: XCTestCase {
         let decodedResponse: DaemonResponse = try MessageCodec.decodeDaemonResponse(serializedResponse);
         let reserializedResponse: Data = try MessageCodec.encodeDaemonResponse(decodedResponse);
 
-        XCTAssertEqual(decodedResponse, originalResponse, "the daemon handshake response should survive transport unchanged");
-        XCTAssertEqual(reserializedResponse, serializedResponse, "re-encoding the decoded response should be byte-exact");
+        #expect(decodedResponse == originalResponse, "the daemon handshake response should survive transport unchanged");
+        #expect(reserializedResponse == serializedResponse, "re-encoding the decoded response should be byte-exact");
     }
 
-    func testShouldEncodeChatCommandsOnTheSerdeCompatibleSnakeCaseWireShape() throws -> Void {
+    @Test
+    func should_encode_chat_commands_on_the_serde_compatible_snake_case_wire_shape() throws -> Void {
         let serializedCommand: Data = try MessageCodec.encodeCommand(self.makeChatGenerationCommand(promptText: "wire shape"));
 
-        let serializedText: String = try XCTUnwrap(String(data: serializedCommand, encoding: String.Encoding.utf8));
-        XCTAssertTrue(serializedText.contains("\"kind\":\"generate\""), "the variant tag must stay the snake_case `kind` discriminator");
-        XCTAssertTrue(serializedText.contains("\"request_id\":71"), "field names must stay serde-compatible snake_case");
-        XCTAssertTrue(serializedText.contains("\"tool_choice\":{\"kind\":\"none\"}"), "nested enums must keep the internally tagged shape");
+        let serializedText: String = try #require(String(data: serializedCommand, encoding: String.Encoding.utf8));
+        #expect(serializedText.contains("\"kind\":\"generate\""), "the variant tag must stay the snake_case `kind` discriminator");
+        #expect(serializedText.contains("\"request_id\":71"), "field names must stay serde-compatible snake_case");
+        #expect(serializedText.contains("\"tool_choice\":{\"kind\":\"none\"}"), "nested enums must keep the internally tagged shape");
     }
 
-    func testShouldRejectInvalidWorkerModelCapabilitiesOnTheReadyWireBoundary() throws -> Void {
+    @Test
+    func should_reject_invalid_worker_model_capabilities_on_the_ready_wire_boundary() throws -> Void {
         let impossibleCapabilities: WorkerModelCapabilities = WorkerModelCapabilities(
             chat: nil,
             imageGeneration: nil,
@@ -145,15 +159,14 @@ final class MessageCodecTests: XCTestCase {
 
         do {
             _ = try MessageCodec.decodeEvent(serializedEvent);
-            XCTFail("a ready event advertising no capability surface must be rejected at the wire boundary");
+            Issue.record("a ready event advertising no capability surface must be rejected at the wire boundary");
         } catch ProtocolError.invalidWorkerModelCapabilities(let capabilitiesValidationError) {
-            XCTAssertEqual(capabilitiesValidationError, WorkerModelCapabilitiesValidationError.noCapabilities);
-        } catch {
-            XCTFail("decodeEvent should fail with the capability contract error, got: \(error)");
+            #expect(capabilitiesValidationError == WorkerModelCapabilitiesValidationError.noCapabilities);
         }
     }
 
-    func testShouldRejectInvalidImageCompletionMetadataAtTheWireBoundary() throws -> Void {
+    @Test
+    func should_reject_invalid_image_completion_metadata_at_the_wire_boundary() throws -> Void {
         let invalidMetadata: ImageGenerationResultMetadata = ImageGenerationResultMetadata(
             widthPixels: MessageCodecTests.COMPLETION_IMAGE_WIDTH_PIXELS,
             heightPixels: MessageCodecTests.COMPLETION_IMAGE_HEIGHT_PIXELS,
@@ -170,57 +183,52 @@ final class MessageCodecTests: XCTestCase {
 
         do {
             _ = try MessageCodec.decodeEvent(serializedEvent);
-            XCTFail("completion metadata outside the protocol bounds must be rejected at the wire boundary");
+            Issue.record("completion metadata outside the protocol bounds must be rejected at the wire boundary");
         } catch ProtocolError.invalidImageGenerationCompletion(let completionValidationError) {
-            XCTAssertEqual(
-                completionValidationError,
-                ImageGenerationCompletionValidationError.invalidMetadata(
-                    metadataError: ImageGenerationValidationError.guidanceOutOfRange(
-                        actualGuidanceThousandths: 100_001,
-                        maximumGuidanceThousandths: 100_000)));
-        } catch {
-            XCTFail("decodeEvent should fail with the completion contract error, got: \(error)");
+            #expect(
+                completionValidationError
+                    == ImageGenerationCompletionValidationError.invalidMetadata(
+                        metadataError: ImageGenerationValidationError.guidanceOutOfRange(
+                            actualGuidanceThousandths: 100_001,
+                            maximumGuidanceThousandths: 100_000)));
         }
     }
 
-    func testShouldRejectAnOutgoingCommandBeyondTheSharedFrameBudget() throws -> Void {
+    @Test
+    func should_reject_an_outgoing_command_beyond_the_shared_frame_budget() throws -> Void {
         let oversizedCommand: WorkerCommand = self.makeChatGenerationCommand(promptText: MessageCodecTests.OVERSIZED_PROMPT_TEXT);
 
         do {
             _ = try MessageCodec.encodeCommand(oversizedCommand);
-            XCTFail("a command beyond the frame budget must be rejected before transport");
+            Issue.record("a command beyond the frame budget must be rejected before transport");
         } catch ProtocolError.outgoingMessageTooLarge(let actualMessageBytes, let maximumMessageBytes) {
-            XCTAssertGreaterThan(actualMessageBytes, maximumMessageBytes, "the rejection must report the real oversize");
-            XCTAssertEqual(maximumMessageBytes, IpcFrameLimits.maximumIpcFrameBytes);
-        } catch {
-            XCTFail("encodeCommand should fail with the outgoing frame-budget error, got: \(error)");
+            #expect(actualMessageBytes > maximumMessageBytes, "the rejection must report the real oversize");
+            #expect(maximumMessageBytes == IpcFrameLimits.maximumIpcFrameBytes);
         }
     }
 
-    func testShouldRejectAnIncomingFrameBeyondTheSharedFrameBudget() throws -> Void {
+    @Test
+    func should_reject_an_incoming_frame_beyond_the_shared_frame_budget() throws -> Void {
         let oversizedFrame: Data = Data(count: IpcFrameLimits.maximumIpcFrameBytes + 1);
 
         do {
             _ = try MessageCodec.decodeEvent(oversizedFrame);
-            XCTFail("an inbound frame beyond the budget must be rejected before parsing");
+            Issue.record("an inbound frame beyond the budget must be rejected before parsing");
         } catch ProtocolError.incomingMessageTooLarge(let actualMessageBytes, let maximumMessageBytes) {
-            XCTAssertEqual(actualMessageBytes, IpcFrameLimits.maximumIpcFrameBytes + 1);
-            XCTAssertEqual(maximumMessageBytes, IpcFrameLimits.maximumIpcFrameBytes);
-        } catch {
-            XCTFail("decodeEvent should fail with the incoming frame-budget error, got: \(error)");
+            #expect(actualMessageBytes == IpcFrameLimits.maximumIpcFrameBytes + 1);
+            #expect(maximumMessageBytes == IpcFrameLimits.maximumIpcFrameBytes);
         }
     }
 
-    func testShouldRejectMalformedJsonBytesAsADeserializationFailure() throws -> Void {
+    @Test
+    func should_reject_malformed_json_bytes_as_a_deserialization_failure() throws -> Void {
         let malformedFrame: Data = Data("not json".utf8);
 
         do {
             _ = try MessageCodec.decodeCommand(malformedFrame);
-            XCTFail("malformed JSON must surface as a deserialization failure");
+            Issue.record("malformed JSON must surface as a deserialization failure");
         } catch ProtocolError.deserializeMessage {
-            return;
-        } catch {
-            XCTFail("decodeCommand should fail with the deserialization error, got: \(error)");
+            // The expected rejection: any other error propagates and fails the journey.
         }
     }
 
