@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_chat_completion_request/image_content.rs.
-final class ChatCompletionRequestImageContentTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ChatCompletionRequestImageContentTests {
 
-    func testShouldRejectAFileImageUrlBeforeWorkerAdmission() throws {
+    @Test
+    func should_reject_a_file_image_url_before_worker_admission() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -20,14 +24,14 @@ final class ChatCompletionRequestImageContentTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("file image URLs must be rejected before worker admission");
-            return;
+            Issue.record("file image URLs must be rejected before worker admission");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .unsupportedImageUrlScheme);
+            #expect(validationError == OpenAiChatCompletionValidationError.unsupportedImageUrlScheme);
         }
     }
 
-    func testShouldAcceptADataUriImageContentPart() throws {
+    @Test
+    func should_accept_a_data_uri_image_content_part() throws {
         // A 1x1 red PNG, base64-encoded as a data URI.
         let redPixelPngBase64: String = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
         let dataUri: String = "data:image/png;base64,\(redPixelPngBase64)";
@@ -48,63 +52,65 @@ final class ChatCompletionRequestImageContentTests: XCTestCase {
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
         guard requestParts.messages.count == 1,
             case .user(let content, let images) = requestParts.messages[0] else {
-            XCTFail("expected a user message with images");
+            Issue.record("expected a user message with images");
             return;
         }
-        XCTAssertEqual(content, "What is in this picture?");
-        XCTAssertEqual(images.count, 1, "exactly one image should be decoded");
+        #expect(content == "What is in this picture?");
+        #expect(images.count == 1, "exactly one image should be decoded");
         let image: ImageInput.OpenAiImageInput = images[0];
-        XCTAssertTrue(image.decodedBytes().count > 50,
+        #expect(image.decodedBytes().count > 50,
             "the decoded image bytes should be the raw PNG payload");
-        XCTAssertEqual(image.mimeType(), "image/png");
+        #expect(image.mimeType() == "image/png");
     }
 
-    func testShouldRejectAnHttpImageUrl() throws {
+    @Test
+    func should_reject_an_http_image_url() throws {
         try Self.assertUnsupportedScheme(#"https://example.com/image.png"#,
             because: "http image URLs must be rejected to preserve the local-only privacy model");
     }
 
-    func testShouldRejectAFileImageUrl() throws {
+    @Test
+    func should_reject_a_file_image_url() throws {
         try Self.assertUnsupportedScheme(#"file:///tmp/image.png"#,
             because: "file image URLs must be rejected to avoid local-path attack surface");
     }
 
-    func testShouldRejectANonImageDataUriMimeType() throws {
+    @Test
+    func should_reject_a_non_image_data_uri_mime_type() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try Self.requestWithImageUrl(
             "data:text/plain;base64,SGVsbG8=");
         do {
             try chatCompletionRequest.validate();
-            XCTFail("non-image MIME types must be rejected");
-            return;
+            Issue.record("non-image MIME types must be rejected");
         } catch let validationError as OpenAiChatCompletionValidationError {
             guard case .unsupportedImageMimeType = validationError else {
-                XCTFail("expected UnsupportedImageMimeType, got \(validationError)");
+                Issue.record("expected UnsupportedImageMimeType, got \(validationError)");
                 return;
             }
         }
     }
 
-    func testShouldRejectAMalformedDataUriWithoutAComma() throws {
+    @Test
+    func should_reject_a_malformed_data_uri_without_a_comma() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try Self.requestWithImageUrl(
             "data:image/png;base64NOCOMMA");
         do {
             try chatCompletionRequest.validate();
-            XCTFail("a data URI without a comma separator must be rejected");
-            return;
+            Issue.record("a data URI without a comma separator must be rejected");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .malformedDataUri);
+            #expect(validationError == OpenAiChatCompletionValidationError.malformedDataUri);
         }
     }
 
-    func testShouldRejectInvalidBase64InADataUri() throws {
+    @Test
+    func should_reject_invalid_base64_in_a_data_uri() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try Self.requestWithImageUrl(
             "data:image/png;base64,!!!not-valid-base64!!!");
         do {
             try chatCompletionRequest.validate();
-            XCTFail("invalid base64 payload must be rejected");
-            return;
+            Issue.record("invalid base64 payload must be rejected");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .invalidBase64);
+            #expect(validationError == OpenAiChatCompletionValidationError.invalidBase64);
         }
     }
 
@@ -129,11 +135,10 @@ final class ChatCompletionRequestImageContentTests: XCTestCase {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try requestWithImageUrl(imageUrl);
         do {
             try chatCompletionRequest.validate();
-            XCTFail(reason);
-            return;
+            Issue.record(Comment(stringLiteral: reason));
         } catch let validationError as OpenAiChatCompletionValidationError {
             guard case .unsupportedImageUrlScheme = validationError else {
-                XCTFail("expected UnsupportedImageUrlScheme, got \(validationError)");
+                Issue.record("expected UnsupportedImageUrlScheme, got \(validationError)");
                 return;
             }
         }
