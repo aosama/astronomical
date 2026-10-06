@@ -1,5 +1,9 @@
 import Foundation;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
+
 @testable import AstronomicalConfig;
 
 /**
@@ -8,7 +12,8 @@ import XCTest;
  * ceiling, attribution toggles, and the configuration digest, mirroring the
  * precedence of crates/config/src/lib.rs.
  */
-final class RuntimeAccessorsTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class RuntimeAccessorsTests {
 
     private static let MINIMAL_VALID_CONFIG_JSON: String =
         "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}";
@@ -23,18 +28,10 @@ final class RuntimeAccessorsTests: XCTestCase {
 
     private var temporaryDirectoryFixture: TemporaryDirectoryFixture?;
 
-    override func tearDown() {
-        guard let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture else {
-            super.tearDown();
-            return;
+    deinit {
+        if let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture {
+            try? fixture.destroy();
         }
-        do {
-            try fixture.destroy();
-        } catch {
-            XCTFail("temporary directory should be removed: \(error)");
-        }
-        self.temporaryDirectoryFixture = nil;
-        super.tearDown();
     }
 
     private func makeTemporaryDirectoryFixture() throws -> TemporaryDirectoryFixture {
@@ -64,57 +61,60 @@ final class RuntimeAccessorsTests: XCTestCase {
         return try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
     }
 
-    func testFirstRunDefaultsResolveTheWorkerStartupPolicy() throws {
+    @Test
+    func should_resolve_first_run_defaults_into_the_worker_startup_policy() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: RuntimeAccessorsTests.MINIMAL_VALID_CONFIG_JSON,
             fixture: fixture);
 
         let promptCacheConfig: PromptCacheConfig = try developmentConfig.promptCache();
-        XCTAssertEqual(
-            promptCacheConfig.globalPromptCacheRootDirectory,
-            developmentConfig.instancePaths.promptCacheDirectory);
-        XCTAssertEqual(promptCacheConfig.globalPromptCacheMaximumSizeBytes, 50_000_000_000);
-        XCTAssertEqual(promptCacheConfig.activeModelPromptCacheDirectory, promptCacheConfig.globalPromptCacheRootDirectory);
-        XCTAssertTrue(developmentConfig.persistentPromptCacheEnabled());
-        XCTAssertNil(developmentConfig.configuredPersistentPromptCacheEnabled());
-        XCTAssertNil(try developmentConfig.configuredPromptCacheMaximumSizeBytes());
+        #expect(
+            promptCacheConfig.globalPromptCacheRootDirectory
+                == developmentConfig.instancePaths.promptCacheDirectory);
+        #expect(promptCacheConfig.globalPromptCacheMaximumSizeBytes == 50_000_000_000);
+        #expect(promptCacheConfig.activeModelPromptCacheDirectory == promptCacheConfig.globalPromptCacheRootDirectory);
+        #expect(developmentConfig.persistentPromptCacheEnabled());
+        #expect(developmentConfig.configuredPersistentPromptCacheEnabled() == nil);
+        #expect(try developmentConfig.configuredPromptCacheMaximumSizeBytes() == nil);
 
         let loggingConfig: LoggingConfig = developmentConfig.logging();
-        XCTAssertEqual(loggingConfig.directory, developmentConfig.instancePaths.loggingDirectory);
-        XCTAssertEqual(loggingConfig.level, LogLevel.warn);
-        XCTAssertEqual(loggingConfig.retainedFiles, 7);
-        XCTAssertEqual(loggingConfig.bufferedLineLimit, 1024);
+        #expect(loggingConfig.directory == developmentConfig.instancePaths.loggingDirectory);
+        #expect(loggingConfig.level == LogLevel.warn);
+        #expect(loggingConfig.retainedFiles == 7);
+        #expect(loggingConfig.bufferedLineLimit == 1024);
 
-        XCTAssertNil(try developmentConfig.maximumMlxMemoryBytes());
-        XCTAssertFalse(developmentConfig.performanceAttributionEnabled());
-        XCTAssertFalse(developmentConfig.completionAttributionEnabled());
-        XCTAssertFalse(developmentConfig.experimentalQwenThinkingChannelSeedEnabled());
+        #expect(try developmentConfig.maximumMlxMemoryBytes() == nil);
+        #expect(!developmentConfig.performanceAttributionEnabled());
+        #expect(!developmentConfig.completionAttributionEnabled());
+        #expect(!developmentConfig.experimentalQwenThinkingChannelSeedEnabled());
     }
 
-    func testAuthoredOverridesTakePrecedenceOverDefaults() throws {
+    @Test
+    func should_let_authored_overrides_take_precedence_over_defaults() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: RuntimeAccessorsTests.OVERRIDDEN_CONFIG_JSON,
             fixture: fixture);
 
         let promptCacheConfig: PromptCacheConfig = try developmentConfig.promptCache();
-        XCTAssertEqual(promptCacheConfig.globalPromptCacheMaximumSizeBytes, 7_000_000_000);
-        XCTAssertFalse(developmentConfig.persistentPromptCacheEnabled());
-        XCTAssertEqual(developmentConfig.configuredPersistentPromptCacheEnabled(), false);
-        XCTAssertEqual(try developmentConfig.configuredPromptCacheMaximumSizeBytes(), 7_000_000_000);
+        #expect(promptCacheConfig.globalPromptCacheMaximumSizeBytes == 7_000_000_000);
+        #expect(!developmentConfig.persistentPromptCacheEnabled());
+        #expect(developmentConfig.configuredPersistentPromptCacheEnabled() == false);
+        #expect(try developmentConfig.configuredPromptCacheMaximumSizeBytes() == 7_000_000_000);
 
         let loggingConfig: LoggingConfig = developmentConfig.logging();
-        XCTAssertEqual(loggingConfig.level, LogLevel.debug);
-        XCTAssertEqual(loggingConfig.retainedFiles, 3);
+        #expect(loggingConfig.level == LogLevel.debug);
+        #expect(loggingConfig.retainedFiles == 3);
 
-        XCTAssertEqual(try developmentConfig.maximumMlxMemoryBytes(), 32_000_000_000);
-        XCTAssertTrue(developmentConfig.performanceAttributionEnabled());
-        XCTAssertTrue(developmentConfig.completionAttributionEnabled());
-        XCTAssertTrue(developmentConfig.experimentalQwenThinkingChannelSeedEnabled());
+        #expect(try developmentConfig.maximumMlxMemoryBytes() == 32_000_000_000);
+        #expect(developmentConfig.performanceAttributionEnabled());
+        #expect(developmentConfig.completionAttributionEnabled());
+        #expect(developmentConfig.experimentalQwenThinkingChannelSeedEnabled());
     }
 
-    func testPerModelCacheDirectoryStaysBeneathTheGlobalRoot() throws {
+    @Test
+    func should_scope_the_per_model_cache_directory_beneath_the_global_root() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: RuntimeAccessorsTests.MINIMAL_VALID_CONFIG_JSON,
@@ -123,15 +123,15 @@ final class RuntimeAccessorsTests: XCTestCase {
         let modelCacheConfig: PromptCacheConfig = try developmentConfig.promptCache().forModel(
             modelId: "qwen3-model",
             revision: "main");
-        XCTAssertEqual(modelCacheConfig.globalPromptCacheRootDirectory, developmentConfig.instancePaths.promptCacheDirectory);
-        XCTAssertEqual(
+        #expect(modelCacheConfig.globalPromptCacheRootDirectory == developmentConfig.instancePaths.promptCacheDirectory);
+        #expect(
             modelCacheConfig.activeModelPromptCacheDirectory.string.hasSuffix("/qwen3-model/main"),
-            true,
             "active cache directory should be model-and-revision scoped: \(modelCacheConfig.activeModelPromptCacheDirectory)");
-        XCTAssertEqual(modelCacheConfig.globalPromptCacheMaximumSizeBytes, 50_000_000_000);
+        #expect(modelCacheConfig.globalPromptCacheMaximumSizeBytes == 50_000_000_000);
     }
 
-    func testZeroPromptCacheCapacityIsRejected() throws {
+    @Test
+    func should_reject_a_zero_prompt_cache_capacity() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let zeroCapacityConfigJson: String =
             "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
@@ -140,14 +140,19 @@ final class RuntimeAccessorsTests: XCTestCase {
             contents: zeroCapacityConfigJson,
             fixture: fixture);
 
-        XCTAssertThrowsError(try developmentConfig.promptCache()) { (thrownError: any Error) in
-            guard case AstronomicalConfigError.invalidPromptCacheMaxSizeGb = thrownError else {
-                return XCTFail("expected a prompt-cache capacity rejection, got \(thrownError)");
+        do {
+            _ = try developmentConfig.promptCache();
+            Issue.record("expected a prompt-cache capacity rejection");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.invalidPromptCacheMaxSizeGb = configError else {
+                Issue.record(Comment(stringLiteral: "expected a prompt-cache capacity rejection, got \(configError)"));
+                return;
             }
         }
     }
 
-    func testGenerationDigestIsStableAndHexShaped() throws {
+    @Test
+    func should_keep_the_generation_digest_stable_and_hex_shaped() throws {
         let fixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentConfig: AstronomicalConfig = try self.loadConfig(
             contents: RuntimeAccessorsTests.MINIMAL_VALID_CONFIG_JSON,
@@ -156,10 +161,10 @@ final class RuntimeAccessorsTests: XCTestCase {
         let firstGeneration: String = try developmentConfig.generation();
         let reloadedConfig: AstronomicalConfig = try AstronomicalConfig.loadFromInstancePaths(
             developmentConfig.instancePaths);
-        XCTAssertEqual(firstGeneration, try reloadedConfig.generation());
-        XCTAssertEqual(firstGeneration.count, 64);
+        #expect(try firstGeneration == reloadedConfig.generation());
+        #expect(firstGeneration.count == 64);
         let hexCharacterSet: Set<Character> = Set<Character>("0123456789abcdef");
-        XCTAssertTrue(
+        #expect(
             firstGeneration.allSatisfy { (generationCharacter: Character) -> Bool in
                 return hexCharacterSet.contains(generationCharacter)
             },

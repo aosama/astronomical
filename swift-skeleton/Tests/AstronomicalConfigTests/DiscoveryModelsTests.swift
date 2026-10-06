@@ -1,5 +1,8 @@
 import Foundation;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
 
 @testable import AstronomicalConfig;
 
@@ -9,16 +12,15 @@ import XCTest;
  * handling, and unavailable-root diagnostics. Every fixture is synthesized
  * in a temporary directory — no downloads, no real artifacts.
  */
-final class DiscoveryModelsTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class DiscoveryModelsTests {
 
     private var temporaryRootPath: String?;
 
-    override func tearDown() {
+    deinit {
         if let temporaryRootPath: String = self.temporaryRootPath {
             try? FileManager.default.removeItem(atPath: temporaryRootPath);
-            self.temporaryRootPath = nil;
         }
-        super.tearDown();
     }
 
     private func makeTemporaryRoot() throws -> String {
@@ -55,31 +57,29 @@ final class DiscoveryModelsTests: XCTestCase {
         return configFilePath;
     }
 
-    private func qwen35ConfigJson() -> String {
-        return "{\"model_type\":\"qwen3_5\",\"max_position_embeddings\":40960,"
-            + "\"text_config\":{\"num_hidden_layers\":4,\"hidden_size\":1024}}";
-    }
-
-    func testDiscoverFindsAModernbertModelBeneathANestedRoot() throws {
+    @Test
+    func should_discover_a_modernbert_model_beneath_a_nested_root() throws {
         let rootPath: String = try self.makeTemporaryRoot();
         try self.writeModernbertModel(relativePath: "models/ModernBert-Retrieval", beneathRoot: rootPath);
 
         let directoryScans: Array<DiscoveryModelDiscoveryDirectoryScan> = try DiscoveryModels.discoverModels(
             modelDirectories: [FilePath(string: rootPath)]);
 
-        XCTAssertEqual(directoryScans.count, 1);
-        XCTAssertEqual(directoryScans[0].discoveredModels.count, 1);
+        #expect(directoryScans.count == 1);
+        #expect(directoryScans[0].discoveredModels.count == 1);
         let discoveredModel: DiscoveryDiscoveredModel = directoryScans[0].discoveredModels[0];
-        XCTAssertEqual(discoveredModel.modelId, "ModernBert-Retrieval");
-        XCTAssertEqual(discoveredModel.modelFamily, ModelFamily.modernbert);
+        #expect(discoveredModel.modelId == "ModernBert-Retrieval");
+        #expect(discoveredModel.modelFamily == ModelFamily.modernbert);
         guard case let .embeddings(embeddingCapabilities) = discoveredModel.capabilities else {
-            return XCTFail("expected embeddings capabilities, got \(discoveredModel.capabilities)");
+            Issue.record(Comment(stringLiteral: "expected embeddings capabilities, got \(discoveredModel.capabilities)"));
+            return;
         }
-        XCTAssertEqual(embeddingCapabilities.vectorWidth, 768);
-        XCTAssertEqual(embeddingCapabilities.maximumInputTokens, 8192);
+        #expect(embeddingCapabilities.vectorWidth == 768);
+        #expect(embeddingCapabilities.maximumInputTokens == 8192);
     }
 
-    func testWalkerStopsAtAPipelineRootAndSkipsHiddenDirectories() throws {
+    @Test
+    func should_stop_the_walker_at_a_pipeline_root_and_skip_hidden_directories() throws {
         let rootPath: String = try self.makeTemporaryRoot();
         // A Diffusers pipeline root is terminal: nested component configs
         // are not independently requestable.
@@ -103,13 +103,13 @@ final class DiscoveryModelsTests: XCTestCase {
                 discoveredModelIds.insert(discoveredModel.modelId);
             }
         }
-        XCTAssertEqual(
-            discoveredModelIds,
-            Set<String>(),
+        #expect(
+            discoveredModelIds == Set<String>(),
             "pipeline roots and hidden directories must not yield executable models");
     }
 
-    func testDuplicateIdentityAcrossRootsIsRejectedOutright() throws {
+    @Test
+    func should_reject_a_duplicate_identity_across_roots_outright() throws {
         let firstRootPath: String = try self.makeTemporaryRoot();
         let secondRootPath: String = NSTemporaryDirectory() + "adisc-\(UUID().uuidString.prefix(8))";
         try FileManager.default.createDirectory(atPath: secondRootPath, withIntermediateDirectories: true);
@@ -119,15 +119,20 @@ final class DiscoveryModelsTests: XCTestCase {
         try self.writeModernbertModel(relativePath: "m/SharedBert", beneathRoot: firstRootPath);
         try self.writeModernbertModel(relativePath: "m/SharedBert", beneathRoot: secondRootPath);
 
-        XCTAssertThrowsError(try DiscoveryModels.discoverModels(
-            modelDirectories: [FilePath(string: firstRootPath), FilePath(string: secondRootPath)])) { (thrownError: any Error) in
-            guard case DiscoveryDiscoveredModelError.duplicateModelId = thrownError else {
-                return XCTFail("expected a duplicate identity rejection, got \(thrownError)");
+        do {
+            _ = try DiscoveryModels.discoverModels(
+                modelDirectories: [FilePath(string: firstRootPath), FilePath(string: secondRootPath)]);
+            Issue.record("expected a duplicate identity rejection");
+        } catch let discoveryError as DiscoveryDiscoveredModelError {
+            guard case DiscoveryDiscoveredModelError.duplicateModelId = discoveryError else {
+                Issue.record(Comment(stringLiteral: "expected a duplicate identity rejection, got \(discoveryError)"));
+                return;
             }
         }
     }
 
-    func testAmbiguousIdentityIsDiagnosedAndExcludedInsteadOfRejected() throws {
+    @Test
+    func should_diagnose_and_exclude_an_ambiguous_identity_instead_of_rejecting() throws {
         let firstRootPath: String = try self.makeTemporaryRoot();
         let secondRootPath: String = NSTemporaryDirectory() + "adisc-\(UUID().uuidString.prefix(8))";
         try FileManager.default.createDirectory(atPath: secondRootPath, withIntermediateDirectories: true);
@@ -147,14 +152,17 @@ final class DiscoveryModelsTests: XCTestCase {
                 survivingModelIds.insert(discoveredModel.modelId);
             }
         }
-        XCTAssertEqual(survivingModelIds, Set<String>(["UniqueBert"]));
-        XCTAssertTrue(report.diagnostics.contains { (diagnostic: DiscoveryModelDiscoveryDiagnostic) -> Bool in
-            return diagnostic.code == DiscoveryModelDiscoveryDiagnosticCode.ambiguousModelIdentity
-                && diagnostic.modelId == "SharedBert";
-        }, "the ambiguous identity should be diagnosed: \(report.diagnostics)");
+        #expect(survivingModelIds == Set<String>(["UniqueBert"]));
+        #expect(
+            report.diagnostics.contains { (diagnostic: DiscoveryModelDiscoveryDiagnostic) -> Bool in
+                return diagnostic.code == DiscoveryModelDiscoveryDiagnosticCode.ambiguousModelIdentity
+                    && diagnostic.modelId == "SharedBert";
+            },
+            "the ambiguous identity should be diagnosed: \(report.diagnostics)");
     }
 
-    func testUnavailableRootIsDiagnosedAndTheRemainingRootsStillDiscover() throws {
+    @Test
+    func should_diagnose_an_unavailable_root_and_still_discover_the_remaining_roots() throws {
         let availableRootPath: String = try self.makeTemporaryRoot();
         try self.writeModernbertModel(relativePath: "m/SurvivingBert", beneathRoot: availableRootPath);
         let missingRootPath: String = availableRootPath + "/does-not-exist";
@@ -162,20 +170,23 @@ final class DiscoveryModelsTests: XCTestCase {
         let report: DiscoveryModelDiscoveryReport = try DiscoveryModels.discoverModelsExcludingAmbiguousIdentities(
             modelDirectories: [FilePath(string: missingRootPath), FilePath(string: availableRootPath)]);
 
-        XCTAssertTrue(report.diagnostics.contains { (diagnostic: DiscoveryModelDiscoveryDiagnostic) -> Bool in
-            return diagnostic.code == DiscoveryModelDiscoveryDiagnosticCode.unavailableModelDirectory
-                && diagnostic.configuredRootNumbers == [1];
-        }, "the missing root should be diagnosed: \(report.diagnostics)");
+        #expect(
+            report.diagnostics.contains { (diagnostic: DiscoveryModelDiscoveryDiagnostic) -> Bool in
+                return diagnostic.code == DiscoveryModelDiscoveryDiagnosticCode.unavailableModelDirectory
+                    && diagnostic.configuredRootNumbers == [1];
+            },
+            "the missing root should be diagnosed: \(report.diagnostics)");
         var survivingModelIds: Set<String> = Set<String>();
         for directoryScan: DiscoveryModelDiscoveryDirectoryScan in report.directoryScans {
             for discoveredModel: DiscoveryDiscoveredModel in directoryScan.discoveredModels {
                 survivingModelIds.insert(discoveredModel.modelId);
             }
         }
-        XCTAssertEqual(survivingModelIds, Set<String>(["SurvivingBert"]));
+        #expect(survivingModelIds == Set<String>(["SurvivingBert"]));
     }
 
-    func testLibraryProvenanceProvidesImmutableIdentityAndRevision() throws {
+    @Test
+    func should_give_library_provenance_an_immutable_identity_and_revision() throws {
         let rootPath: String = try self.makeTemporaryRoot();
         let configFilePath: FilePath = try self.writeModernbertModel(
             relativePath: "m/ProvenanceBert",
@@ -193,21 +204,22 @@ final class DiscoveryModelsTests: XCTestCase {
 
         let provenance: (providerModelId: String, revision: String)? = DiscoveryModels.immutableModelProvenance(
             modelDirectory: provenanceDirectory);
-        XCTAssertEqual(provenance?.providerModelId, "org/provenance-bert");
-        XCTAssertEqual(provenance?.revision, String(repeating: "a", count: 40));
+        #expect(provenance?.providerModelId == "org/provenance-bert");
+        #expect(provenance?.revision == String(repeating: "a", count: 40));
 
         let directoryScans: Array<DiscoveryModelDiscoveryDirectoryScan> = try DiscoveryModels.discoverModels(
             modelDirectories: [FilePath(string: rootPath)]);
         let discoveredModel: DiscoveryDiscoveredModel = directoryScans[0].discoveredModels[0];
-        XCTAssertEqual(discoveredModel.providerModelId, "org/provenance-bert");
-        XCTAssertEqual(discoveredModel.revision, String(repeating: "a", count: 40));
+        #expect(discoveredModel.providerModelId == "org/provenance-bert");
+        #expect(discoveredModel.revision == String(repeating: "a", count: 40));
     }
 
-    func testRevisionFallsBackToTheConfigDigestWithoutProvenance() throws {
+    @Test
+    func should_fall_back_to_the_config_digest_for_a_revision_without_provenance() throws {
         let configBytes: Data = Data("{\"model_type\":\"qwen3_5\"}".utf8);
         let derivedRevision: String = DiscoveryModels.deriveRevisionFromConfigBytes(configBytes: configBytes);
-        XCTAssertEqual(derivedRevision.count, 12);
+        #expect(derivedRevision.count == 12);
         let repeatedRevision: String = DiscoveryModels.deriveRevisionFromConfigBytes(configBytes: configBytes);
-        XCTAssertEqual(derivedRevision, repeatedRevision);
+        #expect(derivedRevision == repeatedRevision);
     }
 }

@@ -1,12 +1,16 @@
 import Darwin;
 import Foundation;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
+
 @testable import IpcProtocol;
 
 /**
- * Creates and owns one unique temporary directory for one transport test,
- * removed in tearDown. Socket paths live inside it so no test ever touches a
- * developer path or a fixed endpoint.
+ * Creates and owns one unique temporary directory for one transport journey,
+ * removed on suite teardown. Socket paths live inside it so no journey ever
+ * touches a developer path or a fixed endpoint.
  */
 private final class TransportTemporaryDirectoryFixture {
     private let rootDirectoryPathValue: String;
@@ -57,7 +61,7 @@ private final class ConnectedSocketPairFixture {
 
 /**
  * Sends one daemon response frame from a background thread so an oversized
- * frame can be written while the test thread blocks inside ProtocolReader.
+ * frame can be written while the journey thread blocks inside ProtocolReader.
  * A socketpair's kernel buffer is far smaller than the frame, so the writer
  * must overlap the reader instead of running ahead of it.
  */
@@ -94,37 +98,26 @@ private final class SocketResponseWriterThread: Thread {
 /**
  * Transport acceptance journeys for the synchronous unix-socket IPC layer,
  * ported from crates/ipc-protocol/tests/hermetic/daemon_transport.rs. The
- * Swift transport blocks on the caller's thread, so every listener test
+ * Swift transport blocks on the caller's thread, so every listener journey
  * connects the client first — the kernel queues the pending connection — and
  * then serves inline; the only background thread is the one writer that must
  * overlap a blocking frame read in the oversized-frame journey.
  */
-final class TransportTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class TransportTests {
     private static let SOCKET_FILE_NAME: String = "ipc.sock";
     private static let LARGE_FRAME_TEXT_BYTE_COUNT: Int = 200_000;
 
     private var temporaryDirectoryFixture: TransportTemporaryDirectoryFixture?;
 
-    override func setUp() {
-        self.temporaryDirectoryFixture = nil;
-        super.setUp();
+    deinit {
+        if let fixture: TransportTemporaryDirectoryFixture = self.temporaryDirectoryFixture {
+            try? fixture.destroy();
+        }
     }
 
-    override func tearDown() {
-        guard let fixture: TransportTemporaryDirectoryFixture = self.temporaryDirectoryFixture else {
-            super.tearDown();
-            return;
-        }
-        do {
-            try fixture.destroy();
-        } catch {
-            XCTFail("temporary directory should be removed: \(error)");
-        }
-        self.temporaryDirectoryFixture = nil;
-        super.tearDown();
-    }
-
-    func testShouldRoundTripHandshakeRequestAndAcceptedResponseOverUnixSocket() throws -> Void {
+    @Test
+    func should_round_trip_a_handshake_request_and_accepted_response_over_a_unix_socket() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let daemonListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
@@ -138,128 +131,146 @@ final class TransportTests: XCTestCase {
             return cannedResponse;
         });
 
-        XCTAssertEqual(receivedRequest, DaemonRequest.handshake);
+        #expect(receivedRequest == DaemonRequest.handshake);
         let daemonResponse: DaemonResponse? = try daemonClient.nextResponse();
         guard let unwrappedResponse: DaemonResponse = daemonResponse else {
-            return XCTFail("the daemon should answer the handshake before closing");
+            Issue.record("the daemon should answer the handshake before closing");
+            return;
         }
-        XCTAssertEqual(unwrappedResponse, cannedResponse);
-        XCTAssertEqual(daemonListener.socketPath, socketPath);
+        #expect(unwrappedResponse == cannedResponse);
+        #expect(daemonListener.socketPath == socketPath);
     }
 
-    func testShouldReplaceAStaleSocketFileWhenBinding() throws -> Void {
+    @Test
+    func should_replace_a_stale_socket_file_when_binding() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let staleBytes: Data = Data("stale bytes from a dead daemon".utf8);
         try staleBytes.write(to: URL(fileURLWithPath: socketPath));
 
         let boundListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
-        XCTAssertEqual(boundListener.socketPath, socketPath, "binding over a stale socket file should replace it");
+        #expect(boundListener.socketPath == socketPath, "binding over a stale socket file should replace it");
     }
 
-    func testShouldRebindAfterThePreviousListenerReleasesTheSocketFile() throws -> Void {
+    @Test
+    func should_rebind_after_the_previous_listener_releases_the_socket_file() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         do {
             let firstListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
-            XCTAssertEqual(firstListener.socketPath, socketPath, "the first listener should hold the socket path");
+            #expect(firstListener.socketPath == socketPath, "the first listener should hold the socket path");
         }
-        XCTAssertTrue(
+        #expect(
             FileManager.default.fileExists(atPath: socketPath),
             "a closed listener leaves the socket file behind as stale residue");
 
         let reboundListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
-        XCTAssertEqual(reboundListener.socketPath, socketPath, "binding over a stale socket file should rebind");
+        #expect(reboundListener.socketPath == socketPath, "binding over a stale socket file should rebind");
     }
 
-    func testShouldCreateDaemonSocketWithOwnerOnlyPermissions() throws -> Void {
+    @Test
+    func should_create_the_daemon_socket_with_owner_only_permissions() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let daemonListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
         let socketAttributes: Dictionary<FileAttributeKey, Any> = try FileManager.default.attributesOfItem(
             atPath: daemonListener.socketPath);
         guard let permissionValue: NSNumber = socketAttributes[.posixPermissions] as? NSNumber else {
-            return XCTFail("the bound socket file should report posix permissions");
+            Issue.record("the bound socket file should report posix permissions");
+            return;
         }
-        XCTAssertEqual(
-            permissionValue.uint16Value, 0o600,
+        #expect(
+            permissionValue.uint16Value == 0o600,
             "the daemon socket must be readable and writable by the owning user only");
     }
 
-    func testShouldReportDaemonNotRunningWhenConnectingToMissingSocket() throws -> Void {
+    @Test
+    func should_report_daemon_not_running_when_connecting_to_a_missing_socket() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
 
-        XCTAssertThrowsError(try DaemonIpcClient.connect(socketPath: socketPath)) { (thrownError: Error) in
-            guard case DaemonTransportError.daemonNotRunning(let reportedPath) = thrownError else {
-                XCTFail("connecting to a missing daemon socket should report daemonNotRunning, got: \(thrownError)");
+        do {
+            _ = try DaemonIpcClient.connect(socketPath: socketPath);
+            Issue.record("connecting to a missing daemon socket should report daemonNotRunning");
+        } catch let transportError as DaemonTransportError {
+            guard case DaemonTransportError.daemonNotRunning(let reportedPath) = transportError else {
+                Issue.record(Comment(stringLiteral: "expected daemonNotRunning, got \(transportError)"));
                 return;
             }
-            XCTAssertEqual(reportedPath, socketPath);
-        };
+            #expect(reportedPath == socketPath);
+        }
     }
 
-    func testShouldRefuseToBindWhileALiveSocketIsAnswering() throws -> Void {
+    @Test
+    func should_refuse_to_bind_while_a_live_socket_is_answering() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let liveListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
-        XCTAssertThrowsError(try DaemonIpcListener.bind(socketPath: socketPath)) { (thrownError: Error) in
-            guard case DaemonTransportError.bindFailed(let reportedPath, let bindSource) = thrownError else {
-                XCTFail("binding over a live socket should report bindFailed, got: \(thrownError)");
+        do {
+            _ = try DaemonIpcListener.bind(socketPath: socketPath);
+            Issue.record("binding over a live socket should report bindFailed");
+        } catch let transportError as DaemonTransportError {
+            guard case DaemonTransportError.bindFailed(let reportedPath, let bindSource) = transportError else {
+                Issue.record(Comment(stringLiteral: "expected bindFailed, got \(transportError)"));
                 return;
             }
-            XCTAssertEqual(reportedPath, socketPath);
-            XCTAssertTrue(
+            #expect(reportedPath == socketPath);
+            #expect(
                 bindSource.underlyingErrorDescription.contains("address in use"),
                 "the refusal should carry the address-in-use source, got: \(bindSource)");
-        };
+        }
 
         // The final read keeps the live listener alive through the refusal so
-        // its socket cannot be reclassified as stale residue mid-test.
-        XCTAssertEqual(liveListener.socketPath, socketPath);
+        // its socket cannot be reclassified as stale residue mid-journey.
+        #expect(liveListener.socketPath == socketPath);
     }
 
-    func testShouldReportMissingParentDirectoryWhenBinding() throws -> Void {
+    @Test
+    func should_report_a_missing_parent_directory_when_binding() throws -> Void {
         let fixture: TransportTemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let socketPath: String = URL(fileURLWithPath: fixture.rootDirectoryPath)
             .appendingPathComponent("absent-subdirectory")
             .appendingPathComponent(TransportTests.SOCKET_FILE_NAME).path;
 
-        XCTAssertThrowsError(try DaemonIpcListener.bind(socketPath: socketPath)) { (thrownError: Error) in
-            guard case DaemonTransportError.socketParentDirectoryMissing(let reportedPath) = thrownError else {
-                XCTFail(
-                    "binding without a parent directory should report socketParentDirectoryMissing, got: \(thrownError)");
+        do {
+            _ = try DaemonIpcListener.bind(socketPath: socketPath);
+            Issue.record("binding without a parent directory should report socketParentDirectoryMissing");
+        } catch let transportError as DaemonTransportError {
+            guard case DaemonTransportError.socketParentDirectoryMissing(let reportedPath) = transportError else {
+                Issue.record(Comment(stringLiteral: "expected socketParentDirectoryMissing, got \(transportError)"));
                 return;
             }
-            XCTAssertEqual(reportedPath, socketPath);
-        };
+            #expect(reportedPath == socketPath);
+        }
     }
 
-    func testShouldKeepServingAfterClientDisconnectsWithoutARequest() throws -> Void {
+    @Test
+    func should_keep_serving_after_a_client_disconnects_without_a_request() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let daemonListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
         do {
             let silentClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: socketPath);
-            XCTAssertNotNil(silentClient, "connecting a client that will immediately disconnect should succeed");
+            _ = silentClient;
         }
         try daemonListener.serveNextRequest(handleRequest: { (_ incomingRequest: DaemonRequest) -> DaemonResponse in
-            XCTFail("a vanished client must not reach the request handler");
+            Issue.record("a vanished client must not reach the request handler");
             return TransportTests.handshakeAcceptedResponse();
         });
 
         let followingClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: socketPath);
         try followingClient.sendRequest(DaemonRequest.handshake);
         try daemonListener.serveNextRequest(handleRequest: { (incomingRequest: DaemonRequest) -> DaemonResponse in
-            XCTAssertEqual(incomingRequest, DaemonRequest.handshake);
+            #expect(incomingRequest == DaemonRequest.handshake);
             return TransportTests.handshakeAcceptedResponse();
         });
         let followingResponse: DaemonResponse? = try followingClient.nextResponse();
-        XCTAssertEqual(
-            followingResponse, TransportTests.handshakeAcceptedResponse(),
+        #expect(
+            followingResponse == TransportTests.handshakeAcceptedResponse(),
             "the listener should still answer after the silent disconnect");
     }
 
-    func testShouldStreamMultipleResponsesForOneRequest() throws -> Void {
+    @Test
+    func should_stream_multiple_responses_for_one_request() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let daemonListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
@@ -282,26 +293,27 @@ final class TransportTests: XCTestCase {
                 try responseWriter.close();
             });
 
-        XCTAssertEqual(receivedRequest, chatGenerateRequest);
+        #expect(receivedRequest == chatGenerateRequest);
         let firstFragment: DaemonResponse? = try daemonClient.nextResponse();
-        XCTAssertEqual(firstFragment, DaemonResponse.chatGenerationText(text: "Hello"));
+        #expect(firstFragment == DaemonResponse.chatGenerationText(text: "Hello"));
         let secondFragment: DaemonResponse? = try daemonClient.nextResponse();
-        XCTAssertEqual(secondFragment, DaemonResponse.chatGenerationText(text: " world"));
+        #expect(secondFragment == DaemonResponse.chatGenerationText(text: " world"));
         let completionFrame: DaemonResponse? = try daemonClient.nextResponse();
-        XCTAssertEqual(
-            completionFrame,
-            DaemonResponse.chatGenerationCompleted(
-                promptTokenCount: 5,
-                generatedTokenCount: 2,
-                reasoningTokenCount: 0,
-                cachedTokenCount: 0,
-                reason: ChatGenerationCompletionReason.endOfSequence));
+        #expect(
+            completionFrame
+                == DaemonResponse.chatGenerationCompleted(
+                    promptTokenCount: 5,
+                    generatedTokenCount: 2,
+                    reasoningTokenCount: 0,
+                    cachedTokenCount: 0,
+                    reason: ChatGenerationCompletionReason.endOfSequence));
 
         let connectionClosed: DaemonResponse? = try daemonClient.nextResponse();
-        XCTAssertNil(connectionClosed, "the daemon should close the connection after the terminal frame");
+        #expect(connectionClosed == nil, "the daemon should close the connection after the terminal frame");
     }
 
-    func testShouldSurviveAClientDisconnectMidStream() throws -> Void {
+    @Test
+    func should_survive_a_client_disconnect_mid_stream() throws -> Void {
         let socketPath: String = try self.makeSocketPath();
         let daemonListener: DaemonIpcListener = try DaemonIpcListener.bind(socketPath: socketPath);
 
@@ -326,8 +338,8 @@ final class TransportTests: XCTestCase {
         }
         if let streamFailure: Error = streamFailure {
             if case DaemonTransportError.acceptFailed = streamFailure {
-                XCTFail(
-                    "a vanished mid-stream client is a per-request failure, not a listener failure: \(streamFailure)");
+                Issue.record(Comment(stringLiteral:
+                    "a vanished mid-stream client is a per-request failure, not a listener failure: \(streamFailure)"));
             }
         }
 
@@ -337,12 +349,13 @@ final class TransportTests: XCTestCase {
             return TransportTests.handshakeAcceptedResponse();
         });
         let followingResponse: DaemonResponse? = try followingClient.nextResponse();
-        XCTAssertEqual(
-            followingResponse, TransportTests.handshakeAcceptedResponse(),
+        #expect(
+            followingResponse == TransportTests.handshakeAcceptedResponse(),
             "the listener should survive the mid-stream disconnect");
     }
 
-    func testShouldReportCleanEndOfFileAtFrameBoundary() throws -> Void {
+    @Test
+    func should_report_a_clean_end_of_file_at_a_frame_boundary() throws -> Void {
         let socketPair: ConnectedSocketPairFixture = try ConnectedSocketPairFixture();
         let protocolWriter: ProtocolWriter = ProtocolWriter(socket: socketPair.clientEnd);
         let protocolReader: ProtocolReader = ProtocolReader(socket: socketPair.serverEnd);
@@ -351,43 +364,44 @@ final class TransportTests: XCTestCase {
         try socketPair.clientEnd.shutdownWrite();
 
         let firstResponse: DaemonResponse? = try protocolReader.nextDaemonResponse();
-        XCTAssertEqual(firstResponse, DaemonResponse.chatGenerationText(text: "only frame"));
+        #expect(firstResponse == DaemonResponse.chatGenerationText(text: "only frame"));
         let terminalResponse: DaemonResponse? = try protocolReader.nextDaemonResponse();
-        XCTAssertNil(terminalResponse, "clean EOF at a frame boundary should read as nil, not an error");
+        #expect(terminalResponse == nil, "clean EOF at a frame boundary should read as nil, not an error");
     }
 
-    func testShouldReportBytesRemainingWhenAFrameIsTruncated() throws -> Void {
+    @Test
+    func should_report_bytes_remaining_when_a_frame_is_truncated() throws -> Void {
         let socketPair: ConnectedSocketPairFixture = try ConnectedSocketPairFixture();
         try socketPair.clientEnd.writeAll(Data([0x00, 0x00, 0x00, 0x0A]));
         try socketPair.clientEnd.writeAll(Data([0x7B, 0x22, 0x6B]));
         socketPair.clientEnd.close();
 
         let protocolReader: ProtocolReader = ProtocolReader(socket: socketPair.serverEnd);
-        XCTAssertThrowsError(try protocolReader.nextDaemonResponse()) { (thrownError: Error) in
-            guard case ProtocolError.readFrame(let frameIoError) = thrownError else {
-                XCTFail("a truncated frame should raise readFrame, got: \(thrownError)");
-                return;
-            }
-            XCTAssertEqual(frameIoError.underlyingErrorDescription, "bytes remaining on stream");
-        };
+        do {
+            _ = try protocolReader.nextDaemonResponse();
+            Issue.record("a truncated frame should raise readFrame");
+        } catch ProtocolError.readFrame(let frameIoError) {
+            #expect(frameIoError.underlyingErrorDescription == "bytes remaining on stream");
+        }
     }
 
-    func testShouldRejectAnOversizedFrameLengthPrefix() throws -> Void {
+    @Test
+    func should_reject_an_oversized_frame_length_prefix() throws -> Void {
         let socketPair: ConnectedSocketPairFixture = try ConnectedSocketPairFixture();
         try socketPair.clientEnd.writeAll(Data([0x02, 0x00, 0x00, 0x01]));
         socketPair.clientEnd.close();
 
         let protocolReader: ProtocolReader = ProtocolReader(socket: socketPair.serverEnd);
-        XCTAssertThrowsError(try protocolReader.nextDaemonResponse()) { (thrownError: Error) in
-            guard case ProtocolError.readFrame(let frameIoError) = thrownError else {
-                XCTFail("an oversized length prefix should raise readFrame, got: \(thrownError)");
-                return;
-            }
-            XCTAssertEqual(frameIoError.underlyingErrorDescription, "frame size too big");
-        };
+        do {
+            _ = try protocolReader.nextDaemonResponse();
+            Issue.record("an oversized length prefix should raise readFrame");
+        } catch ProtocolError.readFrame(let frameIoError) {
+            #expect(frameIoError.underlyingErrorDescription == "frame size too big");
+        }
     }
 
-    func testShouldDecodeAFrameDeliveredOneByteAtATime() throws -> Void {
+    @Test
+    func should_decode_a_frame_delivered_one_byte_at_a_time() throws -> Void {
         let socketPair: ConnectedSocketPairFixture = try ConnectedSocketPairFixture();
         let expectedResponse: DaemonResponse = DaemonResponse.chatGenerationText(text: "chunked delivery");
         let serializedResponse: Data = try MessageCodec.encodeDaemonResponse(expectedResponse);
@@ -399,10 +413,11 @@ final class TransportTests: XCTestCase {
 
         let protocolReader: ProtocolReader = ProtocolReader(socket: socketPair.serverEnd);
         let decodedResponse: DaemonResponse? = try protocolReader.nextDaemonResponse();
-        XCTAssertEqual(decodedResponse, expectedResponse);
+        #expect(decodedResponse == expectedResponse);
     }
 
-    func testShouldDecodeAFrameLargerThanOneReceiveBuffer() throws -> Void {
+    @Test
+    func should_decode_a_frame_larger_than_one_receive_buffer() throws -> Void {
         let socketPair: ConnectedSocketPairFixture = try ConnectedSocketPairFixture();
         let oversizedFragmentText: String = String(repeating: "x", count: TransportTests.LARGE_FRAME_TEXT_BYTE_COUNT);
         let expectedResponse: DaemonResponse = DaemonResponse.chatGenerationText(text: oversizedFragmentText);
@@ -419,7 +434,7 @@ final class TransportTests: XCTestCase {
             throw writeFailure;
         }
 
-        XCTAssertEqual(decodedResponse, expectedResponse);
+        #expect(decodedResponse == expectedResponse);
     }
 
     private func makeTemporaryDirectoryFixture() throws -> TransportTemporaryDirectoryFixture {
