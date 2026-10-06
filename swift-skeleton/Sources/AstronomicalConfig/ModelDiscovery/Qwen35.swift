@@ -40,8 +40,6 @@ internal enum Qwen35 {
         }
     }
 
-    private static let MTP_TENSOR_COMPONENT: String = "mtp";
-
     /**
      * Lowest context window disk discovery and download preflight accept: one
      * token for the prompt and one for the completion. Anything smaller
@@ -121,9 +119,8 @@ internal enum Qwen35 {
 
     /**
      * Extracts the shard file names disk discovery and download preflight
-     * both treat as mandatory: every shard that carries at least one non-MTP
-     * tensor. A missing MTP-only shard stays valid for target-only serving; a
-     * missing target or vision shard never does. Entries that do not map a
+     * both treat as mandatory: every shard that carries at least one tensor.
+     * A missing shard never leaves discovery valid. Entries that do not map a
      * tensor to a string shard are skipped, mirroring disk discovery's
      * tolerance.
      */
@@ -131,9 +128,6 @@ internal enum Qwen35 {
         var requiredShardFileNames: Set<String> = Set<String>();
         for (key: tensorName, value: tensorShardValue) in weightMap {
             guard let shardFileName: String = tensorShardValue as? String else {
-                continue;
-            }
-            if Qwen35.containsMtpComponent(tensorName: tensorName) {
                 continue;
             }
             requiredShardFileNames.insert(shardFileName);
@@ -150,21 +144,6 @@ internal enum Qwen35 {
             shardFileNames.insert(shardFileName);
         }
         return shardFileNames;
-    }
-
-    private static func containsMtpComponent(tensorName: String) -> Bool {
-        let tensorNameComponents: Array<String> = tensorName.split(
-            omittingEmptySubsequences: false,
-            whereSeparator: { (tensorNameCharacter: Character) -> Bool in
-                return tensorNameCharacter == ".";
-            }
-        ).map(String.init);
-        for tensorNameComponent: String in tensorNameComponents {
-            if tensorNameComponent == Qwen35.MTP_TENSOR_COMPONENT {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

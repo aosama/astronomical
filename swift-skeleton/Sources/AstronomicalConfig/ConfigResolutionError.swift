@@ -13,7 +13,6 @@ internal enum ConfigResolutionError: Error, CustomStringConvertible {
     case invalidRetainedLogFileCount;
     case duplicateConfigKey(configFilePath: FilePath, duplicateKey: String);
     case configChangedDuringUpdate;
-    case invalidMtpDraftDepth(draftDepth: UInt8);
     case legacyMigration(description: String);
 
     internal var description: String {
@@ -25,7 +24,6 @@ internal enum ConfigResolutionError: Error, CustomStringConvertible {
         case .invalidRetainedLogFileCount: return "diagnostics.retained_log_files must be a positive count";
         case let .duplicateConfigKey(configFilePath, duplicateKey): return "duplicate config key \(duplicateKey) in \(configFilePath.string)";
         case .configChangedDuringUpdate: return "the config file changed during the update and the update was abandoned";
-        case let .invalidMtpDraftDepth(draftDepth): return "invalid mtp_draft_depth \(draftDepth): must be between 1 and 3 inclusive";
         case let .legacyMigration(descriptionValue): return "legacy migration failed: \(descriptionValue)";
         }
     }
