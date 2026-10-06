@@ -146,22 +146,23 @@ enum RestChatJourneySupport {
                     defaultBindAddress: SocketEndpoint.loopback(port: 0))));
     }
 
-    /// Posts one chat request body straight to the routed handler, the
-    /// in-process equivalent of the Rust oneshot journeys.
+    /// Posts one request body straight to the routed handler at `routePath`,
+    /// the in-process equivalent of the Rust oneshot journeys.
     static func postChat(
         routeTable: RestRouteTable,
+        routePath: String = RestChatCompletionEndpoint.routePath,
         requestBody: String
     ) throws -> RestHttpResponse {
         let routeOutcome: RestRouteOutcome = routeTable.outcome(
             method: "POST",
-            path: RestChatCompletionEndpoint.routePath);
+            path: routePath);
         guard case let .handler(routeHandler) = routeOutcome else {
             throw RestChatJourneyFailure.chatRouteMissing(routeOutcome);
         }
         let chatRequest: RestHttpRequest = RestHttpRequest(
             method: "POST",
-            path: RestChatCompletionEndpoint.routePath,
-            requestTarget: "\(RestChatCompletionEndpoint.routePath)",
+            path: routePath,
+            requestTarget: routePath,
             headersByLowercasedName: ["content-type": "application/json"],
             bodyBytes: Data(requestBody.utf8));
         return try routeHandler(chatRequest);

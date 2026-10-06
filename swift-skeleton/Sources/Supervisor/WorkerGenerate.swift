@@ -15,7 +15,7 @@ import IpcProtocol;
 public enum WorkerGenerate {
 
     public static func prepareResidentModel(
-        _ generationCommand: ChatGenerationCommand,
+        targetModelId: String,
         workerProcess: WorkerProcess,
         eventPump: WorkerEventPump,
         healthState: WorkerHealthState,
@@ -24,10 +24,10 @@ public enum WorkerGenerate {
         containment: (Error) -> Void
     ) throws -> Void {
         let residentModelId: String? = healthState.currentSnapshot().readyModelId;
-        if residentModelId == generationCommand.model {
+        if residentModelId == targetModelId {
             return;
         }
-        guard let modelPolicy: RuntimeModelPolicy = modelPolicyCatalog[generationCommand.model] else {
+        guard let modelPolicy: RuntimeModelPolicy = modelPolicyCatalog[targetModelId] else {
             if residentModelId == nil {
                 // The worker cannot serve an unmapped model from cold, and no
                 // resident model protects the request either.

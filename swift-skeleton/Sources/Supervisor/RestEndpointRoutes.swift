@@ -45,7 +45,8 @@ public enum RestEndpointRoutes {
         instancePaths: AstronomicalInstancePaths,
         buildIdentity: ApplicationBuildIdentity,
         configurationValidationError: String? = nil,
-        chatContext: RestChatRouteContext? = nil
+        chatContext: RestChatRouteContext? = nil,
+        embeddingsContext: RestEmbeddingsRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -97,6 +98,16 @@ public enum RestEndpointRoutes {
                 path: RestChatCompletionEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
                     return RestChatCompletionEndpoint.handle(request, chatContext: chatContext);
+                });
+        }
+        if let embeddingsContext = embeddingsContext {
+            routeTable.register(
+                method: RestEmbeddingsEndpoint.routeMethod,
+                path: RestEmbeddingsEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return RestEmbeddingsEndpoint.handle(
+                        request,
+                        embeddingsContext: embeddingsContext);
                 });
         }
         routeTable.register(
