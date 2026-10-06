@@ -24,32 +24,6 @@ public final class ValidatedSafetensorsSource {
         self.payloadBytesValue = payloadBytes;
     }
 
-    /// Exercises the required/optional profile partition through the real
-    /// descriptor and header path. The returned boolean is false only when the
-    /// requested optional feature has a profile defect and therefore must be
-    /// disabled atomically; a thrown error means required source validity failed.
-    public static func validateSafetensorsProfilePartitionsForTests(
-        modelDirectory: String, relativeFileName: String, inventory: TensorInventory,
-        canonicalProfiles: Array<TensorProfile>,
-        optionalFeature: TensorFeature) throws -> Bool {
-        let requiredFile: ValidatedRequiredFile = try RequiredFiles.validateRequiredFile(
-            modelDirectory: modelDirectory,
-            requiredFileProfile: RequiredFileProfile(
-                fileName: relativeFileName, sizeBytes: 0));
-        let source: ValidatedSafetensorsSource = try ValidatedSafetensorsSource.parse(
-            sourceId: TensorSourceId(sourceNumber: 1), requiredFile: requiredFile);
-        try source.validateRequiredInventoryProfiles(
-            inventory: inventory, canonicalProfiles: canonicalProfiles);
-        do {
-            try source.validateFeatureInventoryProfiles(
-                inventory: inventory, canonicalProfiles: canonicalProfiles,
-                feature: optionalFeature);
-        } catch {
-            return false;
-        }
-        return true;
-    }
-
     public static func parse(
         sourceId: TensorSourceId, requiredFile: ValidatedRequiredFile) throws -> ValidatedSafetensorsSource {
         let boundedJsonHeader: SafetensorsFraming.BoundedJsonHeader;
@@ -121,37 +95,6 @@ public final class ValidatedSafetensorsSource {
         let sourceLocations: Array<TensorLocation> = self.sourceLocations(inventory: inventory);
         try self.validateExactPhysicalInventory(sourceLocations: sourceLocations);
         try self.validateLocations(locations: sourceLocations, canonicalProfiles: canonicalProfiles);
-    }
-
-    /// Validates required target and vision profiles while leaving optional
-    /// features atomic.
-    ///
-    /// A target shard may physically contain an optional MTP head. A wrong
-    /// optional dtype or shape must disable that complete feature, not reject
-    /// otherwise valid target weights. Physical-name and offset validation
-    /// still covers the entire source before this split, so ignoring optional
-    /// profile semantics cannot hide an undeclared or structurally unsafe tensor.
-    public func validateRequiredInventoryProfiles(
-        inventory: TensorInventory, canonicalProfiles: Array<TensorProfile>) throws -> Void {
-        let sourceLocations: Array<TensorLocation> = self.sourceLocations(inventory: inventory);
-        try self.validateExactPhysicalInventory(sourceLocations: sourceLocations);
-        let requiredLocations: Array<TensorLocation> = sourceLocations
-            .filter({ (tensorLocation: TensorLocation) -> Bool in
-                return tensorLocation.feature == nil;
-            });
-        try self.validateLocations(locations: requiredLocations, canonicalProfiles: canonicalProfiles);
-    }
-
-    /// Validates one optional feature independently after required profiles
-    /// are known safe.
-    public func validateFeatureInventoryProfiles(
-        inventory: TensorInventory, canonicalProfiles: Array<TensorProfile>,
-        feature: TensorFeature) throws -> Void {
-        let featureLocations: Array<TensorLocation> = self.sourceLocations(inventory: inventory)
-            .filter({ (tensorLocation: TensorLocation) -> Bool in
-                return tensorLocation.feature == feature;
-            });
-        try self.validateLocations(locations: featureLocations, canonicalProfiles: canonicalProfiles);
     }
 
     public func intoValidatedWeightsFile() throws -> ValidatedWeightsFile {

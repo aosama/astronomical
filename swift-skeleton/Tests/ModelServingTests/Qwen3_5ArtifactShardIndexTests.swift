@@ -19,17 +19,16 @@ enum Qwen3_5ArtifactTestSupport {
 
     static func frozenTestIndexBytes() throws -> Array<UInt8> {
         let languageTensorProfiles: Array<TensorProfile> = try expectedLanguageTensorProfiles();
-        return try frozenTestIndexBytesWithOptionalLanguageTensorAndMtpTensorReplacement(
-            replacementTensor: nil, mtpTensorNames: Array(),
+        return try frozenTestIndexBytesWithOptionalLanguageTensorReplacement(
+            replacementTensor: nil,
             languageTensorProfiles: languageTensorProfiles);
     }
 
     static func frozenTestIndexBytesWithLanguageTensorReplacement(
         replacementTensorIndex: Int, replacementTensorName: String,
         languageTensorProfiles: Array<TensorProfile>) throws -> Array<UInt8> {
-        return try frozenTestIndexBytesWithOptionalLanguageTensorAndMtpTensorReplacement(
+        return try frozenTestIndexBytesWithOptionalLanguageTensorReplacement(
             replacementTensor: (replacementTensorIndex, replacementTensorName),
-            mtpTensorNames: Array(),
             languageTensorProfiles: languageTensorProfiles);
     }
 
@@ -41,22 +40,21 @@ enum Qwen3_5ArtifactTestSupport {
         return Qwen3_5TensorSpec.qwen3_5LanguageTensorProfiles(qwen3_5Config: ornithConfig);
     }
 
-    private static func frozenTestIndexBytesWithOptionalLanguageTensorAndMtpTensorReplacement(
+    private static func frozenTestIndexBytesWithOptionalLanguageTensorReplacement(
         replacementTensor: (index: Int, name: String)?,
-        mtpTensorNames: Array<String>,
         languageTensorProfiles: Array<TensorProfile>) throws -> Array<UInt8> {
         var weightMapEntries: Array<(tensorName: String, shardFileName: String)> = Array();
         for (languageTensorIndex, tensorProfile): (Int, TensorProfile) in languageTensorProfiles.enumerated() {
-            let tensorName: String =
-                replacementTensor?.index == languageTensorIndex
-                ? replacementTensor!.name
-                : tensorProfile.name;
+            let tensorName: String;
+            if replacementTensor?.index == languageTensorIndex,
+                let replacementName: String = replacementTensor?.name {
+                tensorName = replacementName;
+            } else {
+                tensorName = tensorProfile.name;
+            }
             weightMapEntries.append((
                 tensorName,
                 LANGUAGE_SHARD_FILE_NAMES[languageTensorIndex % LANGUAGE_SHARD_FILE_NAMES.count]));
-        }
-        for mtpTensorName: String in mtpTensorNames {
-            weightMapEntries.append((mtpTensorName, LANGUAGE_SHARD_FILE_NAMES[0]));
         }
         for visionTensorIndex in 0..<333 {
             weightMapEntries.append(

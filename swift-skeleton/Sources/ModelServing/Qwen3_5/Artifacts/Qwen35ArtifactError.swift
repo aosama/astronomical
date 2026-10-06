@@ -9,8 +9,6 @@ public enum Qwen3_5ArtifactError: Error, Equatable {
     case invalidTensorNameLength(tensorName: String, maximumTensorNameBytes: Int);
     case unexpectedLanguageTensor(tensorName: String);
     case missingLanguageTensor(tensorName: String);
-    case unexpectedMtpTensor(tensorName: String);
-    case missingMtpTensor(tensorName: String);
     case unexpectedVisionTensor(tensorName: String);
     case missingVisionTensor(tensorName: String);
     case missingVisionConfig;
@@ -29,10 +27,6 @@ public enum Qwen3_5ArtifactError: Error, Equatable {
             return "Qwen3.5 index contains unexpected executable language tensor '\(tensorName)'";
         case .missingLanguageTensor(let tensorName):
             return "Qwen3.5 index is missing executable language tensor '\(tensorName)'";
-        case .unexpectedMtpTensor(let tensorName):
-            return "Qwen3.5 index contains unexpected MTP tensor '\(tensorName)'";
-        case .missingMtpTensor(let tensorName):
-            return "Qwen3.5 index is missing MTP tensor '\(tensorName)'";
         case .unexpectedVisionTensor(let tensorName):
             return "Qwen3.5 index contains unexpected vision tensor '\(tensorName)'";
         case .missingVisionTensor(let tensorName):
