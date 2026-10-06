@@ -1,13 +1,163 @@
-// SupervisorTests.swift — SupervisorTests
-//
-// INERT MIGRATION SKELETON — comments only; nothing in this file compiles.
-//
-// Test target for Sources/Supervisor (wave 2). Tests mirror the source
-// package paths.
-//
-// Carried contracts:
-// - Tests target the Development instance only; Stable is never started,
-//   stopped, or restarted by a test.
-// - Hermetic tests use temporary directories and fictional placeholder
-//   paths.
-// - Every test carries a built-in timeout capped at 120 seconds.
+import XCTest;
+
+import IpcProtocol;
+
+@testable import Supervisor;
+@testable import AstronomicalConfig;
+
+/// Hermetic coverage for the daemon argument parser and the single-instance
+/// lock. Every test uses temporary directories or fictional placeholder paths;
+/// the Development instance is the only instance these tests may name.
+final class SupervisorTests: XCTestCase {
+
+    func testEmptyArgumentsDefaultToTheDevelopmentInstance() throws {
+        let command: DaemonCommand = try DaemonArguments.parse(processArguments: ["astronomicald"]);
+        guard case let .run(daemonArguments) = command else {
+            return XCTFail("empty arguments should produce a run command");
+        }
+        XCTAssertEqual(daemonArguments.runtimeInstance, AstronomicalRuntimeInstance.development);
+        XCTAssertNil(daemonArguments.stateDirectoryOverride);
+    }
+
+    func testExplicitInstanceArgumentIsAcceptedOnce() throws {
+        let command: DaemonCommand = try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--instance", "development",
+        ]);
+        guard case let .run(daemonArguments) = command else {
+            return XCTFail("instance arguments should produce a run command");
+        }
+        XCTAssertEqual(daemonArguments.runtimeInstance, AstronomicalRuntimeInstance.development);
+    }
+
+    func testUnknownInstanceValueIsRejected() {
+        XCTAssertThrowsError(try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--instance", "canary",
+        ])) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? DaemonArgumentError,
+                DaemonArgumentError.invalidInstance(rawValue: "canary"));
+        }
+    }
+
+    func testRepeatedInstanceArgumentIsRejected() {
+        XCTAssertThrowsError(try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--instance", "development", "--instance", "stable",
+        ])) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? DaemonArgumentError,
+                DaemonArgumentError.repeatedArgument(argumentName: "--instance"));
+        }
+    }
+
+    func testMissingInstanceValueIsRejected() {
+        XCTAssertThrowsError(try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--instance",
+        ])) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? DaemonArgumentError,
+                DaemonArgumentError.missingValue(argumentName: "--instance"));
+        }
+    }
+
+    func testRelativeStateDirectoryIsRejected() {
+        XCTAssertThrowsError(try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--state-directory", "relative/state",
+        ])) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? DaemonArgumentError,
+                DaemonArgumentError.invalidStateDirectory(path: "relative/state"));
+        }
+    }
+
+    func testRootStateDirectoryIsRejected() {
+        XCTAssertThrowsError(try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--state-directory", "/",
+        ])) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? DaemonArgumentError,
+                DaemonArgumentError.invalidStateDirectory(path: "/"));
+        }
+    }
+
+    func testUnknownArgumentIsRejected() {
+        XCTAssertThrowsError(try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--daemonize",
+        ])) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? DaemonArgumentError,
+                DaemonArgumentError.unknownArgument(argument: "--daemonize"));
+        }
+    }
+
+    func testHelpAndVersionShortCircuitBeforeValidation() throws {
+        XCTAssertEqual(try DaemonArguments.parse(processArguments: ["astronomicald", "--help"]), DaemonCommand.help);
+        XCTAssertEqual(try DaemonArguments.parse(processArguments: ["astronomicald", "-h"]), DaemonCommand.help);
+        XCTAssertEqual(try DaemonArguments.parse(processArguments: ["astronomicald", "--version"]), DaemonCommand.version);
+        XCTAssertTrue(DaemonArguments.helpText().contains("--instance"));
+    }
+
+    func testStateDirectoryOverrideResolvesThroughTheOverride() throws {
+        let overrideDirectory: String = "/astronomical-test/fictional-state-root";
+        let command: DaemonCommand = try DaemonArguments.parse(processArguments: [
+            "astronomicald", "--state-directory", overrideDirectory,
+        ]);
+        guard case let .run(daemonArguments) = command else {
+            return XCTFail("state-directory arguments should produce a run command");
+        }
+        let instancePaths: AstronomicalInstancePaths = try daemonArguments.resolveInstancePaths();
+        XCTAssertTrue(instancePaths.stateDirectory.string.hasPrefix(overrideDirectory));
+    }
+
+    func testInstanceLockAcquiresInsideATemporaryStateDirectoryAndBlocksASecondHolder() throws {
+        let temporaryStateDirectory: String = NSTemporaryDirectory() + "astronomical-supervisor-lock-\(UUID().uuidString)";
+        let lockFilePath: String = temporaryStateDirectory + "/daemon.lock";
+        let firstLock: AstronomicalInstanceLock = try AstronomicalInstanceLock.acquire(lockFilePath: lockFilePath);
+        defer {
+            try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
+        }
+        XCTAssertThrowsError(try AstronomicalInstanceLock.acquire(lockFilePath: lockFilePath)) { (thrownError: any Error) in
+            XCTAssertEqual(
+                thrownError as? AstronomicalInstanceLockError,
+                AstronomicalInstanceLockError.alreadyRunning);
+        }
+        // Dropping the first holder releases the advisory lock with its file
+        // descriptor, so the next acquisition for the same path succeeds.
+        _ = firstLock;
+    }
+
+    func testDaemonIpcServiceAnswersHandshakeAndStatusAndCleansItsSocketOnShutdown() throws {
+        let temporaryStateDirectory: String = NSTemporaryDirectory() + "asup-\(UUID().uuidString.prefix(8))";
+        try FileManager.default.createDirectory(atPath: temporaryStateDirectory, withIntermediateDirectories: true);
+        let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
+            FilePath(string: temporaryStateDirectory),
+            runtimeInstance: AstronomicalRuntimeInstance.development);
+        let service: DaemonIpcService = try DaemonIpcService.start(
+            instancePaths: instancePaths,
+            healthProvider: { return DaemonWorkerStatus.unavailable; });
+        defer {
+            service.shutdown();
+            try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: service.socketPath));
+
+        let handshakeClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: service.socketPath);
+        try handshakeClient.sendRequest(DaemonRequest.handshake);
+        XCTAssertEqual(
+            try handshakeClient.nextResponse(),
+            DaemonResponse.handshakeAccepted(
+                protocolVersion: DaemonProtocol.protocolVersion,
+                applicationName: DaemonProtocol.applicationName));
+
+        let statusClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: service.socketPath);
+        try statusClient.sendRequest(DaemonRequest.status);
+        XCTAssertEqual(
+            try statusClient.nextResponse(),
+            DaemonResponse.status(
+                workerStatus: DaemonWorkerStatus.unavailable,
+                readyModelId: nil,
+                defaultModelId: nil));
+
+        service.shutdown();
+        XCTAssertFalse(FileManager.default.fileExists(atPath: service.socketPath));
+    }
+}
