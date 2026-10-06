@@ -125,6 +125,27 @@ final class SupervisorTests: XCTestCase {
         _ = firstLock;
     }
 
+    func testWorkerProcessLaunchesTracksPidAndTerminatesOnCommandSideClose() throws {
+        // /bin/cat mirrors the worker's transport shape: it holds its stdin
+        // open and exits when the supervisor half-closes the command side.
+        let workerProcess: WorkerProcess = try WorkerProcess.launch(workerExecutablePath: "/bin/cat");
+        XCTAssertNotNil(workerProcess.processId);
+        try workerProcess.terminateGracefully();
+        XCTAssertNil(workerProcess.processId);
+    }
+
+    func testWorkerProcessEscalatesToSignalForAWorkerThatIgnoresEof() throws {
+        // sleep never reads stdin, so half-closing the command side cannot
+        // end it; the escalation path must SIGTERM it out of existence inside
+        // the shutdown timeout.
+        let workerProcess: WorkerProcess = try WorkerProcess.launch(
+            workerExecutablePath: "/bin/sleep",
+            arguments: ["30"]);
+        XCTAssertNotNil(workerProcess.processId);
+        try workerProcess.terminateGracefully();
+        XCTAssertNil(workerProcess.processId);
+    }
+
     func testDaemonIpcServiceAnswersHandshakeAndStatusAndCleansItsSocketOnShutdown() throws {
         let temporaryStateDirectory: String = NSTemporaryDirectory() + "asup-\(UUID().uuidString.prefix(8))";
         try FileManager.default.createDirectory(atPath: temporaryStateDirectory, withIntermediateDirectories: true);

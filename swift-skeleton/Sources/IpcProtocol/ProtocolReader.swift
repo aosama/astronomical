@@ -12,12 +12,16 @@ public final class ProtocolReader {
     /// recv() scratch size per transport read.
     private static let receiveBufferByteCount: Int = 65_536;
 
-    private let socket: UnixSocketStream;
+    private let socket: any FrameTransport;
     private var pendingBytes: Array<UInt8> = Array<UInt8>();
     private let performanceAttributionEnabled: Bool;
 
-    public init(socket: UnixSocketStream, performanceAttributionEnabled: Bool = false) {
-        self.socket = socket;
+    public convenience init(socket: UnixSocketStream, performanceAttributionEnabled: Bool = false) {
+        self.init(transport: socket, performanceAttributionEnabled: performanceAttributionEnabled);
+    }
+
+    public init(transport: any FrameTransport, performanceAttributionEnabled: Bool = false) {
+        self.socket = transport;
         self.performanceAttributionEnabled = performanceAttributionEnabled;
     }
 
