@@ -33,6 +33,15 @@ public enum WorkerHealthStatus: Equatable {
         case .loading, .unavailable: return false;
         }
     }
+
+    /// Stable text used by readiness responses and diagnostics.
+    public func readinessText() -> String {
+        switch (self) {
+        case .loading: return "loading";
+        case .ready: return "ready";
+        case .unavailable: return "unavailable";
+        }
+    }
 }
 
 /// Snapshot of the supervisor's current worker health assessment.

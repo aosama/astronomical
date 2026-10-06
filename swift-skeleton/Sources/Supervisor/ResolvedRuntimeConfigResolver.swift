@@ -94,6 +94,7 @@ public struct ResolvedRuntimeConfigResolver {
             configuredPromptCacheMaximumSizeBytes: try userConfig.configuredPromptCacheMaximumSizeBytes(),
             promptCacheConfig: promptCacheConfig,
             bindAddress: supervisorBindAddress.description,
+            bindEndpoint: supervisorBindAddress,
             loggingConfig: loggingConfig);
     }
 

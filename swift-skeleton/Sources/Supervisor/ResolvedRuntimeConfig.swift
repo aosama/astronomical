@@ -42,6 +42,8 @@ public struct ResolvedRuntimeConfig: Equatable {
     public var promptCacheConfig: PromptCacheConfig;
     /// Resolved supervisor bind address (REST API restart required to change).
     public var bindAddress: String;
+    /// The typed endpoint behind `bindAddress`; the REST listener binds this.
+    public var bindEndpoint: SocketEndpoint;
     /// Resolved logging policy (REST API restart required to change).
     public var loggingConfig: LoggingConfig;
 
@@ -62,6 +64,7 @@ public struct ResolvedRuntimeConfig: Equatable {
         configuredPromptCacheMaximumSizeBytes: UInt64?,
         promptCacheConfig: PromptCacheConfig,
         bindAddress: String,
+        bindEndpoint: SocketEndpoint,
         loggingConfig: LoggingConfig
     ) {
         self.configurationGeneration = configurationGeneration;
@@ -80,6 +83,7 @@ public struct ResolvedRuntimeConfig: Equatable {
         self.configuredPromptCacheMaximumSizeBytes = configuredPromptCacheMaximumSizeBytes;
         self.promptCacheConfig = promptCacheConfig;
         self.bindAddress = bindAddress;
+        self.bindEndpoint = bindEndpoint;
         self.loggingConfig = loggingConfig;
     }
 
