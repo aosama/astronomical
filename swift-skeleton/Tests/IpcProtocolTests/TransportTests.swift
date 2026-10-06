@@ -361,7 +361,7 @@ final class TransportTests {
         let protocolReader: ProtocolReader = ProtocolReader(socket: socketPair.serverEnd);
 
         try protocolWriter.sendDaemonResponse(DaemonResponse.chatGenerationText(text: "only frame"));
-        try socketPair.clientEnd.shutdownWrite();
+        socketPair.clientEnd.shutdownWrite();
 
         let firstResponse: DaemonResponse? = try protocolReader.nextDaemonResponse();
         #expect(firstResponse == DaemonResponse.chatGenerationText(text: "only frame"));

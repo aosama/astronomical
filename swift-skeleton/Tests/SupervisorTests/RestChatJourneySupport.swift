@@ -317,4 +317,7 @@ enum RestChatJourneyFailure: Error {
     case missingChoice;
     case missingAssistantMessage;
     case missingUsage;
+    case expectedObject(String);
+    case expectedArray(String);
+    case expectedString(String);
 }

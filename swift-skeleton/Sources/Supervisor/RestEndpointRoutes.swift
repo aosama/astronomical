@@ -46,6 +46,7 @@ public enum RestEndpointRoutes {
         buildIdentity: ApplicationBuildIdentity,
         configurationValidationError: String? = nil,
         chatContext: RestChatRouteContext? = nil,
+        responsesContext: RestResponsesRouteContext? = nil,
         embeddingsContext: RestEmbeddingsRouteContext? = nil,
         imageContext: RestImageGenerationRouteContext? = nil
     ) -> RestRouteTable {
@@ -99,6 +100,14 @@ public enum RestEndpointRoutes {
                 path: RestChatCompletionEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
                     return RestChatCompletionEndpoint.handle(request, chatContext: chatContext);
+                });
+        }
+        if let responsesContext = responsesContext {
+            routeTable.register(
+                method: RestResponsesEndpoint.routeMethod,
+                path: RestResponsesEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return RestResponsesEndpoint.handle(request, responsesContext: responsesContext);
                 });
         }
         if let embeddingsContext = embeddingsContext {

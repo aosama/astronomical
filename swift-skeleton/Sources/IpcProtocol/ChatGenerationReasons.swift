@@ -3,7 +3,7 @@ import Foundation;
 /// A bounded request-scoped failure that leaves the worker process responsive.
 /// Wire shape is serde's externally tagged enum: unit variants serialize as
 /// plain strings and struct variants as single-entry objects.
-public enum ChatGenerationFailureReason: Equatable {
+public enum ChatGenerationFailureReason: Equatable, Sendable {
     /// The worker independently rejected malformed structured chat input.
     case invalidRequest(reason: String);
     /// A fatal model-execution failure reported before the worker exits.
