@@ -43,8 +43,8 @@ readonly DIRECT_MLX_TIMEOUT_SECONDS=600
 # contracts run in a web view, so it needs the compilation timeout class rather
 # than the 120-second test bound.
 readonly THIN_TALK_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=24
-readonly REPOSITORY_CONTRACT_STEP_COUNT=13
+readonly TOTAL_STEP_COUNT=25
+readonly REPOSITORY_CONTRACT_STEP_COUNT=14
 readonly SWIFT_NODE_CONTRACT_STEP_COUNT=5
 readonly CARGO_CORE_STEP_COUNT=6
 readonly PHASE_PROGRESS_INTERVAL_SECONDS=2
@@ -177,6 +177,7 @@ phase_repository_contracts() {
     run_step commit-release-isolation "$TEST_TIMEOUT_SECONDS" scripts/test-commit-release-isolation.sh || return $?
     run_step ci-native-cache-contract "$TEST_TIMEOUT_SECONDS" scripts/test-ci-native-cache-coordination.sh || return $?
     run_step cache-prune-contract "$TEST_TIMEOUT_SECONDS" scripts/test-prune-ci-caches-contract.sh || return $?
+    run_step sccache-save-contract "$TEST_TIMEOUT_SECONDS" scripts/test-save-sccache-cache-contract.sh || return $?
     run_step cargo-artifact-lifecycle-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-lifecycle-contract.sh || return $?
     run_step bounded-cargo-test-lock-contract "$TEST_TIMEOUT_SECONDS" scripts/test-bounded-cargo-test-lock-contract.sh || return $?
     run_step cargo-artifact-cleanup-signal-contract "$TEST_TIMEOUT_SECONDS" scripts/test-cargo-artifact-cleanup-signal-contract.sh || return $?
