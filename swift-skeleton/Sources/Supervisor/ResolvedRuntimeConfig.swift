@@ -8,7 +8,7 @@ import IpcProtocol;
 /// API restart, or only an in-place update.
 ///
 /// Migrates the struct half of apps/supervisor/src/config_reload.rs.
-public struct ResolvedRuntimeConfig: Equatable {
+public struct ResolvedRuntimeConfig: Equatable, Sendable {
 
     /// Privacy-safe identity of the accepted semantic configuration document.
     public var configurationGeneration: String;
