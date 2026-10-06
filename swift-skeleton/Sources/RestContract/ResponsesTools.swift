@@ -145,6 +145,13 @@ public struct OpenAiResponseToolDefinitionParts: Equatable {
         self.parameters = parameters;
         self.strict = strict;
     }
+
+    /// serde_json stores parsed Values in a BTreeMap, so the Rust
+    /// serialization of this schema emits keys in UTF-8 byte order; the
+    /// worker consumes exactly those canonical bytes.
+    public func canonicalParametersJson() throws -> String {
+        return try ChatToolValidation.canonicalSerializedText(self.parameters);
+    }
 }
 
 /// Responses tool-selection input, retained broadly for precise validation.
