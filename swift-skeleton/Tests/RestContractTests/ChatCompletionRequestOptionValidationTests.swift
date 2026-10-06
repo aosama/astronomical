@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_chat_completion_request/option_validation.rs.
-final class ChatCompletionRequestOptionValidationTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ChatCompletionRequestOptionValidationTests {
 
-    func testShouldRejectAnOutputBudgetAboveTheWorkerRepresentationLimit() throws {
+    @Test
+    func should_reject_an_output_budget_above_the_worker_representation_limit() throws {
         let requestJson: String = """
     {
         "model": "astronomical/fake-mixture-of-experts",
@@ -17,18 +21,18 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("the public endpoint must reject an oversized output budget");
-            return;
+            Issue.record("the public endpoint must reject an oversized output budget");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(
-                validationError,
-                .outputTokenCountOutOfRange(
-                    actualOutputTokens: ChatCompletionLimits.MAX_OPENAI_OUTPUT_TOKENS + 1,
-                    maximumOutputTokens: ChatCompletionLimits.MAX_OPENAI_OUTPUT_TOKENS));
+            #expect(
+                validationError
+                    == OpenAiChatCompletionValidationError.outputTokenCountOutOfRange(
+                        actualOutputTokens: ChatCompletionLimits.MAX_OPENAI_OUTPUT_TOKENS + 1,
+                        maximumOutputTokens: ChatCompletionLimits.MAX_OPENAI_OUTPUT_TOKENS));
         }
     }
 
-    func testShouldRejectCallerSuppliedStopSequencesBeforeWorkerAdmission() throws {
+    @Test
+    func should_reject_caller_supplied_stop_sequences_before_worker_admission() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -39,14 +43,14 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("caller-supplied stop sequences must not be accepted and ignored");
-            return;
+            Issue.record("caller-supplied stop sequences must not be accepted and ignored");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .unsupportedStopSequences);
+            #expect(validationError == OpenAiChatCompletionValidationError.unsupportedStopSequences);
         }
     }
 
-    func testShouldRejectRequiredToolChoiceBeforeWorkerAdmission() throws {
+    @Test
+    func should_reject_required_tool_choice_before_worker_admission() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -63,14 +67,16 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("required tool choice must not rely on unenforced prompt hints");
-            return;
+            Issue.record("required tool choice must not rely on unenforced prompt hints");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .unsupportedToolChoice(mode: "required"));
+            #expect(
+                validationError
+                    == OpenAiChatCompletionValidationError.unsupportedToolChoice(mode: "required"));
         }
     }
 
-    func testShouldRejectANamedForcedFunctionBeforeWorkerAdmission() throws {
+    @Test
+    func should_reject_a_named_forced_function_before_worker_admission() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -87,14 +93,16 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("named function choices must not be accepted without deterministic enforcement");
-            return;
+            Issue.record("named function choices must not be accepted without deterministic enforcement");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .unsupportedForcedToolChoice(functionName: "glob"));
+            #expect(
+                validationError
+                    == OpenAiChatCompletionValidationError.unsupportedForcedToolChoice(functionName: "glob"));
         }
     }
 
-    func testShouldRejectAKnownButUnsupportedOpencodeOptionExplicitly() throws {
+    @Test
+    func should_reject_a_known_but_unsupported_opencode_option_explicitly() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -105,14 +113,16 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("known but unsupported options must fail closed");
-            return;
+            Issue.record("known but unsupported options must fail closed");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .unsupportedOption(optionName: "store"));
+            #expect(
+                validationError
+                    == OpenAiChatCompletionValidationError.unsupportedOption(optionName: "store"));
         }
     }
 
-    func testShouldAcceptHistoryToolCallsWithModelInventedNames() throws {
+    @Test
+    func should_accept_history_tool_calls_with_model_invented_names() throws {
         // The Qwen output parser deliberately fail-opens closed tool-call envelopes
         // with unknown or malformed names to the harness. A follow-up request
         // echoes that model output as assistant history; rejecting the replayed
@@ -142,7 +152,8 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
         try chatCompletionRequest.validate();
     }
 
-    func testShouldStillRejectInvalidToolDefinitionNames() throws {
+    @Test
+    func should_still_reject_invalid_tool_definition_names() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -156,14 +167,16 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("caller-declared tool definitions must keep the portable name grammar");
-            return;
+            Issue.record("caller-declared tool definitions must keep the portable name grammar");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(validationError, .invalidToolName(toolName: "r=bash"));
+            #expect(
+                validationError
+                    == OpenAiChatCompletionValidationError.invalidToolName(toolName: "r=bash"));
         }
     }
 
-    func testShouldRejectEmptyHistoryToolCallNames() throws {
+    @Test
+    func should_reject_empty_history_tool_call_names() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -180,11 +193,10 @@ final class ChatCompletionRequestOptionValidationTests: XCTestCase {
     """));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("an empty history tool-call name carries no round-trip identity");
-            return;
+            Issue.record("an empty history tool-call name carries no round-trip identity");
         } catch let validationError as OpenAiChatCompletionValidationError {
             guard case .emptyString = validationError else {
-                XCTFail("expected EmptyString, got \(validationError)");
+                Issue.record("expected EmptyString, got \(validationError)");
                 return;
             }
         }

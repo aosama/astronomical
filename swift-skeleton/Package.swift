@@ -77,7 +77,7 @@ let package: Package = Package(
         // One test target per module, mirroring Sources/.
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol"]),
-        .testTarget(name: "RestContractTests", dependencies: ["RestContract"]),
+        .testTarget(name: "RestContractTests", dependencies: ["RestContract", "JourneyCategories"]),
         .testTarget(name: "SupervisorTests", dependencies: ["Supervisor", "JourneyCategories"]),
         .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
