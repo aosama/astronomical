@@ -15,6 +15,17 @@
 # Every step reports start, end, and elapsed seconds; every phase reports its
 # own elapsed time; the run closes with the slowest steps and the Cargo timing
 # report so slowness is attributable without re-reading the whole log.
+#
+# Cargo invocations the Cargo core phase runs, in order:
+#   1. cargo fmt --all -- --check
+#   2. cargo test-hermetic-and-rest --timings --no-run --jobs N   (compile only;
+#      the alias lists the hermetic + REST packages and test binaries)
+#   3. scripts/compile-mlx-memory-contract-lane.sh                (feature-gated
+#      memory-contract world, compile only)
+#   4. scripts/test-direct-mlx.sh (background lane; one cargo test invocation
+#      for the direct-MLX contract binaries in an owned disposable target)
+#   5. cargo test-hermetic-and-rest --jobs N -- --quiet --test-threads N
+# Shell contracts run before these; Swift/Node contracts run alongside.
 
 set -eu
 # pipefail is Bash/Zsh; the subshell probe keeps this script POSIX-runnable.
@@ -225,7 +236,7 @@ phase_cargo_core() {
     # against, and CMake must never overlap the Rust compile steps.
     run_step prewarm-native-build "$COMPILE_TIMEOUT_SECONDS" \
         scripts/prewarm-native-build.sh --profile core --profile core+memory-contract || return $?
-    run_step compile-rust "$COMPILE_TIMEOUT_SECONDS" cargo verify-commit-rust \
+    run_step compile-rust "$COMPILE_TIMEOUT_SECONDS" cargo test-hermetic-and-rest \
         --timings --no-run --jobs "$logical_cpu_count" || return $?
     # The memory-contract lane is feature-gated off every routine graph, so an
     # API move under its test binary used to ship silently; this compile-only
@@ -245,7 +256,7 @@ phase_cargo_core() {
     DIRECT_MLX_LANE_PROCESS_ID=""
     launch_direct_mlx_lane
     run_rust_exit_status=0
-    run_step run-rust "$TEST_TIMEOUT_SECONDS" cargo verify-commit-rust \
+    run_step run-rust "$TEST_TIMEOUT_SECONDS" cargo test-hermetic-and-rest \
         --jobs "$logical_cpu_count" -- --quiet --test-threads "$logical_cpu_count" || run_rust_exit_status=$?
     if [ "$run_rust_exit_status" -ne 0 ]; then
         # The lane coordinator owns its target cleanup through its own signal

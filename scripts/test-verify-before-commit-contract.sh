@@ -127,7 +127,7 @@ import tomllib
 
 repository_root = pathlib.Path(os.environ["REPOSITORY_ROOT"])
 aliases = tomllib.loads((repository_root / ".cargo/config.toml").read_text())["alias"]
-verification_alias_arguments = aliases["verify-commit-rust"]
+verification_alias_arguments = aliases["test-hermetic-and-rest"]
 expected_alias_arguments = [
     "test",
     "--no-fail-fast",
@@ -231,11 +231,11 @@ main() {
         print_error "formatting did not preserve the caller Cargo context"
         exit 1
     }
-    grep -F 'verify-commit-rust --timings --no-run --jobs 8' "$cargo_log" >/dev/null || {
+    grep -F 'test-hermetic-and-rest --timings --no-run --jobs 8' "$cargo_log" >/dev/null || {
         print_error "Rust compilation was not one combined compile-only invocation"
         exit 1
     }
-    grep -F 'verify-commit-rust --jobs 8 -- --quiet --test-threads 8' "$cargo_log" >/dev/null || {
+    grep -F 'test-hermetic-and-rest --jobs 8 -- --quiet --test-threads 8' "$cargo_log" >/dev/null || {
         print_error "Rust tests were not one combined bounded execution invocation"
         exit 1
     }
