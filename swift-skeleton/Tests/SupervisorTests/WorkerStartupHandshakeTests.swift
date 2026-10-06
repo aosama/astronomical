@@ -160,7 +160,7 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             workerExecutablePath: "/bin/sleep",
             arguments: ["30"]);
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
         try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
@@ -181,7 +181,7 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             arguments: ["-c", fakeWorkerScript],
             workerStartupConfiguration: WorkerStartupHandshakeTests.startupConfiguration());
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let healthState: WorkerHealthState = WorkerHealthState();
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
@@ -211,7 +211,7 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             arguments: ["-c", "exec sleep 30\n"],
             workerStartupConfiguration: WorkerStartupHandshakeTests.startupConfiguration());
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
@@ -236,7 +236,7 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             arguments: ["-c", fakeWorkerScript],
             workerStartupConfiguration: WorkerStartupHandshakeTests.startupConfiguration());
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
@@ -251,7 +251,7 @@ final class WorkerStartupHandshakeTests: XCTestCase {
         }
     }
 
-    private static func startupConfiguration() -> WorkerStartupConfiguration {
+    static func startupConfiguration() -> WorkerStartupConfiguration {
         return WorkerStartupConfiguration(
             configurationGeneration: "gen-1",
             globalPromptCacheRootDirectory: "/tmp/astronomical-prompt-cache",

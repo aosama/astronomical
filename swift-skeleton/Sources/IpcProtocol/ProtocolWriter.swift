@@ -18,6 +18,12 @@ public final class ProtocolWriter {
         self.performanceAttributionEnabled = performanceAttributionEnabled;
     }
 
+    /// Closes the underlying transport descriptor outright; the
+    /// worker-process owner calls this for a replaced child's write end.
+    public func closeTransportFileDescriptor() -> Void {
+        self.socket.closeTransportFileDescriptor();
+    }
+
     /// Serializes and transmits one supervisor command frame.
     public func sendCommand(_ workerCommand: WorkerCommand) throws -> Void {
         let serializedCommand: Data = try MessageCodec.encodeCommand(workerCommand);

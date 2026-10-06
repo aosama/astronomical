@@ -17,13 +17,19 @@ public final class WorkerEventPump: @unchecked Sendable {
     private var pendingEvents: Array<WorkerEvent>;
     private var isEventStreamFinished: Bool;
     private var streamFailure: Error?;
+    /// Incremented on every relaunch resume so a drain thread parked on the
+    /// replaced process's pipe can never publish into the new generation.
+    private var drainGeneration: Int;
 
     public init(workerProcess: WorkerProcess) {
         self.workerProcess = workerProcess;
         self.pumpCondition = NSCondition();
         self.pendingEvents = Array<WorkerEvent>();
         self.isEventStreamFinished = false;
-        let drainThread: Thread = Thread(block: { self.drainUntilClosed(); });
+        self.streamFailure = nil;
+        self.drainGeneration = 1;
+        let initialGeneration: Int = self.drainGeneration;
+        let drainThread: Thread = Thread(block: { self.drainUntilClosed(generation: initialGeneration); });
         drainThread.name = "astronomicald-worker-event-pump";
         drainThread.start();
     }
@@ -50,18 +56,41 @@ public final class WorkerEventPump: @unchecked Sendable {
         return nil;
     }
 
-    private func drainUntilClosed() -> Void {
+    /// Clears the latched stream end and starts a fresh drain thread after
+    /// the owning process relaunched; stale events and failures from the
+    /// replaced process are discarded, exactly like the Rust loop's fresh
+    /// event reader.
+    public func resumeAfterRelaunch() -> Void {
+        self.pumpCondition.lock();
+        defer { self.pumpCondition.unlock(); }
+        self.drainGeneration += 1;
+        let resumedGeneration: Int = self.drainGeneration;
+        self.pendingEvents.removeAll();
+        self.isEventStreamFinished = false;
+        self.streamFailure = nil;
+        let drainThread: Thread = Thread(block: { self.drainUntilClosed(generation: resumedGeneration); });
+        drainThread.name = "astronomicald-worker-event-pump";
+        drainThread.start();
+    }
+
+    private func drainUntilClosed(generation: Int) -> Void {
         while true {
+            self.pumpCondition.lock();
+            let isSuperseded: Bool = generation != self.drainGeneration;
+            self.pumpCondition.unlock();
+            if isSuperseded {
+                return;
+            }
             do {
                 // A nil return is the clean frame-boundary EOF; anything
                 // thrown is a framing or decoding failure on this stream.
                 guard let workerEvent: WorkerEvent = try self.workerProcess.nextEvent() else {
-                    self.finishStream(failure: nil);
+                    self.finishStream(failure: nil, generation: generation);
                     return;
                 }
                 self.enqueue(workerEvent);
             } catch let readFailure {
-                self.finishStream(failure: readFailure);
+                self.finishStream(failure: readFailure, generation: generation);
                 return;
             }
         }
@@ -74,9 +103,14 @@ public final class WorkerEventPump: @unchecked Sendable {
         self.pumpCondition.signal();
     }
 
-    private func finishStream(failure: Error?) -> Void {
+    private func finishStream(failure: Error?, generation: Int) -> Void {
         self.pumpCondition.lock();
         defer { self.pumpCondition.unlock(); }
+        // A thread parked on the replaced process's pipe must never latch
+        // its stream end into the relaunched generation.
+        if generation != self.drainGeneration {
+            return;
+        }
         self.isEventStreamFinished = true;
         self.streamFailure = failure;
         self.pumpCondition.broadcast();

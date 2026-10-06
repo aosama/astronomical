@@ -25,6 +25,12 @@ public final class ProtocolReader {
         self.performanceAttributionEnabled = performanceAttributionEnabled;
     }
 
+    /// Closes the underlying transport descriptor outright; the
+    /// worker-process owner calls this for a replaced child's read end.
+    public func closeTransportFileDescriptor() -> Void {
+        self.socket.closeTransportFileDescriptor();
+    }
+
     /// Reads the next supervisor command, or `nil` when the transport closes cleanly.
     public func nextCommand() throws -> WorkerCommand? {
         guard let serializedCommand: Data = try self.nextFrame() else {
