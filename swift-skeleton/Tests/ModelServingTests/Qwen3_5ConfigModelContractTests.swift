@@ -11,7 +11,6 @@ final class Qwen3_5ConfigModelContractTests: XCTestCase {
         XCTAssertEqual(ornithConfig.hiddenSize(), 2_048);
         XCTAssertEqual(ornithConfig.layerCount(), 40);
         XCTAssertEqual(ornithConfig.vocabularySize(), 248_320);
-        XCTAssertEqual(ornithConfig.mtpLayerCount(), 1);
         XCTAssertEqual(ornithConfig.torchDtype(), "bfloat16");
         XCTAssertEqual(ornithConfig.hiddenActivation(), "silu");
         XCTAssertEqual(ornithConfig.rmsNormEpsilonBits(), Float(1e-6).bitPattern);

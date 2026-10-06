@@ -14,15 +14,14 @@
 //   StrictJson.swift, UserConfigFile.swift, RuntimeConfigFile.swift,
 //   PromptCacheConfigFile.swift, ChunkingConfigFile.swift,
 //   DiagnosticsConfigFile.swift, ModelConfigFile.swift,
-//   ModelLimitsConfigFile.swift, GenerationDefaultsConfigFile.swift,
-//   AccelerationConfigFile.swift, MtpConfigFile.swift.
+//   ModelLimitsConfigFile.swift, GenerationDefaultsConfigFile.swift.
 //
 // Still to port (each with its own slice):
 // - chunking_config resolution and persist-back
 // - logging_config
 // - maximum_mlx_memory
-// - resolved_model_config (per-model limits, generation-defaults and mtp
-//   range validation, model-ID hygiene)
+// - resolved_model_config (per-model limits, generation-defaults range
+//   validation, model-ID hygiene)
 // - legacy_config_migration
 // - duplicate_key_json
 // - configuration_generation

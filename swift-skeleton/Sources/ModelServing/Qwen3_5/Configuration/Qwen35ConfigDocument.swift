@@ -9,30 +9,6 @@ private let EXPECTED_DENSE_TEXT_MODEL_TYPE: String = "qwen3_5_text";
 private let EXPECTED_HIDDEN_ACTIVATION: String = "silu";
 private let MAXIMUM_MLX_SHAPE_DIMENSION: UInt64 = UInt64(Int32.max);
 
-/// Qwen MTP sidecar declaration parsed from `mlx_lm_extra_tensors`.
-struct MlxLmExtraTensors: Equatable {
-    /// Path to the MTP sidecar safetensors file, relative to the model directory.
-    /// E.g., "mtp.safetensors" or "optiq/mtp.safetensors".
-    var mtpFile: String?;
-}
-
-/// Global MTP quantization parameters declared in the top-level config.
-/// Provides default bit width and group size for MTP modules that lack
-/// per-module overrides in the `quantization` dict. Absent when the
-/// model does not declare quantized MTP.
-struct MtplxMtpQuantization: Equatable {
-    var bits: UInt32 = 0;
-    var groupSize: UInt32 = 0;
-
-    static func decoded(wireValue: JsonWireValue) throws -> MtplxMtpQuantization {
-        let quantizationObject: JsonWireObject = try JsonWireValue.extractObject(wireValue);
-        var parsedQuantization: MtplxMtpQuantization = MtplxMtpQuantization();
-        parsedQuantization.bits = try quantizationObject.decodeOptionalUInt32AllowingAbsent(fieldName: "bits") ?? 0;
-        parsedQuantization.groupSize = try quantizationObject.decodeOptionalUInt32AllowingAbsent(fieldName: "group_size") ?? 0;
-        return parsedQuantization;
-    }
-}
-
 /// Private wire schema retained only while validating one model config document.
 struct Qwen3_5ConfigDocument {
     var architectures: Array<String> = Array();
@@ -44,16 +20,6 @@ struct Qwen3_5ConfigDocument {
     var textConfig: Qwen3_5TextConfig;
     var tieWordEmbeddings: Bool = false;
     var activationDtype: String?;
-    /// Sidecar file declarations from config.json's `mlx_lm_extra_tensors` field.
-    /// Absent when models store all tensors in the shard index.
-    var mlxLmExtraTensors: MlxLmExtraTensors?;
-    /// Top-level MTP sidecar path declared directly in config.json.
-    /// Provides a fallback when `mlx_lm_extra_tensors` is absent.
-    var mtpFile: String?;
-    /// Global MTP quantization parameters for prequantized MTP sidecars.
-    /// E.g. `{"bits": 4, "group_size": 64, "mode": "affine", "prequantized": true}`.
-    /// Absent when the model does not declare quantized MTP.
-    var mtxplxMtpQuantization: MtplxMtpQuantization?;
 
     static func decoded(wireValue: JsonWireValue) throws -> Qwen3_5ConfigDocument {
         let documentObject: JsonWireObject = try JsonWireValue.extractObject(wireValue);
@@ -81,16 +47,6 @@ struct Qwen3_5ConfigDocument {
         // serde alias: `dtype` preferred, `torch_dtype` accepted when absent.
         parsedDocument.activationDtype = try documentObject.decodeOptionalStringAllowingAbsent(fieldName: "dtype")
             ?? documentObject.decodeOptionalStringAllowingAbsent(fieldName: "torch_dtype");
-        if let extraTensorsObject: JsonWireObject = try documentObject.decodeOptionalObjectAllowingAbsent(fieldName: "mlx_lm_extra_tensors") {
-            var parsedExtraTensors: MlxLmExtraTensors = MlxLmExtraTensors();
-            parsedExtraTensors.mtpFile = try extraTensorsObject.decodeOptionalStringAllowingAbsent(fieldName: "mtp_file");
-            parsedDocument.mlxLmExtraTensors = parsedExtraTensors;
-        }
-        parsedDocument.mtpFile = try documentObject.decodeOptionalStringAllowingAbsent(fieldName: "mtp_file");
-        parsedDocument.mtxplxMtpQuantization = try documentObject.decodeOptionalRawValueAllowingAbsent(fieldName: "mtplx_mtp_quantization")
-            .map({ (mtpQuantizationWireValue: JsonWireValue) throws -> MtplxMtpQuantization in
-                return try MtplxMtpQuantization.decoded(wireValue: mtpQuantizationWireValue);
-            });
         return parsedDocument;
     }
 }
@@ -129,7 +85,6 @@ struct Qwen3_5TextConfig: Equatable {
     var moeIntermediateSize: UInt32 = 0;
     var sharedExpertIntermediateSize: UInt32 = 0;
     var intermediateSize: UInt32 = 0;
-    var mtpNumHiddenLayers: UInt32 = 0;
     var mambaSsmDtype: String?;
 
     static func decoded(wireValue: JsonWireValue) throws -> Qwen3_5TextConfig {
@@ -182,7 +137,6 @@ struct Qwen3_5TextConfig: Equatable {
         parsedTextConfig.moeIntermediateSize = try textConfigObject.decodeOptionalUInt32AllowingAbsent(fieldName: "moe_intermediate_size") ?? 0;
         parsedTextConfig.sharedExpertIntermediateSize = try textConfigObject.decodeOptionalUInt32AllowingAbsent(fieldName: "shared_expert_intermediate_size") ?? 0;
         parsedTextConfig.intermediateSize = try textConfigObject.decodeOptionalUInt32AllowingAbsent(fieldName: "intermediate_size") ?? 0;
-        parsedTextConfig.mtpNumHiddenLayers = try textConfigObject.decodeUInt32(fieldName: "mtp_num_hidden_layers");
         parsedTextConfig.mambaSsmDtype = try textConfigObject.decodeOptionalStringAllowingAbsent(fieldName: "mamba_ssm_dtype");
         return parsedTextConfig;
     }

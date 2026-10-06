@@ -38,27 +38,6 @@ final class Qwen3_5ConfigQuantizationTests: XCTestCase {
         }
     }
 
-    func testShouldRetainAnArtifactDeclaredMtpQuantizationOverride() throws {
-        let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
-            String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));
-        let mtpDenseProjectionModuleName: String = "language_model.mtp.layers.0.mlp.down_proj";
-        let modifiedConfigValue: JsonWireValue = frozenConfigValue
-            .settingObjectKey(
-                path: ["quantization", mtpDenseProjectionModuleName],
-                newValue: try Qwen3_5MoeConfigFixtures.wireValue(#"{"bits": 5, "group_size": 32}"#))
-            .settingObjectKey(
-                path: ["quantization_config"],
-                newValue: frozenConfigValue.objectValue(forKey: "quantization")!
-                    .settingObjectKey(
-                        path: [mtpDenseProjectionModuleName],
-                        newValue: try Qwen3_5MoeConfigFixtures.wireValue(#"{"bits": 5, "group_size": 32}"#)));
-        let configBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(modifiedConfigValue);
-        let config: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(configBytes: configBytes);
-        let mtpProfile: OptiQQuantizationProfile = config.quantizationProfile(forModule: mtpDenseProjectionModuleName);
-        XCTAssertEqual(mtpProfile.bits, 5);
-        XCTAssertEqual(mtpProfile.groupSize, 32);
-    }
-
     func testShouldRejectTheAffineQuantizationBitWidthUnsupportedByMlx() throws {
         let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));

@@ -14,8 +14,6 @@ internal struct LegacyConfigFile {
     internal var performanceAttributionEnabled: Bool?;
     internal var persistentPromptCacheEnabled: Bool?;
     internal var maximumMlxMemoryGb: UInt64?;
-    internal var mtpEnabled: Bool?;
-    internal var mtpDraftDepth: UInt8?;
     internal var supervisor: LegacySupervisorConfigFile?;
     internal var promptCacheMaxSizeGb: UInt64?;
     internal var logging: LegacyLoggingConfigFile?;
@@ -27,8 +25,6 @@ internal struct LegacyConfigFile {
         self.performanceAttributionEnabled = nil;
         self.persistentPromptCacheEnabled = nil;
         self.maximumMlxMemoryGb = nil;
-        self.mtpEnabled = nil;
-        self.mtpDraftDepth = nil;
         self.supervisor = nil;
         self.promptCacheMaxSizeGb = nil;
         self.logging = nil;
@@ -44,8 +40,6 @@ internal struct LegacyConfigFile {
                 "performance_attribution_enabled",
                 "persistent_prompt_cache_enabled",
                 "maximum_mlx_memory_gb",
-                "mtp_enabled",
-                "mtp_draft_depth",
                 "supervisor",
                 "prompt_cache_max_size_gb",
                 "logging"
@@ -59,8 +53,6 @@ internal struct LegacyConfigFile {
         legacyConfigFile.performanceAttributionEnabled = try LegacyConfigFile.parsePresentBoolean(object: jsonObject, fieldName: "performance_attribution_enabled");
         legacyConfigFile.persistentPromptCacheEnabled = try LegacyConfigFile.parsePresentBoolean(object: jsonObject, fieldName: "persistent_prompt_cache_enabled");
         legacyConfigFile.maximumMlxMemoryGb = try StrictJson.optionalUnsignedInteger(object: jsonObject, fieldName: "maximum_mlx_memory_gb");
-        legacyConfigFile.mtpEnabled = try LegacyConfigFile.parsePresentBoolean(object: jsonObject, fieldName: "mtp_enabled");
-        legacyConfigFile.mtpDraftDepth = try StrictJson.optionalUnsignedInteger(object: jsonObject, fieldName: "mtp_draft_depth");
         legacyConfigFile.supervisor = try StrictJson.decodeOptional(
             StrictJson.optionalObject(object: jsonObject, fieldName: "supervisor"),
             decode: LegacySupervisorConfigFile.fromJsonObject

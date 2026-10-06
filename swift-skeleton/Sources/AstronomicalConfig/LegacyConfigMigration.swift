@@ -112,9 +112,7 @@ internal enum LegacyConfigMigration {
     }
 
     private static func discoverModelIdsRequiredForMigration(legacyConfig: LegacyConfigFile, discoverModelIds: LegacyModelIdDiscovery?) throws -> Array<String> {
-        if legacyConfig.maximumOutputTokens == nil
-            && legacyConfig.mtpDraftDepth == nil
-            && legacyConfig.mtpEnabled != false {
+        if legacyConfig.maximumOutputTokens == nil {
             return Array<String>();
         }
         guard let unwrappedDiscoverModelIds = discoverModelIds else {
@@ -141,26 +139,12 @@ internal enum LegacyConfigMigration {
     private static func buildMigratedConfig(legacyConfig: LegacyConfigFile, discoveredModelIds: Array<String>) -> UserConfigFile {
         var migratedModels: Dictionary<String, ModelConfigFile> = Dictionary<String, ModelConfigFile>();
         for discoveredModelId in discoveredModelIds {
-            var migratedModelConfig = ModelConfigFile(limits: nil, generationDefaults: nil, chunking: nil, acceleration: nil);
+            var migratedModelConfig = ModelConfigFile(limits: nil, generationDefaults: nil, chunking: nil);
             if let maximumOutputTokens: UInt32 = legacyConfig.maximumOutputTokens {
                 migratedModelConfig = ModelConfigFile(
                     limits: nil,
                     generationDefaults: GenerationDefaultsConfigFile(temperature: nil, topP: nil, maximumOutputTokens: maximumOutputTokens),
-                    chunking: nil,
-                    acceleration: nil
-                );
-            }
-            // The legacy `mtp_enabled` field was written as an explicit operator
-            // intent in both directions: `true` must migrate to an enabled v1
-            // acceleration policy (omission stays off), and `false` must survive
-            // as an explicit opt-out. Dropping `true` silently disabled MTP for
-            // operators who asked for it.
-            if legacyConfig.mtpEnabled != nil || legacyConfig.mtpDraftDepth != nil {
-                migratedModelConfig = ModelConfigFile(
-                    limits: migratedModelConfig.limits,
-                    generationDefaults: migratedModelConfig.generationDefaults,
-                    chunking: migratedModelConfig.chunking,
-                    acceleration: AccelerationConfigFile(mtp: MtpConfigFile(enabled: legacyConfig.mtpEnabled, draftDepth: legacyConfig.mtpDraftDepth))
+                    chunking: nil
                 );
             }
             migratedModels[discoveredModelId] = migratedModelConfig;
@@ -204,11 +188,6 @@ internal enum LegacyConfigMigration {
         if let maximumOutputTokens: UInt32 = legacyConfig.maximumOutputTokens {
             if maximumOutputTokens == 0 {
                 throw ConfigResolutionError.legacyMigration(description: "legacy max_output_tokens must be positive");
-            }
-        }
-        if let mtpDraftDepth: UInt8 = legacyConfig.mtpDraftDepth {
-            if mtpDraftDepth < 1 || mtpDraftDepth > 3 {
-                throw ConfigResolutionError.invalidMtpDraftDepth(draftDepth: mtpDraftDepth);
             }
         }
     }
