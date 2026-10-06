@@ -1,16 +1,16 @@
 import Foundation;
 
 /** Image-serving capabilities and dimension rules, in pixels and steps. */
-internal struct DiscoveryImageGenerationCapabilities: Equatable, Sendable {
-    internal let supportsTextToImage: Bool;
-    internal let supportsImageEditing: Bool;
-    internal let supportsMultipleReferenceImages: Bool;
-    internal let defaultSteps: UInt16;
-    internal let minimumDimensionPixels: UInt32;
-    internal let maximumDimensionPixels: UInt32;
-    internal let dimensionMultiplePixels: UInt32;
+public struct DiscoveryImageGenerationCapabilities: Equatable, Sendable {
+    public let supportsTextToImage: Bool;
+    public let supportsImageEditing: Bool;
+    public let supportsMultipleReferenceImages: Bool;
+    public let defaultSteps: UInt16;
+    public let minimumDimensionPixels: UInt32;
+    public let maximumDimensionPixels: UInt32;
+    public let dimensionMultiplePixels: UInt32;
 
-    internal init(
+    public init(
         supportsTextToImage: Bool,
         supportsImageEditing: Bool,
         supportsMultipleReferenceImages: Bool,
@@ -32,7 +32,7 @@ internal struct DiscoveryImageGenerationCapabilities: Equatable, Sendable {
      * First violated dimension rule for a requested resolution, or nil when
      * the request fits the model's accepted dimension grid.
      */
-    internal func imageDimensionViolation(
+    public func imageDimensionViolation(
         modelId: String,
         widthPixels: UInt32,
         heightPixels: UInt32

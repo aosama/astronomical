@@ -9,20 +9,38 @@ import Foundation;
  * both to nil; the chunking-config slice restores the distinction alongside
  * ChunkingConfig resolution.
  */
-internal struct ChunkingConfigFile: Equatable {
-    internal let fixedPromptProcessingChunkSizeTokens: UInt32?;
-    internal let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32?;
-    internal let fullAttentionKeyValueGrowthTokens: UInt32?;
-    internal let prefillGraphSubmissionLayerInterval: UInt32?;
-    internal let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32?;
-    internal let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32?;
-    internal let promptCacheBlockTokens: UInt32?;
-    internal let promptCacheCommonPrefixStrideBlocks: UInt32?;
-    internal let experimentalDecodeStageAttributionEnabled: Bool?;
-    internal let experimentalQuantizedKvCacheEnabled: Bool?;
-    internal let experimentalFusedMoeDecodeEnabled: Bool?;
+public struct ChunkingConfigFile: Equatable {
 
-    internal init(
+    /// The all-absent document, mirroring Rust's `ChunkingConfigFile::default()`;
+    /// resolution then applies every built-in default.
+    public static func defaultFile() -> ChunkingConfigFile {
+        return ChunkingConfigFile(
+            fixedPromptProcessingChunkSizeTokens: nil,
+            fixedSsdStreamingPromptProcessingChunkSizeTokens: nil,
+            fullAttentionKeyValueGrowthTokens: nil,
+            prefillGraphSubmissionLayerInterval: nil,
+            experimentalSsdPagingPrefillGraphSubmissionLayerInterval: nil,
+            experimentalSsdPagingGenerationGraphSubmissionLayerInterval: nil,
+            promptCacheBlockTokens: nil,
+            promptCacheCommonPrefixStrideBlocks: nil,
+            experimentalDecodeStageAttributionEnabled: nil,
+            experimentalQuantizedKvCacheEnabled: nil,
+            experimentalFusedMoeDecodeEnabled: nil);
+    }
+
+    public let fixedPromptProcessingChunkSizeTokens: UInt32?;
+    public let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32?;
+    public let fullAttentionKeyValueGrowthTokens: UInt32?;
+    public let prefillGraphSubmissionLayerInterval: UInt32?;
+    public let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32?;
+    public let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32?;
+    public let promptCacheBlockTokens: UInt32?;
+    public let promptCacheCommonPrefixStrideBlocks: UInt32?;
+    public let experimentalDecodeStageAttributionEnabled: Bool?;
+    public let experimentalQuantizedKvCacheEnabled: Bool?;
+    public let experimentalFusedMoeDecodeEnabled: Bool?;
+
+    public init(
         fixedPromptProcessingChunkSizeTokens: UInt32?,
         fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32?,
         fullAttentionKeyValueGrowthTokens: UInt32?,

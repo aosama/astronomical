@@ -22,6 +22,15 @@ public enum AstronomicalConfigError: Error, CustomStringConvertible {
     case invalidSchemaReference
     case nonLoopbackBindAddress(supervisorBindAddress: SocketEndpoint)
     case invalidMaximumMlxMemoryGb(description: String)
+    case invalidPromptCacheMaxSizeGb(description: String)
+    case configuredContextExceedsArtifact(
+        modelId: String,
+        configuredMaximumContextTokens: UInt32,
+        artifactMaximumContextTokens: UInt32)
+    case configuredOutputNotSmallerThanContext(
+        modelId: String,
+        configuredMaximumOutputTokens: UInt32,
+        effectiveMaximumContextTokens: UInt32)
     case configChangedDuringUpdate
 
     public var description: String {
@@ -54,6 +63,12 @@ public enum AstronomicalConfigError: Error, CustomStringConvertible {
             return "config file must reference \"./astronomical-config.schema.json\" through its $schema field";
         case .nonLoopbackBindAddress(let supervisorBindAddress):
             return "supervisor bind address \(supervisorBindAddress) must be a loopback address";
+        case .invalidPromptCacheMaxSizeGb(let problemDescription):
+            return problemDescription;
+        case let .configuredContextExceedsArtifact(modelId, configuredMaximumContextTokens, artifactMaximumContextTokens):
+            return "models[\(modelId)].limits.maximum_context_tokens (\(configuredMaximumContextTokens)) exceeds the discovered artifact maximum (\(artifactMaximumContextTokens))";
+        case let .configuredOutputNotSmallerThanContext(modelId, configuredMaximumOutputTokens, effectiveMaximumContextTokens):
+            return "models[\(modelId)].generation_defaults.maximum_output_tokens (\(configuredMaximumOutputTokens)) must be smaller than the effective context (\(effectiveMaximumContextTokens))";
         case .invalidMaximumMlxMemoryGb(let problemDescription):
             return "invalid maximum_mlx_memory_gb: \(problemDescription)";
         case .configChangedDuringUpdate:

@@ -16,6 +16,10 @@ public protocol FrameTransport: AnyObject {
 
     /// Half-closes the write side to deliver EOF to the peer.
     func shutdownWrite();
+
+    /// Closes the underlying descriptor outright; the worker-process owner
+    /// calls this for the read end after reaping a replaced child.
+    func closeTransportFileDescriptor();
 }
 
 #if canImport(Glibc)
@@ -78,5 +82,9 @@ public final class PipeFrameTransport: FrameTransport {
         if self.isWriteEnd {
             close(self.fileDescriptor);
         }
+    }
+
+    public func closeTransportFileDescriptor() {
+        close(self.fileDescriptor);
     }
 }

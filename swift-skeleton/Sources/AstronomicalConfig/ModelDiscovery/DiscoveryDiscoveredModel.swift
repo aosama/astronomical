@@ -1,17 +1,17 @@
 import Foundation;
 
 /** One model a discovery scan found on disk. */
-internal struct DiscoveryDiscoveredModel: Equatable, Sendable {
-    internal let modelId: String;
-    internal let providerModelId: String?;
-    internal let modelFamily: ModelFamily;
-    internal let revision: String;
-    internal let modelDirectory: FilePath;
-    internal let capabilities: DiscoveryModelCapabilities;
-    internal let license: ModelLicense?;
-    internal let modelSizeBytes: UInt64;
+public struct DiscoveryDiscoveredModel: Equatable, Sendable {
+    public let modelId: String;
+    public let providerModelId: String?;
+    public let modelFamily: ModelFamily;
+    public let revision: String;
+    public let modelDirectory: FilePath;
+    public let capabilities: DiscoveryModelCapabilities;
+    public let license: ModelLicense?;
+    public let modelSizeBytes: UInt64;
 
-    internal init(
+    public init(
         modelId: String,
         providerModelId: String?,
         modelFamily: ModelFamily,

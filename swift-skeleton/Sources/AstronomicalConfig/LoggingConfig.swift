@@ -4,7 +4,7 @@ import Foundation;
 /// diagnostics config wire field, porting crates/config/src/logging_config.rs.
 /// The wire field is a plain String, so the mapping helpers are the only way
 /// level text enters or leaves this enum.
-internal enum LogLevel: Equatable {
+public enum LogLevel: Equatable, Sendable {
 
     case error;
     case warn;
@@ -12,7 +12,7 @@ internal enum LogLevel: Equatable {
     case debug;
     case trace;
 
-    internal static let defaultValue: LogLevel = .warn;
+    public static let defaultValue: LogLevel = .warn;
 
     internal static let wireNameError: String = "error";
     internal static let wireNameWarn: String = "warn";
@@ -20,7 +20,7 @@ internal enum LogLevel: Equatable {
     internal static let wireNameDebug: String = "debug";
     internal static let wireNameTrace: String = "trace";
 
-    internal func asStr() -> String {
+    public func asStr() -> String {
         switch self {
         case .error: return LogLevel.wireNameError;
         case .warn: return LogLevel.wireNameWarn;
@@ -30,7 +30,7 @@ internal enum LogLevel: Equatable {
         }
     }
 
-    internal static func fromWireName(_ wireName: String) -> LogLevel? {
+    public static func fromWireName(_ wireName: String) -> LogLevel? {
         switch wireName {
         case wireNameError: return .error;
         case wireNameWarn: return .warn;
@@ -43,21 +43,21 @@ internal enum LogLevel: Equatable {
 }
 
 /// Runtime logging configuration, porting LoggingConfig from logging_config.rs.
-internal struct LoggingConfig {
+public struct LoggingConfig: Equatable {
 
     /// Each buffered log line is flushed once the buffer reaches this many
     /// lines; the value comes straight from LOG_BUFFERED_LINE_LIMIT.
-    internal static let logBufferedLineLimit: Int = 1024;
+    public static let logBufferedLineLimit: Int = 1024;
 
     /// The facade keeps this many rotated log files before pruning the rest.
-    internal static let defaultRetainedLogFiles: Int = 7;
+    public static let defaultRetainedLogFiles: Int = 7;
 
-    internal let bufferedLineLimit: Int;
-    internal let directory: FilePath;
-    internal let level: LogLevel;
-    internal let retainedFiles: Int;
+    public let bufferedLineLimit: Int;
+    public let directory: FilePath;
+    public let level: LogLevel;
+    public let retainedFiles: Int;
 
-    internal init(directory: FilePath, level: LogLevel, retainedFiles: Int) {
+    public init(directory: FilePath, level: LogLevel, retainedFiles: Int) {
         self.bufferedLineLimit = LoggingConfig.logBufferedLineLimit;
         self.directory = directory;
         self.level = level;
