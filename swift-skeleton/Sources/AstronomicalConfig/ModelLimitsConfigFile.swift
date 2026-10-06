@@ -1,14 +1,14 @@
 import Foundation;
 
 /** `models.<id>.limits` stanza of the v1 user configuration document. */
-internal struct ModelLimitsConfigFile: Equatable {
-    internal let maximumContextTokens: UInt32?;
+public struct ModelLimitsConfigFile: Equatable {
+    public let maximumContextTokens: UInt32?;
 
-    internal init(maximumContextTokens: UInt32?) {
+    public init(maximumContextTokens: UInt32?) {
         self.maximumContextTokens = maximumContextTokens;
     }
 
-    internal static func fromJsonObject(_ jsonObject: Dictionary<String, Any>) throws -> ModelLimitsConfigFile {
+    public static func fromJsonObject(_ jsonObject: Dictionary<String, Any>) throws -> ModelLimitsConfigFile {
         try StrictJson.requireKnownKeys(object: jsonObject, knownKeys: ["maximum_context_tokens"], fieldName: "limits");
         return ModelLimitsConfigFile(
             maximumContextTokens: try StrictJson.optionalUnsignedInteger(
