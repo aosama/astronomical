@@ -1,11 +1,11 @@
 import Foundation;
 
 /** Failures while scanning a configured model root, mirroring `DiscoveredModelError`. */
-internal enum DiscoveryDiscoveredModelError: Error, CustomStringConvertible {
+public enum DiscoveryDiscoveredModelError: Error, CustomStringConvertible {
     case readDirectory(directoryPath: FilePath, underlyingError: any Error);
     case duplicateModelId(modelId: String, modelDirectories: Array<FilePath>);
 
-    internal var description: String {
+    public var description: String {
         switch (self) {
         case .readDirectory(let directoryPath, let underlyingError):
             return "failed to read the model directory \(directoryPath): \(underlyingError)";
