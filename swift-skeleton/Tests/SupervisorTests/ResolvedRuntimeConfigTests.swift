@@ -53,6 +53,7 @@ final class ResolvedRuntimeConfigTests: XCTestCase {
                 rootDirectory: FilePath(string: "/state/prompt-cache"),
                 maximumSizeBytes: 50_000_000_000),
             bindAddress: "127.0.0.1:6733",
+            bindEndpoint: SocketEndpoint(host: "127.0.0.1", port: 6733),
             loggingConfig: LoggingConfig(
                 directory: FilePath(string: "/state/logs"),
                 level: LogLevel.warn,
