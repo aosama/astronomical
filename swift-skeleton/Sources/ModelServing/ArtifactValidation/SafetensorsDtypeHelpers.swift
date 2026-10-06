@@ -78,6 +78,24 @@ public enum SafetensorsDtypeHelpers {
         return parsedDtype;
     }
 
+    /// Row-major element count for a tensor shape with overflow checked at
+    /// every multiplication, mirroring the Rust try_fold shape products.
+    public static func elementCount(fromShape shape: Array<Int>) throws -> UInt64 {
+        var shapeProduct: UInt64 = 1;
+        for dimension: Int in shape {
+            guard let dimensionValue: UInt64 = UInt64(exactly: dimension) else {
+                throw ArtifactValidationError.tensorPayloadSizeOverflow;
+            }
+            let (multipliedProduct, productOverflowed): (UInt64, Bool) =
+                shapeProduct.multipliedReportingOverflow(by: dimensionValue);
+            if productOverflowed {
+                throw ArtifactValidationError.tensorPayloadSizeOverflow;
+            }
+            shapeProduct = multipliedProduct;
+        }
+        return shapeProduct;
+    }
+
     private static func unknownSafetensorsDtypeError(
         dtypeString: String, fileName: String, tensorName: String) -> ArtifactValidationError {
         return ArtifactValidationError.unknownSafetensorsDtype(

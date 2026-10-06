@@ -108,6 +108,18 @@ public final class ValidatedWeightsFile {
         return self.retainedValidatedRequiredFile;
     }
 
+    /// Returns a strict family-neutral inventory from this retained descriptor.
+    public func readRawSafetensorsInventory() throws -> RawSafetensorsInventory {
+        return try RawSafetensorsInventoryReader.read(
+            validatedRequiredFile: self.retainedValidatedRequiredFile);
+    }
+
+    /// Test seam mirroring the Rust raw-inventory projection: the production
+    /// reader produces the same data, exposed without crate-private metadata.
+    public func readRawSafetensorsInventoryForTests() throws -> RawSafetensorsInventory {
+        return try self.readRawSafetensorsInventory();
+    }
+
     /// Test seam for the shared bounded retained-descriptor reader, keeping
     /// tests on the production reader so path-retention and typed-error
     /// behavior are exercised together.
