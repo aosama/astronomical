@@ -114,6 +114,12 @@ public final class UnixSocketStream: FrameTransport {
         self.close();
     }
 
+    public func pollReadReadiness(timeoutMilliseconds: Int32) -> Bool {
+        return FrameTransportPolling.isReadReady(
+            fileDescriptor: self.fileDescriptor,
+            timeoutMilliseconds: timeoutMilliseconds);
+    }
+
     /// Closes the file descriptor; safe to call repeatedly.
     public func close() -> Void {
         self.lifecycleLock.lock();
