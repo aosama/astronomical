@@ -6,11 +6,15 @@ import Foundation;
 /// bytes hit the socket, and close() half-closes the stream so the peer
 /// observes EOF while reads on the shared descriptor keep working.
 public final class ProtocolWriter {
-    private let socket: UnixSocketStream;
+    private let socket: any FrameTransport;
     private let performanceAttributionEnabled: Bool;
 
-    public init(socket: UnixSocketStream, performanceAttributionEnabled: Bool = false) {
-        self.socket = socket;
+    public convenience init(socket: UnixSocketStream, performanceAttributionEnabled: Bool = false) {
+        self.init(transport: socket, performanceAttributionEnabled: performanceAttributionEnabled);
+    }
+
+    public init(transport: any FrameTransport, performanceAttributionEnabled: Bool = false) {
+        self.socket = transport;
         self.performanceAttributionEnabled = performanceAttributionEnabled;
     }
 
@@ -40,11 +44,7 @@ public final class ProtocolWriter {
 
     /// Half-closes the stream to deliver EOF to the peer.
     public func close() throws -> Void {
-        do {
-            try self.socket.shutdownWrite();
-        } catch let posixError as IpcPosixError {
-            throw ProtocolError.writeFrame(posixError.ioError);
-        }
+        self.socket.shutdownWrite();
     }
 
     private func sendSerializedMessage(_ serializedMessage: Data) throws -> Void {
