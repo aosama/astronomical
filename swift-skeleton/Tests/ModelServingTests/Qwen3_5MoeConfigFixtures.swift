@@ -1,6 +1,7 @@
-import XCTest;
+import Foundation;
 import ModelServing;
 import IpcProtocol;
+import Testing;
 
 /// Frozen Qwen3.5-MoE test fixtures, port of the fixture half of
 /// crates/model-serving/tests/common/qwen3_5_moe.rs, plus small JSON-mutation
@@ -142,7 +143,7 @@ enum Qwen3_5MoeConfigFixtures {
             String(bytes: try frozenOrnith10OptiQConfigBytes(), encoding: String.Encoding.utf8)!);
         guard case .object(let quantizationObject) = optiQConfigValue.objectValue(forKey: "quantization")
             ?? .null else {
-            XCTFail("the quantization map should be an object");
+            Issue.record("the quantization map should be an object");
             return Array();
         }
         var measuredModuleBits: JsonWireObject = quantizationObject;
