@@ -7,11 +7,11 @@ import Darwin;
  * enforced from file metadata before any read so an oversized marker is never
  * buffered, mirroring the Rust dispatch order across family verifiers.
  */
-internal enum FamilyDiscovery {
+public enum FamilyDiscovery {
     private static let maximumConfigBytes: UInt64 = 4 * 1024 * 1024;
     private static let maximumPipelineIndexBytes: UInt64 = 1 * 1024 * 1024;
 
-    internal static func classifyModelDirectory(
+    public static func classifyModelDirectory(
         modelDirectory: FilePath,
         attributionEnabled: Bool
     ) throws -> ModelFamily? {

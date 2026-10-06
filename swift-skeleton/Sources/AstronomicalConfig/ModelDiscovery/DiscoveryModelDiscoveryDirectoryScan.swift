@@ -1,11 +1,11 @@
 import Foundation;
 
 /** Models discovered under one configured root directory. */
-internal struct DiscoveryModelDiscoveryDirectoryScan: Equatable, Sendable {
-    internal let path: FilePath;
-    internal let discoveredModels: Array<DiscoveryDiscoveredModel>;
+public struct DiscoveryModelDiscoveryDirectoryScan: Equatable, Sendable {
+    public let path: FilePath;
+    public var discoveredModels: Array<DiscoveryDiscoveredModel>;
 
-    internal init(path: FilePath, discoveredModels: Array<DiscoveryDiscoveredModel>) {
+    public init(path: FilePath, discoveredModels: Array<DiscoveryDiscoveredModel>) {
         self.path = path;
         self.discoveredModels = discoveredModels;
     }

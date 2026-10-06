@@ -7,11 +7,11 @@ import Foundation;
  */
 internal enum DiscoveryHuggingFaceCache {
     /** A resolved snapshot plus the model identifier the cache layout encodes. */
-    internal struct Snapshot {
-        internal let modelId: String;
-        internal let snapshotDirectory: FilePath;
+    public struct Snapshot {
+        public let modelId: String;
+        public let snapshotDirectory: FilePath;
 
-        internal init(modelId: String, snapshotDirectory: FilePath) {
+        public init(modelId: String, snapshotDirectory: FilePath) {
             self.modelId = modelId;
             self.snapshotDirectory = snapshotDirectory;
         }
@@ -27,7 +27,7 @@ internal enum DiscoveryHuggingFaceCache {
      * Snapshot listing uses `lstat` metadata because the Rust walker treats a
      * symlinked snapshot entry as a directory entry without following it.
      */
-    internal static func resolveCacheEntry(huggingFaceCacheDirectory: FilePath) -> Snapshot? {
+    public static func resolveCacheEntry(huggingFaceCacheDirectory: FilePath) -> Snapshot? {
         guard let decodedModelId: String = decodeCacheDirectoryName(
             directoryName: DiscoveryPathNavigation.lastComponentName(of: huggingFaceCacheDirectory) ?? ""
         ) else {
@@ -79,7 +79,7 @@ internal enum DiscoveryHuggingFaceCache {
     }
 
     /** Strips the `models--` prefix; the remainder is the organization when no `--` remains. */
-    internal static func decodeCacheDirectoryName(directoryName: String) -> String? {
+    public static func decodeCacheDirectoryName(directoryName: String) -> String? {
         guard directoryName.hasPrefix(self.cacheDirectoryPrefix) else {
             return nil;
         }
@@ -94,7 +94,7 @@ internal enum DiscoveryHuggingFaceCache {
     }
 
     /** The repository name: the final component of the decoded identifier, mirroring `rsplit`. */
-    internal static func leafModelId(ofDecodedModelId decodedModelId: String) -> String {
+    public static func leafModelId(ofDecodedModelId decodedModelId: String) -> String {
         guard let lastSeparatorIndex: String.Index = decodedModelId.lastIndex(of: "/") else {
             return decodedModelId;
         }
