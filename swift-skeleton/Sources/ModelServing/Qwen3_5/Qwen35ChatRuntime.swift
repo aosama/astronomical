@@ -9,11 +9,48 @@ import Tokenizers;
 /// the artifact config drives the in-memory engine construction and the
 /// directory's tokenizer files drive the bridged upstream tokenizer.
 ///
-/// The production family factory wraps this builder behind the weight-
-/// streaming gate; until validated shards stream into the engine, weights
-/// are the pinned in-memory initialization, so the production swap path
-/// keeps failing closed while the pairing itself is fully exercised here.
+/// The in-memory builder serves journeys that exercise the tokenizer and
+/// processor pairing without a packaged artifact; production loads go
+/// through `buildArtifactRuntime`, which streams validated shard weights
+/// into the engine before the runtime is published.
 public enum Qwen35ChatRuntime {
+
+    /// Builds the production runtime: the directory is validated end to
+    /// end, the validated shard descriptors stream into the dense engine,
+    /// and the tokenizer bridges from the same directory.
+    public static func buildArtifactRuntime(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        prefillChunkTokenCount: Int = 512,
+        performanceAttributionEnabled: Bool = false
+    ) throws -> LoadedChatRuntime {
+        guard let autoregressiveConfiguration = modelConfiguration.autoregressive() else {
+            throw InferenceEngineError.modelLoad(
+                reason: "the dense Qwen3.5 runtime requires an autoregressive model policy");
+        }
+        let validatedArtifact: ValidatedQwen35Artifact = try Qwen35ArtifactValidator()
+            .validate(
+                modelDirectory: modelDirectory,
+                maxOutputTokens: autoregressiveConfiguration.maximumOutputTokens,
+                performanceAttributionEnabled: performanceAttributionEnabled);
+        let repositoryConfiguration: Qwen3_5Config = validatedArtifact.config();
+        let engine: Qwen35DenseEngine = Qwen35DenseEngine(
+            attributionEnabled: performanceAttributionEnabled,
+            prefillChunkTokenCount: prefillChunkTokenCount);
+        do {
+            try engine.loadValidatedArtifact(validatedArtifact);
+        } catch let engineError as InferenceEngineError {
+            throw engineError;
+        } catch {
+            throw InferenceEngineError.modelLoad(
+                reason: "the dense model weights could not be streamed from the artifact");
+        }
+        return try Qwen35ChatRuntime.pairTokenizerWithProcessor(
+            modelDirectory: modelDirectory,
+            repositoryConfiguration: repositoryConfiguration,
+            autoregressiveConfiguration: autoregressiveConfiguration,
+            engine: engine);
+    }
 
     public static func buildInMemoryRuntime(
         modelDirectory: String,
@@ -50,6 +87,22 @@ public enum Qwen35ChatRuntime {
             throw InferenceEngineError.modelLoad(
                 reason: "the dense model could not be constructed");
         }
+        return try Qwen35ChatRuntime.pairTokenizerWithProcessor(
+            modelDirectory: modelDirectory,
+            repositoryConfiguration: repositoryConfiguration,
+            autoregressiveConfiguration: autoregressiveConfiguration,
+            engine: engine);
+    }
+
+    /// Bridges the directory tokenizer and builds the matched processor
+    /// around one loaded engine — the tail both runtime builders share.
+    private static func pairTokenizerWithProcessor(
+        modelDirectory: String,
+        repositoryConfiguration: Qwen3_5Config,
+        autoregressiveConfiguration: WorkerAutoregressiveModelConfiguration,
+        engine: Qwen35DenseEngine
+    ) throws -> LoadedChatRuntime {
+        let directoryUrl: URL = URL(fileURLWithPath: modelDirectory);
         let bridgedTokenizer: any MLXLMCommon.Tokenizer;
         do {
             bridgedTokenizer = #adaptHuggingFaceTokenizer(

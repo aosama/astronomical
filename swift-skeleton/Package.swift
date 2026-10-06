@@ -61,6 +61,15 @@ let package: Package = Package(
                 .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
                 .product(name: "Tokenizers", package: "swift-transformers")
             ]),
+        // Shared hermetic fixtures (tiny tokenizer, tiny dense artifact)
+        // consumed by every test target that synthesizes model directories.
+        .target(
+            name: "ModelServingTestSupport",
+            dependencies: ["ModelServing"]),
+        // The journey-category vocabulary: test-tier tags and the real-model
+        // gate. Dependency-free so every test target adopts it without
+        // pulling serving code into its dependency graph.
+        .target(name: "JourneyCategories"),
         // Wave 3 — apps/inference-worker
         .executableTarget(
             name: "InferenceWorker",
@@ -69,15 +78,19 @@ let package: Package = Package(
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol"]),
         .testTarget(name: "RestContractTests", dependencies: ["RestContract"]),
-        .testTarget(name: "SupervisorTests", dependencies: ["Supervisor"]),
+        .testTarget(name: "SupervisorTests", dependencies: ["Supervisor", "JourneyCategories"]),
         .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
         .testTarget(
             name: "ModelServingTests",
             dependencies: [
                 "ModelServing",
+                "ModelServingTestSupport",
+                "JourneyCategories",
                 .product(name: "Tokenizers", package: "swift-transformers")
             ]),
-        .testTarget(name: "InferenceWorkerTests", dependencies: ["InferenceWorker"])
+        .testTarget(
+            name: "InferenceWorkerTests",
+            dependencies: ["InferenceWorker", "ModelServingTestSupport", "JourneyCategories"])
     ]
 );

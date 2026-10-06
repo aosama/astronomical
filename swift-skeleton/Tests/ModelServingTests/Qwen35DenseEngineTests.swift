@@ -7,6 +7,8 @@ import MLXLMCommon;
 
 import IpcProtocol;
 import ModelServing;
+import ModelServingTestSupport;
+import JourneyCategories;
 
 @testable import ModelServing;
 
@@ -17,7 +19,7 @@ import ModelServing;
  * fail-closed load path. No downloads; the suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-@Suite(.serialized)
+@Suite(.serialized, .tags(.hermeticMlxJourney))
 final class Qwen35DenseEngineTests {
 
     private static let ROMEO_AND_JULIET_PROMPT: String = "What is the play about?";
@@ -105,18 +107,17 @@ final class Qwen35DenseEngineTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func should_fail_the_load_while_the_artifact_weight_path_is_pending() throws {
+    func should_fail_the_load_when_no_dense_model_was_loaded() throws {
         let engine: Qwen35DenseEngine = Qwen35DenseEngine();
         do {
             _ = try engine.load();
-            Issue.record("the pending artifact weight path must fail closed");
+            Issue.record("an engine without a loaded model must fail the load");
         } catch let loadError as InferenceEngineError {
             guard case let .modelLoad(failureReason) = loadError else {
                 Issue.record("expected a model load failure, got \(loadError)");
                 return;
             }
-            #expect(failureReason
-                .contains("artifact streaming slice") == true);
+            #expect(failureReason == "no dense model is loaded");
         }
     }
 

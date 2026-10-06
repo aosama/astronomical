@@ -130,13 +130,39 @@ the wording is refreshed when each wave begins porting that unit.
 Run from `swift-skeleton/`:
 
     swift build
-    perl -e 'alarm 120; exec @ARGV' swift test --filter AstronomicalConfigTests
+    swift test
 
-`swift build` must stay warning-free; compiler warnings are defects. The
-`perl` alarm wrapper enforces the repo-wide 120-second test-timeout cap at
-the command level. Current tests are hermetic CPU (Central Processing Unit)
-tests and finish in milliseconds; real-model GPU (Graphics Processing Unit)
-journeys are not present yet and will run strictly serially when they land.
+`swift build` must stay warning-free; compiler warnings are defects. `swift test`
+runs every hermetic journey serially by default (SwiftPM's `--no-parallel`), and
+real-model journeys are opt-in only — they never run without the gate variable
+below. Per-suite selection uses the runner's own filter, for example
+`swift test --filter WorkerCommandLoopTests`; no wrapper script owns test
+selection or timeouts — every journey carries its own
+`@Test(.timeLimit(...))` cap.
+
+## Journey categories (the test taxonomy)
+
+Every Swift Testing suite declares exactly one category tag from the
+dependency-free `JourneyCategories` module. The tag is the suite's contract
+with the runner:
+
+| Tag | Meaning | Default `swift test` | Isolation |
+| --- | --- | --- | --- |
+| `.hermeticJourney` | synthesized fixtures, CPU only, no MLX evaluation | runs | parallel-safe |
+| `.hermeticMlxJourney` | synthesized tiny fixtures that evaluate MLX operations (kilobyte-scale models) | runs | `.serialized` suite |
+| `.realModelJourney` | installed artifact's real weights | **disabled** until `ASTRONOMICAL_QWEN35_ARTIFACT_DIRECTORY` resolves a directory | `.serialized` suite, one suite per run |
+
+A real-model suite combines the three traits it needs:
+
+    @Suite(.serialized, .tags(.realModelJourney),
+           .enabled(if: RealModelJourneyGate.qwen35ArtifactDirectory() != nil))
+
+and resolves its directory through the same gate accessor, failing closed when
+it no longer resolves. This replaces the Rust tree's ignored-test +
+`scripts/run-bounded-cargo-test.sh` split with SwiftPM-native machinery: the
+serial default keeps MLX journeys off each other's wired GPU memory
+structurally, and the enablement condition keeps the default run hermetic by
+construction.
 
 ## Rust-to-Swift mapping
 

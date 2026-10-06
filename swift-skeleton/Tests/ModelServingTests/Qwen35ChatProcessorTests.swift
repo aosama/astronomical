@@ -7,6 +7,8 @@ import Tokenizers;
 
 import IpcProtocol;
 import ModelServing;
+import ModelServingTestSupport;
+import JourneyCategories;
 
 @testable import ModelServing;
 
@@ -18,7 +20,7 @@ import ModelServing;
  * that land later. The final journey pairs the processor and the dense
  * engine through the real model directory builder inside the worker loop.
  */
-@Suite(.serialized)
+@Suite(.serialized, .tags(.hermeticMlxJourney))
 final class Qwen35ChatProcessorTests {
 
     init() {
