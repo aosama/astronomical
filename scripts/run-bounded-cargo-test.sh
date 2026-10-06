@@ -14,6 +14,12 @@
 #    binary and its inference children still holding wired model memory. The
 #    phases below run without --foreground so the timeout signal reaches the
 #    entire process group.
+#
+# Usage: scripts/run-bounded-cargo-test.sh cargo test ... [-- ARGS]
+# The wrapper runs `cargo build` (compile phase, 600-second boundary) and then
+# re-runs the same invocation with `--no-run` replaced by the caller's test
+# arguments (execution phase, 120-second boundary unless TEST_TIMEOUT_SECONDS
+# overrides it).
 
 set -eu
 

@@ -3,6 +3,18 @@
 # Runs one foreground build journey in an owned Cargo target and removes that
 # target afterward. High-churn acceptance and release graphs remain useful
 # through sccache without accumulating linked binaries and symbols in the repo.
+#
+# Usage:
+#   scripts/run-in-disposable-cargo-target.sh --lane NAME -- COMMAND [ARG ...]
+#
+# The command runs with CARGO_TARGET_DIR pointed at a fresh temp directory
+# marked as lane-owned; on exit (including signals) the directory is measured
+# and removed. Called from inside an existing lane target, the command reuses
+# that target instead of nesting a second one.
+#
+# Direct callers: scripts/test-direct-mlx.sh, scripts/run-disposable-cargo-journey.sh,
+# scripts/test-mlx-memory-contracts.sh, scripts/accept-prompt-cache-interactions.sh,
+# scripts/internal/build-macos-app.sh.
 
 set -eu
 

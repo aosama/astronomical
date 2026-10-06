@@ -15,6 +15,10 @@ if [ "$#" -ne 0 ]; then
 fi
 
 repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+# Re-exec through the disposable-target runner: this lane runs several cargo
+# invocations that must share one owned CARGO_TARGET_DIR, so the runner owns the
+# whole script (not a single command) and this guard skips re-nesting on re-entry.
+
 if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
     exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
         --lane mlx-memory-contracts -- \
