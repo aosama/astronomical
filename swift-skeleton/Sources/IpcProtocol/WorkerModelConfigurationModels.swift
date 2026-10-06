@@ -1,7 +1,7 @@
 import Foundation;
 
 /// Complete autoregressive execution policy for one canonical requestable model.
-public struct WorkerAutoregressiveModelConfiguration: Equatable {
+public struct WorkerAutoregressiveModelConfiguration: Equatable, Sendable {
     public let modelId: String;
     /// Effective prompt-plus-output context capability.
     public let maximumContextTokens: UInt32;
@@ -47,7 +47,7 @@ public struct WorkerAutoregressiveModelConfiguration: Equatable {
 }
 
 /// Path-free autoregressive policy acknowledged after model binding.
-public struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Equatable {
+public struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Equatable, Sendable {
     public let modelId: String;
     /// Effective prompt-plus-output context capability.
     public let maximumContextTokens: UInt32;
@@ -91,7 +91,7 @@ public struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Equatable {
 }
 
 /// Typed image profile identifier carried without autoregressive placeholders.
-public enum WorkerImageGenerationModelFamily: Equatable {
+public enum WorkerImageGenerationModelFamily: Equatable, Sendable {
     case flux2Klein;
     case qwenImage21;
 
@@ -116,7 +116,7 @@ public enum WorkerImageGenerationModelFamily: Equatable {
 }
 
 /// Typed embedding profile identifier carried without autoregressive placeholders.
-public enum WorkerEmbeddingModelFamily: Equatable {
+public enum WorkerEmbeddingModelFamily: Equatable, Sendable {
     case modernBert;
 
     private static let expectedVariantNames: Array<String> = ["modern_bert"];
@@ -138,7 +138,7 @@ public enum WorkerEmbeddingModelFamily: Equatable {
 }
 
 /// Exact embedding artifact identity required by the selected profile.
-public struct WorkerEmbeddingModelConfiguration: Equatable {
+public struct WorkerEmbeddingModelConfiguration: Equatable, Sendable {
     public let modelId: String;
     public let modelFamily: WorkerEmbeddingModelFamily;
     public let artifactRevision: String;
@@ -189,7 +189,7 @@ public struct WorkerEmbeddingModelConfiguration: Equatable {
 }
 
 /// Exact FLUX artifact identity required by the selected image profile.
-public struct WorkerFlux2KleinModelConfiguration: Equatable {
+public struct WorkerFlux2KleinModelConfiguration: Equatable, Sendable {
     public let modelId: String;
     public let modelFamily: WorkerImageGenerationModelFamily;
     public let artifactRevision: String;
@@ -222,7 +222,7 @@ public struct WorkerFlux2KleinModelConfiguration: Equatable {
 }
 
 /// Exact Qwen-Image-2.1 artifact identity required by the selected image profile.
-public struct WorkerQwenImage21ModelConfiguration: Equatable {
+public struct WorkerQwenImage21ModelConfiguration: Equatable, Sendable {
     public let modelId: String;
     public let modelFamily: WorkerImageGenerationModelFamily;
     public let artifactRevision: String;
@@ -257,7 +257,7 @@ public struct WorkerQwenImage21ModelConfiguration: Equatable {
 /// Complete effective execution policy for one canonical requestable model.
 /// Wire shape is adjacently tagged: `kind` names the variant, `configuration`
 /// carries its payload.
-public enum WorkerModelConfiguration: Equatable {
+public enum WorkerModelConfiguration: Equatable, Sendable {
     case autoregressive(WorkerAutoregressiveModelConfiguration);
     case flux2Klein(WorkerFlux2KleinModelConfiguration);
     case qwenImage21(WorkerQwenImage21ModelConfiguration);
@@ -353,7 +353,7 @@ public enum WorkerModelConfiguration: Equatable {
 /// Path-free loaded-model policy acknowledged to the supervisor and local status API.
 /// Wire shape is adjacently tagged: `kind` names the variant, `configuration`
 /// carries its payload.
-public enum WorkerLoadedModelRuntimeConfiguration: Equatable {
+public enum WorkerLoadedModelRuntimeConfiguration: Equatable, Sendable {
     case autoregressive(WorkerLoadedAutoregressiveModelRuntimeConfiguration);
     case flux2Klein(WorkerFlux2KleinModelConfiguration);
     case qwenImage21(WorkerQwenImage21ModelConfiguration);
