@@ -1,5 +1,9 @@
 import Foundation;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
+
 @testable import AstronomicalConfig;
 
 /**
@@ -7,25 +11,18 @@ import XCTest;
  * user configuration from one instance boundary, mirroring the Rust
  * runtime_instance config-load tests.
  */
-final class AstronomicalConfigLoadTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class AstronomicalConfigLoadTests {
     private static let MINIMAL_VALID_CONFIG_JSON: String =
         "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}";
     private static let CONFIG_SCHEMA_FILE_NAME: String = "astronomical-config.schema.json";
 
     private var temporaryDirectoryFixture: TemporaryDirectoryFixture?;
 
-    override func tearDown() {
-        guard let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture else {
-            super.tearDown();
-            return;
+    deinit {
+        if let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture {
+            try? fixture.destroy();
         }
-        do {
-            try fixture.destroy();
-        } catch {
-            XCTFail("temporary directory should be removed: \(error)");
-        }
-        self.temporaryDirectoryFixture = nil;
-        super.tearDown();
     }
 
     private func makeTemporaryDirectoryFixture() throws -> TemporaryDirectoryFixture {
@@ -47,7 +44,8 @@ final class AstronomicalConfigLoadTests: XCTestCase {
         return try Data(contentsOf: URL(fileURLWithPath: path.string));
     }
 
-    func testShouldGenerateTheDevelopmentFirstRunConfigWithTheDevelopmentPort() throws -> Void {
+    @Test
+    func should_generate_the_development_first_run_config_with_the_development_port() throws -> Void {
         let fictionalHomeDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             fictionalHomeDirectoryFixture.rootDirectoryPath,
@@ -57,21 +55,22 @@ final class AstronomicalConfigLoadTests: XCTestCase {
         let developmentConfig: AstronomicalConfig = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
 
         let supervisorBindAddress: SocketEndpoint = try developmentConfig.supervisorBindAddress();
-        XCTAssertEqual(supervisorBindAddress.description, "127.0.0.1:6733");
-        XCTAssertTrue(
+        #expect(supervisorBindAddress.description == "127.0.0.1:6733");
+        #expect(
             FileManager.default.fileExists(atPath: developmentPaths.configFilePath.string),
             "first run should materialize config.json on disk"
         );
         let adjacentSchemaPath: FilePath = developmentPaths.stateDirectory.appending(
             component: AstronomicalConfigLoadTests.CONFIG_SCHEMA_FILE_NAME
         );
-        XCTAssertTrue(
+        #expect(
             FileManager.default.fileExists(atPath: adjacentSchemaPath.string),
             "first run should write the validation schema beside config.json"
         );
     }
 
-    func testShouldLoadASuppliedTestHomeOnlyFromTheDevelopmentChannel() throws -> Void {
+    @Test
+    func should_load_a_supplied_test_home_only_from_the_development_channel() throws -> Void {
         let testHomeDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let stableStateDirectory: FilePath = testHomeDirectoryFixture.rootDirectoryPath.appending(component: ".astronomical");
         let developmentStateDirectory: FilePath = testHomeDirectoryFixture.rootDirectoryPath.appending(component: ".astronomical-dev");
@@ -86,18 +85,18 @@ final class AstronomicalConfigLoadTests: XCTestCase {
         );
 
         let supervisorBindAddress: SocketEndpoint = try developmentConfig.supervisorBindAddress();
-        XCTAssertEqual(supervisorBindAddress.description, "127.0.0.1:6733");
+        #expect(supervisorBindAddress.description == "127.0.0.1:6733");
         let stableSentinelBytes: Data = try self.readFileBytes(
             atPath: stableStateDirectory.appending(component: "config.json")
         );
-        XCTAssertEqual(
-            stableSentinelBytes,
-            Data("not valid JSON".utf8),
+        #expect(
+            stableSentinelBytes == Data("not valid JSON".utf8),
             "the Stable channel sentinel must never be read or rewritten by a Development load"
         );
     }
 
-    func testShouldAllowAnExplicitTestStateDirectoryToSelectAnEphemeralEndpoint() throws -> Void {
+    @Test
+    func should_let_an_explicit_test_state_directory_select_an_ephemeral_endpoint() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let explicitPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forExplicitStateDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -111,10 +110,11 @@ final class AstronomicalConfigLoadTests: XCTestCase {
         let explicitConfig: AstronomicalConfig = try AstronomicalConfig.loadFromInstancePaths(explicitPaths);
 
         let supervisorBindAddress: SocketEndpoint = try explicitConfig.supervisorBindAddress();
-        XCTAssertEqual(supervisorBindAddress.description, "127.0.0.1:0");
+        #expect(supervisorBindAddress.description == "127.0.0.1:0");
     }
 
-    func testShouldReloadItsOwnFirstRunConfigFile() throws -> Void {
+    @Test
+    func should_reload_its_own_first_run_config_file() throws -> Void {
         let fictionalHomeDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             fictionalHomeDirectoryFixture.rootDirectoryPath,
@@ -125,10 +125,11 @@ final class AstronomicalConfigLoadTests: XCTestCase {
         let reloadedConfig: AstronomicalConfig = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
 
         let supervisorBindAddress: SocketEndpoint = try reloadedConfig.supervisorBindAddress();
-        XCTAssertEqual(supervisorBindAddress.description, "127.0.0.1:6733");
+        #expect(supervisorBindAddress.description == "127.0.0.1:6733");
     }
 
-    func testShouldRejectInvalidJSONWhenLoadingTheConfigFile() throws -> Void {
+    @Test
+    func should_reject_invalid_json_when_loading_the_config_file() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -139,17 +140,19 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.parseConfigFile = thrownError else {
-                XCTFail("expected parseConfigFile, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected parseConfigFile");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.parseConfigFile = configError else {
+                Issue.record(Comment(stringLiteral: "expected parseConfigFile, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectADuplicateConfigKeyWhenLoadingTheConfigFile() throws -> Void {
+    @Test
+    func should_reject_a_duplicate_config_key_when_loading_the_config_file() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -160,17 +163,19 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case ConfigResolutionError.duplicateConfigKey(_, "schema_version") = thrownError else {
-                XCTFail("expected duplicateConfigKey for schema_version, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected duplicateConfigKey for schema_version");
+        } catch let resolutionError as ConfigResolutionError {
+            guard case ConfigResolutionError.duplicateConfigKey(_, "schema_version") = resolutionError else {
+                Issue.record(Comment(stringLiteral: "expected duplicateConfigKey for schema_version, got \(resolutionError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectAnUnknownTopLevelConfigField() throws -> Void {
+    @Test
+    func should_reject_an_unknown_top_level_config_field() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -181,17 +186,19 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.parseConfigFile = thrownError else {
-                XCTFail("expected parseConfigFile, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected parseConfigFile");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.parseConfigFile = configError else {
+                Issue.record(Comment(stringLiteral: "expected parseConfigFile, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectARelativeModelDirectory() throws -> Void {
+    @Test
+    func should_reject_a_relative_model_directory() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -202,20 +209,19 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case let AstronomicalConfigError.pathMustBeAbsolute(
-                fieldName,
-                _
-            ) = thrownError, fieldName == "runtime.model_directories" else {
-                XCTFail("expected pathMustBeAbsolute for runtime.model_directories, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected pathMustBeAbsolute for runtime.model_directories");
+        } catch let configError as AstronomicalConfigError {
+            guard case let .pathMustBeAbsolute(fieldName, _) = configError, fieldName == "runtime.model_directories" else {
+                Issue.record(Comment(stringLiteral: "expected pathMustBeAbsolute for runtime.model_directories, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectAnUnsupportedSchemaVersion() throws -> Void {
+    @Test
+    func should_reject_an_unsupported_schema_version() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -226,17 +232,19 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.unsupportedSchemaVersion = thrownError else {
-                XCTFail("expected unsupportedSchemaVersion, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected unsupportedSchemaVersion");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.unsupportedSchemaVersion = configError else {
+                Issue.record(Comment(stringLiteral: "expected unsupportedSchemaVersion, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectAnIncorrectSchemaReference() throws -> Void {
+    @Test
+    func should_reject_an_incorrect_schema_reference() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -247,17 +255,19 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.invalidSchemaReference = thrownError else {
-                XCTFail("expected invalidSchemaReference, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected invalidSchemaReference");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.invalidSchemaReference = configError else {
+                Issue.record(Comment(stringLiteral: "expected invalidSchemaReference, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectAnOversizedConfigFile() throws -> Void {
+    @Test
+    func should_reject_an_oversized_config_file() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
@@ -269,11 +279,12 @@ final class AstronomicalConfigLoadTests: XCTestCase {
             beneathStateDirectory: developmentPaths.stateDirectory
         );
 
-        XCTAssertThrowsError(
-            try AstronomicalConfig.loadFromInstancePaths(developmentPaths)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.configFileTooLarge = thrownError else {
-                XCTFail("expected configFileTooLarge, got \(thrownError)");
+        do {
+            _ = try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
+            Issue.record("expected configFileTooLarge");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.configFileTooLarge = configError else {
+                Issue.record(Comment(stringLiteral: "expected configFileTooLarge, got \(configError)"));
                 return;
             }
         }

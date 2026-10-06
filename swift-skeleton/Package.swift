@@ -75,11 +75,11 @@ let package: Package = Package(
             name: "InferenceWorker",
             dependencies: ["IpcProtocol", "RuntimeIntegration", "ModelServing", "AstronomicalConfig"]),
         // One test target per module, mirroring Sources/.
-        .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig"]),
-        .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol"]),
+        .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig", "JourneyCategories"]),
+        .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol", "JourneyCategories"]),
         .testTarget(name: "RestContractTests", dependencies: ["RestContract", "JourneyCategories"]),
         .testTarget(name: "SupervisorTests", dependencies: ["Supervisor", "JourneyCategories"]),
-        .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor"]),
+        .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor", "JourneyCategories"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
         .testTarget(
             name: "ModelServingTests",

@@ -1,22 +1,18 @@
 import Foundation;
-import XCTest;
-import AstronomicalConfig;
 
-final class AstronomicalInstancePathsTests: XCTestCase {
+import Testing;
+
+import AstronomicalConfig;
+import JourneyCategories;
+
+@Suite(.tags(.hermeticJourney))
+final class AstronomicalInstancePathsTests {
     private var temporaryDirectoryFixture: TemporaryDirectoryFixture?;
 
-    override func tearDown() {
-        guard let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture else {
-            super.tearDown();
-            return;
+    deinit {
+        if let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture {
+            try? fixture.destroy();
         }
-        do {
-            try fixture.destroy();
-        } catch {
-            XCTFail("temporary directory should be removed: \(error)");
-        }
-        self.temporaryDirectoryFixture = nil;
-        super.tearDown();
     }
 
     private func makeTemporaryDirectoryFixture() throws -> TemporaryDirectoryFixture {
@@ -25,7 +21,8 @@ final class AstronomicalInstancePathsTests: XCTestCase {
         return fixture;
     }
 
-    func testShouldKeepStableAndDevelopmentStateAndEndpointsSeparate() throws -> Void {
+    @Test
+    func should_keep_stable_and_development_state_and_endpoints_separate() throws -> Void {
         let fictionalHomeDirectory: FilePath = try TestPaths.fromLiteral("/Users/example");
         let stableHomeStateDirectory: FilePath = fictionalHomeDirectory.appending(component: ".astronomical");
         let developmentHomeStateDirectory: FilePath = fictionalHomeDirectory.appending(component: ".astronomical-dev");
@@ -39,30 +36,31 @@ final class AstronomicalInstancePathsTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.development
         );
 
-        XCTAssertEqual(stablePaths.stateDirectory, stableHomeStateDirectory);
-        XCTAssertEqual(developmentPaths.stateDirectory, developmentHomeStateDirectory);
-        XCTAssertEqual(stablePaths.defaultBindAddress.description, "127.0.0.1:6732");
-        XCTAssertEqual(developmentPaths.defaultBindAddress.description, "127.0.0.1:6733");
-        XCTAssertNotEqual(stablePaths.configFilePath, developmentPaths.configFilePath);
-        XCTAssertNotEqual(stablePaths.promptCacheDirectory, developmentPaths.promptCacheDirectory);
-        XCTAssertEqual(stablePaths.modelsDirectory, stableHomeStateDirectory.appending(component: "models"));
-        XCTAssertEqual(developmentPaths.modelsDirectory, developmentHomeStateDirectory.appending(component: "models"));
-        XCTAssertNotEqual(stablePaths.modelsDirectory, developmentPaths.modelsDirectory);
-        XCTAssertNotEqual(stablePaths.loggingDirectory, developmentPaths.loggingDirectory);
-        XCTAssertNotEqual(stablePaths.instanceLockFilePath, developmentPaths.instanceLockFilePath);
-        XCTAssertTrue(stablePaths.isStandardStateDirectory);
-        XCTAssertTrue(developmentPaths.isStandardStateDirectory);
+        #expect(stablePaths.stateDirectory == stableHomeStateDirectory);
+        #expect(developmentPaths.stateDirectory == developmentHomeStateDirectory);
+        #expect(stablePaths.defaultBindAddress.description == "127.0.0.1:6732");
+        #expect(developmentPaths.defaultBindAddress.description == "127.0.0.1:6733");
+        #expect(stablePaths.configFilePath != developmentPaths.configFilePath);
+        #expect(stablePaths.promptCacheDirectory != developmentPaths.promptCacheDirectory);
+        #expect(stablePaths.modelsDirectory == stableHomeStateDirectory.appending(component: "models"));
+        #expect(developmentPaths.modelsDirectory == developmentHomeStateDirectory.appending(component: "models"));
+        #expect(stablePaths.modelsDirectory != developmentPaths.modelsDirectory);
+        #expect(stablePaths.loggingDirectory != developmentPaths.loggingDirectory);
+        #expect(stablePaths.instanceLockFilePath != developmentPaths.instanceLockFilePath);
+        #expect(stablePaths.isStandardStateDirectory);
+        #expect(developmentPaths.isStandardStateDirectory);
     }
 
-    func testShouldKeepEveryWritablePathBeneathAnExplicitTestStateDirectory() throws -> Void {
+    @Test
+    func should_keep_every_writable_path_beneath_an_explicit_test_state_directory() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let testStateDirectory: FilePath = testStateDirectoryFixture.rootDirectoryPath;
         let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forExplicitStateDirectory(
             testStateDirectory,
             defaultBindAddress: SocketEndpoint.loopback(port: 0)
         );
-        XCTAssertFalse(instancePaths.isStandardStateDirectory);
-        XCTAssertEqual(instancePaths.modelsDirectory, testStateDirectory.appending(component: "models"));
+        #expect(!instancePaths.isStandardStateDirectory);
+        #expect(instancePaths.modelsDirectory == testStateDirectory.appending(component: "models"));
 
         let writablePaths: Array<FilePath> = [
             instancePaths.configFilePath,
@@ -75,22 +73,24 @@ final class AstronomicalInstancePathsTests: XCTestCase {
         ];
         let stateRootPrefix: String = testStateDirectory.string + "/";
         for writablePath: FilePath in writablePaths {
-            XCTAssertTrue(writablePath.string.hasPrefix(stateRootPrefix));
+            #expect(writablePath.string.hasPrefix(stateRootPrefix));
         }
     }
 
-    func testShouldAssignAnEphemeralEndpointToACustomChannelStateDirectory() throws -> Void {
+    @Test
+    func should_assign_an_ephemeral_endpoint_to_a_custom_channel_state_directory() throws -> Void {
         let testStateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
             testStateDirectoryFixture.rootDirectoryPath,
             runtimeInstance: AstronomicalRuntimeInstance.development
         );
 
-        XCTAssertEqual(instancePaths.defaultBindAddress.description, "127.0.0.1:0");
-        XCTAssertFalse(instancePaths.isStandardStateDirectory);
+        #expect(instancePaths.defaultBindAddress.description == "127.0.0.1:0");
+        #expect(!instancePaths.isStandardStateDirectory);
     }
 
-    func testShouldCanonicalizeAValidUserHomeBeforeDerivingStandardState() throws -> Void {
+    @Test
+    func should_canonicalize_a_valid_user_home_before_deriving_standard_state() throws -> Void {
         let userHomeDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let userHomeDirectory: FilePath = userHomeDirectoryFixture.rootDirectoryPath;
 
@@ -100,79 +100,68 @@ final class AstronomicalInstancePathsTests: XCTestCase {
         );
 
         let canonicalHomeDirectory: FilePath = try TestPaths.canonicalized(userHomeDirectory);
-        XCTAssertEqual(developmentPaths.stateDirectory, canonicalHomeDirectory.appending(component: ".astronomical-dev"));
+        #expect(developmentPaths.stateDirectory == canonicalHomeDirectory.appending(component: ".astronomical-dev"));
     }
 
-    func testShouldRejectARelativeUserHomeBeforeDerivingStandardState() throws -> Void {
+    @Test
+    func should_reject_a_relative_user_home_before_deriving_standard_state() throws -> Void {
         let relativeHomeDirectory: FilePath = try TestPaths.fromLiteral("relative-home");
 
-        XCTAssertThrowsError(
-            try AstronomicalInstancePaths.forUserHomeDirectory(
+        do {
+            _ = try AstronomicalInstancePaths.forUserHomeDirectory(
                 relativeHomeDirectory,
                 runtimeInstance: AstronomicalRuntimeInstance.stable
-            ),
-            "relative HOME must be rejected",
-            { (caughtError: any Error) in
-                guard let configError: AstronomicalConfigError = caughtError as? AstronomicalConfigError else {
-                    XCTFail("expected AstronomicalConfigError, got \(caughtError)");
-                    return;
-                }
-                guard case let AstronomicalConfigError.pathMustBeAbsolute(fieldName, configuredPath) = configError else {
-                    XCTFail("expected pathMustBeAbsolute, got \(configError)");
-                    return;
-                }
-                XCTAssertEqual(fieldName, "HOME");
-                XCTAssertEqual(configuredPath, relativeHomeDirectory);
+            );
+            Issue.record("relative HOME must be rejected");
+        } catch let configError as AstronomicalConfigError {
+            guard case let .pathMustBeAbsolute(fieldName, configuredPath) = configError else {
+                Issue.record(Comment(stringLiteral: "expected pathMustBeAbsolute, got \(configError)"));
+                return;
             }
-        );
+            #expect(fieldName == "HOME");
+            #expect(configuredPath == relativeHomeDirectory);
+        }
     }
 
-    func testShouldRejectTheFilesystemRootAsAUserHome() throws -> Void {
+    @Test
+    func should_reject_the_filesystem_root_as_a_user_home() throws -> Void {
         let rootHomeDirectory: FilePath = try TestPaths.fromLiteral("/");
 
-        XCTAssertThrowsError(
-            try AstronomicalInstancePaths.forUserHomeDirectory(
+        do {
+            _ = try AstronomicalInstancePaths.forUserHomeDirectory(
                 rootHomeDirectory,
                 runtimeInstance: AstronomicalRuntimeInstance.stable
-            ),
-            "filesystem root must not become Astronomical user state",
-            { (caughtError: any Error) in
-                guard let configError: AstronomicalConfigError = caughtError as? AstronomicalConfigError else {
-                    XCTFail("expected AstronomicalConfigError, got \(caughtError)");
-                    return;
-                }
-                guard case AstronomicalConfigError.homeDirectoryMustNotBeRoot = configError else {
-                    XCTFail("expected homeDirectoryMustNotBeRoot, got \(configError)");
-                    return;
-                }
+            );
+            Issue.record("filesystem root must not become Astronomical user state");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.homeDirectoryMustNotBeRoot = configError else {
+                Issue.record(Comment(stringLiteral: "expected homeDirectoryMustNotBeRoot, got \(configError)"));
+                return;
             }
-        );
+        }
     }
 
-    func testShouldRejectANonexistentUserHomeBeforeDerivingStandardState() throws -> Void {
+    @Test
+    func should_reject_a_nonexistent_user_home_before_deriving_standard_state() throws -> Void {
         let nonexistentHomeDirectory: FilePath = try TestPaths.fromLiteral("/nonexistent-astronomical-home-\(UUID().uuidString)");
 
-        XCTAssertThrowsError(
-            try AstronomicalInstancePaths.forUserHomeDirectory(
+        do {
+            _ = try AstronomicalInstancePaths.forUserHomeDirectory(
                 nonexistentHomeDirectory,
                 runtimeInstance: AstronomicalRuntimeInstance.stable
-            ),
-            "nonexistent HOME must be rejected",
-            { (caughtError: any Error) in
-                guard let configError: AstronomicalConfigError = caughtError as? AstronomicalConfigError else {
-                    XCTFail("expected AstronomicalConfigError, got \(caughtError)");
-                    return;
-                }
-                guard case let AstronomicalConfigError.resolveHomeDirectory(homeDirectory, _) = configError else {
-                    XCTFail("expected resolveHomeDirectory, got \(configError)");
-                    return;
-                }
-                XCTAssertEqual(homeDirectory, nonexistentHomeDirectory);
+            );
+            Issue.record("nonexistent HOME must be rejected");
+        } catch let configError as AstronomicalConfigError {
+            guard case let .resolveHomeDirectory(homeDirectory, _) = configError else {
+                Issue.record(Comment(stringLiteral: "expected resolveHomeDirectory, got \(configError)"));
+                return;
             }
-        );
+            #expect(homeDirectory == nonexistentHomeDirectory);
+        }
     }
 
-    func testShouldResolveThinkingMarkdownUnderTheInstanceStateDirectory() throws -> Void {
+    @Test
+    func should_resolve_thinking_markdown_under_the_instance_state_directory() throws -> Void {
         let fictionalHomeDirectory: FilePath = try TestPaths.fromLiteral("/Users/example");
         let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             fictionalHomeDirectory,
@@ -183,17 +172,16 @@ final class AstronomicalInstancePathsTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.stable
         );
 
-        XCTAssertEqual(
-            developmentPaths.qwenThinkingChannelSeedFilePath,
-            fictionalHomeDirectory.appending(component: ".astronomical-dev").appending(component: "thinking.md")
-        );
-        XCTAssertEqual(
-            stablePaths.qwenThinkingChannelSeedFilePath,
-            fictionalHomeDirectory.appending(component: ".astronomical").appending(component: "thinking.md")
-        );
+        #expect(
+            developmentPaths.qwenThinkingChannelSeedFilePath
+                == fictionalHomeDirectory.appending(component: ".astronomical-dev").appending(component: "thinking.md"));
+        #expect(
+            stablePaths.qwenThinkingChannelSeedFilePath
+                == fictionalHomeDirectory.appending(component: ".astronomical").appending(component: "thinking.md"));
     }
 
-    func testShouldResolveAppStoreStateBeneathTheApplicationSupportDirectory() throws -> Void {
+    @Test
+    func should_resolve_app_store_state_beneath_the_application_support_directory() throws -> Void {
         let fictionalApplicationSupportDirectory: FilePath =
             try TestPaths.fromLiteral("/Users/example/Library/Application Support");
 
@@ -203,18 +191,19 @@ final class AstronomicalInstancePathsTests: XCTestCase {
         );
         let stableStateDirectory: FilePath = fictionalApplicationSupportDirectory.appending(component: "Astronomical");
 
-        XCTAssertEqual(stablePaths.stateDirectory, stableStateDirectory);
-        XCTAssertEqual(stablePaths.modelsDirectory, stableStateDirectory.appending(component: "models"));
-        XCTAssertEqual(stablePaths.promptCacheDirectory, stableStateDirectory.appending(component: "cache"));
-        XCTAssertEqual(stablePaths.loggingDirectory, stableStateDirectory.appending(component: "logs"));
-        XCTAssertEqual(stablePaths.configFilePath, stableStateDirectory.appending(component: "config.json"));
+        #expect(stablePaths.stateDirectory == stableStateDirectory);
+        #expect(stablePaths.modelsDirectory == stableStateDirectory.appending(component: "models"));
+        #expect(stablePaths.promptCacheDirectory == stableStateDirectory.appending(component: "cache"));
+        #expect(stablePaths.loggingDirectory == stableStateDirectory.appending(component: "logs"));
+        #expect(stablePaths.configFilePath == stableStateDirectory.appending(component: "config.json"));
         // Standard-instance endpoint guards must carry over so the store
         // build keeps the same loopback discipline as the direct channel.
-        XCTAssertTrue(stablePaths.isStandardStateDirectory);
-        XCTAssertEqual(stablePaths.defaultBindAddress.description, "127.0.0.1:6732");
+        #expect(stablePaths.isStandardStateDirectory);
+        #expect(stablePaths.defaultBindAddress.description == "127.0.0.1:6732");
     }
 
-    func testShouldKeepAppStoreStableAndDevelopmentStateSeparate() throws -> Void {
+    @Test
+    func should_keep_app_store_stable_and_development_state_separate() throws -> Void {
         let fictionalApplicationSupportDirectory: FilePath =
             try TestPaths.fromLiteral("/Users/example/Library/Application Support");
 
@@ -227,19 +216,18 @@ final class AstronomicalInstancePathsTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.development
         );
 
-        XCTAssertEqual(
-            stablePaths.stateDirectory,
-            fictionalApplicationSupportDirectory.appending(component: "Astronomical")
-        );
-        XCTAssertEqual(
-            developmentPaths.stateDirectory,
-            fictionalApplicationSupportDirectory.appending(component: "Astronomical Development")
-        );
-        XCTAssertNotEqual(stablePaths.stateDirectory, developmentPaths.stateDirectory);
-        XCTAssertNotEqual(stablePaths.defaultBindAddress, developmentPaths.defaultBindAddress);
+        #expect(
+            stablePaths.stateDirectory
+                == fictionalApplicationSupportDirectory.appending(component: "Astronomical"));
+        #expect(
+            developmentPaths.stateDirectory
+                == fictionalApplicationSupportDirectory.appending(component: "Astronomical Development"));
+        #expect(stablePaths.stateDirectory != developmentPaths.stateDirectory);
+        #expect(stablePaths.defaultBindAddress != developmentPaths.defaultBindAddress);
     }
 
-    func testShouldNeverShareAppStoreStateWithTheHomeDotFolderChannel() throws -> Void {
+    @Test
+    func should_never_share_app_store_state_with_the_home_dot_folder_channel() throws -> Void {
         let fictionalHomeDirectory: FilePath = try TestPaths.fromLiteral("/Users/example");
         let fictionalApplicationSupportDirectory: FilePath =
             try TestPaths.fromLiteral("/Users/example/Library/Application Support");
@@ -253,10 +241,11 @@ final class AstronomicalInstancePathsTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.stable
         );
 
-        XCTAssertNotEqual(directPaths.stateDirectory, appStorePaths.stateDirectory);
+        #expect(directPaths.stateDirectory != appStorePaths.stateDirectory);
     }
 
-    func testShouldExposeDaemonIpcSocketPathBesideTheInstanceLockForEveryInstance() throws -> Void {
+    @Test
+    func should_expose_the_daemon_ipc_socket_path_beside_the_instance_lock_for_every_instance() throws -> Void {
         let fictionalHomeDirectory: FilePath = try TestPaths.fromLiteral("/Users/example");
         let fictionalTestStateDirectory: FilePath = try TestPaths.fromLiteral("/tmp/astronomical-test-instance");
 
@@ -273,23 +262,21 @@ final class AstronomicalInstancePathsTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.development
         );
 
-        XCTAssertEqual(
-            stablePaths.ipcSocketFilePath,
-            fictionalHomeDirectory.appending(component: ".astronomical").appending(component: "ipc.sock")
-        );
-        XCTAssertEqual(
-            developmentPaths.ipcSocketFilePath,
-            fictionalHomeDirectory.appending(component: ".astronomical-dev").appending(component: "ipc.sock")
-        );
-        XCTAssertEqual(
-            explicitTestPaths.ipcSocketFilePath,
-            fictionalTestStateDirectory.appending(component: "ipc.sock")
-        );
-        XCTAssertNotEqual(stablePaths.ipcSocketFilePath, developmentPaths.ipcSocketFilePath);
-        XCTAssertNotEqual(stablePaths.ipcSocketFilePath, stablePaths.instanceLockFilePath);
+        #expect(
+            stablePaths.ipcSocketFilePath
+                == fictionalHomeDirectory.appending(component: ".astronomical").appending(component: "ipc.sock"));
+        #expect(
+            developmentPaths.ipcSocketFilePath
+                == fictionalHomeDirectory.appending(component: ".astronomical-dev").appending(component: "ipc.sock"));
+        #expect(
+            explicitTestPaths.ipcSocketFilePath
+                == fictionalTestStateDirectory.appending(component: "ipc.sock"));
+        #expect(stablePaths.ipcSocketFilePath != developmentPaths.ipcSocketFilePath);
+        #expect(stablePaths.ipcSocketFilePath != stablePaths.instanceLockFilePath);
     }
 
-    func testShouldRejectAForeignBindAddressForAStandardStateDirectory() throws -> Void {
+    @Test
+    func should_reject_a_foreign_bind_address_for_a_standard_state_directory() throws -> Void {
         let fictionalHomeDirectory: FilePath = try TestPaths.fromLiteral("/Users/example");
         let stablePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             fictionalHomeDirectory,
@@ -297,28 +284,23 @@ final class AstronomicalInstancePathsTests: XCTestCase {
         );
         let foreignEndpoint: SocketEndpoint = SocketEndpoint.loopback(port: 6733);
 
-        XCTAssertThrowsError(
-            try stablePaths.validateConfiguredBindAddress(foreignEndpoint),
-            "standard instances must keep their own loopback endpoint",
-            { (caughtError: any Error) in
-                guard let configError: AstronomicalConfigError = caughtError as? AstronomicalConfigError else {
-                    XCTFail("expected AstronomicalConfigError, got \(caughtError)");
-                    return;
-                }
-                guard case let AstronomicalConfigError.standardInstanceBindAddressMismatch(
-                    configuredBindAddress,
-                    expectedBindAddress
-                ) = configError else {
-                    XCTFail("expected standardInstanceBindAddressMismatch, got \(configError)");
-                    return;
-                }
-                XCTAssertEqual(configuredBindAddress, foreignEndpoint);
-                XCTAssertEqual(expectedBindAddress.description, "127.0.0.1:6732");
+        do {
+            _ = try stablePaths.validateConfiguredBindAddress(foreignEndpoint);
+            Issue.record("standard instances must keep their own loopback endpoint");
+        } catch let configError as AstronomicalConfigError {
+            guard case let .standardInstanceBindAddressMismatch(
+                configuredBindAddress,
+                expectedBindAddress) = configError else {
+                Issue.record(Comment(stringLiteral: "expected standardInstanceBindAddressMismatch, got \(configError)"));
+                return;
             }
-        );
+            #expect(configuredBindAddress == foreignEndpoint);
+            #expect(expectedBindAddress.description == "127.0.0.1:6732");
+        }
     }
 
-    func testShouldPermitAnyLoopbackBindAddressForAnExplicitTestStateDirectory() throws -> Void {
+    @Test
+    func should_permit_any_loopback_bind_address_for_an_explicit_test_state_directory() throws -> Void {
         let fictionalTestStateDirectory: FilePath = try TestPaths.fromLiteral("/tmp/astronomical-test-instance");
         let explicitPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forExplicitStateDirectory(
             fictionalTestStateDirectory,
@@ -328,6 +310,6 @@ final class AstronomicalInstancePathsTests: XCTestCase {
 
         let acceptedEndpoint: SocketEndpoint = try explicitPaths.validateConfiguredBindAddress(customEndpoint);
 
-        XCTAssertEqual(acceptedEndpoint, customEndpoint);
+        #expect(acceptedEndpoint == customEndpoint);
     }
 }
