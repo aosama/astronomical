@@ -1,17 +1,22 @@
 #!/bin/sh
 # Prune surplus GitHub Actions caches so the repository stays under the 10 GB
-# cache storage limit. Three sccache entries alone can reach ~10.8 GB, and when
-# the limit is exceeded GitHub evicts caches least-recently-used, which has
-# evicted the small native-build cache and forced silent multi-minute CMake
-# rebuilds in CI. The policy keeps the newest entries per cache family: the
-# newest on the default branch plus the newest across feature-branch refs, so
-# an in-flight pull request keeps its warm cache while stale toolchain
-# generations are removed. On top of the count policy, sccache entries above a
-# decimal 5 GB ceiling are deleted even when newest: a generation that large
-# cannot restore inside the one-minute cache segment timeout and only hastens
-# the 10 GB eviction that kills the native-build cache. Count alone cannot
-# bound the budget because each sccache generation inherits the whole previous
-# directory through the restore-key prefix chain.
+# cache storage limit. Two sccache generations alone can reach ~6.5 GB, and
+# when the limit is exceeded GitHub evicts caches least-recently-used, which
+# has evicted the small native-build cache and forced silent multi-minute
+# CMake rebuilds in CI. The policy keeps the newest entries per cache family:
+# the newest on the default branch, plus the newest across feature-branch refs
+# for families that still save on pull requests, so an in-flight pull request
+# keeps its warm cache while stale toolchain generations are removed. sccache
+# saves are default-branch-only, so a non-default-ref sccache entry can never
+# be superseded by a newer generation; keeping one preserves a stale
+# multi-gigabyte directory forever, and the family keeps zero of them. On top
+# of the count policy, sccache entries above a decimal 3 GB ceiling are
+# deleted even when newest: the sccache cap budgets 2.83 decimal GB of tracked
+# entries, so a larger generation was never trimmed, cannot restore inside the
+# one-minute cache segment timeout, and only hastens the 10 GB eviction that
+# kills the native-build cache. Count alone cannot bound the budget because
+# each sccache generation inherits the whole previous directory through the
+# restore-key prefix chain.
 #
 # Usage:
 #   scripts/prune-ci-caches.sh [--dry-run] [--repo owner/name]
@@ -34,9 +39,16 @@ CACHE_KEY_PREFIX="astronomical-v2-"
 NATIVE_BUILD_KEEP_COUNT=2
 DEFAULT_KEEP_COUNT=1
 # Size ceilings are family-scoped because only sccache generations ratchet
-# upward; 0 disables the ceiling for families that own bounded artifacts.
-SCCACHE_MAX_ENTRY_BYTES=5000000000
+# upward; 0 disables the ceiling for families that own bounded artifacts. The
+# sccache cap (SCCACHE_CACHE_SIZE=2700M, 2.83 decimal GB of tracked entries)
+# plus archive overhead must land under this decimal ceiling.
+SCCACHE_MAX_ENTRY_BYTES=3000000000
 DEFAULT_MAX_ENTRY_BYTES=0
+# sccache saves are default-branch-only, so a non-default-ref sccache entry is
+# never superseded and only burns budget; every other family keeps one entry
+# across non-default refs so an in-flight pull request stays warm.
+SCCACHE_OTHER_REF_KEEP_COUNT=0
+DEFAULT_OTHER_REF_KEEP_COUNT=1
 
 DRY_RUN=0
 REPOSITORY="${GITHUB_REPOSITORY:-}"
@@ -116,6 +128,15 @@ max_entry_bytes_for_family() {
     esac
 }
 
+other_ref_keep_count_for_family() {
+    family_name="$1"
+    if [ "$family_name" = "sccache" ]; then
+        echo "$SCCACHE_OTHER_REF_KEEP_COUNT"
+    else
+        echo "$DEFAULT_OTHER_REF_KEEP_COUNT"
+    fi
+}
+
 # The family is the token between the astronomical-v2- prefix and the runner
 # platform segment (every key embeds -macOS- on this repository's runners).
 family_of_key() {
@@ -143,20 +164,22 @@ for FAMILY in $FAMILIES; do
         continue
 
     KEEP_COUNT="$(keep_count_for_family "$FAMILY")"
+    OTHER_REF_KEEP_COUNT="$(other_ref_keep_count_for_family "$FAMILY")"
     MAX_ENTRY_BYTES="$(max_entry_bytes_for_family "$FAMILY")"
     FAMILY_DELETED_COUNT=0
     FAMILY_OVERSIZED_DELETED_COUNT=0
     FAMILY_FREED_BYTES=0
 
     # Newest first within each ref class; keep the newest KEEP_COUNT entries on
-    # the default branch and the newest KEEP_COUNT entries across all other
-    # refs. Entries above the family's size ceiling are deleted first, even
-    # when they are the newest, because they can never restore within budget.
+    # the default branch and the newest OTHER_REF_KEEP_COUNT entries across all
+    # other refs. Entries above the family's size ceiling are deleted first,
+    # even when they are the newest, because they can never restore within
+    # budget.
     DELETION_IDS="$(LC_ALL=C sort -t"$(printf '\t')" -k4,4r "$FAMILY_LIST_PATH" |
-        awk -F'\t' -v default_ref="$DEFAULT_BRANCH_REF" -v keep_count="$KEEP_COUNT" -v size_ceiling="$MAX_ENTRY_BYTES" '
+        awk -F'\t' -v default_ref="$DEFAULT_BRANCH_REF" -v keep_count="$KEEP_COUNT" -v other_keep_count="$OTHER_REF_KEEP_COUNT" -v size_ceiling="$MAX_ENTRY_BYTES" '
             size_ceiling > 0 && ($5 + 0) > size_ceiling { print $1; next }
             $3 == default_ref { kept_main++; if (kept_main <= keep_count) next }
-            $3 != default_ref { kept_other++; if (kept_other <= keep_count) next }
+            $3 != default_ref { kept_other++; if (kept_other <= other_keep_count) next }
             { print $1 }
         ')"
 
