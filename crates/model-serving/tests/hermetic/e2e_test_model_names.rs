@@ -3,10 +3,6 @@ fn should_load_a_discovered_leaf_model_id_for_every_e2e_test_role() {
     let e2e_test_model_ids = [
         crate::common::large_sparse_moe_model_id(),
         crate::common::resident_sparse_moe_model_id(),
-        crate::common::laguna_xs_model_id(),
-        crate::common::laguna_xs_5bit_model_id(),
-        crate::common::laguna_xs_4bit_model_id(),
-        crate::common::dense_mtp_model_id(),
         crate::common::small_dense_model_id(),
         crate::common::flux2_klein_model_id(),
         crate::common::k2_horizon_mova_model_id(),

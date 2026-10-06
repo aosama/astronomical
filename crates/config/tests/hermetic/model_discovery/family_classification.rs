@@ -1,9 +1,6 @@
 use std::fs;
 
-use astronomical_config::{
-    ModelFamily, ModelFamilyClassificationError, classify_model_directory,
-    discover_classified_model_artifacts, requestable_model_id,
-};
+use astronomical_config::{ModelFamilyClassificationError, classify_model_directory};
 
 #[test]
 fn should_reject_malformed_duplicate_or_oversized_pipeline_family_markers() {
@@ -38,35 +35,6 @@ fn should_reject_malformed_duplicate_or_oversized_pipeline_family_markers() {
 }
 
 #[test]
-fn should_classify_laguna_without_discovering_it_as_executable() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let laguna_model_directory = temporary_directory.path().join("Laguna-XS-Fixture");
-    fs::create_dir_all(&laguna_model_directory).expect("Laguna model directory should be created");
-    super::write_minimal_model_config(&laguna_model_directory, "laguna", 262_144);
-    super::write_required_model_files(&laguna_model_directory);
-
-    assert_eq!(
-        classify_model_directory(&laguna_model_directory)
-            .expect("Laguna family classification should complete"),
-        Some(ModelFamily::Laguna)
-    );
-    assert!(
-        super::discover_configured_models(&temporary_directory)[0]
-            .discovered_models
-            .is_empty()
-    );
-    let classified_artifacts =
-        discover_classified_model_artifacts(&[temporary_directory.path().to_path_buf()])
-            .expect("classified Laguna discovery should complete");
-    assert_eq!(classified_artifacts.len(), 1);
-    assert_eq!(classified_artifacts[0].model_family, ModelFamily::Laguna);
-    assert_eq!(
-        requestable_model_id(&laguna_model_directory).as_deref(),
-        Some("Laguna-XS-Fixture")
-    );
-}
-
-#[test]
 fn should_reject_duplicate_or_oversized_family_configuration_before_dispatch() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let duplicate_model_directory = temporary_directory.path().join("duplicate-family");
@@ -74,7 +42,7 @@ fn should_reject_duplicate_or_oversized_family_configuration_before_dispatch() {
         .expect("duplicate family directory should be created");
     fs::write(
         duplicate_model_directory.join("config.json"),
-        br#"{"model_type":"laguna","model_type":"qwen3_5"}"#,
+        br#"{"model_type":"k2_horizon_mova","model_type":"qwen3_5"}"#,
     )
     .expect("duplicate family config should be written");
 

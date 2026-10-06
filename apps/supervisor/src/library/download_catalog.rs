@@ -64,7 +64,6 @@ pub struct DownloadCatalogCapabilities {
 #[serde(rename_all = "snake_case")]
 pub enum DownloadCatalogFamily {
     Qwen3_5,
-    Laguna,
     Flux2Klein,
     /// The wire name matches the discovery family, including its underscore before 21.
     #[serde(rename = "qwen_image_21")]
@@ -82,7 +81,6 @@ impl DownloadCatalogFamily {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Qwen3_5 => "qwen3_5",
-            Self::Laguna => "laguna",
             Self::Flux2Klein => "flux2_klein",
             Self::QwenImage21 => "qwen_image_21",
             Self::ModernBert => "modernbert",

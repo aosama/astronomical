@@ -4,10 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::{
-    deepseek_v4, flux2_klein, k2_horizon_mova, laguna, modernbert, qwen_image_21, qwen3_5,
-    qwen4_exp,
-};
+use super::{flux2_klein, k2_horizon_mova, modernbert, qwen_image_21, qwen3_5};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -16,9 +13,6 @@ const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModelFamily {
     Qwen3_5,
-    Qwen4Exp,
-    Laguna,
-    DeepSeekV4,
     K2HorizonMoVA,
     Flux2Klein,
     QwenImage21,
@@ -31,12 +25,6 @@ impl ModelFamily {
     pub fn from_model_type(model_type: Option<&str>) -> Option<Self> {
         if qwen3_5::recognizes_model_type(model_type) {
             Some(Self::Qwen3_5)
-        } else if qwen4_exp::recognizes_model_type(model_type) {
-            Some(Self::Qwen4Exp)
-        } else if laguna::recognizes_model_type(model_type) {
-            Some(Self::Laguna)
-        } else if deepseek_v4::recognizes_model_type(model_type) {
-            Some(Self::DeepSeekV4)
         } else if k2_horizon_mova::recognizes_model_type(model_type) {
             Some(Self::K2HorizonMoVA)
         } else if modernbert::recognizes_model_type(model_type) {
@@ -51,9 +39,6 @@ impl ModelFamily {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Qwen3_5 => "qwen3_5",
-            Self::Qwen4Exp => "qwen4_exp",
-            Self::Laguna => "laguna",
-            Self::DeepSeekV4 => "deepseek_v4",
             Self::K2HorizonMoVA => "k2_horizon_mova",
             Self::Flux2Klein => "flux2_klein",
             Self::QwenImage21 => "qwen_image_21",

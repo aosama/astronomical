@@ -17,7 +17,6 @@ print_journeys() {
         accept-cache-disabled-generation \
         accept-cached-reverse-model-swap \
         accept-tool-call-reuse \
-        accept-laguna-family-swap \
         accept-thinking-seed \
         accept-hard-thinking-budget \
         accept-follow-up-turn-admission \
@@ -48,7 +47,6 @@ print_journeys() {
         measure-model-ssd-streaming-high-ram-cached-suffix-prefill \
         measure-model-ssd-streaming-large-sparse-moe-tight-ceiling-prefill \
         measure-model-ssd-streaming-prefill-memory-progress \
-        measure-model-ssd-streaming-laguna-paging \
         measure-experimental-aligned-expert-packs-large-sparse-moe-generation \
         measure-experimental-aligned-expert-packs-large-sparse-moe-prompt-processing \
         measure-experimental-aligned-expert-packs-large-sparse-moe-data-plane
@@ -86,10 +84,6 @@ main() {
         accept-tool-call-reuse)
             lane_name="deployed-rest-liveness"
             set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_complete_a_tool_call_and_reuse_the_worker -- --ignored --nocapture
-            ;;
-        accept-laguna-family-swap)
-            lane_name="laguna-family-model-swap"
-            set -- cargo test --release -p astronomical-inference-worker --test serving_acceptance_tests --features serving-acceptance should_swap_qwen_then_laguna_xs_then_qwen_on_one_worker -- --ignored --nocapture
             ;;
         accept-thinking-seed)
             lane_name="qwen3-5-thinking-seed-rest"
@@ -201,10 +195,6 @@ main() {
         measure-model-ssd-streaming-prefill-memory-progress)
             lane_name="model-ssd-streaming-prefill-memory-progress"
             set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_report_changing_bounded_mlx_memory_during_prefill -- --ignored --nocapture
-            ;;
-        measure-model-ssd-streaming-laguna-paging)
-            lane_name="model-ssd-streaming-laguna-paging"
-            set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance model_ssd_streaming::laguna_paging_journey:: -- --ignored --nocapture --test-threads 1
             ;;
         measure-experimental-aligned-expert-packs-large-sparse-moe-generation)
             lane_name="aligned-expert-generation"

@@ -24,8 +24,6 @@ pub use adaptive_growth_projection::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use live_allocation::{MlxAllocationAdmission, MlxAllocationAdmissionError};
-#[cfg(feature = "direct-mlx")]
-pub(crate) use ram::context_token_bucket;
 pub use ram::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,

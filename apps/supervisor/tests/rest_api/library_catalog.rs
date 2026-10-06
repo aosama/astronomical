@@ -24,10 +24,10 @@ const VALID_CATALOG_JSON: &str = r#"{
             "public": true
         },
         {
-            "huggingface_id": "astronomical-test/example-laguna",
+            "huggingface_id": "astronomical-test/example-k2",
             "revision": "89abcdef0123456789abcdef0123456789abcdef",
-            "display_name": "Example Laguna",
-            "family": "laguna",
+            "display_name": "Example K2",
+            "family": "k2_horizon_mova",
             "approximate_size_bytes": 5000000000,
             "public": true
         },
@@ -99,10 +99,10 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
                         }
                     },
                     {
-                        "huggingface_id": "astronomical-test/example-laguna",
+                        "huggingface_id": "astronomical-test/example-k2",
                         "revision": "89abcdef0123456789abcdef0123456789abcdef",
-                        "display_name": "Example Laguna",
-                        "family": "laguna",
+                        "display_name": "Example K2",
+                        "family": "k2_horizon_mova",
                         "approximate_size_bytes": 5_000_000_000_u64,
                         "public": true,
                         "ready_on_this_mac": false,

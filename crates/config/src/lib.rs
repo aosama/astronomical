@@ -10,7 +10,6 @@ mod config_file;
 mod configuration_generation;
 mod default_model;
 mod duplicate_key_json;
-mod laguna_template_source;
 mod legacy_config_migration;
 mod logging_config;
 mod maximum_mlx_memory;
@@ -37,11 +36,6 @@ pub use default_model::{
     BUILTIN_DEFAULT_MODEL_ID, DefaultModelConfigUpdate, commit_default_model_update,
     prepare_default_model_update, write_default_model,
 };
-pub use laguna_template_source::{
-    LagunaRootChatTemplateSelectionError, LagunaRootChatTemplateSource,
-    LagunaStandaloneChatTemplateState, select_laguna_root_chat_template,
-    validate_laguna_standalone_chat_template_role,
-};
 pub use logging_config::{LogLevel, LoggingConfig};
 pub use maximum_mlx_memory::{
     MaximumMlxMemoryConfigUpdate, commit_maximum_mlx_memory_gb_update,
@@ -54,11 +48,10 @@ pub use model_discovery::{
     Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError, ImageGenerationCapabilities,
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelCapabilities, ModelDiscoveryDiagnostic,
     ModelDiscoveryDiagnosticCode, ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily,
-    ModelFamilyClassificationError, ModelLicense, Qwen4ExpConfigurationSummary,
-    QwenImage21DirectoryEvidence, QwenImage21DirectoryVerificationError, classify_model_directory,
-    classify_pipeline_index_bytes, context_window_tokens, describe_configuration,
-    discover_classified_model_artifacts, discover_effective_models, discover_models,
-    discover_models_excluding_ambiguous_identities, requestable_model_id,
+    ModelFamilyClassificationError, ModelLicense, QwenImage21DirectoryEvidence,
+    QwenImage21DirectoryVerificationError, classify_model_directory, classify_pipeline_index_bytes,
+    context_window_tokens, discover_classified_model_artifacts, discover_effective_models,
+    discover_models, discover_models_excluding_ambiguous_identities, requestable_model_id,
     required_shard_file_names, verify_flux2_klein_model_directory,
     verify_qwen_image_21_model_directory,
 };

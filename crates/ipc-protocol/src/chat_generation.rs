@@ -29,7 +29,7 @@ pub struct ChatGenerationCommand {
     pub settings: ChatGenerationSettings,
     /// Optional reasoning text seeded after the Qwen3.5 `<think>` open.
     ///
-    /// Laguna ignores this field. Absent or empty means ordinary thinking.
+    /// Absent or empty means ordinary thinking.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub qwen_thinking_channel_seed: Option<String>,
     /// Token-masked structured generation. Absent means ordinary sampling.

@@ -7,11 +7,10 @@ use astronomical_config::{
 use astronomical_ipc_protocol::{WorkerImageGenerationModelFamily, WorkerModelConfiguration};
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
-    K2HorizonMoVAServingSettings, LagunaServingSettings, ModelFactory, ModelFactoryRuntime,
+    K2HorizonMoVAServingSettings, ModelFactory, ModelFactoryRuntime,
     ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceEngine,
     ModernBertEmbeddingEngine, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
-    deepseek_v4_unavailable_reason, initialize_k2_horizon_mova_model_with_serving_settings,
-    initialize_laguna_model_with_serving_settings,
+    initialize_k2_horizon_mova_model_with_serving_settings,
 };
 
 use crate::qwen3_5_model_startup;
@@ -124,47 +123,6 @@ impl
                 Ok(ModelFactoryRuntime::autoregressive(
                     ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
                     ModelFamilyInferenceEngine::Qwen3_5(qwen3_5_engine),
-                ))
-            }
-            (
-                Some(ModelFamily::Laguna),
-                WorkerModelConfiguration::Autoregressive(model_configuration),
-            ) => {
-                let (generation_processor, laguna_engine) =
-                    tokio::task::spawn_blocking(move || {
-                        let chunking = model_configuration.chunking.clone();
-                        let (generation_processor, laguna_engine) =
-                            initialize_laguna_model_with_serving_settings(
-                                &model_directory_path,
-                                effective_mlx_memory_ceiling_bytes,
-                                allocator_cache_memory_limit_bytes,
-                                performance_attribution_enabled,
-                                LagunaServingSettings {
-                                    maximum_context_tokens: Some(
-                                        model_configuration.maximum_context_tokens,
-                                    ),
-                                    maximum_output_tokens: Some(
-                                        model_configuration.maximum_output_tokens,
-                                    ),
-                                    chunking: Some(chunking),
-                                    persistent_prompt_cache_enabled,
-                                    prompt_cache_config: persistent_prompt_cache_enabled
-                                        .then_some(prompt_cache_config),
-                                    performance_attribution_log_path: Some(
-                                        performance_attribution_log_path,
-                                    ),
-                                },
-                            )
-                            .map_err(|startup_error| {
-                                startup_error.public_model_load_failure_reason()
-                            })?;
-                        Ok::<_, String>((generation_processor, laguna_engine))
-                    })
-                    .await
-                    .map_err(|_| "Laguna initialization task failed".to_owned())??;
-                Ok(ModelFactoryRuntime::autoregressive(
-                    ModelFamilyGenerationProcessor::Laguna(generation_processor),
-                    ModelFamilyInferenceEngine::Laguna(laguna_engine),
                 ))
             }
             (
@@ -304,12 +262,6 @@ impl
                     ModelFamilyGenerationProcessor::K2HorizonMoVA(generation_processor),
                     ModelFamilyInferenceEngine::K2HorizonMoVA(k2_engine),
                 ))
-            }
-            (Some(ModelFamily::DeepSeekV4), WorkerModelConfiguration::Autoregressive(_)) => {
-                Err(deepseek_v4_unavailable_reason().to_owned())
-            }
-            (Some(ModelFamily::Qwen4Exp), WorkerModelConfiguration::Autoregressive(_)) => {
-                Err("Qwen 3.8 Flash model execution is not implemented in this build".to_owned())
             }
             (
                 Some(ModelFamily::ModernBert),

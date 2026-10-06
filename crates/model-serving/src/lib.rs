@@ -6,7 +6,6 @@
 mod artifact_validation;
 mod attention;
 mod decoder_cache;
-mod deepseek_v4;
 mod embedding_engine;
 mod engine_backed_worker;
 mod expert_paging;
@@ -17,7 +16,6 @@ mod image_generation_engine;
 mod inference_engine;
 mod k2_horizon_mova;
 mod kernel_capability;
-mod laguna;
 mod memory;
 mod model_family_runtime;
 mod model_generation_processor;
@@ -27,7 +25,6 @@ mod performance_attribution;
 mod persistent_cache;
 mod qwen3_5;
 mod qwen3_5_moe;
-mod qwen4_exp;
 mod qwen_image_21;
 mod safetensors;
 mod sampling_seed;
@@ -67,11 +64,6 @@ pub use decoder_cache::{
 pub use decoder_cache::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
     DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
-};
-pub use deepseek_v4::{
-    DeepSeekV4UnavailableGenerationProcessor, DeepSeekV4UnavailableInferenceEngine,
-    DeepSeekV4UnavailableInferenceRequest, DeepSeekV4UnavailableRequestOutput,
-    deepseek_v4_unavailable_reason,
 };
 pub use embedding_engine::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
@@ -166,49 +158,6 @@ pub use kernel_capability::worker_process_kernel_capabilities;
 pub use kernel_capability::{
     CustomKernelVerdict, CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError,
     KernelUnsupportedReason, WorkerKernelCapabilities, validate_probe_outputs,
-};
-pub use laguna::{
-    LagunaAffineProfile, LagunaArtifactValidationError, LagunaArtifactValidator,
-    LagunaAttentionDescriptor, LagunaAttentionKind, LagunaAttentionProjection,
-    LagunaBlockFp8Profile, LagunaCacheDescriptor, LagunaCanonicalSourceLayout,
-    LagunaCanonicalTensorAssemblyKind, LagunaCanonicalTensorDescriptor,
-    LagunaCompressedFeedForwardProjection, LagunaCompressedIgnoreScope,
-    LagunaCompressedInputActivationDescriptor, LagunaCompressedModuleScope,
-    LagunaCompressedStorageDescriptor, LagunaCompressedWeightEncoding, LagunaDefaultRopeDescriptor,
-    LagunaDenseFeedForwardDescriptor, LagunaDirectAffineStorageDescriptor,
-    LagunaExactStorageSupport, LagunaExecutionDtype, LagunaExecutionError,
-    LagunaExpertGateUpLayout, LagunaExpertPagingPlan, LagunaExpertProjection,
-    LagunaFeedForwardDescriptor, LagunaFp8InputActivationDescriptor, LagunaFp8KvCacheDescriptor,
-    LagunaGatingKind, LagunaGenerationProcessor, LagunaGlobalTensorRole,
-    LagunaIndexTotalSizeSemantics, LagunaInferenceRequest, LagunaLayerDescriptor,
-    LagunaLayerTensorRole, LagunaModelDescriptor, LagunaMoeDescriptor,
-    LagunaNonExecutableMetadataDescriptor, LagunaNormalizationError,
-    LagunaNvfp4InputActivationDescriptor, LagunaNvfp4Profile, LagunaOutputEvent,
-    LagunaOutputParser, LagunaOutputParserError, LagunaPagingError, LagunaPreparationError,
-    LagunaPreparedGeneration, LagunaPromptProcessingChunkSizer,
-    LagunaPromptProcessingChunkSizerError, LagunaPromptRenderer, LagunaPromptRendererError,
-    LagunaRawTensorNameRecord, LagunaRequestMemoryRequirements, LagunaRequestOutput,
-    LagunaRequestOutputError, LagunaRetainedArtifactFiles, LagunaRopeDescriptor, LagunaRouterKind,
-    LagunaRouterSelection, LagunaSamplerConfig, LagunaSamplingStrategy, LagunaShardIndex,
-    LagunaShardIndexError, LagunaSparseLayerPagingPlan, LagunaStorageDescriptor,
-    LagunaSymmetricPackedAffineProfile, LagunaTargetContract, LagunaTargetNormalizer,
-    LagunaTensorAssembly, LagunaTensorComponent, LagunaTensorContract, LagunaTensorId,
-    LagunaTensorNameContract, LagunaTensorNameNormalizationError, LagunaTensorNameNormalizer,
-    LagunaTensorSource, LagunaTensorSourceDescriptor, LagunaTensorSourceRole,
-    LagunaTensorStorageEncoding, LagunaTextArtifactDescriptor, LagunaTextArtifactError,
-    LagunaTextArtifactNormalizer, LagunaTextArtifactSources, LagunaTokenDecoder, LagunaTokenizer,
-    LagunaTokenizerError, LagunaYarnRopeDescriptor, ValidatedLagunaArtifact,
-    apply_router_logit_softcap, laguna_decoder_cache_layout,
-    laguna_sliding_prefill_transient_token_count, select_laguna_router_experts,
-};
-#[cfg(feature = "direct-mlx")]
-pub use laguna::{
-    LagunaDecoderState, LagunaEngine, LagunaExpertWeightPage, LagunaInferenceExecution,
-    LagunaModel, LagunaNativeWeights, LagunaResidentExpert, LagunaServingSettings,
-    LagunaStartupError, forward_paged_routed_swiglu, initialize_laguna_execution,
-    initialize_laguna_execution_with_serving_settings, initialize_laguna_model,
-    initialize_laguna_model_with_serving_settings, load_laguna_expert_page,
-    route_laguna_native_experts,
 };
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
@@ -397,27 +346,6 @@ pub use qwen3_5_moe::{
 pub use qwen3_5_moe::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
-pub use qwen4_exp::configuration::{
-    Qwen4ExpConfig, Qwen4ExpConfigError, Qwen4ExpHyperConnectionConfig, Qwen4ExpLayerKind,
-    Qwen4ExpLinearAttentionConfig, Qwen4ExpNgramConfig, Qwen4ExpQuantizationMode,
-    Qwen4ExpQuantizationProfile, Qwen4ExpSparseAttentionConfig,
-};
-pub use qwen4_exp::decoder::{
-    Qwen4ExpDecoderLayerCacheDtypes, Qwen4ExpStateGeometry, qwen4_exp_decoder_cache_layout,
-};
-#[cfg(feature = "direct-mlx")]
-pub use qwen4_exp::hyper_connection::HyperConnectionExecutor;
-pub use qwen4_exp::hyper_connection::{
-    GatedMixOutput, GatedResidualWeights, StreamAlgebraError, StreamMixingPlan, average_combine,
-    average_mix, gated_combine, gated_mix, grouped_rms_norm,
-};
-pub use qwen4_exp::ple::{
-    DEFAULT_NGRAM_SEED, NgramIdentityConfiguration, NgramIdentityError, NgramPlanError,
-    NgramRowIdentity, NgramVocabLayout, PLE_LAYER_PRIME, SPLITMIX_GAMMA, SPLITMIX_MULTIPLIER_1,
-    SPLITMIX_MULTIPLIER_2, head_count_for, is_prime_u64, nth_prime_after, splitmix64,
-};
-#[cfg(feature = "direct-mlx")]
-pub use qwen4_exp::qsa::{Qwen4ExpSelectionPlan, select_keys, sparse_attention};
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
