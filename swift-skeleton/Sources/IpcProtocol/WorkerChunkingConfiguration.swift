@@ -5,7 +5,7 @@ import Foundation;
 /// The user-facing configuration is validated before this data transfer object
 /// is created. Keeping these values together prevents the worker, model, cache,
 /// and model families from independently restoring hidden defaults.
-public struct WorkerChunkingConfiguration: Equatable {
+public struct WorkerChunkingConfiguration: Equatable, Sendable {
     /// Fixed prompt work while sparse experts are fully resident.
     public let fixedPromptProcessingChunkSizeTokens: UInt32;
     /// Fixed prompt work while sparse experts stream from storage.
