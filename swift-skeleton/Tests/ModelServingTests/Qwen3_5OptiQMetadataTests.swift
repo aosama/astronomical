@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import ModelServing;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/model-serving/tests/qwen3_5_hermetic/config/optiq_metadata.rs.
-final class Qwen3_5OptiQMetadataTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class Qwen3_5OptiQMetadataTests {
 
-    func testShouldAcceptTwoBitOptiQMetadataSupportedByMlxAffineQuantization() throws {
+    @Test
+    func should_accept_two_bit_optiq_metadata_supported_by_mlx_affine_quantization() throws {
         let optiQMetadataBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(
             try Qwen3_5MoeConfigFixtures.wireValue("""
         {
@@ -27,19 +31,21 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         """));
         let optiQMetadata: OptiQMetadata = try OptiQMetadata.fromJsonBytes(
             metadataBytes: optiQMetadataBytes);
-        XCTAssertEqual(optiQMetadata.measuredModuleCount(), 1);
+        #expect(optiQMetadata.measuredModuleCount() == 1);
     }
 
-    func testShouldRequireTheOptiQMetadataBitMapToMatchTheConfig() throws {
+    @Test
+    func should_require_the_optiq_metadata_bit_map_to_match_the_config() throws {
         let ornithConfig: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(
             configBytes: Qwen3_5MoeConfigFixtures.frozenOrnith10OptiQConfigBytes());
         let optiQMetadata: OptiQMetadata = try OptiQMetadata.fromJsonBytes(
             metadataBytes: Qwen3_5MoeConfigFixtures.frozenOptiQMetadataBytes());
-        XCTAssertEqual(optiQMetadata.measuredModuleCount(), 510);
+        #expect(optiQMetadata.measuredModuleCount() == 510);
         try optiQMetadata.validateAgainstConfig(qwen3_5Config: ornithConfig);
     }
 
-    func testShouldAcceptMeasuredOptiQProfilesThatAreAStrictSubsetOfTheConfig() throws {
+    @Test
+    func should_accept_measured_optiq_profiles_that_are_a_strict_subset_of_the_config() throws {
         let ornithConfig: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(
             configBytes: Qwen3_5MoeConfigFixtures.frozenOrnith10OptiQConfigBytes());
         let metadataDocument: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
@@ -57,11 +63,12 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
             metadataDocument.settingObjectKey(path: ["per_layer"], newValue: .object(retainedProfiles)));
         let optiQMetadata: OptiQMetadata = try OptiQMetadata.fromJsonBytes(
             metadataBytes: subsetMetadataBytes);
-        XCTAssertEqual(optiQMetadata.measuredModuleCount(), 390);
+        #expect(optiQMetadata.measuredModuleCount() == 390);
         try optiQMetadata.validateAgainstConfig(qwen3_5Config: ornithConfig);
     }
 
-    func testShouldAcceptOptionalOutputHeadMeasurementInOptiQMetadata() throws {
+    @Test
+    func should_accept_optional_output_head_measurement_in_optiq_metadata() throws {
         let ornithConfig: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(
             configBytes: Qwen3_5MoeConfigFixtures.frozenOrnith10OptiQConfigBytes());
         let metadataDocument: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
@@ -75,7 +82,8 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         try optiQMetadata.validateAgainstConfig(qwen3_5Config: ornithConfig);
     }
 
-    func testShouldCompareSupportedOptiQMetadataGroupSizesWithTheModelConfig() throws {
+    @Test
+    func should_compare_supported_optiq_metadata_group_sizes_with_the_model_config() throws {
         let ornithConfig: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(
             configBytes: Qwen3_5MoeConfigFixtures.frozenOrnith10OptiQConfigBytes());
         let metadataDocument: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
@@ -83,7 +91,7 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         let measuredModuleProfiles: JsonWireObject = try JsonWireValue.extractObject(
             metadataDocument.objectValue(forKey: "per_layer") ?? .null);
         guard let firstMeasuredEntry: (key: String, value: JsonWireValue) = measuredModuleProfiles.entries.first else {
-            XCTFail("the frozen OptiQ metadata should measure at least one module");
+            Issue.record("the frozen OptiQ metadata should measure at least one module");
             return;
         }
         let modifiedGroupSizeBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(
@@ -94,20 +102,20 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
             metadataBytes: modifiedGroupSizeBytes);
         do {
             try optiQMetadata.validateAgainstConfig(qwen3_5Config: ornithConfig);
-            XCTFail("a metadata group size that differs from config should fail validation");
-            return;
+            Issue.record("a metadata group size that differs from config should fail validation");
         } catch let validationError as OptiQMetadataError {
             guard case .configGroupSizeMismatch(let moduleName, let configGroupSize, let metadataGroupSize) = validationError else {
-                XCTFail("expected ConfigGroupSizeMismatch, got \(validationError)");
+                Issue.record("expected ConfigGroupSizeMismatch, got \(validationError)");
                 return;
             }
-            XCTAssertEqual(moduleName, firstMeasuredEntry.key);
-            XCTAssertEqual(configGroupSize, 64);
-            XCTAssertEqual(metadataGroupSize, 32);
+            #expect(moduleName == firstMeasuredEntry.key);
+            #expect(configGroupSize == 64);
+            #expect(metadataGroupSize == 32);
         }
     }
 
-    func testShouldAcceptProvenanceOnlyOptiQMetadataWithoutAMeasuredBitMap() throws {
+    @Test
+    func should_accept_provenance_only_optiq_metadata_without_a_measured_bit_map() throws {
         // Expert-compressed variants (for example REAP expert pruning) publish a
         // provenance document shaped around the compression run instead of a
         // sensitivity bit-map. It makes no per-module quantization claims, so it
@@ -127,10 +135,11 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         """));
         let optiQMetadata: OptiQMetadata = try OptiQMetadata.fromJsonBytes(
             metadataBytes: optiQMetadataBytes);
-        XCTAssertEqual(optiQMetadata.measuredModuleCount(), 0);
+        #expect(optiQMetadata.measuredModuleCount() == 0);
     }
 
-    func testShouldRejectMeasuredOptiQMetadataWithUnknownFields() throws {
+    @Test
+    func should_reject_measured_optiq_metadata_with_unknown_fields() throws {
         // Presence of `per_layer` keeps the exact strict contract: unknown fields
         // stay rejected so a measured document cannot smuggle undeclared content.
         let optiQMetadataBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(
@@ -155,11 +164,10 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         """));
         do {
             _ = try OptiQMetadata.fromJsonBytes(metadataBytes: optiQMetadataBytes);
-            XCTFail("measured OptiQ metadata with unknown fields should stay rejected");
-            return;
+            Issue.record("measured OptiQ metadata with unknown fields should stay rejected");
         } catch let metadataError as OptiQMetadataError {
             guard case .deserializeMetadata = metadataError else {
-                XCTFail("expected DeserializeMetadata, got \(metadataError)");
+                Issue.record("expected DeserializeMetadata, got \(metadataError)");
                 return;
             }
         }

@@ -1,9 +1,13 @@
-import XCTest;
+import Foundation;
 import ModelServing;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
-/// Synthetic bounded shard-index fixtures, port of
-/// crates/model-serving/tests/qwen3_5_hermetic/artifact_test_support.rs.
+/**
+ * Synthetic bounded shard-index fixtures, port of
+ * crates/model-serving/tests/qwen3_5_hermetic/artifact_test_support.rs.
+ */
 enum Qwen3_5ArtifactTestSupport {
 
     static let FROZEN_LANGUAGE_PAYLOAD_BYTES: UInt64 = 22_164_699_392;
@@ -78,30 +82,33 @@ enum Qwen3_5ArtifactTestSupport {
 }
 
 /// Ported from crates/model-serving/tests/qwen3_5_hermetic/artifact.rs.
-final class Qwen3_5ArtifactShardIndexTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class Qwen3_5ArtifactShardIndexTests {
 
-    func testShouldExcludeANestedVisionSidecarFromTheExecutableModelShardInventory() throws {
+    @Test
+    func should_exclude_a_nested_vision_sidecar_from_the_executable_model_shard_inventory() throws {
         let languageTensorProfiles: Array<TensorProfile> = try Qwen3_5ArtifactTestSupport.expectedLanguageTensorProfiles();
         let indexBytes: Array<UInt8> = try Qwen3_5ArtifactTestSupport.frozenTestIndexBytes();
         let shardIndex: Qwen3_5ShardIndex = try Qwen3_5ShardIndex.fromJsonBytes(
             indexBytes: indexBytes, languageTensorProfiles: languageTensorProfiles);
-        XCTAssertEqual(
-            shardIndex.totalPayloadBytes(),
-            Qwen3_5ArtifactTestSupport.FROZEN_LANGUAGE_PAYLOAD_BYTES);
-        XCTAssertEqual(shardIndex.tensorCount(), 1_757);
-        XCTAssertEqual(shardIndex.languageTensorCount(), 1_757);
-        XCTAssertEqual(
-            shardIndex.modelShardFileNames(),
-            Qwen3_5ArtifactTestSupport.LANGUAGE_SHARD_FILE_NAMES);
+        #expect(
+            shardIndex.totalPayloadBytes()
+                == Qwen3_5ArtifactTestSupport.FROZEN_LANGUAGE_PAYLOAD_BYTES);
+        #expect(shardIndex.tensorCount() == 1_757);
+        #expect(shardIndex.languageTensorCount() == 1_757);
+        #expect(
+            shardIndex.modelShardFileNames()
+                == Qwen3_5ArtifactTestSupport.LANGUAGE_SHARD_FILE_NAMES);
     }
 
-    func testShouldClassifyARootVisionOnlyFileByTensorRoleInsteadOfFilename() throws {
+    @Test
+    func should_classify_a_root_vision_only_file_by_tensor_role_instead_of_filename() throws {
         let languageTensorProfiles: Array<TensorProfile> = try Qwen3_5ArtifactTestSupport.expectedLanguageTensorProfiles();
         let visionOnlyModelShardFileName: String = "model-vision-only.safetensors";
         let indexDocument: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: try Qwen3_5ArtifactTestSupport.frozenTestIndexBytes(), as: UTF8.self));
         guard case .object(let documentObject) = indexDocument else {
-            XCTFail("the frozen synthetic shard index should be an object");
+            Issue.record("the frozen synthetic shard index should be an object");
             return;
         }
         let weightMapObject: JsonWireObject = try documentObject.decodeObject(fieldName: "weight_map");
@@ -117,12 +124,13 @@ final class Qwen3_5ArtifactShardIndexTests: XCTestCase {
             indexDocument.settingObjectKey(path: ["weight_map"], newValue: .object(reclassifiedWeightMap)));
         let shardIndex: Qwen3_5ShardIndex = try Qwen3_5ShardIndex.fromJsonBytes(
             indexBytes: indexBytes, languageTensorProfiles: languageTensorProfiles);
-        XCTAssertFalse(
-            shardIndex.modelShardFileNames().contains(visionOnlyModelShardFileName));
-        XCTAssertEqual(shardIndex.visionSidecarFileNames(), [visionOnlyModelShardFileName]);
+        #expect(
+            shardIndex.modelShardFileNames().contains(visionOnlyModelShardFileName) == false);
+        #expect(shardIndex.visionSidecarFileNames() == [visionOnlyModelShardFileName]);
     }
 
-    func testShouldRejectAnOrnithShardIndexWithAnUnexpectedExecutableLanguageTensorName() throws {
+    @Test
+    func should_reject_an_ornith_shard_index_with_an_unexpected_executable_language_tensor_name() throws {
         let languageTensorProfiles: Array<TensorProfile> = try Qwen3_5ArtifactTestSupport.expectedLanguageTensorProfiles();
         let unexpectedTensorName: String = "language_model.model.layers.0.linear_attn.in_proj_qkvz.weight";
         let indexBytes: Array<UInt8> = try Qwen3_5ArtifactTestSupport
@@ -133,10 +141,11 @@ final class Qwen3_5ArtifactShardIndexTests: XCTestCase {
         do {
             _ = try Qwen3_5ShardIndex.fromJsonBytes(
                 indexBytes: indexBytes, languageTensorProfiles: languageTensorProfiles);
-            XCTFail("an unexpected executable language tensor must fail index validation");
-            return;
+            Issue.record("an unexpected executable language tensor must fail index validation");
         } catch let artifactError as Qwen3_5ArtifactError {
-            XCTAssertEqual(artifactError, .unexpectedLanguageTensor(tensorName: unexpectedTensorName));
+            #expect(
+                artifactError == Qwen3_5ArtifactError.unexpectedLanguageTensor(
+                    tensorName: unexpectedTensorName));
         }
     }
 }
