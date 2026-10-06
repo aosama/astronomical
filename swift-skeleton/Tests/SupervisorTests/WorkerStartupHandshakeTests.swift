@@ -13,16 +13,6 @@ import IpcProtocol;
 /// genuine framed events over a real pipe pair.
 final class WorkerStartupHandshakeTests: XCTestCase {
 
-    private static let IDLE_EVENT_PAYLOAD: String =
-        "{\"kind\":\"idle\",\"machine_mlx_memory_ceiling_bytes\":17179869184,"
-        + "\"effective_mlx_memory_ceiling_bytes\":8589934592,\"minimum_mlx_memory_ceiling_bytes\":1}";
-
-    private static let RUNTIME_CONFIGURATION_PAYLOAD: String =
-        "{\"kind\":\"runtime_feature_configuration_applied\","
-        + "\"worker_runtime_feature_configuration\":{\"configuration_generation\":\"gen-1\","
-        + "\"persistent_prompt_cache_enabled\":true,\"prompt_cache_maximum_size_bytes\":1073741824,"
-        + "\"loaded_model\":null}}";
-
     func testHealthStateStartsLoadingAndReachesReadyThroughLifecycleEvents() throws {
         let healthState: WorkerHealthState = WorkerHealthState();
         XCTAssertEqual(
@@ -182,9 +172,9 @@ final class WorkerStartupHandshakeTests: XCTestCase {
     }
 
     func testStartupWaitCompletesWhenTheFakeWorkerAcknowledgesItsPolicy() throws {
-        let fakeWorkerScript: String = WorkerStartupHandshakeTests.frameEmitterFunction()
-            + "emit_frame '\(WorkerStartupHandshakeTests.IDLE_EVENT_PAYLOAD)'\n"
-            + "emit_frame '\(WorkerStartupHandshakeTests.RUNTIME_CONFIGURATION_PAYLOAD)'\n"
+        let fakeWorkerScript: String = FakeWorkerEventEmitter.frameEmitterFunction()
+            + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.idleEventPayload())
+            + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.modelLessRuntimePolicyPayload())
             + "exec sleep 30\n";
         let workerProcess: WorkerProcess = try WorkerProcess.launch(
             workerExecutablePath: "/bin/bash",
@@ -239,8 +229,8 @@ final class WorkerStartupHandshakeTests: XCTestCase {
     }
 
     func testStartupWaitSurfacesAStreamClosureInsteadOfATimeout() throws {
-        let fakeWorkerScript: String = WorkerStartupHandshakeTests.frameEmitterFunction()
-            + "emit_frame '\(WorkerStartupHandshakeTests.IDLE_EVENT_PAYLOAD)'\n";
+        let fakeWorkerScript: String = FakeWorkerEventEmitter.frameEmitterFunction()
+            + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.idleEventPayload());
         let workerProcess: WorkerProcess = try WorkerProcess.launch(
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", fakeWorkerScript],
@@ -259,15 +249,6 @@ final class WorkerStartupHandshakeTests: XCTestCase {
                 return XCTFail("expected a stream closure, got \(thrownError)");
             }
         }
-    }
-
-    private static func frameEmitterFunction() -> String {
-        return "emit_frame() {\n"
-            + "  payload=\"$1\"\n"
-            + "  length=\"${#payload}\"\n"
-            + "  printf \"$(printf '\\\\x%02x\\\\x%02x\\\\x%02x\\\\x%02x' "
-            + "$((length>>24&255)) $((length>>16&255)) $((length>>8&255)) $((length&255)))%s\" \"$payload\"\n"
-            + "}\n";
     }
 
     private static func startupConfiguration() -> WorkerStartupConfiguration {
