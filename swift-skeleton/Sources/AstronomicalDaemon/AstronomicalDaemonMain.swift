@@ -101,6 +101,7 @@ struct AstronomicalDaemonMain {
                 modelPolicyCatalog: resolvedRuntimeConfig.modelPolicyCatalog);
         }
         let workerHealthState: WorkerHealthState = workerSupervisor.ownedHealthState();
+        let chatRequestIdAllocator: ChatRequestIdAllocator = ChatRequestIdAllocator();
         let restServer: RestHttpServer;
         do {
             restServer = try RestHttpServer.start(
@@ -109,7 +110,12 @@ struct AstronomicalDaemonMain {
                     resolvedRuntimeConfig: resolvedRuntimeConfig,
                     workerHealthState: workerHealthState,
                     instancePaths: instancePaths,
-                    buildIdentity: ApplicationBuildIdentity.current()));
+                    buildIdentity: ApplicationBuildIdentity.current(),
+                    chatContext: RestChatRouteContext(
+                        chatExecutor: workerSupervisor,
+                        requestIdAllocator: chatRequestIdAllocator,
+                        resolvedRuntimeConfig: resolvedRuntimeConfig,
+                        instancePaths: instancePaths)));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);
