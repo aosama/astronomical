@@ -18,7 +18,7 @@ public struct RequiredFileProfile: Equatable {
 }
 
 /// Supported safetensors dtype names for expected tensor metadata.
-public enum TensorDtype: Equatable {
+public enum TensorDtype: Equatable, Sendable {
     /// Floating-point storage accepted by MLX affine scales and biases.
     case affineQuantizationFloat;
     /// Floating-point storage for model parameters retained without conversion.

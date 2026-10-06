@@ -45,7 +45,7 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         let metadataDocument: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: Qwen3_5MoeConfigFixtures.frozenOptiQMetadataBytes(), as: UTF8.self));
         let measuredModuleProfiles: JsonWireObject = try JsonWireValue.extractObject(
-            try metadataDocument.objectValue(forKey: "per_layer") ?? .null);
+            metadataDocument.objectValue(forKey: "per_layer") ?? .null);
         var retainedProfiles: JsonWireObject = JsonWireObject(entries: Array());
         for entry: (key: String, value: JsonWireValue) in measuredModuleProfiles.entries {
             if entry.key.contains(".mlp.switch_mlp.") {
@@ -81,7 +81,7 @@ final class Qwen3_5OptiQMetadataTests: XCTestCase {
         let metadataDocument: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: Qwen3_5MoeConfigFixtures.frozenOptiQMetadataBytes(), as: UTF8.self));
         let measuredModuleProfiles: JsonWireObject = try JsonWireValue.extractObject(
-            try metadataDocument.objectValue(forKey: "per_layer") ?? .null);
+            metadataDocument.objectValue(forKey: "per_layer") ?? .null);
         guard let firstMeasuredEntry: (key: String, value: JsonWireValue) = measuredModuleProfiles.entries.first else {
             XCTFail("the frozen OptiQ metadata should measure at least one module");
             return;
