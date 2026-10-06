@@ -257,10 +257,7 @@ final class MessageCodecTests: XCTestCase {
     private func makeReadyEvent(modelCapabilities: WorkerModelCapabilities) -> WorkerEvent {
         return WorkerEvent.ready(
             modelId: MessageCodecTests.FAKE_MODEL_ID,
-            capabilities: modelCapabilities,
-            mtpRuntimeState: MtpRuntimeState.disabled,
-            mtpUnavailableReason: nil,
-            mtpDepthStatus: MtpDepthStatus.empty);
+            capabilities: modelCapabilities);
     }
 
     private func makeModelSwappedEvent(modelCapabilities: WorkerModelCapabilities) -> WorkerEvent {
@@ -268,10 +265,7 @@ final class MessageCodecTests: XCTestCase {
             modelId: MessageCodecTests.FAKE_MODEL_ID,
             capabilities: modelCapabilities,
             expertMemoryMode: nil,
-            minimumMlxMemoryCeilingBytes: 1,
-            mtpRuntimeState: MtpRuntimeState.targetOnly,
-            mtpUnavailableReason: nil,
-            mtpDepthStatus: MtpDepthStatus.empty);
+            minimumMlxMemoryCeilingBytes: 1);
     }
 
     private func makeValidImageCompletionMetadata() -> ImageGenerationResultMetadata {

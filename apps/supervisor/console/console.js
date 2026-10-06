@@ -334,14 +334,6 @@ function renderAboutFromStatus(data) {
         expertMemoryElement.textContent =
             expertMemory.charAt(0).toUpperCase() + expertMemory.slice(1);
     } else { expertMemoryElement.textContent = "—"; }
-    const mtpEnabled = data.mtp_enabled;
-    const mtpRuntimeState = data.mtp_runtime_state;
-    const mtpElement = document.getElementById("about-mtp");
-    if (data.ready_model_id && mtpEnabled !== undefined && mtpRuntimeState !== undefined) {
-        mtpElement.textContent = mtpEnabled ? String(mtpRuntimeState) : "disabled (config)";
-    } else if (!data.ready_model_id) {
-        mtpElement.textContent = "Not loaded";
-    }
 }
 
 function renderAboutFromModels(model) {
@@ -381,16 +373,6 @@ function renderAboutEnhanced(data) {
             : "Not loaded";
     } else if (data.status !== "ready") {
         residencyElement.textContent = "Not loaded";
-    }
-    const mtpUnavailableReason = data.mtp_unavailable_reason;
-    const mtpDepthResolutionReason = data.mtp_depth_resolution_reason;
-    const mtpReasonElement = document.getElementById("about-mtp-reason");
-    if (mtpUnavailableReason) {
-        mtpReasonElement.textContent = mtpUnavailableReason;
-    } else if (mtpDepthResolutionReason) {
-        mtpReasonElement.textContent = mtpDepthResolutionReason;
-    } else {
-        mtpReasonElement.textContent = "—";
     }
 }
 

@@ -125,12 +125,9 @@ extension WorkerEvent {
         case "ready":
             let parsedEvent = WorkerEvent.ready(
                 modelId: try wireObject.decodeString(fieldName: "model_id"),
-                capabilities: try WorkerModelCapabilities.fromWireValue(try wireObject.requireObjectValue(fieldName: "capabilities")),
-                mtpRuntimeState: try MtpRuntimeState.fromWireValue(try wireObject.requireObjectValue(fieldName: "mtp_runtime_state")),
-                mtpUnavailableReason: try wireObject.decodeOptionalString(fieldName: "mtp_unavailable_reason"),
-                mtpDepthStatus: try MtpDepthStatus.fromWireValue(try wireObject.requireObjectValue(fieldName: "mtp_depth_status")));
+                capabilities: try WorkerModelCapabilities.fromWireValue(try wireObject.requireObjectValue(fieldName: "capabilities")));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: [
-                "model_id", "capabilities", "mtp_runtime_state", "mtp_unavailable_reason", "mtp_depth_status",
+                "model_id", "capabilities",
             ]);
             return parsedEvent;
         case "output":
@@ -221,13 +218,9 @@ extension WorkerEvent {
                 modelId: try wireObject.decodeString(fieldName: "model_id"),
                 capabilities: try WorkerModelCapabilities.fromWireValue(try wireObject.requireObjectValue(fieldName: "capabilities")),
                 expertMemoryMode: try WorkerEventWireValues.decodeOptionalExpertMemoryMode(wireObject: wireObject, fieldName: "expert_memory_mode"),
-                minimumMlxMemoryCeilingBytes: try wireObject.decodeUInt64(fieldName: "minimum_mlx_memory_ceiling_bytes"),
-                mtpRuntimeState: try MtpRuntimeState.fromWireValue(try wireObject.requireObjectValue(fieldName: "mtp_runtime_state")),
-                mtpUnavailableReason: try wireObject.decodeOptionalString(fieldName: "mtp_unavailable_reason"),
-                mtpDepthStatus: try MtpDepthStatus.fromWireValue(try wireObject.requireObjectValue(fieldName: "mtp_depth_status")));
+                minimumMlxMemoryCeilingBytes: try wireObject.decodeUInt64(fieldName: "minimum_mlx_memory_ceiling_bytes"));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: [
                 "model_id", "capabilities", "expert_memory_mode", "minimum_mlx_memory_ceiling_bytes",
-                "mtp_runtime_state", "mtp_unavailable_reason", "mtp_depth_status",
             ]);
             return parsedEvent;
         case "model_swap_failed":

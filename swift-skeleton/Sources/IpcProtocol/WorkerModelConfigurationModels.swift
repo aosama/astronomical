@@ -8,28 +8,21 @@ public struct WorkerAutoregressiveModelConfiguration: Equatable {
     /// Independent output capability; request defaults remain supervisor-owned.
     public let maximumOutputTokens: UInt32;
     public let chunking: WorkerChunkingConfiguration;
-    public let mtpEnabled: Bool;
-    public let mtpDraftDepth: UInt8?;
 
     public init(
         modelId: String,
         maximumContextTokens: UInt32,
         maximumOutputTokens: UInt32,
-        chunking: WorkerChunkingConfiguration,
-        mtpEnabled: Bool,
-        mtpDraftDepth: UInt8?
+        chunking: WorkerChunkingConfiguration
     ) {
         self.modelId = modelId;
         self.maximumContextTokens = maximumContextTokens;
         self.maximumOutputTokens = maximumOutputTokens;
         self.chunking = chunking;
-        self.mtpEnabled = mtpEnabled;
-        self.mtpDraftDepth = mtpDraftDepth;
     }
 
     internal static let wireFieldNames: Array<String> = [
         "model_id", "maximum_context_tokens", "maximum_output_tokens", "chunking",
-        "mtp_enabled", "mtp_draft_depth",
     ];
 
     internal func wireValue() -> JsonWireValue {
@@ -38,8 +31,6 @@ public struct WorkerAutoregressiveModelConfiguration: Equatable {
         wireObject.appendEntry(key: "maximum_context_tokens", value: .unsignedInteger(UInt64(self.maximumContextTokens)));
         wireObject.appendEntry(key: "maximum_output_tokens", value: .unsignedInteger(UInt64(self.maximumOutputTokens)));
         wireObject.appendEntry(key: "chunking", value: self.chunking.wireValue());
-        wireObject.appendEntry(key: "mtp_enabled", value: .boolean(self.mtpEnabled));
-        wireObject.appendEntry(key: "mtp_draft_depth", value: WorkerAutoregressiveModelConfiguration.optionalUInt8WireValue(self.mtpDraftDepth));
         return .object(wireObject);
     }
 
@@ -49,18 +40,9 @@ public struct WorkerAutoregressiveModelConfiguration: Equatable {
             modelId: try wireObject.decodeString(fieldName: "model_id"),
             maximumContextTokens: try wireObject.decodeUInt32(fieldName: "maximum_context_tokens"),
             maximumOutputTokens: try wireObject.decodeUInt32(fieldName: "maximum_output_tokens"),
-            chunking: try WorkerChunkingConfiguration.fromWireValue(try wireObject.requireObjectValue(fieldName: "chunking")),
-            mtpEnabled: try wireObject.decodeBool(fieldName: "mtp_enabled"),
-            mtpDraftDepth: try wireObject.decodeOptionalUInt8(fieldName: "mtp_draft_depth"));
+            chunking: try WorkerChunkingConfiguration.fromWireValue(try wireObject.requireObjectValue(fieldName: "chunking")));
         try wireObject.rejectUnknownFields(allowedFieldNames: WorkerAutoregressiveModelConfiguration.wireFieldNames);
         return parsedConfiguration;
-    }
-
-    private static func optionalUInt8WireValue(_ optionalValue: UInt8?) -> JsonWireValue {
-        guard let unwrappedValue = optionalValue else {
-            return .null;
-        }
-        return .unsignedInteger(UInt64(unwrappedValue));
     }
 }
 
@@ -72,23 +54,17 @@ public struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Equatable {
     /// Independent output capability, not the configured request default.
     public let maximumOutputTokens: UInt32;
     public let chunking: WorkerChunkingConfiguration;
-    public let mtpEnabled: Bool;
-    public let mtpDraftDepth: UInt8?;
 
     public init(
         modelId: String,
         maximumContextTokens: UInt32,
         maximumOutputTokens: UInt32,
-        chunking: WorkerChunkingConfiguration,
-        mtpEnabled: Bool,
-        mtpDraftDepth: UInt8?
+        chunking: WorkerChunkingConfiguration
     ) {
         self.modelId = modelId;
         self.maximumContextTokens = maximumContextTokens;
         self.maximumOutputTokens = maximumOutputTokens;
         self.chunking = chunking;
-        self.mtpEnabled = mtpEnabled;
-        self.mtpDraftDepth = mtpDraftDepth;
     }
 
     internal static let wireFieldNames: Array<String> = WorkerAutoregressiveModelConfiguration.wireFieldNames;
@@ -99,8 +75,6 @@ public struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Equatable {
         wireObject.appendEntry(key: "maximum_context_tokens", value: .unsignedInteger(UInt64(self.maximumContextTokens)));
         wireObject.appendEntry(key: "maximum_output_tokens", value: .unsignedInteger(UInt64(self.maximumOutputTokens)));
         wireObject.appendEntry(key: "chunking", value: self.chunking.wireValue());
-        wireObject.appendEntry(key: "mtp_enabled", value: .boolean(self.mtpEnabled));
-        wireObject.appendEntry(key: "mtp_draft_depth", value: WorkerLoadedAutoregressiveModelRuntimeConfiguration.optionalUInt8WireValue(self.mtpDraftDepth));
         return .object(wireObject);
     }
 
@@ -110,18 +84,9 @@ public struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Equatable {
             modelId: try wireObject.decodeString(fieldName: "model_id"),
             maximumContextTokens: try wireObject.decodeUInt32(fieldName: "maximum_context_tokens"),
             maximumOutputTokens: try wireObject.decodeUInt32(fieldName: "maximum_output_tokens"),
-            chunking: try WorkerChunkingConfiguration.fromWireValue(try wireObject.requireObjectValue(fieldName: "chunking")),
-            mtpEnabled: try wireObject.decodeBool(fieldName: "mtp_enabled"),
-            mtpDraftDepth: try wireObject.decodeOptionalUInt8(fieldName: "mtp_draft_depth"));
+            chunking: try WorkerChunkingConfiguration.fromWireValue(try wireObject.requireObjectValue(fieldName: "chunking")));
         try wireObject.rejectUnknownFields(allowedFieldNames: WorkerLoadedAutoregressiveModelRuntimeConfiguration.wireFieldNames);
         return parsedConfiguration;
-    }
-
-    private static func optionalUInt8WireValue(_ optionalValue: UInt8?) -> JsonWireValue {
-        guard let unwrappedValue = optionalValue else {
-            return .null;
-        }
-        return .unsignedInteger(UInt64(unwrappedValue));
     }
 }
 
@@ -328,9 +293,7 @@ public enum WorkerModelConfiguration: Equatable {
                 modelId: configuration.modelId,
                 maximumContextTokens: configuration.maximumContextTokens,
                 maximumOutputTokens: configuration.maximumOutputTokens,
-                chunking: configuration.chunking,
-                mtpEnabled: configuration.mtpEnabled,
-                mtpDraftDepth: configuration.mtpDraftDepth));
+                chunking: configuration.chunking));
         case let .flux2Klein(configuration):
             return .flux2Klein(configuration);
         case let .qwenImage21(configuration):
