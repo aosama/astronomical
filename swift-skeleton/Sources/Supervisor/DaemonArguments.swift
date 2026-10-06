@@ -70,8 +70,10 @@ public struct DaemonArguments: Equatable {
         return HELP_TEXT;
     }
 
-    let runtimeInstance: AstronomicalRuntimeInstance;
-    let stateDirectoryOverride: String?;
+    /// The instance the daemon serves.
+    public let runtimeInstance: AstronomicalRuntimeInstance;
+    /// Absolute non-root state root override, when the operator supplied one.
+    public let stateDirectoryOverride: String?;
 
     private init(runtimeInstance: AstronomicalRuntimeInstance, stateDirectoryOverride: String?) {
         self.runtimeInstance = runtimeInstance;

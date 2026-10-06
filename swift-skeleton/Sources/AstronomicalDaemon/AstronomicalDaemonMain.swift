@@ -1,0 +1,109 @@
+import Foundation;
+
+import AstronomicalConfig;
+import IpcProtocol;
+
+import Supervisor;
+
+/// The astronomicald daemon entry point.
+///
+/// Mirrors the startup spine of apps/supervisor/src/main.rs: parse process
+/// arguments, resolve the instance paths, take the exclusive instance lock,
+/// start the daemon IPC service, and serve until SIGINT or SIGTERM. The REST
+/// surface, worker containment, and library slices attach to this spine as
+/// they land. Stable's lifecycle stays owned by macOS LaunchAgents; this
+/// binary only ever runs the instance its arguments select, and the
+/// Development instance is the only one tests may start.
+@main
+struct AstronomicalDaemonMain {
+
+    static func main() {
+        let daemonCommand: DaemonCommand;
+        do {
+            daemonCommand = try DaemonArguments.parse(processArguments: Array(CommandLine.arguments));
+        } catch let argumentError as DaemonArgumentError {
+            FileHandle.standardError.write(Data("astronomicald: \(argumentError)\n".utf8));
+            exit(2);
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: unexpected argument failure\n".utf8));
+            exit(2);
+        }
+        switch (daemonCommand) {
+        case .help:
+            print(DaemonArguments.helpText());
+            exit(0);
+        case .version:
+            print("astronomicald \(buildIdentityLine())");
+            exit(0);
+        case let .run(daemonArguments):
+            run(daemonArguments: daemonArguments);
+        }
+    }
+
+    private static func run(daemonArguments: DaemonArguments) -> Never {
+        let instancePaths: AstronomicalInstancePaths;
+        do {
+            instancePaths = try daemonArguments.resolveInstancePaths();
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: could not resolve instance paths: \(error)\n".utf8));
+            exit(2);
+        }
+        let instanceLock: AstronomicalInstanceLock;
+        do {
+            instanceLock = try AstronomicalInstanceLock.acquire(
+                lockFilePath: instancePaths.instanceLockFilePath.string);
+        } catch AstronomicalInstanceLockError.alreadyRunning {
+            FileHandle.standardError.write(Data(
+                "astronomicald: Astronomical is already running for the selected instance\n".utf8));
+            exit(1);
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: could not take the instance lock: \(error)\n".utf8));
+            exit(2);
+        }
+        let service: DaemonIpcService;
+        do {
+            service = try DaemonIpcService.start(
+                instancePaths: instancePaths,
+                healthProvider: { return DaemonWorkerStatus.unavailable; });
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: could not start the daemon IPC service: \(error)\n".utf8));
+            exit(2);
+        }
+        // Live progress instead of silent waits: the operator sees the socket
+        // the daemon answers on before anything can talk to it.
+        print("astronomicald \(daemonArguments.runtimeInstance.rawInstanceName) serving on \(service.socketPath)");
+        FileHandle.standardOutput.synchronizeFile();
+
+        let shutdownSemaphore = DispatchSemaphore(value: 0);
+        let signalSourceShutdown: () -> Void = {
+            service.shutdown();
+            shutdownSemaphore.signal();
+        };
+        for signalNumber: Int32 in [SIGINT, SIGTERM] {
+            let signalSource: DispatchSourceSignal = DispatchSource.makeSignalSource(
+                signal: signalNumber,
+                queue: DispatchQueue.global());
+            signal(signalNumber, SIG_IGN);
+            signalSource.setEventHandler(handler: signalSourceShutdown);
+            signalSource.resume();
+            // Keep the source alive for the process lifetime.
+            AllSignalSources.append(signalSource);
+        }
+
+        shutdownSemaphore.wait();
+        // The lock releases when this process exits; instanceLock is held so
+        // the compiler keeps it alive for the whole serving lifetime.
+        _ = instanceLock;
+        exit(0);
+    }
+
+    private static func buildIdentityLine() -> String {
+        let buildIdentity: String? = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion") as? String;
+        return buildIdentity.map { (identity: String) -> String in identity } ?? "0.0.0-dev";
+    }
+}
+
+/// Signal sources must stay retained or Dispatch tears them down immediately.
+/// The daemon is single-threaded at this boundary, so the escape is safe here.
+private nonisolated(unsafe) var AllSignalSources: Array<DispatchSourceSignal> = Array();
