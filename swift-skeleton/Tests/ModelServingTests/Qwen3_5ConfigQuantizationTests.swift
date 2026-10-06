@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import ModelServing;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/model-serving/tests/qwen3_5_hermetic/config/quantization.rs.
-final class Qwen3_5ConfigQuantizationTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class Qwen3_5ConfigQuantizationTests {
 
-    func testShouldAcceptEveryAffineQuantizationBitWidthSupportedByMlx() throws {
+    @Test
+    func should_accept_every_affine_quantization_bit_width_supported_by_mlx() throws {
         for quantizationBits: UInt32 in [2, 3, 4, 5, 6, 8] {
             let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
                 String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));
@@ -16,11 +20,12 @@ final class Qwen3_5ConfigQuantizationTests: XCTestCase {
                     .settingObjectKey(path: ["bits"], newValue: .unsignedInteger(UInt64(quantizationBits))));
             let configBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(modifiedConfigValue);
             let config: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(configBytes: configBytes);
-            XCTAssertEqual(config.defaultQuantizationBits(), quantizationBits);
+            #expect(config.defaultQuantizationBits() == quantizationBits);
         }
     }
 
-    func testShouldAcceptEveryAffineQuantizationGroupSizeSupportedByMlx() throws {
+    @Test
+    func should_accept_every_affine_quantization_group_size_supported_by_mlx() throws {
         for quantizationGroupSize: UInt32 in [32, 64, 128] {
             let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
                 String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));
@@ -34,11 +39,12 @@ final class Qwen3_5ConfigQuantizationTests: XCTestCase {
                         .settingObjectKey(path: ["group_size"], newValue: .unsignedInteger(UInt64(quantizationGroupSize))));
             let configBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(modifiedConfigValue);
             let config: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(configBytes: configBytes);
-            XCTAssertEqual(config.defaultQuantizationGroupSize(), quantizationGroupSize);
+            #expect(config.defaultQuantizationGroupSize() == quantizationGroupSize);
         }
     }
 
-    func testShouldRejectTheAffineQuantizationBitWidthUnsupportedByMlx() throws {
+    @Test
+    func should_reject_the_affine_quantization_bit_width_unsupported_by_mlx() throws {
         let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));
         let unsupportedBitsQuantization: JsonWireValue = frozenConfigValue.objectValue(forKey: "quantization")!
@@ -49,16 +55,17 @@ final class Qwen3_5ConfigQuantizationTests: XCTestCase {
         let invalidConfigBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(modifiedConfigValue);
         do {
             _ = try Qwen3_5Config.fromJsonBytes(configBytes: invalidConfigBytes);
-            XCTFail("MLX-unsupported affine bits must fail");
+            Issue.record("MLX-unsupported affine bits must fail");
         } catch let configError as Qwen3_5ConfigError {
             guard case .invalidConfigValueDynamic = configError else {
-                XCTFail("expected InvalidConfigValueDynamic, got \(configError)");
+                Issue.record("expected InvalidConfigValueDynamic, got \(configError)");
                 return;
             }
         }
     }
 
-    func testShouldParseAStandardSixBitConfigWithoutHighBitEmbeddingOverrides() throws {
+    @Test
+    func should_parse_a_standard_six_bit_config_without_high_bit_embedding_overrides() throws {
         let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));
         let trimmedQuantization: JsonWireValue = frozenConfigValue
@@ -70,15 +77,16 @@ final class Qwen3_5ConfigQuantizationTests: XCTestCase {
             .settingObjectKey(path: ["quantization_config"], newValue: trimmedQuantization);
         let configBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(modifiedConfigValue);
         let config: Qwen3_5Config = try Qwen3_5Config.fromJsonBytes(configBytes: configBytes);
-        XCTAssertEqual(
-            config.quantizationProfile(forModule: "language_model.model.embed_tokens").bits, 6);
-        XCTAssertEqual(config.quantizationProfile(forModule: "language_model.lm_head").bits, 6);
+        #expect(
+            config.quantizationProfile(forModule: "language_model.model.embed_tokens").bits == 6);
+        #expect(config.quantizationProfile(forModule: "language_model.lm_head").bits == 6);
     }
 
-    func testShouldCreateAnUnquantizedQuantizationProfile() {
+    @Test
+    func should_create_an_unquantized_quantization_profile() {
         let profile: OptiQQuantizationProfile = .unquantized();
-        XCTAssertEqual(profile.bits, 0);
-        XCTAssertEqual(profile.groupSize, 0);
-        XCTAssertTrue(profile.isUnquantized());
+        #expect(profile.bits == 0);
+        #expect(profile.groupSize == 0);
+        #expect(profile.isUnquantized());
     }
 }

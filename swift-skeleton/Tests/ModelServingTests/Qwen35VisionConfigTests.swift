@@ -1,8 +1,12 @@
-import XCTest;
+import Foundation;
 import ModelServing;
+import Testing;
+import JourneyCategories;
 
-/// The frozen trimmed Ornith vision fixture, twin-porting
-/// vision_config_test_support's FROZEN_VISION_CONFIG_JSON.
+/**
+ * The frozen trimmed Ornith vision fixture, twin-porting
+ * vision_config_test_support's FROZEN_VISION_CONFIG_JSON.
+ */
 enum Qwen35VisionConfigFixtures {
     static let FROZEN_VISION_CONFIG_JSON: String = """
     {
@@ -63,28 +67,33 @@ enum Qwen35VisionConfigFixtures {
     """;
 }
 
-/// Behavioral journeys for the accepted Qwen3.5 vision configuration,
-/// twin-porting crates/model-serving/tests/qwen3_5_hermetic/vision_config.rs.
-final class Qwen35VisionConfigTests: XCTestCase {
+/**
+ * Behavioral journeys for the accepted Qwen3.5 vision configuration,
+ * twin-porting crates/model-serving/tests/qwen3_5_hermetic/vision_config.rs.
+ */
+@Suite(.tags(.hermeticJourney))
+final class Qwen35VisionConfigTests {
 
-    func testShouldParseTheFrozenOrnithVisionConfig() throws {
+    @Test
+    func should_parse_the_frozen_ornith_vision_config() throws {
         let visionConfig: Qwen3_5VisionConfig = try Qwen3_5VisionConfig.fromJsonBytes(
             configBytes: Data(Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON.utf8));
 
-        XCTAssertEqual(visionConfig.depth, 27);
-        XCTAssertEqual(visionConfig.hiddenSize, 1152);
-        XCTAssertEqual(visionConfig.inChannels, 3);
-        XCTAssertEqual(visionConfig.intermediateSize, 4304);
-        XCTAssertEqual(visionConfig.headCount, 16);
-        XCTAssertEqual(visionConfig.positionEmbeddingCount, 2304);
-        XCTAssertEqual(visionConfig.patchSize, 16);
-        XCTAssertEqual(visionConfig.spatialMergeSize, 2);
-        XCTAssertEqual(visionConfig.temporalPatchSize, 2);
-        XCTAssertEqual(visionConfig.outHiddenSize, 2048);
-        XCTAssertEqual(visionConfig.hiddenActivation, "gelu_pytorch_tanh");
+        #expect(visionConfig.depth == 27);
+        #expect(visionConfig.hiddenSize == 1152);
+        #expect(visionConfig.inChannels == 3);
+        #expect(visionConfig.intermediateSize == 4304);
+        #expect(visionConfig.headCount == 16);
+        #expect(visionConfig.positionEmbeddingCount == 2304);
+        #expect(visionConfig.patchSize == 16);
+        #expect(visionConfig.spatialMergeSize == 2);
+        #expect(visionConfig.temporalPatchSize == 2);
+        #expect(visionConfig.outHiddenSize == 2048);
+        #expect(visionConfig.hiddenActivation == "gelu_pytorch_tanh");
     }
 
-    func testShouldAllowATextOnlyQwenConfigWithoutVisionConfig() throws {
+    @Test
+    func should_allow_a_text_only_qwen_config_without_vision_config() throws {
         let textOnlyConfigJson: String = """
         {
             "model_type": "qwen3_5_moe",
@@ -97,53 +106,72 @@ final class Qwen35VisionConfigTests: XCTestCase {
         let visionConfig: Qwen3_5VisionConfig? = try Qwen3_5VisionConfig.fromOptionalJsonBytes(
             configBytes: Data(textOnlyConfigJson.utf8));
 
-        XCTAssertNil(visionConfig);
+        #expect(visionConfig == nil);
     }
 
-    func testShouldAcceptAnOrnithVisionConfigWithADifferentDepth() throws {
+    @Test
+    func should_accept_an_ornith_vision_config_with_a_different_depth() throws {
         let configBytes: String = Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON
             .replacingOccurrences(of: "\"depth\": 27", with: "\"depth\": 32");
         let visionConfig: Qwen3_5VisionConfig = try Qwen3_5VisionConfig.fromJsonBytes(
             configBytes: Data(configBytes.utf8));
-        XCTAssertEqual(visionConfig.depth, 32);
+        #expect(visionConfig.depth == 32);
     }
 
-    func testShouldAcceptAnOrnithVisionConfigWithADifferentHiddenSize() throws {
+    @Test
+    func should_accept_an_ornith_vision_config_with_a_different_hidden_size() throws {
         let configBytes: String = Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON
             .replacingOccurrences(of: "\"hidden_size\": 1152", with: "\"hidden_size\": 1024");
         let visionConfig: Qwen3_5VisionConfig = try Qwen3_5VisionConfig.fromJsonBytes(
             configBytes: Data(configBytes.utf8));
-        XCTAssertEqual(visionConfig.hiddenSize, 1024);
+        #expect(visionConfig.hiddenSize == 1024);
     }
 
-    func testShouldAcceptAnOrnithVisionConfigWithADifferentPatchSize() throws {
+    @Test
+    func should_accept_an_ornith_vision_config_with_a_different_patch_size() throws {
         let configBytes: String = Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON
             .replacingOccurrences(of: "\"patch_size\": 16", with: "\"patch_size\": 14");
         let visionConfig: Qwen3_5VisionConfig = try Qwen3_5VisionConfig.fromJsonBytes(
             configBytes: Data(configBytes.utf8));
-        XCTAssertEqual(visionConfig.patchSize, 14);
+        #expect(visionConfig.patchSize == 14);
     }
 
-    func testShouldRejectAVisionHiddenSizeThatCannotFormEqualAttentionHeads() throws {
+    @Test
+    func should_reject_a_vision_hidden_size_that_cannot_form_equal_attention_heads() throws {
         let configBytes: String = Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON
             .replacingOccurrences(of: "\"hidden_size\": 1152", with: "\"hidden_size\": 1153");
 
-        XCTAssertThrowsError(try Qwen3_5VisionConfig.fromJsonBytes(configBytes: Data(configBytes.utf8)));
+        do {
+            _ = try Qwen3_5VisionConfig.fromJsonBytes(configBytes: Data(configBytes.utf8));
+            Issue.record("a vision hidden size that cannot form equal attention heads must be rejected");
+        } catch {
+            // The vision config fails closed on unequal attention heads.
+        }
     }
 
-    func testShouldRejectAVisionActivationOutsideTheQwen35ExecutionGraph() throws {
+    @Test
+    func should_reject_a_vision_activation_outside_the_qwen35_execution_graph() throws {
         let configBytes: String = Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON
             .replacingOccurrences(of: "\"hidden_act\": \"gelu_pytorch_tanh\"", with: "\"hidden_act\": \"silu\"");
 
-        XCTAssertThrowsError(try Qwen3_5VisionConfig.fromJsonBytes(configBytes: Data(configBytes.utf8)));
+        do {
+            _ = try Qwen3_5VisionConfig.fromJsonBytes(configBytes: Data(configBytes.utf8));
+            Issue.record("a vision activation outside the Qwen3.5 execution graph must be rejected");
+        } catch {
+            // The vision config fails closed on unsupported activations.
+        }
     }
 
-    func testShouldRejectAnOrnithVisionConfigWithTheWrongModelType() throws {
+    @Test
+    func should_reject_an_ornith_vision_config_with_the_wrong_model_type() throws {
         let configBytes: String = Qwen35VisionConfigFixtures.FROZEN_VISION_CONFIG_JSON
             .replacingOccurrences(
                 of: "\"model_type\": \"qwen3_5_moe_vision\"", with: "\"model_type\": \"wrong_vision\"");
-        XCTAssertThrowsError(
-            try Qwen3_5VisionConfig.fromJsonBytes(configBytes: Data(configBytes.utf8)),
-            "vision config with wrong model_type should be rejected");
+        do {
+            _ = try Qwen3_5VisionConfig.fromJsonBytes(configBytes: Data(configBytes.utf8));
+            Issue.record("a vision config with a wrong model_type must be rejected");
+        } catch {
+            // The vision config fails closed on a foreign model type.
+        }
     }
 }

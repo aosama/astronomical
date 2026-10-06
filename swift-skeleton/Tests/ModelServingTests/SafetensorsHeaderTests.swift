@@ -1,14 +1,20 @@
-import XCTest;
+import Foundation;
 import ModelServing;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
-/// Behavioral journeys for the bounded safetensors header reader, mirroring
-/// the framing contract of crates/model-serving/src/safetensors/header.rs:
-/// little-endian length prefix, header-size bound, header-within-file bound,
-/// duplicate-key rejection, and `__metadata__` extraction.
-final class SafetensorsHeaderTests: XCTestCase {
+/**
+ * Behavioral journeys for the bounded safetensors header reader, mirroring
+ * the framing contract of crates/model-serving/src/safetensors/header.rs:
+ * little-endian length prefix, header-size bound, header-within-file bound,
+ * duplicate-key rejection, and `__metadata__` extraction.
+ */
+@Suite(.tags(.hermeticJourney))
+final class SafetensorsHeaderTests {
 
-    func testShouldParseABoundedHeaderWithOneTensorAndMetadata() throws {
+    @Test
+    func should_parse_a_bounded_header_with_one_tensor_and_metadata() throws {
         let (fileHandle, fileSizeBytes): (FileHandle, UInt64) = try Self.openFramedFile(
             headerJsonText: """
             {"__metadata__":{"format":"pt"},"tensor.weight":{"dtype":"BF16","shape":[2,3],"data_offsets":[0,12]}}
@@ -17,25 +23,26 @@ final class SafetensorsHeaderTests: XCTestCase {
         let parsedHeader: SafetensorsFraming.BoundedJsonHeader = try SafetensorsFraming.readBoundedJsonHeader(
             fileHandle: fileHandle, fileSizeBytes: fileSizeBytes,
             maximumHeaderLengthBytes: 1024 * 1024);
-        XCTAssertEqual(parsedHeader.dataSectionStartBytes, UInt64(fileSizeBytes) - 12);
-        XCTAssertEqual(parsedHeader.fileSizeBytes, fileSizeBytes);
-        XCTAssertEqual(parsedHeader.tensorJsonValues.count, 1);
-        XCTAssertEqual(parsedHeader.tensorJsonValues[0].tensorName, "tensor.weight");
+        #expect(parsedHeader.dataSectionStartBytes == UInt64(fileSizeBytes) - 12);
+        #expect(parsedHeader.fileSizeBytes == fileSizeBytes);
+        #expect(parsedHeader.tensorJsonValues.count == 1);
+        #expect(parsedHeader.tensorJsonValues[0].tensorName == "tensor.weight");
         let tensorView: SafetensorsFraming.TensorView = try SafetensorsFraming.TensorView.decoded(
             wireValue: parsedHeader.tensorJsonValues[0].headerValue);
-        XCTAssertEqual(tensorView.dtype, "BF16");
-        XCTAssertEqual(tensorView.shape, [2, 3]);
-        XCTAssertEqual(tensorView.dataStartOffset(), 0);
-        XCTAssertEqual(tensorView.dataEndOffset(), 12);
-        let metadataValue: JsonWireValue = try XCTUnwrap(parsedHeader.metadataJsonValue);
+        #expect(tensorView.dtype == "BF16");
+        #expect(tensorView.shape == [2, 3]);
+        #expect(tensorView.dataStartOffset() == 0);
+        #expect(tensorView.dataEndOffset() == 12);
+        let metadataValue: JsonWireValue = try #require(parsedHeader.metadataJsonValue);
         guard case let .object(metadataObject) = metadataValue else {
-            XCTFail("expected a metadata object");
+            Issue.record("expected a metadata object");
             return;
         }
-        XCTAssertEqual(metadataObject.value(forKey: "format"), .string("pt"));
+        #expect(metadataObject.value(forKey: "format") == JsonWireValue.string("pt"));
     }
 
-    func testShouldRejectDuplicateHeaderKeysBeforeAnyConsumerCanClassifyThem() throws {
+    @Test
+    func should_reject_duplicate_header_keys_before_any_consumer_can_classify_them() throws {
         let rawDuplicateHeaderBytes: Array<UInt8> = Array(#"{"tensor.weight":{"dtype":"U8","shape":[1],"data_offsets":[0,1]},"tensor.weight":{"dtype":"BF16","shape":[1],"data_offsets":[0,2]}}"#.utf8);
         let framedFileBytes: Array<UInt8> = Self.frameBytes(
             headerJsonBytes: rawDuplicateHeaderBytes, payloadByteCount: 2);
@@ -47,20 +54,20 @@ final class SafetensorsHeaderTests: XCTestCase {
             _ = try SafetensorsFraming.readBoundedJsonHeader(
                 fileHandle: fileHandle, fileSizeBytes: UInt64(framedFileBytes.count),
                 maximumHeaderLengthBytes: 1024 * 1024);
-            XCTFail("duplicate safetensors header keys must be rejected");
-            return;
+            Issue.record("duplicate safetensors header keys must be rejected");
         } catch let headerError as SafetensorsFraming.BoundedHeaderError {
             guard case .invalidHeaderJson(let problem) = headerError else {
-                XCTFail("expected InvalidHeaderJson, got \(headerError)");
+                Issue.record("expected InvalidHeaderJson, got \(headerError)");
                 return;
             }
-            XCTAssertTrue(
+            #expect(
                 problem.lowercased().contains("duplicate"),
                 "the duplicate-key rejection must name the duplication, got: \(problem)");
         }
     }
 
-    func testShouldRejectAHeaderLongerThanTheDeclaredBound() throws {
+    @Test
+    func should_reject_a_header_longer_than_the_declared_bound() throws {
         let (fileHandle, fileSizeBytes): (FileHandle, UInt64) = try Self.openFramedFile(
             headerJsonText: #"{"tensor.weight":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}"#,
             payloadByteCount: 1);
@@ -69,18 +76,18 @@ final class SafetensorsHeaderTests: XCTestCase {
             _ = try SafetensorsFraming.readBoundedJsonHeader(
                 fileHandle: fileHandle, fileSizeBytes: fileSizeBytes,
                 maximumHeaderLengthBytes: 8);
-            XCTFail("a header beyond the declared bound must fail closed");
-            return;
+            Issue.record("a header beyond the declared bound must fail closed");
         } catch let headerError as SafetensorsFraming.BoundedHeaderError {
             guard case .headerLengthTooLarge = headerError else {
-                XCTFail("expected HeaderLengthTooLarge, got \(headerError)");
+                Issue.record("expected HeaderLengthTooLarge, got \(headerError)");
                 return;
             }
         }
     }
 
-    func testShouldRejectAHeaderThatReachesBeyondTheFileEnd() throws {
-        let (fileHandle, _) : (FileHandle, UInt64) = try Self.openFramedFile(
+    @Test
+    func should_reject_a_header_that_reaches_beyond_the_file_end() throws {
+        let (fileHandle, _): (FileHandle, UInt64) = try Self.openFramedFile(
             headerJsonText: #"{"tensor.weight":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}"#,
             payloadByteCount: 1);
         defer { fileHandle.closeFile(); }
@@ -88,14 +95,13 @@ final class SafetensorsHeaderTests: XCTestCase {
             _ = try SafetensorsFraming.readBoundedJsonHeader(
                 fileHandle: fileHandle, fileSizeBytes: 4,
                 maximumHeaderLengthBytes: 1024 * 1024);
-            XCTFail("a header reaching past the file end must fail closed");
-            return;
+            Issue.record("a header reaching past the file end must fail closed");
         } catch let headerError as SafetensorsFraming.BoundedHeaderError {
             guard case .headerBeyondFile(let headerEndOffsetBytes, let declaredFileSizeBytes) = headerError else {
-                XCTFail("expected HeaderBeyondFile, got \(headerError)");
+                Issue.record("expected HeaderBeyondFile, got \(headerError)");
                 return;
             }
-            XCTAssertGreaterThan(headerEndOffsetBytes, declaredFileSizeBytes);
+            #expect(headerEndOffsetBytes > declaredFileSizeBytes);
         }
     }
 

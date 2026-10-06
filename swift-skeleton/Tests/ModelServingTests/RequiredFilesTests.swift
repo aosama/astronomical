@@ -1,11 +1,16 @@
-import XCTest;
+import Foundation;
 import ModelServing;
+import Testing;
+import JourneyCategories;
 
-/// Behavioral journeys for required-file validation, twin-porting
-/// crates/model-serving/tests/hermetic/required_files.rs: Hugging Face
-/// snapshot symlink confinement, shared-blob provenance, path-safety, and
-/// retained-descriptor bounded reads.
-final class RequiredFilesTests: XCTestCase {
+/**
+ * Behavioral journeys for required-file validation, twin-porting
+ * crates/model-serving/tests/hermetic/required_files.rs: Hugging Face
+ * snapshot symlink confinement, shared-blob provenance, path-safety, and
+ * retained-descriptor bounded reads.
+ */
+@Suite(.tags(.hermeticJourney))
+final class RequiredFilesTests {
 
     fileprivate static let CONFIG_BYTES: Data = Data(#"{"model_type":"qwen3_5_moe"}"#.utf8);
     /// Digest the shared store names its object after in the shared-blob fixtures.
@@ -23,7 +28,8 @@ final class RequiredFilesTests: XCTestCase {
         return directoryUrl;
     }
 
-    func testShouldAcceptAHuggingFaceSnapshotSymlinkToItsOwnBlobDirectory() throws {
+    @Test
+    func should_accept_a_hugging_face_snapshot_symlink_to_its_own_blob_directory() throws {
         let temporaryRoot: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: temporaryRoot); }
         let modelCacheDirectory: URL = temporaryRoot.appendingPathComponent("models--example--model");
@@ -43,76 +49,78 @@ final class RequiredFilesTests: XCTestCase {
                 fileName: "config.json", sizeBytes: UInt64(Self.CONFIG_BYTES.count)));
         let validatedFileHandle: FileHandle = validatedWeightsFile.intoFile();
         let actualConfigBytes: Data = validatedFileHandle.readDataToEndOfFile();
-        XCTAssertEqual(actualConfigBytes, Self.CONFIG_BYTES);
+        #expect(actualConfigBytes == Self.CONFIG_BYTES);
     }
 
-    func testShouldAcceptAHuggingFaceSnapshotSymlinkToAVerifiedSharedBlob() throws {
+    @Test
+    func should_accept_a_hugging_face_snapshot_symlink_to_a_verified_shared_blob() throws {
         let sharedBlobLayout: SharedBlobLayout = try SharedBlobLayout.create();
         defer { try? FileManager.default.removeItem(at: sharedBlobLayout.hubDirectory); }
         try sharedBlobLayout.writeTreeRecord(
             recordedDigestText: Self.SHARED_BLOB_CONTENT_DIGEST,
             recordedSizeBytes: UInt64(Self.CONFIG_BYTES.count));
 
-        XCTAssertNoThrow(try sharedBlobLayout.validate());
+        try sharedBlobLayout.validate();
     }
 
-    func testShouldRejectASharedBlobThatIsNotTheSnapshotRecordedContentAddress() throws {
+    @Test
+    func should_reject_a_shared_blob_that_is_not_the_snapshot_recorded_content_address() throws {
         let sharedBlobLayout: SharedBlobLayout = try SharedBlobLayout.create();
         defer { try? FileManager.default.removeItem(at: sharedBlobLayout.hubDirectory); }
         try sharedBlobLayout.writeTreeRecord(
             recordedDigestText: Self.UNRELATED_CONTENT_DIGEST,
             recordedSizeBytes: UInt64(Self.CONFIG_BYTES.count));
 
-        XCTAssertThrowsError(try sharedBlobLayout.validate(), "must fail closed") { thrownError in
-            guard let validationError: ArtifactValidationError = thrownError as? ArtifactValidationError else {
-                XCTFail("expected an ArtifactValidationError, got \(thrownError)");
-                return;
-            }
-            XCTAssertEqual(
-                validationError, .huggingFaceSharedBlobIdentityMismatch(
+        do {
+            try sharedBlobLayout.validate();
+            Issue.record("a shared blob without the recorded content address must fail closed");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.huggingFaceSharedBlobIdentityMismatch(
                     fileName: "config.json",
                     recordedDigestText: Self.UNRELATED_CONTENT_DIGEST));
-        };
+        }
     }
 
-    func testShouldRejectASharedBlobWhoseSizeDisagreesWithItsSnapshotTreeRecord() throws {
+    @Test
+    func should_reject_a_shared_blob_whose_size_disagrees_with_its_snapshot_tree_record() throws {
         let sharedBlobLayout: SharedBlobLayout = try SharedBlobLayout.create();
         defer { try? FileManager.default.removeItem(at: sharedBlobLayout.hubDirectory); }
         try sharedBlobLayout.writeTreeRecord(
             recordedDigestText: Self.SHARED_BLOB_CONTENT_DIGEST,
             recordedSizeBytes: UInt64(Self.CONFIG_BYTES.count + 1));
 
-        XCTAssertThrowsError(try sharedBlobLayout.validate(), "must fail closed") { thrownError in
-            guard let validationError: ArtifactValidationError = thrownError as? ArtifactValidationError else {
-                XCTFail("expected an ArtifactValidationError, got \(thrownError)");
-                return;
-            }
-            XCTAssertEqual(
-                validationError, .huggingFaceSharedBlobSizeMismatch(
+        do {
+            try sharedBlobLayout.validate();
+            Issue.record("a shared blob whose size disagrees with the tree record must fail closed");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.huggingFaceSharedBlobSizeMismatch(
                     fileName: "config.json",
                     recordedSizeBytes: UInt64(Self.CONFIG_BYTES.count + 1),
                     actualSizeBytes: UInt64(Self.CONFIG_BYTES.count)));
-        };
+        }
     }
 
-    func testShouldRejectASharedBlobWithoutASnapshotTreeRecord() throws {
+    @Test
+    func should_reject_a_shared_blob_without_a_snapshot_tree_record() throws {
         let sharedBlobLayout: SharedBlobLayout = try SharedBlobLayout.create();
         defer { try? FileManager.default.removeItem(at: sharedBlobLayout.hubDirectory); }
 
-        XCTAssertThrowsError(try sharedBlobLayout.validate(), "must fail closed") { thrownError in
-            guard let validationError: ArtifactValidationError = thrownError as? ArtifactValidationError else {
-                XCTFail("expected an ArtifactValidationError, got \(thrownError)");
-                return;
-            }
+        do {
+            try sharedBlobLayout.validate();
+            Issue.record("a shared blob without a snapshot tree record must fail closed");
+        } catch let validationError as ArtifactValidationError {
             guard case .huggingFaceSharedBlobMetadataUnavailable(let fileName, _) = validationError else {
-                XCTFail("expected HuggingFaceSharedBlobMetadataUnavailable, got \(validationError)");
+                Issue.record("expected HuggingFaceSharedBlobMetadataUnavailable, got \(validationError)");
                 return;
             }
-            XCTAssertEqual(fileName, "config.json");
-        };
+            #expect(fileName == "config.json");
+        }
     }
 
-    func testShouldRejectAHuggingFaceSnapshotSymlinkThatEscapesItsBlobDirectory() throws {
+    @Test
+    func should_reject_a_hugging_face_snapshot_symlink_that_escapes_its_blob_directory() throws {
         let temporaryRoot: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: temporaryRoot); }
         let modelCacheDirectory: URL = temporaryRoot.appendingPathComponent("models--example--model");
@@ -126,24 +134,22 @@ final class RequiredFilesTests: XCTestCase {
             atPath: snapshotDirectory.appendingPathComponent("config.json").path,
             withDestinationPath: "../../../outside-config.json");
 
-        XCTAssertThrowsError(
-            try RequiredFiles.validateRequiredFileForTests(
+        do {
+            _ = try RequiredFiles.validateRequiredFileForTests(
                 modelDirectory: snapshotDirectory.path,
-                requiredFileProfile: RequiredFileProfile(fileName: "config.json", sizeBytes: 0)),
-            "a snapshot symlink outside its own blob directory must fail closed") { thrownError in
-            guard let validationError: ArtifactValidationError = thrownError as? ArtifactValidationError else {
-                XCTFail("expected an ArtifactValidationError, got \(thrownError)");
-                return;
-            }
+                requiredFileProfile: RequiredFileProfile(fileName: "config.json", sizeBytes: 0));
+            Issue.record("a snapshot symlink outside its own blob directory must fail closed");
+        } catch let validationError as ArtifactValidationError {
             guard case .huggingFaceSnapshotSymlinkEscapesBlobDirectory(let fileName, _, _) = validationError else {
-                XCTFail("expected HuggingFaceSnapshotSymlinkEscapesBlobDirectory, got \(validationError)");
+                Issue.record("expected HuggingFaceSnapshotSymlinkEscapesBlobDirectory, got \(validationError)");
                 return;
             }
-            XCTAssertEqual(fileName, "config.json");
-        };
+            #expect(fileName == "config.json");
+        }
     }
 
-    func testShouldContinueRejectingSymlinksInRegularModelDirectories() throws {
+    @Test
+    func should_continue_rejecting_symlinks_in_regular_model_directories() throws {
         let modelDirectory: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: modelDirectory); }
         try Data("contents".utf8).write(
@@ -152,34 +158,38 @@ final class RequiredFilesTests: XCTestCase {
             atPath: modelDirectory.appendingPathComponent("config.json").path,
             withDestinationPath: "config-contents.json");
 
-        XCTAssertThrowsError(
-            try RequiredFiles.validateRequiredFileForTests(
+        do {
+            _ = try RequiredFiles.validateRequiredFileForTests(
                 modelDirectory: modelDirectory.path,
-                requiredFileProfile: RequiredFileProfile(fileName: "config.json", sizeBytes: 0)),
-            "regular model directories must continue rejecting symlinks") { thrownError in
-            XCTAssertEqual(
-                thrownError as? ArtifactValidationError,
-                .requiredFileIsSymlink(fileName: "config.json"));
-        };
+                requiredFileProfile: RequiredFileProfile(fileName: "config.json", sizeBytes: 0));
+            Issue.record("regular model directories must continue rejecting symlinks");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.requiredFileIsSymlink(
+                    fileName: "config.json"));
+        }
     }
 
-    func testShouldRejectARequiredFileNameWithParentDirectoryComponents() throws {
+    @Test
+    func should_reject_a_required_file_name_with_parent_directory_components() throws {
         let modelDirectory: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: modelDirectory); }
         try Data("contents".utf8).write(to: modelDirectory.appendingPathComponent("outside.json"));
 
-        XCTAssertThrowsError(
-            try RequiredFiles.validateRequiredFileForTests(
+        do {
+            _ = try RequiredFiles.validateRequiredFileForTests(
                 modelDirectory: modelDirectory.path,
-                requiredFileProfile: RequiredFileProfile(fileName: "../outside.json", sizeBytes: 0)),
-            "required file names must not escape the model directory") { thrownError in
-            XCTAssertEqual(
-                thrownError as? ArtifactValidationError,
-                .invalidProfileFileName(fileName: "../outside.json"));
-        };
+                requiredFileProfile: RequiredFileProfile(fileName: "../outside.json", sizeBytes: 0));
+            Issue.record("required file names must not escape the model directory");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.invalidProfileFileName(
+                    fileName: "../outside.json"));
+        }
     }
 
-    func testShouldReadAnOrdinaryJsonSidecarThroughItsRetainedDescriptor() throws {
+    @Test
+    func should_read_an_ordinary_json_sidecar_through_its_retained_descriptor() throws {
         let modelDirectory: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: modelDirectory); }
         let sidecarFileName: String = "model.safetensors.index.json";
@@ -199,10 +209,11 @@ final class RequiredFilesTests: XCTestCase {
 
         let actualSidecarBytes: Data = try validatedRequiredFile.readBoundedBytesForTests(
             maximumSizeBytes: UInt64(retainedSidecarBytes.count));
-        XCTAssertEqual(actualSidecarBytes, retainedSidecarBytes);
+        #expect(actualSidecarBytes == retainedSidecarBytes);
     }
 
-    func testShouldRejectABoundedRequiredFileReadAboveItsExplicitLimit() throws {
+    @Test
+    func should_reject_a_bounded_required_file_read_above_its_explicit_limit() throws {
         let modelDirectory: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: modelDirectory); }
         let sidecarFileName: String = "model.safetensors.index.json";
@@ -213,19 +224,21 @@ final class RequiredFilesTests: XCTestCase {
             requiredFileProfile: RequiredFileProfile(
                 fileName: sidecarFileName, sizeBytes: UInt64(sidecarBytes.count)));
 
-        XCTAssertThrowsError(
-            try validatedRequiredFile.readBoundedBytesForTests(
-                maximumSizeBytes: UInt64(sidecarBytes.count - 1)),
-            "a sidecar above the caller's explicit limit must fail closed") { thrownError in
-            XCTAssertEqual(
-                thrownError as? ArtifactValidationError, .boundedRequiredFileTooLarge(
+        do {
+            _ = try validatedRequiredFile.readBoundedBytesForTests(
+                maximumSizeBytes: UInt64(sidecarBytes.count - 1));
+            Issue.record("a sidecar above the caller's explicit limit must fail closed");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.boundedRequiredFileTooLarge(
                     fileName: sidecarFileName,
                     actualSizeBytes: UInt64(sidecarBytes.count),
                     maximumSizeBytes: UInt64(sidecarBytes.count - 1)));
-        };
+        }
     }
 
-    func testShouldPreserveTheSourceWhenARetainedDescriptorBecomesShort() throws {
+    @Test
+    func should_preserve_the_source_when_a_retained_descriptor_becomes_short() throws {
         let modelDirectory: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: modelDirectory); }
         let sidecarFileName: String = "model.safetensors.index.json";
@@ -239,17 +252,19 @@ final class RequiredFilesTests: XCTestCase {
                 fileName: sidecarFileName, sizeBytes: UInt64(sidecarBytes.count)));
         try Data().write(to: sidecarUrl);
 
-        XCTAssertThrowsError(
-            try validatedRequiredFile.readBoundedBytesForTests(
-                maximumSizeBytes: UInt64(sidecarBytes.count)),
-            "a short retained descriptor must fail with its read source") { thrownError in
-            XCTAssertEqual(
-                thrownError as? ArtifactValidationError, .readBoundedRequiredFile(
+        do {
+            _ = try validatedRequiredFile.readBoundedBytesForTests(
+                maximumSizeBytes: UInt64(sidecarBytes.count));
+            Issue.record("a short retained descriptor must fail with its read source");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.readBoundedRequiredFile(
                     fileName: sidecarFileName, problem: "failed to fill whole buffer"));
-        };
+        }
     }
 
-    func testShouldRejectADuplicateRequiredProfileBeforeReplacingTheFirstFile() throws {
+    @Test
+    func should_reject_a_duplicate_required_profile_before_replacing_the_first_file() throws {
         let modelDirectory: URL = try Self.makeTemporaryDirectory();
         defer { try? FileManager.default.removeItem(at: modelDirectory); }
         try Self.CONFIG_BYTES.write(to: modelDirectory.appendingPathComponent("config.json"));
@@ -260,20 +275,23 @@ final class RequiredFilesTests: XCTestCase {
                 fileName: "config.json", sizeBytes: UInt64(Self.CONFIG_BYTES.count + 1)),
         ];
 
-        XCTAssertThrowsError(
+        do {
             try duplicateProfiles[0].validateAllForTests(
-                modelDirectory: modelDirectory.path, requiredFileProfiles: duplicateProfiles),
-            "a repeated profile name must fail instead of replacing its first descriptor") { thrownError in
-            XCTAssertEqual(
-                thrownError as? ArtifactValidationError,
-                .duplicateProfileFileName(fileName: "config.json"));
-        };
+                modelDirectory: modelDirectory.path, requiredFileProfiles: duplicateProfiles);
+            Issue.record("a repeated profile name must fail instead of replacing its first descriptor");
+        } catch let validationError as ArtifactValidationError {
+            #expect(
+                validationError == ArtifactValidationError.duplicateProfileFileName(
+                    fileName: "config.json"));
+        }
     }
 }
 
-/// One Hugging Face hub whose model entry reaches an object in the hub-level
-/// shared blob store, so each test can vary exactly one verification input.
-/// Twin-port of the Rust SharedBlobLayout fixture.
+/**
+ * One Hugging Face hub whose model entry reaches an object in the hub-level
+ * shared blob store, so each journey can vary exactly one verification input.
+ * Twin-port of the Rust SharedBlobLayout fixture.
+ */
 private final class SharedBlobLayout {
     let hubDirectory: URL;
     let snapshotDirectory: URL;

@@ -1,11 +1,16 @@
-import XCTest;
+import Foundation;
 import ModelServing;
+import Testing;
+import JourneyCategories;
 
-/// Behavioral journeys for the canonical tensor inventory, twin-porting the
-/// pure-inventory tests of crates/model-serving/tests/hermetic/tensor_inventory.rs.
-/// The partition-validator journeys in that Rust file depend on the bounded
-/// safetensors source validator and land with that port.
-final class TensorInventoryTests: XCTestCase {
+/**
+ * Behavioral journeys for the canonical tensor inventory, twin-porting the
+ * pure-inventory tests of crates/model-serving/tests/hermetic/tensor_inventory.rs.
+ * The partition-validator journeys in that Rust file depend on the bounded
+ * safetensors source validator and land with that port.
+ */
+@Suite(.tags(.hermeticJourney))
+final class TensorInventoryTests {
 
     private func targetLocation(
         canonicalName: String, storedName: String, sourceId: TensorSourceId,
@@ -15,21 +20,23 @@ final class TensorInventoryTests: XCTestCase {
             semanticRole: .target, declarationOrigin: declarationOrigin);
     }
 
-    func testShouldResolveCanonicalNamesToStoredSidecarNames() throws {
+    @Test
+    func should_resolve_canonical_names_to_stored_sidecar_names() throws {
         let sourceId: TensorSourceId = TensorSourceId(sourceNumber: 7);
         let inventory: TensorInventory = TensorInventory();
         try inventory.insert(location: self.targetLocation(
             canonicalName: "language_model.trunk.fc.weight", storedName: "trunk.fc.weight",
             sourceId: sourceId, declarationOrigin: .architectureSidecar));
 
-        let location: TensorLocation = try XCTUnwrap(
+        let location: TensorLocation = try #require(
             inventory.location(canonicalName: "language_model.trunk.fc.weight"),
             "the canonical tensor should resolve");
-        XCTAssertEqual(location.storedName, "trunk.fc.weight");
-        XCTAssertEqual(location.sourceId, sourceId);
+        #expect(location.storedName == "trunk.fc.weight");
+        #expect(location.sourceId == sourceId);
     }
 
-    func testShouldRejectEmbeddedAndSidecarCanonicalCollisions() throws {
+    @Test
+    func should_reject_embedded_and_sidecar_canonical_collisions() throws {
         let inventory: TensorInventory = TensorInventory();
         try inventory.insert(location: self.targetLocation(
             canonicalName: "language_model.trunk.fc.weight",
@@ -41,14 +48,16 @@ final class TensorInventoryTests: XCTestCase {
                 canonicalName: "language_model.trunk.fc.weight", storedName: "trunk.fc.weight",
                 sourceId: TensorSourceId(sourceNumber: 2),
                 declarationOrigin: .architectureSidecar));
-            XCTFail("the sidecar must not silently override the embedded location");
+            Issue.record("the sidecar must not silently override the embedded location");
         } catch let collision as TensorInventoryError {
-            XCTAssertEqual(
-                collision, .canonicalNameCollision(canonicalName: "language_model.trunk.fc.weight"));
+            #expect(
+                collision == TensorInventoryError.canonicalNameCollision(
+                    canonicalName: "language_model.trunk.fc.weight"));
         }
     }
 
-    func testShouldRejectDuplicatePhysicalTensorLocations() throws {
+    @Test
+    func should_reject_duplicate_physical_tensor_locations() throws {
         let sourceId: TensorSourceId = TensorSourceId(sourceNumber: 3);
         let inventory: TensorInventory = TensorInventory();
         try inventory.insert(location: self.targetLocation(
@@ -59,15 +68,16 @@ final class TensorInventoryTests: XCTestCase {
             try inventory.insert(location: self.targetLocation(
                 canonicalName: "language_model.trunk.alias.weight", storedName: "trunk.fc.weight",
                 sourceId: sourceId, declarationOrigin: .architectureSidecar));
-            XCTFail("one physical tensor must not have two canonical identities");
+            Issue.record("one physical tensor must not have two canonical identities");
         } catch let duplicate as TensorInventoryError {
-            XCTAssertEqual(
-                duplicate, .physicalLocationCollision(
+            #expect(
+                duplicate == TensorInventoryError.physicalLocationCollision(
                     sourceId: sourceId, storedName: "trunk.fc.weight"));
         }
     }
 
-    func testShouldRemoveRemovedCanonicalNamesFromEveryLookup() throws {
+    @Test
+    func should_remove_removed_canonical_names_from_every_lookup() throws {
         let sourceId: TensorSourceId = TensorSourceId(sourceNumber: 9);
         let inventory: TensorInventory = TensorInventory();
         var removedCanonicalNames: Set<String> = Set();
@@ -82,27 +92,7 @@ final class TensorInventoryTests: XCTestCase {
 
         inventory.removeCanonicalNames(canonicalNames: removedCanonicalNames);
 
-        XCTAssertEqual(inventory.tensorCount(), 0);
-        XCTAssertTrue(inventory.sourceIds().isEmpty);
-    }
-
-    /// Little-endian length prefix plus header text plus zeroed payload,
-    /// using the same immutable scalar-view pattern as SafetensorsHeaderTests.
-    private static func framedBytes(headerText: String, payloadByteCount: Int) -> Array<UInt8> {
-        var framedFileBytes: Array<UInt8> = Array();
-        var littleEndianHeaderLength: UInt64 = UInt64(headerText.utf8.count);
-        withUnsafeBytes(of: &littleEndianHeaderLength) { (valueBuffer: UnsafeRawBufferPointer) -> Void in
-            framedFileBytes.append(contentsOf: Array(valueBuffer));
-        };
-        framedFileBytes.append(contentsOf: Array(headerText.utf8));
-        framedFileBytes.append(contentsOf: Array<UInt8>(repeating: 0, count: payloadByteCount));
-        return framedFileBytes;
-    }
-
-    private static func makeInventoryTemporaryDirectory() throws -> URL {
-        let directoryUrl: URL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tensor-inventory-\(UUID().uuidString)");
-        try FileManager.default.createDirectory(at: directoryUrl, withIntermediateDirectories: true);
-        return directoryUrl;
+        #expect(inventory.tensorCount() == 0);
+        #expect(inventory.sourceIds().isEmpty);
     }
 }
