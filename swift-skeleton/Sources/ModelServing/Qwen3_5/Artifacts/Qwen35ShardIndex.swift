@@ -15,12 +15,10 @@ public struct Qwen3_5ShardIndex: Equatable {
 
     /// Name-keyed maps kept in Rust BTreeMap (UTF-8 byte) order.
     private var languageTensorShardEntries: Array<(tensorName: String, shardFileName: String)>;
-    private var mtpTensorShardEntries: Array<(tensorName: String, shardFileName: String)>;
     private var visionTensorShardEntries: Array<(tensorName: String, shardFileName: String)>;
     private let totalPayloadBytesValue: UInt64;
     private let modelShardFileNamesValue: Array<String>;
     private let visionSidecarFileNamesValue: Array<String>;
-    private var mtpOnlyShardFileNamesValue: Array<String>;
 
     /// Parses and independently validates the executable language inventory.
     /// Also collects vision tower tensor mappings for embedded and sidecar storage.
@@ -47,27 +45,14 @@ public struct Qwen3_5ShardIndex: Equatable {
         // ownership; physical duplicate tensors are handled during validation.
         var languageTensorNames: Set<String> = Set();
         var languageTensorShardEntries: Array<(tensorName: String, shardFileName: String)> = Array();
-        var mtpTensorShardEntries: Array<(tensorName: String, shardFileName: String)> = Array();
         var visionTensorShardEntries: Array<(tensorName: String, shardFileName: String)> = Array();
         var languageShardFileNames: Set<String> = Set();
-        var mtpShardFileNames: Set<String> = Set();
-        var languageOrMtpShardFileNames: Set<String> = Set();
         var visionShardFileNames: Set<String> = Set();
         // Iterate the weight map in BTreeMap (UTF-8 byte) order.
         for weightEntry: (tensorName: String, shardFileName: String) in indexDocument.weightMap {
             try Qwen3_5ShardIndex.validateTensorName(tensorName: weightEntry.tensorName);
             if weightEntry.tensorName.hasPrefix("language_model.") {
-                if Qwen3_5ShardIndex.containsMtpComponent(tensorName: weightEntry.tensorName) {
-                    // Qwen3.6 oQ artifacts embed the optional MTP head in the
-                    // same shards as the autoregressive trunk. The head has its
-                    // own strict profile and is not part of the trunk inventory.
-                    mtpShardFileNames.insert(weightEntry.shardFileName);
-                    languageOrMtpShardFileNames.insert(weightEntry.shardFileName);
-                    mtpTensorShardEntries.append(weightEntry);
-                    continue;
-                }
                 languageShardFileNames.insert(weightEntry.shardFileName);
-                languageOrMtpShardFileNames.insert(weightEntry.shardFileName);
                 languageTensorNames.insert(weightEntry.tensorName);
                 languageTensorShardEntries.append(weightEntry);
             } else if weightEntry.tensorName.hasPrefix("vision_tower.") {
@@ -78,7 +63,10 @@ public struct Qwen3_5ShardIndex: Equatable {
                 visionShardFileNames.insert(weightEntry.shardFileName);
                 visionTensorShardEntries.append(weightEntry);
             }
-            // Other tensor prefixes (e.g., "mtp.") are silently skipped.
+            // Other tensor prefixes are silently skipped. MTP tensors inside
+            // language shards fail closed through the language tensor-name
+            // validation below: the codebase ships target-only until
+            // speculative decoding is rebuilt from first principles.
         }
         try Qwen3_5TensorSpec.validateLanguageTensorNames(
             actualLanguageTensorNames: languageTensorNames,
@@ -88,9 +76,6 @@ public struct Qwen3_5ShardIndex: Equatable {
         };
         let sortedByteOrder: (String, String) -> Bool = byteOrderedSort;
         let visionOnlyShardFileNames: Array<String> = visionShardFileNames
-            .subtracting(languageOrMtpShardFileNames)
-            .sorted(by: sortedByteOrder);
-        let mtpOnlyShardFileNames: Array<String> = mtpShardFileNames
             .subtracting(languageShardFileNames)
             .sorted(by: sortedByteOrder);
         let modelShardFileNames: Array<String> = languageShardFileNames
@@ -102,27 +87,22 @@ public struct Qwen3_5ShardIndex: Equatable {
         }
         return Qwen3_5ShardIndex(
             languageTensorShardEntries: sortedByName(languageTensorShardEntries),
-            mtpTensorShardEntries: sortedByName(mtpTensorShardEntries),
             visionTensorShardEntries: sortedByName(visionTensorShardEntries),
             totalPayloadBytesValue: totalPayloadBytes,
             modelShardFileNamesValue: modelShardFileNames,
-            visionSidecarFileNamesValue: visionOnlyShardFileNames,
-            mtpOnlyShardFileNamesValue: mtpOnlyShardFileNames);
+            visionSidecarFileNamesValue: visionOnlyShardFileNames);
     }
 
     private init(
         languageTensorShardEntries: Array<(tensorName: String, shardFileName: String)>,
-        mtpTensorShardEntries: Array<(tensorName: String, shardFileName: String)>,
         visionTensorShardEntries: Array<(tensorName: String, shardFileName: String)>,
         totalPayloadBytesValue: UInt64, modelShardFileNamesValue: Array<String>,
-        visionSidecarFileNamesValue: Array<String>, mtpOnlyShardFileNamesValue: Array<String>) {
+        visionSidecarFileNamesValue: Array<String>) {
         self.languageTensorShardEntries = languageTensorShardEntries;
-        self.mtpTensorShardEntries = mtpTensorShardEntries;
         self.visionTensorShardEntries = visionTensorShardEntries;
         self.totalPayloadBytesValue = totalPayloadBytesValue;
         self.modelShardFileNamesValue = modelShardFileNamesValue;
         self.visionSidecarFileNamesValue = visionSidecarFileNamesValue;
-        self.mtpOnlyShardFileNamesValue = mtpOnlyShardFileNamesValue;
     }
 
     /// Returns the total payload bytes declared by the index.
@@ -140,16 +120,6 @@ public struct Qwen3_5ShardIndex: Equatable {
         return self.languageTensorShardEntries.count;
     }
 
-    /// Returns the count of optional MTP-head tensors recorded in language shards.
-    public func mtpTensorCount() -> Int {
-        return self.mtpTensorShardEntries.count;
-    }
-
-    /// Returns the optional MTP-head tensor location inventory in byte order.
-    public func mtpTensorNameToShardFileName() -> Array<(tensorName: String, shardFileName: String)> {
-        return self.mtpTensorShardEntries;
-    }
-
     /// Returns the vision tower tensor name to shard file name mapping in byte order.
     public func visionTensorNameToShardFileName() -> Array<(tensorName: String, shardFileName: String)> {
         return self.visionTensorShardEntries;
@@ -165,7 +135,6 @@ public struct Qwen3_5ShardIndex: Equatable {
     /// Returns executable model shard file names in sorted order.
     ///
     /// Includes target-language files and language files with embedded vision.
-    /// MTP-only files are retained separately so target-only loading does not map them.
     public func modelShardFileNames() -> Array<String> {
         return self.modelShardFileNamesValue;
     }
@@ -173,28 +142,6 @@ public struct Qwen3_5ShardIndex: Equatable {
     /// Returns vision-only files that are loaded separately from language shards.
     public func visionSidecarFileNames() -> Array<String> {
         return self.visionSidecarFileNamesValue;
-    }
-
-    /// Returns MTP-only files that may be absent without blocking target serving.
-    public func mtpOnlyShardFileNames() -> Array<String> {
-        return self.mtpOnlyShardFileNamesValue;
-    }
-
-    /// Returns whether the indexed file contains only optional MTP tensors.
-    public func isMtpOnlyShardFile(shardFileName: String) -> Bool {
-        return self.mtpOnlyShardFileNamesValue.contains(shardFileName);
-    }
-
-    /// Removes an absent optional MTP file and its logical tensor ownership.
-    public mutating func omitOptionalMtpShardFile(shardFileName: String) -> Bool {
-        if self.isMtpOnlyShardFile(shardFileName: shardFileName) == false {
-            return false;
-        }
-        self.mtpTensorShardEntries = self.mtpTensorShardEntries
-            .filter({ (entry: (tensorName: String, shardFileName: String)) -> Bool in entry.shardFileName != shardFileName });
-        self.mtpOnlyShardFileNamesValue = self.mtpOnlyShardFileNamesValue
-            .filter({ (indexedFileName: String) -> Bool in indexedFileName != shardFileName });
-        return true;
     }
 
     /// Returns whether the indexed file is a separately loaded vision file.
@@ -221,13 +168,6 @@ public struct Qwen3_5ShardIndex: Equatable {
             .shardFileName;
     }
 
-    /// Resolves one exact MTP-head tensor name to its shard file.
-    public func shardFileNameForMtpTensor(tensorName: String) -> String? {
-        return self.mtpTensorShardEntries
-            .first(where: { (entry: (tensorName: String, shardFileName: String)) -> Bool in entry.tensorName == tensorName })?
-            .shardFileName;
-    }
-
     /// Returns language tensor names that belong to one shard.
     public func languageTensorNamesForShard(shardFileName: String) -> Array<String> {
         return self.languageTensorShardEntries
@@ -237,17 +177,10 @@ public struct Qwen3_5ShardIndex: Equatable {
             .map({ (entry: (tensorName: String, shardFileName: String)) -> String in entry.tensorName });
     }
 
-    /// Returns MTP-head tensor names that belong to one language shard.
-    public func mtpTensorNamesForShard(shardFileName: String) -> Array<String> {
-        return self.mtpTensorShardEntries
-            .filter({ (entry: (tensorName: String, shardFileName: String)) -> Bool in entry.shardFileName == shardFileName })
-            .map({ (entry: (tensorName: String, shardFileName: String)) -> String in entry.tensorName });
-    }
-
     /// Extracts the set of language tensor names from the safetensors index JSON
     /// without performing any validation against tensor profiles.
     ///
-    /// This is used to determine which target and MTP modules are quantized vs.
+    /// This is used to determine which target modules are quantized vs.
     /// unquantized by checking for affine companion tensors before the full
     /// validation pass that requires complete tensor profiles.
     public static func extractLanguageTensorNamesFromJson(
@@ -283,14 +216,6 @@ public struct Qwen3_5ShardIndex: Equatable {
         }
     }
 
-    private static func containsMtpComponent(tensorName: String) -> Bool {
-        return tensorName
-            .split(separator: ".")
-            .contains(where: { (nameComponent: Substring) -> Bool in
-                return nameComponent == "mtp" || nameComponent.hasPrefix("mtp_");
-            });
-    }
-
     public static func == (lhsValue: Qwen3_5ShardIndex, rhsValue: Qwen3_5ShardIndex) -> Bool {
         func entriesEqual(_ leftEntries: Array<(tensorName: String, shardFileName: String)>, _ rightEntries: Array<(tensorName: String, shardFileName: String)>) -> Bool {
             return leftEntries.elementsEqual(rightEntries, by: { (leftEntry: (tensorName: String, shardFileName: String), rightEntry: (tensorName: String, shardFileName: String)) -> Bool in
@@ -300,11 +225,9 @@ public struct Qwen3_5ShardIndex: Equatable {
         }
         return lhsValue.totalPayloadBytesValue == rhsValue.totalPayloadBytesValue
             && entriesEqual(lhsValue.languageTensorShardEntries, rhsValue.languageTensorShardEntries)
-            && entriesEqual(lhsValue.mtpTensorShardEntries, rhsValue.mtpTensorShardEntries)
             && entriesEqual(lhsValue.visionTensorShardEntries, rhsValue.visionTensorShardEntries)
             && lhsValue.modelShardFileNamesValue == rhsValue.modelShardFileNamesValue
-            && lhsValue.visionSidecarFileNamesValue == rhsValue.visionSidecarFileNamesValue
-            && lhsValue.mtpOnlyShardFileNamesValue == rhsValue.mtpOnlyShardFileNamesValue;
+            && lhsValue.visionSidecarFileNamesValue == rhsValue.visionSidecarFileNamesValue;
     }
 }
 
