@@ -18,7 +18,11 @@ let package: Package = Package(
         // tokenizer, and eval loops the Swift engine adapts instead of
         // porting. Exactly pinned so the pairing with mlx-swift above is
         // deliberate: 3.32.3 requires mlx-swift ~> 0.32.3.
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3")
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3"),
+        // The tokenizer engine the mlx-swift-lm tokenizer bridge adapts;
+        // 3.32.3 defines the bridge but ships no tokenizer implementation,
+        // so the consuming package owns this dependency (upstream recipe).
+        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.3.0")
     ],
     targets: [
         // Wave 1 — crates/config
@@ -53,7 +57,9 @@ let package: Package = Package(
                 .product(name: "MLXFast", package: "mlx-swift"),
                 .product(name: "MLXLinalg", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-                .product(name: "MLXLLM", package: "mlx-swift-lm")
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers")
             ]),
         // Wave 3 — apps/inference-worker
         .executableTarget(
@@ -66,7 +72,12 @@ let package: Package = Package(
         .testTarget(name: "SupervisorTests", dependencies: ["Supervisor"]),
         .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
-        .testTarget(name: "ModelServingTests", dependencies: ["ModelServing"]),
+        .testTarget(
+            name: "ModelServingTests",
+            dependencies: [
+                "ModelServing",
+                .product(name: "Tokenizers", package: "swift-transformers")
+            ]),
         .testTarget(name: "InferenceWorkerTests", dependencies: ["InferenceWorker"])
     ]
 );
