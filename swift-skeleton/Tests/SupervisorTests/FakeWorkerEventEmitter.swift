@@ -9,13 +9,18 @@ import Foundation;
 enum FakeWorkerEventEmitter {
 
     /// A bash function that writes one frame: a four-byte big-endian length
-    /// prefix followed by the payload bytes.
+    /// prefix followed by the payload bytes. `printf -v` computes the prefix
+    /// in the shell process itself; a `$(printf ...)` command substitution
+    /// would fork per frame, and those forks fail under the parallel test
+    /// runner's process-table pressure, killing the fake worker before it
+    /// emits anything.
     static func frameEmitterFunction() -> String {
         return "emit_frame() {\n"
             + "  payload=\"$1\"\n"
             + "  length=\"${#payload}\"\n"
-            + "  printf \"$(printf '\\\\x%02x\\\\x%02x\\\\x%02x\\\\x%02x' "
-            + "$((length>>24&255)) $((length>>16&255)) $((length>>8&255)) $((length&255)))%s\" \"$payload\"\n"
+            + "  printf -v prefix '\\\\x%02x\\\\x%02x\\\\x%02x\\\\x%02x' "
+            + "$((length>>24&255)) $((length>>16&255)) $((length>>8&255)) $((length&255))\n"
+            + "  printf \"$prefix%s\" \"$payload\"\n"
             + "}\n";
     }
 

@@ -1,7 +1,9 @@
 import Foundation;
-import XCTest;
+
+import Testing;
 
 import AstronomicalConfig;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -13,9 +15,11 @@ import AstronomicalConfig;
  * cap. The bound endpoint is discoverable, a misbehaving client never
  * disturbs the endpoint, and shutdown refuses further connections.
  */
-final class RestHttpServerTests: XCTestCase {
+@Suite(.serialized, .tags(.hermeticJourney))
+final class RestHttpServerTests {
 
-    func testHealthJourneyAnswersOkOverLoopback() throws {
+    @Test
+    func should_answer_the_health_journey_with_ok_over_loopback() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
 
         let responseText: String? = RawLoopbackHttpClient.exchange(
@@ -23,20 +27,21 @@ final class RestHttpServerTests: XCTestCase {
             requestText: "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
 
         let responseBody: String = try self.requireResponseText(responseText);
-        XCTAssertTrue(responseBody.hasPrefix("HTTP/1.1 200 OK"), "unexpected status line: \(responseBody)");
-        XCTAssertTrue(responseBody.contains("Connection: close"), "response must be a close-delimited reply");
-        XCTAssertTrue(responseBody.contains("Content-Type: text/plain"), "health is a plain-text reply");
-        XCTAssertTrue(responseBody.hasSuffix("\r\n\r\nok"), "health body must be exactly ok: \(responseBody)");
+        #expect(responseBody.hasPrefix("HTTP/1.1 200 OK"), "unexpected status line: \(responseBody)");
+        #expect(responseBody.contains("Connection: close"), "response must be a close-delimited reply");
+        #expect(responseBody.contains("Content-Type: text/plain"), "health is a plain-text reply");
+        #expect(responseBody.hasSuffix("\r\n\r\nok"), "health body must be exactly ok: \(responseBody)");
 
         let queryResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /health?live=1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let queryBody: String = try self.requireResponseText(queryResponse);
-        XCTAssertTrue(queryBody.hasPrefix("HTTP/1.1 200 "), "query parts must not change routing: \(queryBody)");
+        #expect(queryBody.hasPrefix("HTTP/1.1 200 "), "query parts must not change routing: \(queryBody)");
         server.stop();
     }
 
-    func testOversizedHeaderBlockAnswersBadRequestAndTheEndpointKeepsServing() throws {
+    @Test
+    func should_answer_bad_request_for_an_oversized_header_block_and_keep_serving() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
 
         let oversizedHeaderLine: String = String(repeating: "x", count: 40_000);
@@ -44,17 +49,18 @@ final class RestHttpServerTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /health HTTP/1.1\r\nX-Bulk: \(oversizedHeaderLine)\r\n\r\n");
         let oversizedBody: String = try self.requireResponseText(oversizedResponse);
-        XCTAssertTrue(oversizedBody.hasPrefix("HTTP/1.1 400 "), "an oversized header block must be 400: \(oversizedBody)");
+        #expect(oversizedBody.hasPrefix("HTTP/1.1 400 "), "an oversized header block must be 400: \(oversizedBody)");
 
         let followUpResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let followUpBody: String = try self.requireResponseText(followUpResponse);
-        XCTAssertTrue(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must keep serving after oversized headers");
+        #expect(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must keep serving after oversized headers");
         server.stop();
     }
 
-    func testReadinessFollowsTheWorkerHealthProvider() throws {
+    @Test
+    func should_follow_the_worker_health_provider_for_readiness() throws {
         let readinessBox: ReadinessBox = ReadinessBox(initialStatus: .loading);
         let server: RestHttpServer = try self.startFoundationServer(readinessBox: readinessBox);
 
@@ -62,73 +68,77 @@ final class RestHttpServerTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /ready HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let loadingBody: String = try self.requireResponseText(loadingResponse);
-        XCTAssertTrue(loadingBody.hasPrefix("HTTP/1.1 503 "), "not-ready must be 503: \(loadingBody)");
-        XCTAssertTrue(loadingBody.hasSuffix("\r\n\r\nloading"), "readiness body names the status: \(loadingBody)");
+        #expect(loadingBody.hasPrefix("HTTP/1.1 503 "), "not-ready must be 503: \(loadingBody)");
+        #expect(loadingBody.hasSuffix("\r\n\r\nloading"), "readiness body names the status: \(loadingBody)");
 
         readinessBox.overwrite(status: .ready);
         let readyResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /ready HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let readyBody: String = try self.requireResponseText(readyResponse);
-        XCTAssertTrue(readyBody.hasPrefix("HTTP/1.1 200 "), "ready must be 200: \(readyBody)");
-        XCTAssertTrue(readyBody.hasSuffix("\r\n\r\nready"), "readiness body names the status: \(readyBody)");
+        #expect(readyBody.hasPrefix("HTTP/1.1 200 "), "ready must be 200: \(readyBody)");
+        #expect(readyBody.hasSuffix("\r\n\r\nready"), "readiness body names the status: \(readyBody)");
         server.stop();
     }
 
-    func testUnknownPathAnswersNotFoundWithTheSharedErrorEnvelope() throws {
+    @Test
+    func should_answer_not_found_with_the_shared_error_envelope_for_an_unknown_path() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
 
         let responseText: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /nope HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let responseBody: String = try self.requireResponseText(responseText);
-        XCTAssertTrue(responseBody.hasPrefix("HTTP/1.1 404 "), "unknown path must be 404: \(responseBody)");
-        XCTAssertTrue(responseBody.contains("Content-Type: application/json"), "failures are JSON envelopes");
+        #expect(responseBody.hasPrefix("HTTP/1.1 404 "), "unknown path must be 404: \(responseBody)");
+        #expect(responseBody.contains("Content-Type: application/json"), "failures are JSON envelopes");
 
         let envelope: [String: Any] = try self.decodeEnvelope(fromResponseBody: responseBody);
         let errorObject: [String: Any] = try self.requireErrorObject(envelope);
-        XCTAssertEqual(errorObject["type"] as? String, "invalid_request_error");
+        #expect(errorObject["type"] as? String == "invalid_request_error");
         let messageText: String = try self.requireMessageText(errorObject);
-        XCTAssertFalse(messageText.isEmpty, "the failure must say what was wrong");
+        #expect(!messageText.isEmpty, "the failure must say what was wrong");
         server.stop();
     }
 
-    func testWrongMethodOnAKnownPathAnswersMethodNotAllowed() throws {
+    @Test
+    func should_answer_method_not_allowed_for_a_wrong_method_on_a_known_path() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
 
         let responseText: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "POST /health HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2\r\n\r\n{}");
         let responseBody: String = try self.requireResponseText(responseText);
-        XCTAssertTrue(responseBody.hasPrefix("HTTP/1.1 405 "), "wrong method must be 405: \(responseBody)");
-        XCTAssertTrue(responseBody.contains("Allow:"), "405 must name the allowed methods");
+        #expect(responseBody.hasPrefix("HTTP/1.1 405 "), "wrong method must be 405: \(responseBody)");
+        #expect(responseBody.contains("Allow:"), "405 must name the allowed methods");
 
         let envelope: [String: Any] = try self.decodeEnvelope(fromResponseBody: responseBody);
         let errorObject: [String: Any] = try self.requireErrorObject(envelope);
-        XCTAssertEqual(errorObject["type"] as? String, "invalid_request_error");
+        #expect(errorObject["type"] as? String == "invalid_request_error");
         let messageText: String = try self.requireMessageText(errorObject);
-        XCTAssertFalse(messageText.isEmpty, "the failure must say what was wrong");
+        #expect(!messageText.isEmpty, "the failure must say what was wrong");
         server.stop();
     }
 
-    func testMalformedRequestAnswersBadRequestAndTheEndpointKeepsServing() throws {
+    @Test
+    func should_answer_bad_request_for_a_malformed_request_and_keep_serving() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
 
         let malformedResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "BOGUS LINE\r\n\r\n");
         let malformedBody: String = try self.requireResponseText(malformedResponse);
-        XCTAssertTrue(malformedBody.hasPrefix("HTTP/1.1 400 "), "garbage must be 400: \(malformedBody)");
+        #expect(malformedBody.hasPrefix("HTTP/1.1 400 "), "garbage must be 400: \(malformedBody)");
 
         let followUpResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let followUpBody: String = try self.requireResponseText(followUpResponse);
-        XCTAssertTrue(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must keep serving after garbage");
+        #expect(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must keep serving after garbage");
         server.stop();
     }
 
-    func testRequestBodyBeyondTheServerCapIsRejectedAndWithinItServed() throws {
+    @Test
+    func should_reject_a_request_body_beyond_the_server_cap_and_serve_within_it() throws {
         let readinessBox: ReadinessBox = ReadinessBox(initialStatus: .ready);
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return readinessBox.readStatus();
@@ -148,35 +158,38 @@ final class RestHttpServerTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "POST /test/echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 10\r\n\r\n0123456789");
         let withinCapBody: String = try self.requireResponseText(withinCapResponse);
-        XCTAssertTrue(withinCapBody.hasPrefix("HTTP/1.1 200 "), "body within the cap must reach the handler: \(withinCapBody)");
+        #expect(withinCapBody.hasPrefix("HTTP/1.1 200 "), "body within the cap must reach the handler: \(withinCapBody)");
 
         let beyondCapResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "POST /test/echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 65\r\n\r\n" + String(repeating: "x", count: 65));
         let beyondCapBody: String = try self.requireResponseText(beyondCapResponse);
-        XCTAssertTrue(beyondCapBody.hasPrefix("HTTP/1.1 413 "), "declared body beyond the cap must be 413: \(beyondCapBody)");
+        #expect(beyondCapBody.hasPrefix("HTTP/1.1 413 "), "declared body beyond the cap must be 413: \(beyondCapBody)");
         server.stop();
     }
 
-    func testServerExposesTheActuallyBoundLoopbackEndpoint() throws {
+    @Test
+    func should_expose_the_actually_bound_loopback_endpoint() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
-        XCTAssertEqual(server.boundEndpoint.host, "127.0.0.1");
-        XCTAssertNotEqual(server.boundEndpoint.port, 0, "an ephemeral bind must publish its actual port");
+        #expect(server.boundEndpoint.host == "127.0.0.1");
+        #expect(server.boundEndpoint.port != 0, "an ephemeral bind must publish its actual port");
         server.stop();
     }
 
-    func testStopEndsTheEndpoint() throws {
+    @Test
+    func should_end_the_endpoint_on_stop() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
         let boundPort: UInt16 = server.boundEndpoint.port;
         server.stop();
 
-        XCTAssertFalse(
-            RawLoopbackHttpClient.canConnect(port: boundPort),
+        #expect(
+            !RawLoopbackHttpClient.canConnect(port: boundPort),
             "after stop() the endpoint must refuse connections");
         server.stop();
     }
 
-    func testAbruptClientDisconnectDoesNotDisturbTheEndpoint() throws {
+    @Test
+    func should_keep_the_endpoint_disturbed_by_nothing_when_a_client_disconnects_abruptly() throws {
         let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
 
         RawLoopbackHttpClient.connectThenCloseWithoutSpeaking(port: server.boundEndpoint.port);
@@ -184,7 +197,7 @@ final class RestHttpServerTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let followUpBody: String = try self.requireResponseText(followUpResponse);
-        XCTAssertTrue(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must survive silent clients");
+        #expect(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must survive silent clients");
         server.stop();
     }
 
@@ -206,7 +219,6 @@ final class RestHttpServerTests: XCTestCase {
 
     private func requireResponseText(_ responseText: String?) throws -> String {
         guard let unwrappedResponseText: String = responseText else {
-            XCTFail("the loopback exchange must produce a response");
             throw RestHttpServerTestFailure.missingResponse;
         }
         return unwrappedResponseText;
@@ -238,7 +250,7 @@ final class RestHttpServerTests: XCTestCase {
     }
 }
 
-/// Thread-safe readiness handoff between the test body and the serving thread.
+/// Thread-safe readiness handoff between the journey body and the serving thread.
 private final class ReadinessBox: @unchecked Sendable {
 
     private let stateLock: NSLock;
