@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_image_generation.rs.
-final class ImageGenerationTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ImageGenerationTests {
 
-    func testShouldValidateACompleteImageGenerationRequestIntoEffectiveParts() throws {
+    @Test
+    func should_validate_a_complete_image_generation_request_into_effective_parts() throws {
         let request: OpenAiImageGenerationRequest = try Self.deserializeRequest("""
         {
             "model":"black-forest-labs/FLUX.2-klein-4B",
@@ -18,24 +22,26 @@ final class ImageGenerationTests: XCTestCase {
         }
         """);
         let requestParts: OpenAiImageGenerationRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.model, "black-forest-labs/FLUX.2-klein-4B");
-        XCTAssertEqual(requestParts.prompt, "A moonlit balcony scene from Romeo and Juliet.");
-        XCTAssertEqual(requestParts.seed, UInt64.max);
-        XCTAssertEqual(requestParts.width, 1_024);
-        XCTAssertEqual(requestParts.height, 768);
-        XCTAssertEqual(requestParts.responseFormat, .base64Json);
-        XCTAssertEqual(requestParts.imageCount, 1);
+        #expect(requestParts.model == "black-forest-labs/FLUX.2-klein-4B");
+        #expect(requestParts.prompt == "A moonlit balcony scene from Romeo and Juliet.");
+        #expect(requestParts.seed == UInt64.max);
+        #expect(requestParts.width == 1_024);
+        #expect(requestParts.height == 768);
+        #expect(requestParts.responseFormat == .base64Json);
+        #expect(requestParts.imageCount == 1);
     }
 
-    func testShouldDefaultTheImageCountAndOptionalSeed() throws {
+    @Test
+    func should_default_the_image_count_and_optional_seed() throws {
         let request: OpenAiImageGenerationRequest = try Self.deserializeRequest(
             Self.validRequestFields(width: "64", height: "64"));
         let requestParts: OpenAiImageGenerationRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.imageCount, 1);
-        XCTAssertNil(requestParts.seed);
+        #expect(requestParts.imageCount == 1);
+        #expect(requestParts.seed == nil);
     }
 
-    func testShouldRejectStepAndGuidanceFieldsAsUnknown() throws {
+    @Test
+    func should_reject_step_and_guidance_fields_as_unknown() throws {
         // The diffusion schedule is owned by the worker's model profile, so a caller that still
         // sends the removed control fields gets the strict unknown-field rejection rather than a
         // silently ignored knob.
@@ -44,27 +50,29 @@ final class ImageGenerationTests: XCTestCase {
             let request: OpenAiImageGenerationRequest = try Self.deserializeRequest(requestJson);
             do {
                 _ = try request.intoParts();
-                XCTFail("intruding field \(intrudingFieldName) must fail closed");
-                return;
+                Issue.record("intruding field \(intrudingFieldName) must fail closed");
             } catch let validationError as OpenAiImageGenerationValidationError {
-                XCTAssertEqual(
-                    validationError,
-                    .unknownField(fieldName: intrudingFieldName));
+                #expect(
+                    validationError
+                        == OpenAiImageGenerationValidationError.unknownField(fieldName: intrudingFieldName));
             }
         }
     }
 
-    func testShouldRejectBlankOrNonStringPrompts() throws {
+    @Test
+    func should_reject_blank_or_non_string_prompts() throws {
         let blankPromptRequest: OpenAiImageGenerationRequest = try Self.deserializeRequest(
             #"{"model":"flux","prompt":" \n\t","width":64,"height":64,"response_format":"b64_json"}"#);
-        XCTAssertEqual(
-            try Self.intoPartsResult(blankPromptRequest),
-            .failure(.blankPrompt));
+        #expect(
+            Self.intoPartsResult(blankPromptRequest)
+                == Result<OpenAiImageGenerationRequestParts, OpenAiImageGenerationValidationError>
+                    .failure(.blankPrompt));
         Self.assertMalformedRequest(
             #"{"model":"flux","prompt":7,"width":64,"height":64,"response_format":"b64_json"}"#);
     }
 
-    func testShouldRejectDimensionsOutsideTheSupportedGeometry() throws {
+    @Test
+    func should_reject_dimensions_outside_the_supported_geometry() throws {
         let invalidDimensions: Array<(width: String, height: String, parameterName: String, actualPixels: UInt32)> = [
             ("0", "64", "width", 0),
             ("48", "64", "width", 48),
@@ -74,17 +82,19 @@ final class ImageGenerationTests: XCTestCase {
         for invalidDimension in invalidDimensions {
             let request: OpenAiImageGenerationRequest = try Self.deserializeRequest(
                 Self.validRequestFields(width: invalidDimension.width, height: invalidDimension.height));
-            XCTAssertEqual(
-                try Self.intoPartsResult(request),
-                .failure(.unsupportedDimension(
-                    parameterName: invalidDimension.parameterName,
-                    actualPixels: invalidDimension.actualPixels,
-                    minimumPixels: 64,
-                    maximumPixels: 1_024)));
+            #expect(
+                Self.intoPartsResult(request)
+                    == Result<OpenAiImageGenerationRequestParts, OpenAiImageGenerationValidationError>
+                        .failure(.unsupportedDimension(
+                            parameterName: invalidDimension.parameterName,
+                            actualPixels: invalidDimension.actualPixels,
+                            minimumPixels: 64,
+                            maximumPixels: 1_024)));
         }
     }
 
-    func testShouldRejectMalformedDimensionTransportValues() {
+    @Test
+    func should_reject_malformed_dimension_transport_values() {
         for malformedFields in [
             Self.validRequestFields(width: "64.5", height: "64"),
             Self.validRequestFields(width: "-64", height: "64"),
@@ -94,14 +104,16 @@ final class ImageGenerationTests: XCTestCase {
         }
     }
 
-    func testShouldRejectMalformedSeedTransportValues() {
+    @Test
+    func should_reject_malformed_seed_transport_values() {
         for malformedSeed in ["-1", "1.5", "18446744073709551616", "\"7\""] {
             let requestJson: String = "{\"model\":\"flux\",\"prompt\":\"A rose.\",\"seed\":\(malformedSeed),\"width\":64,\"height\":64,\"response_format\":\"b64_json\"}";
             Self.assertMalformedRequest(requestJson);
         }
     }
 
-    func testShouldRejectUnsupportedFormatCountAndUnknownFields() throws {
+    @Test
+    func should_reject_unsupported_format_count_and_unknown_fields() throws {
         let invalidRequests: Array<(requestJson: String, expectedError: OpenAiImageGenerationValidationError)> = [
             (
                 #"{"model":"flux","prompt":"A rose.","width":64,"height":64,"response_format":"url"}"#,
@@ -118,13 +130,15 @@ final class ImageGenerationTests: XCTestCase {
         ];
         for invalidRequest in invalidRequests {
             let request: OpenAiImageGenerationRequest = try Self.deserializeRequest(invalidRequest.requestJson);
-            XCTAssertEqual(
-                try Self.intoPartsResult(request),
-                .failure(invalidRequest.expectedError));
+            #expect(
+                Self.intoPartsResult(request)
+                    == Result<OpenAiImageGenerationRequestParts, OpenAiImageGenerationValidationError>
+                        .failure(invalidRequest.expectedError));
         }
     }
 
-    func testShouldSerializeOneGeneratedImageWithReproducibilityMetadata() throws {
+    @Test
+    func should_serialize_one_generated_image_with_reproducibility_metadata() throws {
         let response: OpenAiImageGenerationResponse = OpenAiImageGenerationResponse(
             created: 1_787_010_400,
             generatedImageParts: OpenAiGeneratedImageParts(
@@ -134,9 +148,9 @@ final class ImageGenerationTests: XCTestCase {
                 effectiveSeed: UInt64.max,
                 width: 1_024,
                 height: 768));
-        XCTAssertEqual(
-            try response.wireValue().serializedText,
-            #"{"created":1787010400,"data":[{"b64_json":"iVBORw0KGgoAAAANSUhEUg==","mime_type":"image/png","model_revision":"0123456789abcdef","seed":18446744073709551615,"width":1024,"height":768}]}"#);
+        #expect(
+            try response.wireValue().serializedText
+                == #"{"created":1787010400,"data":[{"b64_json":"iVBORw0KGgoAAAANSUhEUg==","mime_type":"image/png","model_revision":"0123456789abcdef","seed":18446744073709551615,"width":1024,"height":768}]}"#);
     }
 
     private static func deserializeRequest(_ requestJson: String) throws -> OpenAiImageGenerationRequest {
@@ -148,7 +162,7 @@ final class ImageGenerationTests: XCTestCase {
         do {
             _ = try OpenAiImageGenerationRequest.decoded(
                 wireValue: try RestContractTestFixture.wireValue(requestJson));
-            XCTFail("the malformed transport value must be rejected during deserialization");
+            Issue.record("the malformed transport value must be rejected during deserialization");
         } catch {
             // Expected: malformed transport values fail at the decode boundary.
         }
@@ -165,7 +179,7 @@ final class ImageGenerationTests: XCTestCase {
         } catch let validationError as OpenAiImageGenerationValidationError {
             return .failure(validationError);
         } catch {
-            XCTFail("unexpected error type: \(error)");
+            Issue.record("unexpected error type: \(error)");
             return .failure(.blankModel);
         }
     }
