@@ -327,7 +327,7 @@ public enum RequiredFiles {
     /// straight from the descriptor without touching its cursor state and never
     /// reopens the artifact pathname. nil when the file ends before the
     /// requested bytes are complete.
-    private static func positionedReadExactly(
+    static func positionedReadExactly(
         fileDescriptor: Int32, startOffsetBytes: UInt64, byteCount: Int) throws -> Data? {
         var collectedBytes: Array<UInt8> = Array();
         collectedBytes.reserveCapacity(byteCount);
