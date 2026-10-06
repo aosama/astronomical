@@ -4,7 +4,7 @@ import Foundation;
 /// ConfiguredChunkingFields from crates/config/src/chunking_config.rs. Legacy
 /// migration and precedence merging need the distinction between "explicitly
 /// set" and "left at the default".
-public struct ConfiguredChunkingFields: Equatable {
+public struct ConfiguredChunkingFields: Equatable, Sendable {
 
     public let fixedPromptProcessingChunkSizeTokens: Bool;
     public let fixedSsdStreamingPromptProcessingChunkSizeTokens: Bool;

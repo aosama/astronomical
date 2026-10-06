@@ -98,6 +98,11 @@ public struct ResolvedModelConfig: Equatable {
         return self.configuredMaximumOutputTokensValue != nil;
     }
 
+    /// The authored output default before internal fallback policy applied.
+    public func configuredMaximumOutputTokens() -> UInt32? {
+        return self.configuredMaximumOutputTokensValue;
+    }
+
     /// The configured sampling temperature without inventing a default.
     public func temperature() -> Float? {
         return self.temperatureValue;
