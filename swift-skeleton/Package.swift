@@ -30,6 +30,10 @@ let package: Package = Package(
         .target(name: "RestContract", dependencies: ["IpcProtocol"]),
         // Wave 2 — apps/supervisor
         .target(name: "Supervisor", dependencies: ["AstronomicalConfig", "IpcProtocol"]),
+        // Wave 2 — the astronomicald daemon binary itself.
+        .executableTarget(
+            name: "AstronomicalDaemon",
+            dependencies: ["Supervisor", "AstronomicalConfig", "IpcProtocol"]),
         // Wave 2 — apps/astronomical
         .executableTarget(name: "AstronomicalCli"),
         // Wave 3 — crates/runtime-integration
