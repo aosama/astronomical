@@ -18,7 +18,6 @@ public struct TensorSourceId: Equatable, Hashable, Comparable, Sendable {
 /// Architecture-neutral semantic ownership of a tensor.
 public enum TensorSemanticRole: Equatable, Sendable {
     case target;
-    case multiTokenPrediction;
     case vision;
 }
 
@@ -28,11 +27,6 @@ public enum TensorDeclarationOrigin: Equatable, Sendable {
     case architectureSidecar;
 }
 
-/// Optional feature that atomically owns a set of tensor locations.
-public enum TensorFeature: Equatable, Sendable {
-    case multiTokenPrediction;
-}
-
 /// Canonical and physical identity for one validated tensor location.
 public struct TensorLocation: Equatable, Sendable {
     public let canonicalName: String;
@@ -40,19 +34,16 @@ public struct TensorLocation: Equatable, Sendable {
     public let sourceId: TensorSourceId;
     public let semanticRole: TensorSemanticRole;
     public let declarationOrigin: TensorDeclarationOrigin;
-    public let feature: TensorFeature?;
 
     /// Creates a tensor location after architecture-specific name parsing.
     public init(
         canonicalName: String, storedName: String, sourceId: TensorSourceId,
-        semanticRole: TensorSemanticRole, declarationOrigin: TensorDeclarationOrigin,
-        feature: TensorFeature?) {
+        semanticRole: TensorSemanticRole, declarationOrigin: TensorDeclarationOrigin) {
         self.canonicalName = canonicalName;
         self.storedName = storedName;
         self.sourceId = sourceId;
         self.semanticRole = semanticRole;
         self.declarationOrigin = declarationOrigin;
-        self.feature = feature;
     }
 }
 
@@ -127,16 +118,6 @@ public final class TensorInventory {
 
     public func tensorCount() -> Int {
         return self.locationsByCanonicalName.count;
-    }
-
-    /// Removes every location owned by an unavailable optional feature.
-    public func removeFeature(feature: TensorFeature) -> Void {
-        self.locationsByCanonicalName = self.locationsByCanonicalName.filter({ (_: String, tensorLocation: TensorLocation) -> Bool in
-            return tensorLocation.feature != feature;
-        });
-        self.canonicalNameByPhysicalLocation = self.canonicalNameByPhysicalLocation.filter({ (_: PhysicalTensorLocation, canonicalName: String) -> Bool in
-            return self.locationsByCanonicalName[canonicalName] != nil;
-        });
     }
 
     /// Removes locations by canonical name. Streaming revisions carry expert
