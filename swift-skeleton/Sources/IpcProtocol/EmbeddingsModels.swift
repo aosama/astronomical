@@ -96,7 +96,7 @@ public enum EmbeddingEncodingFormat: Equatable, Sendable {
 /// Failure delivered after an embeddings request was admitted to the worker.
 /// Wire shape is serde's externally tagged enum: unit variants serialize as
 /// plain strings and struct variants as single-entry objects.
-public enum EmbeddingsFailureReason: Equatable {
+public enum EmbeddingsFailureReason: Equatable, Sendable {
     /// The worker independently rejected malformed structured embeddings input.
     case invalidRequest(reason: String);
     /// A fatal model-execution failure reported before the worker exits.
