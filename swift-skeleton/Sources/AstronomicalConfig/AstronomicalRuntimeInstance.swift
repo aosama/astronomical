@@ -1,7 +1,7 @@
 import Foundation;
 
 /** User-visible runtime identity that keeps Stable and Development state apart. */
-public enum AstronomicalRuntimeInstance: String, Equatable {
+public enum AstronomicalRuntimeInstance: String, Equatable, Sendable {
     case stable = "stable"
     case development = "development"
 

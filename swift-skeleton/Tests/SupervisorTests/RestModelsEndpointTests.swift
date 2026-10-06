@@ -125,7 +125,15 @@ final class RestModelsEndpointTests: XCTestCase {
     ) throws -> RestHttpServer {
         let routeTable: RestRouteTable = RestEndpointRoutes.servingRouteTable(
             resolvedRuntimeConfig: resolvedConfig,
-            workerHealthState: workerHealthState);
+            workerHealthState: workerHealthState,
+            instancePaths: AstronomicalInstancePaths.forExplicitStateDirectory(
+                FilePath(string: "/models-journey-state"),
+                defaultBindAddress: SocketEndpoint.loopback(port: 0)),
+            buildIdentity: ApplicationBuildIdentity(
+                version: "0.0.0-test",
+                buildNumber: 0,
+                commit: "unknown",
+                isDirty: false));
         return try RestHttpServer.start(
             bindEndpoint: SocketEndpoint.loopback(port: 0),
             routeTable: routeTable);

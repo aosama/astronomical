@@ -18,6 +18,51 @@ public struct ConfiguredChunkingFields: Equatable, Sendable {
     public let experimentalQuantizedKvCacheEnabled: Bool;
     public let experimentalFusedMoeDecodeEnabled: Bool;
 
+    /// The all-unset fields of a policy with no authored chunking document,
+    /// mirroring ConfiguredChunkingFields::default() of the Rust contract.
+    public static func inactive() -> ConfiguredChunkingFields {
+        let inactiveFields: ConfiguredChunkingFields = ConfiguredChunkingFields(
+            fixedPromptProcessingChunkSizeTokens: false,
+            fixedSsdStreamingPromptProcessingChunkSizeTokens: false,
+            fullAttentionKeyValueGrowthTokens: false,
+            prefillGraphSubmissionLayerInterval: false,
+            experimentalSsdPagingPrefillGraphSubmissionLayerInterval: false,
+            experimentalSsdPagingGenerationGraphSubmissionLayerInterval: false,
+            promptCacheBlockTokens: false,
+            promptCacheCommonPrefixStrideBlocks: false,
+            experimentalDecodeStageAttributionEnabled: false,
+            experimentalQuantizedKvCacheEnabled: false,
+            experimentalFusedMoeDecodeEnabled: false);
+        return inactiveFields;
+    }
+
+    /// Builds the field set from one resolved chunking document.
+    public init(
+        fixedPromptProcessingChunkSizeTokens: Bool,
+        fixedSsdStreamingPromptProcessingChunkSizeTokens: Bool,
+        fullAttentionKeyValueGrowthTokens: Bool,
+        prefillGraphSubmissionLayerInterval: Bool,
+        experimentalSsdPagingPrefillGraphSubmissionLayerInterval: Bool,
+        experimentalSsdPagingGenerationGraphSubmissionLayerInterval: Bool,
+        promptCacheBlockTokens: Bool,
+        promptCacheCommonPrefixStrideBlocks: Bool,
+        experimentalDecodeStageAttributionEnabled: Bool,
+        experimentalQuantizedKvCacheEnabled: Bool,
+        experimentalFusedMoeDecodeEnabled: Bool
+    ) {
+        self.fixedPromptProcessingChunkSizeTokens = fixedPromptProcessingChunkSizeTokens;
+        self.fixedSsdStreamingPromptProcessingChunkSizeTokens = fixedSsdStreamingPromptProcessingChunkSizeTokens;
+        self.fullAttentionKeyValueGrowthTokens = fullAttentionKeyValueGrowthTokens;
+        self.prefillGraphSubmissionLayerInterval = prefillGraphSubmissionLayerInterval;
+        self.experimentalSsdPagingPrefillGraphSubmissionLayerInterval = experimentalSsdPagingPrefillGraphSubmissionLayerInterval;
+        self.experimentalSsdPagingGenerationGraphSubmissionLayerInterval = experimentalSsdPagingGenerationGraphSubmissionLayerInterval;
+        self.promptCacheBlockTokens = promptCacheBlockTokens;
+        self.promptCacheCommonPrefixStrideBlocks = promptCacheCommonPrefixStrideBlocks;
+        self.experimentalDecodeStageAttributionEnabled = experimentalDecodeStageAttributionEnabled;
+        self.experimentalQuantizedKvCacheEnabled = experimentalQuantizedKvCacheEnabled;
+        self.experimentalFusedMoeDecodeEnabled = experimentalFusedMoeDecodeEnabled;
+    }
+
     public init(chunkingConfigFile: ChunkingConfigFile) {
         self.fixedPromptProcessingChunkSizeTokens = chunkingConfigFile.fixedPromptProcessingChunkSizeTokens != nil;
         self.fixedSsdStreamingPromptProcessingChunkSizeTokens = chunkingConfigFile.fixedSsdStreamingPromptProcessingChunkSizeTokens != nil;
@@ -71,19 +116,19 @@ internal extension ChunkingConfigFile {
 public struct ChunkingConfig: Equatable, Sendable {
 
     /// KV growth slack before a full-attention layer stops growing its cache.
-    internal static let defaultFullAttentionKeyValueGrowthTokens: UInt32 = 256;
+    public static let defaultFullAttentionKeyValueGrowthTokens: UInt32 = 256;
     /// Resident prefill works in chunks of this many tokens.
-    internal static let defaultFixedPromptProcessingChunkSizeTokens: UInt32 = 2_048;
+    public static let defaultFixedPromptProcessingChunkSizeTokens: UInt32 = 2_048;
     /// Legacy config files were written when the resident default was larger;
     /// the value is kept only so legacy documents stay semantically stable.
     internal static let legacyDefaultFixedPromptProcessingChunkSizeTokens: UInt32 = 4_096;
     /// SSD streaming prefill chunks independently of the resident chunk.
-    internal static let defaultFixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32 = 2_048;
-    internal static let defaultExperimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32 = 1;
-    internal static let defaultExperimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32 = 3;
-    internal static let defaultPrefillGraphSubmissionLayerInterval: UInt32 = 0;
+    public static let defaultFixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32 = 2_048;
+    public static let defaultExperimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32 = 1;
+    public static let defaultExperimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32 = 3;
+    public static let defaultPrefillGraphSubmissionLayerInterval: UInt32 = 0;
     /// Common-prefix scanning advances prompt-cache block strides of this size.
-    internal static let defaultPromptCacheCommonPrefixStrideBlocks: UInt32 = 4;
+    public static let defaultPromptCacheCommonPrefixStrideBlocks: UInt32 = 4;
 
     private let fixedPromptProcessingChunkSizeTokensValue: UInt32;
     private let fixedSsdStreamingPromptProcessingChunkSizeTokensValue: UInt32;

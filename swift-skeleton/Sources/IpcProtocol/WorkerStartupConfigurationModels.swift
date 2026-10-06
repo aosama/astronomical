@@ -60,7 +60,7 @@ public struct WorkerRuntimeFeatureConfiguration: Equatable {
         self.loadedModel = loadedModel;
     }
 
-    internal func wireValue() -> JsonWireValue {
+    public func wireValue() -> JsonWireValue {
         var wireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
         wireObject.appendEntry(key: "configuration_generation", value: .string(self.configurationGeneration));
         wireObject.appendEntry(key: "persistent_prompt_cache_enabled", value: .boolean(self.persistentPromptCacheEnabled));
