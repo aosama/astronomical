@@ -35,7 +35,7 @@ let package: Package = Package(
             name: "AstronomicalDaemon",
             dependencies: ["Supervisor", "AstronomicalConfig", "IpcProtocol"]),
         // Wave 2 — apps/astronomical
-        .executableTarget(name: "AstronomicalCli"),
+        .executableTarget(name: "AstronomicalCli", dependencies: ["AstronomicalConfig", "IpcProtocol", "Supervisor"]),
         // Wave 3 — crates/runtime-integration
         .target(name: "RuntimeIntegration"),
         // Wave 3 — crates/model-serving
@@ -55,7 +55,7 @@ let package: Package = Package(
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol"]),
         .testTarget(name: "RestContractTests", dependencies: ["RestContract"]),
         .testTarget(name: "SupervisorTests", dependencies: ["Supervisor"]),
-        .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli"]),
+        .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
         .testTarget(name: "ModelServingTests", dependencies: ["ModelServing"]),
         .testTarget(name: "InferenceWorkerTests", dependencies: ["InferenceWorker"])
