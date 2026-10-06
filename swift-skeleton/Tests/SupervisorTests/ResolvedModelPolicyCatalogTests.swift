@@ -1,8 +1,10 @@
 import Foundation;
-import XCTest;
+
+import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -12,7 +14,8 @@ import IpcProtocol;
  * chat, image, and embedding families, with config inheritance applied on
  * top of the artifact capability.
  */
-final class ResolvedModelPolicyCatalogTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResolvedModelPolicyCatalogTests {
 
     private static let CHAT_CAPABILITIES: DiscoveryChatModelCapabilities = DiscoveryChatModelCapabilities(
         contextWindowTokens: 32_768,
@@ -40,12 +43,10 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
 
     private var temporaryStateDirectory: String?;
 
-    override func tearDown() {
+    deinit {
         if let temporaryStateDirectory: String = self.temporaryStateDirectory {
             try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
-            self.temporaryStateDirectory = nil;
         }
-        super.tearDown();
     }
 
     private static func imageCapabilities(defaultSteps: UInt16) -> DiscoveryImageGenerationCapabilities {
@@ -74,7 +75,8 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
         return try AstronomicalConfig.loadFromInstancePaths(developmentPaths);
     }
 
-    func testChatPolicyCarriesCapabilityAndInternalRequestDefaults() throws {
+    @Test
+    func should_resolve_a_chat_policy_with_capability_and_internal_request_defaults() throws {
         let userConfig: AstronomicalConfig = try self.loadConfig(
             contents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}");
         let discoveredModel: DiscoveryDiscoveredModel = ResolvedModelPolicyCatalogTests.chatModel(
@@ -89,24 +91,26 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
             // when the capability advertises a different geometry.
             artifactContextWindows: ["qwen3-model": 30_000]);
 
-        let modelPolicy: RuntimeModelPolicy = try XCTUnwrap(modelPolicies["qwen3-model"]);
-        XCTAssertEqual(modelPolicy.modelDirectory, FilePath(string: "/models/qwen3"));
-        XCTAssertNil(modelPolicy.configuredMaximumContextTokens);
-        XCTAssertEqual(modelPolicy.defaultMaximumContextTokens, 30_000);
-        XCTAssertEqual(modelPolicy.generationDefaults.maximumOutputTokens, UInt16(ResolvedModelConfig.defaultMaximumOutputTokens));
-        XCTAssertNil(modelPolicy.generationDefaults.temperatureThousandths);
+        let modelPolicy: RuntimeModelPolicy = try #require(modelPolicies["qwen3-model"]);
+        #expect(modelPolicy.modelDirectory == FilePath(string: "/models/qwen3"));
+        #expect(modelPolicy.configuredMaximumContextTokens == nil);
+        #expect(modelPolicy.defaultMaximumContextTokens == 30_000);
+        #expect(modelPolicy.generationDefaults.maximumOutputTokens == UInt16(ResolvedModelConfig.defaultMaximumOutputTokens));
+        #expect(modelPolicy.generationDefaults.temperatureThousandths == nil);
         guard case let .autoregressive(workerConfiguration) = modelPolicy.workerModelConfiguration else {
-            return XCTFail("expected an autoregressive worker policy, got \(modelPolicy.workerModelConfiguration)");
+            Issue.record(Comment(stringLiteral: "expected an autoregressive worker policy, got \(modelPolicy.workerModelConfiguration)"));
+            return;
         }
-        XCTAssertEqual(workerConfiguration.modelId, "qwen3-model");
-        XCTAssertEqual(workerConfiguration.maximumContextTokens, 32_768);
-        XCTAssertEqual(workerConfiguration.maximumOutputTokens, 8_192);
-        XCTAssertEqual(
-            workerConfiguration.chunking,
-            RuntimeModelPolicy.workerChunkingConfiguration(from: ChunkingConfig.defaultConfig()));
+        #expect(workerConfiguration.modelId == "qwen3-model");
+        #expect(workerConfiguration.maximumContextTokens == 32_768);
+        #expect(workerConfiguration.maximumOutputTokens == 8_192);
+        #expect(
+            workerConfiguration.chunking
+                == RuntimeModelPolicy.workerChunkingConfiguration(from: ChunkingConfig.defaultConfig()));
     }
 
-    func testChatPolicyAppliesConfiguredInheritanceAndThousandths() throws {
+    @Test
+    func should_apply_configured_inheritance_and_thousandths_to_a_chat_policy() throws {
         let userConfig: AstronomicalConfig = try self.loadConfig(
             contents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
                 + "\"runtime\":{\"model_directories\":[]},\"models\":{\"qwen3-model\":{"
@@ -122,17 +126,18 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
             discoveredModels: [discoveredModel],
             artifactContextWindows: Dictionary<String, UInt32>());
 
-        let modelPolicy: RuntimeModelPolicy = try XCTUnwrap(modelPolicies["qwen3-model"]);
-        XCTAssertEqual(modelPolicy.configuredMaximumContextTokens, 16_384);
+        let modelPolicy: RuntimeModelPolicy = try #require(modelPolicies["qwen3-model"]);
+        #expect(modelPolicy.configuredMaximumContextTokens == 16_384);
         // No artifact window entry: the capability window is the default.
-        XCTAssertEqual(modelPolicy.defaultMaximumContextTokens, 32_768);
-        XCTAssertEqual(modelPolicy.generationDefaults.maximumOutputTokens, 4_096);
-        XCTAssertEqual(modelPolicy.generationDefaults.configuredMaximumOutputTokens, 4_096);
-        XCTAssertEqual(modelPolicy.generationDefaults.temperatureThousandths, 500);
-        XCTAssertEqual(modelPolicy.generationDefaults.topPThousandths, 900);
+        #expect(modelPolicy.defaultMaximumContextTokens == 32_768);
+        #expect(modelPolicy.generationDefaults.maximumOutputTokens == 4_096);
+        #expect(modelPolicy.generationDefaults.configuredMaximumOutputTokens == 4_096);
+        #expect(modelPolicy.generationDefaults.temperatureThousandths == 500);
+        #expect(modelPolicy.generationDefaults.topPThousandths == 900);
     }
 
-    func testImagePoliciesStayTypedToTheirDiscoveredFamily() throws {
+    @Test
+    func should_keep_image_policies_typed_to_their_discovered_family() throws {
         let userConfig: AstronomicalConfig = try self.loadConfig(
             contents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}");
         let fluxModel: DiscoveryDiscoveredModel = DiscoveryDiscoveredModel(
@@ -159,20 +164,23 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
             discoveredModels: [fluxModel, qwenImageModel],
             artifactContextWindows: Dictionary<String, UInt32>());
 
-        let fluxPolicy: RuntimeModelPolicy = try XCTUnwrap(modelPolicies["flux-model"]);
+        let fluxPolicy: RuntimeModelPolicy = try #require(modelPolicies["flux-model"]);
         guard case let .flux2Klein(fluxConfiguration) = fluxPolicy.workerModelConfiguration else {
-            return XCTFail("expected a flux worker policy, got \(fluxPolicy.workerModelConfiguration)");
+            Issue.record(Comment(stringLiteral: "expected a flux worker policy, got \(fluxPolicy.workerModelConfiguration)"));
+            return;
         }
-        XCTAssertEqual(fluxConfiguration.artifactRevision, "step-8");
-        XCTAssertEqual(fluxPolicy.generationDefaults, RuntimeModelGenerationDefaults.inert());
+        #expect(fluxConfiguration.artifactRevision == "step-8");
+        #expect(fluxPolicy.generationDefaults == RuntimeModelGenerationDefaults.inert());
 
-        let qwenImagePolicy: RuntimeModelPolicy = try XCTUnwrap(modelPolicies["qwen-image-model"]);
+        let qwenImagePolicy: RuntimeModelPolicy = try #require(modelPolicies["qwen-image-model"]);
         guard case .qwenImage21 = qwenImagePolicy.workerModelConfiguration else {
-            return XCTFail("expected a qwen-image worker policy, got \(qwenImagePolicy.workerModelConfiguration)");
+            Issue.record(Comment(stringLiteral: "expected a qwen-image worker policy, got \(qwenImagePolicy.workerModelConfiguration)"));
+            return;
         }
     }
 
-    func testImageCapabilityOnAChatFamilyFallsBackToTheFluxIdentity() throws {
+    @Test
+    func should_fall_back_to_the_flux_identity_for_image_capability_on_a_chat_family() throws {
         let userConfig: AstronomicalConfig = try self.loadConfig(
             contents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}");
         // A discovered directory that classifies as a chat family but
@@ -193,13 +201,15 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
             discoveredModels: [misclassifiedModel],
             artifactContextWindows: Dictionary<String, UInt32>());
 
-        let modelPolicy: RuntimeModelPolicy = try XCTUnwrap(modelPolicies["misclassified-model"]);
+        let modelPolicy: RuntimeModelPolicy = try #require(modelPolicies["misclassified-model"]);
         guard case .flux2Klein = modelPolicy.workerModelConfiguration else {
-            return XCTFail("expected the flux fallback, got \(modelPolicy.workerModelConfiguration)");
+            Issue.record(Comment(stringLiteral: "expected the flux fallback, got \(modelPolicy.workerModelConfiguration)"));
+            return;
         }
     }
 
-    func testEmbeddingsPolicyCarriesGeometryAndStaysModernbert() throws {
+    @Test
+    func should_resolve_an_embeddings_policy_with_its_geometry_staying_modernbert() throws {
         let userConfig: AstronomicalConfig = try self.loadConfig(
             contents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}");
         let embeddingModel: DiscoveryDiscoveredModel = DiscoveryDiscoveredModel(
@@ -219,15 +229,16 @@ final class ResolvedModelPolicyCatalogTests: XCTestCase {
             discoveredModels: [embeddingModel],
             artifactContextWindows: Dictionary<String, UInt32>());
 
-        let modelPolicy: RuntimeModelPolicy = try XCTUnwrap(modelPolicies["modernbert-model"]);
+        let modelPolicy: RuntimeModelPolicy = try #require(modelPolicies["modernbert-model"]);
         guard case let .embeddings(embeddingConfiguration) = modelPolicy.workerModelConfiguration else {
-            return XCTFail("expected an embeddings worker policy, got \(modelPolicy.workerModelConfiguration)");
+            Issue.record(Comment(stringLiteral: "expected an embeddings worker policy, got \(modelPolicy.workerModelConfiguration)"));
+            return;
         }
-        XCTAssertEqual(embeddingConfiguration.modelId, "modernbert-model");
-        XCTAssertEqual(embeddingConfiguration.modelFamily, WorkerEmbeddingModelFamily.modernBert);
-        XCTAssertEqual(embeddingConfiguration.vectorWidth, 1_024);
-        XCTAssertEqual(embeddingConfiguration.maximumInputTokens, 8_192);
-        XCTAssertEqual(embeddingConfiguration.artifactRevision, "main");
-        XCTAssertEqual(modelPolicy.generationDefaults, RuntimeModelGenerationDefaults.inert());
+        #expect(embeddingConfiguration.modelId == "modernbert-model");
+        #expect(embeddingConfiguration.modelFamily == WorkerEmbeddingModelFamily.modernBert);
+        #expect(embeddingConfiguration.vectorWidth == 1_024);
+        #expect(embeddingConfiguration.maximumInputTokens == 8_192);
+        #expect(embeddingConfiguration.artifactRevision == "main");
+        #expect(modelPolicy.generationDefaults == RuntimeModelGenerationDefaults.inert());
     }
 }

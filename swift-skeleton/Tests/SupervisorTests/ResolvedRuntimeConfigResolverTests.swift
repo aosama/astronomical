@@ -1,8 +1,10 @@
 import Foundation;
-import XCTest;
+
+import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -15,16 +17,15 @@ import IpcProtocol;
  * generation is stable across loads. The journey also proves the automatic
  * Library root outranks authored roots for the same identity.
  */
-final class ResolvedRuntimeConfigResolverTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResolvedRuntimeConfigResolverTests {
 
     private var temporaryRootPath: String?;
 
-    override func tearDown() {
+    deinit {
         if let temporaryRootPath: String = self.temporaryRootPath {
             try? FileManager.default.removeItem(atPath: temporaryRootPath);
-            self.temporaryRootPath = nil;
         }
-        super.tearDown();
     }
 
     private func makeTemporaryRoot() throws -> String {
@@ -70,7 +71,8 @@ final class ResolvedRuntimeConfigResolverTests: XCTestCase {
             fallbackWorkerExecutablePath: FilePath(string: "/opt/astronomical/bin/inference-worker"));
     }
 
-    func testResolverProducesTheCompleteSnapshotAnOperatorConfigures() throws {
+    @Test
+    func should_resolve_an_operator_config_into_the_complete_snapshot() throws {
         let temporaryRootPath: String = try self.makeTemporaryRoot();
         let modelsRootPath: String = temporaryRootPath + "/authored-models";
         try self.writeModernbertModel(modelId: "EmbeddedBert", modelsRootPath: modelsRootPath);
@@ -85,40 +87,40 @@ final class ResolvedRuntimeConfigResolverTests: XCTestCase {
         let resolvedConfig: ResolvedRuntimeConfig = try resolver.load();
         let reloadedConfig: ResolvedRuntimeConfig = try resolver.load();
 
-        XCTAssertEqual(resolvedConfig, reloadedConfig);
-        XCTAssertEqual(resolvedConfig.configurationGeneration.count, 64);
-        XCTAssertEqual(resolvedConfig.workerExecutablePath, FilePath(string: "/opt/astronomical/bin/inference-worker"));
-        XCTAssertEqual(resolvedConfig.discoveredModels.map { (discoveredModel: DiscoveryDiscoveredModel) -> String in
+        #expect(resolvedConfig == reloadedConfig);
+        #expect(resolvedConfig.configurationGeneration.count == 64);
+        #expect(resolvedConfig.workerExecutablePath == FilePath(string: "/opt/astronomical/bin/inference-worker"));
+        #expect(resolvedConfig.discoveredModels.map { (discoveredModel: DiscoveryDiscoveredModel) -> String in
             return discoveredModel.modelId;
-        }, ["EmbeddedBert"]);
-        XCTAssertEqual(resolvedConfig.unmatchedModelConfigIds, ["GhostModel"]);
-        XCTAssertEqual(resolvedConfig.maximumMlxMemoryBytes, 24_000_000_000);
+        } == ["EmbeddedBert"]);
+        #expect(resolvedConfig.unmatchedModelConfigIds == ["GhostModel"]);
+        #expect(resolvedConfig.maximumMlxMemoryBytes == 24_000_000_000);
         // A non-standard (temporary) state directory binds the loopback
         // placeholder; only the standard instance directories carry the
         // fixed channel ports.
-        XCTAssertTrue(resolvedConfig.bindAddress.hasPrefix("127.0.0.1:"),
-            "bind address should stay loopback: \(resolvedConfig.bindAddress)");
-        XCTAssertEqual(
-            resolvedConfig.promptCacheConfig.globalPromptCacheRootDirectory,
-            resolver.resolvedInstancePaths.promptCacheDirectory);
+        #expect(resolvedConfig.bindAddress.hasPrefix("127.0.0.1:"), "bind address should stay loopback: \(resolvedConfig.bindAddress)");
+        #expect(
+            resolvedConfig.promptCacheConfig.globalPromptCacheRootDirectory
+                == resolver.resolvedInstancePaths.promptCacheDirectory);
 
         // The discovered model reaches the catalog with embeddings policy.
         let modelPolicy: RuntimeModelPolicy? = resolvedConfig.modelPolicyCatalog["EmbeddedBert"];
-        XCTAssertNotNil(modelPolicy);
         guard case .embeddings = modelPolicy?.workerModelConfiguration else {
-            return XCTFail("expected an embeddings worker policy, got \(String(describing: modelPolicy?.workerModelConfiguration))");
+            Issue.record(Comment(stringLiteral: "expected an embeddings worker policy, got \(String(describing: modelPolicy?.workerModelConfiguration))"));
+            return;
         }
 
         // The bootstrap DTO carries the resolved worker settings.
         let workerStartupConfiguration: WorkerStartupConfiguration = resolvedConfig.workerStartupConfiguration();
-        XCTAssertEqual(workerStartupConfiguration.configurationGeneration, resolvedConfig.configurationGeneration);
-        XCTAssertEqual(workerStartupConfiguration.configuredMaximumMlxMemoryBytes, 24_000_000_000);
-        XCTAssertEqual(
-            workerStartupConfiguration.globalPromptCacheRootDirectory,
-            resolver.resolvedInstancePaths.promptCacheDirectory.string);
+        #expect(workerStartupConfiguration.configurationGeneration == resolvedConfig.configurationGeneration);
+        #expect(workerStartupConfiguration.configuredMaximumMlxMemoryBytes == 24_000_000_000);
+        #expect(
+            workerStartupConfiguration.globalPromptCacheRootDirectory
+                == resolver.resolvedInstancePaths.promptCacheDirectory.string);
     }
 
-    func testAutomaticLibraryRootWinsIdentityCollisionsWithAuthoredRoots() throws {
+    @Test
+    func should_let_the_automatic_library_root_win_identity_collisions_with_authored_roots() throws {
         let temporaryRootPath: String = try self.makeTemporaryRoot();
         let stateDirectoryPath: String = temporaryRootPath + "/state";
         let resolver: ResolvedRuntimeConfigResolver = try self.makeResolver(
@@ -139,9 +141,9 @@ final class ResolvedRuntimeConfigResolverTests: XCTestCase {
         let discoveredModelIds: Set<String> = Set<String>(resolvedConfig.discoveredModels.map { (discoveredModel: DiscoveryDiscoveredModel) -> String in
             return discoveredModel.modelId;
         });
-        XCTAssertEqual(discoveredModelIds, Set<String>(["CollisionBert", "AuthoredBert"]));
-        XCTAssertTrue(resolvedConfig.modelDiscoveryDiagnostics.isEmpty,
+        #expect(discoveredModelIds == Set<String>(["CollisionBert", "AuthoredBert"]));
+        #expect(resolvedConfig.modelDiscoveryDiagnostics.isEmpty,
             "Library ownership clears the authored ambiguity for its identities: \(resolvedConfig.modelDiscoveryDiagnostics)");
-        XCTAssertEqual(resolvedConfig.modelPolicyCatalog.count, 2);
+        #expect(resolvedConfig.modelPolicyCatalog.count == 2);
     }
 }
