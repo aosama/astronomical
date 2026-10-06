@@ -55,12 +55,23 @@ enum RestChatCompletionEndpoint {
                 operationOutcome: "served",
                 performanceAttributionEnabled: chatContext.resolvedRuntimeConfig.performanceAttributionEnabled);
         }
+        let requestDiagnosticSnapshot: OpenAiChatRequestDiagnosticSnapshot =
+            OpenAiChatRequestDiagnostics.buildRequestDiagnosticSnapshot(
+                requestBodyBytes: request.bodyBytes);
+        let requestInfoDiagnosticSnapshot: OpenAiChatRequestInfoDiagnosticSnapshot =
+            OpenAiChatRequestDiagnostics.buildRequestInfoDiagnosticSnapshot(
+                requestBodyBytes: request.bodyBytes);
+        OpenAiChatRequestDiagnostics.logRequestCapture(requestDiagnosticSnapshot);
         let chatCompletionRequest: OpenAiChatCompletionRequest;
         do {
             let requestWireValue: JsonWireValue = try JsonWireParser.parseDocument(
                 documentBytes: request.bodyBytes);
             chatCompletionRequest = try OpenAiChatCompletionRequest.decoded(wireValue: requestWireValue);
         } catch {
+            OpenAiChatRequestDiagnostics.logRequestRejection(
+                reason: "request body is not valid JSON",
+                diagnosticSnapshot: requestDiagnosticSnapshot,
+                infoDiagnosticSnapshot: requestInfoDiagnosticSnapshot);
             return RestChatCompletionEndpoint.invalidRequestResponse(
                 message: "request body is not valid JSON: \(error)",
                 code: "invalid_json");
@@ -68,11 +79,19 @@ enum RestChatCompletionEndpoint {
         do {
             try chatCompletionRequest.validate();
         } catch let validationRejection as OpenAiChatCompletionValidationError {
+            OpenAiChatRequestDiagnostics.logRequestRejection(
+                reason: validationRejection.errorDescription ?? String(describing: validationRejection),
+                diagnosticSnapshot: requestDiagnosticSnapshot,
+                infoDiagnosticSnapshot: requestInfoDiagnosticSnapshot);
             return RestChatCompletionEndpoint.invalidRequestResponse(
                 message: validationRejection.errorDescription
                     ?? String(describing: validationRejection),
                 code: "invalid_request");
         } catch {
+            OpenAiChatRequestDiagnostics.logRequestRejection(
+                reason: String(describing: error),
+                diagnosticSnapshot: requestDiagnosticSnapshot,
+                infoDiagnosticSnapshot: requestInfoDiagnosticSnapshot);
             return RestChatCompletionEndpoint.invalidRequestResponse(
                 message: String(describing: error),
                 code: "invalid_request");
