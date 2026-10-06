@@ -57,6 +57,19 @@ public enum SafetensorsDtype: Equatable, Sendable, CaseIterable {
         }
     }
 
+    /// Bits occupied by one element of this dtype, matching the pinned
+    /// safetensors format's `Dtype::bitsize` table.
+    public var bitsize: UInt64 {
+        switch self {
+        case .f4: return 4;
+        case .f6E2m3, .f6E3m2: return 6;
+        case .bool, .u8, .i8, .f8E5m2, .f8E4m3, .f8E8m0, .f8E4m3fnuz, .f8E5m2fnuz: return 8;
+        case .i16, .u16, .f16, .bf16: return 16;
+        case .i32, .u32, .f32: return 32;
+        case .c64, .f64, .i64, .u64: return 64;
+        }
+    }
+
     public static func parsed(fromCanonicalName canonicalName: String) -> SafetensorsDtype? {
         for candidate: SafetensorsDtype in SafetensorsDtype.allCases where candidate.canonicalName == canonicalName {
             return candidate;
