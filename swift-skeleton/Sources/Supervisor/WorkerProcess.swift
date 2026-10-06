@@ -28,11 +28,13 @@ public final class WorkerProcess {
     private static let STDERR_TAIL_MAXIMUM_BYTE_COUNT: Int = 8_192;
 
     private var process: Process;
-    private let commandWriter: ProtocolWriter;
-    private let eventReader: ProtocolReader;
+    private var commandWriter: ProtocolWriter;
+    private var eventReader: ProtocolReader;
     private let stderrTailLock: NSLock;
     private var stderrTailBytes: Array<UInt8>;
     private let workerStartedAt: Date;
+    private let workerExecutablePath: String;
+    private let workerArguments: Array<String>;
     private let startupConfiguration: WorkerStartupConfiguration?;
     private let lifecycleLock: NSLock;
     private var startupRuntimeConfigurationAppliedFlag: Bool;
@@ -41,6 +43,8 @@ public final class WorkerProcess {
         process: Process,
         commandWriter: ProtocolWriter,
         eventReader: ProtocolReader,
+        workerExecutablePath: String,
+        workerArguments: Array<String>,
         startupConfiguration: WorkerStartupConfiguration?
     ) {
         self.process = process;
@@ -49,6 +53,8 @@ public final class WorkerProcess {
         self.stderrTailLock = NSLock();
         self.stderrTailBytes = Array<UInt8>();
         self.workerStartedAt = Date();
+        self.workerExecutablePath = workerExecutablePath;
+        self.workerArguments = workerArguments;
         self.startupConfiguration = startupConfiguration;
         self.lifecycleLock = NSLock();
         self.startupRuntimeConfigurationAppliedFlag = false;
@@ -90,6 +96,8 @@ public final class WorkerProcess {
         let standardOutputPipe: Pipe = Pipe();
         return try WorkerProcess.launchInternal(
             workerProcess: workerProcess,
+            workerExecutablePath: workerExecutablePath,
+            workerArguments: arguments,
             standardInputPipe: standardInputPipe,
             standardOutputPipe: standardOutputPipe,
             workerStartupConfiguration: workerStartupConfiguration);
@@ -97,6 +105,8 @@ public final class WorkerProcess {
 
     private static func launchInternal(
         workerProcess: Process,
+        workerExecutablePath: String,
+        workerArguments: Array<String>,
         standardInputPipe: Pipe,
         standardOutputPipe: Pipe,
         workerStartupConfiguration: WorkerStartupConfiguration?
@@ -120,6 +130,8 @@ public final class WorkerProcess {
             process: workerProcess,
             commandWriter: commandWriter,
             eventReader: eventReader,
+            workerExecutablePath: workerExecutablePath,
+            workerArguments: workerArguments,
             startupConfiguration: workerStartupConfiguration);
         launchedWorker.drainStandardError(standardErrorPipe: standardErrorPipe);
         if let startupConfiguration: WorkerStartupConfiguration = workerStartupConfiguration {
@@ -141,7 +153,7 @@ public final class WorkerProcess {
         operationFailure: Error
     ) -> Error {
         do {
-            try failedWorker.terminateGracefully();
+            _ = try failedWorker.close();
         } catch {
             return WorkerControlError.operationAndCleanupFailed(
                 operationDescription: String(describing: operationFailure),
@@ -196,7 +208,9 @@ public final class WorkerProcess {
 
     /// Terminates the worker: half-close the command side and wait a bounded
     /// time for EOF-driven exit, escalate to SIGTERM, then SIGKILL, then reap.
-    public func terminateGracefully() throws {
+    /// The outcome reports whether EOF alone sufficed and whether the child
+    /// reported a successful exit, mirroring the Rust close path.
+    public func close() throws -> WorkerTerminationOutcome {
         try self.commandWriter.close();
         let shutdownDeadline: Date = Date().addingTimeInterval(
             WorkerProcess.SHUTDOWN_TIMEOUT_SECONDS);
@@ -204,7 +218,9 @@ public final class WorkerProcess {
             Thread.sleep(forTimeInterval: 0.02);
         }
         if !self.process.isRunning {
-            return;
+            self.process.waitUntilExit();
+            return .graceful(
+                processExitSuccessful: self.process.terminationStatus == 0);
         }
         if let processId: Int32 = self.processId {
             kill(processId, SIGTERM);
@@ -220,6 +236,48 @@ public final class WorkerProcess {
             }
         }
         self.process.waitUntilExit();
+        return .forced(
+            processExitSuccessful: self.process.terminationStatus == 0);
+    }
+
+    /// Kills the worker outright and reaps it; the containment path for a
+    /// worker that can no longer be trusted to answer a graceful close.
+    public func forceTerminate() throws -> WorkerTerminationOutcome {
+        if let processId: Int32 = self.processId {
+            kill(processId, SIGKILL);
+        }
+        self.process.waitUntilExit();
+        return .forced(
+            processExitSuccessful: self.process.terminationStatus == 0);
+    }
+
+    /// Whether the worker process is still alive.
+    public func hasLivingProcess() -> Bool {
+        return self.process.isRunning;
+    }
+
+    /// Starts a clean process from this worker's exact portable launch inputs
+    /// after the previous process ended, resetting the once-per-process
+    /// startup flag; mirrors the Rust relaunch_after_termination.
+    public func relaunchAfterTermination() throws -> Void {
+        self.eventReader.closeTransportFileDescriptor();
+        // Best-effort close of the replaced child's command pipe; the child
+        // already ended, so a failure here leaves nothing to recover.
+        do {
+            try self.commandWriter.close();
+        } catch {
+            self.commandWriter.closeTransportFileDescriptor();
+        }
+        let replacementWorker: WorkerProcess = try WorkerProcess.launch(
+            workerExecutablePath: self.workerExecutablePath,
+            arguments: self.workerArguments,
+            workerStartupConfiguration: self.startupConfiguration);
+        self.process = replacementWorker.process;
+        self.commandWriter = replacementWorker.commandWriter;
+        self.eventReader = replacementWorker.eventReader;
+        self.lifecycleLock.lock();
+        self.startupRuntimeConfigurationAppliedFlag = false;
+        self.lifecycleLock.unlock();
     }
 
     private func drainStandardError(standardErrorPipe: Pipe) {

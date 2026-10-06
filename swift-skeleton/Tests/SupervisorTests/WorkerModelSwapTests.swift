@@ -55,7 +55,7 @@ final class WorkerModelSwapTests: XCTestCase {
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", fakeWorkerScript]);
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let healthState: WorkerHealthState = WorkerHealthState();
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
@@ -88,7 +88,7 @@ final class WorkerModelSwapTests: XCTestCase {
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", fakeWorkerScript]);
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let healthState: WorkerHealthState = WorkerHealthState();
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
@@ -117,7 +117,7 @@ final class WorkerModelSwapTests: XCTestCase {
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", fakeWorkerScript]);
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
@@ -152,7 +152,7 @@ final class WorkerModelSwapTests: XCTestCase {
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", fakeWorkerScript]);
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
@@ -179,7 +179,7 @@ final class WorkerModelSwapTests: XCTestCase {
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", fakeWorkerScript]);
         defer {
-            try? workerProcess.terminateGracefully();
+            try? workerProcess.close();
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
