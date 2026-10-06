@@ -42,7 +42,7 @@ final class Qwen3_5ConfigModelContractTests: XCTestCase {
     func testShouldParseANativeBfloat16ConfigWithoutQuantizationMetadata() throws {
         let frozenConfigValue: JsonWireValue = try Qwen3_5MoeConfigFixtures.wireValue(
             String(decoding: Qwen3_5MoeConfigFixtures.frozenOrnith10ConfigBytes(), as: UTF8.self));
-        var nativeBfloat16ConfigDocument: JsonWireValue = frozenConfigValue
+        let nativeBfloat16ConfigDocument: JsonWireValue = frozenConfigValue
             .removingObjectKey(path: ["quantization"])
             .removingObjectKey(path: ["quantization_config"]);
         let nativeBfloat16ConfigBytes: Array<UInt8> = try Qwen3_5MoeConfigFixtures.serializedBytes(
