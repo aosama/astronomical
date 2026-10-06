@@ -33,11 +33,15 @@ public final class WorkerProcess {
     private let stderrTailLock: NSLock;
     private var stderrTailBytes: Array<UInt8>;
     private let workerStartedAt: Date;
+    private let startupConfiguration: WorkerStartupConfiguration?;
+    private let lifecycleLock: NSLock;
+    private var startupRuntimeConfigurationAppliedFlag: Bool;
 
     private init(
         process: Process,
         commandWriter: ProtocolWriter,
-        eventReader: ProtocolReader
+        eventReader: ProtocolReader,
+        startupConfiguration: WorkerStartupConfiguration?
     ) {
         self.process = process;
         self.commandWriter = commandWriter;
@@ -45,6 +49,9 @@ public final class WorkerProcess {
         self.stderrTailLock = NSLock();
         self.stderrTailBytes = Array<UInt8>();
         self.workerStartedAt = Date();
+        self.startupConfiguration = startupConfiguration;
+        self.lifecycleLock = NSLock();
+        self.startupRuntimeConfigurationAppliedFlag = false;
     }
 
     /// Starts the worker executable with piped stdio and a draining stderr tail.
@@ -60,6 +67,22 @@ public final class WorkerProcess {
         workerExecutablePath: String,
         arguments: Array<String>
     ) throws -> WorkerProcess {
+        return try WorkerProcess.launch(
+            workerExecutablePath: workerExecutablePath,
+            arguments: arguments,
+            workerStartupConfiguration: nil);
+    }
+
+    /// Starts the worker executable and writes the InitializeWorker startup
+    /// policy over the command pipe, mirroring the launch path of
+    /// apps/supervisor/src/worker_process.rs. A failed policy write is
+    /// followed by a best-effort graceful termination of the just-started
+    /// child before the failure surfaces.
+    public static func launch(
+        workerExecutablePath: String,
+        arguments: Array<String>,
+        workerStartupConfiguration: WorkerStartupConfiguration?
+    ) throws -> WorkerProcess {
         let workerProcess: Process = Process();
         workerProcess.executableURL = URL(fileURLWithPath: workerExecutablePath);
         workerProcess.arguments = arguments;
@@ -68,13 +91,15 @@ public final class WorkerProcess {
         return try WorkerProcess.launchInternal(
             workerProcess: workerProcess,
             standardInputPipe: standardInputPipe,
-            standardOutputPipe: standardOutputPipe);
+            standardOutputPipe: standardOutputPipe,
+            workerStartupConfiguration: workerStartupConfiguration);
     }
 
     private static func launchInternal(
         workerProcess: Process,
         standardInputPipe: Pipe,
-        standardOutputPipe: Pipe
+        standardOutputPipe: Pipe,
+        workerStartupConfiguration: WorkerStartupConfiguration?
     ) throws -> WorkerProcess {
         workerProcess.standardInput = standardInputPipe;
         workerProcess.standardOutput = standardOutputPipe;
@@ -91,12 +116,57 @@ public final class WorkerProcess {
         let eventReader: ProtocolReader = ProtocolReader(transport: PipeFrameTransport(
             fileDescriptor: standardOutputPipe.fileHandleForReading.fileDescriptor,
             isWriteEnd: false));
-        let workerProcess: WorkerProcess = WorkerProcess(
+        let launchedWorker: WorkerProcess = WorkerProcess(
             process: workerProcess,
             commandWriter: commandWriter,
-            eventReader: eventReader);
-        workerProcess.drainStandardError(standardErrorPipe: standardErrorPipe);
-        return workerProcess;
+            eventReader: eventReader,
+            startupConfiguration: workerStartupConfiguration);
+        launchedWorker.drainStandardError(standardErrorPipe: standardErrorPipe);
+        if let startupConfiguration: WorkerStartupConfiguration = workerStartupConfiguration {
+            do {
+                try launchedWorker.sendCommand(.initializeWorker(startupConfiguration));
+            } catch let initializationFailure {
+                throw WorkerProcess.cleanUpFailedLaunch(
+                    launchedWorker,
+                    operationFailure: initializationFailure);
+            }
+        }
+        return launchedWorker;
+    }
+
+    /// Terminates a worker whose launch handshake failed, combining both
+    /// failures when the cleanup cannot run, as the Rust startup cleanup does.
+    private static func cleanUpFailedLaunch(
+        _ failedWorker: WorkerProcess,
+        operationFailure: Error
+    ) -> Error {
+        do {
+            try failedWorker.terminateGracefully();
+        } catch {
+            return WorkerControlError.operationAndCleanupFailed(
+                operationDescription: String(describing: operationFailure),
+                cleanupDescription: String(describing: error));
+        }
+        return operationFailure;
+    }
+
+    /// The configuration generation this worker was launched to acknowledge.
+    public func expectedConfigurationGeneration() -> String? {
+        return self.startupConfiguration?.configurationGeneration;
+    }
+
+    /// Whether the startup runtime-policy wait already completed for this
+    /// process; live memory updates must not wait again.
+    public func isStartupRuntimeConfigurationApplied() -> Bool {
+        self.lifecycleLock.lock();
+        defer { self.lifecycleLock.unlock(); }
+        return self.startupRuntimeConfigurationAppliedFlag;
+    }
+
+    public func markStartupRuntimeConfigurationApplied() {
+        self.lifecycleLock.lock();
+        defer { self.lifecycleLock.unlock(); }
+        self.startupRuntimeConfigurationAppliedFlag = true;
     }
 
     /// The child process identifier while the worker is alive.
@@ -171,9 +241,4 @@ public final class WorkerProcess {
             strongSelf.stderrTailLock.unlock();
         };
     }
-}
-
-public enum WorkerControlError: Error, Equatable {
-    case startWorker(underlyingDescription: String)
-    case workerExitedUnexpectedly(exitStatus: Int32)
 }

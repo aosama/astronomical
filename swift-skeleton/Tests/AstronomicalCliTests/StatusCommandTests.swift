@@ -19,7 +19,7 @@ final class StatusCommandTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.development);
         let service: DaemonIpcService = try DaemonIpcService.start(
             instancePaths: instancePaths,
-            healthProvider: { return DaemonWorkerStatus.ready; });
+            healthProvider: { return DaemonStatusReport(workerStatus: .ready, readyModelId: nil); });
         defer {
             service.shutdown();
             try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
@@ -56,7 +56,7 @@ final class StatusCommandTests: XCTestCase {
         // one of them, so the probe must surface that as a rejection.
         let service: DaemonIpcService = try DaemonIpcService.start(
             instancePaths: instancePaths,
-            healthProvider: { return DaemonWorkerStatus.unavailable; });
+            healthProvider: { return DaemonStatusReport.unavailable(); });
         defer {
             service.shutdown();
             try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
