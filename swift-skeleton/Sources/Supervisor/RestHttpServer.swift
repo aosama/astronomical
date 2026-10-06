@@ -129,12 +129,18 @@ public final class RestHttpServer: @unchecked Sendable {
     }
 
     /// Stops serving, waits for the accept thread to end, and closes the
-    /// listener so clients cannot connect to a dead endpoint.
+    /// listener so clients cannot connect to a dead endpoint. Stopping an
+    /// already-stopped server is a no-op — the listener descriptor is
+    /// closed exactly once, so a reused descriptor is never closed again.
     public func stop() -> Void {
         self.stateLock.lock();
+        let wasAlreadyShutdown: Bool = self.isShutdownRequested;
         self.isShutdownRequested = true;
-        let servingThread: Thread? = self.servingThread;
         self.stateLock.unlock();
+        if wasAlreadyShutdown {
+            return;
+        }
+        let servingThread: Thread? = self.servingThread;
         // A throwaway loopback connection unblocks the accept that is
         // waiting for a client; the loop then observes the flag and exits.
         let wakeupDescriptor: Int32 = socket(AF_INET, SOCK_STREAM, 0);
@@ -218,6 +224,7 @@ public final class RestHttpServer: @unchecked Sendable {
         defer { connection.discard(); }
 
         var response: RestHttpResponse?;
+        var endpointHandleStart: ContinuousClock.Instant?;
         let parseStart: ContinuousClock.Instant? = RestHttpPerformanceAttribution.startedOperation(
             operationName: "rest_request_parse",
             performanceAttributionEnabled: performanceAttributionEnabled);
@@ -232,13 +239,13 @@ public final class RestHttpServer: @unchecked Sendable {
                 performanceAttributionEnabled: performanceAttributionEnabled);
             switch (routeTable.outcome(method: request.method, path: request.path)) {
             case let .handler(endpointHandler):
-                let handleStart: ContinuousClock.Instant? = RestHttpPerformanceAttribution.startedOperation(
+                endpointHandleStart = RestHttpPerformanceAttribution.startedOperation(
                     operationName: "rest_endpoint_handle",
                     performanceAttributionEnabled: performanceAttributionEnabled);
                 response = try endpointHandler(request);
                 RestHttpPerformanceAttribution.finishedOperation(
                     operationName: "rest_endpoint_handle",
-                    operationStart: handleStart,
+                    operationStart: endpointHandleStart,
                     operationOutcome: "success",
                     performanceAttributionEnabled: performanceAttributionEnabled);
             case let .methodNotAllowed(allowedMethods):
@@ -258,11 +265,21 @@ public final class RestHttpServer: @unchecked Sendable {
                     .envelopeResponse();
             }
         } catch let endpointFailure as RestEndpointFailure {
-            RestHttpPerformanceAttribution.finishedOperation(
-                operationName: "rest_request_parse",
-                operationStart: parseStart,
-                operationOutcome: "rejected",
-                performanceAttributionEnabled: performanceAttributionEnabled);
+            // A typed failure from the handler belongs to the handle
+            // operation; anything earlier belongs to the parse operation.
+            if endpointHandleStart != nil {
+                RestHttpPerformanceAttribution.finishedOperation(
+                    operationName: "rest_endpoint_handle",
+                    operationStart: endpointHandleStart,
+                    operationOutcome: "failed",
+                    performanceAttributionEnabled: performanceAttributionEnabled);
+            } else {
+                RestHttpPerformanceAttribution.finishedOperation(
+                    operationName: "rest_request_parse",
+                    operationStart: parseStart,
+                    operationOutcome: "rejected",
+                    performanceAttributionEnabled: performanceAttributionEnabled);
+            }
             do {
                 response = try endpointFailure.envelopeResponse();
             } catch {
@@ -271,19 +288,35 @@ public final class RestHttpServer: @unchecked Sendable {
                     body: "the failure envelope could not be serialized");
             }
         } catch is RestConnectionError {
-            RestHttpPerformanceAttribution.finishedOperation(
-                operationName: "rest_request_parse",
-                operationStart: parseStart,
-                operationOutcome: "disconnected",
-                performanceAttributionEnabled: performanceAttributionEnabled);
+            if endpointHandleStart != nil {
+                RestHttpPerformanceAttribution.finishedOperation(
+                    operationName: "rest_endpoint_handle",
+                    operationStart: endpointHandleStart,
+                    operationOutcome: "disconnected",
+                    performanceAttributionEnabled: performanceAttributionEnabled);
+            } else {
+                RestHttpPerformanceAttribution.finishedOperation(
+                    operationName: "rest_request_parse",
+                    operationStart: parseStart,
+                    operationOutcome: "disconnected",
+                    performanceAttributionEnabled: performanceAttributionEnabled);
+            }
             // No answer is possible; the client is gone or stalled.
             return;
         } catch {
-            RestHttpPerformanceAttribution.finishedOperation(
-                operationName: "rest_request_parse",
-                operationStart: parseStart,
-                operationOutcome: "failed",
-                performanceAttributionEnabled: performanceAttributionEnabled);
+            if endpointHandleStart != nil {
+                RestHttpPerformanceAttribution.finishedOperation(
+                    operationName: "rest_endpoint_handle",
+                    operationStart: endpointHandleStart,
+                    operationOutcome: "failed",
+                    performanceAttributionEnabled: performanceAttributionEnabled);
+            } else {
+                RestHttpPerformanceAttribution.finishedOperation(
+                    operationName: "rest_request_parse",
+                    operationStart: parseStart,
+                    operationOutcome: "failed",
+                    performanceAttributionEnabled: performanceAttributionEnabled);
+            }
             do {
                 response = try RestEndpointFailure.internalError(message: "the endpoint handler failed")
                     .envelopeResponse();
