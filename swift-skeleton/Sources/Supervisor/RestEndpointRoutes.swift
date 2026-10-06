@@ -46,7 +46,8 @@ public enum RestEndpointRoutes {
         buildIdentity: ApplicationBuildIdentity,
         configurationValidationError: String? = nil,
         chatContext: RestChatRouteContext? = nil,
-        embeddingsContext: RestEmbeddingsRouteContext? = nil
+        embeddingsContext: RestEmbeddingsRouteContext? = nil,
+        imageContext: RestImageGenerationRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -108,6 +109,16 @@ public enum RestEndpointRoutes {
                     return RestEmbeddingsEndpoint.handle(
                         request,
                         embeddingsContext: embeddingsContext);
+                });
+        }
+        if let imageContext = imageContext {
+            routeTable.register(
+                method: RestImageGenerationEndpoint.routeMethod,
+                path: RestImageGenerationEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return RestImageGenerationEndpoint.handle(
+                        request,
+                        imageContext: imageContext);
                 });
         }
         routeTable.register(
