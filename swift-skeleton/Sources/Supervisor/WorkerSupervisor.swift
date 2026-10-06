@@ -145,6 +145,16 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         return try self.runGeneration(generationCommand);
     }
 
+    /// Runs one bounded embeddings request to its completed output, swapping
+    /// the resident model on demand exactly as chat does.
+    public func startEmbeddingsGeneration(
+        _ embeddingsCommand: EmbeddingsCommand
+    ) throws -> EmbeddingsOutput {
+        try self.admitGeneration();
+        defer { self.releaseAdmission(); }
+        return try self.runEmbeddingsGeneration(embeddingsCommand);
+    }
+
     private func admitGeneration() throws -> Void {
         self.stateLock.lock();
         defer { self.stateLock.unlock(); }
@@ -216,7 +226,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
             throw GenerationStartError.workerUnavailable;
         }
         try WorkerGenerate.prepareResidentModel(
-            generationCommand,
+            targetModelId: generationCommand.model,
             workerProcess: workerProcess,
             eventPump: eventPump,
             healthState: self.healthState,
@@ -253,8 +263,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     /// process-scoped events to health state and generation events for other
     /// requests to protocol violations, mirroring the Rust loop's
     /// active-request matching.
-    private func collectGenerationEvents(
-        _ requestId: RequestId,
+    private func collectGenerationEvents(        _ requestId: RequestId,
         eventPump: WorkerEventPump
     ) throws -> Array<ChatGenerationStreamEvent> {
         var streamEvents: Array<ChatGenerationStreamEvent> = Array<ChatGenerationStreamEvent>();
@@ -319,6 +328,118 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
                  .promptWorkReuse, .generationFinalized:
                 // Request-scoped telemetry without CLI presentation; the
                 // attribution slice consumes it from health state later.
+                continue;
+            default:
+                try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
+            }
+        }
+    }
+
+    /// Runs one embeddings command through the worker: startup wait, model
+    /// swap, command send, and the completed output collection, mirroring the
+    /// chat generation path's containment.
+    private func runEmbeddingsGeneration(
+        _ embeddingsCommand: EmbeddingsCommand
+    ) throws -> EmbeddingsOutput {
+        self.stateLock.lock();
+        let workerProcess: WorkerProcess? = self.workerProcess;
+        let eventPump: WorkerEventPump? = self.eventPump;
+        self.stateLock.unlock();
+        guard let workerProcess = workerProcess, let eventPump = eventPump else {
+            throw GenerationStartError.workerUnavailable;
+        }
+        do {
+            try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
+                workerProcess: workerProcess,
+                eventPump: eventPump,
+                healthState: self.healthState,
+                modelLoadTimeout: self.modelLoadTimeout);
+        } catch {
+            // The startup acknowledgement never arrived for this process; a
+            // fresh attempt is the only recovery.
+            self.containAndAttemptRelaunch(controlError: error);
+            throw GenerationStartError.workerUnavailable;
+        }
+        try WorkerGenerate.prepareResidentModel(
+            targetModelId: embeddingsCommand.model,
+            workerProcess: workerProcess,
+            eventPump: eventPump,
+            healthState: self.healthState,
+            modelPolicyCatalog: self.modelPolicyCatalog,
+            modelLoadTimeout: self.modelLoadTimeout,
+            containment: { (controlError: Error) -> Void in
+                self.containAndAttemptRelaunch(controlError: controlError);
+            });
+        do {
+            try workerProcess.sendCommand(.generateEmbeddings(embeddingsCommand));
+        } catch let protocolError as ProtocolError {
+            if case let .outgoingMessageTooLarge(actualMessageBytes, maximumMessageBytes) = protocolError {
+                throw GenerationStartError.requestTooLarge(
+                    actualIpcMessageBytes: actualMessageBytes,
+                    maximumIpcMessageBytes: maximumMessageBytes);
+            }
+            self.containAndAttemptRelaunch(controlError: protocolError);
+            throw GenerationStartError.workerUnavailable;
+        } catch let sendError {
+            self.containAndAttemptRelaunch(controlError: sendError);
+            throw GenerationStartError.workerUnavailable;
+        }
+        do {
+            return try self.collectEmbeddingsEvents(
+                embeddingsCommand.requestId,
+                eventPump: eventPump);
+        } catch let controlError as WorkerControlError {
+            self.containAndAttemptRelaunch(controlError: controlError);
+            throw EmbeddingsExecutionError.workerUnavailable;
+        }
+    }
+
+    /// Drains worker events until this embeddings request completes or fails,
+    /// applying the same active-request matching as the chat collection.
+    private func collectEmbeddingsEvents(
+        _ requestId: RequestId,
+        eventPump: WorkerEventPump
+    ) throws -> EmbeddingsOutput {
+        while true {
+            self.stateLock.lock();
+            let isShutdownRequested: Bool = self.isShutdownRequested;
+            self.stateLock.unlock();
+            if isShutdownRequested {
+                throw WorkerControlError.workerEventStreamClosed;
+            }
+            guard let workerEvent: WorkerEvent = try eventPump.nextEvent(
+                within: WorkerSupervisor.generationPollSeconds) else {
+                continue;
+            }
+            switch (workerEvent) {
+            case let .embeddingsCompleted(
+                eventRequestId, embeddings, inputTokenCounts, _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                return EmbeddingsOutput(
+                    embeddings: embeddings,
+                    inputTokenCounts: inputTokenCounts);
+            case let .embeddingsFailed(eventRequestId, reason):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                throw EmbeddingsExecutionError.workerFailure(reason);
+            case .embeddingsFinalized:
+                // The request-scoped release acknowledgement; the outcome
+                // event always arrives first.
+                continue;
+            case let .output(eventRequestId, _, _, _, _, _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                throw WorkerControlError.workerProtocolViolation(
+                    description: "the embeddings request received a chat output frame");
+            case let .completed(eventRequestId, _, _, _, _, _, _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                throw WorkerControlError.workerProtocolViolation(
+                    description: "the embeddings request received a chat terminal frame");
+            case let .failed(eventRequestId, _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                throw WorkerControlError.workerProtocolViolation(
+                    description: "the embeddings request received a chat terminal frame");
+            case .generationPreparationStarted, .generationProgress, .firstDecodeCompleted,
+                 .promptWorkReuse, .generationFinalized, .prefillProgress:
+                // Request-scoped telemetry without endpoint presentation.
                 continue;
             default:
                 try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
