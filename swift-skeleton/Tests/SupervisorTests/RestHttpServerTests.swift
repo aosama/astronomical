@@ -27,6 +27,30 @@ final class RestHttpServerTests: XCTestCase {
         XCTAssertTrue(responseBody.contains("Connection: close"), "response must be a close-delimited reply");
         XCTAssertTrue(responseBody.contains("Content-Type: text/plain"), "health is a plain-text reply");
         XCTAssertTrue(responseBody.hasSuffix("\r\n\r\nok"), "health body must be exactly ok: \(responseBody)");
+
+        let queryResponse: String? = RawLoopbackHttpClient.exchange(
+            port: server.boundEndpoint.port,
+            requestText: "GET /health?live=1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        let queryBody: String = try self.requireResponseText(queryResponse);
+        XCTAssertTrue(queryBody.hasPrefix("HTTP/1.1 200 "), "query parts must not change routing: \(queryBody)");
+        server.stop();
+    }
+
+    func testOversizedHeaderBlockAnswersBadRequestAndTheEndpointKeepsServing() throws {
+        let server: RestHttpServer = try self.startFoundationServer(readiness: .ready);
+
+        let oversizedHeaderLine: String = String(repeating: "x", count: 40_000);
+        let oversizedResponse: String? = RawLoopbackHttpClient.exchange(
+            port: server.boundEndpoint.port,
+            requestText: "GET /health HTTP/1.1\r\nX-Bulk: \(oversizedHeaderLine)\r\n\r\n");
+        let oversizedBody: String = try self.requireResponseText(oversizedResponse);
+        XCTAssertTrue(oversizedBody.hasPrefix("HTTP/1.1 400 "), "an oversized header block must be 400: \(oversizedBody)");
+
+        let followUpResponse: String? = RawLoopbackHttpClient.exchange(
+            port: server.boundEndpoint.port,
+            requestText: "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        let followUpBody: String = try self.requireResponseText(followUpResponse);
+        XCTAssertTrue(followUpBody.hasPrefix("HTTP/1.1 200 "), "endpoint must keep serving after oversized headers");
         server.stop();
     }
 
