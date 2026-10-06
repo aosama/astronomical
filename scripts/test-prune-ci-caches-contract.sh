@@ -1,10 +1,11 @@
 #!/usr/bin/env sh
 
 # Proves scripts/prune-ci-caches.sh keeps the newest cache per family and ref
-# class, deletes sccache entries above the family size ceiling even when they
-# are the newest, never applies the sccache ceiling to other families,
-# tolerates delete failures, and deletes nothing in dry-run mode, using a gh
-# shim so the contract never touches real GitHub state.
+# class, keeps zero non-default-ref sccache entries because sccache saves are
+# default-branch-only, deletes sccache entries above the decimal 3 GB family
+# ceiling even when they are the newest, never applies the sccache ceiling to
+# other families, tolerates delete failures, and deletes nothing in dry-run
+# mode, using a gh shim so the contract never touches real GitHub state.
 
 set -eu
 
@@ -50,14 +51,17 @@ cat >"$FIXTURE_REPO_JSON" <<'JSON'
 {"default_branch": "main"}
 JSON
 
-# Two sccache generations on main (one stale), one on a pull-request ref, three
-# native-build generations on main (one stale beyond the keep-two policy), and
-# one swiftpm cache that must survive untouched.
+# Two sccache generations on main (one stale) and one on a pull-request ref.
+# All three sit under the decimal 3 GB ceiling, so the count policy decides:
+# the stale main entry is surplus and the pull-request copy is deleted because
+# sccache keeps zero non-default-ref entries. One native-build trio on main
+# (one stale beyond the keep-two policy) and one swiftpm cache that must
+# survive untouched.
 cat >"$FIXTURE_CACHES_JSON" <<'JSON'
 {"actions_caches": [
-  {"id": 101, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/heads/main", "created_at": "2026-09-29T03:23:17Z", "size_in_bytes": 3620000971},
-  {"id": 102, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockB", "ref": "refs/heads/main", "created_at": "2026-09-28T22:02:06Z", "size_in_bytes": 3532723622},
-  {"id": 103, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/pull/851/merge", "created_at": "2026-09-29T03:16:40Z", "size_in_bytes": 3619984168},
+  {"id": 101, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/heads/main", "created_at": "2026-09-29T03:23:17Z", "size_in_bytes": 2900000000},
+  {"id": 102, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockB", "ref": "refs/heads/main", "created_at": "2026-09-28T22:02:06Z", "size_in_bytes": 2850000000},
+  {"id": 103, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/pull/851/merge", "created_at": "2026-09-29T03:16:40Z", "size_in_bytes": 2800000000},
   {"id": 201, "key": "astronomical-v2-native-build-macOS-ARM64-identityNew", "ref": "refs/heads/main", "created_at": "2026-09-29T02:56:59Z", "size_in_bytes": 6087355},
   {"id": 202, "key": "astronomical-v2-native-build-macOS-ARM64-identityMid", "ref": "refs/heads/main", "created_at": "2026-09-28T20:00:00Z", "size_in_bytes": 6080000},
   {"id": 203, "key": "astronomical-v2-native-build-macOS-ARM64-identityOld", "ref": "refs/heads/main", "created_at": "2026-09-27T20:00:00Z", "size_in_bytes": 6080000},
@@ -67,9 +71,9 @@ JSON
 
 # The oversize fixture pins the size-ceiling policy: a 5.5 GB newest sccache
 # entry on main and its 5.5 GB pull-request copy must both be deleted as
-# oversize, the 3 GB previous generation must survive as the newest under the
-# ceiling, and a 6 GB native-build entry must survive because the ceiling is
-# family-scoped to sccache.
+# oversize, the newest main entry at exactly decimal 3 GB must survive at the
+# inclusive ceiling boundary, and a 6 GB native-build entry must survive
+# because the ceiling is family-scoped to sccache.
 cat >"$FIXTURE_OVERSIZED_CACHES_JSON" <<'JSON'
 {"actions_caches": [
   {"id": 111, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainZ-lockZ", "ref": "refs/heads/main", "created_at": "2026-09-30T03:23:17Z", "size_in_bytes": 5500000000},
@@ -138,16 +142,18 @@ assert_deletions_match() {
 
 shellcheck "${repository_root}/scripts/prune-ci-caches.sh"
 
-# Contract 1: default run keeps the newest sccache on main and on the pull
-# request, keeps the two newest native-build entries, and deletes the rest.
+# Contract 1: default run keeps the newest sccache on main, keeps the two
+# newest native-build entries, and deletes the stale main sccache, the
+# pull-request sccache copy (zero non-default-ref entries kept), and the
+# surplus native-build entry.
 run_prune ""
-assert_deletions_match "102 203" "stale sccache and surplus native-build entries should be deleted"
-if grep -q 'cache_id=101\|cache_id=103\|cache_id=301\|cache_id=201\|cache_id=202' "$PRUNE_OUTPUT_FILE"; then
+assert_deletions_match "102 103 203" "stale main sccache, the pull-request sccache copy, and surplus native-build entries should be deleted"
+if grep -q 'cache_id=101\|cache_id=301\|cache_id=201\|cache_id=202' "$PRUNE_OUTPUT_FILE"; then
     print_error "kept caches must not appear as deleted"
     exit 1
 fi
-if ! grep -q 'status=complete outcome=pruned deleted=2' "$PRUNE_OUTPUT_FILE"; then
-    print_error "the run should close with a pruned summary of two deletions"
+if ! grep -q 'status=complete outcome=pruned deleted=3' "$PRUNE_OUTPUT_FILE"; then
+    print_error "the run should close with a pruned summary of three deletions"
     cat "$PRUNE_OUTPUT_FILE" >&2
     exit 1
 fi
@@ -155,7 +161,7 @@ fi
 # Contract 2: a failed cache deletion is reported but does not abort the run.
 GH_SHIM_FAIL_DELETIONS="102" run_prune ""
 unset GH_SHIM_FAIL_DELETIONS
-assert_deletions_match "203" "a failed deletion must not stop the remaining deletions"
+assert_deletions_match "103 203" "a failed deletion must not stop the remaining deletions"
 if ! grep -q 'action=delete-failed cache_id=102' "$PRUNE_OUTPUT_FILE"; then
     print_error "the failed deletion should be reported visibly"
     cat "$PRUNE_OUTPUT_FILE" >&2
@@ -169,16 +175,17 @@ if [ -s "$DELETIONS_FILE" ]; then
     exit 1
 fi
 if ! grep -q 'action=would-delete reason=surplus cache_id=102' "$PRUNE_OUTPUT_FILE" ||
+    ! grep -q 'action=would-delete reason=surplus cache_id=103' "$PRUNE_OUTPUT_FILE" ||
     ! grep -q 'action=would-delete reason=surplus cache_id=203' "$PRUNE_OUTPUT_FILE"; then
-    print_error "dry-run should report both stale caches as would-delete"
+    print_error "dry-run should report the stale sccache, its pull-request copy, and the stale native-build as would-delete"
     cat "$PRUNE_OUTPUT_FILE" >&2
     exit 1
 fi
 
 # Contract 4: an oversized sccache generation is deleted even when it is the
 # newest on main, its oversized pull-request copy is deleted too, the newest
-# under-ceiling generation survives, and the sccache ceiling never reaches the
-# native-build family.
+# main entry at exactly decimal 3 GB survives at the inclusive ceiling
+# boundary, and the sccache ceiling never reaches the native-build family.
 PRUNE_CACHES_FIXTURE="$FIXTURE_OVERSIZED_CACHES_JSON" run_prune ""
 unset PRUNE_CACHES_FIXTURE
 assert_deletions_match "111 113" "oversized sccache entries must be deleted regardless of recency"
