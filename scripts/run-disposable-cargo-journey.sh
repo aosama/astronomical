@@ -2,6 +2,15 @@
 
 # Maps named release and acceptance journeys to immutable Cargo commands.
 # Their artifact ownership remains centralized in the disposable-target runner.
+#
+# Usage:
+#   scripts/run-disposable-cargo-journey.sh JOURNEY   run one journey
+#   scripts/run-disposable-cargo-journey.sh --list    print journey names
+#
+# Each journey case below IS its Cargo command: the `set --` line in the
+# matching case arm is executed verbatim inside a disposable target. Most
+# journeys wrap the bounded runner (scripts/run-bounded-cargo-test.sh), which
+# enforces the 120-second boundary and serial real-model execution.
 
 set -eu
 

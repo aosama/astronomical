@@ -1,4 +1,10 @@
 [alias]
+# Each alias expands to one plain `cargo test` invocation; read the list to
+# see the exact packages and test binaries it covers.
+# test-hermetic: every package's hermetic_tests binary.
+# test-rest-api: the REST contract and supervisor rest_api_tests binaries.
+# test-hermetic-and-rest: both lanes together; this is what the commit gate
+# (scripts/verify-before-commit.sh) compiles and runs.
 test-hermetic = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-supervisor", "--test", "hermetic_tests"]
 test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-supervisor", "--test", "rest_api_tests"]
-verify-commit-rust = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-supervisor", "-p", "astronomical-rest-contract", "--test", "hermetic_tests", "--test", "rest_api_tests"]
+test-hermetic-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-supervisor", "-p", "astronomical-rest-contract", "--test", "hermetic_tests", "--test", "rest_api_tests"]

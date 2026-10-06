@@ -13,6 +13,13 @@
 # text-only for the text journey, plus a 9,216-visual-token image for the
 # vision journey; SSD cache disabled); this script only invokes them. Journeys
 # are not wired into CI and require an Apple-Silicon host.
+#
+# Command per journey (release profile, performance-throughput feature):
+#   cargo test --release -p astronomical-inference-worker \
+#     --features astronomical-inference-worker/performance_throughput \
+#     --test performance_throughput_tests <TEST_NAME> -- --ignored --exact --nocapture
+# with TEST_NAME = performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput
+# or   TEST_NAME = performance_throughput::qwen3_5_moe_vision::should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput
 
 set -eu
 
