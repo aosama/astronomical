@@ -63,6 +63,8 @@ public struct WorkerHealthSnapshot: Equatable {
     public var latestMlxMemorySnapshot: WorkerMlxMemorySnapshot?;
     /// Latest worker-reported retained-expert topology.
     public var expertResidency: WorkerExpertResidencySnapshot?;
+    /// Sparse-expert ownership mode reported by the worker or a swap.
+    public var expertMemoryMode: ExpertMemoryMode?;
 
     /// Builds a ready snapshot from the worker's enriched readiness event.
     public static func readyWithModel(
@@ -78,7 +80,8 @@ public struct WorkerHealthSnapshot: Equatable {
             effectiveMlxMemoryCeilingBytes: 0,
             minimumMlxMemoryCeilingBytes: 1,
             latestMlxMemorySnapshot: nil,
-            expertResidency: nil);
+            expertResidency: nil,
+            expertMemoryMode: nil);
     }
 
     /// Builds a ready snapshot for an idle worker that has no resident model.
@@ -96,7 +99,8 @@ public struct WorkerHealthSnapshot: Equatable {
             effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes,
             minimumMlxMemoryCeilingBytes: minimumMlxMemoryCeilingBytes,
             latestMlxMemorySnapshot: nil,
-            expertResidency: nil);
+            expertResidency: nil,
+            expertMemoryMode: nil);
     }
 
     /// Builds a non-ready snapshot.
@@ -110,6 +114,26 @@ public struct WorkerHealthSnapshot: Equatable {
             effectiveMlxMemoryCeilingBytes: 0,
             minimumMlxMemoryCeilingBytes: 1,
             latestMlxMemorySnapshot: nil,
-            expertResidency: nil);
+            expertResidency: nil,
+            expertMemoryMode: nil);
+    }
+
+    /// Builds a fresh resident-model snapshot without resetting daemon-session
+    /// totals. The prompt-cache pending state and serving-session totals join
+    /// this carry-over when their slices land.
+    public static func readyWithReplacementModel(
+        modelId: String,
+        capabilities: WorkerModelCapabilities,
+        minimumMlxMemoryCeilingBytes: UInt64,
+        previousHealthSnapshot: WorkerHealthSnapshot
+    ) -> WorkerHealthSnapshot {
+        var replacementHealthSnapshot: WorkerHealthSnapshot = WorkerHealthSnapshot.readyWithModel(
+            modelId: modelId,
+            capabilities: capabilities);
+        replacementHealthSnapshot.machineMlxMemoryCeilingBytes = previousHealthSnapshot.machineMlxMemoryCeilingBytes;
+        replacementHealthSnapshot.effectiveMlxMemoryCeilingBytes = previousHealthSnapshot.effectiveMlxMemoryCeilingBytes;
+        replacementHealthSnapshot.minimumMlxMemoryCeilingBytes = minimumMlxMemoryCeilingBytes;
+        replacementHealthSnapshot.workerRuntimeFeatureConfiguration = previousHealthSnapshot.workerRuntimeFeatureConfiguration;
+        return replacementHealthSnapshot;
     }
 }
