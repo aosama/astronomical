@@ -4,10 +4,10 @@ import Foundation;
  * A human-readable discovery outcome that never embeds absolute paths, so a
  * report stays safe to surface in configuration errors and logs.
  */
-internal struct DiscoveryModelDiscoveryDiagnostic: Equatable, Sendable {
-    internal let code: DiscoveryModelDiscoveryDiagnosticCode;
-    internal let modelId: String;
-    internal let configuredRootNumbers: Array<Int>;
+public struct DiscoveryModelDiscoveryDiagnostic: Equatable, Sendable {
+    public let code: DiscoveryModelDiscoveryDiagnosticCode;
+    public let modelId: String;
+    public let configuredRootNumbers: Array<Int>;
 
     private init(code: DiscoveryModelDiscoveryDiagnosticCode, modelId: String, configuredRootNumbers: Array<Int>) {
         self.code = code;
@@ -16,7 +16,7 @@ internal struct DiscoveryModelDiscoveryDiagnostic: Equatable, Sendable {
     }
 
     /** A model id appeared under more than one configured root; roots are 1-based. */
-    internal static func ambiguousModelIdentity(
+    public static func ambiguousModelIdentity(
         modelId: String,
         configuredRootNumbers: Array<Int>
     ) -> DiscoveryModelDiscoveryDiagnostic {
@@ -28,7 +28,7 @@ internal struct DiscoveryModelDiscoveryDiagnostic: Equatable, Sendable {
     }
 
     /** A configured root could not be scanned; the number is 1-based. */
-    internal static func unavailableModelDirectory(configuredRootNumber: Int) -> DiscoveryModelDiscoveryDiagnostic {
+    public static func unavailableModelDirectory(configuredRootNumber: Int) -> DiscoveryModelDiscoveryDiagnostic {
         return DiscoveryModelDiscoveryDiagnostic(
             code: DiscoveryModelDiscoveryDiagnosticCode.unavailableModelDirectory,
             modelId: "",

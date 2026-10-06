@@ -158,6 +158,14 @@ internal enum DiscoveryStrictJsonDocument {
                 if currentByte < 0x20 {
                     throw ParseError.malformedJson(description: "unescaped control character in a string");
                 }
+                // ASCII pass-through: printable single-byte characters are
+                // their own UTF-8 sequence; only >= 0x80 starts a multi-byte
+                // sequence.
+                if currentByte <= 0x7F {
+                    stringBytes.append(currentByte);
+                    self.readOffset += 1;
+                    continue;
+                }
                 try self.parseRawUtf8Sequence(into: &stringBytes);
             }
         }
