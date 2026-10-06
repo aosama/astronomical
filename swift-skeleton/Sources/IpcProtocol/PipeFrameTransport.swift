@@ -20,6 +20,11 @@ public protocol FrameTransport: AnyObject {
     /// Closes the underlying descriptor outright; the worker-process owner
     /// calls this for the read end after reaping a replaced child.
     func closeTransportFileDescriptor();
+
+    /// Reports whether bytes are ready within `timeoutMilliseconds` without
+    /// consuming them; the worker's decode loop uses this to interleave
+    /// supervisor commands between engine steps.
+    func pollReadReadiness(timeoutMilliseconds: Int32) -> Bool;
 }
 
 #if canImport(Glibc)
@@ -86,5 +91,14 @@ public final class PipeFrameTransport: FrameTransport {
 
     public func closeTransportFileDescriptor() {
         close(self.fileDescriptor);
+    }
+
+    public func pollReadReadiness(timeoutMilliseconds: Int32) -> Bool {
+        if self.isWriteEnd {
+            return false;
+        }
+        return FrameTransportPolling.isReadReady(
+            fileDescriptor: self.fileDescriptor,
+            timeoutMilliseconds: timeoutMilliseconds);
     }
 }
