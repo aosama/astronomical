@@ -2,7 +2,7 @@ import Foundation;
 
 /// Current sparse-expert weight residency exposed by the local worker.
 public enum ExpertMemoryMode: Equatable {
-    /// Every target and optional MTP layer has complete sparse experts resident.
+    /// Every decoder layer has complete sparse experts resident.
     case resident;
     /// Some routed experts are retained while misses still page.
     case hybrid;
