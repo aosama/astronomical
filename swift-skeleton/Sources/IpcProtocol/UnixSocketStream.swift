@@ -6,7 +6,7 @@ import Foundation;
 /// keeps one file descriptor that ProtocolReader and ProtocolWriter share,
 /// because the Swift frame codec is synchronous and runs on the caller's
 /// thread instead of inside an async runtime.
-public final class UnixSocketStream {
+public final class UnixSocketStream: FrameTransport {
     private let fileDescriptor: Int32;
     private let lifecycleLock: NSLock = NSLock();
     private var isFileDescriptorClosed: Bool = false;
@@ -103,11 +103,11 @@ public final class UnixSocketStream {
 
     /// Half-closes the stream so the peer observes EOF while this side keeps
     /// the descriptor open for reads, mirroring dropping the Rust write half.
-    public func shutdownWrite() throws -> Void {
+    /// A failed half-close leaves the caller to close the whole transport, so
+    /// the errno is swallowed here exactly like the Rust drop path.
+    public func shutdownWrite() {
         let shutdownResult: Int32 = shutdown(self.fileDescriptor, SHUT_WR);
-        if shutdownResult < 0 {
-            throw IpcPosixError.fromErrno();
-        }
+        _ = shutdownResult;
     }
 
     /// Closes the file descriptor; safe to call repeatedly.
