@@ -11,16 +11,13 @@ const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 mod artifact_discovery;
 mod bounded_artifact_file;
 mod classified_artifacts;
-mod deepseek_v4;
 mod effective_models;
 mod flux2_klein;
 mod flux2_klein_documents;
 mod k2_horizon_mova;
-mod laguna;
 mod model_family;
 mod modernbert;
 mod qwen3_5;
-mod qwen4_exp;
 mod qwen_image_21;
 mod qwen_image_21_documents;
 
@@ -46,7 +43,6 @@ pub use qwen_image_21::{
 pub use qwen3_5::{
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, context_window_tokens, required_shard_file_names,
 };
-pub use qwen4_exp::{Qwen4ExpConfigurationSummary, describe_configuration};
 
 /// Capability contract for one discovered executable model.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -112,7 +112,6 @@ pub enum PerformanceCounter {
     PreviousTokenPrefetchByteCount,
     /// Previous-token experts dropped because leftover slots were full (#537).
     PreviousTokenPrefetchCapacityDropCount,
-    Qwen4ExpIndexerSelectedKeyCount,
     /// Admission decisions composed from the exact-context transient evidence (#691).
     AdmissionReserveExactContextSourceCount,
     /// Admission decisions composed from a token-scaled phase estimate (#691).
@@ -196,7 +195,6 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchMissCount,
         Self::PreviousTokenPrefetchByteCount,
         Self::PreviousTokenPrefetchCapacityDropCount,
-        Self::Qwen4ExpIndexerSelectedKeyCount,
         Self::AdmissionReserveExactContextSourceCount,
         Self::AdmissionReservePhaseScaledSourceCount,
         Self::AdmissionReserveGlobalMaximumSourceCount,
@@ -344,7 +342,6 @@ impl PerformanceCounter {
             Self::PreviousTokenPrefetchCapacityDropCount => {
                 "previous_token_prefetch_capacity_drop_count"
             }
-            Self::Qwen4ExpIndexerSelectedKeyCount => "qwen4_exp_indexer_selected_key_count",
             Self::AdmissionReserveExactContextSourceCount => {
                 "admission_reserve_exact_context_source_count"
             }

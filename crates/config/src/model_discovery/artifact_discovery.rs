@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::model_discovery::{
     ChatModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities,
     ModelFamily, ModelLicense, classified_artifacts, derive_revision_from_config_bytes,
-    flux2_klein, k2_horizon_mova, laguna, model_family, modernbert, qwen_image_21, qwen3_5,
+    flux2_klein, k2_horizon_mova, model_family, modernbert, qwen_image_21, qwen3_5,
 };
 
 pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
@@ -63,31 +63,6 @@ pub fn try_discover_model_with_id(
                 }),
                 license: None,
                 model_size_bytes: family_metadata.model_size_bytes,
-            })
-        }
-        ModelFamily::Laguna => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let laguna_metadata = laguna::discover_model_metadata(model_directory, &config_bytes)?;
-            let provider_model_id =
-                classified_artifacts::immutable_model_provenance(model_directory)
-                    .filter(|(_, revision)| revision == &laguna_metadata.revision)
-                    .map(|(provider_model_id, _)| provider_model_id);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id,
-                model_family,
-                revision: laguna_metadata.revision,
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: laguna_metadata.context_window,
-                    max_input_tokens: laguna_metadata.max_input_tokens,
-                    max_output_tokens: laguna_metadata.max_output_tokens,
-                    supports_vision: laguna_metadata.has_vision,
-                    supports_reasoning: laguna_metadata.supports_reasoning,
-                    supports_tool_calls: laguna_metadata.supports_tool_calls,
-                }),
-                license: None,
-                model_size_bytes: laguna_metadata.model_size_bytes,
             })
         }
         ModelFamily::Flux2Klein => {
@@ -158,8 +133,6 @@ pub fn try_discover_model_with_id(
                 model_size_bytes: family_metadata.model_size_bytes,
             })
         }
-        // Classification is intentionally broader than executable discovery.
-        ModelFamily::DeepSeekV4 => None,
         // The native T2I engine is wired end to end (worker factory arm, supervisor image
         // policy, preflight, catalog), so a verified Qwen-Image-2.1 artifact now advertises
         // with the same evidence shape as FLUX.2 Klein.
@@ -176,9 +149,5 @@ pub fn try_discover_model_with_id(
                 model_size_bytes: verified_evidence.model_size_bytes,
             })
         }
-        // Recognized but deliberately not executable: no engine exists yet, so
-        // the artifact stays unpublished while classification still names the
-        // family for download preflight and bounded diagnostics.
-        ModelFamily::Qwen4Exp => None,
     }
 }

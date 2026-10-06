@@ -234,8 +234,8 @@ phase_cargo_core() {
     # scripts/test-mlx-memory-contracts.sh, one process per limit profile.
     run_step compile-memory-contract-lane "$COMPILE_TIMEOUT_SECONDS" \
         scripts/compile-mlx-memory-contract-lane.sh || return $?
-    # Hosted CI cannot execute the direct-MLX lane; the 2026-08-26 Laguna
-    # residency regression proved behavioral breaks ship silently without it.
+    # Hosted CI cannot execute the direct-MLX lane; the 2026-08-26 residency
+    # regression proved behavioral breaks ship silently without it.
     # The lane owns a disposable target separate from the shared graph, so it
     # overlaps the hermetic suite run instead of queueing behind it. Its one
     # Cargo invocation also runs the hermetic MLX-C coverage contract binary,

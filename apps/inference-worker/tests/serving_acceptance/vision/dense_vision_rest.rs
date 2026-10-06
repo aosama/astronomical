@@ -51,17 +51,18 @@ fn configured_dense_qwen3_5_vision_artifact() -> Option<(
     std::path::PathBuf,
     astronomical_model_serving::ValidatedQwen3_5Artifact,
 )> {
-    let dense_model_id = crate::support::dense_mtp_model_id();
-    let discovered_model = crate::support::configured_discovered_models()
+    crate::support::configured_discovered_models()
         .into_iter()
-        .find(|discovered_model| discovered_model.model_id == dense_model_id)?;
-    let maximum_output_tokens =
-        crate::support::chat_capabilities(&discovered_model)?.max_output_tokens;
-    let validated_artifact = Qwen3_5ArtifactValidator::new()
-        .validate(&discovered_model.model_directory, maximum_output_tokens)
-        .ok()?;
-    (validated_artifact.config().feed_forward_architecture()
-        == Qwen3_5FeedForwardArchitecture::Dense
-        && validated_artifact.supports_image_input())
-    .then_some((discovered_model.model_directory, validated_artifact))
+        .find_map(|discovered_model| {
+            let maximum_output_tokens = crate::support::chat_capabilities(&discovered_model)
+                .ok()?
+                .max_output_tokens;
+            let validated_artifact = Qwen3_5ArtifactValidator::new()
+                .validate(&discovered_model.model_directory, maximum_output_tokens)
+                .ok()?;
+            (validated_artifact.config().feed_forward_architecture()
+                == Qwen3_5FeedForwardArchitecture::Dense
+                && validated_artifact.supports_image_input())
+            .then_some((discovered_model.model_directory, validated_artifact))
+        })
 }

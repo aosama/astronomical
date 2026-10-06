@@ -327,11 +327,11 @@ fn expected_layer_types() -> Vec<&'static str> {
         .collect()
 }
 
-/// Freezes the funnygeeker/Qwen3.8-35B-A3B-Distill-oQ6e-mtp configuration shape:
+/// Freezes a sparse mixed-precision quantization configuration shape:
 /// a 6-bit affine default with a sparse override map whose unlisted expected
 /// modules (router gates) are stored as native floating point and
 /// resolved through the shard-index scan.
-pub fn frozen_qwen3_8_distill_config_bytes() -> Vec<u8> {
+pub fn frozen_sparse_mixed_precision_config_bytes() -> Vec<u8> {
     let config_bytes = br#"
     {
         "architectures": ["Qwen3_5MoeForConditionalGeneration"],

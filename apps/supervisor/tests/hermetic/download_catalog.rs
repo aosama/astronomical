@@ -123,7 +123,6 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
         "schema_version": 2,
         "entries": [
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
-            valid_entry("astronomical-test/example-laguna", "laguna"),
             valid_entry("astronomical-test/example-flux", "flux2_klein"),
             valid_entry("astronomical-test/example-embedder", "modernbert"),
             valid_entry("astronomical-test/example-k2", "k2_horizon_mova"),
@@ -133,25 +132,21 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
     let download_catalog = DownloadCatalog::parse_json(&catalog_json.to_string())
         .expect("complete fictional entries should be accepted");
 
-    assert_eq!(download_catalog.entries().len(), 5);
+    assert_eq!(download_catalog.entries().len(), 4);
     assert_eq!(
         download_catalog.entries()[0].huggingface_id(),
         "astronomical-test/example-qwen"
     );
     assert_eq!(
         download_catalog.entries()[1].huggingface_id(),
-        "astronomical-test/example-laguna"
-    );
-    assert_eq!(
-        download_catalog.entries()[2].huggingface_id(),
         "astronomical-test/example-flux"
     );
     assert_eq!(
-        download_catalog.entries()[3].huggingface_id(),
+        download_catalog.entries()[2].huggingface_id(),
         "astronomical-test/example-embedder"
     );
     assert_eq!(
-        download_catalog.entries()[4].huggingface_id(),
+        download_catalog.entries()[3].huggingface_id(),
         "astronomical-test/example-k2"
     );
 }

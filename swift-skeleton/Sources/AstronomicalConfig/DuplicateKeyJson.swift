@@ -21,7 +21,7 @@ internal enum DuplicateKeyJson {
     internal static func parseJsonRejectingDuplicates(configFilePath: FilePath, configBytes: Data, performanceAttributionEnabled: Bool = false) throws -> Any {
         let passStart = ConfigPerformanceAttribution.startedPass(operationName: "parse_json_rejecting_duplicates", performanceAttributionEnabled: performanceAttributionEnabled);
         do {
-            let parsedJson = try parseJsonBytes(configBytes: configBytes, rejectDuplicateKeys: true);
+            let parsedJson = try parseJsonBytes(configBytes: configBytes);
             ConfigPerformanceAttribution.finishedPass(operationName: "parse_json_rejecting_duplicates", passStart: passStart, passOutcome: "success", performanceAttributionEnabled: performanceAttributionEnabled);
             return parsedJson;
         } catch let parserFailure as ParserFailure {
@@ -30,40 +30,8 @@ internal enum DuplicateKeyJson {
         }
     }
 
-    /// Parses while tolerating duplicate keys, mirroring the first pass of
-    /// select_laguna_root_chat_template which parses the whole document before
-    /// counting duplicate top-level chat_template fields itself.
-    internal static func parseJsonAllowingDuplicateKeys(configBytes: Data) throws -> Any {
-        do {
-            return try parseJsonBytes(configBytes: configBytes, rejectDuplicateKeys: false);
-        } catch let parserFailure as ParserFailure {
-            throw parserFailure;
-        }
-    }
-
-    /// Parses the top level of an object document into ordered entries,
-    /// tolerating duplicate keys. The laguna selector must see every
-    /// chat_template occurrence, which a deduplicating dictionary would hide.
-    internal static func parseJsonTopLevelObjectEntriesAllowingDuplicateKeys(configBytes: Data) throws -> Array<(key: String, jsonValue: Any)> {
-        var documentParser: JsonParser = JsonParser(configBytes: configBytes, rejectDuplicateKeys: false);
-        do {
-            documentParser.skipWhitespaceBytes();
-            guard documentParser.isAtEnd == false else {
-                throw ParserFailure.emptyDocument;
-            }
-            let orderedTopLevelEntries: Array<(key: String, jsonValue: Any)> = try documentParser.parseTopLevelObjectEntries();
-            documentParser.skipWhitespaceBytes();
-            if documentParser.isAtEnd == false {
-                throw ParserFailure.trailingContent;
-            }
-            return orderedTopLevelEntries;
-        } catch let parserFailure as ParserFailure {
-            throw parserFailure;
-        }
-    }
-
-    private static func parseJsonBytes(configBytes: Data, rejectDuplicateKeys: Bool) throws -> Any {
-        var documentParser: JsonParser = JsonParser(configBytes: configBytes, rejectDuplicateKeys: rejectDuplicateKeys);
+    private static func parseJsonBytes(configBytes: Data) throws -> Any {
+        var documentParser: JsonParser = JsonParser(configBytes: configBytes, rejectDuplicateKeys: true);
         documentParser.skipWhitespaceBytes();
         guard documentParser.isAtEnd == false else {
             throw ParserFailure.emptyDocument;
@@ -209,48 +177,6 @@ internal enum DuplicateKeyJson {
                 if configBytes[parseOffset] == UInt8(ascii: "}") {
                     parseOffset += 1;
                     return parsedObject;
-                }
-                throw ParserFailure.malformed(problem: "expected , or } in object");
-            }
-        }
-
-        /// Parses every member of the current object without collapsing
-        /// duplicates, in document order.
-        fileprivate mutating func parseTopLevelObjectEntries() throws -> Array<(key: String, jsonValue: Any)> {
-            var orderedEntries: Array<(key: String, jsonValue: Any)> = Array<(key: String, jsonValue: Any)>();
-            try expectNextByte(expectedByte: UInt8(ascii: "{"), problem: "expected an object");
-            skipWhitespaceBytes();
-            if isAtEnd {
-                throw ParserFailure.malformed(problem: "unterminated object");
-            }
-            if configBytes[parseOffset] == UInt8(ascii: "}") {
-                parseOffset += 1;
-                return orderedEntries;
-            }
-            while true {
-                skipWhitespaceBytes();
-                if isAtEnd {
-                    throw ParserFailure.malformed(problem: "unterminated object");
-                }
-                if configBytes[parseOffset] != UInt8(ascii: "\"") {
-                    throw ParserFailure.malformed(problem: "expected a quoted object key");
-                }
-                let memberKey = try parseStringValue();
-                skipWhitespaceBytes();
-                try expectNextByte(expectedByte: UInt8(ascii: ":"), problem: "expected : between object key and value");
-                let memberValue = try parseValue(currentDepth: 1);
-                orderedEntries.append((key: memberKey, jsonValue: memberValue));
-                skipWhitespaceBytes();
-                if isAtEnd {
-                    throw ParserFailure.malformed(problem: "unterminated object");
-                }
-                if configBytes[parseOffset] == UInt8(ascii: ",") {
-                    parseOffset += 1;
-                    continue;
-                }
-                if configBytes[parseOffset] == UInt8(ascii: "}") {
-                    parseOffset += 1;
-                    return orderedEntries;
                 }
                 throw ParserFailure.malformed(problem: "expected , or } in object");
             }

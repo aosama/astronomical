@@ -9,8 +9,8 @@
 //!
 //! - Budget composition (`budget/ram.rs`) treats `GenerationPreparation` as
 //!   `Decode`-equivalent: the qwen3.5 residency planner maps
-//!   `GenerationPreparation | Decode` to the decode budget, and laguna does
-//!   the same.
+//!   `GenerationPreparation | Decode` to the decode budget, and every other
+//!   family does the same.
 //! - The adaptive growth guard only ever observes `Prefill` and `Decode`
 //!   windows; callers never construct a growth context for
 //!   `GenerationPreparation`.

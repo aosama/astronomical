@@ -420,7 +420,7 @@ async fn should_keep_all_discovered_models_listed_and_routable() {
 
 #[tokio::test]
 async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing() {
-    const RELOADED_MODEL_ID: &str = "astronomical/reloaded-laguna";
+    const RELOADED_MODEL_ID: &str = "astronomical/reloaded-model";
     let config_home_directory = tempfile::tempdir()
         .expect("a config home should be created")
         .keep();
@@ -433,12 +433,12 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
         Arc::clone(&reloadable_config),
         config_home_directory,
     );
-    let mut reloaded_laguna = discovered_model_for(RELOADED_MODEL_ID);
-    reloaded_laguna.model_family = astronomical_config::ModelFamily::Laguna;
+    let mut reloaded_model = discovered_model_for(RELOADED_MODEL_ID);
+    reloaded_model.model_family = astronomical_config::ModelFamily::Qwen3_5;
     reloadable_config
         .write()
         .expect("the reloadable config should remain writable")
-        .discovered_models = vec![reloaded_laguna];
+        .discovered_models = vec![reloaded_model];
 
     let model_list_response = application
         .clone()
@@ -464,10 +464,10 @@ async fn should_use_the_same_reloaded_discovery_snapshot_for_listing_and_routing
                 .body(Body::from(format!(
                     r#"{{"model":"{RELOADED_MODEL_ID}","messages":[{{"role":"user","content":"hello"}}],"stream":true}}"#
                 )))
-                .expect("the Laguna request should be well formed"),
+                .expect("the reloaded-model request should be well formed"),
         )
         .await
-        .expect("the Laguna request should receive a response");
+        .expect("the reloaded-model request should receive a response");
 
     assert_eq!(generation_response.status(), StatusCode::OK);
     let received_generation_commands = received_generation_commands

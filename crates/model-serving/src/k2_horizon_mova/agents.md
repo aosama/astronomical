@@ -10,7 +10,7 @@ Family code measures byte facts, calls those decision types, and enacts the resu
 
 - Do not add `k2_horizon_mova/memory/`.
 - Do not introduce K2 or MoVA types inside the centralized memory package.
-- Do not import `laguna` or `qwen3_5` internals. Family-neutral reuse is `memory`, `expert_paging`, `sparse_experts`, `decoder_cache`, `persistent_cache`, and `performance_attribution`.
+- Do not import other families' internals. Family-neutral reuse is `memory`, `expert_paging`, `sparse_experts`, `decoder_cache`, `persistent_cache`, and `performance_attribution`.
 - Persistent prompt cache is append-only attention KV through `PersistentPromptCacheDiskStore`. This family maps tensors; it does not invent a second store.
 - Performance attribution is the serving-settings log plus `PerformanceAttribution::enabled` on load and each generation. Flush reports on load success and generation end; do not leave the recorder disabled on the serving path.
 - The prompt always opens `<ifm|think>`. Honor `thinking_budget` when the request sets it; when it is omitted, apply a family default that leaves room for `</ifm|think>` and a visible answer, then inject the close token into decoder history.

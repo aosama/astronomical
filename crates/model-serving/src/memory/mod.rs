@@ -6,7 +6,7 @@
 //! family code ──measures──▶ memory decides ──decision──▶ family code enacts
 //! ```
 //!
-//! Family modules (`qwen3_5`, `qwen3_5_moe`, `laguna`) measure byte facts from
+//! Family modules (`qwen3_5`, `qwen3_5_moe`, `k2_horizon_mova`) measure byte facts from
 //! MLX and the artifact, hand them to the modules below, and enact the typed
 //! decisions they receive. This package imports nothing from any family; the
 //! dependency edge physically cannot point back. A family that re-derives
@@ -76,8 +76,6 @@ pub use admission::{
 pub(crate) use admission::{
     log_context_admission_projection, log_generation_context_workspace_reservation,
 };
-#[cfg(feature = "direct-mlx")]
-pub(crate) use budget::context_token_bucket;
 pub use budget::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
     AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,

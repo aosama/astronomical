@@ -6,9 +6,6 @@ import Foundation;
  */
 internal enum ModelFamily: String, Equatable, Sendable {
     case qwen35 = "qwen3_5";
-    case qwen4Exp = "qwen4_exp";
-    case laguna = "laguna";
-    case deepseekV4 = "deepseek_v4";
     case k2HorizonMova = "k2_horizon_mova";
     case flux2Klein = "flux2_klein";
     case qwenImage21 = "qwen_image_21";
@@ -17,15 +14,6 @@ internal enum ModelFamily: String, Equatable, Sendable {
     internal static func fromModelType(_ modelType: String?) -> ModelFamily? {
         if Qwen35.recognizesModelType(modelType) {
             return ModelFamily.qwen35;
-        }
-        if Qwen4Exp.recognizesModelType(modelType) {
-            return ModelFamily.qwen4Exp;
-        }
-        if Laguna.recognizesModelType(modelType) {
-            return ModelFamily.laguna;
-        }
-        if DeepseekV4.recognizesModelType(modelType) {
-            return ModelFamily.deepseekV4;
         }
         if K2HorizonMova.recognizesModelType(modelType) {
             return ModelFamily.k2HorizonMova;

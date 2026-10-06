@@ -15,7 +15,7 @@ async fn should_guard_both_chat_surfaces_with_the_experimental_thinking_seed_fla
             astronomical_config::ModelFamily::Qwen3_5,
             Some(ROMEO_AND_JULIET_THINKING_SEED),
         ),
-        (true, astronomical_config::ModelFamily::Laguna, None),
+        (true, astronomical_config::ModelFamily::K2HorizonMoVA, None),
     ] {
         let test_context =
             ThinkingSeedTestContext::new(thinking_channel_seed_enabled, model_family);
