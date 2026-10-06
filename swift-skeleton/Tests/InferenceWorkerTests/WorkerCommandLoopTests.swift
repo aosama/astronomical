@@ -513,3 +513,49 @@ final class WorkerLoopRun {
         }
     }
 }
+
+extension WorkerCommandLoopTests {
+
+    /**
+     * The real model family factory classifies a real directory and fails
+     * the swap closed while the dense artifact-weight path is pending; the
+     * worker stays responsive for the next command.
+     */
+    @Test(.timeLimit(.minutes(1)))
+    func should_fail_closed_a_real_qwen35_directory_swap_until_the_artifact_slice() throws {
+        let modelDirectoryUrl: URL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("qwen35-factory-journey-\(UUID().uuidString)");
+        try FileManager.default.createDirectory(at: modelDirectoryUrl, withIntermediateDirectories: true);
+        defer { try? FileManager.default.removeItem(at: modelDirectoryUrl); }
+        let configJson: String = """
+            {"architectures": ["Qwen3_5ForConditionalGeneration"], "model_type": "qwen3_5"}
+            """;
+        try Data(configJson.utf8).write(to: modelDirectoryUrl.appendingPathComponent("config.json"));
+
+        let loopRun: WorkerLoopRun = try self.startBootstrappedLoop(
+            startupConfiguration: self.startupConfiguration(
+                configurationGeneration: "gen-1",
+                configuredMaximumMlxMemoryBytes: nil));
+        defer { loopRun.finish(); }
+        _ = try self.expectEvent(loopRun.eventReader);
+        _ = try self.expectEvent(loopRun.eventReader);
+
+        try loopRun.commandWriter.sendCommand(.swapModel(
+            modelDirectory: modelDirectoryUrl.path,
+            modelConfiguration: self.autoregressiveModelConfiguration()));
+        let swapFailure: WorkerEvent = try self.expectEvent(loopRun.eventReader);
+        guard case let .modelSwapFailed(loadedModelRemainsReady, modelLoadFailureReason) = swapFailure else {
+            Issue.record("expected a fail-closed swap, got \(swapFailure)");
+            return;
+        }
+        #expect(loadedModelRemainsReady == false);
+        #expect(modelLoadFailureReason.contains("artifact streaming slice") == true);
+
+        try loopRun.commandWriter.sendCommand(.sampleMlxMemory);
+        let pollAnswer: WorkerEvent = try self.expectEvent(loopRun.eventReader);
+        guard case .mlxMemorySample = pollAnswer else {
+            Issue.record("expected a memory sample after the fail-closed swap, got \(pollAnswer)");
+            return;
+        }
+    }
+}

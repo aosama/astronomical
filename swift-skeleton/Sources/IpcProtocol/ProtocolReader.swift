@@ -12,6 +12,10 @@ public final class ProtocolReader {
     /// recv() scratch size per transport read.
     private static let receiveBufferByteCount: Int = 65_536;
 
+    /// One `poll(2)` wait per partial-frame slice; bounds cancel latency
+    /// without spinning when a frame trickles in across transport reads.
+    private static let pollSliceMilliseconds: Int32 = 20;
+
     private let socket: any FrameTransport;
     private var pendingBytes: Array<UInt8> = Array<UInt8>();
     private let performanceAttributionEnabled: Bool;
@@ -37,6 +41,66 @@ public final class ProtocolReader {
             return nil;
         }
         return try MessageCodec.decodeCommand(serializedCommand);
+    }
+
+    /// The outcome of one bounded poll for the next supervisor command.
+    public enum PolledCommand {
+        /// A complete command frame arrived and decoded.
+        case command(WorkerCommand);
+        /// No complete frame arrived within the timeout; the stream stays open.
+        case none;
+        /// The transport closed cleanly; the caller ends the loop.
+        case endOfStream;
+    }
+
+    /// Waits up to `timeoutMilliseconds` for the next complete command frame.
+    ///
+    /// The engine-backed worker's decode loop calls this between engine steps
+    /// so cancel and memory commands interleave at token boundaries, exactly
+    /// as the Rust loop's biased `tokio::select!` interleaves them between
+    /// decode yields. A partially received frame keeps polling within the
+    /// remaining budget instead of resurfacing as a blocking read.
+    public func pollNextCommand(timeoutMilliseconds: Int32) throws -> PolledCommand {
+        if self.hasCompleteFrameBuffered() {
+            return try self.decodeBufferedCommand();
+        }
+        let clock: ContinuousClock = ContinuousClock();
+        let pollDeadline: ContinuousClock.Instant = clock.now.advanced(
+            by: .milliseconds(Int64(timeoutMilliseconds)));
+        while clock.now < pollDeadline {
+            guard self.socket.pollReadReadiness(
+                timeoutMilliseconds: ProtocolReader.pollSliceMilliseconds) else {
+                return .none;
+            }
+            if try self.readMoreBytes() == false {
+                return .endOfStream;
+            }
+            if self.hasCompleteFrameBuffered() {
+                return try self.decodeBufferedCommand();
+            }
+        }
+        return .none;
+    }
+
+    /// Pops and decodes one already-buffered complete frame as a command.
+    private func decodeBufferedCommand() throws -> PolledCommand {
+        guard let serializedCommand: Data = try self.nextFrame() else {
+            return .endOfStream;
+        }
+        return .command(try MessageCodec.decodeCommand(serializedCommand));
+    }
+
+    /// Returns whether one complete frame already sits in the pending buffer.
+    private func hasCompleteFrameBuffered() -> Bool {
+        guard self.pendingBytes.count >= ProtocolReader.lengthPrefixByteCount else {
+            return false;
+        }
+        let bufferedFrameLength: Int = self.pendingFrameLength();
+        if bufferedFrameLength > IpcFrameLimits.maximumIpcFrameBytes {
+            return false;
+        }
+        return self.pendingBytes.count
+            >= ProtocolReader.lengthPrefixByteCount + bufferedFrameLength;
     }
 
     /// Reads the next worker event, or `nil` when the transport closes cleanly.

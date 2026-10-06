@@ -58,7 +58,7 @@ let package: Package = Package(
         // Wave 3 — apps/inference-worker
         .executableTarget(
             name: "InferenceWorker",
-            dependencies: ["IpcProtocol", "RuntimeIntegration"]),
+            dependencies: ["IpcProtocol", "RuntimeIntegration", "ModelServing", "AstronomicalConfig"]),
         // One test target per module, mirroring Sources/.
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol"]),
