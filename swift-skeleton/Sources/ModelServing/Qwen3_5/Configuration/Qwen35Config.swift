@@ -10,16 +10,7 @@ private let EXPECTED_MOE_MODEL_TYPE: String = "qwen3_5_moe";
 private let EXPECTED_DENSE_MODEL_TYPE: String = "qwen3_5";
 private let EXPECTED_TORCH_DTYPE: String = "bfloat16";
 
-/// Global MTP quantization fallback parsed from `mtplx_mtp_quantization`.
-/// When an MTP module lacks a per-module override in `mtp_quantized_module_profiles`,
-/// `quantizationProfile(forModule:)` falls back to this profile. `nil` when the
-/// model does not declare quantized MTP.
-public struct MtplxMtpQuantizationFallback: Equatable {
-    let bits: UInt32;
-    let groupSize: UInt32;
-}
-
-/// Physical representation of executable model weights.
+/// Physical representation of executable weights.
 ///
 /// Native BF16 tensors use ordinary dense MLX operations. Affine-quantized
 /// tensors require packed-weight matrix multiplication with scales and biases.
@@ -38,22 +29,12 @@ public struct Qwen3_5Config: Equatable {
     var eosTokenIds: Array<UInt32>;
     var hasTiedEmbeddingsFlag: Bool;
     var quantizedModuleProfileMap: SortedModuleProfiles;
-    var mtpQuantizedModuleProfileMap: SortedModuleProfiles;
-    /// Global MTP quantization fallback from `mtplx_mtp_quantization`.
-    /// When an MTP module lacks a per-module override in `mtp_quantized_module_profiles`,
-    /// `quantizationProfile(forModule:)` falls back to this profile. `nil` when
-    /// the model does not declare quantized MTP.
-    var mtxplxMtpQuantizationFallback: MtplxMtpQuantizationFallback?;
     var modelWeightStorageValue: ModelWeightStorage;
     var defaultQuantizationBitsValue: UInt32;
     var defaultQuantizationGroupSizeValue: UInt32;
     var textConfigValue: Qwen3_5TextConfig;
     var activationDtypeName: String;
     var feedForwardArchitectureValue: Qwen3_5FeedForwardArchitecture;
-    /// Path to the MTP sidecar safetensors file, relative to the model directory.
-    /// Populated from config.json's `mlx_lm_extra_tensors.mtp_file`.
-    /// `nil` when MTP weights are embedded in the shard index or absent.
-    var sidecarMtpFileValue: String?;
 
     /// Parses the config bytes retained by validated artifact ownership.
     public static func fromJsonBytes(configBytes: Array<UInt8>) throws -> Qwen3_5Config {
@@ -126,7 +107,6 @@ public struct Qwen3_5Config: Equatable {
         }
         try configDocument.textConfig.validate(feedForwardArchitecture: feedForwardArchitecture);
         var quantizedModuleProfiles: SortedModuleProfiles = SortedModuleProfiles(entries: Array());
-        var mtpQuantizedModuleProfiles: SortedModuleProfiles = SortedModuleProfiles(entries: Array());
         var modelWeightStorage: ModelWeightStorage = .nativeBfloat16;
         var defaultQuantizationBits: UInt32 = 0;
         var defaultQuantizationGroupSize: UInt32 = 0;
@@ -137,7 +117,6 @@ public struct Qwen3_5Config: Equatable {
             quantizedModuleProfiles = try quantization.validate(
                 configSource: configDocument.textConfig,
                 feedForwardArchitecture: feedForwardArchitecture);
-            mtpQuantizedModuleProfiles = quantization.mtpQuantizedModuleProfiles();
             modelWeightStorage = .affineQuantized;
             defaultQuantizationBits = quantization.defaultBits();
             defaultQuantizationGroupSize = quantization.defaultGroupSize();
@@ -148,32 +127,19 @@ public struct Qwen3_5Config: Equatable {
             quantizedModuleProfiles = try quantization.validate(
                 configSource: configDocument.textConfig,
                 feedForwardArchitecture: feedForwardArchitecture);
-            mtpQuantizedModuleProfiles = quantization.mtpQuantizedModuleProfiles();
             modelWeightStorage = .affineQuantized;
             defaultQuantizationBits = quantization.defaultBits();
             defaultQuantizationGroupSize = quantization.defaultGroupSize();
-        }
-        var sidecarMtpFile: String? = configDocument.mtpFile;
-        if sidecarMtpFile == nil {
-            sidecarMtpFile = configDocument.mlxLmExtraTensors?.mtpFile;
-        }
-        var mtxplxMtpQuantizationFallback: MtplxMtpQuantizationFallback? = nil;
-        if let mtxplxMtpQuantization: MtplxMtpQuantization = configDocument.mtxplxMtpQuantization {
-            mtxplxMtpQuantizationFallback = MtplxMtpQuantizationFallback(
-                bits: mtxplxMtpQuantization.bits, groupSize: mtxplxMtpQuantization.groupSize);
         }
         return Qwen3_5Config(
             eosTokenIds: normalizedEosTokenIds,
             hasTiedEmbeddingsFlag: configDocument.tieWordEmbeddings,
             quantizedModuleProfileMap: quantizedModuleProfiles,
-            mtpQuantizedModuleProfileMap: mtpQuantizedModuleProfiles,
-            mtxplxMtpQuantizationFallback: mtxplxMtpQuantizationFallback,
             modelWeightStorageValue: modelWeightStorage,
             defaultQuantizationBitsValue: defaultQuantizationBits,
             defaultQuantizationGroupSizeValue: defaultQuantizationGroupSize,
             textConfigValue: configDocument.textConfig,
             activationDtypeName: activationDtype,
-            feedForwardArchitectureValue: feedForwardArchitecture,
-            sidecarMtpFileValue: sidecarMtpFile);
+            feedForwardArchitectureValue: feedForwardArchitecture);
     }
 }

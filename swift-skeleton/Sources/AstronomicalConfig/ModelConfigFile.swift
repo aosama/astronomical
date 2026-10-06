@@ -11,24 +11,21 @@ internal struct ModelConfigFile: Equatable {
     internal let limits: ModelLimitsConfigFile?;
     internal let generationDefaults: GenerationDefaultsConfigFile?;
     internal let chunking: ChunkingConfigFile?;
-    internal let acceleration: AccelerationConfigFile?;
 
     internal init(
         limits: ModelLimitsConfigFile?,
         generationDefaults: GenerationDefaultsConfigFile?,
-        chunking: ChunkingConfigFile?,
-        acceleration: AccelerationConfigFile?
+        chunking: ChunkingConfigFile?
     ) {
         self.limits = limits;
         self.generationDefaults = generationDefaults;
         self.chunking = chunking;
-        self.acceleration = acceleration;
     }
 
     internal static func fromJsonObject(_ jsonObject: Dictionary<String, Any>) throws -> ModelConfigFile {
         try StrictJson.requireKnownKeys(
             object: jsonObject,
-            knownKeys: ["limits", "generation_defaults", "chunking", "acceleration"],
+            knownKeys: ["limits", "generation_defaults", "chunking"],
             fieldName: "model"
         );
         let limitsObject: Dictionary<String, Any>? = try StrictJson.optionalObject(
@@ -43,21 +40,13 @@ internal struct ModelConfigFile: Equatable {
             object: jsonObject,
             fieldName: "chunking"
         );
-        let accelerationObject: Dictionary<String, Any>? = try StrictJson.optionalObject(
-            object: jsonObject,
-            fieldName: "acceleration"
-        );
         return ModelConfigFile(
             limits: try StrictJson.decodeOptional(limitsObject, decode: ModelLimitsConfigFile.fromJsonObject),
             generationDefaults: try StrictJson.decodeOptional(
                 generationDefaultsObject,
                 decode: GenerationDefaultsConfigFile.fromJsonObject
             ),
-            chunking: try StrictJson.decodeOptional(chunkingObject, decode: ChunkingConfigFile.fromJsonObject),
-            acceleration: try StrictJson.decodeOptional(
-                accelerationObject,
-                decode: AccelerationConfigFile.fromJsonObject
-            )
+            chunking: try StrictJson.decodeOptional(chunkingObject, decode: ChunkingConfigFile.fromJsonObject)
         );
     }
 
@@ -71,9 +60,6 @@ internal struct ModelConfigFile: Equatable {
         }
         if let chunking: ChunkingConfigFile = self.chunking {
             jsonObject["chunking"] = chunking.toJsonObject();
-        }
-        if let acceleration: AccelerationConfigFile = self.acceleration {
-            jsonObject["acceleration"] = acceleration.toJsonObject();
         }
         return jsonObject;
     }

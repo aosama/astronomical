@@ -30,21 +30,12 @@ extension Qwen3_5Config {
         return self.modelWeightStorageValue;
     }
 
-    /// Returns the quantization profile for a specific module, falling back to the
-    /// `mtplx_mtp_quantization` global default for MTP modules, then the model-wide
-    /// default profile if the module is not found in any override map.
+    /// Returns the quantization profile for a specific module, falling back to
+    /// the model-wide default profile if the module is not found in the
+    /// override map.
     public func quantizationProfile(forModule moduleName: String) -> OptiQQuantizationProfile {
-        if let mtpProfile: OptiQQuantizationProfile = self.mtpQuantizedModuleProfileMap.profile(forKey: moduleName) {
-            return mtpProfile;
-        }
         if let moduleProfile: OptiQQuantizationProfile = self.quantizedModuleProfileMap.profile(forKey: moduleName) {
             return moduleProfile;
-        }
-        // MTP modules without a per-module override get the global
-        // mtplx_mtp_quantization fallback when declared.
-        if moduleName.hasPrefix("language_model.mtp."),
-            let fallback: MtplxMtpQuantizationFallback = self.mtxplxMtpQuantizationFallback {
-            return OptiQQuantizationProfile(bits: fallback.bits, groupSize: fallback.groupSize);
         }
         return OptiQQuantizationProfile(
             bits: self.defaultQuantizationBitsValue,
@@ -58,8 +49,7 @@ extension Qwen3_5Config {
 
     /// Resolves modules stored as native floating-point when both affine companion
     /// tensors are absent from the safetensors index. This handles mixed storage
-    /// artifacts whose default quantization profile does not describe every module,
-    /// including optional MTP modules.
+    /// artifacts whose default quantization profile does not describe every module.
     ///
     /// The shardTensorNames parameter should contain all tensor names from the
     /// safetensors index (the weight_map keys).
@@ -78,11 +68,7 @@ extension Qwen3_5Config {
         }
         for nativeModuleName: String in nativeModuleNames {
             let nativeQuantizationProfile: OptiQQuantizationProfile = .unquantized();
-            if nativeModuleName.hasPrefix("language_model.mtp.") {
-                self.mtpQuantizedModuleProfileMap.insert(profile: nativeQuantizationProfile, forKey: nativeModuleName);
-            } else {
-                self.quantizedModuleProfileMap.insert(profile: nativeQuantizationProfile, forKey: nativeModuleName);
-            }
+            self.quantizedModuleProfileMap.insert(profile: nativeQuantizationProfile, forKey: nativeModuleName);
         }
     }
 
@@ -289,17 +275,6 @@ extension Qwen3_5Config {
     public func rotaryDimension() -> UInt32 {
         let partialRotaryFactor: Float = Float(bitPattern: self.partialRotaryFactorBits());
         return UInt32(Float(self.textConfigValue.headDim) * partialRotaryFactor);
-    }
-
-    /// Returns the artifact-declared MTP layer count.
-    public func mtpLayerCount() -> UInt32 {
-        return self.textConfigValue.mtpNumHiddenLayers;
-    }
-
-    /// Returns the MTP sidecar file path declared in `mlx_lm_extra_tensors.mtp_file`,
-    /// or `nil` when MTP weights are embedded in the shard index or absent.
-    public func sidecarMtpFile() -> String? {
-        return self.sidecarMtpFileValue;
     }
 
     /// Reserves context-growing full-attention key/value state for each context token.
