@@ -2,6 +2,7 @@ import XCTest;
 
 import Foundation;
 
+import AstronomicalConfig;
 import IpcProtocol;
 
 @testable import Supervisor;
@@ -154,5 +155,18 @@ final class WorkerLifecycleTests: XCTestCase {
             }
         }
         try workerProcess.close();
+    }
+}
+
+/// The worker executable is located beside the running daemon binary; the
+/// mechanism contract is the platform-stable file name.
+final class FallbackWorkerExecutablePathTests: XCTestCase {
+
+    func testDerivedWorkerExecutableUsesThePlatformStableName() throws {
+        let workerExecutablePath: FilePath = try FallbackWorkerExecutablePath.derive();
+        XCTAssertEqual(
+            workerExecutablePath.string.hasSuffix("/" + FallbackWorkerExecutablePath.workerExecutableName),
+            true,
+            "worker path should end with the worker binary name: \(workerExecutablePath)");
     }
 }
