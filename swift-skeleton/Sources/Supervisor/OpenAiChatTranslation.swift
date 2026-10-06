@@ -83,7 +83,7 @@ enum OpenAiChatTranslation {
                 &translatedMessages,
                 jsonOutputInstruction: structuredOutput.jsonOutputInstruction());
         }
-        var chatGenerationCommand: ChatGenerationCommand = ChatGenerationCommand(
+        let chatGenerationCommand: ChatGenerationCommand = ChatGenerationCommand(
             requestId: requestId,
             model: requestParts.model,
             messages: translatedMessages,

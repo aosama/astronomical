@@ -213,7 +213,7 @@ public enum ImageGenerationPhase: Equatable, Sendable {
 /// A request-scoped image failure that leaves the worker protocol responsive.
 /// Wire shape is serde's externally tagged enum: unit variants serialize as
 /// plain strings and struct variants as single-entry objects.
-public enum ImageGenerationFailureReason: Equatable {
+public enum ImageGenerationFailureReason: Equatable, Sendable {
     /// The command failed worker-side semantic validation before model execution.
     case invalidRequest(reason: String);
     /// The loaded artifact exposes no image-generation surface.
