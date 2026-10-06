@@ -4,21 +4,21 @@ import Foundation;
 /// ConfiguredChunkingFields from crates/config/src/chunking_config.rs. Legacy
 /// migration and precedence merging need the distinction between "explicitly
 /// set" and "left at the default".
-internal struct ConfiguredChunkingFields {
+public struct ConfiguredChunkingFields: Equatable {
 
-    internal let fixedPromptProcessingChunkSizeTokens: Bool;
-    internal let fixedSsdStreamingPromptProcessingChunkSizeTokens: Bool;
-    internal let fullAttentionKeyValueGrowthTokens: Bool;
-    internal let prefillGraphSubmissionLayerInterval: Bool;
-    internal let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: Bool;
-    internal let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: Bool;
-    internal let promptCacheBlockTokens: Bool;
-    internal let promptCacheCommonPrefixStrideBlocks: Bool;
-    internal let experimentalDecodeStageAttributionEnabled: Bool;
-    internal let experimentalQuantizedKvCacheEnabled: Bool;
-    internal let experimentalFusedMoeDecodeEnabled: Bool;
+    public let fixedPromptProcessingChunkSizeTokens: Bool;
+    public let fixedSsdStreamingPromptProcessingChunkSizeTokens: Bool;
+    public let fullAttentionKeyValueGrowthTokens: Bool;
+    public let prefillGraphSubmissionLayerInterval: Bool;
+    public let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: Bool;
+    public let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: Bool;
+    public let promptCacheBlockTokens: Bool;
+    public let promptCacheCommonPrefixStrideBlocks: Bool;
+    public let experimentalDecodeStageAttributionEnabled: Bool;
+    public let experimentalQuantizedKvCacheEnabled: Bool;
+    public let experimentalFusedMoeDecodeEnabled: Bool;
 
-    internal init(chunkingConfigFile: ChunkingConfigFile) {
+    public init(chunkingConfigFile: ChunkingConfigFile) {
         self.fixedPromptProcessingChunkSizeTokens = chunkingConfigFile.fixedPromptProcessingChunkSizeTokens != nil;
         self.fixedSsdStreamingPromptProcessingChunkSizeTokens = chunkingConfigFile.fixedSsdStreamingPromptProcessingChunkSizeTokens != nil;
         self.fullAttentionKeyValueGrowthTokens = chunkingConfigFile.fullAttentionKeyValueGrowthTokens != nil;
@@ -68,7 +68,7 @@ internal extension ChunkingConfigFile {
 /// crates/config/src/chunking_config.rs. Every field carries the repository
 /// default when the operator left it unset, and resolve() validates the
 /// combined result before serving.
-internal struct ChunkingConfig {
+public struct ChunkingConfig: Equatable, Sendable {
 
     /// KV growth slack before a full-attention layer stops growing its cache.
     internal static let defaultFullAttentionKeyValueGrowthTokens: UInt32 = 256;
@@ -125,11 +125,11 @@ internal struct ChunkingConfig {
         self.experimentalFusedMoeDecodeEnabledValue = resolvedChunkingFile.experimentalFusedMoeDecodeEnabled ?? false;
     }
 
-    internal static func defaultConfig() -> ChunkingConfig {
+    public static func defaultConfig() -> ChunkingConfig {
         return ChunkingConfig();
     }
 
-    internal static func resolve(configuredChunkingFile: ChunkingConfigFile) throws -> ChunkingConfig {
+    public static func resolve(configuredChunkingFile: ChunkingConfigFile) throws -> ChunkingConfig {
         let resolvedChunkingConfig = ChunkingConfig(resolvedChunkingFile: configuredChunkingFile);
         try resolvedChunkingConfig.validate();
         return resolvedChunkingConfig;
@@ -165,47 +165,47 @@ internal struct ChunkingConfig {
         }
     }
 
-    internal func fixedPromptProcessingChunkSizeTokens() -> UInt32 {
+    public func fixedPromptProcessingChunkSizeTokens() -> UInt32 {
         return self.fixedPromptProcessingChunkSizeTokensValue;
     }
 
-    internal func fixedSsdStreamingPromptProcessingChunkSizeTokens() -> UInt32 {
+    public func fixedSsdStreamingPromptProcessingChunkSizeTokens() -> UInt32 {
         return self.fixedSsdStreamingPromptProcessingChunkSizeTokensValue;
     }
 
-    internal func fullAttentionKeyValueGrowthTokens() -> UInt32 {
+    public func fullAttentionKeyValueGrowthTokens() -> UInt32 {
         return self.fullAttentionKeyValueGrowthTokensValue;
     }
 
-    internal func prefillGraphSubmissionLayerInterval() -> UInt32 {
+    public func prefillGraphSubmissionLayerInterval() -> UInt32 {
         return self.prefillGraphSubmissionLayerIntervalValue;
     }
 
-    internal func experimentalSsdPagingPrefillGraphSubmissionLayerInterval() -> UInt32 {
+    public func experimentalSsdPagingPrefillGraphSubmissionLayerInterval() -> UInt32 {
         return self.experimentalSsdPagingPrefillGraphSubmissionLayerIntervalValue;
     }
 
-    internal func experimentalSsdPagingGenerationGraphSubmissionLayerInterval() -> UInt32 {
+    public func experimentalSsdPagingGenerationGraphSubmissionLayerInterval() -> UInt32 {
         return self.experimentalSsdPagingGenerationGraphSubmissionLayerIntervalValue;
     }
 
-    internal func promptCacheBlockTokens() -> UInt32? {
+    public func promptCacheBlockTokens() -> UInt32? {
         return self.promptCacheBlockTokensValue;
     }
 
-    internal func promptCacheCommonPrefixStrideBlocks() -> UInt32 {
+    public func promptCacheCommonPrefixStrideBlocks() -> UInt32 {
         return self.promptCacheCommonPrefixStrideBlocksValue;
     }
 
-    internal func experimentalDecodeStageAttributionEnabled() -> Bool {
+    public func experimentalDecodeStageAttributionEnabled() -> Bool {
         return self.experimentalDecodeStageAttributionEnabledValue;
     }
 
-    internal func experimentalQuantizedKvCacheEnabled() -> Bool {
+    public func experimentalQuantizedKvCacheEnabled() -> Bool {
         return self.experimentalQuantizedKvCacheEnabledValue;
     }
 
-    internal func experimentalFusedMoeDecodeEnabled() -> Bool {
+    public func experimentalFusedMoeDecodeEnabled() -> Bool {
         return self.experimentalFusedMoeDecodeEnabledValue;
     }
 }

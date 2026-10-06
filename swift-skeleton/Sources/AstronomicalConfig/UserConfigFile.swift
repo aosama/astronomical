@@ -99,10 +99,12 @@ internal struct UserConfigFile: Equatable {
         var loadedModels: Dictionary<String, ModelConfigFile> = Dictionary<String, ModelConfigFile>();
         if let presentModelsObject: Dictionary<String, Any> = modelsObject {
             for modelId: String in presentModelsObject.keys {
-                let modelObject: Dictionary<String, Any> = try StrictJson.objectValue(
-                    object: presentModelsObject,
-                    fieldName: "models." + modelId
-                );
+                guard let modelObjectValue: Any = presentModelsObject[modelId] else {
+                    throw StrictJsonError(fieldName: "models." + modelId, problem: "is required");
+                }
+                guard let modelObject: Dictionary<String, Any> = modelObjectValue as? Dictionary<String, Any> else {
+                    throw StrictJsonError(fieldName: "models." + modelId, problem: "must be an object");
+                }
                 loadedModels[modelId] = try ModelConfigFile.fromJsonObject(modelObject);
             }
         }
