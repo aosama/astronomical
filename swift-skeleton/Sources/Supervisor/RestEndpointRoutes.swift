@@ -44,7 +44,8 @@ public enum RestEndpointRoutes {
         workerHealthState: WorkerHealthState,
         instancePaths: AstronomicalInstancePaths,
         buildIdentity: ApplicationBuildIdentity,
-        configurationValidationError: String? = nil
+        configurationValidationError: String? = nil,
+        chatContext: RestChatRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -90,6 +91,14 @@ public enum RestEndpointRoutes {
                     message: "the requested model \(requestedModelId) is not advertised by this instance")
                     .envelopeResponse();
             });
+        if let chatContext = chatContext {
+            routeTable.register(
+                method: RestChatCompletionEndpoint.routeMethod,
+                path: RestChatCompletionEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return RestChatCompletionEndpoint.handle(request, chatContext: chatContext);
+                });
+        }
         routeTable.register(
             method: "GET",
             path: "/v1/cache/stats",
