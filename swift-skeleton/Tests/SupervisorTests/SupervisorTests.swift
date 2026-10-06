@@ -130,7 +130,7 @@ final class SupervisorTests: XCTestCase {
         // open and exits when the supervisor half-closes the command side.
         let workerProcess: WorkerProcess = try WorkerProcess.launch(workerExecutablePath: "/bin/cat");
         XCTAssertNotNil(workerProcess.processId);
-        try workerProcess.close();
+        _ = try workerProcess.close();
         XCTAssertNil(workerProcess.processId);
     }
 
@@ -142,7 +142,7 @@ final class SupervisorTests: XCTestCase {
             workerExecutablePath: "/bin/sleep",
             arguments: ["30"]);
         XCTAssertNotNil(workerProcess.processId);
-        try workerProcess.close();
+        _ = try workerProcess.close();
         XCTAssertNil(workerProcess.processId);
     }
 

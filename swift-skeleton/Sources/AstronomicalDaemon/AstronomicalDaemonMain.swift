@@ -41,6 +41,10 @@ struct AstronomicalDaemonMain {
     }
 
     private static func run(daemonArguments: DaemonArguments) -> Never {
+        // A local client that disconnects mid-frame must end as a failed
+        // write on the serving thread, never as a process-killing SIGPIPE;
+        // the Rust daemon inherits this behavior from Rust's default.
+        signal(SIGPIPE, SIG_IGN);
         let instancePaths: AstronomicalInstancePaths;
         do {
             instancePaths = try daemonArguments.resolveInstancePaths();
@@ -79,7 +83,24 @@ struct AstronomicalDaemonMain {
             FileHandle.standardError.write(Data("astronomicald: could not resolve the runtime configuration: \(error)\n".utf8));
             exit(2);
         }
-        let workerHealthState: WorkerHealthState = WorkerHealthState();
+        // The supervisor owns the one live health snapshot: the REST routes
+        // and the daemon IPC status verb read from it, so every surface sees
+        // the same worker facts.
+        let workerSupervisor: WorkerSupervisor;
+        do {
+            workerSupervisor = try WorkerSupervisor.launch(
+                workerExecutablePath: resolvedRuntimeConfig.workerExecutablePath.string,
+                workerArguments: [],
+                workerStartupConfiguration: resolvedRuntimeConfig.workerStartupConfiguration(),
+                modelPolicyCatalog: resolvedRuntimeConfig.modelPolicyCatalog,
+                modelLoadTimeout: AstronomicalDaemonMain.workerModelLoadTimeoutSeconds);
+        } catch {
+            FileHandle.standardError.write(Data(
+                "astronomicald worker unavailable: \(error)\n".utf8));
+            workerSupervisor = WorkerSupervisor.unavailable(
+                modelPolicyCatalog: resolvedRuntimeConfig.modelPolicyCatalog);
+        }
+        let workerHealthState: WorkerHealthState = workerSupervisor.ownedHealthState();
         let restServer: RestHttpServer;
         do {
             restServer = try RestHttpServer.start(
@@ -97,7 +118,11 @@ struct AstronomicalDaemonMain {
         do {
             service = try DaemonIpcService.start(
                 instancePaths: instancePaths,
-                healthProvider: { return workerHealthState.daemonStatusReport(); });
+                healthProvider: { return workerHealthState.daemonStatusReport(); },
+                chatContext: DaemonIpcChatContext(
+                    chatExecutor: workerSupervisor,
+                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    instancePaths: instancePaths));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the daemon IPC service: \(error)\n".utf8));
             exit(2);
@@ -117,6 +142,7 @@ struct AstronomicalDaemonMain {
         let signalSourceShutdown: () -> Void = {
             restServer.stop();
             service.shutdown();
+            _ = try? workerSupervisor.shutdown();
             shutdownSemaphore.signal();
         };
         for signalNumber: Int32 in [SIGINT, SIGTERM] {
@@ -147,3 +173,10 @@ struct AstronomicalDaemonMain {
 /// Signal sources must stay retained or Dispatch tears them down immediately.
 /// The daemon is single-threaded at this boundary, so the escape is safe here.
 private nonisolated(unsafe) var AllSignalSources: Array<DispatchSourceSignal> = Array();
+
+extension AstronomicalDaemonMain {
+
+    /// The bounded wait for a worker's startup or model-load acknowledgement,
+    /// mirroring apps/supervisor/src/main.rs's WORKER_MODEL_LOAD_TIMEOUT.
+    static let workerModelLoadTimeoutSeconds: TimeInterval = 60;
+}
