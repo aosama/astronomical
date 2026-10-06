@@ -1,8 +1,10 @@
 import Foundation;
-import XCTest;
+
+import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -13,7 +15,8 @@ import IpcProtocol;
  * candidate config change into the three reload outcomes. Snapshots are
  * constructed directly: these types are pure data plus derived values.
  */
-final class ResolvedRuntimeConfigTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResolvedRuntimeConfigTests {
 
     private static func embeddingsSnapshot(
         configurationGeneration: String = "doc-gen-1"
@@ -76,7 +79,8 @@ final class ResolvedRuntimeConfigTests: XCTestCase {
         return try AstronomicalConfig.loadFromInstancePaths(instancePaths);
     }
 
-    func testResolvedGenerationIsStableAcrossEqualSnapshotsAndChangesWithContent() throws {
+    @Test
+    func should_derive_a_stable_generation_for_equal_snapshots_and_a_changed_one_for_differing_content() throws {
         let firstGeneration: String = try ResolvedConfigurationGeneration.derive(
             documentGeneration: "doc-gen-1",
             discoveredModels: ResolvedRuntimeConfigTests.embeddingsSnapshot().discoveredModels,
@@ -87,15 +91,15 @@ final class ResolvedRuntimeConfigTests: XCTestCase {
             discoveredModels: ResolvedRuntimeConfigTests.embeddingsSnapshot().discoveredModels,
             modelPolicyCatalog: ResolvedRuntimeConfigTests.embeddingsSnapshot().modelPolicyCatalog,
             unmatchedModelConfigIds: Array<String>());
-        XCTAssertEqual(firstGeneration, secondGeneration);
-        XCTAssertEqual(firstGeneration.count, 64);
+        #expect(firstGeneration == secondGeneration);
+        #expect(firstGeneration.count == 64);
 
         let changedDocumentGeneration: String = try ResolvedConfigurationGeneration.derive(
             documentGeneration: "doc-gen-2",
             discoveredModels: ResolvedRuntimeConfigTests.embeddingsSnapshot().discoveredModels,
             modelPolicyCatalog: ResolvedRuntimeConfigTests.embeddingsSnapshot().modelPolicyCatalog,
             unmatchedModelConfigIds: Array<String>());
-        XCTAssertNotEqual(firstGeneration, changedDocumentGeneration);
+        #expect(firstGeneration != changedDocumentGeneration);
 
         var unmatchedSnapshot: ResolvedRuntimeConfig = ResolvedRuntimeConfigTests.embeddingsSnapshot();
         unmatchedSnapshot.unmatchedModelConfigIds = ["ghost-model"];
@@ -104,10 +108,11 @@ final class ResolvedRuntimeConfigTests: XCTestCase {
             discoveredModels: unmatchedSnapshot.discoveredModels,
             modelPolicyCatalog: unmatchedSnapshot.modelPolicyCatalog,
             unmatchedModelConfigIds: unmatchedSnapshot.unmatchedModelConfigIds);
-        XCTAssertNotEqual(firstGeneration, changedUnmatchedGeneration);
+        #expect(firstGeneration != changedUnmatchedGeneration);
     }
 
-    func testWorkerStartupConfigurationProjectsTheIpcBootstrap() throws {
+    @Test
+    func should_project_the_worker_startup_configuration_from_the_resolved_snapshot() throws {
         var snapshot: ResolvedRuntimeConfig = ResolvedRuntimeConfigTests.embeddingsSnapshot();
         snapshot.maximumMlxMemoryBytes = 32_000_000_000;
         snapshot.performanceAttributionEnabled = true;
@@ -119,50 +124,55 @@ final class ResolvedRuntimeConfigTests: XCTestCase {
 
         let workerStartupConfiguration: WorkerStartupConfiguration = snapshot.workerStartupConfiguration();
 
-        XCTAssertEqual(workerStartupConfiguration.configurationGeneration, snapshot.configurationGeneration);
-        XCTAssertEqual(
-            workerStartupConfiguration.globalPromptCacheRootDirectory,
-            "/state/prompt-cache");
-        XCTAssertEqual(workerStartupConfiguration.globalPromptCacheMaximumSizeBytes, 50_000_000_000);
-        XCTAssertEqual(workerStartupConfiguration.persistentPromptCacheEnabled, false);
-        XCTAssertEqual(workerStartupConfiguration.configuredMaximumMlxMemoryBytes, 32_000_000_000);
-        XCTAssertEqual(workerStartupConfiguration.performanceAttributionEnabled, true);
-        XCTAssertEqual(workerStartupConfiguration.loggingDirectory, "/state/logs");
-        XCTAssertEqual(workerStartupConfiguration.loggingLevel, WorkerLogLevel.debug);
-        XCTAssertEqual(workerStartupConfiguration.retainedLogFileCount, 3);
+        #expect(workerStartupConfiguration.configurationGeneration == snapshot.configurationGeneration);
+        #expect(
+            workerStartupConfiguration.globalPromptCacheRootDirectory
+                == "/state/prompt-cache");
+        #expect(workerStartupConfiguration.globalPromptCacheMaximumSizeBytes == 50_000_000_000);
+        #expect(workerStartupConfiguration.persistentPromptCacheEnabled == false);
+        #expect(workerStartupConfiguration.configuredMaximumMlxMemoryBytes == 32_000_000_000);
+        #expect(workerStartupConfiguration.performanceAttributionEnabled == true);
+        #expect(workerStartupConfiguration.loggingDirectory == "/state/logs");
+        #expect(workerStartupConfiguration.loggingLevel == WorkerLogLevel.debug);
+        #expect(workerStartupConfiguration.retainedLogFileCount == 3);
     }
 
-    func testReloadDiffClassifiesTheThreeOutcomesWithTheirFieldNames() throws {
+    @Test
+    func should_classify_a_config_change_into_the_three_reload_outcomes_with_their_field_names() throws {
         let current: ResolvedRuntimeConfig = ResolvedRuntimeConfigTests.embeddingsSnapshot();
 
         // A memory-ceiling edit applies in place.
         var memoryCandidate: ResolvedRuntimeConfig = current;
         memoryCandidate.maximumMlxMemoryBytes = 48_000_000_000;
         guard case let .noWorkerRestart(reloadedFields, _) = ConfigReloadDiff.compare(current: current, candidate: memoryCandidate) else {
-            return XCTFail("a memory edit is an in-place reload");
+            Issue.record("a memory edit is an in-place reload");
+            return;
         }
-        XCTAssertEqual(reloadedFields, ["maximum_mlx_memory_gb"]);
+        #expect(reloadedFields == ["maximum_mlx_memory_gb"]);
 
         // A prompt-cache edit replaces the worker.
         var cacheCandidate: ResolvedRuntimeConfig = current;
         cacheCandidate.persistentPromptCacheEnabled = false;
         guard case let .restartWorker(reloadedWorkerFields, _) = ConfigReloadDiff.compare(current: current, candidate: cacheCandidate) else {
-            return XCTFail("a prompt-cache edit requires a worker restart");
+            Issue.record("a prompt-cache edit requires a worker restart");
+            return;
         }
-        XCTAssertEqual(reloadedWorkerFields, ["persistent_prompt_cache_enabled"]);
+        #expect(reloadedWorkerFields == ["persistent_prompt_cache_enabled"]);
 
         // A bind-address edit requires a full REST restart.
         var bindCandidate: ResolvedRuntimeConfig = current;
         bindCandidate.bindAddress = "127.0.0.1:6799";
         guard case let .restApiRestartRequired(reloadedInPlaceFields, restartRequiredFields, _) = ConfigReloadDiff.compare(current: current, candidate: bindCandidate) else {
-            return XCTFail("a bind-address edit requires a REST restart");
+            Issue.record("a bind-address edit requires a REST restart");
+            return;
         }
-        XCTAssertEqual(reloadedInPlaceFields, Array<String>());
-        XCTAssertEqual(restartRequiredFields, ["supervisor.bind_address"]);
+        #expect(reloadedInPlaceFields == Array<String>());
+        #expect(restartRequiredFields == ["supervisor.bind_address"]);
 
         // Identical snapshots need nothing.
         guard case .noWorkerRestart = ConfigReloadDiff.compare(current: current, candidate: current) else {
-            return XCTFail("identical snapshots need no restart");
+            Issue.record("identical snapshots need no restart");
+            return;
         }
     }
 }

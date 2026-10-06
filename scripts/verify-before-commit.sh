@@ -43,9 +43,14 @@ readonly DIRECT_MLX_TIMEOUT_SECONDS=600
 # contracts run in a web view, so it needs the compilation timeout class rather
 # than the 120-second test bound.
 readonly THIN_TALK_TIMEOUT_SECONDS=600
-readonly TOTAL_STEP_COUNT=25
+# The Swift migration skeleton builds its own package world (including the
+# MLX dependencies) before its hermetic journeys run, so it shares the
+# compilation timeout class; its journeys stay individually bounded through
+# their own Swift Testing time limits.
+readonly SWIFT_SKELETON_TIMEOUT_SECONDS=600
+readonly TOTAL_STEP_COUNT=26
 readonly REPOSITORY_CONTRACT_STEP_COUNT=14
-readonly SWIFT_NODE_CONTRACT_STEP_COUNT=5
+readonly SWIFT_NODE_CONTRACT_STEP_COUNT=6
 readonly CARGO_CORE_STEP_COUNT=6
 readonly PHASE_PROGRESS_INTERVAL_SECONDS=2
 readonly FAILED_PHASE_LOG_TAIL_LINES=40
@@ -191,6 +196,11 @@ phase_swift_node_contracts() {
     run_step test-macos-app-validation-contract "$TEST_TIMEOUT_SECONDS" scripts/test-validate-macos-app-contract.sh || return $?
     run_step test-macos-menu-contracts "$TEST_TIMEOUT_SECONDS" scripts/test-macos-menu-contracts.sh || return $?
     run_step thin-talk-contracts "$THIN_TALK_TIMEOUT_SECONDS" swift test --package-path apps/thin-talk || return $?
+    # The Rust-to-Swift migration journeys: plain `swift test` streams every
+    # journey's name, verdict, and duration through this phase's log, which
+    # the monitor relays live, so progress and per-journey timing stay
+    # visible without any wrapper-owned selection or silencing.
+    run_step swift-skeleton-journeys "$SWIFT_SKELETON_TIMEOUT_SECONDS" swift test --package-path swift-skeleton || return $?
     run_step test-pull-request-policy-contracts "$TEST_TIMEOUT_SECONDS" node \
         --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js || return $?
     run_step test-observatory-contracts "$TEST_TIMEOUT_SECONDS" node --test --test-reporter=spec \

@@ -1,8 +1,9 @@
-import XCTest;
+import Testing;
 
 import Foundation;
 
 import IpcProtocol;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -11,13 +12,15 @@ import IpcProtocol;
 /// and the process-scoped event handling that feeds real worker state into
 /// the daemon status verb. The fake workers are short shell scripts that emit
 /// genuine framed events over a real pipe pair.
-final class WorkerStartupHandshakeTests: XCTestCase {
+@Suite(.serialized, .tags(.hermeticJourney))
+final class WorkerStartupHandshakeTests {
 
-    func testHealthStateStartsLoadingAndReachesReadyThroughLifecycleEvents() throws {
+    @Test
+    func should_start_health_state_loading_and_reach_ready_through_lifecycle_events() throws {
         let healthState: WorkerHealthState = WorkerHealthState();
-        XCTAssertEqual(
-            healthState.daemonStatusReport(),
-            DaemonStatusReport(workerStatus: .loading, readyModelId: nil));
+        #expect(
+            healthState.daemonStatusReport()
+                == DaemonStatusReport(workerStatus: .loading, readyModelId: nil));
 
         try WorkerEventHandler.handle(
             .idle(
@@ -25,49 +28,59 @@ final class WorkerStartupHandshakeTests: XCTestCase {
                 effectiveMlxMemoryCeilingBytes: 8589934592,
                 minimumMlxMemoryCeilingBytes: 1),
             healthState: healthState);
-        XCTAssertEqual(
-            healthState.daemonStatusReport(),
-            DaemonStatusReport(workerStatus: .ready, readyModelId: nil));
-        XCTAssertEqual(
-            healthState.currentSnapshot().machineMlxMemoryCeilingBytes,
-            17179869184);
+        #expect(
+            healthState.daemonStatusReport()
+                == DaemonStatusReport(workerStatus: .ready, readyModelId: nil));
+        #expect(
+            healthState.currentSnapshot().machineMlxMemoryCeilingBytes
+                == 17179869184);
 
-        XCTAssertThrowsError(try WorkerEventHandler.handle(
-            .idle(
-                machineMlxMemoryCeilingBytes: 1,
-                effectiveMlxMemoryCeilingBytes: 1,
-                minimumMlxMemoryCeilingBytes: 1),
-            healthState: healthState)) { (thrownError: any Error) in
-            guard case let WorkerControlError.workerProtocolViolation(description) = thrownError else {
-                return XCTFail("expected a protocol violation, got \(thrownError)");
+        do {
+            try WorkerEventHandler.handle(
+                .idle(
+                    machineMlxMemoryCeilingBytes: 1,
+                    effectiveMlxMemoryCeilingBytes: 1,
+                    minimumMlxMemoryCeilingBytes: 1),
+                healthState: healthState);
+            Issue.record("expected a protocol violation");
+        } catch let workerControlError as WorkerControlError {
+            guard case let .workerProtocolViolation(description) = workerControlError else {
+                Issue.record(Comment(stringLiteral: "expected a protocol violation, got \(workerControlError)"));
+                return;
             }
-            XCTAssertEqual(description, "duplicate worker idle event");
+            #expect(description == "duplicate worker idle event");
         }
     }
 
-    func testReadyEventPublishesTheModelAndRejectsDuplicates() throws {
+    @Test
+    func should_publish_the_model_on_the_ready_event_and_reject_duplicates() throws {
         let healthState: WorkerHealthState = WorkerHealthState();
         try WorkerEventHandler.handle(
             .ready(modelId: "qwen3-model", capabilities: WorkerStartupHandshakeTests.chatCapabilities()),
             healthState: healthState);
-        XCTAssertEqual(
-            healthState.daemonStatusReport(),
-            DaemonStatusReport(workerStatus: .ready, readyModelId: "qwen3-model"));
-        XCTAssertEqual(
-            healthState.currentSnapshot().readyModelCapabilities,
-            WorkerStartupHandshakeTests.chatCapabilities());
+        #expect(
+            healthState.daemonStatusReport()
+                == DaemonStatusReport(workerStatus: .ready, readyModelId: "qwen3-model"));
+        #expect(
+            healthState.currentSnapshot().readyModelCapabilities
+                == WorkerStartupHandshakeTests.chatCapabilities());
 
-        XCTAssertThrowsError(try WorkerEventHandler.handle(
-            .ready(modelId: "qwen3-model", capabilities: WorkerStartupHandshakeTests.chatCapabilities()),
-            healthState: healthState)) { (thrownError: any Error) in
-            guard case let WorkerControlError.workerProtocolViolation(description) = thrownError else {
-                return XCTFail("expected a protocol violation, got \(thrownError)");
+        do {
+            try WorkerEventHandler.handle(
+                .ready(modelId: "qwen3-model", capabilities: WorkerStartupHandshakeTests.chatCapabilities()),
+                healthState: healthState);
+            Issue.record("expected a protocol violation");
+        } catch let workerControlError as WorkerControlError {
+            guard case let .workerProtocolViolation(description) = workerControlError else {
+                Issue.record(Comment(stringLiteral: "expected a protocol violation, got \(workerControlError)"));
+                return;
             }
-            XCTAssertEqual(description, "duplicate worker readiness");
+            #expect(description == "duplicate worker readiness");
         }
     }
 
-    func testRuntimePolicyAcknowledgementMustMatchThePublishedModel() throws {
+    @Test
+    func should_require_the_runtime_policy_acknowledgement_to_match_the_published_model() throws {
         let healthState: WorkerHealthState = WorkerHealthState();
         try WorkerEventHandler.handle(
             .ready(modelId: "qwen3-model", capabilities: WorkerStartupHandshakeTests.chatCapabilities()),
@@ -78,15 +91,19 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             persistentPromptCacheEnabled: true,
             promptCacheMaximumSizeBytes: 1073741824,
             loadedModel: WorkerStartupHandshakeTests.loadedModel(modelId: "other-model"));
-        XCTAssertThrowsError(try WorkerEventHandler.handle(
-            .runtimeFeatureConfigurationApplied(foreignAcknowledgement),
-            healthState: healthState)) { (thrownError: any Error) in
-            guard case let WorkerControlError.workerProtocolViolation(description) = thrownError else {
-                return XCTFail("expected a protocol violation, got \(thrownError)");
+        do {
+            try WorkerEventHandler.handle(
+                .runtimeFeatureConfigurationApplied(foreignAcknowledgement),
+                healthState: healthState);
+            Issue.record("expected a protocol violation");
+        } catch let workerControlError as WorkerControlError {
+            guard case let .workerProtocolViolation(description) = workerControlError else {
+                Issue.record(Comment(stringLiteral: "expected a protocol violation, got \(workerControlError)"));
+                return;
             }
-            XCTAssertEqual(
-                description,
-                "runtime policy acknowledgement does not match the published model");
+            #expect(
+                description
+                    == "runtime policy acknowledgement does not match the published model");
         }
 
         let matchingAcknowledgement: WorkerRuntimeFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
@@ -97,10 +114,10 @@ final class WorkerStartupHandshakeTests: XCTestCase {
         try WorkerEventHandler.handle(
             .runtimeFeatureConfigurationApplied(matchingAcknowledgement),
             healthState: healthState);
-        XCTAssertEqual(
-            healthState.currentSnapshot().workerRuntimeFeatureConfiguration,
-            matchingAcknowledgement);
-        XCTAssertTrue(healthState.hasRuntimeFeatureConfiguration());
+        #expect(
+            healthState.currentSnapshot().workerRuntimeFeatureConfiguration
+                == matchingAcknowledgement);
+        #expect(healthState.hasRuntimeFeatureConfiguration());
 
         // A refreshed generation with an identical loaded model is the legal
         // live-memory-update shape; a changed loaded-model payload without a
@@ -110,15 +127,19 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             persistentPromptCacheEnabled: true,
             promptCacheMaximumSizeBytes: 1073741824,
             loadedModel: WorkerStartupHandshakeTests.loadedModel(modelId: "qwen3-model", maximumOutputTokens: 2048));
-        XCTAssertThrowsError(try WorkerEventHandler.handle(
-            .runtimeFeatureConfigurationApplied(silentlyChangedPolicy),
-            healthState: healthState)) { (thrownError: any Error) in
-            guard case let WorkerControlError.workerProtocolViolation(description) = thrownError else {
-                return XCTFail("expected a protocol violation, got \(thrownError)");
+        do {
+            try WorkerEventHandler.handle(
+                .runtimeFeatureConfigurationApplied(silentlyChangedPolicy),
+                healthState: healthState);
+            Issue.record("expected a protocol violation");
+        } catch let workerControlError as WorkerControlError {
+            guard case let .workerProtocolViolation(description) = workerControlError else {
+                Issue.record(Comment(stringLiteral: "expected a protocol violation, got \(workerControlError)"));
+                return;
             }
-            XCTAssertEqual(
-                description,
-                "runtime policy changed without an atomic model transition");
+            #expect(
+                description
+                    == "runtime policy changed without an atomic model transition");
         }
 
         let refreshedGeneration: WorkerRuntimeFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
@@ -129,12 +150,13 @@ final class WorkerStartupHandshakeTests: XCTestCase {
         try WorkerEventHandler.handle(
             .runtimeFeatureConfigurationApplied(refreshedGeneration),
             healthState: healthState);
-        XCTAssertEqual(
-            healthState.currentSnapshot().workerRuntimeFeatureConfiguration,
-            refreshedGeneration);
+        #expect(
+            healthState.currentSnapshot().workerRuntimeFeatureConfiguration
+                == refreshedGeneration);
     }
 
-    func testMemorySamplesPublishAndClearTheirObservations() throws {
+    @Test
+    func should_publish_and_clear_memory_sample_observations() throws {
         let healthState: WorkerHealthState = WorkerHealthState();
         let memorySnapshot: WorkerMlxMemorySnapshot = WorkerStartupHandshakeTests.memorySnapshot();
         let expertResidency: WorkerExpertResidencySnapshot = WorkerExpertResidencySnapshot(
@@ -144,18 +166,19 @@ final class WorkerStartupHandshakeTests: XCTestCase {
         try WorkerEventHandler.handle(
             .mlxMemorySample(mlxMemorySnapshot: memorySnapshot, expertResidency: expertResidency),
             healthState: healthState);
-        XCTAssertEqual(healthState.currentSnapshot().latestMlxMemorySnapshot, memorySnapshot);
-        XCTAssertEqual(healthState.currentSnapshot().expertResidency, expertResidency);
+        #expect(healthState.currentSnapshot().latestMlxMemorySnapshot == memorySnapshot);
+        #expect(healthState.currentSnapshot().expertResidency == expertResidency);
 
         try WorkerEventHandler.handle(
             .mlxMemorySample(mlxMemorySnapshot: nil, expertResidency: nil),
             healthState: healthState);
-        XCTAssertNil(healthState.currentSnapshot().latestMlxMemorySnapshot);
+        #expect(healthState.currentSnapshot().latestMlxMemorySnapshot == nil);
         // Residency is concrete topology and survives a cleared sample.
-        XCTAssertEqual(healthState.currentSnapshot().expertResidency, expertResidency);
+        #expect(healthState.currentSnapshot().expertResidency == expertResidency);
     }
 
-    func testStartupWaitReturnsImmediatelyWithoutAStartupConfiguration() throws {
+    @Test
+    func should_return_from_the_startup_wait_immediately_without_a_startup_configuration() throws {
         let workerProcess: WorkerProcess = try WorkerProcess.launch(
             workerExecutablePath: "/bin/sleep",
             arguments: ["30"]);
@@ -168,10 +191,11 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             eventPump: eventPump,
             healthState: WorkerHealthState(),
             modelLoadTimeout: 1);
-        XCTAssertFalse(workerProcess.isStartupRuntimeConfigurationApplied());
+        #expect(!workerProcess.isStartupRuntimeConfigurationApplied());
     }
 
-    func testStartupWaitCompletesWhenTheFakeWorkerAcknowledgesItsPolicy() throws {
+    @Test
+    func should_complete_the_startup_wait_when_the_fake_worker_acknowledges_its_policy() throws {
         let fakeWorkerScript: String = FakeWorkerEventEmitter.frameEmitterFunction()
             + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.idleEventPayload())
             + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.modelLessRuntimePolicyPayload())
@@ -192,20 +216,21 @@ final class WorkerStartupHandshakeTests: XCTestCase {
             healthState: healthState,
             modelLoadTimeout: 10);
 
-        XCTAssertTrue(workerProcess.isStartupRuntimeConfigurationApplied());
-        XCTAssertEqual(workerProcess.expectedConfigurationGeneration(), "gen-1");
-        XCTAssertEqual(
-            healthState.daemonStatusReport(),
-            DaemonStatusReport(workerStatus: .ready, readyModelId: nil));
-        XCTAssertEqual(
-            healthState.currentSnapshot().machineMlxMemoryCeilingBytes,
-            17179869184);
-        XCTAssertEqual(
-            healthState.currentSnapshot().workerRuntimeFeatureConfiguration?.configurationGeneration,
-            "gen-1");
+        #expect(workerProcess.isStartupRuntimeConfigurationApplied());
+        #expect(workerProcess.expectedConfigurationGeneration() == "gen-1");
+        #expect(
+            healthState.daemonStatusReport()
+                == DaemonStatusReport(workerStatus: .ready, readyModelId: nil));
+        #expect(
+            healthState.currentSnapshot().machineMlxMemoryCeilingBytes
+                == 17179869184);
+        #expect(
+            healthState.currentSnapshot().workerRuntimeFeatureConfiguration?.configurationGeneration
+                == "gen-1");
     }
 
-    func testStartupWaitTimesOutWhenTheWorkerNeverAcknowledges() throws {
+    @Test
+    func should_time_out_the_startup_wait_when_the_worker_never_acknowledges() throws {
         let workerProcess: WorkerProcess = try WorkerProcess.launch(
             workerExecutablePath: "/bin/bash",
             arguments: ["-c", "exec sleep 30\n"],
@@ -215,20 +240,25 @@ final class WorkerStartupHandshakeTests: XCTestCase {
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
-        XCTAssertThrowsError(try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
-            workerProcess: workerProcess,
-            eventPump: eventPump,
-            healthState: WorkerHealthState(),
-            modelLoadTimeout: 1)) { (thrownError: any Error) in
-            guard case let WorkerControlError.modelLoadTimeout(modelLoadTimeoutMillis) = thrownError else {
-                return XCTFail("expected a model-load timeout, got \(thrownError)");
+        do {
+            try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
+                workerProcess: workerProcess,
+                eventPump: eventPump,
+                healthState: WorkerHealthState(),
+                modelLoadTimeout: 1);
+            Issue.record("expected a model-load timeout");
+        } catch let workerControlError as WorkerControlError {
+            guard case let .modelLoadTimeout(modelLoadTimeoutMillis) = workerControlError else {
+                Issue.record(Comment(stringLiteral: "expected a model-load timeout, got \(workerControlError)"));
+                return;
             }
-            XCTAssertEqual(modelLoadTimeoutMillis, 1000);
+            #expect(modelLoadTimeoutMillis == 1000);
         }
-        XCTAssertFalse(workerProcess.isStartupRuntimeConfigurationApplied());
+        #expect(!workerProcess.isStartupRuntimeConfigurationApplied());
     }
 
-    func testStartupWaitSurfacesAStreamClosureInsteadOfATimeout() throws {
+    @Test
+    func should_surface_a_stream_closure_instead_of_a_timeout_from_the_startup_wait() throws {
         let fakeWorkerScript: String = FakeWorkerEventEmitter.frameEmitterFunction()
             + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.idleEventPayload());
         let workerProcess: WorkerProcess = try WorkerProcess.launch(
@@ -240,13 +270,17 @@ final class WorkerStartupHandshakeTests: XCTestCase {
         }
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
 
-        XCTAssertThrowsError(try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
-            workerProcess: workerProcess,
-            eventPump: eventPump,
-            healthState: WorkerHealthState(),
-            modelLoadTimeout: 10)) { (thrownError: any Error) in
-            guard case WorkerControlError.workerEventStreamClosed = thrownError else {
-                return XCTFail("expected a stream closure, got \(thrownError)");
+        do {
+            try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
+                workerProcess: workerProcess,
+                eventPump: eventPump,
+                healthState: WorkerHealthState(),
+                modelLoadTimeout: 10);
+            Issue.record("expected a stream closure");
+        } catch let workerControlError as WorkerControlError {
+            guard case WorkerControlError.workerEventStreamClosed = workerControlError else {
+                Issue.record(Comment(stringLiteral: "expected a stream closure, got \(workerControlError)"));
+                return;
             }
         }
     }

@@ -132,13 +132,20 @@ Run from `swift-skeleton/`:
     swift build
     swift test
 
-`swift build` must stay warning-free; compiler warnings are defects. `swift test`
-runs every hermetic journey serially by default (SwiftPM's `--no-parallel`), and
-real-model journeys are opt-in only — they never run without the gate variable
-below. Per-suite selection uses the runner's own filter, for example
-`swift test --filter WorkerCommandLoopTests`; no wrapper script owns test
-selection or timeouts — every journey carries its own
-`@Test(.timeLimit(...))` cap.
+`swift build` must stay warning-free; compiler warnings are defects. `swift
+test` streams every journey's name, verdict, and duration live. Swift Testing
+always executes concurrently — there is no runner flag that serializes it
+(`.serialized` serializes one suite subtree, and SwiftPM's `--no-parallel`
+applies only to XCTest) — so concurrency safety comes from the journeys
+themselves: hermetic worker journeys spawn children through a process type
+that owns every file descriptor end to end, and no journey shares mutable
+state with another. Real-model journeys are opt-in only — they never run
+without the gate variable below. Per-suite selection uses the runner's own
+filter, for example `swift test --filter WorkerCommandLoopTests`; no wrapper
+script owns test selection or timeouts — every journey carries its own
+`@Test(.timeLimit(...))` cap. The commit gate
+(`scripts/verify-before-commit.sh`) runs this suite as the
+`swift-skeleton-journeys` step and relays the live per-journey output.
 
 ## Journey categories (the test taxonomy)
 
@@ -160,8 +167,10 @@ A real-model suite combines the three traits it needs:
 and resolves its directory through the same gate accessor, failing closed when
 it no longer resolves. This replaces the Rust tree's ignored-test +
 `scripts/run-bounded-cargo-test.sh` split with SwiftPM-native machinery: the
-serial default keeps MLX journeys off each other's wired GPU memory
-structurally, and the enablement condition keeps the default run hermetic by
+`.serialized` trait keeps a suite's MLX journeys off each other's wired GPU
+memory structurally (a serialized suite serializes its whole subtree, so
+real-model suites that must never overlap share one serialized container
+suite), and the enablement condition keeps the default run hermetic by
 construction.
 
 ## Rust-to-Swift mapping

@@ -272,12 +272,16 @@ main() {
         print_error "the memory-contract lane gate did not retain its compile-class timeout"
         exit 1
     }
-    grep -F '600s|swift' "$timeout_log" >/dev/null || {
-        print_error "the Thin Talk package did not retain its separate compile-class timeout"
+    [ "$(grep -c '^600s|swift' "$timeout_log")" -eq 2 ] || {
+        print_error "the Swift package lanes did not retain their separate compile-class timeouts"
         exit 1
     }
     grep -Fx -- 'test --package-path apps/thin-talk' "$swift_log" >/dev/null || {
         print_error "verification did not run the Thin Talk Swift package contracts"
+        exit 1
+    }
+    grep -Fx -- 'test --package-path swift-skeleton' "$swift_log" >/dev/null || {
+        print_error "verification did not run the Swift migration skeleton journeys"
         exit 1
     }
     [ "$(grep -c '^120s|' "$timeout_log")" -eq 21 ] || {

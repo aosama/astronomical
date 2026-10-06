@@ -1,9 +1,11 @@
 import Foundation;
-import XCTest;
+
+import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
 import RestContract;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -18,9 +20,11 @@ import RestContract;
  * discovery is empty but a worker is ready, the ready model is advertised
  * from its acknowledged worker capabilities.
  */
-final class RestModelsEndpointTests: XCTestCase {
+@Suite(.serialized, .tags(.hermeticJourney))
+final class RestModelsEndpointTests {
 
-    func testModelsJourneyAdvertisesDiscoveredChatModel() throws {
+    @Test
+    func should_advertise_the_discovered_chat_model_through_the_models_journey() throws {
         let resolvedConfig: ResolvedRuntimeConfig = try self.makeResolvedConfig();
         let server: RestHttpServer = try self.startServingServer(resolvedConfig: resolvedConfig);
 
@@ -28,23 +32,24 @@ final class RestModelsEndpointTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /v1/models HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let (statusCode, envelope): (Int, [String: Any]) = try self.decodeObjectEnvelope(responseText);
-        XCTAssertEqual(statusCode, 200);
-        XCTAssertEqual(envelope["object"] as? String, "list");
+        #expect(statusCode == 200);
+        #expect(envelope["object"] as? String == "list");
         let models: Array<[String: Any]> = try self.requireModelsArray(envelope);
-        XCTAssertEqual(models.count, 1);
+        #expect(models.count == 1);
         let advertisedModel: [String: Any] = models[0];
-        XCTAssertEqual(advertisedModel["id"] as? String, "synthetic-chat-model");
-        XCTAssertEqual(advertisedModel["owned_by"] as? String, "astronomical");
-        XCTAssertGreaterThan(advertisedModel["created"] as? UInt64 ?? 0, 0);
-        XCTAssertEqual(advertisedModel["context_window"] as? UInt32, 4_096);
-        XCTAssertEqual(advertisedModel["max_output_tokens"] as? UInt32, 1_024);
+        #expect(advertisedModel["id"] as? String == "synthetic-chat-model");
+        #expect(advertisedModel["owned_by"] as? String == "astronomical");
+        #expect((advertisedModel["created"] as? UInt64 ?? 0) > 0);
+        #expect(advertisedModel["context_window"] as? UInt32 == 4_096);
+        #expect(advertisedModel["max_output_tokens"] as? UInt32 == 1_024);
         let supportedEndpoints: Array<String> = (advertisedModel["supported_endpoints"] as? [String]) ?? [];
-        XCTAssertTrue(supportedEndpoints.contains("/v1/chat/completions"));
-        XCTAssertTrue(supportedEndpoints.contains("/v1/responses"));
+        #expect(supportedEndpoints.contains("/v1/chat/completions"));
+        #expect(supportedEndpoints.contains("/v1/responses"));
         server.stop();
     }
 
-    func testModelRetrievalResolvesPlainProviderPrefixedAndUnknownIdentifiers() throws {
+    @Test
+    func should_resolve_plain_provider_prefixed_and_unknown_identifiers_on_model_retrieval() throws {
         let resolvedConfig: ResolvedRuntimeConfig = try self.makeResolvedConfig();
         let server: RestHttpServer = try self.startServingServer(resolvedConfig: resolvedConfig);
 
@@ -52,27 +57,28 @@ final class RestModelsEndpointTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /v1/models/synthetic-chat-model HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let (plainStatus, plainEnvelope): (Int, [String: Any]) = try self.decodeObjectEnvelope(plainResponse);
-        XCTAssertEqual(plainStatus, 200);
-        XCTAssertEqual(plainEnvelope["id"] as? String, "synthetic-chat-model");
+        #expect(plainStatus == 200);
+        #expect(plainEnvelope["id"] as? String == "synthetic-chat-model");
 
         let prefixedResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /v1/models/vendor/synthetic-chat-model HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let (prefixedStatus, prefixedEnvelope): (Int, [String: Any]) = try self.decodeObjectEnvelope(prefixedResponse);
-        XCTAssertEqual(prefixedStatus, 200, "a provider-prefixed identifier must resolve");
-        XCTAssertEqual(prefixedEnvelope["id"] as? String, "synthetic-chat-model");
+        #expect(prefixedStatus == 200, "a provider-prefixed identifier must resolve");
+        #expect(prefixedEnvelope["id"] as? String == "synthetic-chat-model");
 
         let unknownResponse: String? = RawLoopbackHttpClient.exchange(
             port: server.boundEndpoint.port,
             requestText: "GET /v1/models/unknown-model HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let (unknownStatus, unknownEnvelope): (Int, [String: Any]) = try self.decodeObjectEnvelope(unknownResponse);
-        XCTAssertEqual(unknownStatus, 404);
+        #expect(unknownStatus == 404);
         let errorObject: [String: Any] = try self.requireErrorObject(unknownEnvelope);
-        XCTAssertEqual(errorObject["type"] as? String, "invalid_request_error");
+        #expect(errorObject["type"] as? String == "invalid_request_error");
         server.stop();
     }
 
-    func testCacheStatsJourneyAnswersTheZeroedPersistentCacheSummary() throws {
+    @Test
+    func should_answer_the_cache_stats_journey_with_the_zeroed_persistent_cache_summary() throws {
         let resolvedConfig: ResolvedRuntimeConfig = try self.makeResolvedConfig();
         let server: RestHttpServer = try self.startServingServer(resolvedConfig: resolvedConfig);
 
@@ -80,14 +86,15 @@ final class RestModelsEndpointTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /v1/cache/stats HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let (statusCode, envelope): (Int, [String: Any]) = try self.decodeObjectEnvelope(responseText);
-        XCTAssertEqual(statusCode, 200);
-        XCTAssertEqual(envelope["persistent_prompt_cache_hits"] as? UInt64, 0);
-        XCTAssertEqual(envelope["persistent_prompt_cache_misses"] as? UInt64, 0);
-        XCTAssertEqual(envelope["persistent_prompt_cache_maximum_size_bytes"] as? UInt64, 50_000_000_000);
+        #expect(statusCode == 200);
+        #expect(envelope["persistent_prompt_cache_hits"] as? UInt64 == 0);
+        #expect(envelope["persistent_prompt_cache_misses"] as? UInt64 == 0);
+        #expect(envelope["persistent_prompt_cache_maximum_size_bytes"] as? UInt64 == 50_000_000_000);
         server.stop();
     }
 
-    func testEmptyDiscoveryWithAReadyWorkerAdvertisesTheReadyModel() throws {
+    @Test
+    func should_advertise_the_ready_model_when_discovery_is_empty() throws {
         let workerCapabilities: WorkerModelCapabilities = WorkerModelCapabilities.from(
             chatCapabilities: ChatModelCapabilities(
                 supportsReasoning: false,
@@ -109,11 +116,11 @@ final class RestModelsEndpointTests: XCTestCase {
             port: server.boundEndpoint.port,
             requestText: "GET /v1/models HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let (statusCode, envelope): (Int, [String: Any]) = try self.decodeObjectEnvelope(responseText);
-        XCTAssertEqual(statusCode, 200);
+        #expect(statusCode == 200);
         let models: Array<[String: Any]> = try self.requireModelsArray(envelope);
-        XCTAssertEqual(models.count, 1);
-        XCTAssertEqual(models[0]["id"] as? String, "ready-chat-model");
-        XCTAssertEqual(models[0]["context_window"] as? UInt32, 2_048);
+        #expect(models.count == 1);
+        #expect(models[0]["id"] as? String == "ready-chat-model");
+        #expect(models[0]["context_window"] as? UInt32 == 2_048);
         server.stop();
     }
 
