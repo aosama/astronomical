@@ -9,7 +9,7 @@ public enum ExpertMemoryMode: Equatable {
     /// No sparse expert payload is retained; every miss pages from storage.
     case paged;
 
-    internal var wireName: String {
+    public var wireName: String {
         switch self {
         case .resident: return "resident";
         case .hybrid: return "hybrid";
@@ -46,7 +46,7 @@ public struct WorkerExpertResidencySnapshot: Equatable {
 
     internal static let wireFieldNames: Array<String> = ["total_layer_count", "resident_expert_count", "resident_expert_payload_bytes"];
 
-    internal func wireValue() -> JsonWireValue {
+    public func wireValue() -> JsonWireValue {
         var wireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
         wireObject.appendEntry(key: "total_layer_count", value: .unsignedInteger(UInt64(self.totalLayerCount)));
         wireObject.appendEntry(key: "resident_expert_count", value: .unsignedInteger(UInt64(self.residentExpertCount)));

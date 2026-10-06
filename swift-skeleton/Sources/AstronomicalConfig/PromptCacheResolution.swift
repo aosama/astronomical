@@ -5,6 +5,11 @@ import Foundation;
 /// prompt_cache_size_gb_to_bytes conversion from crates/config/src/lib.rs.
 public struct PromptCacheConfig: Equatable, Sendable {
 
+    /// The facade default cache budget in decimal SI bytes before the user
+    /// configures one (DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB of the Rust lib).
+    public static let defaultMaximumSizeBytes: UInt64 =
+        PromptCacheResolution.defaultPromptCacheMaximumSizeGb * PromptCacheResolution.bytesPerConfiguredGigabyte;
+
     public let globalPromptCacheRootDirectory: FilePath;
     public let activeModelPromptCacheDirectory: FilePath;
     public let globalPromptCacheMaximumSizeBytes: UInt64;
