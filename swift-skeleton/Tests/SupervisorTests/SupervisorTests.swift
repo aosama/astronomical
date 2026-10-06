@@ -154,7 +154,7 @@ final class SupervisorTests: XCTestCase {
             runtimeInstance: AstronomicalRuntimeInstance.development);
         let service: DaemonIpcService = try DaemonIpcService.start(
             instancePaths: instancePaths,
-            healthProvider: { return DaemonWorkerStatus.unavailable; });
+            healthProvider: { return DaemonStatusReport.unavailable(); });
         defer {
             service.shutdown();
             try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
