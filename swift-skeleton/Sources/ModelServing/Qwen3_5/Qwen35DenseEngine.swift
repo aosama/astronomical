@@ -11,17 +11,32 @@ public final class Qwen35PreparedInferenceRequest: PreparedInferenceRequest {
 
     public let promptTokenIds: Array<UInt32>;
     public let samplingSettings: Qwen35SamplingSettings;
-
-    public var promptTokenCount: Int {
-        return self.promptTokenIds.count;
-    }
+    /// The compiled enforced structured-generation constraint, present only
+    /// when the request carried one; masked on visible tokens only.
+    public let guidedConstraint: Qwen35GuidedConstraint?;
+    /// Whether the rendered chat template opened the thinking channel, so
+    /// generation starts inside `<think>` and the constraint stays dormant
+    /// until the reasoning-end boundary commits.
+    public let startsInsideThinking: Bool;
+    /// The token ids that close the thinking channel naturally.
+    public let naturalReasoningEndTokenIds: Set<UInt32>;
 
     public init(
         promptTokenIds: Array<UInt32>,
-        samplingSettings: Qwen35SamplingSettings
+        samplingSettings: Qwen35SamplingSettings,
+        guidedConstraint: Qwen35GuidedConstraint? = nil,
+        startsInsideThinking: Bool = false,
+        naturalReasoningEndTokenIds: Set<UInt32> = Set()
     ) {
         self.promptTokenIds = promptTokenIds;
         self.samplingSettings = samplingSettings;
+        self.guidedConstraint = guidedConstraint;
+        self.startsInsideThinking = startsInsideThinking;
+        self.naturalReasoningEndTokenIds = naturalReasoningEndTokenIds;
+    }
+
+    public var promptTokenCount: Int {
+        return self.promptTokenIds.count;
     }
 }
 
@@ -51,6 +66,9 @@ public final class Qwen35DenseEngine: InferenceEngine {
     private var hasEmittedPreparation: Bool = false;
     private var hasEmittedFirstDecode: Bool = false;
     private var cancelledRequestIds: Set<RequestId> = [];
+    private var activeGuidedConstraint: Qwen35GuidedConstraint?;
+    private var isInsideThinking: Bool = false;
+    private var activeReasoningEndTokenIds: Set<UInt32> = Set();
 
     public init(
         attributionEnabled: Bool = false,
@@ -142,6 +160,9 @@ public final class Qwen35DenseEngine: InferenceEngine {
         self.hasEmittedPreparation = false;
         self.hasEmittedFirstDecode = false;
         self.activeSampler = preparedRequest.samplingSettings.makeSampler();
+        self.activeGuidedConstraint = preparedRequest.guidedConstraint;
+        self.isInsideThinking = preparedRequest.startsInsideThinking;
+        self.activeReasoningEndTokenIds = preparedRequest.naturalReasoningEndTokenIds;
         self.activeCache = try denseModel.newCache(parameters: nil);
         return EngineGenerationStart(
             cachedTokenCount: 0,
@@ -174,7 +195,8 @@ public final class Qwen35DenseEngine: InferenceEngine {
             throw InferenceEngineError.fatalExecution(
                 reason: "the dense engine lost its sampler or logits before decode");
         }
-        let sampledTokenId: Int = activeSampler.sample(logits: lastLogits[0, -1]).item(Int.self);
+        let sampledTokenId: Int = try self.sampleTokenId(
+            sampler: activeSampler, lastLogits: lastLogits);
         let decodeForwardStart: ContinuousClock.Instant? =
             ServingPerformanceAttribution.startedOperation(
                 operationName: "qwen35_decode_step",
@@ -280,6 +302,47 @@ public final class Qwen35DenseEngine: InferenceEngine {
         Memory.cacheLimit = Int(clamping: requestedMlxMemoryCeilingBytes);
     }
 
+    /** Samples one token from the last logit row, applying the guided
+    constraint's grammar mask on visible tokens only — mirroring the Rust
+    generated-token emission rule where thinking tokens feed the budget state
+    and visible tokens feed the constraint. */
+    private func sampleTokenId(
+        sampler: any LogitSampler,
+        lastLogits: MLXArray
+    ) throws -> Int {
+        var logitRow: MLXArray = lastLogits[0, -1];
+        if let guidedConstraint = self.activeGuidedConstraint,
+           self.isInsideThinking == false,
+           guidedConstraint.isTerminated() == false {
+            do {
+                logitRow = try guidedConstraint.maskLogits(logitRow);
+            } catch {
+                throw InferenceEngineError.invalidRequest(
+                    reason: "the structured-generation constraint failed to mask the decode step: \(error)");
+            }
+        }
+        let sampledTokenId: Int = sampler.sample(logits: logitRow).item(Int.self);
+        if let guidedConstraint = self.activeGuidedConstraint {
+            if self.isInsideThinking {
+                if self.currentReasoningEndTokenIds().contains(UInt32(clamping: sampledTokenId)) {
+                    self.isInsideThinking = false;
+                }
+            } else if guidedConstraint.isTerminated() == false {
+                do {
+                    try guidedConstraint.commitToken(Int32(clamping: sampledTokenId));
+                } catch {
+                    throw InferenceEngineError.invalidRequest(
+                        reason: "the sampled token violated the structured-generation constraint: \(error)");
+                }
+            }
+        }
+        return sampledTokenId;
+    }
+
+    private func currentReasoningEndTokenIds() -> Set<UInt32> {
+        return self.activeReasoningEndTokenIds;
+    }
+
     private func releaseActiveRequest() -> Void {
         self.activeCache = nil;
         self.activeSampler = nil;
@@ -290,6 +353,8 @@ public final class Qwen35DenseEngine: InferenceEngine {
         self.prefillElapsedMillis = 0;
         self.hasEmittedPreparation = false;
         self.hasEmittedFirstDecode = false;
+        self.activeGuidedConstraint = nil;
+        self.isInsideThinking = false;
     }
 
     private static func millisSince(

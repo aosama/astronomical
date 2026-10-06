@@ -73,16 +73,28 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
             throw ChatPreparationRejection(reason: .invalidRequest(
                 reason: "the thinking budget lands with the thinking-budget slice"));
         }
-        if chatGenerationCommand.structuredGeneration != nil {
-            throw ChatPreparationRejection(reason: .invalidRequest(
-                reason: "token-masked structured generation lands with the guided-generation slice"));
-        }
         if chatGenerationCommand.tools.isEmpty == false {
             // The tool-call output parser lands with the structured
             // generation slice; until then a tool-bearing conversation would
             // render without its marker parser, so it fails closed.
             throw ChatPreparationRejection(reason: .invalidRequest(
                 reason: "tool-call parsing lands with the structured generation slice"));
+        }
+        var guidedConstraint: Qwen35GuidedConstraint? = nil;
+        if let enforcedConstraint = chatGenerationCommand.structuredGeneration {
+            do {
+                guidedConstraint = try Qwen35GuidedConstraint.compile(
+                    constraint: enforcedConstraint,
+                    tokenizer: self.tokenizer,
+                    endOfSequenceTokenId: Int32(bitPattern: UInt32(
+                        self.endOfSequenceTokenIds.min() ?? 0)));
+            } catch let guidedRejection as Qwen35GuidedConstraintError {
+                throw ChatPreparationRejection(reason: .invalidRequest(
+                    reason: guidedRejection.description));
+            } catch {
+                throw ChatPreparationRejection(reason: .invalidRequest(
+                    reason: "the structured-generation constraint failed to compile"));
+            }
         }
         let promptTokenIds: Array<Int>;
         do {
@@ -104,8 +116,23 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
                     return UInt32(clamping: promptTokenId);
                 },
                 samplingSettings: Qwen35SamplingSettings(
-                    chatGenerationSettings: chatGenerationCommand.settings)),
+                    chatGenerationSettings: chatGenerationCommand.settings),
+                guidedConstraint: guidedConstraint,
+                startsInsideThinking: true,
+                naturalReasoningEndTokenIds: self.naturalReasoningEndTokenIds()),
             endOfSequenceTokenIds: self.endOfSequenceTokenIds);
+    }
+
+    /// Resolves the `</think>` boundary token ids from the tokenizer so the
+    /// engine can flip the constraint from dormant (inside thinking) to
+    /// masking (visible answer), mirroring the Rust generation-start rule
+    /// where the template's opened thinking channel gates the mask.
+    private func naturalReasoningEndTokenIds() -> Set<UInt32> {
+        let encodedBoundaryIds: Array<Int> = self.tokenizer.encode(
+            text: self.reasoningConfig.endDelimiter, addSpecialTokens: false);
+        return Set<UInt32>(encodedBoundaryIds.map { (boundaryTokenId: Int) -> UInt32 in
+            return UInt32(clamping: boundaryTokenId);
+        });
     }
 
     /// Maps the wire conversation onto the chat-template message dictionaries.
