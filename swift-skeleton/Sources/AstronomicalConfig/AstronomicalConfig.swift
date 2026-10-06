@@ -148,4 +148,19 @@ public struct AstronomicalConfig {
     public var configuredModelIds: Array<String> {
         return Array<String>(self.loadedUserConfigFile.models.keys).sorted();
     }
+
+    /// Resolves inherited policy for one canonical discovered model identity:
+    /// context/output limits, generation defaults, and merged chunking.
+    public func resolvedModelConfig(
+        modelId: String,
+        artifactMaximumContextTokens: UInt32
+    ) throws -> ResolvedModelConfig {
+        let globalChunkingFile: ChunkingConfigFile = self.loadedUserConfigFile.chunking
+            ?? ChunkingConfigFile.defaultFile();
+        return try ResolvedModelConfig.resolve(
+            modelId: modelId,
+            artifactMaximumContextTokens: artifactMaximumContextTokens,
+            globalChunkingFile: globalChunkingFile,
+            configuredModel: self.loadedUserConfigFile.models[modelId]);
+    }
 }
