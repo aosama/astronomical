@@ -22,6 +22,7 @@ public enum AstronomicalConfigError: Error, CustomStringConvertible {
     case invalidSchemaReference
     case nonLoopbackBindAddress(supervisorBindAddress: SocketEndpoint)
     case invalidMaximumMlxMemoryGb(description: String)
+    case invalidPromptCacheMaxSizeGb(description: String)
     case configChangedDuringUpdate
 
     public var description: String {
@@ -54,6 +55,8 @@ public enum AstronomicalConfigError: Error, CustomStringConvertible {
             return "config file must reference \"./astronomical-config.schema.json\" through its $schema field";
         case .nonLoopbackBindAddress(let supervisorBindAddress):
             return "supervisor bind address \(supervisorBindAddress) must be a loopback address";
+        case .invalidPromptCacheMaxSizeGb(let problemDescription):
+            return problemDescription
         case .invalidMaximumMlxMemoryGb(let problemDescription):
             return "invalid maximum_mlx_memory_gb: \(problemDescription)";
         case .configChangedDuringUpdate:
