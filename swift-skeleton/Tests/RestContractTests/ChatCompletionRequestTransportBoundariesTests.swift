@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_chat_completion_request/transport_boundaries.rs.
-final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ChatCompletionRequestTransportBoundariesTests {
 
-    func testShouldAcceptOpencodeLargeOutputBudgetWithoutAPublicCodingCap() throws {
+    @Test
+    func should_accept_opencode_large_output_budget_without_a_public_coding_cap() throws {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -16,18 +20,20 @@ final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
     }
     """));
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
-        XCTAssertEqual(requestParts.maximumOutputTokens, 20_000);
+        #expect(requestParts.maximumOutputTokens == 20_000);
     }
 
-    func testShouldAcceptLargeOpencodeChatHistoryWithoutAPublicMessageCountCap() throws {
+    @Test
+    func should_accept_large_opencode_chat_history_without_a_public_message_count_cap() throws {
         let requestJson: String = Self.requestJson(messageCount: 250);
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
-        XCTAssertEqual(requestParts.messages.count, 250);
+        #expect(requestParts.messages.count == 250);
     }
 
-    func testShouldAcceptManySmallTextContentPartsWithoutAPublicPartCountCap() throws {
+    @Test
+    func should_accept_many_small_text_content_parts_without_a_public_part_count_cap() throws {
         var contentPartTexts: Array<String> = Array();
         for partNumber in 0..<250 {
             contentPartTexts.append("{\"type\": \"text\", \"text\": \"part \(partNumber) \"}");
@@ -43,13 +49,14 @@ final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
         guard requestParts.messages.count == 1,
             case .user(let content, _) = requestParts.messages[0] else {
-            XCTFail("expected a single user message part");
+            Issue.record("expected a single user message part");
             return;
         }
-        XCTAssertTrue(content.contains("part 249"));
+        #expect(content.contains("part 249"));
     }
 
-    func testShouldAcceptManySmallToolDefinitionsWithoutAPublicToolCountCap() throws {
+    @Test
+    func should_accept_many_small_tool_definitions_without_a_public_tool_count_cap() throws {
         var toolJsonTexts: Array<String> = Array();
         for toolNumber in 0..<250 {
             toolJsonTexts.append(
@@ -66,10 +73,11 @@ final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
-        XCTAssertEqual(requestParts.tools.count, 250);
+        #expect(requestParts.tools.count == 250);
     }
 
-    func testShouldAcceptLargeAssistantToolCallArgumentsWithoutAPublicFieldByteCap() throws {
+    @Test
+    func should_accept_large_assistant_tool_call_arguments_without_a_public_field_byte_cap() throws {
         let largeArgumentsJson: String = "{\"payload\":\"\(String(repeating: "x", count: 80 * 1024))\"}";
         let requestJson: String = """
     {
@@ -92,13 +100,14 @@ final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
         guard requestParts.messages.count == 1,
             case .assistant(_, _, let toolCalls) = requestParts.messages[0] else {
-            XCTFail("expected an assistant message part with tool calls");
+            Issue.record("expected an assistant message part with tool calls");
             return;
         }
-        XCTAssertTrue(toolCalls[0].argumentsJson.contains("payload"));
+        #expect(toolCalls[0].argumentsJson.contains("payload"));
     }
 
-    func testShouldAcceptASingleTextMessageLargerThanTheOldPublicMessageByteLimit() throws {
+    @Test
+    func should_accept_a_single_text_message_larger_than_the_old_public_message_byte_limit() throws {
         let largeMessageContent: String = String(repeating: "x", count: 128 * 1024);
         let requestJson: String = """
     {
@@ -112,13 +121,14 @@ final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
         let requestParts: OpenAiChatCompletionRequestParts = try chatCompletionRequest.intoParts();
         guard requestParts.messages.count == 1,
             case .user(let content, _) = requestParts.messages[0] else {
-            XCTFail("expected a single user message part");
+            Issue.record("expected a single user message part");
             return;
         }
-        XCTAssertEqual(content, largeMessageContent);
+        #expect(content == largeMessageContent);
     }
 
-    func testShouldRejectAnUnknownOversizedReasoningEffortLabelInsteadOfIgnoringIt() throws {
+    @Test
+    func should_reject_an_unknown_oversized_reasoning_effort_label_instead_of_ignoring_it() throws {
         let oversizedReasoningEffort: String = String(repeating: "x", count: 8 * 1024);
         let requestJson: String = """
     {
@@ -131,12 +141,12 @@ final class ChatCompletionRequestTransportBoundariesTests: XCTestCase {
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         do {
             try chatCompletionRequest.validate();
-            XCTFail("an unrecognized effort label must fail loudly, not get ignored by size");
-            return;
+            Issue.record("an unrecognized effort label must fail loudly, not get ignored by size");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(
-                validationError,
-                .thinkingControls(.unknownReasoningEffort(reasoningEffort: oversizedReasoningEffort)));
+            #expect(
+                validationError
+                    == OpenAiChatCompletionValidationError.thinkingControls(
+                        .unknownReasoningEffort(reasoningEffort: oversizedReasoningEffort)));
         }
     }
 

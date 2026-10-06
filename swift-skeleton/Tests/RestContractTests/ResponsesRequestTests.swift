@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_responses_request.rs.
-final class ResponsesRequestTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResponsesRequestTests {
 
-    func testShouldParseANonStreamingResponseRequestWithStringInput() throws {
+    @Test
+    func should_parse_a_non_streaming_response_request_with_string_input() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -17,34 +21,36 @@ final class ResponsesRequestTests: XCTestCase {
         }
         """));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.model, "astronomical/fake-mixture-of-experts");
+        #expect(requestParts.model == "astronomical/fake-mixture-of-experts");
         guard case .text(let inputText) = requestParts.input else {
-            XCTFail("expected string input");
+            Issue.record("expected string input");
             return;
         }
-        XCTAssertEqual(inputText, "Explain the repository.");
-        XCTAssertEqual(requestParts.maximumOutputTokens, 512);
-        XCTAssertEqual(requestParts.requestedMaximumOutputTokens, 512);
-        XCTAssertEqual(requestParts.temperature, 0.6);
-        XCTAssertEqual(requestParts.topP, 0.95);
-        XCTAssertFalse(requestParts.stream);
+        #expect(inputText == "Explain the repository.");
+        #expect(requestParts.maximumOutputTokens == 512);
+        #expect(requestParts.requestedMaximumOutputTokens == 512);
+        #expect(requestParts.temperature == 0.6);
+        #expect(requestParts.topP == 0.95);
+        #expect(requestParts.stream == false);
     }
 
-    func testShouldPreserveOmittedResponsesGenerationSettingsAndRequestOnlyMetadata() throws {
+    @Test
+    func should_preserve_omitted_responses_generation_settings_and_request_only_metadata() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(
                 #"{"model":"organization/model","input":"hello"}"#));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
         let responseConfiguration: OpenAiResponseRequestConfiguration = requestParts.responseConfiguration();
-        XCTAssertNil(requestParts.requestedMaximumOutputTokens);
-        XCTAssertNil(requestParts.temperature);
-        XCTAssertNil(requestParts.topP);
-        XCTAssertNil(responseConfiguration.maxOutputTokens);
-        XCTAssertNil(responseConfiguration.temperature);
-        XCTAssertNil(responseConfiguration.topP);
+        #expect(requestParts.requestedMaximumOutputTokens == nil);
+        #expect(requestParts.temperature == nil);
+        #expect(requestParts.topP == nil);
+        #expect(responseConfiguration.maxOutputTokens == nil);
+        #expect(responseConfiguration.temperature == nil);
+        #expect(responseConfiguration.topP == nil);
     }
 
-    func testShouldPreserveOrderedResponseItemsForManualFunctionLoopReplay() throws {
+    @Test
+    func should_preserve_ordered_response_items_for_manual_function_loop_replay() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -60,20 +66,21 @@ final class ResponsesRequestTests: XCTestCase {
         }
         """));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.instructions, "Be precise.");
+        #expect(requestParts.instructions == "Be precise.");
         guard case .items(let responseInputItems) = requestParts.input else {
-            XCTFail("expected ordered response input items");
+            Issue.record("expected ordered response input items");
             return;
         }
-        XCTAssertEqual(responseInputItems.count, 5);
-        XCTAssertEqual(responseInputItems[0].kindName(), "user_message");
-        XCTAssertEqual(responseInputItems[1].kindName(), "reasoning");
-        XCTAssertEqual(responseInputItems[2].kindName(), "assistant_message");
-        XCTAssertEqual(responseInputItems[3].kindName(), "function_call");
-        XCTAssertEqual(responseInputItems[4].kindName(), "function_call_output");
+        #expect(responseInputItems.count == 5);
+        #expect(responseInputItems[0].kindName() == "user_message");
+        #expect(responseInputItems[1].kindName() == "reasoning");
+        #expect(responseInputItems[2].kindName() == "assistant_message");
+        #expect(responseInputItems[3].kindName() == "function_call");
+        #expect(responseInputItems[4].kindName() == "function_call_output");
     }
 
-    func testShouldDecodeAResponsesDataUriImageInUserContentOrder() throws {
+    @Test
+    func should_decode_a_responses_data_uri_image_in_user_content_order() throws {
         let redPixelPngBase64: String = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
         let requestJson: String = """
         {
@@ -91,19 +98,20 @@ final class ResponsesRequestTests: XCTestCase {
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
         guard case .items(let responseInputItems) = requestParts.input else {
-            XCTFail("expected response input items");
+            Issue.record("expected response input items");
             return;
         }
         guard case .userMessage(let content, let images) = responseInputItems[0] else {
-            XCTFail("expected a user message");
+            Issue.record("expected a user message");
             return;
         }
-        XCTAssertEqual(content, "Describe this image.");
-        XCTAssertEqual(images.count, 1);
-        XCTAssertEqual(images[0].mimeType(), "image/png");
+        #expect(content == "Describe this image.");
+        #expect(images.count == 1);
+        #expect(images[0].mimeType() == "image/png");
     }
 
-    func testShouldAcceptNativeFunctionToolsAndHarmlessCompatibilityFields() throws {
+    @Test
+    func should_accept_native_function_tools_and_harmless_compatibility_fields() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -128,15 +136,16 @@ final class ResponsesRequestTests: XCTestCase {
         }
         """));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.tools.count, 1);
-        XCTAssertEqual(requestParts.tools[0].name, "glob");
-        XCTAssertEqual(requestParts.toolChoice.kindName(), "none");
-        XCTAssertEqual(
-            requestParts.metadata.first(where: { (entry: OpenAiMetadataEntry) -> Bool in entry.metadataKey == "session" })?.metadataValue,
-            "local");
+        #expect(requestParts.tools.count == 1);
+        #expect(requestParts.tools[0].name == "glob");
+        #expect(requestParts.toolChoice.kindName() == "none");
+        #expect(
+            requestParts.metadata.first(where: { (entry: OpenAiMetadataEntry) -> Bool in entry.metadataKey == "session" })?.metadataValue
+                == "local");
     }
 
-    func testShouldParseRecognizedBehaviorChangingFieldsBeforeRejectingThem() throws {
+    @Test
+    func should_parse_recognized_behavior_changing_fields_before_rejecting_them() throws {
         let unsupportedRequests: Array<(requestJson: String, expectedOptionName: String)> = [
             (
                 #"{"model":"ornith","input":"hello","previous_response_id":"resp_prior"}"#,
@@ -156,17 +165,17 @@ final class ResponsesRequestTests: XCTestCase {
                 wireValue: try RestContractTestFixture.wireValue(unsupportedRequest.requestJson));
             do {
                 _ = try request.intoParts();
-                XCTFail("behavior-changing unsupported fields must be rejected");
-                return;
+                Issue.record("behavior-changing unsupported fields must be rejected");
             } catch let validationError as OpenAiResponsesValidationError {
-                XCTAssertTrue(
+                #expect(
                     validationError.errorDescription?.contains(unsupportedRequest.expectedOptionName) == true,
                     "expected \(unsupportedRequest.expectedOptionName) in \(String(describing: validationError.errorDescription))");
             }
         }
     }
 
-    func testShouldParseAForeignResponseItemBeforeRejectingItsType() throws {
+    @Test
+    func should_parse_a_foreign_response_item_before_rejecting_its_type() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -176,14 +185,14 @@ final class ResponsesRequestTests: XCTestCase {
         """));
         do {
             _ = try request.intoParts();
-            XCTFail("hosted file-search items are not locally executable");
-            return;
+            Issue.record("hosted file-search items are not locally executable");
         } catch let validationError as OpenAiResponsesValidationError {
-            XCTAssertTrue(validationError.errorDescription?.contains("file_search_call") == true);
+            #expect(validationError.errorDescription?.contains("file_search_call") == true);
         }
     }
 
-    func testShouldAcceptTheIncludeFieldAsAHarmlessNoop() throws {
+    @Test
+    func should_accept_the_include_field_as_a_harmless_noop() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -193,10 +202,11 @@ final class ResponsesRequestTests: XCTestCase {
         }
         """));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.model, "ornith");
+        #expect(requestParts.model == "ornith");
     }
 
-    func testShouldRejectResponsesGuidedGrammarUntilEnforced() throws {
+    @Test
+    func should_reject_responses_guided_grammar_until_enforced() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -207,14 +217,14 @@ final class ResponsesRequestTests: XCTestCase {
         """));
         do {
             _ = try request.intoParts();
-            XCTFail("unenforced guided_grammar must fail closed on Responses");
-            return;
+            Issue.record("unenforced guided_grammar must fail closed on Responses");
         } catch let validationError as OpenAiResponsesValidationError {
-            XCTAssertTrue(validationError.errorDescription?.contains("guided_grammar") == true);
+            #expect(validationError.errorDescription?.contains("guided_grammar") == true);
         }
     }
 
-    func testShouldResolveCopilotReasoningEffortIntoTheThinkingBudget() throws {
+    @Test
+    func should_resolve_copilot_reasoning_effort_into_the_thinking_budget() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
         {
@@ -224,7 +234,7 @@ final class ResponsesRequestTests: XCTestCase {
         }
         """));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.model, "ornith");
-        XCTAssertEqual(requestParts.thinkingBudget, 8192);
+        #expect(requestParts.model == "ornith");
+        #expect(requestParts.thinkingBudget == 8192);
     }
 }

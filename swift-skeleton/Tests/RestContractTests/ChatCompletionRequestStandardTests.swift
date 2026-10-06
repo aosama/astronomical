@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_chat_completion_request/standard_request.rs.
-final class ChatCompletionRequestStandardTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ChatCompletionRequestStandardTests {
 
-    func testShouldDeserializeAStandardStreamingToolUseRequest() throws {
+    @Test
+    func should_deserialize_a_standard_streaming_tool_use_request() throws {
         let requestJson: String = """
     {
         "model": "astronomical/fake-mixture-of-experts",
@@ -38,14 +42,16 @@ final class ChatCompletionRequestStandardTests: XCTestCase {
         let chatCompletionRequest: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         try chatCompletionRequest.validate();
-        XCTAssertEqual(chatCompletionRequest.model(), "astronomical/fake-mixture-of-experts");
-        XCTAssertEqual(chatCompletionRequest.messages().count, 2);
-        XCTAssertEqual(chatCompletionRequest.tools().count, 1);
-        XCTAssertTrue(chatCompletionRequest.stream());
-        XCTAssertTrue(chatCompletionRequest.includesUsageInStream());
+        #expect(chatCompletionRequest.model() == "astronomical/fake-mixture-of-experts");
+        #expect(chatCompletionRequest.messages().count == 2);
+        #expect(chatCompletionRequest.tools().count == 1);
+        #expect(chatCompletionRequest.stream());
+        #expect(chatCompletionRequest.includesUsageInStream());
     }
 
-    func testShouldExposeValidatedRequestPartsWithoutLeakingRestDTOsIntoIpc() throws {        let requestJson: String = """
+    @Test
+    func should_expose_validated_request_parts_without_leaking_rest_dtos_into_ipc() throws {
+        let requestJson: String = """
     {
         "model": "astronomical/fake-mixture-of-experts",
         "messages": [
@@ -73,32 +79,33 @@ final class ChatCompletionRequestStandardTests: XCTestCase {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.model, "astronomical/fake-mixture-of-experts");
-        XCTAssertEqual(requestParts.maximumOutputTokens, 512);
-        XCTAssertEqual(requestParts.requestedMaximumOutputTokens, 512);
-        XCTAssertEqual(requestParts.toolChoice, .none);
-        XCTAssertEqual(requestParts.temperature, 0.6);
-        XCTAssertEqual(requestParts.topP, 0.95);
-        XCTAssertEqual(requestParts.seed, 7);
-        XCTAssertTrue(requestParts.stream);
-        XCTAssertTrue(requestParts.includesUsageInStream);
-        XCTAssertEqual(requestParts.tools[0].name, "glob");
-        XCTAssertEqual(requestParts.tools[0].parametersJson, #"{"type":"object"}"#);
+        #expect(requestParts.model == "astronomical/fake-mixture-of-experts");
+        #expect(requestParts.maximumOutputTokens == 512);
+        #expect(requestParts.requestedMaximumOutputTokens == 512);
+        #expect(requestParts.toolChoice == .none);
+        #expect(requestParts.temperature == 0.6);
+        #expect(requestParts.topP == 0.95);
+        #expect(requestParts.seed == 7);
+        #expect(requestParts.stream);
+        #expect(requestParts.includesUsageInStream);
+        #expect(requestParts.tools[0].name == "glob");
+        #expect(requestParts.tools[0].parametersJson == #"{"type":"object"}"#);
         guard requestParts.messages.count == 1,
             case .user(let content, _) = requestParts.messages[0] else {
-            XCTFail("expected a single user message part");
+            Issue.record("expected a single user message part");
             return;
         }
-        XCTAssertEqual(content, "Inspect the repository.");
+        #expect(content == "Inspect the repository.");
     }
 
-    func testShouldPreserveOmittedChatGenerationSettingsForModelDefaults() throws {
+    @Test
+    func should_preserve_omitted_chat_generation_settings_for_model_defaults() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(
                 #"{"model":"organization/model","messages":[{"role":"user","content":"hello"}]}"#));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
-        XCTAssertNil(requestParts.requestedMaximumOutputTokens);
-        XCTAssertNil(requestParts.temperature);
-        XCTAssertNil(requestParts.topP);
+        #expect(requestParts.requestedMaximumOutputTokens == nil);
+        #expect(requestParts.temperature == nil);
+        #expect(requestParts.topP == nil);
     }
 }

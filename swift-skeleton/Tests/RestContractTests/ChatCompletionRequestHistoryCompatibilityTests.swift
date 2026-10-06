@@ -1,14 +1,20 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
-/// Contract coverage for replayed history that carries provider-specific fields.
-/// Mainstream harnesses resend messages produced by other providers, so unknown
-/// fields must degrade to ignored instead of rejecting the whole request (#772).
-/// Ported from crates/rest-contract/tests/rest_api/openai_chat_completion_request/history_compatibility.rs.
-final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
+/**
+ * Contract coverage for replayed history that carries provider-specific fields.
+ * Mainstream harnesses resend messages produced by other providers, so unknown
+ * fields must degrade to ignored instead of rejecting the whole request (#772).
+ * Ported from crates/rest-contract/tests/rest_api/openai_chat_completion_request/history_compatibility.rs.
+ */
+@Suite(.tags(.hermeticJourney))
+final class ChatCompletionRequestHistoryCompatibilityTests {
 
-    func testShouldIgnoreUnknownFieldsOnReplayedHistoryMessages() throws {
+    @Test
+    func should_ignore_unknown_fields_on_replayed_history_messages() throws {
         let requestParts: OpenAiChatCompletionRequestParts = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -32,18 +38,19 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
     }
     """)).intoParts();
         guard case .some(.system(let firstContent)) = requestParts.messages.first else {
-            XCTFail("expected a leading system message");
+            Issue.record("expected a leading system message");
             return;
         }
-        XCTAssertEqual(firstContent, "Be helpful.");
+        #expect(firstContent == "Be helpful.");
         guard case .some(.tool(_, let lastContent)) = requestParts.messages.last else {
-            XCTFail("expected a trailing tool message");
+            Issue.record("expected a trailing tool message");
             return;
         }
-        XCTAssertEqual(lastContent, "sunny");
+        #expect(lastContent == "sunny");
     }
 
-    func testShouldPreserveAnAssistantRefusalAsMessageContent() throws {
+    @Test
+    func should_preserve_an_assistant_refusal_as_message_content() throws {
         let requestParts: OpenAiChatCompletionRequestParts = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -55,13 +62,14 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
     }
     """)).intoParts();
         guard case .some(.assistant(let content, _, _)) = requestParts.messages.last else {
-            XCTFail("expected a trailing assistant message");
+            Issue.record("expected a trailing assistant message");
             return;
         }
-        XCTAssertEqual(content, "I'm sorry, but I can't help with that.");
+        #expect(content == "I'm sorry, but I can't help with that.");
     }
 
-    func testShouldPreferExplicitContentOverRefusalOnAnAssistantMessage() throws {
+    @Test
+    func should_prefer_explicit_content_over_refusal_on_an_assistant_message() throws {
         let requestParts: OpenAiChatCompletionRequestParts = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -73,13 +81,14 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
     }
     """)).intoParts();
         guard case .assistant(let content, _, _) = requestParts.messages.last else {
-            XCTFail("expected a trailing assistant message");
+            Issue.record("expected a trailing assistant message");
             return;
         }
-        XCTAssertEqual(content, "the visible answer");
+        #expect(content == "the visible answer");
     }
 
-    func testShouldPreserveARefusalContentPartAsMessageText() throws {
+    @Test
+    func should_preserve_a_refusal_content_part_as_message_text() throws {
         let requestParts: OpenAiChatCompletionRequestParts = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -97,13 +106,14 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
     }
     """)).intoParts();
         guard case .assistant(let content, _, _) = requestParts.messages.last else {
-            XCTFail("expected a trailing assistant message");
+            Issue.record("expected a trailing assistant message");
             return;
         }
-        XCTAssertEqual(content, "before and a refusal");
+        #expect(content == "before and a refusal");
     }
 
-    func testShouldIgnoreUnknownFieldsInsideStreamOptionsAndHistoryToolCalls() throws {
+    @Test
+    func should_ignore_unknown_fields_inside_stream_options_and_history_tool_calls() throws {
         let requestParts: OpenAiChatCompletionRequestParts = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {
@@ -125,16 +135,17 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
         "stream_options": {"include_usage": true, "verbose": false}
     }
     """)).intoParts();
-        XCTAssertTrue(requestParts.includesUsageInStream);
+        #expect(requestParts.includesUsageInStream);
         guard case .assistant(_, _, let toolCalls) = requestParts.messages.last,
             let firstToolCall: OpenAiAssistantToolCallParts = toolCalls.first else {
-            XCTFail("expected a trailing assistant message with tool calls");
+            Issue.record("expected a trailing assistant message with tool calls");
             return;
         }
-        XCTAssertEqual(firstToolCall.name, "bash");
+        #expect(firstToolCall.name == "bash");
     }
 
-    func testShouldIgnoreAnUnknownFieldOnAnImageUrlObject() throws {
+    @Test
+    func should_ignore_an_unknown_field_on_an_image_url_object() throws {
         let imageDataUri: String = "data:image/png;base64,iVBORw0KGgo=";
         let requestJson: String = """
     {
@@ -153,13 +164,14 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
         let requestParts: OpenAiChatCompletionRequestParts = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue(requestJson)).intoParts();
         guard case .some(.user(_, let images)) = requestParts.messages.first else {
-            XCTFail("expected a leading user message with images");
+            Issue.record("expected a leading user message with images");
             return;
         }
-        XCTAssertEqual(images.count, 1);
+        #expect(images.count == 1);
     }
 
-    func testShouldRejectAnUnknownMessageRole() {
+    @Test
+    func should_reject_an_unknown_message_role() {
         do {
             _ = try OpenAiChatCompletionRequest.decoded(
                 wireValue: try RestContractTestFixture.wireValue("""
@@ -171,17 +183,18 @@ final class ChatCompletionRequestHistoryCompatibilityTests: XCTestCase {
         ]
     }
     """));
-            XCTFail("role is the message discriminator and must stay strict");
+            Issue.record("role is the message discriminator and must stay strict");
         } catch let deserializationError as JsonWireProblem {
-            XCTAssertTrue(
+            #expect(
                 deserializationError.description.contains("unknown variant `critic`"),
                 "an unknown role must be reported through the tag error, got: \(deserializationError)");
         } catch {
-            XCTFail("unexpected error type: \(error)");
+            Issue.record("unexpected error type: \(error)");
         }
     }
 
-    func testShouldAcceptUnknownTopLevelRequestFields() throws {
+    @Test
+    func should_accept_unknown_top_level_request_fields() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
     {

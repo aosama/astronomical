@@ -1,6 +1,8 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Shared JSON-text fixture loader for the RestContract test target.
 enum RestContractTestFixture {
@@ -11,9 +13,11 @@ enum RestContractTestFixture {
 }
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_response_format.rs.
-final class ResponseFormatTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResponseFormatTests {
 
-    func testShouldAcceptJsonObjectResponseFormatOnChatCompletions() throws {
+    @Test
+    func should_accept_json_object_response_format_on_chat_completions() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -23,10 +27,11 @@ final class ResponseFormatTests: XCTestCase {
             }
             """));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.structuredOutput, .jsonObject);
+        #expect(requestParts.structuredOutput == .jsonObject);
     }
 
-    func testShouldAcceptJsonSchemaResponseFormatOnChatCompletions() throws {
+    @Test
+    func should_accept_json_schema_response_format_on_chat_completions() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -51,14 +56,15 @@ final class ResponseFormatTests: XCTestCase {
             """));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
         guard case .jsonSchema(let schemaName, _, _, let strict) = requestParts.structuredOutput else {
-            XCTFail("expected json_schema, got \(String(describing: requestParts.structuredOutput))");
+            Issue.record("expected json_schema, got \(String(describing: requestParts.structuredOutput))");
             return;
         }
-        XCTAssertEqual(schemaName, "romeo_line");
-        XCTAssertTrue(strict);
+        #expect(schemaName == "romeo_line");
+        #expect(strict);
     }
 
-    func testShouldRejectAnUnsupportedResponseFormatType() throws {
+    @Test
+    func should_reject_an_unsupported_response_format_type() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -69,16 +75,16 @@ final class ResponseFormatTests: XCTestCase {
             """));
         do {
             _ = try request.intoParts();
-            XCTFail("unsupported response_format types must fail before worker admission");
-            return;
+            Issue.record("unsupported response_format types must fail before worker admission");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertEqual(
-                validationError.errorDescription,
-                OpenAiStructuredOutputValidationError.unsupportedType(formatType: "xml").errorDescription);
+            #expect(
+                validationError.errorDescription
+                    == OpenAiStructuredOutputValidationError.unsupportedType(formatType: "xml").errorDescription);
         }
     }
 
-    func testShouldAcceptResponsesTextFormatJsonSchema() throws {
+    @Test
+    func should_accept_responses_text_format_json_schema() throws {
         let request: OpenAiResponsesRequest = try OpenAiResponsesRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -95,28 +101,31 @@ final class ResponseFormatTests: XCTestCase {
             """));
         let requestParts: OpenAiResponsesRequestParts = try request.intoParts();
         guard case .jsonSchema = requestParts.structuredOutput else {
-            XCTFail("expected json_schema from Responses text.format");
+            Issue.record("expected json_schema from Responses text.format");
             return;
         }
     }
 
-    func testShouldExtractJsonFromFencedModelTextWithoutFillingFields() throws {
-        let extractedJson: JsonWireValue = try XCTUnwrap(
+    @Test
+    func should_extract_json_from_fenced_model_text_without_filling_fields() throws {
+        let extractedJson: JsonWireValue = try #require(
             OpenAiStructuredOutput.extract_json_value_from_text(
                 "Juliet says:\n```json\n{\"speaker\":\"Juliet\",\"play\":\"Romeo and Juliet\"}\n```\n"));
-        XCTAssertEqual(
-            extractedJson,
-            try RestContractTestFixture.wireValue(
-                #"{"speaker": "Juliet", "play": "Romeo and Juliet"}"#));
-        XCTAssertNil(OpenAiStructuredOutput.compact_extracted_json_text("not json at all"));
+        #expect(
+            try extractedJson
+                == RestContractTestFixture.wireValue(
+                    #"{"speaker": "Juliet", "play": "Romeo and Juliet"}"#));
+        #expect(OpenAiStructuredOutput.compact_extracted_json_text("not json at all") == nil);
     }
 
-    func testShouldNameUnenforcedGrammarInTheWarningHeader() {
-        XCTAssertTrue(ResponseFormatConstants.UNENFORCED_RESPONSE_FORMAT_WARNING
+    @Test
+    func should_name_unenforced_grammar_in_the_warning_header() {
+        #expect(ResponseFormatConstants.UNENFORCED_RESPONSE_FORMAT_WARNING
             .contains("grammar-constrained decoding unavailable"));
     }
 
-    func testShouldAcceptStructuredOutputsChoice() throws {
+    @Test
+    func should_accept_structured_outputs_choice() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -127,12 +136,13 @@ final class ResponseFormatTests: XCTestCase {
             """));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
         guard case .choice = requestParts.enforcedStructuredGeneration else {
-            XCTFail("expected a choice-enforced generation");
+            Issue.record("expected a choice-enforced generation");
             return;
         }
     }
 
-    func testShouldEnforceStructuredOutputsRegex() throws {
+    @Test
+    func should_enforce_structured_outputs_regex() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -142,10 +152,11 @@ final class ResponseFormatTests: XCTestCase {
             }
             """));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.enforcedStructuredGeneration, .regex(pattern: "[A-Z]+"));
+        #expect(requestParts.enforcedStructuredGeneration == .regex(pattern: "[A-Z]+"));
     }
 
-    func testShouldRejectAnUncompilableRegexPattern() throws {
+    @Test
+    func should_reject_an_uncompilable_regex_pattern() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -156,15 +167,15 @@ final class ResponseFormatTests: XCTestCase {
             """));
         do {
             _ = try request.intoParts();
-            XCTFail("an uncompilable regex must fail closed");
-            return;
+            Issue.record("an uncompilable regex must fail closed");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertTrue(validationError.errorDescription?.contains("regex") == true,
+            #expect(validationError.errorDescription?.contains("regex") == true,
                 "unexpected error: \(String(describing: validationError.errorDescription))");
         }
     }
 
-    func testShouldRejectAnOversizedRegexPattern() throws {
+    @Test
+    func should_reject_an_oversized_regex_pattern() throws {
         let oversizedPattern: String = String(
             repeating: "a",
             count: OpenAiStructuredOutputs.MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES + 1);
@@ -178,15 +189,15 @@ final class ResponseFormatTests: XCTestCase {
             """));
         do {
             _ = try request.intoParts();
-            XCTFail("an oversized regex pattern must fail closed");
-            return;
+            Issue.record("an oversized regex pattern must fail closed");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertTrue(validationError.errorDescription?.contains("bounded") == true,
+            #expect(validationError.errorDescription?.contains("bounded") == true,
                 "unexpected error: \(String(describing: validationError.errorDescription))");
         }
     }
 
-    func testShouldRejectGuidedGrammarUntilEnforced() throws {
+    @Test
+    func should_reject_guided_grammar_until_enforced() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -197,15 +208,15 @@ final class ResponseFormatTests: XCTestCase {
             """));
         do {
             try request.validate();
-            XCTFail("unenforced guided_grammar must fail closed");
-            return;
+            Issue.record("unenforced guided_grammar must fail closed");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertTrue(validationError.errorDescription?.contains("guided_grammar") == true,
+            #expect(validationError.errorDescription?.contains("guided_grammar") == true,
                 "unexpected error: \(String(describing: validationError.errorDescription))");
         }
     }
 
-    func testShouldRejectStructuredOutputsAndGuidedGrammarTogether() throws {
+    @Test
+    func should_reject_structured_outputs_and_guided_grammar_together() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -217,15 +228,15 @@ final class ResponseFormatTests: XCTestCase {
             """));
         do {
             try request.validate();
-            XCTFail("both extra-body fields must fail closed");
-            return;
+            Issue.record("both extra-body fields must fail closed");
         } catch let validationError as OpenAiChatCompletionValidationError {
-            XCTAssertTrue(validationError.errorDescription?.contains("only one") == true,
+            #expect(validationError.errorDescription?.contains("only one") == true,
                 "unexpected error: \(String(describing: validationError.errorDescription))");
         }
     }
 
-    func testShouldAcceptStructuredOutputsJsonObject() throws {
+    @Test
+    func should_accept_structured_outputs_json_object() throws {
         let request: OpenAiChatCompletionRequest = try OpenAiChatCompletionRequest.decoded(
             wireValue: try RestContractTestFixture.wireValue("""
             {
@@ -235,6 +246,6 @@ final class ResponseFormatTests: XCTestCase {
             }
             """));
         let requestParts: OpenAiChatCompletionRequestParts = try request.intoParts();
-        XCTAssertEqual(requestParts.enforcedStructuredGeneration, .jsonObject);
+        #expect(requestParts.enforcedStructuredGeneration == .jsonObject);
     }
 }

@@ -1,11 +1,15 @@
-import XCTest;
+import Foundation;
 import RestContract;
 import IpcProtocol;
+import Testing;
+import JourneyCategories;
 
 /// Ported from crates/rest-contract/tests/rest_api/openai_responses_thinking_controls.rs.
-final class ResponsesThinkingControlsTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class ResponsesThinkingControlsTests {
 
-    func testShouldResolveTheReasoningObjectMaxTokensIntoTheThinkingBudget() throws {
+    @Test
+    func should_resolve_the_reasoning_object_max_tokens_into_the_thinking_budget() throws {
         let requestParts: OpenAiResponsesRequestParts = try Self.parseResponsesRequestParts("""
         {
             "model": "astronomical/fake-mixture-of-experts",
@@ -13,10 +17,11 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"max_tokens": 5000}
         }
         """);
-        XCTAssertEqual(requestParts.thinkingBudget, 5000);
+        #expect(requestParts.thinkingBudget == 5000);
     }
 
-    func testShouldResolveTheReasoningObjectEffortLevels() throws {
+    @Test
+    func should_resolve_the_reasoning_object_effort_levels() throws {
         let effortLevels: Array<(effort: String, expectedBudget: UInt32)> = [
             ("minimal", 1024),
             ("low", 2048),
@@ -33,14 +38,14 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"effort": "\(effortLevel.effort)"}
         }
         """);
-            XCTAssertEqual(
-                requestParts.thinkingBudget,
-                effortLevel.expectedBudget,
+            #expect(
+                requestParts.thinkingBudget == effortLevel.expectedBudget,
                 "reasoning.effort \(effortLevel.effort) must enforce its token budget");
         }
     }
 
-    func testShouldDisableThinkingFromEveryDisableSpelling() throws {
+    @Test
+    func should_disable_thinking_from_every_disable_spelling() throws {
         let disableSpellings: Array<String> = [
             "\"reasoning\": {\"effort\": \"none\"}",
             "\"reasoning\": {\"enabled\": false}",
@@ -56,14 +61,14 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             \(disableSpelling)
         }
         """);
-            XCTAssertEqual(
-                requestParts.thinkingBudget,
-                0,
+            #expect(
+                requestParts.thinkingBudget == 0,
                 "disable spelling \(disableSpelling) must close the thinking channel");
         }
     }
 
-    func testShouldFlagReasoningExclusionWithoutChangingTheBudget() throws {
+    @Test
+    func should_flag_reasoning_exclusion_without_changing_the_budget() throws {
         let excludedParts: OpenAiResponsesRequestParts = try Self.parseResponsesRequestParts("""
         {
             "model": "astronomical/fake-mixture-of-experts",
@@ -71,18 +76,19 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"max_tokens": 5000, "exclude": true}
         }
         """);
-        XCTAssertEqual(excludedParts.thinkingBudget, 5000);
-        XCTAssertTrue(excludedParts.reasoningExcluded);
+        #expect(excludedParts.thinkingBudget == 5000);
+        #expect(excludedParts.reasoningExcluded);
         let plainParts: OpenAiResponsesRequestParts = try Self.parseResponsesRequestParts("""
         {
             "model": "astronomical/fake-mixture-of-experts",
             "input": "Summarize this conversation."
         }
         """);
-        XCTAssertFalse(plainParts.reasoningExcluded);
+        #expect(plainParts.reasoningExcluded == false);
     }
 
-    func testShouldPreferTheTopLevelNumericBudgetOverReasoningMaxTokensConflictFree() throws {
+    @Test
+    func should_prefer_the_top_level_numeric_budget_over_reasoning_max_tokens_conflict_free() throws {
         let requestParts: OpenAiResponsesRequestParts = try Self.parseResponsesRequestParts("""
         {
             "model": "astronomical/fake-mixture-of-experts",
@@ -91,11 +97,12 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"max_tokens": 5000, "exclude": true}
         }
         """);
-        XCTAssertEqual(requestParts.thinkingBudget, 5000);
-        XCTAssertTrue(requestParts.reasoningExcluded);
+        #expect(requestParts.thinkingBudget == 5000);
+        #expect(requestParts.reasoningExcluded);
     }
 
-    func testShouldRejectDisagreeingNumericAndLevelSpellings() throws {
+    @Test
+    func should_reject_disagreeing_numeric_and_level_spellings() throws {
         // numeric vs reasoning.max_tokens
         guard case .thinkingControls(.conflictingNumericThinkingBudgets) = try Self.validateResponsesRequest("""
         {
@@ -105,7 +112,7 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"max_tokens": 5000}
         }
         """) else {
-            XCTFail("expected ConflictingNumericThinkingBudgets");
+            Issue.record("expected ConflictingNumericThinkingBudgets");
             return;
         }
         // reasoning_effort vs reasoning.effort
@@ -117,7 +124,7 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"effort": "low"}
         }
         """) else {
-            XCTFail("expected ConflictingReasoningEfforts");
+            Issue.record("expected ConflictingReasoningEfforts");
             return;
         }
         // enable flags
@@ -129,7 +136,7 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "reasoning": {"enabled": false}
         }
         """) else {
-            XCTFail("expected ConflictingThinkingEnableFlags");
+            Issue.record("expected ConflictingThinkingEnableFlags");
             return;
         }
         // disable with positive budget
@@ -141,12 +148,13 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             "thinking_budget": 5000
         }
         """) else {
-            XCTFail("expected ThinkingDisabledWhileBudgetRequested");
+            Issue.record("expected ThinkingDisabledWhileBudgetRequested");
             return;
         }
     }
 
-    func testShouldAbsorbUnknownSubfieldsOfTheReasoningObject() {
+    @Test
+    func should_absorb_unknown_subfields_of_the_reasoning_object() {
         for unknownSubfield in [
             "{\"effort\": \"low\", \"bogus\": 1}",
             "{\"bogus\": true}",
@@ -165,7 +173,7 @@ final class ResponsesThinkingControlsTests: XCTestCase {
                 _ = try OpenAiResponsesRequest.decoded(
                     wireValue: try RestContractTestFixture.wireValue(requestJson));
             } catch {
-                XCTFail("an unknown reasoning subfield must be absorbed: \(unknownSubfield)");
+                Issue.record("an unknown reasoning subfield must be absorbed: \(unknownSubfield)");
             }
         }
         let kwargsRequestJson: String = """
@@ -179,20 +187,22 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             _ = try OpenAiResponsesRequest.decoded(
                 wireValue: try RestContractTestFixture.wireValue(kwargsRequestJson));
         } catch {
-            XCTFail("unknown chat_template_kwargs entries must be absorbed");
+            Issue.record("unknown chat_template_kwargs entries must be absorbed");
         }
     }
 
-    func testShouldRejectAnUnknownReasoningEffortLabel() throws {
-        XCTAssertEqual(
+    @Test
+    func should_reject_an_unknown_reasoning_effort_label() throws {
+        #expect(
             try Self.validateResponsesRequest("""
         {
             "model": "astronomical/fake-mixture-of-experts",
             "input": "hello",
             "reasoning_effort": "turbo"
         }
-        """),
-            .thinkingControls(.unknownReasoningEffort(reasoningEffort: "turbo")));
+        """)
+                == OpenAiResponsesValidationError.thinkingControls(
+                    .unknownReasoningEffort(reasoningEffort: "turbo")));
     }
 
     private static func parseResponsesRequestParts(_ requestJson: String) throws -> OpenAiResponsesRequestParts {
@@ -205,7 +215,7 @@ final class ResponsesThinkingControlsTests: XCTestCase {
             wireValue: try RestContractTestFixture.wireValue(requestJson));
         do {
             _ = try responsesRequest.intoParts();
-            XCTFail("conflicting or invalid spellings must fail loudly");
+            Issue.record("conflicting or invalid spellings must fail loudly");
         } catch let validationError as OpenAiResponsesValidationError {
             return validationError;
         }
