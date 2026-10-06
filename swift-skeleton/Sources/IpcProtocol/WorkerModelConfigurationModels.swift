@@ -258,6 +258,15 @@ public struct WorkerQwenImage21ModelConfiguration: Equatable, Sendable {
 /// Wire shape is adjacently tagged: `kind` names the variant, `configuration`
 /// carries its payload.
 public enum WorkerModelConfiguration: Equatable, Sendable {
+
+    /// Serializes the exact wire form this policy sends to the worker; the
+    /// resolved-configuration generation digests these bytes.
+    public func serializedJsonBytes() throws -> Data {
+        var wireWriter = JsonWireWriter();
+        try wireWriter.appendValue(self.wireValue());
+        return wireWriter.serializedUtf8Bytes;
+    }
+
     case autoregressive(WorkerAutoregressiveModelConfiguration);
     case flux2Klein(WorkerFlux2KleinModelConfiguration);
     case qwenImage21(WorkerQwenImage21ModelConfiguration);

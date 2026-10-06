@@ -6,7 +6,7 @@ public enum ModelLicense: String, Equatable, Sendable {
     case qwenResearch = "qwen-research";
 
     /** SPDX-style identifier reported through configuration APIs. */
-    internal var spdxIdentifier: String {
+    public var spdxIdentifier: String {
         return self.rawValue;
     }
 }
