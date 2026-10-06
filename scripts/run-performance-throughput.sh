@@ -22,10 +22,9 @@ bounded_runner="${repository_root}/scripts/run-bounded-cargo-test.sh"
 # The ignored throughput journeys, by their exact Rust test names.
 text_journey_test_name="performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput"
 vision_journey_test_name="performance_throughput::qwen3_5_moe_vision::should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput"
-dense_mtp_journey_test_name="performance_throughput::qwen3_8_dense_mtp::should_measure_dense_mtp_prompt_processing_and_decode_throughput_with_mtp_disabled"
 
 overall_status="success"
-for test_name in "$text_journey_test_name" "$vision_journey_test_name" "$dense_mtp_journey_test_name"; do
+for test_name in "$text_journey_test_name" "$vision_journey_test_name"; do
     started_at_seconds="$(date +%s)"
     printf '%s\n' "[performance-throughput] status=start name=${test_name} started_at=$(date '+%Y-%m-%dT%H:%M:%S%z')"
     if TEST_TIMEOUT_SECONDS=120 \

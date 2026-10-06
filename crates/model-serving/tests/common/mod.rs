@@ -2,10 +2,8 @@
 mod e2e_test_model_names;
 #[allow(dead_code, unused_imports)]
 pub(crate) use e2e_test_model_names::{
-    dense_mtp_model_id, e2e_test_model_ids, flux2_klein_model_id, k2_horizon_mova_model_id,
-    laguna_xs_4bit_model_id, laguna_xs_5bit_model_id, laguna_xs_model_id,
-    large_sparse_moe_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
-    small_dense_model_id,
+    e2e_test_model_ids, flux2_klein_model_id, k2_horizon_mova_model_id, large_sparse_moe_model_id,
+    required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -31,14 +29,9 @@ pub(crate) mod generation_progress;
 #[allow(dead_code)]
 pub(crate) mod qwen3_5;
 pub(crate) mod qwen3_5_moe;
-pub(crate) mod qwen4_exp;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
 pub(crate) mod qwen_image_21;
-
-#[cfg(feature = "direct-mlx")]
-#[allow(dead_code)]
-pub(crate) mod laguna;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]

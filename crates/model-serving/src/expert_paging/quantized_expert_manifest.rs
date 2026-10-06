@@ -1,6 +1,6 @@
 //! Exact selected-expert manifests for quantized Qwen3.5-MoE MoE pages.
 //!
-//! The oQ6e artifact has a checkpoint-specific contract: each projection is
+//! Quantized checkpoints pack each projection as a U32 `weight` tensor plus
 //! represented by a packed U32 `weight` tensor plus BF16 `scales` and `biases`,
 //! and a layer's projection family may be split across shard files. This module
 //! keeps those source files explicit so native reads remain bounded and never

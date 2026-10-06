@@ -3,8 +3,7 @@ use astronomical_ipc_protocol::{
 };
 
 use crate::{
-    DeepSeekV4UnavailableGenerationProcessor, K2HorizonMoVAGenerationProcessor,
-    LagunaGenerationProcessor, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
+    K2HorizonMoVAGenerationProcessor, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
     ModelGenerationProcessor, PreparedModelGeneration, Qwen3_5GenerationProcessor,
 };
 
@@ -13,9 +12,7 @@ use super::{ModelFamilyInferenceRequest, ModelFamilyRequestOutput};
 /// Family-tagged prompt and output processor used by EngineBackedWorker.
 pub enum ModelFamilyGenerationProcessor {
     Qwen3_5(Qwen3_5GenerationProcessor),
-    Laguna(LagunaGenerationProcessor),
     K2HorizonMoVA(K2HorizonMoVAGenerationProcessor),
-    DeepSeekV4(DeepSeekV4UnavailableGenerationProcessor),
 }
 
 impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
@@ -25,9 +22,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     fn ready_event(&self) -> WorkerEvent {
         match self {
             Self::Qwen3_5(processor) => processor.ready_event(),
-            Self::Laguna(processor) => processor.ready_event(),
             Self::K2HorizonMoVA(processor) => processor.ready_event(),
-            Self::DeepSeekV4(processor) => processor.ready_event(),
         }
     }
 
@@ -47,14 +42,6 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
                         ModelFamilyRequestOutput::Qwen3_5(prepared_generation.request_output),
                     )
                 }),
-            Self::Laguna(processor) => processor
-                .prepare_chat_generation(chat_generation_command)
-                .map(|prepared_generation| {
-                    PreparedModelGeneration::new(
-                        ModelFamilyInferenceRequest::Laguna(prepared_generation.inference_request),
-                        ModelFamilyRequestOutput::Laguna(prepared_generation.request_output),
-                    )
-                }),
             Self::K2HorizonMoVA(processor) => processor
                 .prepare_chat_generation(chat_generation_command)
                 .map(|prepared_generation| {
@@ -65,27 +52,15 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
                         ModelFamilyRequestOutput::K2HorizonMoVA(prepared_generation.request_output),
                     )
                 }),
-            Self::DeepSeekV4(processor) => processor
-                .prepare_chat_generation(chat_generation_command)
-                .map(|prepared_generation| {
-                    PreparedModelGeneration::new(
-                        ModelFamilyInferenceRequest::DeepSeekV4(
-                            prepared_generation.inference_request,
-                        ),
-                        ModelFamilyRequestOutput::DeepSeekV4(prepared_generation.request_output),
-                    )
-                }),
         }
     }
 
     fn is_end_of_sequence_token(&self, generated_token_id: u32) -> bool {
         match self {
             Self::Qwen3_5(processor) => processor.is_end_of_sequence_token(generated_token_id),
-            Self::Laguna(processor) => processor.is_end_of_sequence_token(generated_token_id),
             Self::K2HorizonMoVA(processor) => {
                 processor.is_end_of_sequence_token(generated_token_id)
             }
-            Self::DeepSeekV4(processor) => processor.is_end_of_sequence_token(generated_token_id),
         }
     }
 
@@ -98,16 +73,10 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             (Self::Qwen3_5(processor), ModelFamilyRequestOutput::Qwen3_5(request_output)) => {
                 processor.translate_generated_token(request_output, generated_token_id)
             }
-            (Self::Laguna(processor), ModelFamilyRequestOutput::Laguna(request_output)) => {
-                processor.translate_generated_token(request_output, generated_token_id)
-            }
             (
                 Self::K2HorizonMoVA(processor),
                 ModelFamilyRequestOutput::K2HorizonMoVA(request_output),
             ) => processor.translate_generated_token(request_output, generated_token_id),
-            (Self::DeepSeekV4(processor), ModelFamilyRequestOutput::DeepSeekV4(request_output)) => {
-                processor.translate_generated_token(request_output, generated_token_id)
-            }
             _ => Err(ModelGenerationOutputError::Fatal {
                 reason: "model-family processor and request output do not match".to_owned(),
             }),
@@ -122,16 +91,10 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             (Self::Qwen3_5(processor), ModelFamilyRequestOutput::Qwen3_5(request_output)) => {
                 processor.finish_request_output(request_output)
             }
-            (Self::Laguna(processor), ModelFamilyRequestOutput::Laguna(request_output)) => {
-                processor.finish_request_output(request_output)
-            }
             (
                 Self::K2HorizonMoVA(processor),
                 ModelFamilyRequestOutput::K2HorizonMoVA(request_output),
             ) => processor.finish_request_output(request_output),
-            (Self::DeepSeekV4(processor), ModelFamilyRequestOutput::DeepSeekV4(request_output)) => {
-                processor.finish_request_output(request_output)
-            }
             _ => Err(ModelGenerationOutputError::Fatal {
                 reason: "model-family processor and request output do not match".to_owned(),
             }),
