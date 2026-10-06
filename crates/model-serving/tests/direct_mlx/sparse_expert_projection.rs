@@ -1,6 +1,6 @@
 //! End-to-end operations references for family-neutral sparse-expert projection.
 //!
-//! These tests deliberately avoid any Qwen or Laguna router. They start from the
+//! These tests deliberately avoid any family router. They start from the
 //! canonical arrays that every family must produce, exercise the real MLX GPU
 //! operations, and compare sorted, unsorted, dense, and affine paths. This proves
 //! that the neutral layer shares math without silently sharing family policy.

@@ -34,7 +34,7 @@ pub use sorted_expert_weighted_sum_probe::SortedExpertWeightedSumProbe;
 /// only on the GPU and operating system, never on the loaded model.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CustomMetalKernelFamily {
-    /// Sorted mixture-of-experts weighted reduction, shared by Qwen and Laguna.
+    /// Sorted mixture-of-experts weighted reduction, shared by Qwen families.
     SortedExpertWeightedSum,
     /// Fused single-token quantized expert decode for K2 Horizon MoVA.
     FusedQuantizedExpertDecode,

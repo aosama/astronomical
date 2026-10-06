@@ -13,9 +13,8 @@ use astronomical_mlx_c_rust::MlxArray;
 /// Builds one lazy sampled token using a fully GPU-resident top-k + top-p pipeline.
 ///
 /// `logits` must have shape `[1, 1, vocabulary]`. `top_k = None` means no k-truncation:
-/// with `top_p >= 1.0` this is temperature scaling plus `categorical` over the full row,
-/// which is the published Laguna 6-bit generation_config (temperature 1.0, top_p 1.0,
-/// omitted top_k).
+/// with `top_p >= 1.0` this is temperature scaling plus `categorical` over the
+/// full row (temperature 1.0, top_p 1.0, omitted top_k).
 pub(crate) fn build_sampled_token(
     runtime: &MlxRuntime,
     logits: &MlxArray,

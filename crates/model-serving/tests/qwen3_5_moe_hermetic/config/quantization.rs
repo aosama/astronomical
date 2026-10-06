@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use crate::common::qwen3_5_moe::{
     frozen_ornith_1_0_config_bytes, frozen_ornith_1_0_optiq_config_bytes,
-    frozen_qwen3_8_distill_config_bytes,
+    frozen_sparse_mixed_precision_config_bytes,
 };
 
 #[test]
@@ -140,10 +140,10 @@ fn should_not_hide_missing_scales_when_affine_biases_are_present() {
 }
 
 #[test]
-fn should_parse_the_qwen_3_8_distill_sparse_mixed_precision_quantization_config() {
-    let config_bytes = frozen_qwen3_8_distill_config_bytes();
+fn should_parse_the_sparse_mixed_precision_quantization_config() {
+    let config_bytes = frozen_sparse_mixed_precision_config_bytes();
     let config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the frozen Qwen 3.8 distill config should parse");
+        .expect("the frozen sparse mixed-precision config should parse");
 
     assert_eq!(config.default_quantization_bits(), 6);
     assert_eq!(config.default_quantization_group_size(), 64);
@@ -190,10 +190,10 @@ fn should_parse_the_qwen_3_8_distill_sparse_mixed_precision_quantization_config(
 }
 
 #[test]
-fn should_resolve_the_qwen_3_8_distill_router_as_unquantized() {
-    let config_bytes = frozen_qwen3_8_distill_config_bytes();
+fn should_resolve_the_sparse_override_router_as_unquantized() {
+    let config_bytes = frozen_sparse_mixed_precision_config_bytes();
     let mut config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the frozen Qwen 3.8 distill config should parse");
+        .expect("the frozen sparse mixed-precision config should parse");
 
     // The artifact stores the router gates and the normalization weights as
     // plain native tensors with no scales or biases.

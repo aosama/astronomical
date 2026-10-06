@@ -22,9 +22,9 @@ function createTypingSession() {
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/example-laguna",
-                display_name: "Example laguna",
-                family: "laguna"
+                huggingface_id: "astronomical-test/example-k2",
+                display_name: "Example k2",
+                family: "k2_horizon_mova"
             })
         ]
     };
@@ -112,9 +112,9 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
         entries: [
             validCatalogEntry({ display_name: "First", approximate_size_bytes: 1_500_000_000 }),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/example-laguna",
+                huggingface_id: "astronomical-test/example-k2",
                 display_name: "Second",
-                family: "laguna",
+                family: "k2_horizon_mova",
                 approximate_size_bytes: 2_000_000_000
             })
         ]
@@ -136,7 +136,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             destinationDirectory: null,
             downloadState: null,
             description: "A test model for exercising Library rendering.",
-            quantizationLabel: "oQ6e (6-bit enhanced)",
+            quantizationLabel: "6-bit affine (group 64)",
             architectureSummary: "Test architecture",
             upstreamLicense: "MIT",
             requestableModelId: null,
@@ -149,16 +149,16 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             maxOutputTokens: 4096
         },
         {
-            huggingfaceId: "astronomical-test/example-laguna",
+            huggingfaceId: "astronomical-test/example-k2",
             displayName: "Second",
-            family: "laguna",
+            family: "k2_horizon_mova",
             approximateSize: "2.00 GB",
             approximateSizeBytes: 2_000_000_000,
             readyOnThisMac: false,
             destinationDirectory: null,
             downloadState: null,
             description: "A test model for exercising Library rendering.",
-            quantizationLabel: "oQ6e (6-bit enhanced)",
+            quantizationLabel: "6-bit affine (group 64)",
             architectureSummary: "Test architecture",
             upstreamLicense: "MIT",
             requestableModelId: null,
@@ -343,8 +343,8 @@ test("renders daemon-authored catalog families without a client allowlist", () =
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/example-laguna",
-                family: "laguna"
+                huggingface_id: "astronomical-test/example-k2",
+                family: "k2_horizon_mova"
             }),
             validCatalogEntry({
                 huggingface_id: "astronomical-test/example-flux",
@@ -365,13 +365,13 @@ test("renders daemon-authored catalog families without a client allowlist", () =
     assert.equal(renderedState, "ready");
     assert.deepEqual(
         JSON.parse(JSON.stringify(catalogRows.map((catalogRow) => catalogRow.family))),
-        ["qwen3_5", "laguna", "flux2_klein"]
+        ["qwen3_5", "k2_horizon_mova", "flux2_klein"]
     );
     const filterBar = libraryDocument.catalogContainer.children[2];
     const familyFilter = filterBar.children[2];
     assert.deepEqual(
         familyFilter.children.map((option) => option.value),
-        ["all", "qwen3_5", "laguna", "flux2_klein"]
+        ["all", "qwen3_5", "k2_horizon_mova", "flux2_klein"]
     );
 });
 
