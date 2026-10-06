@@ -1,7 +1,7 @@
 import Foundation;
 
 /** Complete writable path and endpoint boundary for one Astronomical instance. */
-public struct AstronomicalInstancePaths: Equatable {
+public struct AstronomicalInstancePaths: Equatable, Sendable {
     private static let STABLE_STATE_DIRECTORY_NAME: String = ".astronomical";
     private static let DEVELOPMENT_STATE_DIRECTORY_NAME: String = ".astronomical-dev";
     // App Store channel state roots. Sandboxed apps may write only inside

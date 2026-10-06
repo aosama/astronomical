@@ -1,5 +1,6 @@
 import Foundation;
 
+import AstronomicalConfig;
 import IpcProtocol;
 import RestContract;
 
@@ -33,15 +34,33 @@ public enum RestEndpointRoutes {
     }
 
     /// The serving route table: the foundation probes plus the model
-    /// advertisement and cache statistic endpoints built from the resolved
-    /// runtime configuration and the worker health state.
+    /// advertisement, cache statistics, and instance status endpoints built
+    /// from the resolved runtime configuration and the worker health state.
+    /// Until the config-reload slice lands, one resolved snapshot is both the
+    /// configured and the resolved view; the status contract already keeps
+    /// them apart so reload only rewires this call.
     public static func servingRouteTable(
         resolvedRuntimeConfig: ResolvedRuntimeConfig,
-        workerHealthState: WorkerHealthState
+        workerHealthState: WorkerHealthState,
+        instancePaths: AstronomicalInstancePaths,
+        buildIdentity: ApplicationBuildIdentity,
+        configurationValidationError: String? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
         });
+        routeTable.register(
+            method: "GET",
+            path: "/v1/status",
+            handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                return try RestStatusResponse.statusResponse(
+                    configuredRuntimeConfig: resolvedRuntimeConfig,
+                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    workerHealthSnapshot: workerHealthState.currentSnapshot(),
+                    configurationValidationError: configurationValidationError,
+                    instancePaths: instancePaths,
+                    buildIdentity: buildIdentity);
+            });
         routeTable.register(
             method: "GET",
             path: "/v1/models",
