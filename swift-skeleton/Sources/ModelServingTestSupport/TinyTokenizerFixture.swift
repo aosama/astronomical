@@ -28,7 +28,10 @@ public enum TinyTokenizerFixture {
     private static let characterTokenIdBase: Int = 100;
 
     /// Vocabulary: control markers at their fixed ids, fixture words at
-    /// 20+, the unknown fallback, and one id per distinct character.
+    /// 20+, the unknown fallback, and one id per distinct character; the
+    /// computed fillers keep every id from zero through the character block
+    /// mapped, because the upstream grammar-vocab extraction walks ids from
+    /// zero and stops at the first unmapped id.
     public static func vocabulary() -> [String: Int] {
         var vocabulary: [String: Int] = [:];
         for (tokenId, tokenText) in addedTokens {
@@ -44,6 +47,19 @@ public enum TinyTokenizerFixture {
         for characterText: String in distinctCharacters() {
             vocabulary[characterText] = nextCharacterTokenId;
             nextCharacterTokenId += 1;
+        }
+        let highestMappedTokenId: Int = max(unknownTokenId, nextCharacterTokenId - 1);
+        var mappedTokenIds: Set<Int> = Set(vocabulary.values);
+        var fillerTokenId: Int = 0;
+        for candidateTokenId: Int in 0...highestMappedTokenId {
+            if mappedTokenIds.contains(candidateTokenId) {
+                continue;
+            }
+            while mappedTokenIds.contains(fillerTokenId) {
+                fillerTokenId += 1;
+            }
+            vocabulary["<|filler_\(fillerTokenId)|>"] = candidateTokenId;
+            mappedTokenIds.insert(candidateTokenId);
         }
         return vocabulary;
     }
