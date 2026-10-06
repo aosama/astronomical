@@ -13,19 +13,14 @@ public enum Qwen35ArtifactInventory {
             try Qwen35ArtifactInventory.sourceIdByFileName(shardIndex: shardIndex);
 
         let inventory: TensorInventory = TensorInventory();
-        var declarations: Array<(canonicalName: String, shardFileName: String, semanticRole: TensorSemanticRole, feature: TensorFeature?)> = Array();
+        var declarations: Array<(canonicalName: String, shardFileName: String, semanticRole: TensorSemanticRole)> = Array();
         for declaration: (tensorName: String, shardFileName: String) in shardIndex.languageTensorNameToShardFileName() {
-            declarations.append((declaration.tensorName, declaration.shardFileName, .target, nil));
-        }
-        for declaration: (tensorName: String, shardFileName: String) in shardIndex.mtpTensorNameToShardFileName() {
-            declarations.append(
-                (declaration.tensorName, declaration.shardFileName, .multiTokenPrediction,
-                 .multiTokenPrediction));
+            declarations.append((declaration.tensorName, declaration.shardFileName, .target));
         }
         for declaration: (tensorName: String, shardFileName: String) in shardIndex.visionTensorNameToShardFileName() {
-            declarations.append((declaration.tensorName, declaration.shardFileName, .vision, nil));
+            declarations.append((declaration.tensorName, declaration.shardFileName, .vision));
         }
-        for declaration: (canonicalName: String, shardFileName: String, semanticRole: TensorSemanticRole, feature: TensorFeature?) in declarations {
+        for declaration: (canonicalName: String, shardFileName: String, semanticRole: TensorSemanticRole) in declarations {
             guard let sourceId: TensorSourceId = sourceIdByFileName[declaration.shardFileName] else {
                 throw ArtifactValidationError.profileMissingRequiredFile(
                     fileName: declaration.shardFileName);
@@ -36,8 +31,7 @@ public enum Qwen35ArtifactInventory {
                     storedName: declaration.canonicalName,
                     sourceId: sourceId,
                     semanticRole: declaration.semanticRole,
-                    declarationOrigin: .mainIndex,
-                    feature: declaration.feature));
+                    declarationOrigin: .mainIndex));
             } catch {
                 throw ArtifactValidationError.unexpectedTensor(tensorName: declaration.canonicalName);
             }
@@ -54,9 +48,6 @@ public enum Qwen35ArtifactInventory {
         var sourceIdByFileName: Dictionary<String, TensorSourceId> = Dictionary();
         var uniqueFileNames: Set<String> = Set();
         for declaration: (tensorName: String, shardFileName: String) in shardIndex.languageTensorNameToShardFileName() {
-            uniqueFileNames.insert(declaration.shardFileName);
-        }
-        for declaration: (tensorName: String, shardFileName: String) in shardIndex.mtpTensorNameToShardFileName() {
             uniqueFileNames.insert(declaration.shardFileName);
         }
         for declaration: (tensorName: String, shardFileName: String) in shardIndex.visionTensorNameToShardFileName() {
