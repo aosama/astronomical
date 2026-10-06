@@ -19,9 +19,11 @@ public enum RestRouteOutcome: Sendable {
 public struct RestRouteTable: Sendable {
 
     private var handlersByPathThenMethod: Dictionary<String, Dictionary<String, RestEndpointHandler>>;
+    private var handlersByPathPrefix: Array<(pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>)>;
 
     public init() {
         self.handlersByPathThenMethod = Dictionary();
+        self.handlersByPathPrefix = Array();
     }
 
     public mutating func register(
@@ -35,10 +37,50 @@ public struct RestRouteTable: Sendable {
         self.handlersByPathThenMethod[path] = handlersByMethod;
     }
 
-    public func outcome(method: String, path: String) -> RestRouteOutcome {
-        guard let handlersByMethod: Dictionary<String, RestEndpointHandler> = self.handlersByPathThenMethod[path] else {
-            return .notFound;
+    /// Registers a handler for every path under the given prefix, for the
+    /// routes that carry a variable tail (for example `/v1/models/{id}`).
+    public mutating func registerPrefix(
+        method: String,
+        pathPrefix: String,
+        handler: @escaping RestEndpointHandler
+    ) -> Void {
+        var prefixHandlers: Array<(pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>)> = self.handlersByPathPrefix;
+        if let existingIndex: Array<(pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>)>.Index = prefixHandlers.firstIndex(where: { (entry: (pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>)) -> Bool in
+            return entry.pathPrefix == pathPrefix;
+        }) {
+            var handlersByMethod: Dictionary<String, RestEndpointHandler> = prefixHandlers[existingIndex].handlersByMethod;
+            handlersByMethod[method.uppercased()] = handler;
+            prefixHandlers[existingIndex] = (pathPrefix, handlersByMethod);
+        } else {
+            prefixHandlers.append((pathPrefix, [method.uppercased(): handler]));
         }
+        self.handlersByPathPrefix = prefixHandlers;
+    }
+
+    public func outcome(method: String, path: String) -> RestRouteOutcome {
+        if let handlersByMethod: Dictionary<String, RestEndpointHandler> = self.handlersByPathThenMethod[path] {
+            return self.methodOutcome(handlersByMethod: handlersByMethod, method: method);
+        }
+        // Longest registered prefix wins so nested prefixes stay exact.
+        var bestMatch: (pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>)?;
+        for prefixEntry: (pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>) in self.handlersByPathPrefix {
+            guard path.hasPrefix(prefixEntry.pathPrefix) else {
+                continue;
+            }
+            if bestMatch == nil || prefixEntry.pathPrefix.count > bestMatch!.pathPrefix.count {
+                bestMatch = prefixEntry;
+            }
+        }
+        if let matchedPrefix: (pathPrefix: String, handlersByMethod: Dictionary<String, RestEndpointHandler>) = bestMatch {
+            return self.methodOutcome(handlersByMethod: matchedPrefix.handlersByMethod, method: method);
+        }
+        return .notFound;
+    }
+
+    private func methodOutcome(
+        handlersByMethod: Dictionary<String, RestEndpointHandler>,
+        method: String
+    ) -> RestRouteOutcome {
         guard let matchedHandler: RestEndpointHandler = handlersByMethod[method.uppercased()] else {
             return .methodNotAllowed(allowedMethods: handlersByMethod.keys.sorted());
         }

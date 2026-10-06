@@ -1,9 +1,9 @@
 import Foundation;
 
 /// Model identifier helpers, porting crates/config/src/model_identity.rs.
-internal enum ModelIdentity {
+public enum ModelIdentity {
 
-    internal static func resolveModelId(requestedModelId: String, knownModelIds: Array<String>) -> String {
+    public static func resolveModelId(requestedModelId: String, knownModelIds: Array<String>) -> String {
         if knownModelIds.contains(requestedModelId) {
             return requestedModelId;
         }

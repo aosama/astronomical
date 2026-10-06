@@ -84,9 +84,9 @@ struct AstronomicalDaemonMain {
         do {
             restServer = try RestHttpServer.start(
                 bindEndpoint: resolvedRuntimeConfig.bindEndpoint,
-                routeTable: RestEndpointRoutes.foundationRouteTable(readinessProvider: {
-                    return workerHealthState.currentSnapshot().status;
-                }));
+                routeTable: RestEndpointRoutes.servingRouteTable(
+                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    workerHealthState: workerHealthState));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);

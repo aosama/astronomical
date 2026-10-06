@@ -3,7 +3,7 @@ import Foundation;
 /// Prompt-cache directory layout and size conversion, porting
 /// crates/config/src/prompt_cache_config.rs plus the
 /// prompt_cache_size_gb_to_bytes conversion from crates/config/src/lib.rs.
-public struct PromptCacheConfig: Equatable {
+public struct PromptCacheConfig: Equatable, Sendable {
 
     public let globalPromptCacheRootDirectory: FilePath;
     public let activeModelPromptCacheDirectory: FilePath;
