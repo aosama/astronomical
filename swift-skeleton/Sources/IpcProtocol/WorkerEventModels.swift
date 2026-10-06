@@ -164,10 +164,7 @@ public enum WorkerEvent: Equatable {
     /// Reports that the configured model finished loading.
     case ready(
         modelId: String,
-        capabilities: WorkerModelCapabilities,
-        mtpRuntimeState: MtpRuntimeState,
-        mtpUnavailableReason: String?,
-        mtpDepthStatus: MtpDepthStatus);
+        capabilities: WorkerModelCapabilities);
     /// Delivers one or more ordered model outputs in a single frame.
     case output(
         requestId: RequestId,
@@ -222,10 +219,7 @@ public enum WorkerEvent: Equatable {
         modelId: String,
         capabilities: WorkerModelCapabilities,
         expertMemoryMode: ExpertMemoryMode?,
-        minimumMlxMemoryCeilingBytes: UInt64,
-        mtpRuntimeState: MtpRuntimeState,
-        mtpUnavailableReason: String?,
-        mtpDepthStatus: MtpDepthStatus);
+        minimumMlxMemoryCeilingBytes: UInt64);
     /// Reports that a model swap failed while the worker process remained responsive.
     case modelSwapFailed(loadedModelRemainsReady: Bool, modelLoadFailureReason: String);
     /// Reports cumulative persistent prompt-cache observability counters and disk footprint.

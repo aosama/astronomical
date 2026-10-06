@@ -5,7 +5,7 @@ import Foundation;
 /// crates/model-serving/src/qwen3_5/artifacts/artifact_inventory.rs.
 public enum Qwen35ArtifactInventory {
 
-    /// Canonical locations for every language, MTP, and vision tensor the
+    /// Canonical locations for every language and vision tensor the
     /// main index declares, all owned by the main-index declaration origin.
     public static func buildIndexTensorInventory(
         shardIndex: Qwen3_5ShardIndex) throws -> TensorInventory {

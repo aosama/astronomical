@@ -191,21 +191,6 @@ public struct OptiQQuantizationConfig: Equatable {
         return SortedModuleProfiles(entries: resolvedProfiles);
     }
 
-    /// Returns the artifact-declared quantization profiles for optional MTP modules.
-    public func mtpQuantizedModuleProfiles() -> SortedModuleProfiles {
-        var mtpProfiles: Array<(moduleName: String, profile: OptiQQuantizationProfile)> = Array();
-        for moduleOverride: (moduleName: String, overrideValue: OptiQQuantizationOverride) in self.moduleOverrides {
-            if moduleOverride.moduleName.hasPrefix("language_model.mtp.") {
-                mtpProfiles.append((
-                    moduleOverride.moduleName,
-                    OptiQQuantizationProfile(
-                        bits: moduleOverride.overrideValue.bits,
-                        groupSize: moduleOverride.overrideValue.groupSize)));
-            }
-        }
-        return SortedModuleProfiles(entries: mtpProfiles);
-    }
-
     private static func expectedQuantizedModuleNames(
         configSource: QuantizationConfigSource,
         feedForwardArchitecture: Qwen3_5FeedForwardArchitecture) -> Array<String> {

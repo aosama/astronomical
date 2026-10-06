@@ -88,13 +88,10 @@ extension WorkerEvent {
                 wireObject.appendEntry(key: "elapsed_millis", value: .unsignedInteger(elapsedMillis));
                 wireObject.appendEntry(key: "mlx_memory_snapshot", value: WorkerEventWireValues.optionalMlxMemorySnapshotWireValue(mlxMemorySnapshot));
             });
-        case let .ready(modelId, capabilities, mtpRuntimeState, mtpUnavailableReason, mtpDepthStatus):
+        case let .ready(modelId, capabilities):
             return WorkerEvent.taggedWireObject(variantName: "ready", fieldAppender: { (wireObject: inout JsonWireObject) in
                 wireObject.appendEntry(key: "model_id", value: .string(modelId));
                 wireObject.appendEntry(key: "capabilities", value: capabilities.wireValue());
-                wireObject.appendEntry(key: "mtp_runtime_state", value: mtpRuntimeState.wireValue());
-                wireObject.appendEntry(key: "mtp_unavailable_reason", value: WorkerEventWireValues.optionalStringWireValue(mtpUnavailableReason));
-                wireObject.appendEntry(key: "mtp_depth_status", value: mtpDepthStatus.wireValue());
             });
         case let .output(requestId, sequenceNumber, generatedTokenCount, outputs, mlxMemorySnapshot, expertResidency):
             return WorkerEvent.taggedWireObject(variantName: "output", fieldAppender: { (wireObject: inout JsonWireObject) in
@@ -159,15 +156,12 @@ extension WorkerEvent {
                 wireObject.appendEntry(key: "request_id", value: requestId.wireValue());
                 wireObject.appendEntry(key: "reason", value: reason.wireValue());
             });
-        case let .modelSwapped(modelId, capabilities, expertMemoryMode, minimumMlxMemoryCeilingBytes, mtpRuntimeState, mtpUnavailableReason, mtpDepthStatus):
+        case let .modelSwapped(modelId, capabilities, expertMemoryMode, minimumMlxMemoryCeilingBytes):
             return WorkerEvent.taggedWireObject(variantName: "model_swapped", fieldAppender: { (wireObject: inout JsonWireObject) in
                 wireObject.appendEntry(key: "model_id", value: .string(modelId));
                 wireObject.appendEntry(key: "capabilities", value: capabilities.wireValue());
                 wireObject.appendEntry(key: "expert_memory_mode", value: WorkerEventWireValues.optionalExpertMemoryModeWireValue(expertMemoryMode));
                 wireObject.appendEntry(key: "minimum_mlx_memory_ceiling_bytes", value: .unsignedInteger(minimumMlxMemoryCeilingBytes));
-                wireObject.appendEntry(key: "mtp_runtime_state", value: mtpRuntimeState.wireValue());
-                wireObject.appendEntry(key: "mtp_unavailable_reason", value: WorkerEventWireValues.optionalStringWireValue(mtpUnavailableReason));
-                wireObject.appendEntry(key: "mtp_depth_status", value: mtpDepthStatus.wireValue());
             });
         case let .modelSwapFailed(loadedModelRemainsReady, modelLoadFailureReason):
             return WorkerEvent.taggedWireObject(variantName: "model_swap_failed", fieldAppender: { (wireObject: inout JsonWireObject) in

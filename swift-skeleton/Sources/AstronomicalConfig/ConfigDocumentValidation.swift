@@ -96,6 +96,12 @@ internal enum ConfigDocumentValidation {
                 if removeNestedObjectField(configJson: &modelObject, containerFieldName: "acceleration", fieldName: "speculative_prefill") {
                     removedForModel = true;
                 }
+                // A retired member leaves an empty retired container behind;
+                // strict parsing rejects unknown fields, so drop it too.
+                if (modelObject["acceleration"] as? Dictionary<String, Any>)?.isEmpty == true {
+                    modelObject.removeValue(forKey: "acceleration");
+                    removedForModel = true;
+                }
                 if removedForModel {
                     modelsObject[modelId] = modelObject;
                     removedAnyRetiredField = true;
