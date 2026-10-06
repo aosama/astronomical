@@ -1,5 +1,9 @@
 import Foundation;
-import XCTest;
+
+import Testing;
+
+import JourneyCategories;
+
 @testable import AstronomicalConfig;
 
 /**
@@ -8,7 +12,8 @@ import XCTest;
  * prepare step and an all-or-nothing commit that refuses to clobber a config
  * changed underneath it.
  */
-final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
+@Suite(.tags(.hermeticJourney))
+final class AstronomicalMaximumMlxMemoryTests {
     private static let MINIMAL_VALID_CONFIG_JSON: String =
         "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,\"runtime\":{\"model_directories\":[]}}";
     private static let CONFIG_FILE_NAME: String = "config.json";
@@ -17,18 +22,10 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
 
     private var temporaryDirectoryFixture: TemporaryDirectoryFixture?;
 
-    override func tearDown() {
-        guard let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture else {
-            super.tearDown();
-            return;
+    deinit {
+        if let fixture: TemporaryDirectoryFixture = self.temporaryDirectoryFixture {
+            try? fixture.destroy();
         }
-        do {
-            try fixture.destroy();
-        } catch {
-            XCTFail("temporary directory should be removed: \(error)");
-        }
-        self.temporaryDirectoryFixture = nil;
-        super.tearDown();
     }
 
     private func makeTemporaryDirectoryFixture() throws -> TemporaryDirectoryFixture {
@@ -58,7 +55,7 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
         let configBytes: Data = try self.readFileBytes(atPath: configFilePath);
         let parsedConfigValue: Any = try JSONSerialization.jsonObject(with: configBytes, options: []);
         guard let configJson: Dictionary<String, Any> = parsedConfigValue as? Dictionary<String, Any> else {
-            XCTFail("config.json should hold a JSON object");
+            Issue.record("config.json should hold a JSON object");
             return Dictionary<String, Any>();
         }
         return configJson;
@@ -67,42 +64,52 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
     private func readRuntimeJsonDictionary(stateDirectory: FilePath) throws -> Dictionary<String, Any> {
         let configJson: Dictionary<String, Any> = try self.readConfigJsonDictionary(stateDirectory: stateDirectory);
         guard let runtimeJson: Dictionary<String, Any> = configJson["runtime"] as? Dictionary<String, Any> else {
-            XCTFail("config.json should hold a runtime object");
+            Issue.record("config.json should hold a runtime object");
             return Dictionary<String, Any>();
         }
         return runtimeJson;
     }
 
-    func testShouldConvertPositiveDecimalGigabytesToExactDecimalBytes() throws -> Void {
+    @Test
+    func should_convert_positive_decimal_gigabytes_to_exact_decimal_bytes() throws -> Void {
         let oneGigabyteBytes: UInt64 = try MaximumMlxMemory.maximumMlxMemoryGbToBytes(1);
         let twelveGigabyteBytes: UInt64 = try MaximumMlxMemory.maximumMlxMemoryGbToBytes(12);
-        XCTAssertEqual(oneGigabyteBytes, 1_000_000_000, "end-user memory values are decimal SI gigabytes");
-        XCTAssertEqual(twelveGigabyteBytes, 12_000_000_000);
+        #expect(oneGigabyteBytes == 1_000_000_000, "end-user memory values are decimal SI gigabytes");
+        #expect(twelveGigabyteBytes == 12_000_000_000);
     }
 
-    func testShouldRejectAZeroGigabyteSetting() throws -> Void {
-        XCTAssertThrowsError(try MaximumMlxMemory.maximumMlxMemoryGbToBytes(0)) { (thrownError: Error) in
-            guard case AstronomicalConfigError.invalidMaximumMlxMemoryGb = thrownError else {
-                XCTFail("expected invalidMaximumMlxMemoryGb, got \(thrownError)");
+    @Test
+    func should_reject_a_zero_gigabyte_setting() throws -> Void {
+        do {
+            _ = try MaximumMlxMemory.maximumMlxMemoryGbToBytes(0);
+            Issue.record("expected invalidMaximumMlxMemoryGb");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.invalidMaximumMlxMemoryGb = configError else {
+                Issue.record(Comment(stringLiteral: "expected invalidMaximumMlxMemoryGb, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldRejectAGigabyteSettingBeyondTheUnsignedByteRange() throws -> Void {
+    @Test
+    func should_reject_a_gigabyte_setting_beyond_the_unsigned_byte_range() throws -> Void {
         // 18_446_744_073 gigabytes still fits in 64 bits; one more gigabyte
         // overflows UInt64.max = 18_446_744_073_709_551_615 bytes.
         let largestFittingGigabytes: UInt64 = try MaximumMlxMemory.maximumMlxMemoryGbToBytes(18_446_744_073);
-        XCTAssertEqual(largestFittingGigabytes, 18_446_744_073_000_000_000);
-        XCTAssertThrowsError(try MaximumMlxMemory.maximumMlxMemoryGbToBytes(18_446_744_074)) { (thrownError: Error) in
-            guard case AstronomicalConfigError.invalidMaximumMlxMemoryGb = thrownError else {
-                XCTFail("expected invalidMaximumMlxMemoryGb, got \(thrownError)");
+        #expect(largestFittingGigabytes == 18_446_744_073_000_000_000);
+        do {
+            _ = try MaximumMlxMemory.maximumMlxMemoryGbToBytes(18_446_744_074);
+            Issue.record("expected invalidMaximumMlxMemoryGb");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.invalidMaximumMlxMemoryGb = configError else {
+                Issue.record(Comment(stringLiteral: "expected invalidMaximumMlxMemoryGb, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldPersistTheOverrideIntoAFirstRunConfigFile() throws -> Void {
+    @Test
+    func should_persist_the_override_into_a_first_run_config_file() throws -> Void {
         let stateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let stateDirectory: FilePath = stateDirectoryFixture.rootDirectoryPath;
 
@@ -110,20 +117,21 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
             stateDirectory: stateDirectory,
             maximumMlxMemoryGb: 24
         );
-        XCTAssertEqual(configUpdate.priorConfigBytes, nil, "first run has no prior config document");
+        #expect(configUpdate.priorConfigBytes == nil, "first run has no prior config document");
 
         let runtimeJson: Dictionary<String, Any> = try self.readRuntimeJsonDictionary(stateDirectory: stateDirectory);
-        XCTAssertEqual(runtimeJson["maximum_mlx_memory_gb"] as? UInt64, 24);
+        #expect(runtimeJson["maximum_mlx_memory_gb"] as? UInt64 == 24);
         let adjacentSchemaPath: FilePath = stateDirectory.appending(
             component: AstronomicalMaximumMlxMemoryTests.CONFIG_SCHEMA_FILE_NAME
         );
-        XCTAssertTrue(
+        #expect(
             FileManager.default.fileExists(atPath: adjacentSchemaPath.string),
             "the schema should be written beside the first-run config document"
         );
     }
 
-    func testShouldReplaceAndClearTheOverrideOnAnExistingV1Config() throws -> Void {
+    @Test
+    func should_replace_and_clear_the_override_on_an_existing_v1_config() throws -> Void {
         let stateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let stateDirectory: FilePath = stateDirectoryFixture.rootDirectoryPath;
         try self.writeFile(
@@ -131,40 +139,42 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
             toPath: stateDirectory.appending(component: AstronomicalMaximumMlxMemoryTests.CONFIG_FILE_NAME)
         );
 
-        let _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: 8);
+        _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: 8);
         let replacedRuntimeJson: Dictionary<String, Any> = try self.readRuntimeJsonDictionary(stateDirectory: stateDirectory);
-        XCTAssertEqual(replacedRuntimeJson["maximum_mlx_memory_gb"] as? UInt64, 8);
-        XCTAssertEqual(replacedRuntimeJson["model_directories"] as? Array<String>, Array<String>());
+        #expect(replacedRuntimeJson["maximum_mlx_memory_gb"] as? UInt64 == 8);
+        #expect(replacedRuntimeJson["model_directories"] as? Array<String> == Array<String>());
 
-        let _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: nil);
+        _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: nil);
         let clearedRuntimeJson: Dictionary<String, Any> = try self.readRuntimeJsonDictionary(stateDirectory: stateDirectory);
-        XCTAssertFalse(
-            clearedRuntimeJson.keys.contains("maximum_mlx_memory_gb"),
+        #expect(
+            !clearedRuntimeJson.keys.contains("maximum_mlx_memory_gb"),
             "clearing the override should omit the key rather than persist a null"
         );
-        XCTAssertEqual(clearedRuntimeJson["model_directories"] as? Array<String>, Array<String>());
+        #expect(clearedRuntimeJson["model_directories"] as? Array<String> == Array<String>());
     }
 
-    func testShouldMigrateALegacyConfigAndKeepTheLegacyBackup() throws -> Void {
+    @Test
+    func should_migrate_a_legacy_config_and_keep_the_legacy_backup() throws -> Void {
         let stateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let stateDirectory: FilePath = stateDirectoryFixture.rootDirectoryPath;
         let configFilePath: FilePath = stateDirectory.appending(component: AstronomicalMaximumMlxMemoryTests.CONFIG_FILE_NAME);
         try self.writeFile("{}", toPath: configFilePath);
 
-        let _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: 16);
+        _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: 16);
 
         let configJson: Dictionary<String, Any> = try self.readConfigJsonDictionary(stateDirectory: stateDirectory);
-        XCTAssertEqual(configJson["schema_version"] as? Int, 1, "the legacy document should migrate to schema v1");
+        #expect(configJson["schema_version"] as? Int == 1, "the legacy document should migrate to schema v1");
         let runtimeJson: Dictionary<String, Any> = try self.readRuntimeJsonDictionary(stateDirectory: stateDirectory);
-        XCTAssertEqual(runtimeJson["maximum_mlx_memory_gb"] as? UInt64, 16);
+        #expect(runtimeJson["maximum_mlx_memory_gb"] as? UInt64 == 16);
         let legacyBackupPath: FilePath = stateDirectory.appending(
             component: AstronomicalMaximumMlxMemoryTests.LEGACY_BACKUP_FILE_NAME
         );
         let legacyBackupBytes: Data = try self.readFileBytes(atPath: legacyBackupPath);
-        XCTAssertEqual(legacyBackupBytes, Data("{}".utf8), "the backup should hold the exact legacy document");
+        #expect(legacyBackupBytes == Data("{}".utf8), "the backup should hold the exact legacy document");
     }
 
-    func testShouldRefuseToCommitWhenTheConfigChangedDuringPrepare() throws -> Void {
+    @Test
+    func should_refuse_to_commit_when_the_config_changed_during_prepare() throws -> Void {
         let stateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let stateDirectory: FilePath = stateDirectoryFixture.rootDirectoryPath;
         let configFilePath: FilePath = stateDirectory.appending(component: AstronomicalMaximumMlxMemoryTests.CONFIG_FILE_NAME);
@@ -182,17 +192,19 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
             toPath: configFilePath
         );
 
-        XCTAssertThrowsError(
-            try MaximumMlxMemory.commitMaximumMlxMemoryGbUpdate(stateDirectory: stateDirectory, configUpdate: configUpdate)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.configChangedDuringUpdate = thrownError else {
-                XCTFail("expected configChangedDuringUpdate, got \(thrownError)");
+        do {
+            _ = try MaximumMlxMemory.commitMaximumMlxMemoryGbUpdate(stateDirectory: stateDirectory, configUpdate: configUpdate);
+            Issue.record("expected configChangedDuringUpdate");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.configChangedDuringUpdate = configError else {
+                Issue.record(Comment(stringLiteral: "expected configChangedDuringUpdate, got \(configError)"));
                 return;
             }
         }
     }
 
-    func testShouldLeaveTheConfigUntouchedWhenTheGigabyteSettingIsInvalid() throws -> Void {
+    @Test
+    func should_leave_the_config_untouched_when_the_gigabyte_setting_is_invalid() throws -> Void {
         let stateDirectoryFixture: TemporaryDirectoryFixture = try self.makeTemporaryDirectoryFixture();
         let stateDirectory: FilePath = stateDirectoryFixture.rootDirectoryPath;
         let configFilePath: FilePath = stateDirectory.appending(component: AstronomicalMaximumMlxMemoryTests.CONFIG_FILE_NAME);
@@ -202,17 +214,17 @@ final class AstronomicalMaximumMlxMemoryTests: XCTestCase {
         );
         let originalConfigBytes: Data = try self.readFileBytes(atPath: configFilePath);
 
-        XCTAssertThrowsError(
-            try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: 0)
-        ) { (thrownError: Error) in
-            guard case AstronomicalConfigError.invalidMaximumMlxMemoryGb = thrownError else {
-                XCTFail("expected invalidMaximumMlxMemoryGb, got \(thrownError)");
+        do {
+            _ = try MaximumMlxMemory.writeMaximumMlxMemoryGb(stateDirectory: stateDirectory, maximumMlxMemoryGb: 0);
+            Issue.record("expected invalidMaximumMlxMemoryGb");
+        } catch let configError as AstronomicalConfigError {
+            guard case AstronomicalConfigError.invalidMaximumMlxMemoryGb = configError else {
+                Issue.record(Comment(stringLiteral: "expected invalidMaximumMlxMemoryGb, got \(configError)"));
                 return;
             }
         }
-        XCTAssertEqual(
-            try self.readFileBytes(atPath: configFilePath),
-            originalConfigBytes,
+        #expect(
+            try self.readFileBytes(atPath: configFilePath) == originalConfigBytes,
             "a rejected setting must not touch the source of truth"
         );
     }

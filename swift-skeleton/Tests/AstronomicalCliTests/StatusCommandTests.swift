@@ -1,17 +1,22 @@
-import XCTest;
+import Foundation;
+
+import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
 import Supervisor;
+import JourneyCategories;
 
 @testable import AstronomicalCli;
 
 /// Hermetic coverage for the `astronomical status` journey: the probe and
 /// renderer against a real daemon IPC service on a temporary socket. Paths
 /// stay short because a unix socket path must fit sun_path.
-final class StatusCommandTests: XCTestCase {
+@Suite(.serialized, .tags(.hermeticJourney))
+final class StatusCommandTests {
 
-    func testStatusReportsTheStubbedWorkerAgainstALiveDaemon() throws {
+    @Test
+    func should_report_the_stubbed_worker_against_a_live_daemon() throws {
         let temporaryStateDirectory: String = NSTemporaryDirectory() + "acli-\(UUID().uuidString.prefix(8))";
         try FileManager.default.createDirectory(atPath: temporaryStateDirectory, withIntermediateDirectories: true);
         let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
@@ -26,11 +31,12 @@ final class StatusCommandTests: XCTestCase {
         }
 
         let report: String = try StatusCommand.run(instancePaths: instancePaths);
-        XCTAssertTrue(report.contains("worker:   ready"), "report should name the worker state: \(report)");
-        XCTAssertTrue(report.contains("download:"), "report should carry the download line: \(report)");
+        #expect(report.contains("worker:   ready"), "report should name the worker state: \(report)");
+        #expect(report.contains("download:"), "report should carry the download line: \(report)");
     }
 
-    func testStatusReportsADaemonThatIsNotRunning() throws {
+    @Test
+    func should_report_a_daemon_that_is_not_running() throws {
         let temporaryStateDirectory: String = NSTemporaryDirectory() + "acli-\(UUID().uuidString.prefix(8))";
         try FileManager.default.createDirectory(atPath: temporaryStateDirectory, withIntermediateDirectories: true);
         let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
@@ -41,10 +47,11 @@ final class StatusCommandTests: XCTestCase {
         }
 
         let report: String = try StatusCommand.run(instancePaths: instancePaths);
-        XCTAssertTrue(report.contains("daemon is not running"), "report should explain the missing daemon: \(report)");
+        #expect(report.contains("daemon is not running"), "report should explain the missing daemon: \(report)");
     }
 
-    func testProbeRejectsAnUnexpectedResponseFrame() throws {
+    @Test
+    func should_reject_an_unexpected_response_frame() throws {
         let temporaryStateDirectory: String = NSTemporaryDirectory() + "acli-\(UUID().uuidString.prefix(8))";
         try FileManager.default.createDirectory(atPath: temporaryStateDirectory, withIntermediateDirectories: true);
         let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
@@ -62,12 +69,16 @@ final class StatusCommandTests: XCTestCase {
             try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
         }
 
-        XCTAssertThrowsError(try DaemonProbe.activeDownloadJob(
-            candidateSocketPaths: [instancePaths.ipcSocketFilePath.string])) { (thrownError: any Error) in
-            guard case let DaemonProbeError.daemonRejected(reason) = thrownError else {
-                return XCTFail("expected a daemon rejection, got \(thrownError)");
+        do {
+            _ = try DaemonProbe.activeDownloadJob(
+                candidateSocketPaths: [instancePaths.ipcSocketFilePath.string]);
+            Issue.record("expected a daemon rejection");
+        } catch let probeError as DaemonProbeError {
+            guard case let .daemonRejected(reason) = probeError else {
+                Issue.record(Comment(stringLiteral: "expected a daemon rejection, got \(probeError)"));
+                return;
             }
-            XCTAssertFalse(reason.isEmpty);
+            #expect(!reason.isEmpty);
         }
     }
 }
