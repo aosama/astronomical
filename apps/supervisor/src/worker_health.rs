@@ -1,8 +1,8 @@
 use super::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    DaemonWorkerStatus, ExpertMemoryMode, MtpDepthStatus, MtpRuntimeState, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
-    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
+    DaemonWorkerStatus, ExpertMemoryMode, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
@@ -232,12 +232,6 @@ pub struct WorkerHealthSnapshot {
     pub expert_memory_mode: Option<ExpertMemoryMode>,
     /// Concrete topology retained independently of transient request progress.
     pub expert_residency: Option<ExpertResidencySnapshot>,
-    /// Actual MTP runtime state: Disabled, TargetOnly, Active, or Unavailable.
-    pub mtp_runtime_state: MtpRuntimeState,
-    /// Concise reason when MTP runtime state is Unavailable.
-    pub mtp_unavailable_reason: Option<String>,
-    /// Configured, artifact, resolved, and current execution depth metadata.
-    pub mtp_depth_status: MtpDepthStatus,
     /// Feature settings explicitly acknowledged by the currently running worker.
     pub worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
     /// Latest persistent prompt-cache observability stats from the worker.
@@ -266,8 +260,6 @@ impl WorkerHealthSnapshot {
     pub fn ready_with_model(
         model_id: String,
         capabilities: impl Into<WorkerModelCapabilities>,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
     ) -> Self {
         Self {
             status: WorkerHealthStatus::Ready,
@@ -277,9 +269,6 @@ impl WorkerHealthSnapshot {
             active_request_progress: None,
             expert_memory_mode: None,
             expert_residency: None,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status: MtpDepthStatus::EMPTY,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
@@ -300,16 +289,9 @@ impl WorkerHealthSnapshot {
         model_id: String,
         capabilities: impl Into<WorkerModelCapabilities>,
         minimum_mlx_memory_ceiling_bytes: u64,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
         previous_health_snapshot: &Self,
     ) -> Self {
-        let mut replacement_health_snapshot = Self::ready_with_model(
-            model_id,
-            capabilities,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-        );
+        let mut replacement_health_snapshot = Self::ready_with_model(model_id, capabilities);
         replacement_health_snapshot.mlx_memory_ceiling_bytes =
             previous_health_snapshot.mlx_memory_ceiling_bytes;
         replacement_health_snapshot.machine_mlx_memory_ceiling_bytes =
@@ -350,9 +332,6 @@ impl WorkerHealthSnapshot {
             active_request_progress: None,
             expert_memory_mode: None,
             expert_residency: None,
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: MtpDepthStatus::EMPTY,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
@@ -378,9 +357,6 @@ impl WorkerHealthSnapshot {
             active_request_progress: None,
             expert_memory_mode: None,
             expert_residency: None,
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: MtpDepthStatus::EMPTY,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
@@ -393,22 +369,6 @@ impl WorkerHealthSnapshot {
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
         }
-    }
-
-    #[must_use]
-    pub const fn mtp_runtime_state(&self) -> MtpRuntimeState {
-        self.mtp_runtime_state
-    }
-
-    #[must_use]
-    pub fn mtp_unavailable_reason(&self) -> Option<&str> {
-        self.mtp_unavailable_reason.as_deref()
-    }
-
-    #[must_use]
-    pub const fn with_mtp_depth_status(mut self, mtp_depth_status: MtpDepthStatus) -> Self {
-        self.mtp_depth_status = mtp_depth_status;
-        self
     }
 
     /// Records the startup feature policy acknowledged by this exact worker.

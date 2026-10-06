@@ -1,34 +1,6 @@
 use super::*;
 
 #[tokio::test]
-async fn should_report_the_loaded_engines_target_only_mtp_runtime_state() {
-    let engine_worker = EngineBackedWorker::new(
-        ScriptedChatProcessor::new(),
-        ScriptedChatEngine::new().with_mtp_runtime_state(MtpRuntimeState::TargetOnly, None),
-    );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
-    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let worker_task = tokio::spawn(async move {
-        engine_worker
-            .run(worker_reader_transport, worker_writer_transport)
-            .await
-    });
-
-    assert_eq!(
-        next_event(&mut supervisor_reader).await,
-        ready_event_with_load_details(MtpRuntimeState::TargetOnly, None,)
-    );
-
-    close_worker_transport(
-        ProtocolWriter::new(supervisor_writer_transport),
-        worker_task,
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_configurations = Arc::new(Mutex::new(Vec::new()));

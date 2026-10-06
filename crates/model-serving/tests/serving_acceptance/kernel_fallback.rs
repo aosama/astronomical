@@ -71,8 +71,6 @@ async fn run_forced_fallback_romeo_continuation() {
         CustomMetalKernelFamily::SortedExpertWeightedSum,
         CustomMetalKernelFamily::GatedDeltaSequence,
         CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
-        CustomMetalKernelFamily::TargetVerificationQuantizedLinear,
-        CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
     ] {
         assert!(
             !retained_verdicts.is_custom_kernel_supported(family),
@@ -94,7 +92,6 @@ async fn run_forced_fallback_romeo_continuation() {
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
-        false,
     )
     .expect("the demoted-kernel engine settings should be valid");
     qwen3_5_engine

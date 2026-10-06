@@ -7,7 +7,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use astronomical_ipc_protocol::MtpRuntimeState;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatModelCapabilities, EmbeddingsCommand, GeneratedImage,
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationResultMetadata,
@@ -66,8 +65,6 @@ impl ScriptedExecutor {
                         output_mime_types: vec!["image/png".to_owned()],
                     },
                 ),
-                MtpRuntimeState::Disabled,
-                None,
             ),
             stream_events,
             received_generation_commands: Arc::new(Mutex::new(Vec::new())),

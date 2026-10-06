@@ -8,57 +8,23 @@ use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
-/// Target-model graph outputs retained for optional specialized consumers.
+/// Target-model graph outputs retained for specialized consumers.
 pub struct Qwen3_5TargetForwardOutput {
     final_logits: MlxArray,
-    all_position_logits: Option<MlxArray>,
     pre_final_normalization_hidden_states: MlxArray,
 }
 
 impl Qwen3_5TargetForwardOutput {
-    /// Assembles one target forward output from an all-position logits tensor
-    /// and its pre-final-normalization hidden rows — the compiled
-    /// verification window's outputs, which slice their final row here.
-    pub(crate) fn from_all_position_logits(
-        runtime: &MlxRuntime,
-        all_position_logits: MlxArray,
-        pre_final_normalization_hidden_states: MlxArray,
-        token_count: i32,
-        vocabulary_size: i32,
-    ) -> Result<Self, MlxRuntimeError> {
-        let final_logits = runtime.slice(
-            &all_position_logits,
-            &[0, token_count - 1, 0],
-            &[1, token_count, vocabulary_size],
-            &[1, 1, 1],
-        )?;
-        Ok(Self {
-            final_logits,
-            all_position_logits: Some(all_position_logits),
-            pre_final_normalization_hidden_states,
-        })
-    }
-
     /// Returns float32 logits for the final target position.
     #[must_use]
     pub fn final_logits(&self) -> &MlxArray {
         &self.final_logits
     }
 
-    /// Returns float32 logits for every target input position when requested.
-    #[must_use]
-    pub(crate) fn all_position_logits(&self) -> Option<&MlxArray> {
-        self.all_position_logits.as_ref()
-    }
-
     /// Returns every final decoder row before the trunk's final RMS normalization.
     #[must_use]
     pub fn pre_final_normalization_hidden_states(&self) -> &MlxArray {
         &self.pre_final_normalization_hidden_states
-    }
-
-    pub(crate) fn into_pre_final_normalization_hidden_states(self) -> MlxArray {
-        self.pre_final_normalization_hidden_states
     }
 
     /// Returns one pre-final-normalization hidden row from this target forward.
@@ -116,7 +82,6 @@ impl Qwen3_5Model {
                 None,
                 paged_prefill_execution_mode,
                 performance_attribution,
-                false,
             )?
             .final_logits)
     }
@@ -148,7 +113,6 @@ impl Qwen3_5Model {
                 boundary_checkpoint_collector,
                 paged_prefill_execution_mode,
                 performance_attribution,
-                false,
                 false,
             )?,
         );
@@ -218,7 +182,6 @@ impl Qwen3_5Model {
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
-            false,
             true,
         )
     }
@@ -234,7 +197,6 @@ impl Qwen3_5Model {
         >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-        should_retain_all_position_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         self.build_target_forward_graph_from_token_indices_with_position_offsets(
             token_indices,
@@ -245,7 +207,6 @@ impl Qwen3_5Model {
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
-            should_retain_all_position_logits,
             true,
         )
     }
@@ -262,7 +223,6 @@ impl Qwen3_5Model {
         >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-        should_retain_all_position_logits: bool,
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         let hidden_states = self.embedding_lookup(token_indices)?;
@@ -275,7 +235,6 @@ impl Qwen3_5Model {
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
-            should_retain_all_position_logits,
             should_materialize_vocabulary_logits,
         )
     }
@@ -301,7 +260,6 @@ impl Qwen3_5Model {
                 boundary_checkpoint_collector,
                 paged_prefill_execution_mode,
                 performance_attribution,
-                false,
             )?
             .final_logits)
     }
@@ -317,7 +275,6 @@ impl Qwen3_5Model {
         >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-        should_retain_all_position_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         self.build_target_forward_graph_from_embeddings_with_position_offsets(
             hidden_states,
@@ -328,7 +285,6 @@ impl Qwen3_5Model {
             boundary_checkpoint_collector,
             paged_prefill_execution_mode,
             performance_attribution,
-            should_retain_all_position_logits,
             true,
         )
     }
@@ -345,7 +301,6 @@ impl Qwen3_5Model {
         >,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
-        should_retain_all_position_logits: bool,
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         // Each forward owns one deferred missing-route collection. Clear any
@@ -427,11 +382,10 @@ impl Qwen3_5Model {
                 final_logits: hidden_states
                     .retain()
                     .map_err(Qwen3_5ExecutionError::from)?,
-                all_position_logits: None,
                 pre_final_normalization_hidden_states: hidden_states,
             });
         }
-        let (final_logits, all_position_logits) = performance_attribution.measure_operation(
+        let final_logits = performance_attribution.measure_operation(
             PerformanceOperation::FinalLogitsGraphConstruction,
             |_performance_attribution| {
                 let normalized_states = self.runtime.rms_norm(
@@ -439,28 +393,6 @@ impl Qwen3_5Model {
                     &self.weights.final_normalization_weight,
                     f32::from_bits(self.config.rms_norm_epsilon_bits()),
                 )?;
-                if should_retain_all_position_logits {
-                    let target_all_position_logits = self
-                        .quantized_linear_for_paged_prefill_execution_mode(
-                            &normalized_states,
-                            &self.weights.language_model_head_weights,
-                            paged_prefill_execution_mode,
-                        )?;
-                    let target_all_position_logits = self
-                        .runtime
-                        .astype(&target_all_position_logits, MlxDtype::Float32)?;
-                    let vocabulary_size = self.config.vocabulary_size() as i32;
-                    let final_logits = self.runtime.slice(
-                        &target_all_position_logits,
-                        &[0, token_count - 1, 0],
-                        &[1, token_count, vocabulary_size],
-                        &[1, 1, 1],
-                    )?;
-                    return Ok::<(MlxArray, Option<MlxArray>), Qwen3_5ExecutionError>((
-                        final_logits,
-                        Some(target_all_position_logits),
-                    ));
-                }
                 let hidden_size = self.config.hidden_size() as i32;
                 let final_hidden_state = self.runtime.slice(
                     &normalized_states,
@@ -468,20 +400,17 @@ impl Qwen3_5Model {
                     &[1, token_count, hidden_size],
                     &[1, 1, 1],
                 )?;
-                let final_logits = self.quantized_linear_for_paged_prefill_execution_mode(
+                let final_logits = self.quantized_linear(
                     &final_hidden_state,
                     &self.weights.language_model_head_weights,
-                    paged_prefill_execution_mode,
                 )?;
-                Ok::<(MlxArray, Option<MlxArray>), Qwen3_5ExecutionError>((
+                Ok::<MlxArray, Qwen3_5ExecutionError>(
                     self.runtime.astype(&final_logits, MlxDtype::Float32)?,
-                    None,
-                ))
+                )
             },
         )?;
         Ok(Qwen3_5TargetForwardOutput {
             final_logits,
-            all_position_logits,
             pre_final_normalization_hidden_states: hidden_states,
         })
     }

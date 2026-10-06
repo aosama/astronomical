@@ -88,14 +88,6 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
             ["x-astronomical-apply-mode"],
         "application-restart"
     );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["mtp"]["properties"]["enabled"]["default"],
-        false
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["mtp"]["x-astronomical-apply-mode"],
-        "model-reload"
-    );
     assert!(astronomical_config.model_directories().is_empty());
     assert_eq!(
         astronomical_config.maximum_mlx_memory_bytes().unwrap(),

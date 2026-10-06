@@ -36,33 +36,6 @@ fn should_accept_every_affine_quantization_group_size_supported_by_mlx() {
 }
 
 #[test]
-fn should_retain_an_artifact_declared_mtp_quantization_override() {
-    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
-        .expect("the frozen test config should decode as JSON");
-    let mtp_dense_projection_module_name = "language_model.mtp.layers.0.mlp.down_proj";
-    config_value["quantization"][mtp_dense_projection_module_name] =
-        json!({"bits": 5, "group_size": 32});
-    config_value["quantization_config"] = config_value["quantization"].clone();
-    let config_bytes = serde_json::to_vec(&config_value)
-        .expect("the modified Ornith config should serialize as JSON");
-
-    let config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the configuration with an MTP override should parse");
-
-    assert_eq!(
-        (
-            config
-                .quantization_profile_for_module(mtp_dense_projection_module_name)
-                .bits,
-            config
-                .quantization_profile_for_module(mtp_dense_projection_module_name)
-                .group_size,
-        ),
-        (5, 32)
-    );
-}
-
-#[test]
 fn should_reject_the_affine_quantization_bit_width_unsupported_by_mlx() {
     let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
         .expect("the frozen test config should decode as JSON");

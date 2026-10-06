@@ -199,8 +199,6 @@ impl ChatGenerationExecutor for ScriptedResponsesExecutor {
                 max_output_tokens: 20_480,
                 context_window: 262_144,
             },
-            MtpRuntimeState::Disabled,
-            None,
         )
     }
 }

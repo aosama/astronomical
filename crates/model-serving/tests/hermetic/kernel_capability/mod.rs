@@ -107,8 +107,7 @@ fn should_report_a_typed_compilation_reason_without_losing_other_families() {
             description: "the probe kernel source failed to compile".to_owned(),
         }),
     );
-    let (supported_probe, _) =
-        supported_probe_pair(CustomMetalKernelFamily::TargetVerificationQuantizedLinear);
+    let (supported_probe, _) = supported_probe_pair(CustomMetalKernelFamily::GdnDecodePrework);
     let mut performance_attribution = PerformanceAttribution::disabled();
 
     let capabilities = WorkerKernelCapabilities::probe_custom_kernels(
@@ -126,7 +125,7 @@ fn should_report_a_typed_compilation_reason_without_losing_other_families() {
         !capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
     );
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::TargetVerificationQuantizedLinear),
+        capabilities.verdict(CustomMetalKernelFamily::GdnDecodePrework),
         CustomKernelVerdict::Supported,
         "one unsupported family must never demote an independently supported family"
     );
@@ -142,7 +141,7 @@ fn should_distinguish_execution_failures_from_output_mismatches() {
         }),
     );
     let (mismatch_probe, _) = CountingProbe::with_outcome(
-        CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
+        CustomMetalKernelFamily::FusedQuantizedExpertDecode,
         Err(KernelCapabilityError::OutputMismatch {
             description: "probe output value 0 read 0.000000 but expected 133.000000".to_owned(),
         }),
@@ -161,7 +160,7 @@ fn should_distinguish_execution_failures_from_output_mismatches() {
         })
     );
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear),
+        capabilities.verdict(CustomMetalKernelFamily::FusedQuantizedExpertDecode),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
             description: "probe output value 0 read 0.000000 but expected 133.000000".to_owned(),
         })

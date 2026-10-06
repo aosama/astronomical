@@ -36,16 +36,14 @@
 
 // MlxArray is an MLX tensor handle. These methods normally build a lazy MLX
 // graph; actual graphics-processor evaluation happens at a later boundary.
+use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::Qwen3_5ExecutionError;
-use super::attention_execution;
 use super::decoder_layer_weights::Qwen3_5FullAttentionWeights;
 use super::model::Qwen3_5Model;
 use super::tensor_slicing;
 use crate::decoder_cache::FullAttentionKeyValueState;
-use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
-use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 
 const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 
@@ -78,7 +76,6 @@ pub fn qwen3_5_full_attention_step(
     active_values: &MlxArray,
     output_gate: &MlxArray,
     attention_scale: f32,
-    paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
 ) -> Result<MlxArray, MlxRuntimeError> {
     // Fail early with a model-serving error if the tensors cannot represent the
     // matrix operations below. This is more informative than a native failure.
@@ -93,20 +90,7 @@ pub fn qwen3_5_full_attention_step(
     // More than one query token means this is prompt processing. The causal
     // mask lets each token attend only to itself and earlier positions.
     let is_causal = attention_shape.query_token_count > 1;
-    let should_process_query_rows_sequentially = is_causal
-        && paged_prefill_execution_mode
-            == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
-    let attention_output = if should_process_query_rows_sequentially {
-        attention_execution::sequential_causal_attention(
-            runtime,
-            rotated_queries,
-            active_keys,
-            active_values,
-            attention_scale,
-            attention_shape.query_token_count,
-            attention_shape.active_key_value_token_count,
-        )?
-    } else if is_causal {
+    let attention_output = if is_causal {
         // Keep the stock MLX route so each Apple GPU receives the fastest
         // supported fused or matrix-kernel graph for this head geometry.
         runtime.causal_scaled_dot_product_attention(
@@ -148,7 +132,7 @@ pub fn qwen3_5_full_attention_step(
     // controls how much of each attention-output feature continues onward.
     // Prefill uses a retained compiled MLX graph for the same sigmoid/multiply
     // calculation; decode keeps the small direct graph.
-    if is_causal && !should_process_query_rows_sequentially {
+    if is_causal {
         runtime
             .apply_compiled_attention_output_gate(
                 compiled_elementwise_graphs,
@@ -169,9 +153,6 @@ struct FullAttentionShape {
     // Number of new query tokens in this forward: a prompt chunk length during
     // prefill, or one during normal autoregressive token generation.
     query_token_count: i32,
-    // Number of key/value positions visible to the complete forward, including
-    // the newly appended query positions.
-    active_key_value_token_count: i32,
     // The width after all query-head vectors are placed side by side. It is
     // query_head_count x features_per_head and matches the output gate.
     output_dimension: i32,
@@ -249,7 +230,6 @@ fn validate_full_attention_arguments(
     Ok(FullAttentionShape {
         batch_size,
         query_token_count,
-        active_key_value_token_count,
         output_dimension,
     })
 }
@@ -280,7 +260,6 @@ impl Qwen3_5Model {
         full_attention_weights: &Qwen3_5FullAttentionWeights,
         kv_state: &mut FullAttentionKeyValueState,
         token_position_offsets: Option<&MlxArray>,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         // The model configuration supplies the dimensions for this layer. Qwen
         // has more Q heads than K/V heads, which is grouped-query attention.
@@ -301,11 +280,8 @@ impl Qwen3_5Model {
         // First learned projection: turn each hidden-state vector into the
         // combined query-and-gate features. Quantization changes how the matrix
         // is stored and evaluated, not the mathematical role of this projection.
-        let query_projection = self.quantized_linear_for_paged_prefill_execution_mode(
-            hidden_states,
-            &full_attention_weights.query_projection,
-            paged_prefill_execution_mode,
-        )?;
+        let query_projection =
+            self.quantized_linear(hidden_states, &full_attention_weights.query_projection)?;
 
         // Expose the Q-head axis and the two packed halves:
         // [batch, tokens, query_heads, 2 x features_per_head].
@@ -347,11 +323,7 @@ impl Qwen3_5Model {
         // Second learned projection: K describes what each token offers for
         // matching. There are fewer K heads because they are shared by groups
         // of Q heads in grouped-query attention.
-        let keys = self.quantized_linear_for_paged_prefill_execution_mode(
-            hidden_states,
-            &full_attention_weights.key_projection,
-            paged_prefill_execution_mode,
-        )?;
+        let keys = self.quantized_linear(hidden_states, &full_attention_weights.key_projection)?;
 
         // K becomes [batch, tokens, key_value_heads, features_per_head].
         let keys = self.runtime.reshape(
@@ -366,11 +338,8 @@ impl Qwen3_5Model {
 
         // Third learned projection: V carries the information that will be
         // averaged together after softmax decides how relevant each key is.
-        let values = self.quantized_linear_for_paged_prefill_execution_mode(
-            hidden_states,
-            &full_attention_weights.value_projection,
-            paged_prefill_execution_mode,
-        )?;
+        let values =
+            self.quantized_linear(hidden_states, &full_attention_weights.value_projection)?;
 
         // V uses the same head layout as K so each key position has one matching
         // value position in the KV state.
@@ -475,16 +444,11 @@ impl Qwen3_5Model {
             &active_values,
             &output_gate,
             (attention_head_dimension as f32).sqrt().recip(),
-            paged_prefill_execution_mode,
         )?;
 
         // Final learned projection: mix the concatenated head outputs back into
         // the decoder's hidden-size space. The caller adds this result to the
         // residual stream before continuing with the rest of the layer.
-        self.quantized_linear_for_paged_prefill_execution_mode(
-            &gated_output,
-            &full_attention_weights.output_projection,
-            paged_prefill_execution_mode,
-        )
+        self.quantized_linear(&gated_output, &full_attention_weights.output_projection)
     }
 }

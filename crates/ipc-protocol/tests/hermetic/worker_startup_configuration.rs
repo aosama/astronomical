@@ -67,8 +67,6 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
-                mtp_enabled: true,
-                mtp_draft_depth: Some(2),
             },
         ),
     };
@@ -110,8 +108,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                 experimental_quantized_kv_cache_enabled: false,
                 experimental_fused_moe_decode_enabled: false,
             },
-            mtp_enabled: true,
-            mtp_draft_depth: Some(2),
         });
 
     let serialized_configuration =
@@ -137,9 +133,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                     "experimental_decode_stage_attribution_enabled": false,
                     "experimental_quantized_kv_cache_enabled": false,
                     "experimental_fused_moe_decode_enabled": false
-                },
-                "mtp_enabled": true,
-                "mtp_draft_depth": 2
+                }
             }
         })
     );

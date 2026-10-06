@@ -7,8 +7,6 @@ use super::{
     Qwen3_5EngineState, Qwen3_5InferenceExecution, fatal_engine_error, qwen3_5_runtime_error,
 };
 
-const TEST_MTP_FULL_ATTENTION_GROWTH_TOKENS: i32 = 1;
-
 // These owner-thread operations intentionally live beside their asynchronous
 // public wrappers. Keeping acceptance-only state mutation out of the engine
 // owner prevents the production lifecycle module from becoming a test-control bag.
@@ -59,42 +57,6 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
-    fn execute_resident_mtp_draft_for_tests(
-        &self,
-        next_token_id: u32,
-    ) -> Result<u32, InferenceEngineError> {
-        let loaded_model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("cannot execute resident MTP before loading"))?;
-        if loaded_model.expert_memory_mode() != ExpertMemoryMode::Resident {
-            return Err(fatal_engine_error(
-                "cannot execute the resident MTP acceptance while experts are paged",
-            ));
-        }
-        let next_token_indices = loaded_model
-            .runtime()
-            .array_from_u32(&[next_token_id], &[1, 1])
-            .map_err(qwen3_5_runtime_error)?;
-        let hidden_states_for_mtp_fusion = loaded_model
-            .embedding_lookup(&next_token_indices)
-            .map_err(InferenceEngineError::from)?;
-        let mut mtp_request_state = crate::Qwen3_5MtpRequestState::empty_with_growth_tokens(
-            TEST_MTP_FULL_ATTENTION_GROWTH_TOKENS,
-        )
-        .map_err(qwen3_5_runtime_error)?;
-        let mtp_forward_output = loaded_model
-            .forward_mtp_draft(
-                &hidden_states_for_mtp_fusion,
-                &next_token_indices,
-                &mut mtp_request_state,
-            )
-            .map_err(InferenceEngineError::from)?;
-        loaded_model
-            .highest_logit_token_id(mtp_forward_output.draft_logits())
-            .map_err(InferenceEngineError::from)
-    }
-
     fn prompt_work_reuse_for_tests(
         &self,
         request_id: RequestId,
@@ -124,29 +86,6 @@ impl Qwen3_5EngineState {
         }
         active_request.force_next_prefill_capacity_rejection_for_tests = true;
         Ok(())
-    }
-
-    fn force_next_mtp_draft_rejection_for_tests(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error("cannot force MTP rejection without an active request")
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force MTP rejection for a different request",
-            ));
-        }
-        if let Some(optional_prediction_session) = active_request.optional_prediction_session_mut()
-        {
-            optional_prediction_session.force_next_draft_rejection_for_tests();
-            Ok(())
-        } else {
-            Err(fatal_engine_error(
-                "cannot force MTP rejection for a target-only request",
-            ))
-        }
     }
 }
 
@@ -222,26 +161,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         .await
     }
 
-    /// Executes one real MTP head forward from a supplied fixture token on the owner thread.
-    #[doc(hidden)]
-    pub async fn execute_resident_mtp_draft_for_tests(
-        &self,
-        next_token_id: u32,
-    ) -> Result<u32, InferenceEngineError> {
-        let (draft_token_sender, draft_token_receiver) = std::sync::mpsc::sync_channel(1);
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            let draft_token_id =
-                qwen_inference_execution.execute_resident_mtp_draft_for_tests(next_token_id)?;
-            draft_token_sender.send(draft_token_id).map_err(|_| {
-                fatal_engine_error("resident MTP draft token receiver stopped unexpectedly")
-            })
-        })
-        .await?;
-        draft_token_receiver
-            .recv()
-            .map_err(|_| fatal_engine_error("resident MTP owner operation returned no draft token"))
-    }
-
     /// Returns truthful per-model prompt work for an active acceptance request.
     #[doc(hidden)]
     pub async fn prompt_work_reuse_for_tests(
@@ -270,17 +189,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     ) -> Result<(), InferenceEngineError> {
         self.run_owner_test_operation(move |qwen_inference_execution| {
             qwen_inference_execution.force_next_prefill_capacity_rejection_for_tests(request_id)
-        })
-        .await
-    }
-
-    /// Arms one deterministic draft rejection through the production acceptance path.
-    pub async fn force_next_mtp_draft_rejection_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            qwen_inference_execution.force_next_mtp_draft_rejection_for_tests(request_id)
         })
         .await
     }

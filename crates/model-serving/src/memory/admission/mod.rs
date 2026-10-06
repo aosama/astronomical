@@ -11,8 +11,6 @@ mod complete_residency;
 mod context;
 #[cfg(feature = "direct-mlx")]
 mod context_logging;
-mod mtp;
-mod mtp_draft_depth;
 mod rotating;
 
 pub use allocation::{
@@ -31,11 +29,6 @@ pub use context::{
 pub(crate) use context_logging::{
     log_context_admission_projection, log_generation_context_workspace_reservation,
 };
-pub use mtp::{
-    MtpAdmission, MtpDepthDowngradeReason, MtpDepthSelection, MtpMemoryCandidate,
-    MtpMemoryProjection, MtpMemoryProjectionError,
-};
-pub use mtp_draft_depth::{MtpDraftDepth, MtpDraftDepthError};
 pub use rotating::{
     RotatingAdmissionError, rotating_committed_token_count, rotating_prefill_transient_token_count,
 };

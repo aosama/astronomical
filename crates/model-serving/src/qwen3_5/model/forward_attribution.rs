@@ -2,8 +2,8 @@
 
 use astronomical_mlx_c_rust::MlxArray;
 
+use crate::PerformanceAttribution;
 use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
-use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::forward_contract;
 use super::model::Qwen3_5Model;
@@ -370,72 +370,6 @@ impl Qwen3_5Model {
                 performance_attribution,
             )? {
                 PagedRouteValidationOutcome::CompleteHit => return Ok(final_logits),
-            }
-        }
-        Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "paged route replay exceeded the sparse-layer safety bound",
-        })
-    }
-
-    pub(crate) fn forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
-        &self,
-        token_ids: &[u32],
-        starting_position_tokens: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        self.forward_chunk_with_pre_final_normalization_hidden_states_and_synchronization_attribution(
-            token_ids,
-            starting_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-            None,
-        )
-    }
-
-    fn forward_chunk_with_pre_final_normalization_hidden_states_and_synchronization_attribution(
-        &self,
-        token_ids: &[u32],
-        starting_position_tokens: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-        performance_attribution: &mut PerformanceAttribution,
-        synchronization_operation: Option<PerformanceOperation>,
-    ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
-        let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
-            let target_forward_output = self.build_target_forward_graph(
-                token_ids,
-                starting_position_tokens,
-                request_decoder_state,
-                None,
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-                performance_attribution,
-            )?;
-            let synchronize_target_forward_output =
-                |performance_attribution: &mut PerformanceAttribution| -> Result<
-                    PagedRouteValidationOutcome,
-                    Qwen3_5ExecutionError,
-                > {
-                    let mut evaluation_arrays = super::forward_contract::forward_state_arrays(
-                        target_forward_output.final_logits(),
-                        request_decoder_state,
-                    )?;
-                    evaluation_arrays
-                        .push(target_forward_output.pre_final_normalization_hidden_states());
-                    self.evaluate_arrays_resolving_paged_routes(
-                        &evaluation_arrays,
-                        performance_attribution,
-                    )
-                };
-            let paged_route_validation_outcome = match synchronization_operation {
-                Some(synchronization_operation) => performance_attribution.measure_operation(
-                    synchronization_operation,
-                    synchronize_target_forward_output,
-                )?,
-                None => synchronize_target_forward_output(performance_attribution)?,
-            };
-            match paged_route_validation_outcome {
-                PagedRouteValidationOutcome::CompleteHit => return Ok(target_forward_output),
             }
         }
         Err(Qwen3_5ExecutionError::InvalidInput {

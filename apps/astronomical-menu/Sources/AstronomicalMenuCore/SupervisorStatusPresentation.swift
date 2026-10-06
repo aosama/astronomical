@@ -97,16 +97,6 @@ extension SupervisorStatusDocument {
     readyModelSizeBytes.map(decimalGigabyteText) ?? "Not measured"
   }
 
-  var mtpRuntimeStateTitle: String {
-    guard readyModelIdentifier != nil else { return "Not loaded" }
-    switch mtpRuntimeState {
-    case "active": return "Active"
-    case "target_only": return "Standard generation"
-    case "unavailable": return "Unavailable"
-    default: return "Disabled"
-    }
-  }
-
   var progressTitle: String {
     guard let progress else {
       return isRestoringPromptCache ? "Restoring prompt cache" : "Standing by"

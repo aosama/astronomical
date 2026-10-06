@@ -1,14 +1,12 @@
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MtpDepthResolutionReason, MtpDepthStatus, MtpRuntimeState,
-    ProtocolReader, ProtocolWriter, WorkerEvent, WorkerModelCapabilities,
-    WorkerRuntimeFeatureConfiguration,
+    ProtocolReader, ProtocolWriter, WorkerEvent, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test]
-async fn should_preserve_generation_and_mtp_configuration_in_acknowledgement() {
+async fn should_preserve_generation_and_chunking_configuration_in_acknowledgement() {
     use astronomical_ipc_protocol::{
         WorkerChunkingConfiguration, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
         WorkerLoadedModelRuntimeConfiguration,
@@ -38,8 +36,6 @@ async fn should_preserve_generation_and_mtp_configuration_in_acknowledgement() {
                         experimental_quantized_kv_cache_enabled: false,
                         experimental_fused_moe_decode_enabled: false,
                     },
-                    mtp_enabled: true,
-                    mtp_draft_depth: Some(3),
                 },
             )),
         },
@@ -62,48 +58,4 @@ async fn should_preserve_generation_and_mtp_configuration_in_acknowledgement() {
     let serialized_event = serde_json::to_string(&decoded_event).expect("event should serialize");
     assert!(serialized_event.contains(&configuration_generation));
     assert!(!serialized_event.contains("/tmp/"));
-}
-
-#[tokio::test]
-async fn should_round_trip_loaded_model_mtp_depth_acknowledgement() {
-    let worker_event = WorkerEvent::Ready {
-        model_id: "fictional/qwen-model".to_owned(),
-        capabilities: WorkerModelCapabilities::from(ChatModelCapabilities {
-            supports_reasoning: true,
-            supports_tool_calls: true,
-            has_vision: false,
-            max_input_tokens: 8_000,
-            max_output_tokens: 1_000,
-            context_window: 9_000,
-        }),
-        mtp_runtime_state: MtpRuntimeState::Active,
-        mtp_unavailable_reason: None,
-        mtp_depth_status: MtpDepthStatus {
-            configured_draft_depth: Some(3),
-            artifact_maximum_draft_depth: Some(3),
-            artifact_default_draft_depth: Some(2),
-            resolved_requested_draft_depth: Some(3),
-            capped_draft_depth: Some(1),
-            effective_execution_draft_depth: Some(1),
-            resolution_reason: Some(
-                MtpDepthResolutionReason::ConfiguredDepthClampedToArtifactMaximum,
-            ),
-        },
-    };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
-
-    worker_writer
-        .send_event(&worker_event)
-        .await
-        .expect("the loaded-model MTP depth acknowledgement should be written");
-
-    assert_eq!(
-        supervisor_reader
-            .next_event()
-            .await
-            .expect("the loaded-model MTP depth acknowledgement should decode"),
-        Some(worker_event)
-    );
 }

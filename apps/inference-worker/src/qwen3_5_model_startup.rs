@@ -20,8 +20,6 @@ pub(crate) fn initialize_qwen3_5_model(
     requested_model_id: String,
     maximum_context_tokens: u32,
     max_output_tokens: u32,
-    mtp_enabled: bool,
-    mtp_draft_depth: Option<u8>,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
@@ -145,26 +143,25 @@ pub(crate) fn initialize_qwen3_5_model(
             ));
         }
     };
-    let qwen3_5_engine = Qwen3_5Engine::new_with_effective_context_runtime_chunking_mtp_depth_and_performance_attribution(
-        validated_artifact,
-        active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
-        prompt_processing_chunk_sizer,
-        think_end_token_id,
-        model_directory_path.clone(),
-        maximum_context_tokens,
-        chunking,
-        true,
-        mtp_enabled,
-        mtp_draft_depth,
-        model_loading_performance_attribution,
-        performance_attribution_log,
-    )
-    .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
-        model_directory: model_directory_path,
-        source,
-    })?;
+    let qwen3_5_engine =
+        Qwen3_5Engine::new_with_effective_context_runtime_chunking_and_performance_attribution(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            persistent_prompt_cache_disk_store_config,
+            prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory_path.clone(),
+            maximum_context_tokens,
+            chunking,
+            true,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+        )
+        .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
+            model_directory: model_directory_path,
+            source,
+        })?;
     Ok((generation_processor, qwen3_5_engine))
 }
 

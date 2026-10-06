@@ -1,7 +1,7 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
 use astronomical_config::DiscoveredModel;
-use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities, MtpRuntimeState};
+use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application, build_application_with_discovered_models,
@@ -244,8 +244,6 @@ fn ready_worker_health_snapshot() -> WorkerHealthSnapshot {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        MtpRuntimeState::Disabled,
-        None,
     )
 }
 

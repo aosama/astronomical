@@ -18,7 +18,6 @@ impl TensorSourceId {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TensorSemanticRole {
     Target,
-    MultiTokenPrediction,
     Vision,
 }
 
@@ -29,12 +28,6 @@ pub enum TensorDeclarationOrigin {
     ArchitectureSidecar,
 }
 
-/// Optional feature that atomically owns a set of tensor locations.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TensorFeature {
-    MultiTokenPrediction,
-}
-
 /// Canonical and physical identity for one validated tensor location.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TensorLocation {
@@ -43,7 +36,6 @@ pub struct TensorLocation {
     source_id: TensorSourceId,
     semantic_role: TensorSemanticRole,
     declaration_origin: TensorDeclarationOrigin,
-    feature: Option<TensorFeature>,
 }
 
 impl TensorLocation {
@@ -55,7 +47,6 @@ impl TensorLocation {
         source_id: TensorSourceId,
         semantic_role: TensorSemanticRole,
         declaration_origin: TensorDeclarationOrigin,
-        feature: Option<TensorFeature>,
     ) -> Self {
         Self {
             canonical_name: canonical_name.into(),
@@ -63,7 +54,6 @@ impl TensorLocation {
             source_id,
             semantic_role,
             declaration_origin,
-            feature,
         }
     }
 
@@ -90,11 +80,6 @@ impl TensorLocation {
     #[must_use]
     pub const fn declaration_origin(&self) -> TensorDeclarationOrigin {
         self.declaration_origin
-    }
-
-    #[must_use]
-    pub const fn feature(&self) -> Option<TensorFeature> {
-        self.feature
     }
 }
 
@@ -161,17 +146,6 @@ impl TensorInventory {
     #[must_use]
     pub fn tensor_count(&self) -> usize {
         self.locations_by_canonical_name.len()
-    }
-
-    /// Removes every location owned by an unavailable optional feature.
-    pub fn remove_feature(&mut self, feature: TensorFeature) {
-        self.locations_by_canonical_name
-            .retain(|_, location| location.feature() != Some(feature));
-        self.canonical_name_by_physical_location
-            .retain(|_, canonical_name| {
-                self.locations_by_canonical_name
-                    .contains_key(canonical_name)
-            });
     }
 
     /// Removes locations by canonical name. Streaming revisions carry expert

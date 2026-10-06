@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use astronomical_ipc_protocol::{
-    MtpDepthStatus, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerModelConfiguration, WorkerRuntimeFeatureConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
+    WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_supervisor::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 
@@ -21,8 +21,8 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
             vec![1, 3],
         ),
     ];
-    let configured_worker_model_configuration = worker_model_configuration(false);
-    let effective_worker_model_configuration = worker_model_configuration(true);
+    let configured_worker_model_configuration = worker_model_configuration();
+    let effective_worker_model_configuration = worker_model_configuration();
     resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
         crate::common::MODEL_ID.to_owned(),
         RuntimeModelPolicy {
@@ -39,11 +39,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
                 fixed_prompt_processing_chunk_size_tokens: true,
                 ..Default::default()
             },
-            acceleration_availability:
-                astronomical_supervisor::RuntimeModelAccelerationAvailability {
-                    configured_mtp_enabled: Some(false),
-                    ..Default::default()
-                },
             worker_model_configuration: configured_worker_model_configuration,
         },
     )]));
@@ -56,15 +51,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         prompt_cache_maximum_size_bytes: 50_000_000_000,
         loaded_model: Some(effective_worker_model_configuration.runtime_configuration()),
     });
-    executor.health_snapshot.mtp_depth_status = MtpDepthStatus {
-        configured_draft_depth: Some(3),
-        artifact_maximum_draft_depth: Some(3),
-        artifact_default_draft_depth: Some(2),
-        resolved_requested_draft_depth: Some(3),
-        capped_draft_depth: Some(1),
-        effective_execution_draft_depth: Some(1),
-        resolution_reason: None,
-    };
     let temporary_home = tempfile::tempdir().expect("status config home should exist");
     let application = build_development_application_with_reload(
         executor,
@@ -109,22 +95,6 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         }])
     );
     assert!(!String::from_utf8_lossy(&status_bytes).contains("/fictional/private"));
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["mtp_enabled"]["default"],
-        false
-    );
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["mtp_enabled"]["configured"],
-        false
-    );
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["mtp_enabled"]["effective"],
-        true
-    );
-    assert_eq!(
-        status_document["configuration"]["ready_model"]["mtp_draft_depth"]["effective"],
-        1
-    );
     assert_eq!(
         status_document["configuration"]["ready_model"]["temperature"]["configured"],
         0.7
@@ -189,7 +159,7 @@ async fn should_expose_unavailable_model_directory_diagnostics_without_paths() {
     );
 }
 
-fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {
+fn worker_model_configuration() -> WorkerModelConfiguration {
     WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
         model_id: crate::common::MODEL_ID.to_owned(),
         maximum_context_tokens: 16_384,
@@ -207,7 +177,5 @@ fn worker_model_configuration(mtp_enabled: bool) -> WorkerModelConfiguration {
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
         },
-        mtp_enabled,
-        mtp_draft_depth: Some(3),
     })
 }

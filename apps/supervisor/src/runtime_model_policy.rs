@@ -14,12 +14,6 @@ pub struct RuntimeModelGenerationDefaults {
     pub top_p_thousandths: Option<u16>,
 }
 
-/// Model acceleration settings resolved by the supervisor.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct RuntimeModelAccelerationAvailability {
-    pub configured_mtp_enabled: Option<bool>,
-}
-
 /// One canonical requestable model's directory and fully resolved execution policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimeModelPolicy {
@@ -28,7 +22,6 @@ pub struct RuntimeModelPolicy {
     pub configured_maximum_context_tokens: Option<u32>,
     pub default_maximum_context_tokens: u32,
     pub configured_chunking_fields: astronomical_config::ConfiguredChunkingFields,
-    pub acceleration_availability: RuntimeModelAccelerationAvailability,
     pub worker_model_configuration: WorkerModelConfiguration,
 }
 

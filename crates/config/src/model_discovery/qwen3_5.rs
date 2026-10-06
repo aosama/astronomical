@@ -8,8 +8,6 @@ use std::path::Path;
 /// and one for the completion. Anything smaller cannot serve a single user turn.
 pub const MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS: u64 = 2;
 
-const MTP_TENSOR_COMPONENT: &str = "mtp";
-
 /// Family-derived metadata returned to neutral discovery orchestration.
 pub(super) struct Qwen3_5DiscoveredModelMetadata {
     pub context_window: u32,
@@ -104,9 +102,8 @@ pub fn context_window_tokens(config_value: &serde_json::Value) -> u64 {
 }
 
 /// Extracts the shard file names disk discovery and download preflight both treat as mandatory:
-/// every shard that carries at least one non-MTP tensor. A missing MTP-only shard stays valid for
-/// target-only serving; a missing target or vision shard never does. Entries that do not map a
-/// tensor to a string shard are skipped, mirroring disk discovery's tolerance.
+/// every shard that carries at least one tensor. Entries that do not map a tensor to a string
+/// shard are skipped, mirroring disk discovery's tolerance.
 #[must_use]
 pub fn required_shard_file_names(
     weight_map: &serde_json::Map<String, serde_json::Value>,
@@ -118,7 +115,6 @@ pub fn required_shard_file_names(
                 .as_str()
                 .map(|shard| (tensor_name, shard))
         })
-        .filter(|(tensor_name, _)| !contains_mtp_component(tensor_name))
         .map(|(_, shard)| shard.to_owned())
         .collect()
 }
@@ -131,12 +127,6 @@ fn all_shard_file_names(
         .filter_map(serde_json::Value::as_str)
         .map(str::to_owned)
         .collect()
-}
-
-fn contains_mtp_component(tensor_name: &str) -> bool {
-    tensor_name
-        .split('.')
-        .any(|tensor_name_component| tensor_name_component == MTP_TENSOR_COMPONENT)
 }
 
 /// Discovers a converted per-expert streaming revision from its manifest and

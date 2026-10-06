@@ -146,9 +146,6 @@ fn configuration_document(spec: &Qwen4ExpShapeSpec) -> serde_json::Value {
         text_object.insert("hc_count".into(), serde_json::json!(2));
         text_object.insert("hc_lowrank".into(), serde_json::json!(8));
     }
-    if spec.subsystems.multi_token_prediction_declared {
-        text_object.insert("mtp_num_hidden_layers".into(), serde_json::json!(1));
-    }
     let mut document = serde_json::json!({
         "architectures": ["Qwen4ExpForConditionalGeneration"],
         "model_type": "qwen4_exp",

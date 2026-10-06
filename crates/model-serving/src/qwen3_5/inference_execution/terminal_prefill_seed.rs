@@ -42,12 +42,10 @@ pub(super) fn seed_terminal_text_prefill_after_prompt_cache_boundaries(
             persistent_prompt_cache_block_token_count,
             &mut active_request.performance_attribution,
         )?;
-    let prompt_token_count = prefill_end - prefill_start;
     seed_first_generated_token_from_terminal_forward_output(
         model,
         active_request,
         &terminal_outcome.target_forward_output,
-        prompt_token_count,
     )?;
     Ok(terminal_outcome.boundary_checkpoints)
 }
@@ -59,34 +57,6 @@ pub(super) fn seed_first_generated_token_from_terminal_prefill_chunk(
     prefill_end: usize,
 ) -> Result<(), Qwen3_5ExecutionError> {
     let prompt_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
-    if active_request.has_optional_prediction_session() {
-        let target_forward_output = model
-            .forward_chunk_with_pre_final_normalization_hidden_states_and_performance_attribution(
-                &prompt_token_ids,
-                active_request.next_position_tokens,
-                &mut active_request.request_decoder_state,
-                &mut active_request.performance_attribution,
-            )?;
-        let last_hidden_row_index = i32::try_from(prompt_token_ids.len().saturating_sub(1))
-            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                description: "terminal prefill token count exceeds the MLX int32 range",
-            })?;
-        let last_prompt_hidden_state = target_forward_output
-            .pre_final_normalization_hidden_state_at(model.runtime(), last_hidden_row_index)
-            .map_err(Qwen3_5ExecutionError::from)?;
-        let first_generated_token =
-            active_request
-                .build_generated_token(model, target_forward_output.final_logits())
-                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                    description:
-                        "failed to sample the first generated token from terminal prefill logits",
-                })?;
-        active_request.set_pending_generated_token(first_generated_token);
-        if let Some(prediction_session) = active_request.optional_prediction_session_mut() {
-            prediction_session.set_target_hidden_states(Some(last_prompt_hidden_state));
-        }
-        return Ok(());
-    }
     let final_prompt_logits = model.forward_chunk_with_performance_attribution(
         &prompt_token_ids,
         active_request.next_position_tokens,
@@ -106,41 +76,12 @@ pub(super) fn seed_first_generated_token_from_terminal_prefill_chunk(
 /// carries both logits and pre-normalization hidden states.
 ///
 /// Used by the terminal checkpointed prefill path, which produces logits and
-/// cache checkpoints in a single forward. The hidden states are evaluated
-/// explicitly when an optional prediction session needs them for MTP.
+/// cache checkpoints in a single forward.
 fn seed_first_generated_token_from_terminal_forward_output(
     model: &Qwen3_5Model,
     active_request: &mut Qwen3_5EngineRequest,
     target_forward_output: &Qwen3_5TargetForwardOutput,
-    prompt_token_count: usize,
 ) -> Result<(), Qwen3_5ExecutionError> {
-    if active_request.has_optional_prediction_session() {
-        model
-            .runtime()
-            .evaluate_arrays(&[target_forward_output.pre_final_normalization_hidden_states()])
-            .map_err(Qwen3_5ExecutionError::from)?;
-        let last_hidden_row_index =
-            i32::try_from(prompt_token_count.saturating_sub(1)).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "terminal prefill token count exceeds the MLX int32 range",
-                }
-            })?;
-        let last_prompt_hidden_state = target_forward_output
-            .pre_final_normalization_hidden_state_at(model.runtime(), last_hidden_row_index)
-            .map_err(Qwen3_5ExecutionError::from)?;
-        let first_generated_token =
-            active_request
-                .build_generated_token(model, target_forward_output.final_logits())
-                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                    description:
-                        "failed to sample the first generated token from terminal prefill logits",
-                })?;
-        active_request.set_pending_generated_token(first_generated_token);
-        if let Some(prediction_session) = active_request.optional_prediction_session_mut() {
-            prediction_session.set_target_hidden_states(Some(last_prompt_hidden_state));
-        }
-        return Ok(());
-    }
     let first_generated_token = active_request
         .build_generated_token(model, target_forward_output.final_logits())
         .map_err(|_| Qwen3_5ExecutionError::InvalidInput {

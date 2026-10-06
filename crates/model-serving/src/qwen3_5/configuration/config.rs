@@ -5,16 +5,6 @@ use super::config_validation;
 use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
 use super::quantizations::optiq::OptiQQuantizationProfile;
 
-/// Global MTP quantization fallback parsed from `mtplx_mtp_quantization`.
-/// When an MTP module lacks a per-module override in `mtp_quantized_module_profiles`,
-/// `quantization_profile_for_module` falls back to this profile. `None` when the
-/// model does not declare quantized MTP.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MtplxMtpQuantizationFallback {
-    pub(crate) bits: u32,
-    pub(crate) group_size: u32,
-}
-
 const EXPECTED_MOE_ARCHITECTURE: &str = "Qwen3_5MoeForConditionalGeneration";
 const EXPECTED_DENSE_ARCHITECTURE: &str = "Qwen3_5ForConditionalGeneration";
 const EXPECTED_MOE_MODEL_TYPE: &str = "qwen3_5_moe";
@@ -44,22 +34,12 @@ pub struct Qwen3_5Config {
     pub(super) eos_token_ids: Vec<u32>,
     pub(super) has_tied_embeddings: bool,
     pub(super) quantized_module_profiles: BTreeMap<String, OptiQQuantizationProfile>,
-    pub(super) mtp_quantized_module_profiles: BTreeMap<String, OptiQQuantizationProfile>,
-    /// Global MTP quantization fallback from `mtplx_mtp_quantization`.
-    /// When an MTP module lacks a per-module override in `mtp_quantized_module_profiles`,
-    /// `quantization_profile_for_module` falls back to this profile. `None` when
-    /// the model does not declare quantized MTP.
-    pub(super) mtxplx_mtp_quantization_fallback: Option<MtplxMtpQuantizationFallback>,
     pub(super) model_weight_storage: ModelWeightStorage,
     pub(super) default_quantization_bits: u32,
     pub(super) default_quantization_group_size: u32,
     pub(super) text_config: Qwen3_5TextConfig,
     pub(super) activation_dtype: String,
     pub(super) feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
-    /// Path to the MTP sidecar safetensors file, relative to the model directory.
-    /// Populated from config.json's `mlx_lm_extra_tensors.mtp_file`.
-    /// `None` when MTP weights are embedded in the shard index or absent.
-    pub(super) sidecar_mtp_file: Option<String>,
 }
 
 impl Qwen3_5Config {
@@ -132,7 +112,6 @@ impl Qwen3_5Config {
             .validate(feed_forward_architecture)?;
         let (
             quantized_module_profiles,
-            mtp_quantized_module_profiles,
             model_weight_storage,
             default_quantization_bits,
             default_quantization_group_size,
@@ -140,13 +119,7 @@ impl Qwen3_5Config {
             config_document.quantization.as_ref(),
             config_document.quantization_config.as_ref(),
         ) {
-            (None, None) => (
-                BTreeMap::new(),
-                BTreeMap::new(),
-                ModelWeightStorage::NativeBfloat16,
-                0,
-                0,
-            ),
+            (None, None) => (BTreeMap::new(), ModelWeightStorage::NativeBfloat16, 0, 0),
             (quantization, quantization_config) => {
                 if let (Some(quantization), Some(quantization_config)) =
                     (quantization, quantization_config)
@@ -161,41 +134,24 @@ impl Qwen3_5Config {
                 )?;
                 let quantized_module_profiles = quantization
                     .validate(&config_document.text_config, feed_forward_architecture)?;
-                let mtp_quantized_module_profiles = quantization.mtp_quantized_module_profiles();
                 (
                     quantized_module_profiles,
-                    mtp_quantized_module_profiles,
                     ModelWeightStorage::AffineQuantized,
                     quantization.default_bits(),
                     quantization.default_group_size(),
                 )
             }
         };
-        let sidecar_mtp_file = config_document.mtp_file.or_else(|| {
-            config_document
-                .mlx_lm_extra_tensors
-                .and_then(|extra| extra.mtp_file)
-        });
-        let mtxplx_mtp_quantization_fallback =
-            config_document
-                .mtxplx_mtp_quantization
-                .map(|mtxplx| MtplxMtpQuantizationFallback {
-                    bits: mtxplx.bits,
-                    group_size: mtxplx.group_size,
-                });
         Ok(Self {
             eos_token_ids,
             has_tied_embeddings: config_document.tie_word_embeddings,
             quantized_module_profiles,
-            mtp_quantized_module_profiles,
-            mtxplx_mtp_quantization_fallback,
             model_weight_storage,
             default_quantization_bits,
             default_quantization_group_size,
             text_config: config_document.text_config,
             activation_dtype,
             feed_forward_architecture,
-            sidecar_mtp_file,
         })
     }
 }

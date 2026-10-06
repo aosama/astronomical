@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin};
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities, MtpRuntimeState,
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
@@ -353,8 +353,6 @@ impl ScriptedExecutor {
                     max_output_tokens: 20_480,
                     context_window: 262_144,
                 },
-                MtpRuntimeState::Disabled,
-                None,
             ),
             stream_events,
         }

@@ -238,7 +238,6 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
             configured_maximum_context_tokens: None,
             default_maximum_context_tokens: 2_048,
             configured_chunking_fields: Default::default(),
-            acceleration_availability: Default::default(),
             worker_model_configuration: test_worker_model_configuration(DELAYED_MODEL_ID),
         },
     )]));
@@ -314,8 +313,6 @@ fn test_worker_model_configuration(model_id: &str) -> WorkerModelConfiguration {
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
         },
-        mtp_enabled: true,
-        mtp_draft_depth: None,
     })
 }
 

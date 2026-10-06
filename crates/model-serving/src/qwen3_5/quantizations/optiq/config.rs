@@ -170,24 +170,6 @@ impl OptiQQuantizationConfig {
 
         Ok(quantized_module_profiles)
     }
-
-    /// Returns the artifact-declared quantization profiles for optional MTP modules.
-    #[must_use]
-    pub fn mtp_quantized_module_profiles(&self) -> BTreeMap<String, OptiQQuantizationProfile> {
-        self.module_overrides
-            .iter()
-            .filter(|(module_name, _)| module_name.starts_with("language_model.mtp."))
-            .map(|(module_name, quantization_override)| {
-                (
-                    module_name.clone(),
-                    OptiQQuantizationProfile {
-                        bits: quantization_override.bits,
-                        group_size: quantization_override.group_size,
-                    },
-                )
-            })
-            .collect()
-    }
 }
 
 fn expected_quantized_module_names(

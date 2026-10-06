@@ -251,34 +251,6 @@
         }
       }
     },
-    "acceleration": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "mtp": {
-          "$ref": "#/$defs/mtp"
-        }
-      }
-    },
-    "mtp": {
-      "type": "object",
-      "description": "Optional multi-token prediction preference for the containing target model.",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "When true, this model may use compatible multi-token prediction tensors. Omission stays target-only so decode does not regress until the user opts in."
-        },
-        "draft_depth": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 3,
-          "description": "Optional proposal depth; omission selects validated artifact policy."
-        }
-      },
-      "x-astronomical-apply-mode": "model-reload"
-    },
     "diagnostics": {
       "type": "object",
       "description": "Bounded diagnostics policy shared by Astronomical processes.",

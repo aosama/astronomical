@@ -38,45 +38,6 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(SystemMemoryPressureTitle.unavailable.rawValue, "Unavailable")
   }
 
-  func test_should_show_effective_mtp_runtime_state_for_every_status() throws {
-    let runtimeStateCases: [(runtimeState: String, readyModelJSON: String, expectedTitle: String)] = [
-      ("active", #", "ready_model_id":"Ornith""#, "Active"),
-      ("target_only", #", "ready_model_id":"Ornith""#, "Standard generation"),
-      ("unavailable", #", "ready_model_id":"Ornith""#, "Unavailable"),
-      ("disabled", #", "ready_model_id":"Ornith""#, "Disabled"),
-      ("disabled", "", "Not loaded"),
-    ]
-
-    for runtimeStateCase in runtimeStateCases {
-      let statusDocument = try JSONDecoder().decode(
-        SupervisorStatusDocument.self,
-        from: Data(
-          """
-          {"status":"ready","activity":"idle","mtp_enabled":true,"mtp_runtime_state":"\(runtimeStateCase.runtimeState)"\(runtimeStateCase.readyModelJSON)}
-          """.utf8)
-      )
-
-      XCTAssertEqual(
-        statusDocument.mtpRuntimeStateTitle,
-        runtimeStateCase.expectedTitle,
-        "unexpected title for \(runtimeStateCase.runtimeState)"
-      )
-    }
-  }
-
-  func test_should_decode_the_bounded_mtp_unavailable_reason() throws {
-    let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
-      from: Data(
-        #"{"status":"ready","activity":"idle","ready_model_id":"Ornith","mtp_runtime_state":"unavailable","mtp_unavailable_reason":"MTP layer count does not match the model configuration"}"#.utf8)
-    )
-
-    XCTAssertEqual(
-      statusDocument.mtpUnavailableReason,
-      "MTP layer count does not match the model configuration"
-    )
-  }
-
   func test_should_use_the_colorblind_safe_mlx_memory_palette() throws {
     let expectedColorComponents: [(Color, CGFloat, CGFloat, CGFloat)] = [
       (MlxMemoryPalette.experts, 10, 132, 255),

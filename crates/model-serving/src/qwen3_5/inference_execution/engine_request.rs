@@ -17,9 +17,6 @@ use crate::{
 
 use super::super::text::sampler;
 use super::qwen3_5_runtime_error;
-use crate::qwen3_5::multi_token_prediction::{
-    MultiTokenPredictionRequestAllocationCheckpoint, Qwen3_5MultiTokenPredictionRequest,
-};
 use crate::qwen3_5::{
     Qwen3_5Model, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
 };
@@ -28,8 +25,6 @@ use astronomical_mlx_c_rust::MlxArray;
 /// Retained request state needed to retry one rejected prompt-processing attempt.
 pub(super) struct Qwen3_5PrefillRequestCheckpoint {
     request_decoder_state_allocation_checkpoint: RequestDecoderStateStackAllocationCheckpoint,
-    optional_prediction_session_allocation_checkpoint:
-        Option<MultiTokenPredictionRequestAllocationCheckpoint>,
     prefill_cursor: usize,
     next_position_tokens: u32,
     consumed_visual_embedding_count: usize,
@@ -67,7 +62,6 @@ pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
     pub(super) image_pad_token_id: u32,
     pub(super) thinking_budget_state: Qwen3_5ThinkingBudgetState,
     pub(super) performance_attribution: PerformanceAttribution,
-    pub(super) optional_prediction_session: Option<Qwen3_5MultiTokenPredictionRequest>,
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
     pub(super) persistent_prompt_cache_diagnostics:
         Option<WorkerPersistentPromptCacheRequestDiagnostics>,
@@ -92,11 +86,6 @@ impl Qwen3_5EngineRequest {
             request_decoder_state_allocation_checkpoint: self
                 .request_decoder_state
                 .allocation_checkpoint()?,
-            optional_prediction_session_allocation_checkpoint: self
-                .optional_prediction_session
-                .as_ref()
-                .map(Qwen3_5MultiTokenPredictionRequest::allocation_checkpoint)
-                .transpose()?,
             prefill_cursor: self.prefill_cursor,
             next_position_tokens: self.next_position_tokens,
             consumed_visual_embedding_count: self.consumed_visual_embedding_count,
@@ -108,27 +97,9 @@ impl Qwen3_5EngineRequest {
         &mut self,
         prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
     ) -> Result<(), MlxRuntimeError> {
-        if self.optional_prediction_session.is_some()
-            != prefill_request_checkpoint
-                .optional_prediction_session_allocation_checkpoint
-                .is_some()
-        {
-            return Err(MlxRuntimeError::RuntimeOperation {
-                operation: "restore Qwen3.5 prefill request checkpoint",
-                description:
-                    "multi-token prediction request-state availability changed during a retryable prompt attempt"
-                        .to_owned(),
-            });
-        }
         self.request_decoder_state.restore_allocation_checkpoint(
             prefill_request_checkpoint.request_decoder_state_allocation_checkpoint,
         )?;
-        if let (Some(optional_prediction_session), Some(allocation_checkpoint)) = (
-            self.optional_prediction_session.as_mut(),
-            prefill_request_checkpoint.optional_prediction_session_allocation_checkpoint,
-        ) {
-            optional_prediction_session.restore_allocation_checkpoint(allocation_checkpoint)?;
-        }
         self.prefill_cursor = prefill_request_checkpoint.prefill_cursor;
         self.next_position_tokens = prefill_request_checkpoint.next_position_tokens;
         self.consumed_visual_embedding_count =
@@ -244,29 +215,6 @@ impl Qwen3_5EngineRequest {
         generated_token_outcome
     }
 
-    /// Returns the sampling strategy this request resolves its tokens with.
-    pub(in crate::qwen3_5) fn sampling_strategy(&self) -> Qwen3_5SamplingStrategy {
-        self.sampling_strategy
-    }
-
-    /// Hands the keyed sampling stream to decode operations that need their own
-    /// random-key splits, such as sampled multi-token-prediction verification.
-    pub(in crate::qwen3_5) fn take_sampling_random_state(
-        &mut self,
-    ) -> Result<MlxArray, InferenceEngineError> {
-        self.random_state
-            .take()
-            .ok_or_else(|| super::fatal_engine_error("sampled request lost its random state"))
-    }
-
-    /// Returns the keyed sampling stream after a decode operation used it.
-    pub(in crate::qwen3_5) fn restore_sampling_random_state(
-        &mut self,
-        sampling_random_state: MlxArray,
-    ) {
-        self.random_state = Some(sampling_random_state);
-    }
-
     pub(crate) fn advance_position(
         &mut self,
         forwarded_token_count: usize,
@@ -281,83 +229,8 @@ impl Qwen3_5EngineRequest {
         Ok(())
     }
 
-    pub(crate) fn take_optional_prediction_session(
-        &mut self,
-    ) -> Option<Qwen3_5MultiTokenPredictionRequest> {
-        self.optional_prediction_session.take()
-    }
-
-    pub(crate) fn restore_optional_prediction_session(
-        &mut self,
-        optional_prediction_session: Qwen3_5MultiTokenPredictionRequest,
-    ) {
-        self.optional_prediction_session = Some(optional_prediction_session);
-    }
-
-    pub(crate) fn clear_optional_prediction_session(&mut self) {
-        self.optional_prediction_session = None;
-    }
-
-    pub(crate) fn optional_prediction_session_mut(
-        &mut self,
-    ) -> Option<&mut Qwen3_5MultiTokenPredictionRequest> {
-        self.optional_prediction_session.as_mut()
-    }
-
-    pub(crate) fn optional_prediction_session(
-        &self,
-    ) -> Option<&Qwen3_5MultiTokenPredictionRequest> {
-        self.optional_prediction_session.as_ref()
-    }
-
-    pub(crate) fn has_optional_prediction_session(&self) -> bool {
-        self.optional_prediction_session.is_some()
-    }
-
-    pub(crate) fn has_queued_prediction_tokens(&self) -> bool {
-        self.optional_prediction_session
-            .as_ref()
-            .is_some_and(|prediction_request| prediction_request.has_verified_generated_token_ids())
-    }
-
-    pub(crate) fn additional_context_state_payload_bytes(&self) -> u64 {
-        self.optional_prediction_session
-            .as_ref()
-            .map_or(0, |optional_prediction_session| {
-                optional_prediction_session.context_state_payload_byte_count()
-            })
-    }
-
-    pub(crate) fn request_decoder_state(&self) -> &RequestDecoderStateStack {
-        &self.request_decoder_state
-    }
-
-    pub(crate) fn request_decoder_state_mut(&mut self) -> &mut RequestDecoderStateStack {
-        &mut self.request_decoder_state
-    }
-
-    pub(crate) fn next_position_tokens(&self) -> u32 {
-        self.next_position_tokens
-    }
-
-    pub(crate) fn generated_token_count(&self) -> u16 {
-        self.generated_token_count
-    }
-
-    pub(crate) fn maximum_output_tokens(&self) -> u16 {
-        self.maximum_output_tokens
-    }
-
     pub(crate) fn is_inside_thinking(&self) -> bool {
         self.thinking_budget_state.is_inside_thinking()
-    }
-
-    pub(crate) fn thinking_token_count(&self) -> u16 {
-        self.thinking_budget_state.thinking_token_count()
-    }
-
-    pub(crate) fn thinking_budget(&self) -> Option<u16> {
-        self.thinking_budget_state.thinking_budget()
     }
 
     pub(super) fn next_forced_thinking_transition_token_id(
@@ -389,112 +262,7 @@ impl Qwen3_5EngineRequest {
         self.thinking_budget_state.is_forcing_transition()
     }
 
-    pub(crate) fn set_next_position_tokens(&mut self, next_position_tokens: u32) {
-        self.next_position_tokens = next_position_tokens;
-    }
-
     pub(crate) fn set_pending_generated_token(&mut self, pending_generated_token: MlxArray) {
         self.pending_generated_token = Some(pending_generated_token);
-    }
-
-    pub(crate) fn clear_pending_generated_token(&mut self) {
-        self.pending_generated_token = None;
-    }
-
-    pub(crate) fn performance_attribution_mut(&mut self) -> &mut PerformanceAttribution {
-        &mut self.performance_attribution
-    }
-
-    pub(crate) fn with_decoder_state_and_performance_attribution<OperationOutput>(
-        &mut self,
-        operation: impl FnOnce(
-            &mut RequestDecoderStateStack,
-            &mut PerformanceAttribution,
-        ) -> OperationOutput,
-    ) -> OperationOutput {
-        let Self {
-            request_decoder_state,
-            performance_attribution,
-            ..
-        } = self;
-        operation(request_decoder_state, performance_attribution)
-    }
-
-    pub(crate) fn with_optional_prediction_session_and_performance_attribution<OperationOutput>(
-        &mut self,
-        operation: impl FnOnce(
-            &mut Qwen3_5MultiTokenPredictionRequest,
-            &mut PerformanceAttribution,
-        ) -> OperationOutput,
-    ) -> Option<OperationOutput> {
-        let Self {
-            optional_prediction_session,
-            performance_attribution,
-            ..
-        } = self;
-        optional_prediction_session
-            .as_mut()
-            .map(|optional_prediction_session| {
-                operation(optional_prediction_session, performance_attribution)
-            })
-    }
-
-    pub(crate) fn with_input_token_range_and_optional_prediction_session_and_performance_attribution<
-        OperationOutput,
-    >(
-        &mut self,
-        input_token_start: usize,
-        input_token_end: usize,
-        operation: impl FnOnce(
-            &[u32],
-            &mut Qwen3_5MultiTokenPredictionRequest,
-            &mut PerformanceAttribution,
-        ) -> OperationOutput,
-    ) -> Option<OperationOutput> {
-        let Self {
-            input_token_ids,
-            optional_prediction_session,
-            performance_attribution,
-            ..
-        } = self;
-        let input_token_range = input_token_ids.get(input_token_start..input_token_end)?;
-        optional_prediction_session
-            .as_mut()
-            .map(|optional_prediction_session| {
-                operation(
-                    input_token_range,
-                    optional_prediction_session,
-                    performance_attribution,
-                )
-            })
-    }
-
-    pub(crate) fn with_input_token_range_and_decoder_state_and_performance_attribution<
-        OperationOutput,
-    >(
-        &mut self,
-        input_token_start: usize,
-        input_token_end: usize,
-        operation: impl FnOnce(
-            &[u32],
-            u32,
-            &mut RequestDecoderStateStack,
-            &mut PerformanceAttribution,
-        ) -> OperationOutput,
-    ) -> Option<OperationOutput> {
-        let Self {
-            input_token_ids,
-            next_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-            ..
-        } = self;
-        let input_token_range = input_token_ids.get(input_token_start..input_token_end)?;
-        Some(operation(
-            input_token_range,
-            *next_position_tokens,
-            request_decoder_state,
-            performance_attribution,
-        ))
     }
 }

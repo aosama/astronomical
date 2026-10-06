@@ -103,7 +103,6 @@ pub(super) struct Qwen4ExpTextConfigDocument {
     pub ple_layer_ids: Option<Vec<u32>>,
     pub ple_conv_kernel_size: Option<u32>,
     pub make_ngram_vocab_size_divisible_by: Option<u32>,
-    pub mtp_num_hidden_layers: Option<u32>,
     pub eos_token_id: Option<u32>,
 }
 

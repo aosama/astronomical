@@ -236,7 +236,6 @@ pub(crate) fn write_cache_pressure_worker_config(
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": PROMPT_CACHE_MAXIMUM_SIZE_GB,
         "performance_attribution_enabled": true,
-        "mtp_enabled": false,
         "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 2_048,
         },

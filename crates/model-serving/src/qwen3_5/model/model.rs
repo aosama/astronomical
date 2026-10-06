@@ -22,7 +22,6 @@ use super::{
     RequestDecoderStateStack,
 };
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
-use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpWeights;
 use astronomical_mlx_c_rust::{
     MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
 };
@@ -34,7 +33,6 @@ pub struct Qwen3_5Model {
     pub(crate) config: Qwen3_5Config,
     pub(crate) decoder_cache_layout: DecoderCacheLayout,
     pub(crate) weights: Qwen3_5Weights,
-    pub(crate) mtp_weights: Option<Qwen3_5MtpWeights>,
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
@@ -54,8 +52,6 @@ pub struct Qwen3_5Model {
     /// Fused decode prework kernel; None when demoted or environment-disabled.
     pub(crate) gdn_decode_prework_kernel: Option<MlxMetalKernel>,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
-    pub(crate) target_verification_quantized_linear_kernel: Option<MlxMetalKernel>,
-    pub(crate) target_verification_four_row_quantized_linear_kernel: Option<MlxMetalKernel>,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
     pub(crate) chunking: Qwen3_5ModelChunkingConfiguration,
@@ -84,9 +80,6 @@ pub struct Qwen3_5Model {
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation:
         RefCell<crate::qwen3_5_moe::model::route_observation::RouteObservationCollector>,
-    /// Compiled multi-token-prediction verification windows, one per row
-    /// count, traced lazily on first use.
-    pub(crate) mtp_verify_lane: crate::qwen3_5::mtp_verify::compiled_window::MtpVerifyWindowLane,
 }
 
 impl Qwen3_5Model {
@@ -210,10 +203,10 @@ impl Qwen3_5Model {
         self.vision_model.as_ref()
     }
 
-    /// Returns whether a compatible resident MTP head is available.
+    /// Returns the resident target payload bytes wired after materialization.
     #[must_use]
-    pub fn mtp_weights(&self) -> bool {
-        self.mtp_weights.is_some()
+    pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
+        self.weights.total_payload_bytes()
     }
 
     /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.
@@ -405,7 +398,6 @@ impl Qwen3_5Model {
             layer_model_state,
             token_position_offsets,
             boundary_checkpoint_collector,
-            paged_prefill_execution_mode,
             performance_attribution,
         )?;
         self.forward_decoder_layer_feed_forward(

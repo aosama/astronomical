@@ -10,7 +10,6 @@ fn should_parse_the_frozen_qwen3_5_moe_text_core_config() {
     assert_eq!(ornith_config.hidden_size(), 2_048);
     assert_eq!(ornith_config.layer_count(), 40);
     assert_eq!(ornith_config.vocabulary_size(), 248_320);
-    assert_eq!(ornith_config.mtp_layer_count(), 1);
     assert_eq!(ornith_config.torch_dtype(), "bfloat16");
     assert_eq!(ornith_config.hidden_activation(), "silu");
     assert_eq!(ornith_config.rms_norm_epsilon_bits(), 1e-6_f32.to_bits());

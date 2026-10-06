@@ -1,6 +1,5 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpDepthStatus,
-    MtpRuntimeState, WorkerEvent,
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, WorkerEvent,
 };
 
 use crate::{
@@ -23,25 +22,12 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     type InferenceRequest = ModelFamilyInferenceRequest;
     type RequestOutput = ModelFamilyRequestOutput;
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         match self {
-            Self::Qwen3_5(processor) => {
-                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
-            }
-            Self::Laguna(processor) => {
-                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
-            }
-            Self::K2HorizonMoVA(processor) => {
-                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
-            }
-            Self::DeepSeekV4(processor) => {
-                processor.ready_event(mtp_runtime_state, mtp_unavailable_reason, mtp_depth_status)
-            }
+            Self::Qwen3_5(processor) => processor.ready_event(),
+            Self::Laguna(processor) => processor.ready_event(),
+            Self::K2HorizonMoVA(processor) => processor.ready_event(),
+            Self::DeepSeekV4(processor) => processor.ready_event(),
         }
     }
 

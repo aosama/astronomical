@@ -1,5 +1,5 @@
 use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MlxMemorySnapshotSource, MtpRuntimeState, WorkerMlxMemorySnapshot,
+    ChatModelCapabilities, MlxMemorySnapshotSource, WorkerMlxMemorySnapshot,
 };
 use astronomical_supervisor::{
     ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
@@ -25,8 +25,6 @@ pub(super) fn ready_health_snapshot_with_model() -> WorkerHealthSnapshot {
             max_output_tokens: 20_480,
             context_window: 262_144,
         },
-        MtpRuntimeState::Disabled,
-        None,
     )
 }
 

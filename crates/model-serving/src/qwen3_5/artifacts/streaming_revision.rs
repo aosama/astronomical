@@ -12,13 +12,10 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use crate::artifact_validation::{
-    ArtifactValidationError, RequiredFileProfile, TensorFeature, TensorSemanticRole,
-    ValidatedSafetensorsSource, hugging_face_snapshot_model_id, validate_required_file,
-    validate_required_files,
+    ArtifactValidationError, RequiredFileProfile, ValidatedSafetensorsSource,
+    hugging_face_snapshot_model_id, validate_required_file, validate_required_files,
 };
-use crate::qwen3_5::artifacts::artifact::{
-    derive_revision_from_config_bytes, parse_optional_mtp_contract,
-};
+use crate::qwen3_5::artifacts::artifact::derive_revision_from_config_bytes;
 use crate::qwen3_5::artifacts::artifact_helpers::{
     captured_required_file_bytes, read_required_file_bytes, required_file,
 };
@@ -32,10 +29,7 @@ use crate::qwen3_5::artifacts::vision_validation;
 use crate::qwen3_5::artifacts::{
     OptiQMetadata, Qwen3_5Config, Qwen3_5ShardIndex, Qwen3_5VisionConfig,
 };
-use crate::qwen3_5::artifacts::{
-    Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5MtpArtifactCapability,
-};
-use crate::qwen3_5::multi_token_prediction;
+use crate::qwen3_5::artifacts::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
 
 /// On-disk format version of a converted per-expert streaming revision.
 const STREAMING_REVISION_FORMAT_VERSION: u32 = 3;
@@ -250,7 +244,6 @@ impl Qwen3_5ArtifactValidator {
             .as_ref()
             .map(qwen3_5_vision_tensor_profiles)
             .unwrap_or_default();
-        let mtp_tensor_profiles = multi_token_prediction::qwen3_5_mtp_tensor_profiles(&config);
         let mut tensor_inventory = build_index_tensor_inventory(&shard_index)?;
         let sparse_expert_names: BTreeSet<String> = language_tensor_profiles
             .iter()
@@ -258,22 +251,7 @@ impl Qwen3_5ArtifactValidator {
             .map(|tensor_profile| tensor_profile.name.clone())
             .collect();
         tensor_inventory.remove_canonical_names(&sparse_expert_names);
-        let canonical_mtp_names: BTreeSet<String> = tensor_inventory
-            .locations()
-            .filter(|location| location.semantic_role() == TensorSemanticRole::MultiTokenPrediction)
-            .map(|location| location.canonical_name().to_owned())
-            .collect();
-        let mtp_contract = parse_optional_mtp_contract(model_directory, config_bytes);
-        let mtp_artifact_capability = Qwen3_5MtpArtifactCapability::from_canonical_tensor_names(
-            &config,
-            canonical_mtp_names,
-            mtp_contract.as_ref().ok(),
-        );
-        if !mtp_artifact_capability.is_mtp_capable() {
-            tensor_inventory.remove_feature(TensorFeature::MultiTokenPrediction);
-        }
         let mut recognized_tensor_profiles = language_tensor_profiles.clone();
-        recognized_tensor_profiles.extend(mtp_tensor_profiles.clone());
         recognized_tensor_profiles.extend(vision_tensor_profiles.clone());
         let source_id_by_file_name_map = source_id_by_file_name(&shard_index)?;
         let mut safetensors_sources = HashMap::new();
@@ -311,11 +289,9 @@ impl Qwen3_5ArtifactValidator {
             total_payload_bytes: validated_total_payload_bytes,
             has_separate_vision_sidecar,
             has_validated_vision_tower: validated_vision_tower_storage.has_validated_vision_tower(),
-            mtp_artifact_capability,
             tensor_inventory,
             safetensors_sources,
             source_id_by_file_name: source_id_by_file_name_map,
-            mtp_sidecar_file_name: None,
             model_id,
             revision,
             max_output_tokens,

@@ -3,8 +3,6 @@ pub(crate) mod adaptive_ram_growth_logging;
 #[cfg(feature = "direct-mlx")]
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
-mod attention_execution;
-#[cfg(feature = "direct-mlx")]
 mod decoder_cache_dtype_flow;
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]
@@ -43,10 +41,6 @@ pub(crate) mod model;
 #[cfg(feature = "direct-mlx")]
 mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
-mod target_verification_four_row_quantized_linear;
-#[cfg(feature = "direct-mlx")]
-mod target_verification_quantized_linear;
-#[cfg(feature = "direct-mlx")]
 mod tensor_slicing;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod weights;
@@ -54,11 +48,7 @@ pub(crate) mod weights;
 pub(crate) mod weights_validation;
 
 #[cfg(feature = "direct-mlx")]
-pub use super::multi_token_prediction::Qwen3_5MtpForwardOutput;
-#[cfg(feature = "direct-mlx")]
 pub use error::Qwen3_5ExecutionError;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use forward_contract::{forward_state_arrays, validate_forward_input};
 #[cfg(feature = "direct-mlx")]
 pub use forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
@@ -72,17 +62,10 @@ pub use gated_delta_boundary_checkpoints::{
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
 #[cfg(feature = "direct-mlx")]
-pub(crate) use gated_delta_pipelined_kernel::{
-    THREADGROUP_THREAD_COUNT as GDN_CHECKPOINT_THREADGROUP_THREAD_COUNT,
-    VALUE_ROW_BLOCK_SIZE as GDN_CHECKPOINT_VALUE_ROW_BLOCK_SIZE,
-};
-#[cfg(feature = "direct-mlx")]
 pub use gated_delta_sequence::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
     qwen3_5_gated_delta_sequence_ops_fallback,
 };
-#[cfg(feature = "direct-mlx")]
-pub(crate) use gdn_decode_prework_kernel::LANE_COUNT as GDN_PREWORK_LANE_COUNT;
 #[cfg(feature = "direct-mlx")]
 pub use gdn_decode_prework_kernel::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
@@ -91,15 +74,6 @@ pub use gdn_decode_prework_kernel::{
 pub use model::Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-#[cfg(feature = "direct-mlx")]
-#[doc(hidden)]
-pub use target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel;
-#[cfg(feature = "direct-mlx")]
-#[doc(hidden)]
-pub use target_verification_quantized_linear::{
-    Qwen3_5TargetVerificationProjection, Qwen3_5TargetVerificationProjectionDispatch,
-    qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
-};
 #[cfg(feature = "direct-mlx")]
 pub use weights::Qwen3_5Weights;
 

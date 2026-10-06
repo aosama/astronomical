@@ -106,7 +106,6 @@ fn mixed_reload_model_policy(model_root: &std::path::Path) -> RuntimeModelPolicy
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 2_048,
         configured_chunking_fields: Default::default(),
-        acceleration_availability: Default::default(),
         worker_model_configuration: WorkerModelConfiguration::Autoregressive(
             WorkerAutoregressiveModelConfiguration {
                 model_id: MODEL_ID.to_owned(),
@@ -125,8 +124,6 @@ fn mixed_reload_model_policy(model_root: &std::path::Path) -> RuntimeModelPolicy
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
-                mtp_enabled: true,
-                mtp_draft_depth: None,
             },
         ),
     }

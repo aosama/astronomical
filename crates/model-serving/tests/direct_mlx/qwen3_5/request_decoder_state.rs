@@ -1,10 +1,9 @@
 use astronomical_model_serving::{
     ConvolutionState, DecoderCacheLayerLayout, DecoderCacheState, DecoderCacheTensorDtype,
     DecoderCacheTensorLayout, FullAttentionKeyValueState, GatedDeltaRecurrentState,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint, RequestDecoderStateStack,
+    RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use std::collections::HashMap;
 use tokio::sync::MutexGuard;
 
 use crate::common::qwen3_5_moe::{
@@ -25,65 +24,6 @@ async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
     )
     .expect("the direct MLX runtime should initialize");
     (direct_mlx_guard, runtime)
-}
-
-#[tokio::test]
-async fn should_restore_attention_only_state_at_a_three_row_verifier_boundary() {
-    let (_direct_mlx_guard, runtime) = test_runtime().await;
-    let decoder_cache_layout = astronomical_model_serving::DecoderCacheLayout::new(vec![
-        DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
-                "attention.keys",
-                DecoderCacheTensorDtype::BFloat16,
-                vec![1, 1, 0, 1],
-                2,
-            ),
-            DecoderCacheTensorLayout::sequence(
-                "attention.values",
-                DecoderCacheTensorDtype::BFloat16,
-                vec![1, 1, 0, 1],
-                2,
-            ),
-            4,
-        ),
-    ])
-    .expect("the attention-only cache layout should validate");
-    let mut request_state =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-            .expect("the attention-only request state should initialize");
-    let DecoderCacheState::AppendOnlyAttention { attention } = request_state
-        .layer_mut(0)
-        .expect("the request should retain its attention layer")
-    else {
-        panic!("the synthetic layer should use append-only attention");
-    };
-    let keys = runtime
-        .array_from_f32(&[0.0; 4], &[1, 1, 4, 1])
-        .expect("the verifier keys should be valid");
-    let values = runtime
-        .array_from_f32(&[0.0; 4], &[1, 1, 4, 1])
-        .expect("the verifier values should be valid");
-    attention
-        .update_and_fetch(&runtime, &keys, &values, 0)
-        .expect("the verifier update should populate attention state");
-
-    request_state
-        .restore_verified_prefix(
-            3,
-            Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                completed_prefill_chunk_tokens: 3,
-                recurrent_snapshot_tensors: HashMap::new(),
-            },
-        )
-        .expect("a three-row verifier boundary should restore exactly");
-
-    let DecoderCacheState::AppendOnlyAttention { attention } = request_state
-        .layer(0)
-        .expect("the request should retain its attention layer")
-    else {
-        panic!("the synthetic layer should use append-only attention");
-    };
-    assert_eq!(attention.offset_tokens(), 3);
 }
 
 #[tokio::test]
@@ -330,7 +270,7 @@ async fn should_return_active_view_covering_only_written_tokens() {
 }
 
 #[tokio::test]
-async fn should_restore_decoder_state_stack_to_checkpoint_after_mtp_attention_update() {
+async fn should_restore_decoder_state_stack_to_checkpoint_after_later_attention_updates() {
     let (_direct_mlx_guard, runtime) = test_runtime().await;
     let ornith_config = frozen_ornith_1_0_config();
     let full_attention_layer_index = (0..ornith_config.layer_count() as usize)
@@ -340,10 +280,10 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_mtp_attention_up
 
     let initial_keys = runtime
         .array_from_f32(&[1.0], &[1, 1, 1, 1])
-        .expect("the initial MTP-test keys tensor should be valid");
+        .expect("the initial keys tensor should be valid");
     let initial_values = runtime
         .array_from_f32(&[2.0], &[1, 1, 1, 1])
-        .expect("the initial MTP-test values tensor should be valid");
+        .expect("the initial values tensor should be valid");
     let DecoderCacheState::AppendOnlyAttention { attention } = decoder_state_stack
         .layer_mut(full_attention_layer_index)
         .expect("the selected full-attention layer should exist")
@@ -358,12 +298,12 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_mtp_attention_up
         .checkpoint()
         .expect("checkpointing a populated decoder stack should capture its logical state");
 
-    let mtp_keys = runtime
+    let later_keys = runtime
         .array_from_f32(&[3.0], &[1, 1, 1, 1])
-        .expect("the MTP keys tensor should be valid");
-    let mtp_values = runtime
+        .expect("the later keys tensor should be valid");
+    let later_values = runtime
         .array_from_f32(&[4.0], &[1, 1, 1, 1])
-        .expect("the MTP values tensor should be valid");
+        .expect("the later values tensor should be valid");
     let DecoderCacheState::AppendOnlyAttention { attention } = decoder_state_stack
         .layer_mut(full_attention_layer_index)
         .expect("the selected full-attention layer should still exist")
@@ -371,17 +311,17 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_mtp_attention_up
         panic!("the selected layer should still be full-attention");
     };
     attention
-        .update_and_fetch(&runtime, &mtp_keys, &mtp_values, 1)
-        .expect("the MTP full-attention update should advance the logical offset");
+        .update_and_fetch(&runtime, &later_keys, &later_values, 1)
+        .expect("the later full-attention update should advance the logical offset");
     assert_eq!(
         attention.offset_tokens(),
         2,
-        "the MTP update should advance the full-attention offset"
+        "the later update should advance the full-attention offset"
     );
 
     decoder_state_stack
         .restore_checkpoint(decoder_state_checkpoint)
-        .expect("restoring the decoder checkpoint should discard MTP state");
+        .expect("restoring the decoder checkpoint should discard post-checkpoint state");
     let DecoderCacheState::AppendOnlyAttention { attention } = decoder_state_stack
         .layer(full_attention_layer_index)
         .expect("the selected full-attention layer should remain available after restore")

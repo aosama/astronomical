@@ -70,7 +70,7 @@ impl DecoderCacheState {
         }
     }
 
-    /// Captures this layer's current logical state for MTP rollback.
+    /// Captures this layer's current logical state for transactional rollback.
     pub fn checkpoint(&self) -> Result<DecoderCacheStateCheckpoint, MlxRuntimeError> {
         match self {
             Self::AppendOnlyAttention { attention } => {
@@ -108,7 +108,7 @@ impl DecoderCacheState {
         }
     }
 
-    /// Restores this layer to an MTP rollback point.
+    /// Restores this layer to a transactional rollback point.
     pub fn restore_checkpoint(
         &mut self,
         checkpoint: DecoderCacheStateCheckpoint,

@@ -36,12 +36,7 @@ impl ModelGenerationProcessor for DeepSeekV4UnavailableGenerationProcessor {
     type InferenceRequest = DeepSeekV4UnavailableInferenceRequest;
     type RequestOutput = DeepSeekV4UnavailableRequestOutput;
 
-    fn ready_event(
-        &self,
-        _mtp_runtime_state: astronomical_ipc_protocol::MtpRuntimeState,
-        _mtp_unavailable_reason: Option<String>,
-        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         WorkerEvent::ModelSwapFailed {
             loaded_model_remains_ready: false,
             model_load_failure_reason: DEEPSEEK_V4_UNAVAILABLE_REASON.to_owned(),

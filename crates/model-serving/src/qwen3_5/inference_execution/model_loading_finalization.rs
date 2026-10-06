@@ -3,42 +3,22 @@ use crate::{
     PerformanceAttribution, PerformanceAttributionOutcome,
 };
 
-use super::{Qwen3_5EngineState, Qwen3_5MtpRuntimeState};
+use super::Qwen3_5EngineState;
 
 impl Qwen3_5EngineState {
-    pub(super) fn engine_load_result_for_mtp_state(
+    pub(super) fn engine_load_result(
         &self,
         minimum_mlx_memory_ceiling_bytes: u64,
     ) -> EngineLoadResult {
-        let mtp_runtime_state = match self.mtp_runtime_state {
-            Qwen3_5MtpRuntimeState::Disabled => {
-                astronomical_ipc_protocol::MtpRuntimeState::Disabled
-            }
-            Qwen3_5MtpRuntimeState::TargetOnly => {
-                astronomical_ipc_protocol::MtpRuntimeState::TargetOnly
-            }
-            Qwen3_5MtpRuntimeState::Active => astronomical_ipc_protocol::MtpRuntimeState::Active,
-            Qwen3_5MtpRuntimeState::Unavailable => {
-                astronomical_ipc_protocol::MtpRuntimeState::Unavailable
-            }
-        };
         // Build readiness only after startup promotion has selected the owner.
         // The worker forwards this value instead of inferring mode from memory.
-        let mut engine_load_result = EngineLoadResult::new()
+        EngineLoadResult::new()
             .with_expert_memory_mode(
                 self.model
                     .as_ref()
                     .map(|loaded_model| loaded_model.expert_memory_mode()),
             )
-            .with_mtp_runtime_state(mtp_runtime_state)
-            .with_mtp_depth_status(self.mtp_depth_status);
-        if self.mtp_runtime_state == Qwen3_5MtpRuntimeState::Unavailable {
-            if let Some(mtp_unavailable_reason) = self.mtp_unavailable_reason.as_ref() {
-                engine_load_result =
-                    engine_load_result.with_mtp_unavailable_reason(mtp_unavailable_reason.clone());
-            }
-        }
-        engine_load_result.with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
+            .with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
     }
 
     pub(super) fn record_model_loading_performance_attribution(

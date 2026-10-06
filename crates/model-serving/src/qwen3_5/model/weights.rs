@@ -194,10 +194,6 @@ impl Qwen3_5Weights {
         self.model_shards.len()
     }
 
-    pub(crate) fn model_shards(&self) -> &[MlxSafetensors] {
-        &self.model_shards
-    }
-
     /// Returns the number of exactly bound executable tensors.
     #[must_use]
     pub const fn tensor_count(&self) -> usize {

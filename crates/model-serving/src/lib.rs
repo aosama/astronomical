@@ -38,16 +38,15 @@ mod structured_generation;
 
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
-#[doc(hidden)]
-pub use artifact_validation::validate_safetensors_profile_partitions_for_tests;
 pub use artifact_validation::{
     ArtifactValidationError, RequiredFileProfile, TensorDeclarationOrigin, TensorDtype,
-    TensorFeature, TensorInventory, TensorInventoryError, TensorLocation, TensorProfile,
-    TensorSemanticRole, TensorSourceId, ValidatedWeightsFile,
+    TensorInventory, TensorInventoryError, TensorLocation, TensorProfile, TensorSemanticRole,
+    TensorSourceId, ValidatedWeightsFile,
 };
 #[doc(hidden)]
 pub use artifact_validation::{
     RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests,
+    validate_safetensors_required_profiles_for_tests,
 };
 pub use astronomical_ipc_protocol::ExpertMemoryMode;
 #[cfg(feature = "direct-mlx")]
@@ -224,13 +223,11 @@ pub use memory::{
     MemoryBoundary, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
     MemoryCeilingUtilization, MemoryPhase, MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment,
     MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
-    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, MtpAdmission, MtpDepthDowngradeReason,
-    MtpDepthSelection, MtpDraftDepth, MtpDraftDepthError, MtpMemoryCandidate, MtpMemoryProjection,
-    MtpMemoryProjectionError, PagedExpertReclamationStep, PreviousTokenPrefetchCandidate,
-    PreviousTokenPrefetchLayerCapacity, PreviousTokenPrefetchPlan, RamBudgetGeometryError,
-    RequestExpertLayerRole, RequestExpertResidency, ResidentExpertWeight, RetainedExpertPageClass,
-    RotatingAdmissionError, classify_expert_memory_mode, combined_persistent_growth_bytes,
-    complete_layer_indexes_required_before_decode,
+    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, PagedExpertReclamationStep,
+    PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity, PreviousTokenPrefetchPlan,
+    RamBudgetGeometryError, RequestExpertLayerRole, RequestExpertResidency, ResidentExpertWeight,
+    RetainedExpertPageClass, RotatingAdmissionError, classify_expert_memory_mode,
+    combined_persistent_growth_bytes, complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, hot_expert_warm_slot_count,
@@ -298,35 +295,27 @@ pub use persistent_cache::{
     clear_persistent_prompt_cache_directory,
 };
 pub use qwen3_5::{
-    MAXIMUM_MTPLX_RUNTIME_BYTES, ModelWeightStorage, MtpVerificationDecision,
-    MtpVerificationDecisionError, OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
+    ModelWeightStorage, OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config,
     Qwen3_5ConfigError, Qwen3_5DecoderLayerCacheDtypes, Qwen3_5FeedForwardArchitecture,
     Qwen3_5GenerationProcessor, Qwen3_5ImageDimensions, Qwen3_5ImageGrid,
     Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5InferenceRequest,
-    Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract, Qwen3_5MtpContractError,
-    Qwen3_5MtpExpertsLayout, Qwen3_5MtpSidecarDeclaration, Qwen3_5MtpSidecarDeclarationError,
-    Qwen3_5MtpSidecarValidationError, Qwen3_5MtpSidecarValidationOutcome,
-    Qwen3_5MtpTargetOnlyReason, Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserError,
-    Qwen3_5ProcessedImage, Qwen3_5PromptError, Qwen3_5PromptRenderer,
-    Qwen3_5RamBudgetGeometryError, Qwen3_5RenderedPrompt, Qwen3_5RequestOutput,
-    Qwen3_5RequestOutputError, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy, Qwen3_5ShardIndex,
-    Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder, Qwen3_5TokenIds,
-    Qwen3_5Tokenizer, Qwen3_5TokenizerError, Qwen3_5ToolCall, Qwen3_5VisionConfig,
-    Qwen3_5VisionInputPlan, Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
+    Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserError, Qwen3_5ProcessedImage,
+    Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RamBudgetGeometryError,
+    Qwen3_5RenderedPrompt, Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig,
+    Qwen3_5SamplingStrategy, Qwen3_5ShardIndex, Qwen3_5ThinkingBudgetError,
+    Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder, Qwen3_5TokenIds, Qwen3_5Tokenizer,
+    Qwen3_5TokenizerError, Qwen3_5ToolCall, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
+    Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
     Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
     ValidatedQwen3_5Artifact, discover_sampler_config, discover_token_ids,
     mlx_ram_budget_model_geometry_from_validated_artifact, plan_qwen3_5_visual_embedding_suffix,
     plan_qwen3_5_visual_prompt_cache_block_inputs, qwen3_5_decoder_cache_layout,
-    qwen3_5_language_tensor_profiles, qwen3_5_mtp_effective_depth_and_reason_for_windows,
-    qwen3_5_mtp_effective_depth_for_windows, qwen3_5_mtp_request_is_eligible,
-    qwen3_5_mtp_sampled_acceptance_probability, qwen3_5_mtp_sampled_verification_decision,
-    qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles, qwen3_5_mtp_verification_decision,
-    qwen3_5_request_enables_thinking, qwen3_5_resident_language_tensor_profiles,
-    qwen3_5_vision_tensor_profiles, resolve_sampling_seed, translate_qwen3_5_preparation_error,
-    translate_request_output_error, validate_context_token_count,
-    validate_qwen3_5_mtp_sidecar_for_tests, validate_qwen3_5_mtp_sidecar_result_for_tests,
+    qwen3_5_language_tensor_profiles, qwen3_5_request_enables_thinking,
+    qwen3_5_resident_language_tensor_profiles, qwen3_5_vision_tensor_profiles,
+    resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
+    validate_context_token_count,
 };
 
 // Qwen-Image-2.1: the family's pure contracts, artifact validation, and geometry constants. The
@@ -369,26 +358,20 @@ pub use qwen_image_21::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{
     Qwen3_5Engine, Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
-    Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5MtpRequestState,
-    Qwen3_5MtpRequestStateAllocationCheckpoint, Qwen3_5MtpRuntimeState,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    Qwen3_5ModelChunkingConfiguration, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillExecutionContext,
     Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
-    Qwen3_5TargetForwardOutput, Qwen3_5TargetVerificationProjection,
-    Qwen3_5TargetVerificationProjectionDispatch, Qwen3_5VisionModel, Qwen3_5VisionPaddingZeroCache,
+    Qwen3_5TargetForwardOutput, Qwen3_5VisionModel, Qwen3_5VisionPaddingZeroCache,
     Qwen3_5VisionWeights, Qwen3_5Weights, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
-    VerifiedEmissionQueue, VerifiedTargetFrontier, four_row_split_k_quantized_linear_kernel,
     is_gdn_decode_prework_eligible, persistent_prompt_cache_publication_advances_parent_chain,
-    qwen3_5_apply_top_p_mask, qwen3_5_depth_one_mtp_window_fits, qwen3_5_full_attention_step,
-    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
+    qwen3_5_apply_top_p_mask, qwen3_5_full_attention_step, qwen3_5_gated_delta_checkpoint_kernel,
+    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
+    qwen3_5_gated_delta_sequence_ops_fallback,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
     qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
-    qwen3_5_inject_visual_embeddings, qwen3_5_mtp_runtime_configuration_after_load,
-    qwen3_5_mtp_runtime_state_after_load, qwen3_5_target_verification_quantized_linear,
-    safe_minimum_mlx_memory_ceiling_bytes, target_verification_quantized_linear_kernel,
+    qwen3_5_inject_visual_embeddings, safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]

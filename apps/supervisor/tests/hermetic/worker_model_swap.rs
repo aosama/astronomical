@@ -394,7 +394,6 @@ fn image_runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeM
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 0,
         configured_chunking_fields: Default::default(),
-        acceleration_availability: Default::default(),
         worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
             WorkerFlux2KleinModelConfiguration {
                 model_id: model_id.to_owned(),
@@ -436,7 +435,6 @@ pub(super) fn runtime_model_policy(
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 2_048,
         configured_chunking_fields: Default::default(),
-        acceleration_availability: Default::default(),
         worker_model_configuration: WorkerModelConfiguration::Autoregressive(
             WorkerAutoregressiveModelConfiguration {
                 model_id: model_id.to_owned(),
@@ -455,8 +453,6 @@ pub(super) fn runtime_model_policy(
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
-                mtp_enabled: true,
-                mtp_draft_depth: None,
             },
         ),
     }

@@ -172,11 +172,6 @@ impl Qwen3_5InferenceRequest {
     }
 
     #[cfg(feature = "direct-mlx")]
-    pub(crate) fn has_structured_generation(&self) -> bool {
-        self.structured_generation.is_some()
-    }
-
-    #[cfg(feature = "direct-mlx")]
     pub(crate) fn take_structured_generation(
         &mut self,
     ) -> Option<crate::structured_generation::StructuredTokenConstraint> {

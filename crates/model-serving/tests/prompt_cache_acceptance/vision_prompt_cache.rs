@@ -180,7 +180,6 @@ async fn load_visual_acceptance_engine(
         tokenizer.think_end_token_id(),
         model_directory,
         worker_chunking_configuration,
-        true,
     )
     .expect("the visual acceptance engine should construct");
     eprintln!("[visual-prompt-cache-acceptance] status=loading-model");

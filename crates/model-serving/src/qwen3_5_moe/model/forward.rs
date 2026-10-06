@@ -37,7 +37,6 @@ impl Qwen3_5Model {
                 && matches!(
                     paged_prefill_execution_mode,
                     Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
-                        | Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
                 )
             {
                 PerformanceOperation::ResidentMoeGraphConstruction
@@ -46,45 +45,14 @@ impl Qwen3_5Model {
             },
             |_performance_attribution| {
                 let router_logits = match &mixture_of_experts_weights.router_projection {
-                    Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => self
-                        .quantized_linear_for_paged_prefill_execution_mode(
-                            hidden_states,
-                            quantized_weights,
-                            paged_prefill_execution_mode,
-                        )?,
+                    Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => {
+                        self.quantized_linear(hidden_states, quantized_weights)?
+                    }
                     Qwen3_5MoERouterGateWeights::Unquantized(unquantized_weight) => {
                         let transposed_gate_weight =
                             self.runtime.transpose_axes(unquantized_weight, &[1, 0])?;
-                        if paged_prefill_execution_mode
-                            == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-                            && token_count > 1
-                        {
-                            let hidden_dimension = hidden_state_shape.last().copied().ok_or(
-                                Qwen3_5ExecutionError::InvalidInput {
-                                    description: "paged MoE hidden dimension is missing",
-                                },
-                            )?;
-                            let mut token_router_logits = Vec::with_capacity(token_count as usize);
-                            for token_position_index in 0..token_count {
-                                let token_hidden_states = self.runtime.slice(
-                                    hidden_states,
-                                    &[0, token_position_index, 0],
-                                    &[1, token_position_index + 1, hidden_dimension],
-                                    &[1, 1, 1],
-                                )?;
-                                token_router_logits.push(
-                                    self.runtime
-                                        .matmul(&token_hidden_states, &transposed_gate_weight)?,
-                                );
-                            }
-                            let token_router_logit_references =
-                                token_router_logits.iter().collect::<Vec<_>>();
-                            self.runtime
-                                .concatenate_axis(&token_router_logit_references, 1)?
-                        } else {
-                            self.runtime
-                                .matmul(hidden_states, &transposed_gate_weight)?
-                        }
+                        self.runtime
+                            .matmul(hidden_states, &transposed_gate_weight)?
                     }
                 };
                 routing::qwen3_5_moe_route_experts(
@@ -100,13 +68,11 @@ impl Qwen3_5Model {
         let should_use_loaded_model_mode = matches!(
             paged_prefill_execution_mode,
             Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
-                | Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
         );
         // Issue #536/#542: retain this decode token's route lazily. The array
         // stays lazy until the decode evaluation that materializes logits;
         // finalization only copies host identifiers. The trunk-layer bound
-        // excludes the MTP draft layer, which routes through this forward with
-        // the next layer index.
+        // covers every decoder layer routed through this forward.
         if should_use_loaded_model_mode
             && token_count == 1
             && layer_index < self.config.layer_count() as usize
@@ -129,7 +95,6 @@ impl Qwen3_5Model {
                 &selected_indices,
                 &selected_scores,
                 should_use_compiled_elementwise_graphs,
-                paged_prefill_execution_mode,
                 performance_attribution,
             );
         }
@@ -150,21 +115,6 @@ impl Qwen3_5Model {
                         PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
                         packed_manifest.payload_byte_count,
                     );
-                    if paged_prefill_execution_mode
-                        == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-                    {
-                        return self
-                            .forward_moe_paged_target_verification_with_performance_attribution(
-                                hidden_states,
-                                mixture_of_experts_weights,
-                                &packed_weights,
-                                &packed_manifest,
-                                &selected_indices,
-                                &complete_expert_ids,
-                                &selected_scores,
-                                performance_attribution,
-                            );
-                    }
                     return self.forward_moe_paged_with_performance_attribution(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -217,21 +167,6 @@ impl Qwen3_5Model {
                         PerformanceCounter::RetainedRouteAssignmentHitCount,
                         u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
                     );
-                    if paged_prefill_execution_mode
-                        == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-                    {
-                        return self
-                            .forward_moe_paged_target_verification_with_performance_attribution(
-                                hidden_states,
-                                mixture_of_experts_weights,
-                                &packed_weights,
-                                &packed_manifest,
-                                &selected_indices,
-                                &complete_expert_ids,
-                                &selected_scores,
-                                performance_attribution,
-                            );
-                    }
                     return self.forward_moe_paged_with_performance_attribution(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -323,21 +258,6 @@ impl Qwen3_5Model {
                     } else {
                         routed_expert_ids
                     };
-                    if paged_prefill_execution_mode
-                        == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-                    {
-                        return self
-                            .forward_moe_paged_target_verification_with_performance_attribution(
-                                hidden_states,
-                                mixture_of_experts_weights,
-                                &packed_weights,
-                                &packed_manifest,
-                                &selected_indices,
-                                gather_expert_ids,
-                                &selected_scores,
-                                performance_attribution,
-                            );
-                    }
                     return self.forward_moe_paged_with_performance_attribution(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -365,23 +285,6 @@ impl Qwen3_5Model {
                         &selected_indices,
                         &selected_scores,
                         should_use_compiled_elementwise_graphs,
-                        false,
-                        paged_prefill_execution_mode,
-                        sorted_unique_expert_ids.as_deref(),
-                        performance_attribution,
-                    );
-                }
-                Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow => {
-                    return self.forward_moe_with_expert_store_paging(
-                        hidden_states,
-                        mixture_of_experts_weights,
-                        expert_pager,
-                        layer_index,
-                        token_count,
-                        &selected_indices,
-                        &selected_scores,
-                        should_use_compiled_elementwise_graphs,
-                        true,
                         paged_prefill_execution_mode,
                         sorted_unique_expert_ids.as_deref(),
                         performance_attribution,
@@ -424,7 +327,6 @@ impl Qwen3_5Model {
             &selected_indices,
             &selected_scores,
             should_use_compiled_elementwise_graphs,
-            false,
             paged_prefill_execution_mode,
             sorted_unique_expert_ids.as_deref(),
             performance_attribution,

@@ -136,16 +136,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
   let progress: Progress?
   let expertMemoryMode: String?
   let expertResidency: ExpertResidencySnapshot?
-  let mtpEnabled: Bool
-  let mtpConfiguredDraftDepth: UInt8?
-  let mtpArtifactMaximumDraftDepth: UInt8?
-  let mtpArtifactDefaultDraftDepth: UInt8?
-  let mtpResolvedRequestedDraftDepth: UInt8?
-  let mtpCappedDraftDepth: UInt8?
-  let mtpEffectiveExecutionDraftDepth: UInt8?
-  let mtpDepthResolutionReason: String?
-  let mtpRuntimeState: String
-  let mtpUnavailableReason: String?
   // True only when the current worker has emitted its runtime configuration event; configuration
   // intent alone is insufficient because a replacement worker can still fail before applying it.
   let workerRuntimeFeatureConfigurationApplied: Bool
@@ -167,16 +157,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     case readyModelSizeBytes = "ready_model_size_bytes"
     case expertMemoryMode = "expert_memory_mode"
     case expertResidency = "expert_residency"
-    case mtpEnabled = "mtp_enabled"
-    case mtpConfiguredDraftDepth = "mtp_configured_draft_depth"
-    case mtpArtifactMaximumDraftDepth = "mtp_artifact_maximum_draft_depth"
-    case mtpArtifactDefaultDraftDepth = "mtp_artifact_default_draft_depth"
-    case mtpResolvedRequestedDraftDepth = "mtp_resolved_requested_draft_depth"
-    case mtpCappedDraftDepth = "mtp_capped_draft_depth"
-    case mtpEffectiveExecutionDraftDepth = "mtp_effective_execution_draft_depth"
-    case mtpDepthResolutionReason = "mtp_depth_resolution_reason"
-    case mtpRuntimeState = "mtp_runtime_state"
-    case mtpUnavailableReason = "mtp_unavailable_reason"
     case workerRuntimeFeatureConfigurationApplied = "worker_runtime_feature_configuration_applied"
     case workerRuntimeFeatureConfiguration = "worker_runtime_feature_configuration"
     case mlxMemorySnapshot = "mlx_memory_snapshot"
@@ -204,16 +184,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     expertMemoryMode = try container.decodeIfPresent(String.self, forKey: .expertMemoryMode)
     expertResidency = try container.decodeIfPresent(
       ExpertResidencySnapshot.self, forKey: .expertResidency)
-    mtpEnabled = try container.decodeIfPresent(Bool.self, forKey: .mtpEnabled) ?? false
-    mtpConfiguredDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpConfiguredDraftDepth)
-    mtpArtifactMaximumDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpArtifactMaximumDraftDepth)
-    mtpArtifactDefaultDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpArtifactDefaultDraftDepth)
-    mtpResolvedRequestedDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpResolvedRequestedDraftDepth)
-    mtpCappedDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpCappedDraftDepth)
-    mtpEffectiveExecutionDraftDepth = try container.decodeIfPresent(UInt8.self, forKey: .mtpEffectiveExecutionDraftDepth)
-    mtpDepthResolutionReason = try container.decodeIfPresent(String.self, forKey: .mtpDepthResolutionReason)
-    mtpRuntimeState = try container.decodeIfPresent(String.self, forKey: .mtpRuntimeState) ?? "disabled"
-    mtpUnavailableReason = try container.decodeIfPresent(String.self, forKey: .mtpUnavailableReason)
     workerRuntimeFeatureConfigurationApplied = try container.decodeIfPresent(
       Bool.self, forKey: .workerRuntimeFeatureConfigurationApplied) ?? false
     workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
@@ -244,16 +214,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     progress: Progress?,
     expertMemoryMode: String?,
     expertResidency: ExpertResidencySnapshot? = nil,
-    mtpEnabled: Bool = false,
-    mtpConfiguredDraftDepth: UInt8? = nil,
-    mtpArtifactMaximumDraftDepth: UInt8? = nil,
-    mtpArtifactDefaultDraftDepth: UInt8? = nil,
-    mtpResolvedRequestedDraftDepth: UInt8? = nil,
-    mtpCappedDraftDepth: UInt8? = nil,
-    mtpEffectiveExecutionDraftDepth: UInt8? = nil,
-    mtpDepthResolutionReason: String? = nil,
-    mtpRuntimeState: String = "disabled",
-    mtpUnavailableReason: String? = nil,
     workerRuntimeFeatureConfigurationApplied: Bool = false,
     workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil,
     mlxMemorySnapshot: MlxMemorySnapshot? = nil,
@@ -274,16 +234,6 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.progress = progress
     self.expertMemoryMode = expertMemoryMode
     self.expertResidency = expertResidency
-    self.mtpEnabled = mtpEnabled
-    self.mtpConfiguredDraftDepth = mtpConfiguredDraftDepth
-    self.mtpArtifactMaximumDraftDepth = mtpArtifactMaximumDraftDepth
-    self.mtpArtifactDefaultDraftDepth = mtpArtifactDefaultDraftDepth
-    self.mtpResolvedRequestedDraftDepth = mtpResolvedRequestedDraftDepth
-    self.mtpCappedDraftDepth = mtpCappedDraftDepth
-    self.mtpEffectiveExecutionDraftDepth = mtpEffectiveExecutionDraftDepth
-    self.mtpDepthResolutionReason = mtpDepthResolutionReason
-    self.mtpRuntimeState = mtpRuntimeState
-    self.mtpUnavailableReason = mtpUnavailableReason
     self.workerRuntimeFeatureConfigurationApplied = workerRuntimeFeatureConfigurationApplied
     self.workerRuntimeFeatureConfiguration = workerRuntimeFeatureConfiguration
     self.mlxMemorySnapshot = mlxMemorySnapshot
