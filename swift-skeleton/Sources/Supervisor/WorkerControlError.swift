@@ -22,6 +22,10 @@ public indirect enum WorkerControlError: Error, Equatable {
     /// The worker stayed responsive but did not finish loading in time.
     case modelLoadTimeout(modelLoadTimeoutMillis: UInt64);
 
+    /// A replacement candidate did not complete its two-part startup
+    /// acknowledgement in time.
+    case candidateAcknowledgementTimeout(acknowledgementTimeoutMillis: UInt64);
+
     /// The worker closed its event stream before the awaited state arrived.
     case workerEventStreamClosed;
 
@@ -37,6 +41,8 @@ public indirect enum WorkerControlError: Error, Equatable {
             return "worker protocol event violated request expectations: \(description)";
         case let .modelLoadTimeout(modelLoadTimeoutMillis):
             return "worker did not finish loading the inference engine within the \(modelLoadTimeoutMillis)-millisecond timeout";
+        case let .candidateAcknowledgementTimeout(acknowledgementTimeoutMillis):
+            return "candidate worker did not acknowledge readiness and runtime configuration within the \(acknowledgementTimeoutMillis)-millisecond timeout";
         case .workerEventStreamClosed:
             return "worker event stream closed before the awaited state arrived";
         }
