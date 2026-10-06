@@ -429,7 +429,7 @@ public struct OpenAiModelList: Equatable {
 }
 
 /// A standard OpenAI-compatible error response.
-public struct OpenAiErrorResponse: Equatable {
+public struct OpenAiErrorResponse: Equatable, Sendable {
     private let errorContent: OpenAiError;
 
     private init(error: OpenAiError) {
@@ -469,7 +469,7 @@ public struct OpenAiErrorResponse: Equatable {
 }
 
 /// Error content nested inside an OpenAI-compatible error response.
-public struct OpenAiError: Equatable {
+public struct OpenAiError: Equatable, Sendable {
     private let messageText: String;
     private let errorTypeName: String;
     private let parameterName: String?;

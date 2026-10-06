@@ -2,8 +2,6 @@ import Foundation;
 
 import AstronomicalConfig;
 
-import AstronomicalCli;
-
 /// The astronomical CLI (Command Line Interface) entry point.
 ///
 /// Carried contracts from the migration skeleton:
