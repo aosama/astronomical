@@ -16,14 +16,14 @@ public final class DaemonIpcService {
     private let listener: DaemonIpcListener;
     private let socketFilePath: String;
     private let stateLock: NSLock;
-    private let healthProvider: () -> DaemonWorkerStatus;
+    private let healthProvider: () -> DaemonStatusReport;
     private var isShutdownRequested: Bool;
     private var serviceThread: Thread?;
 
     private init(
         listener: DaemonIpcListener,
         socketFilePath: String,
-        healthProvider: @escaping () -> DaemonWorkerStatus
+        healthProvider: @escaping () -> DaemonStatusReport
     ) {
         self.listener = listener;
         self.socketFilePath = socketFilePath;
@@ -44,7 +44,7 @@ public final class DaemonIpcService {
     /// local connection, so stopping the service never depends on a client.
     public static func start(
         instancePaths: AstronomicalInstancePaths,
-        healthProvider: @escaping () -> DaemonWorkerStatus
+        healthProvider: @escaping () -> DaemonStatusReport
     ) throws -> DaemonIpcService {
         let socketFilePath: String = instancePaths.ipcSocketFilePath.string;
         let listener: DaemonIpcListener = try DaemonIpcListener.bind(
@@ -116,9 +116,10 @@ public final class DaemonIpcService {
                 protocolVersion: DaemonProtocol.protocolVersion,
                 applicationName: DaemonProtocol.applicationName);
         case .status:
+            let statusReport: DaemonStatusReport = self.healthProvider();
             return DaemonResponse.status(
-                workerStatus: self.healthProvider(),
-                readyModelId: nil,
+                workerStatus: statusReport.workerStatus,
+                readyModelId: statusReport.readyModelId,
                 defaultModelId: nil);
         case .chatGenerate, .embedGenerate, .modelsList, .catalog, .downloadStart,
              .downloadStatus, .defaultModelSet:

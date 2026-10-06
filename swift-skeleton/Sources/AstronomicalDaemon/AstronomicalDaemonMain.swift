@@ -60,11 +60,12 @@ struct AstronomicalDaemonMain {
             FileHandle.standardError.write(Data("astronomicald: could not take the instance lock: \(error)\n".utf8));
             exit(2);
         }
+        let workerHealthState: WorkerHealthState = WorkerHealthState();
         let service: DaemonIpcService;
         do {
             service = try DaemonIpcService.start(
                 instancePaths: instancePaths,
-                healthProvider: { return DaemonWorkerStatus.unavailable; });
+                healthProvider: { return workerHealthState.daemonStatusReport(); });
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the daemon IPC service: \(error)\n".utf8));
             exit(2);
