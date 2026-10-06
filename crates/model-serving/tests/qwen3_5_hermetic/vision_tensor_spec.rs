@@ -35,8 +35,7 @@ const FROZEN_VISION_CONFIG_JSON: &str = r#"{
         "num_experts": 256,
         "num_experts_per_tok": 8,
         "moe_intermediate_size": 512,
-        "shared_expert_intermediate_size": 512,
-        "mtp_num_hidden_layers": 1
+        "shared_expert_intermediate_size": 512
     },
     "vision_config": {
         "deepstack_visual_indexes": [],

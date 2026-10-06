@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin};
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities, MtpRuntimeState,
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatModelCapabilities,
 };
 use astronomical_rest_contract::UNENFORCED_RESPONSE_FORMAT_WARNING;
 use astronomical_supervisor::{
@@ -202,8 +202,6 @@ impl ScriptedExecutor {
                     max_output_tokens: 20_480,
                     context_window: 262_144,
                 },
-                MtpRuntimeState::Disabled,
-                None,
             ),
             stream_events,
             received_structured_constraint: std::sync::Arc::new(std::sync::Mutex::new(None)),

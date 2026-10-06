@@ -1,5 +1,4 @@
 mod config;
-mod dense_mtp_load;
 mod ornith_load;
 mod qwen_image_21_conditioning;
 #[cfg(feature = "direct-mlx")]

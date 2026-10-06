@@ -187,16 +187,7 @@ fn publish_recovery_acknowledgement(
         WorkerEvent::Ready {
             model_id,
             capabilities,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
-        } => WorkerHealthSnapshot::ready_with_model(
-            model_id,
-            capabilities,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-        )
-        .with_mtp_depth_status(mtp_depth_status),
+        } => WorkerHealthSnapshot::ready_with_model(model_id, capabilities),
         _ => {
             return Err(WorkerControlError::WorkerProtocolViolation {
                 description: "replacement worker acknowledgement lost readiness",

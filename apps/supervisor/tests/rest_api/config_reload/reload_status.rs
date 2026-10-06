@@ -548,5 +548,5 @@ async fn should_reject_prompt_cache_reload_when_worker_replacement_is_unavailabl
     let status_document: serde_json::Value =
         serde_json::from_slice(&status_body).expect("the status response should contain JSON");
 
-    assert_eq!(status_document["mtp_enabled"], false);
+    assert_eq!(status_document["status"], "ready");
 }

@@ -37,7 +37,6 @@ pub struct Qwen4ExpConfig {
     pub sparse_attention: Option<Qwen4ExpSparseAttentionConfig>,
     pub hyper_connections: Option<Qwen4ExpHyperConnectionConfig>,
     pub ngram_embedding: Option<Qwen4ExpNgramConfig>,
-    pub multi_token_prediction_layers: Option<u32>,
     pub default_quantization: Option<Qwen4ExpQuantizationProfile>,
     pub per_tensor_quantization: BTreeMap<String, Qwen4ExpQuantizationProfile>,
 }
@@ -331,7 +330,6 @@ impl Qwen4ExpConfig {
             sparse_attention,
             hyper_connections,
             ngram_embedding,
-            multi_token_prediction_layers: text.mtp_num_hidden_layers,
             default_quantization,
             per_tensor_quantization,
         })

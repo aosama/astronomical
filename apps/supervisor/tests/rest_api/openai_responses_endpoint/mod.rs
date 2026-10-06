@@ -3,7 +3,7 @@ use std::{future::Future, path::PathBuf, pin::Pin};
 use astronomical_config::DiscoveredModel;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatModelCapabilities, MtpRuntimeState,
+    ChatModelCapabilities,
 };
 use astronomical_supervisor::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,

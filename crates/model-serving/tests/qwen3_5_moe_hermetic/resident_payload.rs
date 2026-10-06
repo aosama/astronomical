@@ -43,7 +43,7 @@ fn should_preserve_mixed_tensor_payload_widths_in_the_resident_inventory() {
 #[test]
 fn should_reject_a_complete_expert_payload_that_exceeds_u64() {
     let overflowing_layer_plan =
-        synthetic_layer_plan("language_model.mtp.layers.0.mlp", 2, &[usize::MAX]);
+        synthetic_layer_plan("language_model.model.layers.0.mlp", 2, &[usize::MAX]);
 
     assert!(matches!(
         overflowing_layer_plan.complete_expert_payload_byte_count(),

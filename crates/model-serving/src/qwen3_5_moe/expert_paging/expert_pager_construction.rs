@@ -40,7 +40,6 @@ impl Qwen3_5ExpertPager {
         stored_tensor_name_by_canonical_name: &HashMap<String, String>,
         config: &Qwen3_5Config,
         configured_mlx_memory_cap_bytes: usize,
-        include_mtp_sparse_expert_layer: bool,
     ) -> Result<Self, ExpertPagingError> {
         let decoder_layer_count = config.layer_count() as usize;
         // Converted per-expert streaming revisions publish manifest.json (format
@@ -49,12 +48,6 @@ impl Qwen3_5ExpertPager {
         // backed revision keeps the safetensors-index plan path unchanged.
         let (layer_plans, streaming_expert_pack_sources) =
             if model_dir.join("manifest.json").is_file() {
-                if include_mtp_sparse_expert_layer {
-                    return Err(ExpertPagingError::InvalidPagingPlan {
-                        description: "MTP expert paging is not supported for streaming revisions"
-                            .to_owned(),
-                    });
-                }
                 let (layer_plans, streaming_expert_pack_sources) =
                     expert_paging::build_streaming_expert_layer_plans(&model_dir, config)?;
                 (layer_plans, Some(streaming_expert_pack_sources))
@@ -62,7 +55,6 @@ impl Qwen3_5ExpertPager {
                 (
                     self_shard_layer_plans(
                         decoder_layer_count,
-                        include_mtp_sparse_expert_layer,
                         &model_dir,
                         weight_map,
                         stored_tensor_name_by_canonical_name,
@@ -95,19 +87,16 @@ impl Qwen3_5ExpertPager {
     }
 }
 
-/// Builds the shard-backed layer plans for one MoE decoder plus an optional
-/// appended MTP sparse layer from the validated safetensors index.
-#[allow(clippy::too_many_arguments)]
+/// Builds the shard-backed layer plans for the MoE decoder layers from the
+/// validated safetensors index.
 fn self_shard_layer_plans(
     decoder_layer_count: usize,
-    include_mtp_sparse_expert_layer: bool,
     model_dir: &Path,
     weight_map: &HashMap<String, String>,
     stored_tensor_name_by_canonical_name: &HashMap<String, String>,
     config: &Qwen3_5Config,
 ) -> Result<Vec<QuantizedExpertLayerPlan>, ExpertPagingError> {
-    let mut layer_plans =
-        Vec::with_capacity(decoder_layer_count + usize::from(include_mtp_sparse_expert_layer));
+    let mut layer_plans = Vec::with_capacity(decoder_layer_count);
     // One model-level cache prevents every decoder layer from reparsing the same shard header.
     // The cache owns bounded metadata only and is dropped after all byte-range plans are built.
     let mut safetensors_header_by_source_file = HashMap::<PathBuf, SafetensorsHeader>::new();
@@ -122,21 +111,6 @@ fn self_shard_layer_plans(
             &mut safetensors_header_by_source_file,
         )?;
         layer_plans.push(layer_plan);
-    }
-    // MTP has a separate tensor namespace but shares the same pager and
-    // Rust pager. Appending its one sparse layer gives it a stable index
-    // immediately after the target decoder layers without merging artifact
-    // inventories during validation.
-    if include_mtp_sparse_expert_layer {
-        let mtp_layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
-            model_dir,
-            weight_map,
-            stored_tensor_name_by_canonical_name,
-            "language_model.mtp.layers.0.mlp",
-            config,
-            &mut safetensors_header_by_source_file,
-        )?;
-        layer_plans.push(mtp_layer_plan);
     }
     Ok(layer_plans)
 }

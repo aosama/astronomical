@@ -1,4 +1,4 @@
-//! Resolves one canonical model's inherited limits, generation defaults, chunking, and acceleration.
+//! Resolves one canonical model's inherited limits, generation defaults, and chunking.
 
 use crate::AstronomicalConfigError;
 use crate::chunking_config::{ChunkingConfig, ChunkingConfigFile, ConfiguredChunkingFields};
@@ -17,8 +17,6 @@ pub struct ResolvedModelConfig {
     top_p: Option<f32>,
     chunking: ChunkingConfig,
     configured_chunking_fields: ConfiguredChunkingFields,
-    configured_mtp_enabled: Option<bool>,
-    mtp_draft_depth: Option<u8>,
 }
 
 impl ResolvedModelConfig {
@@ -62,7 +60,6 @@ impl ResolvedModelConfig {
             global_chunking,
             configured_model.and_then(|model| model.chunking.as_ref()),
         );
-        let acceleration = configured_model.and_then(|model| model.acceleration.as_ref());
         Ok(Self {
             maximum_context_tokens,
             // The internal default is policy, not an explicit user demand, so tiny
@@ -76,12 +73,6 @@ impl ResolvedModelConfig {
             top_p: generation_defaults.and_then(|defaults| defaults.top_p),
             chunking: ChunkingConfig::resolve(&effective_chunking)?,
             configured_chunking_fields: effective_chunking.configured_fields(),
-            configured_mtp_enabled: acceleration
-                .and_then(|acceleration| acceleration.mtp.as_ref())
-                .and_then(|mtp| mtp.enabled),
-            mtp_draft_depth: acceleration
-                .and_then(|acceleration| acceleration.mtp.as_ref())
-                .and_then(|mtp| mtp.draft_depth),
         })
     }
 
@@ -130,28 +121,5 @@ impl ResolvedModelConfig {
     #[must_use]
     pub const fn configured_chunking_fields(&self) -> ConfiguredChunkingFields {
         self.configured_chunking_fields
-    }
-
-    /// Returns the authored MTP enablement, or `None` when the model has not opted in.
-    #[must_use]
-    pub const fn configured_mtp_enabled(&self) -> Option<bool> {
-        self.configured_mtp_enabled
-    }
-
-    /// Returns whether this model may use compatible multi-token prediction.
-    ///
-    /// Omission stays off. A model must set `acceleration.mtp.enabled` to true.
-    #[must_use]
-    pub const fn mtp_enabled(&self) -> bool {
-        match self.configured_mtp_enabled {
-            Some(mtp_enabled) => mtp_enabled,
-            None => false,
-        }
-    }
-
-    /// Returns the configured proposal depth, or `None` for artifact policy.
-    #[must_use]
-    pub const fn mtp_draft_depth(&self) -> Option<u8> {
-        self.mtp_draft_depth
     }
 }

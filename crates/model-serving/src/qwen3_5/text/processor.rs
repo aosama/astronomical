@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
-    ChatModelCapabilities, MtpRuntimeState, WorkerEvent,
+    ChatModelCapabilities, WorkerEvent,
 };
 
 use crate::{
@@ -84,12 +84,7 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
     type InferenceRequest = Qwen3_5InferenceRequest;
     type RequestOutput = Qwen3_5RequestOutput;
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         WorkerEvent::Ready {
             model_id: self.model_id.clone(),
             capabilities: ChatModelCapabilities {
@@ -101,9 +96,6 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
                 context_window: self.context_window,
             }
             .into(),
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
         }
     }
 

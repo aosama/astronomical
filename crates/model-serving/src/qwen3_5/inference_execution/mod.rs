@@ -13,7 +13,6 @@ pub(in crate::qwen3_5) mod memory_admission;
 mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
-mod mtp_decode_attempt;
 mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
 mod persistent_prompt_cache_tail_capture;
@@ -36,9 +35,7 @@ mod test_controls;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{
-    MtpDepthStatus, RequestId, WorkerChunkingConfiguration, WorkerEvent,
-};
+use astronomical_ipc_protocol::{RequestId, WorkerChunkingConfiguration, WorkerEvent};
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::{
@@ -54,13 +51,7 @@ use crate::{
 use self::engine_request::Qwen3_5EngineRequest;
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
-use crate::memory::MtpDraftDepth;
 
-pub use crate::qwen3_5::multi_token_prediction::Qwen3_5MtpRuntimeState;
-pub use crate::qwen3_5::multi_token_prediction::qwen3_5_depth_one_mtp_window_fits;
-pub use crate::qwen3_5::multi_token_prediction::{
-    qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
-};
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
@@ -86,7 +77,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
-        mtp_enabled: bool,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
         Self::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
@@ -98,7 +88,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             model_directory,
             chunking,
             true,
-            mtp_enabled,
             PerformanceAttribution::disabled(),
             PerformanceAttributionLog::disabled(),
         )
@@ -115,12 +104,11 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
         adaptive_ram_growth_guard_enabled: bool,
-        mtp_enabled: bool,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
         let maximum_context_tokens = validated_artifact.config().maximum_position_count();
-        Self::new_with_effective_context_runtime_chunking_mtp_depth_and_performance_attribution(
+        Self::new_with_effective_context_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
@@ -131,44 +119,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             maximum_context_tokens,
             chunking,
             adaptive_ram_growth_guard_enabled,
-            mtp_enabled,
-            None,
-            model_loading_performance_attribution,
-            performance_attribution_log,
-        )
-    }
-
-    /// Starts the owner thread with explicit fixed MTP depth selection metadata.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_runtime_chunking_mtp_depth_and_performance_attribution(
-        validated_artifact: ValidatedQwen3_5Artifact,
-        active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
-        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
-        think_end_token_id: u32,
-        model_directory: PathBuf,
-        chunking: WorkerChunkingConfiguration,
-        adaptive_ram_growth_guard_enabled: bool,
-        mtp_enabled: bool,
-        mtp_draft_depth: Option<u8>,
-        model_loading_performance_attribution: PerformanceAttribution,
-        performance_attribution_log: PerformanceAttributionLog,
-    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
-        let maximum_context_tokens = validated_artifact.config().maximum_position_count();
-        Self::new_with_effective_context_runtime_chunking_mtp_depth_and_performance_attribution(
-            validated_artifact,
-            active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
-            prompt_processing_chunk_sizer,
-            think_end_token_id,
-            model_directory,
-            maximum_context_tokens,
-            chunking,
-            adaptive_ram_growth_guard_enabled,
-            mtp_enabled,
-            mtp_draft_depth,
             model_loading_performance_attribution,
             performance_attribution_log,
         )
@@ -176,7 +126,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
 
     /// Starts the owner thread with a config-resolved context no larger than the artifact.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_effective_context_runtime_chunking_mtp_depth_and_performance_attribution(
+    pub fn new_with_effective_context_runtime_chunking_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
@@ -187,15 +137,9 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         maximum_context_tokens: u32,
         chunking: WorkerChunkingConfiguration,
         adaptive_ram_growth_guard_enabled: bool,
-        mtp_enabled: bool,
-        mtp_draft_depth: Option<u8>,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5Engine, InferenceEngineError> {
-        let configured_mtp_draft_depth = mtp_draft_depth
-            .map(MtpDraftDepth::new)
-            .transpose()
-            .map_err(|_| fatal_engine_error("MTP draft depth must be between 1 and 3"))?;
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
                 fatal_engine_error("full-attention growth tokens exceed Int32 range")
@@ -254,18 +198,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             chunking,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
-            mtp_enabled,
-            configured_mtp_draft_depth,
-            mtp_runtime_state: if mtp_enabled {
-                Qwen3_5MtpRuntimeState::Unavailable
-            } else {
-                Qwen3_5MtpRuntimeState::Disabled
-            },
-            mtp_unavailable_reason: None,
-            mtp_depth_status: MtpDepthStatus {
-                configured_draft_depth: mtp_draft_depth,
-                ..MtpDepthStatus::default()
-            },
         })
     }
 }
@@ -304,15 +236,6 @@ pub struct Qwen3_5InferenceExecution {
     chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,
-    /// User preference: whether MTP is enabled.
-    /// Defaults to false until the worker passes the real config value.
-    mtp_enabled: bool,
-    configured_mtp_draft_depth: Option<MtpDraftDepth>,
-    /// Actual MTP runtime state after model loading.
-    mtp_runtime_state: Qwen3_5MtpRuntimeState,
-    /// Concise reason when MTP runtime state is Unavailable.
-    mtp_unavailable_reason: Option<String>,
-    mtp_depth_status: MtpDepthStatus,
 }
 
 pub(in crate::qwen3_5) type Qwen3_5EngineState = Qwen3_5InferenceExecution;

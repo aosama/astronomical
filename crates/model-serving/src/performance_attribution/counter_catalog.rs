@@ -68,27 +68,6 @@ pub enum PerformanceCounter {
     /// Decode forwards served partly from RAM and partly from storage (issue #373).
     HotExpertMixedRouteCount,
     ExpertResidencyCommitRejectionCount,
-    MtpDepthSelectionFallbackCount,
-    MtpAdmittedAttemptCount,
-    MtpPromptHistoryInitializationFallbackCount,
-    MtpFeedbackHistoryReseedCount,
-    MtpAcceptedDraftCount,
-    MtpRejectedDraftCount,
-    MtpRequestedDepthTotal,
-    MtpEffectiveDepthTotal,
-    MtpProposedDraftCount,
-    MtpEosTruncatedPrefixCount,
-    MtpOutputDepthDowngradeCount,
-    MtpContextDepthDowngradeCount,
-    MtpThinkingDepthDowngradeCount,
-    MtpMemoryDepthDowngradeCount,
-    MtpVerificationWorkspaceByteCount,
-    MtpBoundarySnapshotByteCount,
-    MtpPersistentGrowthByteCount,
-    MtpTargetRepairCount,
-    MtpPredictorReplayTokenCount,
-    MtpQueuedFrontierRestorationCount,
-    MtpCancellationWithQueuedStateCount,
     /// Complete-layer payload prefill handed to retained ownership while
     /// streaming it, so decode seating does not read the same bytes again.
     ExpertResidencyReadThroughSeatedCompletePayloadBytes,
@@ -117,7 +96,6 @@ pub enum PerformanceCounter {
     /// Headroom a named owner consumed beyond its reserve, which clamped terms
     /// would otherwise hide.
     MemoryCeilingUtilizationOwnerOverrunBytes,
-    MtpOperationalFallbackCount,
     /// Decode tokens whose true route was stored in the observation history (#536).
     RouteObservationStoredRecordCount,
     /// Observations evicted from the history by its capacity bound (#536).
@@ -199,27 +177,6 @@ impl PerformanceCounter {
         Self::HotExpertRouteMissingAssignmentCount,
         Self::HotExpertMixedRouteCount,
         Self::ExpertResidencyCommitRejectionCount,
-        Self::MtpDepthSelectionFallbackCount,
-        Self::MtpAdmittedAttemptCount,
-        Self::MtpPromptHistoryInitializationFallbackCount,
-        Self::MtpFeedbackHistoryReseedCount,
-        Self::MtpAcceptedDraftCount,
-        Self::MtpRejectedDraftCount,
-        Self::MtpRequestedDepthTotal,
-        Self::MtpEffectiveDepthTotal,
-        Self::MtpProposedDraftCount,
-        Self::MtpEosTruncatedPrefixCount,
-        Self::MtpOutputDepthDowngradeCount,
-        Self::MtpContextDepthDowngradeCount,
-        Self::MtpThinkingDepthDowngradeCount,
-        Self::MtpMemoryDepthDowngradeCount,
-        Self::MtpVerificationWorkspaceByteCount,
-        Self::MtpBoundarySnapshotByteCount,
-        Self::MtpPersistentGrowthByteCount,
-        Self::MtpTargetRepairCount,
-        Self::MtpPredictorReplayTokenCount,
-        Self::MtpQueuedFrontierRestorationCount,
-        Self::MtpCancellationWithQueuedStateCount,
         Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
         Self::ExpertResidencyDecodeSeatingStreamedCompletePayloadBytes,
         Self::MemoryCeilingUtilizationCeilingBytes,
@@ -231,7 +188,6 @@ impl PerformanceCounter {
         Self::MemoryCeilingUtilizationUnseatedExpertEntitlementBytes,
         Self::MemoryCeilingUtilizationUnexplainedHeadroomBytes,
         Self::MemoryCeilingUtilizationOwnerOverrunBytes,
-        Self::MtpOperationalFallbackCount,
         Self::RouteObservationStoredRecordCount,
         Self::RouteObservationEvictedRecordCount,
         Self::RouteObservationCapturedLayerCount,
@@ -347,29 +303,6 @@ impl PerformanceCounter {
             }
             Self::HotExpertMixedRouteCount => "hot_expert_mixed_route_count",
             Self::ExpertResidencyCommitRejectionCount => "expert_residency_commit_rejection_count",
-            Self::MtpDepthSelectionFallbackCount => "mtp_memory_admission_fallback_count",
-            Self::MtpAdmittedAttemptCount => "mtp_admitted_attempt_count",
-            Self::MtpPromptHistoryInitializationFallbackCount => {
-                "mtp_prompt_history_initialization_fallback_count"
-            }
-            Self::MtpFeedbackHistoryReseedCount => "mtp_feedback_history_reseed_count",
-            Self::MtpAcceptedDraftCount => "mtp_accepted_draft_count",
-            Self::MtpRejectedDraftCount => "mtp_rejected_draft_count",
-            Self::MtpRequestedDepthTotal => "mtp_requested_depth_total",
-            Self::MtpEffectiveDepthTotal => "mtp_effective_depth_total",
-            Self::MtpProposedDraftCount => "mtp_proposed_draft_count",
-            Self::MtpEosTruncatedPrefixCount => "mtp_eos_truncated_prefix_count",
-            Self::MtpOutputDepthDowngradeCount => "mtp_output_depth_downgrade_count",
-            Self::MtpContextDepthDowngradeCount => "mtp_context_depth_downgrade_count",
-            Self::MtpThinkingDepthDowngradeCount => "mtp_thinking_depth_downgrade_count",
-            Self::MtpMemoryDepthDowngradeCount => "mtp_memory_depth_downgrade_count",
-            Self::MtpVerificationWorkspaceByteCount => "mtp_verification_workspace_byte_count",
-            Self::MtpBoundarySnapshotByteCount => "mtp_boundary_snapshot_byte_count",
-            Self::MtpPersistentGrowthByteCount => "mtp_persistent_growth_byte_count",
-            Self::MtpTargetRepairCount => "mtp_target_repair_count",
-            Self::MtpPredictorReplayTokenCount => "mtp_predictor_replay_token_count",
-            Self::MtpQueuedFrontierRestorationCount => "mtp_queued_frontier_restoration_count",
-            Self::MtpCancellationWithQueuedStateCount => "mtp_cancellation_with_queued_state_count",
             Self::ExpertResidencyReadThroughSeatedCompletePayloadBytes => {
                 "expert_residency_read_through_seated_complete_payload_bytes"
             }
@@ -401,7 +334,6 @@ impl PerformanceCounter {
             Self::MemoryCeilingUtilizationOwnerOverrunBytes => {
                 "memory_ceiling_utilization_owner_overrun_bytes"
             }
-            Self::MtpOperationalFallbackCount => "mtp_operational_fallback_count",
             Self::RouteObservationStoredRecordCount => "route_observation_stored_record_count",
             Self::RouteObservationEvictedRecordCount => "route_observation_evicted_record_count",
             Self::RouteObservationCapturedLayerCount => "route_observation_captured_layer_count",

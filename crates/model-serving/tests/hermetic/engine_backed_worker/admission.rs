@@ -3,8 +3,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
     ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    MAX_IPC_FRAME_BYTES, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand,
-    WorkerEvent,
+    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
@@ -228,12 +227,7 @@ impl ModelGenerationProcessor for PassthroughProcessor {
     type InferenceRequest = TestInferenceRequest;
     type RequestOutput = ();
 
-    fn ready_event(
-        &self,
-        _mtp_runtime_state: MtpRuntimeState,
-        _mtp_unavailable_reason: Option<String>,
-        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         WorkerEvent::Ready {
             model_id: "example/rejecting-engine".to_owned(),
             capabilities: ChatModelCapabilities {
@@ -245,9 +239,6 @@ impl ModelGenerationProcessor for PassthroughProcessor {
                 context_window: 262_144,
             }
             .into(),
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: Default::default(),
         }
     }
 
@@ -288,12 +279,7 @@ impl ModelGenerationProcessor for FeedbackProcessor {
     type InferenceRequest = TestInferenceRequest;
     type RequestOutput = ();
 
-    fn ready_event(
-        &self,
-        _mtp_runtime_state: MtpRuntimeState,
-        _mtp_unavailable_reason: Option<String>,
-        _mtp_depth_status: astronomical_ipc_protocol::MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         WorkerEvent::Ready {
             model_id: "example/feedback-engine".to_owned(),
             capabilities: ChatModelCapabilities {
@@ -305,9 +291,6 @@ impl ModelGenerationProcessor for FeedbackProcessor {
                 context_window: 262_144,
             }
             .into(),
-            mtp_runtime_state: MtpRuntimeState::Disabled,
-            mtp_unavailable_reason: None,
-            mtp_depth_status: Default::default(),
         }
     }
 

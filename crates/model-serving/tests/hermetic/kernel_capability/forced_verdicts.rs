@@ -61,8 +61,6 @@ fn should_honor_every_forced_reason_for_every_family() {
         CustomMetalKernelFamily::FusedQuantizedExpertDecode,
         CustomMetalKernelFamily::GatedDeltaSequence,
         CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
-        CustomMetalKernelFamily::TargetVerificationQuantizedLinear,
-        CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
     ];
 
     for unsupported_reason in &reason_cases {

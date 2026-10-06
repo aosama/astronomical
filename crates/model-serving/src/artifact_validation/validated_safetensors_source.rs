@@ -3,8 +3,8 @@ use std::path::Path;
 
 use super::safetensors_dtype;
 use super::{
-    ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorFeature, TensorInventory,
-    TensorLocation, TensorProfile, TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile,
+    ArtifactValidationError, RequiredFileProfile, TensorDtype, TensorInventory, TensorLocation,
+    TensorProfile, TensorSourceId, ValidatedRequiredFile, ValidatedWeightsFile,
     validate_required_file,
 };
 use crate::safetensors::{
@@ -22,18 +22,14 @@ pub(crate) struct ValidatedSafetensorsSource {
     payload_bytes: u64,
 }
 
-/// Exercises the required/optional profile partition through the real descriptor and header path.
-///
-/// The outer `Result` represents required source validity. The boolean is `false` only when the
-/// requested optional feature has a profile defect and therefore must be disabled atomically.
+/// Exercises required profile validation through the real descriptor and header path.
 #[doc(hidden)]
-pub fn validate_safetensors_profile_partitions_for_tests(
+pub fn validate_safetensors_required_profiles_for_tests(
     model_directory: &Path,
     relative_file_name: &str,
     inventory: &TensorInventory,
     canonical_profiles: &[TensorProfile],
-    optional_feature: TensorFeature,
-) -> Result<bool, ArtifactValidationError> {
+) -> Result<(), ArtifactValidationError> {
     let required_file = validate_required_file(
         model_directory,
         &RequiredFileProfile {
@@ -42,10 +38,7 @@ pub fn validate_safetensors_profile_partitions_for_tests(
         },
     )?;
     let source = ValidatedSafetensorsSource::parse(TensorSourceId::new(1), required_file)?;
-    source.validate_required_inventory_profiles(inventory, canonical_profiles)?;
-    Ok(source
-        .validate_feature_inventory_profiles(inventory, canonical_profiles, optional_feature)
-        .is_ok())
+    source.validate_required_inventory_profiles(inventory, canonical_profiles)
 }
 
 impl ValidatedSafetensorsSource {
@@ -139,10 +132,6 @@ impl ValidatedSafetensorsSource {
         })
     }
 
-    pub(crate) const fn source_id(&self) -> TensorSourceId {
-        self.source_id
-    }
-
     pub(crate) fn file_name(&self) -> &str {
         self.required_file.file_name()
     }
@@ -151,32 +140,7 @@ impl ValidatedSafetensorsSource {
         self.payload_bytes
     }
 
-    pub(crate) fn stored_tensor_names(&self) -> impl Iterator<Item = &String> {
-        self.tensor_metadata_by_stored_name.keys()
-    }
-
-    /// Retained header view for one stored tensor, used for structured validation diagnostics.
-    pub(crate) fn stored_tensor_view(&self, stored_name: &str) -> Option<&SafetensorsTensorView> {
-        self.tensor_metadata_by_stored_name.get(stored_name)
-    }
-
-    /// Validates canonical profiles against physical names without reparsing the header.
-    pub(crate) fn validate_inventory_profiles(
-        &self,
-        inventory: &TensorInventory,
-        canonical_profiles: &[TensorProfile],
-    ) -> Result<(), ArtifactValidationError> {
-        let source_locations = self.source_locations(inventory);
-        self.validate_exact_physical_inventory(&source_locations)?;
-        self.validate_locations(&source_locations, canonical_profiles)
-    }
-
-    /// Validates required target and vision profiles while leaving optional features atomic.
-    ///
-    /// A target shard may physically contain an optional MTP head. A wrong optional dtype or
-    /// shape must disable that complete feature, not reject otherwise valid target weights.
-    /// Physical-name and offset validation still covers the entire source before this split, so
-    /// ignoring optional profile semantics cannot hide an undeclared or structurally unsafe tensor.
+    /// Validates the canonical profiles of every declared source location.
     pub(crate) fn validate_required_inventory_profiles(
         &self,
         inventory: &TensorInventory,
@@ -184,26 +148,7 @@ impl ValidatedSafetensorsSource {
     ) -> Result<(), ArtifactValidationError> {
         let source_locations = self.source_locations(inventory);
         self.validate_exact_physical_inventory(&source_locations)?;
-        let required_locations = source_locations
-            .into_iter()
-            .filter(|location| location.feature().is_none())
-            .collect::<Vec<_>>();
-        self.validate_locations(&required_locations, canonical_profiles)
-    }
-
-    /// Validates one optional feature independently after required profiles are known safe.
-    pub(crate) fn validate_feature_inventory_profiles(
-        &self,
-        inventory: &TensorInventory,
-        canonical_profiles: &[TensorProfile],
-        feature: TensorFeature,
-    ) -> Result<(), ArtifactValidationError> {
-        let feature_locations = self
-            .source_locations(inventory)
-            .into_iter()
-            .filter(|location| location.feature() == Some(feature))
-            .collect::<Vec<_>>();
-        self.validate_locations(&feature_locations, canonical_profiles)
+        self.validate_locations(&source_locations, canonical_profiles)
     }
 
     fn source_locations<'inventory>(

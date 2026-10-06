@@ -34,14 +34,13 @@ use crate::memory::budget::adaptive_growth_projection::{
 /// Exact recurrent execution shape whose temporary allocation evidence may recur.
 ///
 /// Observations are deliberately not transferable between chunk sizes, prompt
-/// positions, visual requests, MTP histories, or sparse-expert residency modes.
+/// positions, visual requests, or sparse-expert residency modes.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AdaptiveRamGrowthContext {
     memory_phase: MemoryPhase,
     forward_token_count: usize,
     prompt_position_context_bucket: u64,
     has_visual_embeddings: bool,
-    has_mtp_prompt_history: bool,
     sparse_experts_are_paged: bool,
 }
 
@@ -52,7 +51,6 @@ impl AdaptiveRamGrowthContext {
         forward_token_count: usize,
         prompt_position_context_bucket: u64,
         has_visual_embeddings: bool,
-        has_mtp_prompt_history: bool,
         sparse_experts_are_paged: bool,
     ) -> Self {
         Self {
@@ -60,24 +58,18 @@ impl AdaptiveRamGrowthContext {
             forward_token_count,
             prompt_position_context_bucket,
             has_visual_embeddings,
-            has_mtp_prompt_history,
             sparse_experts_are_paged,
         }
     }
 
     /// Builds a decode context. Decode has no prompt-chunk position bucket.
     #[must_use]
-    pub const fn decode(
-        forward_token_count: usize,
-        has_mtp_prompt_history: bool,
-        sparse_experts_are_paged: bool,
-    ) -> Self {
+    pub const fn decode(forward_token_count: usize, sparse_experts_are_paged: bool) -> Self {
         Self {
             memory_phase: MemoryPhase::Decode,
             forward_token_count,
             prompt_position_context_bucket: 0,
             has_visual_embeddings: false,
-            has_mtp_prompt_history,
             sparse_experts_are_paged,
         }
     }

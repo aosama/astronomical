@@ -16,7 +16,6 @@ use crate::sparse_experts::{
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::Qwen3_5MoEPagedPrefillExecutionMode;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination;
 use super::routing::{
@@ -35,34 +34,20 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-        execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         performance_attribution.measure_operation(
             PerformanceOperation::ResidentMoeGraphConstruction,
             |performance_attribution| {
-                if execution_mode == Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow {
-                    self.forward_moe_resident_target_verification(
-                        hidden_states,
-                        mixture_of_experts_weights,
-                        resident_expert_layer_weights,
-                        selected_indices,
-                        selected_scores,
-                        execution_mode,
-                        performance_attribution,
-                    )
-                } else {
-                    self.forward_moe_resident(
-                        hidden_states,
-                        mixture_of_experts_weights,
-                        resident_expert_layer_weights,
-                        selected_indices,
-                        selected_scores,
-                        should_use_compiled_elementwise_graphs,
-                        execution_mode,
-                        performance_attribution,
-                    )
-                }
+                self.forward_moe_resident(
+                    hidden_states,
+                    mixture_of_experts_weights,
+                    resident_expert_layer_weights,
+                    selected_indices,
+                    selected_scores,
+                    should_use_compiled_elementwise_graphs,
+                    performance_attribution,
+                )
             },
         )
     }
@@ -76,7 +61,6 @@ impl Qwen3_5Model {
         selected_expert_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-        execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         // Add projection and expert-selection axes expected by MLX gather_mm.
@@ -141,72 +125,6 @@ impl Qwen3_5Model {
             mixture_of_experts_weights,
             &sparse_expert_output,
             should_use_compiled_elementwise_graphs,
-            execution_mode,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn forward_moe_resident_target_verification(
-        &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        resident_expert_layer_weights: &Qwen3_5ResidentExpertLayerWeights,
-        selected_expert_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let hidden_state_shape = hidden_states.shape();
-        let batch_size = hidden_state_shape[0];
-        let token_count = hidden_state_shape[1];
-        let hidden_dimension = hidden_state_shape[2];
-        let expert_count_per_token = selected_expert_indices.shape()[2];
-        // MTP verification keeps token rows explicit and unsorted because the
-        // first verified row is also the exact rollback boundary after rejection.
-        let flattened_hidden_states = self
-            .runtime
-            .reshape(hidden_states, &[batch_size * token_count, hidden_dimension])?;
-        let flattened_expert_indices = self.runtime.reshape(
-            selected_expert_indices,
-            &[batch_size * token_count, expert_count_per_token],
-        )?;
-        let expanded_states = self.runtime.expand_dims(&flattened_hidden_states, -2)?;
-        let expanded_states = self.runtime.expand_dims(&expanded_states, -3)?;
-        let selected_activated = self.resident_gate_up_activation(
-            &expanded_states,
-            &resident_expert_layer_weights.gate_up_weights,
-            &flattened_expert_indices,
-            false,
-            performance_attribution,
-        )?;
-        let selected_outputs = self.resident_expert_linear(
-            &selected_activated,
-            &resident_expert_layer_weights.down_projection,
-            &flattened_expert_indices,
-            false,
-            performance_attribution,
-        )?;
-        let selected_outputs = self.runtime.squeeze_axis(&selected_outputs, -2)?;
-        let selected_outputs = self.runtime.reshape(
-            &selected_outputs,
-            &[
-                batch_size,
-                token_count,
-                expert_count_per_token,
-                hidden_dimension,
-            ],
-        )?;
-        let sparse_expert_output = qwen3_5_moe_unsorted_expert_weighted_sum(
-            &self.runtime,
-            &selected_outputs,
-            selected_scores,
-        )?;
-        self.combine_resident_sparse_and_shared_experts(
-            hidden_states,
-            mixture_of_experts_weights,
-            &sparse_expert_output,
-            false,
-            execution_mode,
         )
     }
 
@@ -358,30 +276,25 @@ impl Qwen3_5Model {
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         sparse_expert_output: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-        execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let shared_gate = self.quantized_linear_for_paged_prefill_execution_mode(
+        let shared_gate = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_gate_projection,
-            execution_mode,
         )?;
-        let shared_up = self.quantized_linear_for_paged_prefill_execution_mode(
+        let shared_up = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_up_projection,
-            execution_mode,
         )?;
         let shared_activated =
             self.runtime
                 .apply_compiled_swiglu(&self.compiled_swiglu, &shared_gate, &shared_up)?;
-        let shared_output = self.quantized_linear_for_paged_prefill_execution_mode(
+        let shared_output = self.quantized_linear(
             &shared_activated,
             &mixture_of_experts_weights.shared_expert_down_projection,
-            execution_mode,
         )?;
-        let shared_gate_logits = self.quantized_linear_for_paged_prefill_execution_mode(
+        let shared_gate_logits = self.quantized_linear(
             hidden_states,
             &mixture_of_experts_weights.shared_expert_output_gate_projection,
-            execution_mode,
         )?;
         if should_use_compiled_elementwise_graphs {
             Ok(self

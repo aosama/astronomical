@@ -309,14 +309,8 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         serde_json::from_slice(&status_body).expect("the status body should contain JSON");
     assert_eq!(status_document["status"], "ready");
     assert_eq!(status_document["activity"], "idle");
-    assert_eq!(status_document["mtp_enabled"], false);
     assert_eq!(status_document["ready_model_id"], MODEL_ID);
     assert!(status_document.get("expert_storage_format").is_none());
-    assert_eq!(status_document["mtp_runtime_state"], "disabled");
-    assert_eq!(
-        status_document["mtp_unavailable_reason"],
-        serde_json::Value::Null
-    );
     assert_eq!(
         status_document["ready_model_size_bytes"],
         18_420_000_000_u64

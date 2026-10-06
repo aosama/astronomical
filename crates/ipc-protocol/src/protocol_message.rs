@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -45,7 +43,7 @@ pub struct WorkerPromptWorkReuse {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpertMemoryMode {
-    /// Every target and optional MTP layer has complete sparse experts resident.
+    /// Every target layer has complete sparse experts resident.
     Resident,
     /// Some routed experts are retained while misses still page.
     Hybrid,
@@ -59,67 +57,6 @@ pub struct WorkerExpertResidencySnapshot {
     pub total_layer_count: u32,
     pub resident_expert_count: u32,
     pub resident_expert_payload_bytes: u64,
-}
-
-/// Runtime execution state of native multi-token prediction (MTP).
-///
-/// Disabled: the user preference is false.
-/// TargetOnly: preference is true and the selected model has no compatible MTP inventory.
-/// Active: preference is true, the head is compatible, and native MTP decode
-/// is available.
-/// Unavailable: preference is true but MTP inventory or initialization failed.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MtpRuntimeState {
-    #[default]
-    Disabled,
-    TargetOnly,
-    Active,
-    Unavailable,
-}
-
-/// Bounded explanation when MTP depth resolution changes or cautions user intent.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MtpDepthResolutionReason {
-    ConfiguredDepthClampedToArtifactMaximum,
-    ConfiguredDepthExceedsAutomaticGuidance,
-}
-
-impl fmt::Display for MtpDepthResolutionReason {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ConfiguredDepthClampedToArtifactMaximum => formatter.write_str(
-                "configured MTP draft depth was clamped to the declared artifact maximum",
-            ),
-            Self::ConfiguredDepthExceedsAutomaticGuidance => formatter
-                .write_str("configured MTP draft depth exceeds the automatic depth-one guidance"),
-        }
-    }
-}
-
-/// Fixed MTP depth metadata resolved by the loaded model and active executor.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct MtpDepthStatus {
-    pub configured_draft_depth: Option<u8>,
-    pub artifact_maximum_draft_depth: Option<u8>,
-    pub artifact_default_draft_depth: Option<u8>,
-    pub resolved_requested_draft_depth: Option<u8>,
-    pub capped_draft_depth: Option<u8>,
-    pub effective_execution_draft_depth: Option<u8>,
-    pub resolution_reason: Option<MtpDepthResolutionReason>,
-}
-
-impl MtpDepthStatus {
-    pub const EMPTY: Self = Self {
-        configured_draft_depth: None,
-        artifact_maximum_draft_depth: None,
-        artifact_default_draft_depth: None,
-        resolved_requested_draft_depth: None,
-        capped_draft_depth: None,
-        effective_execution_draft_depth: None,
-        resolution_reason: None,
-    };
 }
 
 /// Model currently processing the active prompt phase.
@@ -339,11 +276,6 @@ pub enum WorkerEvent {
     Ready {
         model_id: String,
         capabilities: WorkerModelCapabilities,
-        /// Actual MTP runtime state reported by the worker after model load.
-        mtp_runtime_state: MtpRuntimeState,
-        /// Present when MTP is unavailable despite the preference being enabled.
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: MtpDepthStatus,
     },
     /// Delivers one or more ordered model outputs in a single frame.
     Output {
@@ -426,11 +358,6 @@ pub enum WorkerEvent {
         expert_memory_mode: Option<ExpertMemoryMode>,
         /// Safe idle lower bound for the newly loaded model.
         minimum_mlx_memory_ceiling_bytes: u64,
-        /// Actual MTP runtime state reported by the worker after the swap.
-        mtp_runtime_state: MtpRuntimeState,
-        /// Present when MTP is unavailable despite the preference being enabled.
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: MtpDepthStatus,
     },
     /// Reports that a model swap failed while the worker process remained responsive.
     ModelSwapFailed {

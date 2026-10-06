@@ -8,24 +8,15 @@ pub(crate) mod dense;
 pub(crate) mod inference_execution;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
-#[cfg(feature = "direct-mlx")]
-pub(crate) mod mtp_verify;
-pub(crate) mod multi_token_prediction;
 pub(crate) mod quantizations;
 mod text;
 mod vision;
 
 pub use artifacts::{
-    MAXIMUM_MTPLX_RUNTIME_BYTES, Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError,
-    Qwen3_5ArtifactValidator, Qwen3_5MtpArtifactCapability, Qwen3_5MtpContract,
-    Qwen3_5MtpContractError, Qwen3_5MtpExpertsLayout, Qwen3_5MtpSidecarDeclaration,
-    Qwen3_5MtpSidecarDeclarationError, Qwen3_5MtpSidecarValidationError,
-    Qwen3_5MtpSidecarValidationOutcome, Qwen3_5MtpTargetOnlyReason, Qwen3_5RamBudgetGeometryError,
-    Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
+    Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
+    Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
     mlx_ram_budget_model_geometry_from_validated_artifact, qwen3_5_language_tensor_profiles,
-    qwen3_5_mtp_tensor_names, qwen3_5_mtp_tensor_profiles,
-    qwen3_5_resident_language_tensor_profiles, validate_qwen3_5_mtp_sidecar_for_tests,
-    validate_qwen3_5_mtp_sidecar_result_for_tests,
+    qwen3_5_resident_language_tensor_profiles,
 };
 pub use configuration::{
     ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
@@ -33,41 +24,28 @@ pub use configuration::{
 pub use decoder::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
 #[cfg(feature = "direct-mlx")]
 pub use decoder::{
-    Qwen3_5MtpRequestState, Qwen3_5MtpRequestStateAllocationCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
 };
 #[cfg(feature = "direct-mlx")]
 pub use inference_execution::{
-    Qwen3_5Engine, Qwen3_5MtpRuntimeState, Qwen3_5PrefillExecutionContext,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
-    persistent_prompt_cache_publication_advances_parent_chain, qwen3_5_depth_one_mtp_window_fits,
-    qwen3_5_mtp_runtime_configuration_after_load, qwen3_5_mtp_runtime_state_after_load,
+    Qwen3_5Engine, Qwen3_5PrefillExecutionContext, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5PromptProcessingChunkSizerError,
+    persistent_prompt_cache_publication_advances_parent_chain,
     safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
-    Qwen3_5ModelChunkingConfiguration, Qwen3_5MtpForwardOutput, Qwen3_5TargetForwardOutput,
-    Qwen3_5TargetVerificationProjection, Qwen3_5TargetVerificationProjectionDispatch,
-    Qwen3_5Weights, four_row_split_k_quantized_linear_kernel, is_gdn_decode_prework_eligible,
-    qwen3_5_full_attention_step, qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    Qwen3_5ModelChunkingConfiguration, Qwen3_5TargetForwardOutput, Qwen3_5Weights,
+    is_gdn_decode_prework_eligible, qwen3_5_full_attention_step,
+    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
     qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
-    qwen3_5_target_verification_quantized_linear, target_verification_quantized_linear_kernel,
 };
-pub use multi_token_prediction::{
-    MtpVerificationDecision, MtpVerificationDecisionError,
-    qwen3_5_mtp_effective_depth_and_reason_for_windows, qwen3_5_mtp_effective_depth_for_windows,
-    qwen3_5_mtp_request_is_eligible, qwen3_5_mtp_sampled_acceptance_probability,
-    qwen3_5_mtp_sampled_verification_decision, qwen3_5_mtp_verification_decision,
-};
-#[cfg(feature = "direct-mlx")]
-#[doc(hidden)]
-pub use multi_token_prediction::{VerifiedEmissionQueue, VerifiedTargetFrontier};
 pub use quantizations::optiq::{OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile};
 #[cfg(feature = "direct-mlx")]
 pub use text::qwen3_5_apply_top_p_mask;

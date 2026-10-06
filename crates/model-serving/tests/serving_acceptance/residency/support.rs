@@ -70,7 +70,6 @@ pub(super) fn construct_automatic_residency_engine(
         model_directory,
         crate::common::standard_worker_chunking_configuration(),
         false,
-        true,
         astronomical_model_serving::PerformanceAttribution::disabled(),
         astronomical_model_serving::PerformanceAttributionLog::disabled(),
     )

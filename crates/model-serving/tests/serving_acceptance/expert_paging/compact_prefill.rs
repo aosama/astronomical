@@ -209,7 +209,6 @@ pub(crate) async fn run_prefill_snapshot(
         runtime,
         validated_artifact,
         &model_directory,
-        false,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
     .expect("the complete Ornith model should bind from validated descriptors");

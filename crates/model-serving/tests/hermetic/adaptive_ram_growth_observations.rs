@@ -6,10 +6,9 @@
 
 use astronomical_model_serving::{AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, MemoryPhase};
 
-const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
-    AdaptiveRamGrowthContext::decode(1, false, false);
+const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext = AdaptiveRamGrowthContext::decode(1, false);
 const DEFAULT_PREFILL_CONTEXT: AdaptiveRamGrowthContext =
-    AdaptiveRamGrowthContext::prefill(128, 0, false, false, false);
+    AdaptiveRamGrowthContext::prefill(128, 0, false, false);
 
 #[test]
 fn should_keep_prefill_and_decode_transient_high_water_values_independent() {
@@ -246,7 +245,7 @@ fn should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_
 
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, false, true),
+            AdaptiveRamGrowthContext::decode(1, true),
             27_806_577_158,
             192_061_440,
             70_778_880,

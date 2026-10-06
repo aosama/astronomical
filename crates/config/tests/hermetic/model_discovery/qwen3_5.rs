@@ -140,8 +140,8 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
         [],
     )
     .expect("optional vision sidecar should be written");
-    fs::write(dense_model_directory.join("optiq/mtp.safetensors"), [])
-        .expect("optional MTP sidecar should be written");
+    fs::write(dense_model_directory.join("optiq/extra.safetensors"), [])
+        .expect("optional extra sidecar should be written");
 
     let directory_scans = super::discover_configured_models(&temporary_directory);
     let discovered_model = directory_scans[0]
@@ -155,26 +155,6 @@ fn should_discover_a_dense_qwen3_5_model_as_text_only_despite_vision_metadata() 
     };
     assert!(!chat_capabilities.supports_vision);
     assert_eq!(chat_capabilities.context_window, 131_072);
-}
-
-#[test]
-fn should_allow_a_missing_mtp_only_file_with_an_arbitrary_name() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let model_directory = temporary_directory.path().join("MoeQwen3_5-4bit");
-    fs::create_dir_all(&model_directory).expect("model directory should be created");
-    super::write_minimal_model_config(&model_directory, "qwen3_5_moe", 131_072);
-    fs::write(model_directory.join("tokenizer.json"), "{}").expect("tokenizer should be written");
-    fs::write(model_directory.join("model-00001.safetensors"), [])
-        .expect("target model shard should be written");
-    fs::write(
-        model_directory.join("model.safetensors.index.json"),
-        r#"{"metadata":{"total_size":0},"weight_map":{"language_model.model.embed_tokens.weight":"model-00001.safetensors","language_model.mtp.fc.weight":"predictor-weights.safetensors"}}"#,
-    )
-    .expect("model index should be written");
-
-    let directory_scans = super::discover_configured_models(&temporary_directory);
-
-    assert_eq!(directory_scans[0].discovered_models.len(), 1);
 }
 
 #[test]

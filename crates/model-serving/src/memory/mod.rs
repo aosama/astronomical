@@ -64,9 +64,7 @@ mod vocabulary;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
-    CompleteResidencyRequirements, ContextAdmissionRequirements, MtpAdmission,
-    MtpDepthDowngradeReason, MtpDepthSelection, MtpDraftDepth, MtpDraftDepthError,
-    MtpMemoryCandidate, MtpMemoryProjection, MtpMemoryProjectionError, RotatingAdmissionError,
+    CompleteResidencyRequirements, ContextAdmissionRequirements, RotatingAdmissionError,
     combined_persistent_growth_bytes, persistent_context_restore_workspace_bytes,
     request_context_temporary_workspace_bytes, retained_expert_payload_capacity_bytes,
     rotating_committed_token_count, rotating_prefill_transient_token_count,

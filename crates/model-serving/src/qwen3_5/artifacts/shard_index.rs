@@ -15,13 +15,11 @@ const MAXIMUM_TENSOR_NAME_BYTES: usize = 512;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Qwen3_5ShardIndex {
     tensor_name_to_shard_file_name: BTreeMap<String, String>,
-    mtp_tensor_name_to_shard_file_name: BTreeMap<String, String>,
     /// Vision tensor name to shard file name mapping for embedded or sidecar storage.
     vision_tensor_name_to_shard_file_name: BTreeMap<String, String>,
     total_payload_bytes: u64,
     model_shard_file_names: Vec<String>,
     vision_sidecar_file_names: Vec<String>,
-    mtp_only_shard_file_names: Vec<String>,
 }
 
 impl Qwen3_5ShardIndex {
@@ -45,27 +43,13 @@ impl Qwen3_5ShardIndex {
         // ownership; physical duplicate tensors are handled during validation.
         let mut language_tensor_names = BTreeSet::new();
         let mut language_tensor_name_to_shard_file_name = BTreeMap::new();
-        let mut mtp_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut vision_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut language_shard_file_names = BTreeSet::new();
-        let mut mtp_shard_file_names = BTreeSet::new();
-        let mut language_or_mtp_shard_file_names = BTreeSet::new();
         let mut vision_shard_file_names = BTreeSet::new();
         for (tensor_name, shard_file_name) in &index_document.weight_map {
             validate_tensor_name(tensor_name)?;
             if tensor_name.starts_with("language_model.") {
-                if contains_mtp_component(tensor_name) {
-                    // Qwen3.6 oQ artifacts embed the optional MTP head in the
-                    // same shards as the autoregressive trunk. The head has its
-                    // own strict profile and is not part of the trunk inventory.
-                    mtp_shard_file_names.insert(shard_file_name.clone());
-                    language_or_mtp_shard_file_names.insert(shard_file_name.clone());
-                    mtp_tensor_name_to_shard_file_name
-                        .insert(tensor_name.clone(), shard_file_name.clone());
-                    continue;
-                }
                 language_shard_file_names.insert(shard_file_name.clone());
-                language_or_mtp_shard_file_names.insert(shard_file_name.clone());
                 language_tensor_names.insert(tensor_name.as_str());
                 language_tensor_name_to_shard_file_name
                     .insert(tensor_name.clone(), shard_file_name.clone());
@@ -78,7 +62,7 @@ impl Qwen3_5ShardIndex {
                 vision_tensor_name_to_shard_file_name
                     .insert(tensor_name.clone(), shard_file_name.clone());
             }
-            // Other tensor prefixes (e.g., "mtp.") are silently skipped.
+            // Other tensor prefixes are silently skipped.
         }
         tensor_spec::validate_language_tensor_names(
             &language_tensor_names,
@@ -86,24 +70,18 @@ impl Qwen3_5ShardIndex {
         )?;
 
         let vision_only_shard_file_names = vision_shard_file_names
-            .difference(&language_or_mtp_shard_file_names)
+            .difference(&language_shard_file_names)
             .cloned()
             .collect::<BTreeSet<_>>();
         let vision_sidecar_file_names =
             vision_only_shard_file_names.into_iter().collect::<Vec<_>>();
-        let mtp_only_shard_file_names = mtp_shard_file_names
-            .difference(&language_shard_file_names)
-            .cloned()
-            .collect::<Vec<_>>();
         let model_shard_file_names = language_shard_file_names.into_iter().collect::<Vec<_>>();
         Ok(Self {
             tensor_name_to_shard_file_name: language_tensor_name_to_shard_file_name,
-            mtp_tensor_name_to_shard_file_name,
             vision_tensor_name_to_shard_file_name,
             total_payload_bytes,
             model_shard_file_names,
             vision_sidecar_file_names,
-            mtp_only_shard_file_names,
         })
     }
 
@@ -123,18 +101,6 @@ impl Qwen3_5ShardIndex {
     #[must_use]
     pub fn language_tensor_count(&self) -> usize {
         self.tensor_name_to_shard_file_name.len()
-    }
-
-    /// Returns the count of optional MTP-head tensors recorded in language shards.
-    #[must_use]
-    pub fn mtp_tensor_count(&self) -> usize {
-        self.mtp_tensor_name_to_shard_file_name.len()
-    }
-
-    /// Returns the optional MTP-head tensor location inventory.
-    #[must_use]
-    pub fn mtp_tensor_name_to_shard_file_name(&self) -> &BTreeMap<String, String> {
-        &self.mtp_tensor_name_to_shard_file_name
     }
 
     /// Returns the vision tower tensor name to shard file name mapping.
@@ -157,7 +123,6 @@ impl Qwen3_5ShardIndex {
     /// Returns executable model shard file names in sorted order.
     ///
     /// Includes target-language files and language files with embedded vision.
-    /// MTP-only files are retained separately so target-only loading does not map them.
     #[must_use]
     pub fn model_shard_file_names(&self) -> &[String] {
         &self.model_shard_file_names
@@ -167,32 +132,6 @@ impl Qwen3_5ShardIndex {
     #[must_use]
     pub fn vision_sidecar_file_names(&self) -> &[String] {
         &self.vision_sidecar_file_names
-    }
-
-    /// Returns MTP-only files that may be absent without blocking target serving.
-    #[must_use]
-    pub fn mtp_only_shard_file_names(&self) -> &[String] {
-        &self.mtp_only_shard_file_names
-    }
-
-    /// Returns whether the indexed file contains only optional MTP tensors.
-    #[must_use]
-    pub fn is_mtp_only_shard_file(&self, shard_file_name: &str) -> bool {
-        self.mtp_only_shard_file_names
-            .iter()
-            .any(|indexed_file_name| indexed_file_name == shard_file_name)
-    }
-
-    /// Removes an absent optional MTP file and its logical tensor ownership.
-    pub fn omit_optional_mtp_shard_file(&mut self, shard_file_name: &str) -> bool {
-        if !self.is_mtp_only_shard_file(shard_file_name) {
-            return false;
-        }
-        self.mtp_tensor_name_to_shard_file_name
-            .retain(|_, indexed_shard_file_name| indexed_shard_file_name != shard_file_name);
-        self.mtp_only_shard_file_names
-            .retain(|indexed_file_name| indexed_file_name != shard_file_name);
-        true
     }
 
     /// Returns whether the indexed file is a separately loaded vision file.
@@ -224,14 +163,6 @@ impl Qwen3_5ShardIndex {
             .map(String::as_str)
     }
 
-    /// Resolves one exact MTP-head tensor name to its shard file.
-    #[must_use]
-    pub fn shard_file_name_for_mtp_tensor(&self, tensor_name: &str) -> Option<&str> {
-        self.mtp_tensor_name_to_shard_file_name
-            .get(tensor_name)
-            .map(String::as_str)
-    }
-
     /// Returns language tensor names that belong to one shard.
     #[must_use]
     pub fn language_tensor_names_for_shard(&self, shard_file_name: &str) -> Vec<&str> {
@@ -249,21 +180,10 @@ impl Qwen3_5ShardIndex {
             .collect()
     }
 
-    /// Returns MTP-head tensor names that belong to one language shard.
-    #[must_use]
-    pub fn mtp_tensor_names_for_shard(&self, shard_file_name: &str) -> Vec<&str> {
-        self.mtp_tensor_name_to_shard_file_name
-            .iter()
-            .filter_map(|(tensor_name, tensor_shard_file_name)| {
-                (tensor_shard_file_name == shard_file_name).then_some(tensor_name.as_str())
-            })
-            .collect()
-    }
-
     /// Extracts the set of language tensor names from the safetensors index JSON
     /// without performing any validation against tensor profiles.
     ///
-    /// This is used to determine which target and MTP modules are quantized vs.
+    /// This is used to determine which target modules are quantized vs.
     /// unquantized by checking for affine companion tensors before the full
     /// validation pass that requires complete tensor profiles.
     pub fn extract_language_tensor_names_from_json(
@@ -311,12 +231,6 @@ fn validate_tensor_name(tensor_name: &str) -> Result<(), Qwen3_5ArtifactError> {
     Ok(())
 }
 
-fn contains_mtp_component(tensor_name: &str) -> bool {
-    tensor_name
-        .split('.')
-        .any(|component| component == "mtp" || component.starts_with("mtp_"))
-}
-
 /// A bounded structural mismatch in the Qwen3.5 shard index.
 #[derive(Debug, Error)]
 pub enum Qwen3_5ArtifactError {
@@ -338,10 +252,6 @@ pub enum Qwen3_5ArtifactError {
     UnexpectedLanguageTensor { tensor_name: String },
     #[error("Qwen3.5 index is missing executable language tensor '{tensor_name}'")]
     MissingLanguageTensor { tensor_name: String },
-    #[error("Qwen3.5 index contains unexpected MTP tensor '{tensor_name}'")]
-    UnexpectedMtpTensor { tensor_name: String },
-    #[error("Qwen3.5 index is missing MTP tensor '{tensor_name}'")]
-    MissingMtpTensor { tensor_name: String },
     #[error("Qwen3.5 index contains unexpected vision tensor '{tensor_name}'")]
     UnexpectedVisionTensor { tensor_name: String },
     #[error("Qwen3.5 index is missing vision tensor '{tensor_name}'")]

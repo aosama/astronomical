@@ -197,7 +197,5 @@ fn autoregressive_configuration() -> WorkerModelConfiguration {
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
         },
-        mtp_enabled: false,
-        mtp_draft_depth: None,
     })
 }

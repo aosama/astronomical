@@ -2,10 +2,9 @@
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ImageGenerationCapabilities,
-    MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
-    WorkerLoadedModelRuntimeConfiguration, WorkerModelCapabilities,
-    WorkerRuntimeFeatureConfiguration,
+    ProtocolReader, ProtocolWriter, RequestId, WorkerEvent, WorkerFlux2KleinModelConfiguration,
+    WorkerImageGenerationModelFamily, WorkerLoadedModelRuntimeConfiguration,
+    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
 };
 
 const CONFIGURATION_BEFORE_READY_GENERATION: &str =
@@ -57,9 +56,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }) {
         event_writer
             .send_event(&WorkerEvent::Ready {
-                mtp_runtime_state: MtpRuntimeState::Disabled,
-                mtp_unavailable_reason: None,
-                mtp_depth_status: Default::default(),
                 model_id: FLUX_MODEL_ID.to_owned(),
                 capabilities: WorkerModelCapabilities::image_generation(
                     ImageGenerationCapabilities {
@@ -80,9 +76,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }) {
         event_writer
             .send_event(&WorkerEvent::Ready {
-                mtp_runtime_state: MtpRuntimeState::Disabled,
-                mtp_unavailable_reason: None,
-                mtp_depth_status: Default::default(),
                 model_id: "astronomical/unacknowledged-ready-model".to_owned(),
                 capabilities: ChatModelCapabilities {
                     supports_reasoning: false,

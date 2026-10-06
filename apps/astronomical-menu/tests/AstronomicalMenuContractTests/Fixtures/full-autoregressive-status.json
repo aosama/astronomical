@@ -86,16 +86,6 @@
         "effective": null
       },
       "model_id": "fictional/autoregressive-model",
-      "mtp_enabled": {
-        "configured": null,
-        "default": false,
-        "effective": true
-      },
-      "mtp_draft_depth": {
-        "configured": null,
-        "default": null,
-        "effective": null
-      },
       "temperature": {
         "configured": null,
         "default": null,
@@ -123,16 +113,6 @@
   "mlx_memory_ceiling_bytes": 0,
   "mlx_memory_limit_error": null,
   "mlx_memory_snapshot": null,
-  "mtp_artifact_default_draft_depth": null,
-  "mtp_artifact_maximum_draft_depth": null,
-  "mtp_capped_draft_depth": null,
-  "mtp_configured_draft_depth": null,
-  "mtp_depth_resolution_reason": null,
-  "mtp_effective_execution_draft_depth": null,
-  "mtp_enabled": false,
-  "mtp_resolved_requested_draft_depth": null,
-  "mtp_runtime_state": "disabled",
-  "mtp_unavailable_reason": null,
   "pending_mlx_memory_ceiling_bytes": null,
   "persistent_prompt_cache": {
     "hit_rate": 0.0,
@@ -172,9 +152,7 @@
         },
         "maximum_context_tokens": 65536,
         "maximum_output_tokens": 8192,
-        "model_id": "fictional/autoregressive-model",
-        "mtp_enabled": true,
-        "mtp_draft_depth": null
+        "model_id": "fictional/autoregressive-model"
       },
       "kind": "autoregressive"
     },

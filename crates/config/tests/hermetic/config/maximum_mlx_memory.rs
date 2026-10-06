@@ -68,7 +68,7 @@ fn should_atomically_update_maximum_mlx_memory_without_losing_other_config_field
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     let original_config_bytes = br#"{
       "model_directories": ["/models/astronomical"],
-      "mtp_enabled": true,
+      "persistent_prompt_cache_enabled": true,
       "chunking": {}
     }"#;
     write_config(
@@ -131,7 +131,7 @@ fn should_atomically_update_maximum_mlx_memory_without_losing_other_config_field
 fn should_remove_maximum_mlx_memory_override_when_reset_to_automatic() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     let original_config_bytes =
-        br#"{"maximum_mlx_memory_gb": 32, "mtp_enabled": true, "chunking": {}}"#;
+        br#"{"maximum_mlx_memory_gb": 32, "persistent_prompt_cache_enabled": true, "chunking": {}}"#;
     write_config(
         temporary_home_directory.path(),
         std::str::from_utf8(original_config_bytes).expect("fixture should be UTF-8"),

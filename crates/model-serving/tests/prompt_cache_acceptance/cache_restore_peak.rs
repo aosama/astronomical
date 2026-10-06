@@ -79,7 +79,6 @@ async fn run_cache_restore_peak_acceptance() {
         248_069,
         model_directory,
         worker_chunking_configuration,
-        true,
     )
     .expect("the engine should accept the temporary cache configuration");
     qwen3_5_engine

@@ -35,27 +35,12 @@ impl Qwen3_5Config {
     }
 
     /// Returns the quantization profile for a specific module, falling back to the
-    /// `mtplx_mtp_quantization` global default for MTP modules, then the model-wide
-    /// default profile if the module is not found in any override map.
+    /// model-wide default profile if the module is not found in the override map.
     #[must_use]
     pub fn quantization_profile_for_module(&self, module_name: &str) -> OptiQQuantizationProfile {
-        self.mtp_quantized_module_profiles
+        self.quantized_module_profiles
             .get(module_name)
             .copied()
-            .or_else(|| self.quantized_module_profiles.get(module_name).copied())
-            .or_else(|| {
-                // MTP modules without a per-module override get the global
-                // mtplx_mtp_quantization fallback when declared.
-                if module_name.starts_with("language_model.mtp.") {
-                    self.mtxplx_mtp_quantization_fallback
-                        .map(|fallback| OptiQQuantizationProfile {
-                            bits: fallback.bits,
-                            group_size: fallback.group_size,
-                        })
-                } else {
-                    None
-                }
-            })
             .unwrap_or(OptiQQuantizationProfile {
                 bits: self.default_quantization_bits,
                 group_size: self.default_quantization_group_size,
@@ -70,8 +55,7 @@ impl Qwen3_5Config {
 
     /// Resolves modules stored as native floating-point when both affine companion
     /// tensors are absent from the safetensors index. This handles mixed storage
-    /// artifacts whose default quantization profile does not describe every module,
-    /// including optional MTP modules.
+    /// artifacts whose default quantization profile does not describe every module.
     ///
     /// The shard_tensor_names parameter should contain all tensor names from the
     /// safetensors index (the weight_map keys).
@@ -90,13 +74,8 @@ impl Qwen3_5Config {
             .collect::<Vec<_>>();
         for native_module_name in native_module_names {
             let native_quantization_profile = OptiQQuantizationProfile::unquantized();
-            if native_module_name.starts_with("language_model.mtp.") {
-                self.mtp_quantized_module_profiles
-                    .insert(native_module_name, native_quantization_profile);
-            } else {
-                self.quantized_module_profiles
-                    .insert(native_module_name, native_quantization_profile);
-            }
+            self.quantized_module_profiles
+                .insert(native_module_name, native_quantization_profile);
         }
     }
 
@@ -357,18 +336,5 @@ impl Qwen3_5Config {
     pub fn rotary_dimension(&self) -> u32 {
         let partial_rotary_factor = f32::from_bits(self.partial_rotary_factor_bits());
         (self.text_config.head_dim as f32 * partial_rotary_factor) as u32
-    }
-
-    /// Returns the artifact-declared MTP layer count.
-    #[must_use]
-    pub const fn mtp_layer_count(&self) -> u32 {
-        self.text_config.mtp_num_hidden_layers
-    }
-
-    /// Returns the MTP sidecar file path declared in `mlx_lm_extra_tensors.mtp_file`,
-    /// or `None` when MTP weights are embedded in the shard index or absent.
-    #[must_use]
-    pub fn sidecar_mtp_file(&self) -> Option<&str> {
-        self.sidecar_mtp_file.as_deref()
     }
 }

@@ -42,8 +42,7 @@ async fn measure_affine_quantized_matmul_costs() {
         ("prefill-down", 2048, 2048, 4096, GROUP_SIZE),
         ("decode-qkv", 1, 8192, 2048, GROUP_SIZE),
         ("decode-down", 1, 2048, 4096, GROUP_SIZE),
-        // The 27B dense artifact's verify-window geometry: MTP verification
-        // forwards present 2..4 rows against the same weights a 1-row decode
+        // Multi-row batched decode against the same weights a 1-row decode
         // step presents. The dense-MLP projection is the square case; the
         // vocabulary head is the huge-N case.
         ("verify27b-proj-m1", 1, 5120, 5120, 32),

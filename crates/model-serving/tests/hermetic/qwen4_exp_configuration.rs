@@ -60,8 +60,7 @@ fn family_document_json() -> String {
             "ple_embed_dim": 2560,
             "ple_layer_ids": [2],
             "ple_conv_kernel_size": 4,
-            "make_ngram_vocab_size_divisible_by": 128,
-            "mtp_num_hidden_layers": 1
+            "make_ngram_vocab_size_divisible_by": 128
         }
     }"#
     .to_owned()
@@ -100,7 +99,6 @@ fn should_validate_a_compliant_family_document() {
         .ngram_embedding
         .expect("a complete n-gram group validates");
     assert_eq!(ngram.layer_ids_one_based, vec![2]);
-    assert_eq!(config.multi_token_prediction_layers, Some(1));
     assert_eq!(config.default_quantization, None);
 }
 
@@ -278,7 +276,6 @@ fn should_reject_an_unsupported_activation_dtype() {
 #[test]
 fn should_validate_a_text_only_head_less_variant() {
     let head_less = family_document_json()
-        .replace(",\n            \"mtp_num_hidden_layers\": 1", "")
         .replace("\"ngram_size\": 3,", "\"ngram_size\": 3,")
         .replace("\"hc_count\": 4,", "")
         .replace("\"hc_lowrank\": 320,", "")
@@ -298,7 +295,6 @@ fn should_validate_a_text_only_head_less_variant() {
     assert!(config.linear_attention.is_none());
     assert!(config.sparse_attention.is_none());
     assert!(config.hyper_connections.is_none());
-    assert!(config.multi_token_prediction_layers.is_none());
     // The n-gram group stays complete, so it still validates.
     assert!(config.ngram_embedding.is_some());
 }

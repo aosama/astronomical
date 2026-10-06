@@ -19,7 +19,7 @@ use astronomical_config::{
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
-    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand, MtpRuntimeState,
+    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use astronomical_supervisor::{
@@ -122,7 +122,6 @@ pub(crate) fn ipc_runtime_config(
                     configured_maximum_context_tokens: None,
                     default_maximum_context_tokens: 8_192,
                     configured_chunking_fields: Default::default(),
-                    acceleration_availability: Default::default(),
                     worker_model_configuration: WorkerModelConfiguration::Autoregressive(
                         WorkerAutoregressiveModelConfiguration {
                             model_id: (*model_id).to_owned(),
@@ -141,8 +140,6 @@ pub(crate) fn ipc_runtime_config(
                                 experimental_quantized_kv_cache_enabled: false,
                                 experimental_fused_moe_decode_enabled: false,
                             },
-                            mtp_enabled: false,
-                            mtp_draft_depth: None,
                         },
                     ),
                 },
@@ -270,8 +267,6 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
         health_snapshot: WorkerHealthSnapshot::ready_with_model(
             ready_model_id.to_owned(),
             model_capabilities,
-            MtpRuntimeState::Disabled,
-            None,
         ),
         stream_events: vec![
             ChatGenerationStreamEvent::TextFragment("Hello".to_owned()),

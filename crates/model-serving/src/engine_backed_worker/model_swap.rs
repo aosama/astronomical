@@ -1,8 +1,8 @@
 //! Transactional typed runtime replacement for autoregressive and image models.
 
 use astronomical_ipc_protocol::{
-    ImageGenerationFailureReason, MlxMemorySnapshotSource, MtpRuntimeState, ProtocolWriter,
-    WorkerEvent, WorkerModelCapabilities, WorkerModelConfiguration,
+    ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter, WorkerEvent,
+    WorkerModelCapabilities, WorkerModelConfiguration,
 };
 use tokio::io::AsyncWrite;
 
@@ -73,13 +73,7 @@ where
                     })?;
                 let minimum = engine_load_result.minimum_mlx_memory_ceiling_bytes();
                 let event = model_swapped_from_ready_event(
-                    replacement_model.processor.ready_event(
-                        engine_load_result.mtp_runtime_state(),
-                        engine_load_result
-                            .mtp_unavailable_reason()
-                            .map(String::from),
-                        engine_load_result.mtp_depth_status(),
-                    ),
+                    replacement_model.processor.ready_event(),
                     engine_load_result.expert_memory_mode(),
                     minimum,
                 )?;
@@ -114,9 +108,6 @@ where
                     ),
                     expert_memory_mode: None,
                     minimum_mlx_memory_ceiling_bytes: minimum,
-                    mtp_runtime_state: MtpRuntimeState::Disabled,
-                    mtp_unavailable_reason: None,
-                    mtp_depth_status: Default::default(),
                 };
                 (
                     LoadedRuntime::Image(image_engine),
@@ -148,9 +139,6 @@ where
                     ),
                     expert_memory_mode: None,
                     minimum_mlx_memory_ceiling_bytes: minimum,
-                    mtp_runtime_state: MtpRuntimeState::Disabled,
-                    mtp_unavailable_reason: None,
-                    mtp_depth_status: Default::default(),
                 };
                 (
                     LoadedRuntime::Embeddings(embedding_engine),
@@ -255,17 +243,11 @@ fn model_swapped_from_ready_event(
         WorkerEvent::Ready {
             model_id,
             capabilities,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
         } => Ok(WorkerEvent::ModelSwapped {
             model_id,
             capabilities,
             expert_memory_mode,
             minimum_mlx_memory_ceiling_bytes,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
         }),
         other_event => {
             tracing::error!(

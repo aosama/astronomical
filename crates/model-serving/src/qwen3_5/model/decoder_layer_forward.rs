@@ -43,7 +43,6 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5DecoderLayerAttentionOutput, Qwen3_5ExecutionError> {
         let normalized_input = self.runtime.rms_norm(
@@ -74,7 +73,6 @@ impl Qwen3_5Model {
                         convolution,
                         recurrent,
                         boundary_checkpoint_collector,
-                        paged_prefill_execution_mode,
                         performance_attribution,
                     )
                 },
@@ -92,7 +90,6 @@ impl Qwen3_5Model {
                         full_attention_weights,
                         attention,
                         token_position_offsets,
-                        paged_prefill_execution_mode,
                     )
                 },
             ),
@@ -120,16 +117,7 @@ impl Qwen3_5Model {
             }
         };
         let attention_output = match attention_output {
-            Ok(attention_output)
-                if performance_attribution.is_enabled()
-                    && token_count > 1
-                    // The MTP verification window is a latency-sensitive decode
-                    // pass: injected evaluation boundaries serialize it the same
-                    // way they would serialize one-token decode, and its phase
-                    // costs are attributed at the attempt boundary instead.
-                    && paged_prefill_execution_mode
-                        != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow =>
-            {
+            Ok(attention_output) if performance_attribution.is_enabled() && token_count > 1 => {
                 performance_attribution.measure_operation(
                     attention_family_gpu_wait_operation,
                     |_performance_attribution| self.runtime.evaluate_arrays(&[&attention_output]),
@@ -161,19 +149,14 @@ impl Qwen3_5Model {
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let should_use_compiled_elementwise_graphs = token_count != 1
-            && paged_prefill_execution_mode
-                != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow;
-        // One-token decode keeps the low-overhead existing graph. Verification
-        // windows use shape/ownership semantics incompatible with the ordinary
-        // compiled multi-token elementwise closure.
+        let should_use_compiled_elementwise_graphs = token_count != 1;
+        // One-token decode keeps the low-overhead existing graph.
         let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
         let mlp_output = match &decoder_layer_weights.mlp_weights {
             Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => self
                 .forward_qwen3_5_dense_mlp(
                     &attention_output.normalized_attention,
                     dense_mlp_weights,
-                    paged_prefill_execution_mode,
                 ),
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
                 // Sparse layer metadata and router weights live in the decoder
@@ -204,12 +187,7 @@ impl Qwen3_5Model {
         // its graphics-processor time is attributed separately from the chunk
         // terminal wait. See the attention boundary above for the rationale.
         let mlp_output = match mlp_output {
-            Ok(mlp_output)
-                if performance_attribution.is_enabled()
-                    && token_count > 1
-                    && paged_prefill_execution_mode
-                        != Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow =>
-            {
+            Ok(mlp_output) if performance_attribution.is_enabled() && token_count > 1 => {
                 performance_attribution.measure_operation(
                     PerformanceOperation::PrefillFeedForwardGraphicsProcessorCompletionWait,
                     |_performance_attribution| self.runtime.evaluate_arrays(&[&mlp_output]),

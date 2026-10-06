@@ -44,7 +44,6 @@ async fn assert_exact_final_prefill_logit_parity() {
         runtime,
         validated_artifact,
         &configured_model_directory,
-        false,
         crate::common::standard_qwen3_5_model_chunking_configuration(),
     )
     .expect("the configured model should load for final-logit parity acceptance");
