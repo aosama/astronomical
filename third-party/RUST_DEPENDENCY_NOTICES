@@ -3900,7 +3900,7 @@ Used by:
 - rustc_version 0.4.1
 - rustix 1.1.4
 - rustls-native-certs 0.8.4
-- rustls 0.23.43
+- rustls 0.23.45
 - security-framework-sys 2.17.0
 - security-framework 3.7.0
 - signal-hook-registry 1.4.8

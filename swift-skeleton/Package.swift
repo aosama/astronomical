@@ -13,7 +13,12 @@ let package: Package = Package(
     dependencies: [
         // Wave 3 — the Metal acceleration substrate under crates/mlx-c-rust.
         // Pinned to the upstream release; never a developer-local checkout.
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.32.3")
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.32.3"),
+        // Wave 3 engine epic #983 — upstream model definitions, KV caches,
+        // tokenizer, and eval loops the Swift engine adapts instead of
+        // porting. Exactly pinned so the pairing with mlx-swift above is
+        // deliberate: 3.32.3 requires mlx-swift ~> 0.32.3.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3")
     ],
     targets: [
         // Wave 1 — crates/config
@@ -46,7 +51,9 @@ let package: Package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXFast", package: "mlx-swift"),
-                .product(name: "MLXLinalg", package: "mlx-swift")
+                .product(name: "MLXLinalg", package: "mlx-swift"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm")
             ]),
         // Wave 3 — apps/inference-worker
         .executableTarget(name: "InferenceWorker"),
