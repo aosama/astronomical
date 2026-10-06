@@ -4,31 +4,31 @@ use astronomical_model_serving::{
 };
 
 #[test]
-fn should_charge_target_and_mtp_persistent_growth_in_one_admission_projection() {
+fn should_charge_all_persistent_growth_in_one_admission_projection() {
     let target_persistent_state_growth_bytes = 10_485_760;
-    let mtp_full_attention_growth_bytes = 262_144;
+    let additional_full_attention_growth_bytes = 262_144;
 
     let combined_persistent_growth_bytes = combined_persistent_growth_bytes(
         target_persistent_state_growth_bytes,
-        mtp_full_attention_growth_bytes,
+        additional_full_attention_growth_bytes,
     );
 
     assert_eq!(
         combined_persistent_growth_bytes
-            .expect("the target and MTP growth should fit the platform byte range"),
+            .expect("the combined growth should fit the platform byte range"),
         10_747_904
     );
 }
 
 #[test]
-fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_growth() {
+fn should_require_reclamation_only_when_additional_growth_is_added_to_fitting_target_growth() {
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let target_persistent_state_growth_bytes = 300;
 
     let target_only_projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, false, false),
+            AdaptiveRamGrowthContext::decode(1, false),
             700,
             target_persistent_state_growth_bytes,
             0,
@@ -40,7 +40,7 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
             .expect("the combined growth should not overflow");
     let combined_projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, false, false),
+            AdaptiveRamGrowthContext::decode(1, false),
             700,
             combined_growth_bytes,
             0,
@@ -57,7 +57,7 @@ fn should_require_reclamation_only_when_mtp_growth_is_added_to_fitting_target_gr
 }
 
 #[test]
-fn should_fail_closed_when_target_and_mtp_growth_overflows() {
+fn should_fail_closed_when_combined_growth_overflows() {
     assert_eq!(combined_persistent_growth_bytes(usize::MAX, 1), None);
 }
 

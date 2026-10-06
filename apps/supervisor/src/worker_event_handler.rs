@@ -79,9 +79,6 @@ pub(super) fn handle_worker_event(
         WorkerEvent::Ready {
             model_id,
             capabilities,
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
         } => {
             if *is_ready || active_request.is_some() {
                 return Err(protocol_violation("duplicate worker readiness"));
@@ -91,13 +88,7 @@ pub(super) fn handle_worker_event(
             *model_load_deadline = None;
             publish_health(
                 health_snapshot,
-                WorkerHealthSnapshot::ready_with_model(
-                    model_id,
-                    capabilities,
-                    mtp_runtime_state,
-                    mtp_unavailable_reason,
-                )
-                .with_mtp_depth_status(mtp_depth_status),
+                WorkerHealthSnapshot::ready_with_model(model_id, capabilities),
             );
         }
         WorkerEvent::Idle {

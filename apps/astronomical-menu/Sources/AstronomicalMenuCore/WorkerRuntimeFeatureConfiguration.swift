@@ -119,16 +119,12 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
   let maximumContextTokens: UInt32
   let maximumOutputTokens: UInt32
   let chunking: WorkerChunkingConfiguration
-  let mtpEnabled: Bool
-  let mtpDraftDepth: UInt8?
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case modelIdentifier = "model_id"
     case maximumContextTokens = "maximum_context_tokens"
     case maximumOutputTokens = "maximum_output_tokens"
     case chunking
-    case mtpEnabled = "mtp_enabled"
-    case mtpDraftDepth = "mtp_draft_depth"
   }
 
   init(from decoder: Decoder) throws {
@@ -138,8 +134,6 @@ struct WorkerLoadedAutoregressiveModelRuntimeConfiguration: Codable, Equatable {
     maximumContextTokens = try container.decode(UInt32.self, forKey: .maximumContextTokens)
     maximumOutputTokens = try container.decode(UInt32.self, forKey: .maximumOutputTokens)
     chunking = try container.decode(WorkerChunkingConfiguration.self, forKey: .chunking)
-    mtpEnabled = try container.decode(Bool.self, forKey: .mtpEnabled)
-    mtpDraftDepth = try container.decodeRequiredNullable(UInt8.self, forKey: .mtpDraftDepth)
   }
 }
 

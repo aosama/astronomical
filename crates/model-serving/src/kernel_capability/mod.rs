@@ -19,8 +19,6 @@ pub mod fused_expert_decode_probe;
 pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_weighted_sum_probe;
-#[cfg(feature = "direct-mlx")]
-pub mod target_verification_probes;
 
 #[cfg(feature = "direct-mlx")]
 pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
@@ -30,10 +28,6 @@ pub use gated_delta_probes::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use sorted_expert_weighted_sum_probe::SortedExpertWeightedSumProbe;
-#[cfg(feature = "direct-mlx")]
-pub use target_verification_probes::{
-    TargetVerificationFourRowProbe, TargetVerificationProjectionProbe,
-};
 
 /// One Astronomical custom Metal kernel whose dispatch can fall back to a
 /// public MLX API. Kernel sources are fixed constants, so a verdict depends
@@ -51,10 +45,6 @@ pub enum CustomMetalKernelFamily {
     /// Fused gated-delta decode prework: convolution window, conv1d, SiLU,
     /// q/k/v split, RMS norms, and scalar scales in one launch.
     GdnDecodePrework,
-    /// One-row target-verification quantized projection.
-    TargetVerificationQuantizedLinear,
-    /// Four-row split-K target-verification quantized projection.
-    TargetVerificationFourRowQuantizedLinear,
 }
 
 /// Why one custom kernel family cannot run on this GPU.
@@ -258,8 +248,6 @@ pub fn worker_process_kernel_capabilities(
         }
         let sorted_expert_weighted_sum_probe = SortedExpertWeightedSumProbe::new(runtime);
         let fused_expert_decode_probe = FusedQuantizedExpertDecodeProbe::new(runtime);
-        let target_verification_probe = TargetVerificationProjectionProbe::new(runtime);
-        let target_verification_four_row_probe = TargetVerificationFourRowProbe::new(runtime);
         let gated_delta_probe = GatedDeltaSequenceProbe::new(runtime);
         let gated_delta_checkpoint_probe = GatedDeltaBoundaryCheckpointProbe::new(runtime);
         let gdn_decode_prework_probe = GdnDecodePreworkProbe::new(runtime);
@@ -267,8 +255,6 @@ pub fn worker_process_kernel_capabilities(
             &[
                 &sorted_expert_weighted_sum_probe,
                 &fused_expert_decode_probe,
-                &target_verification_probe,
-                &target_verification_four_row_probe,
                 &gated_delta_probe,
                 &gated_delta_checkpoint_probe,
                 &gdn_decode_prework_probe,

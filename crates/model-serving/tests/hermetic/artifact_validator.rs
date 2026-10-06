@@ -39,8 +39,7 @@ fn should_allow_a_recognized_unowned_tensor_to_be_absent_from_a_shard() {
         shape: vec![2, 2],
         equivalent_published_shapes: Vec::new(),
     };
-    let recognized_tensor_names: HashSet<&str> =
-        ["language_model.mtp.fc.weight"].into_iter().collect();
+    let recognized_tensor_names: HashSet<&str> = ["language_model.weight"].into_iter().collect();
     let weights_bytes = safetensors_bytes_with_multiple_tensors(&[(
         "language_model.weight",
         "F32",

@@ -416,16 +416,5 @@ fn model_swapped_event_json(capabilities: serde_json::Value) -> serde_json::Valu
         "capabilities": capabilities,
         "expert_memory_mode": null,
         "minimum_mlx_memory_ceiling_bytes": 1,
-        "mtp_runtime_state": "disabled",
-        "mtp_unavailable_reason": null,
-        "mtp_depth_status": {
-            "configured_draft_depth": null,
-            "artifact_maximum_draft_depth": null,
-            "artifact_default_draft_depth": null,
-            "resolved_requested_draft_depth": null,
-            "capped_draft_depth": null,
-            "effective_execution_draft_depth": null,
-            "resolution_reason": null
-        },
     })
 }

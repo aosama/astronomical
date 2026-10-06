@@ -1,6 +1,5 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, MtpDepthStatus,
-    MtpRuntimeState, WorkerEvent,
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, WorkerEvent,
 };
 use serde::Serialize;
 
@@ -14,12 +13,7 @@ pub trait ModelGenerationProcessor {
     type RequestOutput: Send;
 
     /// Reports the exact loaded model identity and output capabilities.
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: MtpDepthStatus,
-    ) -> WorkerEvent;
+    fn ready_event(&self) -> WorkerEvent;
 
     /// Prepares one independently validated structured-chat request.
     fn prepare_chat_generation(

@@ -190,21 +190,19 @@ fn should_parse_the_qwen_3_8_distill_sparse_mixed_precision_quantization_config(
 }
 
 #[test]
-fn should_resolve_the_qwen_3_8_distill_router_and_mtp_fusion_as_unquantized() {
+fn should_resolve_the_qwen_3_8_distill_router_as_unquantized() {
     let config_bytes = frozen_qwen3_8_distill_config_bytes();
     let mut config = Qwen3_5Config::from_json_bytes(&config_bytes)
         .expect("the frozen Qwen 3.8 distill config should parse");
 
-    // The artifact stores the router gates, the MTP fusion projection, and the
-    // normalization weights as plain native tensors with no scales or biases.
+    // The artifact stores the router gates and the normalization weights as
+    // plain native tensors with no scales or biases.
     let mut shard_tensor_names = BTreeSet::new();
     for decoder_layer_index in 0..40 {
         shard_tensor_names.insert(format!(
             "language_model.model.layers.{decoder_layer_index}.mlp.gate.weight"
         ));
     }
-    shard_tensor_names.insert("language_model.mtp.fc.weight".to_owned());
-    shard_tensor_names.insert("language_model.mtp.norm.weight".to_owned());
     shard_tensor_names
         .insert("language_model.model.layers.0.mlp.switch_mlp.gate_proj.weight".to_owned());
     shard_tensor_names
@@ -216,8 +214,6 @@ fn should_resolve_the_qwen_3_8_distill_router_and_mtp_fusion_as_unquantized() {
     for unquantized_module_name in [
         "language_model.model.layers.0.mlp.gate",
         "language_model.model.layers.39.mlp.gate",
-        "language_model.mtp.fc",
-        "language_model.mtp.norm",
     ] {
         let module_profile = config.quantization_profile_for_module(unquantized_module_name);
         assert!(
@@ -229,35 +225,4 @@ fn should_resolve_the_qwen_3_8_distill_router_and_mtp_fusion_as_unquantized() {
         .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.gate_proj");
     assert_eq!(switch_mlp_profile.bits, 6);
     assert_eq!(switch_mlp_profile.group_size, 64);
-}
-
-#[test]
-fn should_resolve_qwen_3_8_distill_mtp_override_profiles() {
-    let config_bytes = frozen_qwen3_8_distill_config_bytes();
-    let config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the frozen Qwen 3.8 distill config should parse");
-
-    let mtp_profile_expectations = [
-        ("language_model.mtp.layers.0.self_attn.q_proj", 8, 64),
-        ("language_model.mtp.layers.0.self_attn.o_proj", 8, 64),
-        (
-            "language_model.mtp.layers.0.mlp.shared_expert.gate_proj",
-            8,
-            128,
-        ),
-        ("language_model.mtp.layers.0.mlp.shared_expert_gate", 8, 64),
-        (
-            "language_model.mtp.layers.0.mlp.switch_mlp.down_proj",
-            6,
-            64,
-        ),
-    ];
-    for (module_name, expected_bits, expected_group_size) in mtp_profile_expectations {
-        let module_profile = config.quantization_profile_for_module(module_name);
-        assert_eq!(module_profile.bits, expected_bits, "bits for {module_name}");
-        assert_eq!(
-            module_profile.group_size, expected_group_size,
-            "group size for {module_name}"
-        );
-    }
 }

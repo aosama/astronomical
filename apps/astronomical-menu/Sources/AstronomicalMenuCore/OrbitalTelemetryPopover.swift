@@ -54,13 +54,6 @@ struct OrbitalTelemetryPopover: View {
             Text(statusDocument.readyModelIdentifier ?? "No model resident")
               .font(PopoverTypography.headline)
               .lineLimit(1)
-            if statusDocument.mtpRuntimeState == "active" {
-              Text("MTP")
-                .font(PopoverTypography.semiboldCaption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.cyan.opacity(0.2), in: Capsule())
-            }
           }
         }
         Spacer()
@@ -78,15 +71,6 @@ struct OrbitalTelemetryPopover: View {
         let statusRefreshErrorMessage = telemetryStore.lastStatusRefreshErrorMessage
       {
         StatusRefreshErrorView(message: statusRefreshErrorMessage)
-      }
-      if let mtpStatusReason =
-        statusDocument.mtpUnavailableReason ?? statusDocument.mtpDepthResolutionReason
-      {
-        Text(mtpStatusReason)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .lineLimit(2)
-          .frame(maxWidth: .infinity, alignment: .trailing)
       }
       Divider()
       metricRow("Flight", statusDocument.flightTitle)

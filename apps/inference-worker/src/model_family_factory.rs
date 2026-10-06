@@ -109,8 +109,6 @@ impl
                                 model_configuration.model_id,
                                 model_configuration.maximum_context_tokens,
                                 model_configuration.maximum_output_tokens,
-                                model_configuration.mtp_enabled,
-                                model_configuration.mtp_draft_depth,
                                 persistent_prompt_cache_enabled,
                                 performance_attribution_enabled,
                                 performance_attribution_log_path,

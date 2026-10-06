@@ -331,7 +331,7 @@ fn record_rejection_and_restore_checkpoint(
         .performance_attribution
         .record_counter(PerformanceCounter::PrefillCapacityRejectionCount, 1);
     // Restore before cleanup or eviction so retry begins from the same decoder,
-    // MTP, cursor, position, and visual-consumption frontier.
+    // cursor, position, and visual-consumption frontier.
     active_request
         .restore_prefill_request_checkpoint(prefill_request_checkpoint)
         .map_err(qwen3_5_runtime_error)

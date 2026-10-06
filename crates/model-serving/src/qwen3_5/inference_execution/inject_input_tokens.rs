@@ -5,10 +5,6 @@ use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation
 use super::super::model::memory_admission;
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory;
-use crate::qwen3_5::multi_token_prediction::{
-    disable_prediction_after_optional_injection_failure,
-    projected_injected_prediction_growth_bytes, restore_queued_prediction_prefix_before_injection,
-};
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(
@@ -62,16 +58,6 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         input_token_ids: &[u32],
     ) -> Result<(), InferenceEngineError> {
-        restore_queued_prediction_prefix_before_injection(active_request)?;
-        if active_request.has_optional_prediction_session() {
-            // Exact predictor replay needs historical target hidden rows that are
-            // not retained across arbitrary feedback. Quarantine optional MTP
-            // instead of preserving an approximate predictor suffix.
-            disable_prediction_after_optional_injection_failure(active_request);
-            active_request
-                .performance_attribution_mut()
-                .record_counter(crate::PerformanceCounter::MtpOperationalFallbackCount, 1);
-        }
         let remaining_output_tokens = active_request
             .maximum_output_tokens
             .saturating_sub(active_request.generated_token_count)
@@ -124,33 +110,24 @@ impl Qwen3_5EngineState {
                 .as_ref()
                 .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
-            let additional_persistent_state_growth_bytes =
-                projected_injected_prediction_growth_bytes(
-                    model,
-                    active_request,
-                    feedback_prefix_token_ids.len(),
-                )?;
             let injected_prefill_execution_context =
                 super::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
                     false,
-                    active_request.has_optional_prediction_session(),
                     model.sparse_experts_are_paged(),
                     self.persistent_prompt_cache.is_some()
-                        && active_request.can_use_persistent_prompt_cache
-                        && !active_request.has_optional_prediction_session(),
+                        && active_request.can_use_persistent_prompt_cache,
                 );
             let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
                 feedback_prefix_token_ids.len(),
                 injected_prefill_execution_context.context_identifier_flags(),
                 false,
-                active_request.has_optional_prediction_session(),
                 model.sparse_experts_are_paged(),
             );
             let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
                 adaptive_ram_growth_context,
                 &mut active_request.performance_attribution,
                 &active_request.request_decoder_state,
-                additional_persistent_state_growth_bytes,
+                0,
                 0,
             )?;
             let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
@@ -191,7 +168,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .sparse_experts_are_paged();
         let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, false, sparse_experts_are_paged);
+            AdaptiveRamGrowthContext::decode(1, sparse_experts_are_paged);
         let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,

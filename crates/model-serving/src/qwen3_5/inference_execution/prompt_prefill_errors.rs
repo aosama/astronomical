@@ -1,5 +1,3 @@
-use astronomical_runtime_integration::MlxRuntimeError;
-
 use crate::{InferenceEngineError, Qwen3_5ExecutionError};
 
 use super::engine_request::Qwen3_5PrefillRequestCheckpoint;
@@ -38,36 +36,6 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for PromptPrefillChunkAttemptEr
                 Self::Engine(inference_engine_error)
             }
         }
-    }
-}
-
-pub(super) fn terminal_optional_prefill_error_is_fallback(
-    qwen3_5_execution_error: &Qwen3_5ExecutionError,
-) -> bool {
-    if qwen3_5_execution_error.is_recoverable_graphics_processor_out_of_memory() {
-        return false;
-    }
-    match qwen3_5_execution_error {
-        Qwen3_5ExecutionError::Runtime(mlx_runtime_error) => {
-            matches!(mlx_runtime_error, MlxRuntimeError::RuntimeOperation { .. })
-                && !mlx_runtime_error.is_recoverable_graphics_processor_out_of_memory()
-        }
-        Qwen3_5ExecutionError::ExpertPaging(_) => true,
-        Qwen3_5ExecutionError::Artifact(_)
-        | Qwen3_5ExecutionError::MissingTensor { .. }
-        | Qwen3_5ExecutionError::InvalidTensor { .. }
-        | Qwen3_5ExecutionError::MissingQuantization { .. }
-        | Qwen3_5ExecutionError::UnassignedTensor { .. }
-        | Qwen3_5ExecutionError::TypedTensorCountMismatch { .. }
-        | Qwen3_5ExecutionError::MissingDecoderLayerWeights { .. }
-        | Qwen3_5ExecutionError::TensorPayloadMismatch { .. }
-        | Qwen3_5ExecutionError::InvalidInput { .. }
-        | Qwen3_5ExecutionError::InvalidDecoderCacheLayout { .. }
-        | Qwen3_5ExecutionError::DecoderLayerCountMismatch { .. }
-        | Qwen3_5ExecutionError::InvalidRequestDecoderState { .. }
-        | Qwen3_5ExecutionError::PersistentPromptCache(_)
-        | Qwen3_5ExecutionError::PersistentPromptCacheStateBridge(_)
-        | Qwen3_5ExecutionError::SampledDecoding(_) => false,
     }
 }
 

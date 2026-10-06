@@ -2,7 +2,7 @@
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
-    ChatModelCapabilities, MtpDepthStatus, MtpRuntimeState, WorkerEvent,
+    ChatModelCapabilities, WorkerEvent,
 };
 
 use crate::k2_horizon_mova::artifacts::ValidatedK2HorizonMoVAArtifact;
@@ -64,12 +64,7 @@ impl ModelGenerationProcessor for K2HorizonMoVAGenerationProcessor {
     type InferenceRequest = K2HorizonMoVAInferenceRequest;
     type RequestOutput = K2HorizonMoVARequestOutput;
 
-    fn ready_event(
-        &self,
-        mtp_runtime_state: MtpRuntimeState,
-        mtp_unavailable_reason: Option<String>,
-        mtp_depth_status: MtpDepthStatus,
-    ) -> WorkerEvent {
+    fn ready_event(&self) -> WorkerEvent {
         WorkerEvent::Ready {
             model_id: self.model_id.clone(),
             capabilities: ChatModelCapabilities {
@@ -81,9 +76,6 @@ impl ModelGenerationProcessor for K2HorizonMoVAGenerationProcessor {
                 context_window: self.maximum_context_tokens,
             }
             .into(),
-            mtp_runtime_state,
-            mtp_unavailable_reason,
-            mtp_depth_status,
         }
     }
 

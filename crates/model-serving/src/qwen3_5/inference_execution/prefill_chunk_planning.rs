@@ -7,11 +7,10 @@ use crate::{
     AdaptiveRamGrowthContext, persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
+use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-
 /// Immutable decisions computed before memory admission and forward execution.
 ///
 /// Every field is a pure function of the request state and the model config.
@@ -19,7 +18,6 @@ use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 pub(super) struct PrefillChunkPlan {
     /// Token count of this chunk (`prefill_end - prefill_start`).
     pub(super) prefill_token_count: usize,
-    pub(super) is_terminal_optional_history_capture: bool,
 
     /// Completed chunk-end offsets (relative to chunk start) where a prompt
     /// cache boundary checkpoint should be captured after the forward.
@@ -39,9 +37,6 @@ pub(super) struct PrefillChunkPlan {
 
     /// Combined temporary workspace reservation.
     pub(super) exact_temporary_workspace_bytes: usize,
-
-    /// Extra KV-state bytes needed for terminal history capture.
-    pub(super) additional_persistent_state_growth_bytes: usize,
 
     /// Adaptive-RAM growth context derived from this plan's decisions.
     pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
@@ -65,8 +60,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let prefill_token_count = prefill_end - prefill_start;
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
-            && active_request.can_use_persistent_prompt_cache
-            && !active_request.has_optional_prediction_session();
+            && active_request.can_use_persistent_prompt_cache;
 
         // Cache-disabled and request-ineligible paths stop here: they do not
         // plan checkpoint boundaries, derive a synthetic block length, or
@@ -140,58 +134,26 @@ impl Qwen3_5EngineState {
                 super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
             })?;
 
-        let is_terminal_optional_history_capture = active_request.has_optional_prediction_session()
-            && prefill_end == active_request.input_token_ids.len().saturating_sub(1);
-        let additional_persistent_state_growth_bytes = match (
-            is_terminal_optional_history_capture,
-            active_request.optional_prediction_session(),
-        ) {
-            (true, Some(optional_prediction_session))
-                if active_request.visual_embeddings.is_none() =>
-            {
-                let additional_full_attention_bytes_per_layer_token = model
-                    .config()
-                    .full_attention_key_value_state_bytes_per_layer_token()
-                    .ok_or_else(|| {
-                        super::fatal_engine_error(
-                            "additional full-attention bytes per layer token overflowed",
-                        )
-                    })?;
-                optional_prediction_session
-                    .projected_full_attention_growth_bytes(
-                        additional_full_attention_bytes_per_layer_token,
-                        prefill_token_count,
-                    )
-                    .map_err(qwen3_5_runtime_error)?
-            }
-            _ => 0,
-        };
-
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
             0,
             Qwen3_5PrefillExecutionContext::new(
                 active_request.visual_embeddings.is_some(),
-                active_request.has_optional_prediction_session(),
                 model.sparse_experts_are_paged(),
                 self.persistent_prompt_cache.is_some()
-                    && active_request.can_use_persistent_prompt_cache
-                    && !active_request.has_optional_prediction_session(),
+                    && active_request.can_use_persistent_prompt_cache,
             )
             .context_identifier_flags(),
             active_request.visual_embeddings.is_some(),
-            active_request.has_optional_prediction_session(),
             model.sparse_experts_are_paged(),
         );
 
         Ok(PrefillChunkPlan {
             prefill_token_count,
-            is_terminal_optional_history_capture,
             all_completed_prefill_chunk_tokens,
             intermediate_completed_prefill_chunk_tokens,
             persistent_prompt_cache_block_token_count,
             direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,
-            additional_persistent_state_growth_bytes,
             adaptive_ram_growth_context,
         })
     }

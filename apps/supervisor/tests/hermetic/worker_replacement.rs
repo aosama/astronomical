@@ -428,7 +428,6 @@ fn model_policy_catalog(model_id: &str) -> Arc<HashMap<String, RuntimeModelPolic
             configured_maximum_context_tokens: None,
             default_maximum_context_tokens: 2_048,
             configured_chunking_fields: Default::default(),
-            acceleration_availability: Default::default(),
             worker_model_configuration: WorkerModelConfiguration::Autoregressive(
                 WorkerAutoregressiveModelConfiguration {
                     model_id: model_id.to_owned(),
@@ -447,8 +446,6 @@ fn model_policy_catalog(model_id: &str) -> Arc<HashMap<String, RuntimeModelPolic
                         experimental_quantized_kv_cache_enabled: false,
                         experimental_fused_moe_decode_enabled: false,
                     },
-                    mtp_enabled: true,
-                    mtp_draft_depth: None,
                 },
             ),
         },
@@ -469,7 +466,6 @@ fn flux_model_policy_catalog(revision: &str) -> Arc<HashMap<String, RuntimeModel
             configured_maximum_context_tokens: None,
             default_maximum_context_tokens: 0,
             configured_chunking_fields: Default::default(),
-            acceleration_availability: Default::default(),
             worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
                 WorkerFlux2KleinModelConfiguration {
                     model_id: FLUX_MODEL_ID.to_owned(),

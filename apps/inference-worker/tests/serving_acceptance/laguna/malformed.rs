@@ -188,8 +188,7 @@ fn write_two_model_config(home_directory: &Path, healthy: &Path, malformed: &Pat
         state_directory.join("config.json"),
         serde_json::to_vec(&json!({
             "model_directories": [healthy, malformed],
-            "max_output_tokens": 8,
-            "mtp_enabled": false
+            "max_output_tokens": 8
         }))
         .expect("the isolated configuration should serialize"),
     )

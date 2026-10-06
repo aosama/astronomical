@@ -8,8 +8,8 @@ use std::{error::Error, process::ExitCode};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode,
-    MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
-    WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
+    MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
 };
 
 // This smaller fixture reuses only capability and completion helpers from the shared scenario module.
@@ -109,9 +109,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .send_event(&WorkerEvent::ModelSwapped {
                             expert_memory_mode: Some(ExpertMemoryMode::Resident),
                             minimum_mlx_memory_ceiling_bytes: 3_000_000_000,
-                            mtp_runtime_state: MtpRuntimeState::Disabled,
-                            mtp_unavailable_reason: None,
-                            mtp_depth_status: Default::default(),
                             model_id: replacement_model_id.to_owned(),
                             capabilities: match model_configuration.autoregressive() {
                                 Some(autoregressive_configuration) => ChatModelCapabilities {

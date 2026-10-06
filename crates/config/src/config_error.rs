@@ -79,8 +79,6 @@ pub enum AstronomicalConfigError {
     InvalidMaximumMlxMemoryGb { description: &'static str },
     #[error("invalid default_model: {description}")]
     InvalidDefaultModel { description: &'static str },
-    #[error("MTP draft_depth must be between 1 and 3")]
-    InvalidMtpDraftDepth,
     #[error("invalid models[{model_id:?}].{field_name}: {description}")]
     InvalidModelConfig {
         model_id: String,

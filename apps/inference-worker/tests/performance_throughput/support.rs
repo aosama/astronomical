@@ -55,9 +55,6 @@ fn diagnostics_enabled() -> bool {
 #[derive(Clone, Debug)]
 pub(crate) struct ThroughputJourney {
     pub(crate) journey_kind: ThroughputJourneyKind,
-    /// The MTP draft depth the journey's isolated worker configuration
-    /// engages; `None` measures the MTP-off baseline.
-    pub(crate) mtp_draft_depth: Option<u8>,
     pub(crate) warmup_input_prompt: String,
     pub(crate) warmup_images: Vec<ChatImageInput>,
     pub(crate) warmup_output_tokens: u16,
@@ -118,7 +115,6 @@ fn discovery_root_for_model_directory(model_directory: &Path) -> &Path {
 pub(crate) fn perf_worker_environment(
     model_id: &str,
     model_directory: &Path,
-    mtp_draft_depth: Option<u8>,
 ) -> (
     tempfile::TempDir,
     PathBuf,
@@ -146,16 +142,12 @@ pub(crate) fn perf_worker_environment(
         "persistent_prompt_cache_enabled": false,
     });
     if diagnostics_enabled() {
-        // Attribution adds host synchronization to every multi-token forward
-        // and info logging adds I/O, so a diagnostic run explains where time
-        // goes but its throughput is distorted. Production-faithful measured
-        // runs leave both off.
+        // Attribution adds host synchronization to every forward and info
+        // logging adds I/O, so a diagnostic run explains where time goes but
+        // its throughput is distorted. Production-faithful measured runs
+        // leave both off.
         configuration_document["logging"] = serde_json::json!({ "level": "info" });
         configuration_document["performance_attribution_enabled"] = serde_json::Value::Bool(true);
-    }
-    if let Some(mtp_draft_depth) = mtp_draft_depth {
-        configuration_document["mtp_enabled"] = serde_json::Value::Bool(true);
-        configuration_document["mtp_draft_depth"] = mtp_draft_depth.into();
     }
     fs::write(
         configuration_directory.join("config.json"),
@@ -369,7 +361,6 @@ pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJ
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: journey.journey_kind,
-        mtp_draft_depth: journey.mtp_draft_depth,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
@@ -411,7 +402,7 @@ async fn measure_throughput(model_id: &str, journey: &ThroughputJourney) -> Thro
         logging_directory,
         model_policy_catalog,
         worker_startup_configuration,
-    ) = perf_worker_environment(model_id, &model_directory, journey.mtp_draft_depth);
+    ) = perf_worker_environment(model_id, &model_directory);
     let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");

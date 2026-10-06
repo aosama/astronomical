@@ -47,7 +47,6 @@ async fn run_romeo_continuation() {
         image_pad_token_id,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
-        false,
     )
     .expect("the dense engine settings should be valid");
     qwen3_5_engine
@@ -136,7 +135,6 @@ async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
-        false,
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine

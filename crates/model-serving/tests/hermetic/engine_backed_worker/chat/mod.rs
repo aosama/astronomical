@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationOutput, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
     ChatToolChoice, ChatToolDefinition, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
-    MlxMemorySnapshotSource, MtpRuntimeState, ProtocolReader, ProtocolWriter, RequestId,
+    MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerCommand,
     WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelConfiguration,
     WorkerPromptWorkReuse, WorkerRuntimeFeatureConfiguration,
@@ -63,7 +63,6 @@ use scripted_model_factory_test_doubles::{
     FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory,
 };
 use support::{
-    chat_command, close_worker_transport, next_event, ready_event, ready_event_with_load_details,
-    worker_model_configuration,
+    chat_command, close_worker_transport, next_event, ready_event, worker_model_configuration,
 };
 use tracking_chat_engine::TrackingChatEngine;

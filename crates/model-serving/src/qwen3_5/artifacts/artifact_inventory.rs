@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::artifact_validation::{
-    ArtifactValidationError, TensorDeclarationOrigin, TensorFeature, TensorInventory,
-    TensorLocation, TensorSemanticRole, TensorSourceId,
+    ArtifactValidationError, TensorDeclarationOrigin, TensorInventory, TensorLocation,
+    TensorSemanticRole, TensorSourceId,
 };
 
 use super::Qwen3_5ShardIndex;
@@ -14,28 +14,17 @@ pub(super) fn build_index_tensor_inventory(
     let source_id_by_file_name = source_id_by_file_name(shard_index)?;
 
     let mut inventory = TensorInventory::new();
-    let declarations =
-        shard_index
-            .language_tensor_name_to_shard_file_name()
-            .iter()
-            .map(|(name, file_name)| (name, file_name, TensorSemanticRole::Target, None))
-            .chain(shard_index.mtp_tensor_name_to_shard_file_name().iter().map(
-                |(name, file_name)| {
-                    (
-                        name,
-                        file_name,
-                        TensorSemanticRole::MultiTokenPrediction,
-                        Some(TensorFeature::MultiTokenPrediction),
-                    )
-                },
-            ))
-            .chain(
-                shard_index
-                    .vision_tensor_name_to_shard_file_name()
-                    .iter()
-                    .map(|(name, file_name)| (name, file_name, TensorSemanticRole::Vision, None)),
-            );
-    for (canonical_name, file_name, semantic_role, feature) in declarations {
+    let declarations = shard_index
+        .language_tensor_name_to_shard_file_name()
+        .iter()
+        .map(|(name, file_name)| (name, file_name, TensorSemanticRole::Target))
+        .chain(
+            shard_index
+                .vision_tensor_name_to_shard_file_name()
+                .iter()
+                .map(|(name, file_name)| (name, file_name, TensorSemanticRole::Vision)),
+        );
+    for (canonical_name, file_name, semantic_role) in declarations {
         let source_id = source_id_by_file_name
             .get(file_name)
             .copied()
@@ -49,7 +38,6 @@ pub(super) fn build_index_tensor_inventory(
                 source_id,
                 semantic_role,
                 TensorDeclarationOrigin::MainIndex,
-                feature,
             ))
             .map_err(|_| ArtifactValidationError::UnexpectedTensor {
                 tensor_name: canonical_name.clone(),
@@ -81,7 +69,6 @@ fn unique_indexed_file_names(shard_index: &Qwen3_5ShardIndex) -> Vec<String> {
     shard_index
         .language_tensor_name_to_shard_file_name()
         .values()
-        .chain(shard_index.mtp_tensor_name_to_shard_file_name().values())
         .chain(shard_index.vision_tensor_name_to_shard_file_name().values())
         .cloned()
         .collect::<BTreeSet<_>>()

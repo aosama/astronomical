@@ -37,8 +37,7 @@ pub(crate) fn read_user_config_file(
         persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config, false)?;
         return Ok(migrated_user_config);
     }
-    let removed_retired_speculative_prefill_fields =
-        strip_retired_speculative_prefill_config(&mut config_json);
+    let removed_retired_speculative_prefill_fields = strip_retired_config_fields(&mut config_json);
     let mut user_config_file = parse_and_validate_v1(&config_file_path, config_json)?;
     persist_mandatory_chunking_fields(
         &config_file_path,
@@ -52,7 +51,7 @@ pub(crate) fn parse_and_validate_v1(
     config_file_path: &Path,
     mut config_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
-    strip_retired_speculative_prefill_config(&mut config_json);
+    strip_retired_config_fields(&mut config_json);
     let user_config_file: UserConfigFile =
         serde_json::from_value(config_json).map_err(|source| {
             AstronomicalConfigError::ParseConfigFile {
@@ -64,9 +63,7 @@ pub(crate) fn parse_and_validate_v1(
     Ok(user_config_file)
 }
 
-pub(crate) fn strip_retired_speculative_prefill_config(
-    config_json: &mut serde_json::Value,
-) -> bool {
+pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -> bool {
     let mut removed_retired_fields = false;
     if let Some(root_object) = config_json.as_object_mut() {
         removed_retired_fields |= remove_field_from_object(root_object, "speculative_prefill");
@@ -90,6 +87,16 @@ pub(crate) fn strip_retired_speculative_prefill_config(
                 );
                 removed_retired_fields |=
                     remove_nested_field(model_object, "acceleration", "speculative_prefill");
+                // A retired member leaves an empty retired container behind;
+                // strict parsing rejects unknown fields, so drop it too.
+                if model_object
+                    .get("acceleration")
+                    .and_then(serde_json::Value::as_object)
+                    .is_some_and(serde_json::Map::is_empty)
+                {
+                    removed_retired_fields |=
+                        remove_field_from_object(model_object, "acceleration");
+                }
             }
         }
     }

@@ -19,10 +19,6 @@ fn should_defer_only_the_one_token_production_decode_route() {
             .should_defer_host_route_materialization(1)
     );
     assert!(
-        !Qwen3_5MoEPagedPrefillExecutionMode::TargetVerificationWindow
-            .should_defer_host_route_materialization(1)
-    );
-    assert!(
         !Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic
             .should_defer_host_route_materialization(1)
     );

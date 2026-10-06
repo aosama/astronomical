@@ -6,7 +6,6 @@ use std::path::Path;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::artifact_validation::TensorDeclarationOrigin;
 use crate::kernel_capability;
 use crate::kernel_capability::CustomMetalKernelFamily;
 use crate::qwen3_5_moe;
@@ -20,7 +19,6 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
 };
-use crate::qwen3_5::multi_token_prediction;
 use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
 
 impl Qwen3_5Model {
@@ -29,7 +27,6 @@ impl Qwen3_5Model {
         runtime: MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
-        bind_mtp_weights: bool,
         chunking: super::Qwen3_5ModelChunkingConfiguration,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
@@ -37,7 +34,6 @@ impl Qwen3_5Model {
             runtime,
             validated_artifact,
             model_directory,
-            bind_mtp_weights,
             true,
             chunking,
             &mut disabled_performance_attribution,
@@ -57,7 +53,6 @@ impl Qwen3_5Model {
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
-        bind_mtp_weights: bool,
         should_bind_vision_weights: bool,
         chunking: super::Qwen3_5ModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
@@ -69,20 +64,10 @@ impl Qwen3_5Model {
         let has_embedded_vision_tower = should_bind_vision_weights
             && validated_artifact.supports_image_input()
             && !has_separate_vision_sidecar;
-        let mtp_artifact_capability = validated_artifact.mtp_artifact_capability().clone();
         let tensor_inventory = validated_artifact.tensor_inventory().clone();
-        let mtp_sidecar_file_name = validated_artifact
-            .mtp_sidecar_file_name()
-            .map(str::to_owned);
         let shard_index = validated_artifact.shard_index().clone();
         let model_shard_source_ids =
             validated_artifact.source_ids_for_file_names(shard_index.model_shard_file_names())?;
-        let mtp_only_shard_source_ids = validated_artifact
-            .source_ids_for_file_names(shard_index.mtp_only_shard_file_names())?;
-        let mtp_sidecar_source_id = mtp_sidecar_file_name
-            .as_ref()
-            .map(|file_name| validated_artifact.source_id_for_file_name(file_name))
-            .transpose()?;
         let sidecar_vision_model = if has_separate_vision_sidecar {
             performance_attribution.measure_operation(
                 PerformanceOperation::ModelSafetensorsMapping,
@@ -93,34 +78,12 @@ impl Qwen3_5Model {
         } else {
             None
         };
-        let should_load_mtp_only_shards =
-            bind_mtp_weights && mtp_artifact_capability.is_mtp_capable();
-        let mtp_only_shard_files = if should_load_mtp_only_shards {
-            validated_artifact.take_safetensors_sources(&mtp_only_shard_source_ids)?
-        } else {
-            Vec::new()
-        };
-        // Transfer the optional source once by its opaque validated identity.
-        let mtp_sidecar_source = if should_load_mtp_only_shards {
-            mtp_sidecar_source_id
-                .map(|source_id| {
-                    validated_artifact
-                        .take_safetensors_source(source_id)
-                        .map(|source| (source_id, source))
-                })
-                .transpose()?
-        } else {
-            None
-        };
-        let (model_shards, auxiliary_mtp_sources) = performance_attribution.measure_operation(
+        let model_shards = performance_attribution.measure_operation(
             PerformanceOperation::ModelSafetensorsMapping,
             |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
                 let model_shard_files =
                     validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
                 let mut model_shards = Vec::with_capacity(model_shard_files.len());
-                let mut auxiliary_mtp_sources = HashMap::with_capacity(
-                    mtp_only_shard_files.len() + usize::from(mtp_sidecar_source.is_some()),
-                );
                 let positional_file_read_metrics =
                     performance_attribution.positional_file_read_metrics();
                 for model_shard_file in model_shard_files {
@@ -133,37 +96,10 @@ impl Qwen3_5Model {
                         )?,
                     );
                 }
-                for (source_id, mtp_only_shard_file) in mtp_only_shard_source_ids
-                    .iter()
-                    .copied()
-                    .zip(mtp_only_shard_files)
-                {
-                    auxiliary_mtp_sources.insert(
-                        source_id,
-                        runtime.load_safetensors(
-                            mtp_only_shard_file.into_file(),
-                            positional_file_read_metrics
-                                .as_ref()
-                                .map(std::sync::Arc::clone),
-                        )?,
-                    );
-                }
-                // Preserve the source ID because stored names are source-local.
-                if let Some((source_id, mtp_sidecar_file)) = mtp_sidecar_source {
-                    auxiliary_mtp_sources.insert(
-                        source_id,
-                        runtime.load_safetensors(
-                            mtp_sidecar_file.into_file(),
-                            positional_file_read_metrics
-                                .as_ref()
-                                .map(std::sync::Arc::clone),
-                        )?,
-                    );
-                }
-                Ok((model_shards, auxiliary_mtp_sources))
+                Ok(model_shards)
             },
         )?;
-        let (weights, vision_model, mtp_weights) = performance_attribution.measure_operation(
+        let (weights, vision_model) = performance_attribution.measure_operation(
             PerformanceOperation::ModelTensorBinding,
             |_performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
                 let vision_model = if has_separate_vision_sidecar {
@@ -187,18 +123,7 @@ impl Qwen3_5Model {
                 };
                 let weights =
                     Qwen3_5Weights::bind_from_model_shards(&config, &shard_index, model_shards)?;
-                let mtp_weights = multi_token_prediction::bind_optional_weights(
-                    bind_mtp_weights,
-                    &mtp_artifact_capability,
-                    &config,
-                    &shard_index,
-                    &tensor_inventory,
-                    weights.model_shards(),
-                    auxiliary_mtp_sources,
-                    &weights,
-                    &runtime,
-                );
-                Ok((weights, vision_model, mtp_weights))
+                Ok((weights, vision_model))
             },
         )?;
         let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) = match config
@@ -209,23 +134,10 @@ impl Qwen3_5Model {
                 let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
                     .language_tensor_name_to_shard_file_name()
                     .iter()
-                    .chain(shard_index.mtp_tensor_name_to_shard_file_name())
                     .map(|(tensor_name, shard_file_name)| {
                         (tensor_name.clone(), shard_file_name.clone())
                     })
                     .collect();
-                let mut tensor_name_to_shard_file_name = tensor_name_to_shard_file_name;
-                if let Some(sidecar_file_name) = mtp_sidecar_file_name.as_ref() {
-                    for location in tensor_inventory.locations().filter(|location| {
-                        location.declaration_origin()
-                            == TensorDeclarationOrigin::ArchitectureSidecar
-                    }) {
-                        tensor_name_to_shard_file_name.insert(
-                            location.canonical_name().to_owned(),
-                            sidecar_file_name.clone(),
-                        );
-                    }
-                }
                 let stored_tensor_name_by_canonical_name = tensor_inventory
                     .locations()
                     .map(|location| {
@@ -235,10 +147,6 @@ impl Qwen3_5Model {
                         )
                     })
                     .collect::<HashMap<_, _>>();
-                let mtp_has_packed_sparse_experts =
-                    tensor_name_to_shard_file_name.keys().any(|tensor_name| {
-                        tensor_name.contains("language_model.mtp.layers.0.mlp.switch_mlp.")
-                    });
                 let expert_pager = performance_attribution.measure_operation(
                     PerformanceOperation::ExpertPagerPlanConstruction,
                     |_performance_attribution| {
@@ -252,10 +160,6 @@ impl Qwen3_5Model {
                             // paging budget. Reading the runtime policy here lets reloads
                             // apply on every machine without copying a stale wired limit.
                             runtime.memory_limits().active_memory_limit_bytes(),
-                            // Packed resident MTP reuses the pager plan for switch_mlp
-                            // tensors. SSD-paged requests stay target-only. Sidecars
-                            // that store per-expert 2D tensors never enter the pager.
-                            mtp_weights.is_some() && mtp_has_packed_sparse_experts,
                         )
                     },
                 )?;
@@ -379,45 +283,6 @@ impl Qwen3_5Model {
             );
             None
         };
-        // Each target-verification kernel is an independent capability family:
-        // a GPU may retain one while demoting the other. A demoted kernel is
-        // None and the projection dispatch falls back to the token-local MLX
-        // route for the worker's lifetime.
-        let target_verification_quantized_linear_kernel =
-            if kernel_capability::worker_process_kernel_capabilities(
-                &runtime,
-                performance_attribution,
-            )
-            .is_custom_kernel_supported(CustomMetalKernelFamily::TargetVerificationQuantizedLinear)
-            {
-                Some(
-                super::target_verification_quantized_linear::target_verification_quantized_linear_kernel(
-                )?,
-            )
-            } else {
-                tracing::info!(
-                    "target-verification quantized-linear kernel demoted to the MLX fallback for this worker process"
-                );
-                None
-            };
-        let target_verification_four_row_quantized_linear_kernel =
-            if kernel_capability::worker_process_kernel_capabilities(
-                &runtime,
-                performance_attribution,
-            )
-            .is_custom_kernel_supported(
-                CustomMetalKernelFamily::TargetVerificationFourRowQuantizedLinear,
-            ) {
-                Some(
-                super::target_verification_four_row_quantized_linear::four_row_split_k_quantized_linear_kernel(
-                )?,
-            )
-            } else {
-                tracing::info!(
-                    "four-row split-K target-verification kernel demoted to the MLX fallback for this worker process"
-                );
-                None
-            };
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
         // Qwen3.5 config validation accepts BF16 activations only. Construct
@@ -448,18 +313,11 @@ impl Qwen3_5Model {
                 &[head_dimension_i32],
             )
             .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
-        let model_core_payload_bytes = weights
-            .total_payload_bytes()
-            .saturating_add(
-                mtp_weights
-                    .as_ref()
-                    .map_or(0, |mtp_weights| mtp_weights.payload_byte_count()),
-            )
-            .saturating_add(
-                vision_model
-                    .as_ref()
-                    .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
-            );
+        let model_core_payload_bytes = weights.total_payload_bytes().saturating_add(
+            vision_model
+                .as_ref()
+                .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
+        );
         let complete_expert_payload_bytes = match expert_pager.as_ref() {
             Some(expert_pager) => expert_pager.complete_expert_payload_byte_count().map_err(
                 |_| Qwen3_5ExecutionError::InvalidInput {
@@ -504,7 +362,6 @@ impl Qwen3_5Model {
             config,
             decoder_cache_layout,
             weights,
-            mtp_weights,
             vision_model,
             expert_pager,
             // Publication occurs only after core materialization and a fresh idle
@@ -522,8 +379,6 @@ impl Qwen3_5Model {
             gated_delta_checkpoint_kernel,
             gdn_decode_prework_kernel,
             sorted_expert_weighted_sum_kernel,
-            target_verification_quantized_linear_kernel,
-            target_verification_four_row_quantized_linear_kernel,
             compiled_swiglu,
             compiled_elementwise_graphs,
             chunking,
@@ -534,8 +389,6 @@ impl Qwen3_5Model {
             paged_forward_missing_route_collector:
                 crate::qwen3_5_moe::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
-            mtp_verify_lane:
-                crate::qwen3_5::mtp_verify::compiled_window::MtpVerifyWindowLane::default(),
         })
     }
 }

@@ -12,7 +12,7 @@ use thiserror::Error;
 /// Immutable inputs known once a model is loaded against one ceiling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxRamBudgetModelGeometry {
-    /// Non-expert resident model payload (language core, optional vision/MTP).
+    /// Non-expert resident model payload (language core, optional vision).
     pub model_core_payload_bytes: u64,
     /// Bytes required if every sparse expert is fully resident.
     pub complete_expert_payload_bytes: u64,

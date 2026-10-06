@@ -105,7 +105,6 @@ impl Qwen3_5Model {
                 &token_selected_indices,
                 &token_selected_scores,
                 should_use_compiled_elementwise_graphs,
-                false,
                 Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic,
                 None,
                 performance_attribution,

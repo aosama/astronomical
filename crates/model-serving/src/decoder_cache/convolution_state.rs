@@ -243,14 +243,14 @@ impl ConvolutionState {
             .map_or(0, |state| state.byte_count() as u64)
     }
 
-    /// Retains the current rolling buffer for MTP rollback.
+    /// Retains the current rolling buffer for transactional rollback.
     pub fn checkpoint(&self) -> Result<ConvolutionStateCheckpoint, MlxRuntimeError> {
         Ok(ConvolutionStateCheckpoint {
             state: self.state.as_ref().map(MlxArray::retain).transpose()?,
         })
     }
 
-    /// Restores a retained MTP checkpoint.
+    /// Restores a retained checkpoint.
     pub fn restore_checkpoint(&mut self, checkpoint: ConvolutionStateCheckpoint) {
         self.state = checkpoint.state;
     }

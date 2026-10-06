@@ -24,7 +24,6 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-        should_execute_token_projections_separately: bool,
         paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
         known_sorted_unique_expert_ids: Option<&[usize]>,
         performance_attribution: &mut PerformanceAttribution,
@@ -87,18 +86,6 @@ impl Qwen3_5Model {
                     sorted_unique_expert_ids,
                 );
             }
-            if should_execute_token_projections_separately {
-                return self.forward_moe_paged_target_verification_with_performance_attribution(
-                    hidden_states,
-                    mixture_of_experts_weights,
-                    &packed_weights,
-                    &packed_manifest,
-                    selected_indices,
-                    sorted_unique_expert_ids,
-                    selected_scores,
-                    performance_attribution,
-                );
-            }
             return self.forward_moe_paged_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
@@ -133,18 +120,6 @@ impl Qwen3_5Model {
                 Ok::<(), ExpertPagingError>(())
             },
         )?;
-        if should_execute_token_projections_separately {
-            return self.forward_moe_paged_target_verification_with_performance_attribution(
-                hidden_states,
-                mixture_of_experts_weights,
-                &streamed_expert_weights,
-                &page_manifest,
-                selected_indices,
-                sorted_unique_expert_ids,
-                selected_scores,
-                performance_attribution,
-            );
-        }
         self.forward_moe_paged_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,

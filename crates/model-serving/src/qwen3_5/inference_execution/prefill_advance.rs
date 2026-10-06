@@ -40,15 +40,8 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
         // Target-only prefill consumes every prompt token and samples first
-        // output from the last chunk. Optional prediction reserves the last
-        // prompt token for generation kickoff so predictor history can shift.
-        let prefill_end_exclusive =
-            active_request
-                .input_token_ids
-                .len()
-                .saturating_sub(usize::from(
-                    active_request.has_optional_prediction_session(),
-                ));
+        // output from the last chunk.
+        let prefill_end_exclusive = active_request.input_token_ids.len();
         if active_request.prefill_cursor >= prefill_end_exclusive {
             return Ok(None);
         }
@@ -101,7 +94,6 @@ impl Qwen3_5EngineState {
         // 561-token stub) without reducing publication count.
         let requested_prefill_chunk_end = if self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache
-            && !active_request.has_optional_prediction_session()
         {
             let persistent_prompt_cache_block_token_count = self
                 .persistent_prompt_cache
@@ -390,7 +382,7 @@ impl Qwen3_5EngineState {
                     })?;
                 let active_memory_breakdown = model.active_memory_breakdown(
                     &active_request.request_decoder_state,
-                    active_request.additional_context_state_payload_bytes(),
+                    0,
                     active_memory_bytes,
                     0,
                 );

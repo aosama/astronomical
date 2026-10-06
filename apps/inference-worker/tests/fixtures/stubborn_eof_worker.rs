@@ -1,9 +1,7 @@
 use std::time::Duration;
 
 use astronomical_inference_worker::worker_process_runtime;
-use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MtpRuntimeState, ProtocolWriter, WorkerEvent,
-};
+use astronomical_ipc_protocol::{ChatModelCapabilities, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncReadExt;
 
 fn main() {
@@ -21,9 +19,6 @@ fn main() {
 
         if ProtocolWriter::new(tokio::io::stdout())
             .send_event(&WorkerEvent::Ready {
-                mtp_runtime_state: MtpRuntimeState::Disabled,
-                mtp_unavailable_reason: None,
-                mtp_depth_status: Default::default(),
                 model_id: "astronomical/stubborn-worker".to_owned(),
                 capabilities: ChatModelCapabilities {
                     supports_reasoning: false,

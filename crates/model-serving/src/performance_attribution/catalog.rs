@@ -56,14 +56,6 @@ pub enum PerformanceOperation {
     FinalLogitsGraphConstruction,
     TokenSamplingGraphConstruction,
     ForcedThinkingTransitionTokenArrayConstruction,
-    MtpHeadForwardGraphConstruction,
-    MtpHeadStateEvaluationSynchronizationWait,
-    MtpPromptHistoryInitializationSpan,
-    MtpTargetVerificationSynchronizationWait,
-    MtpRejectedDraftStateRestoration,
-    MtpTargetRepair,
-    MtpPredictorCommitReplay,
-    MtpQueuedFrontierRestoration,
     PrefillStateAsyncEvaluationSubmission,
     PrefillStateGraphicsProcessorCompletionWait,
     PrefillLinearAttentionGraphicsProcessorCompletionWait,
@@ -196,14 +188,6 @@ impl PerformanceOperation {
         Self::FinalLogitsGraphConstruction,
         Self::TokenSamplingGraphConstruction,
         Self::ForcedThinkingTransitionTokenArrayConstruction,
-        Self::MtpHeadForwardGraphConstruction,
-        Self::MtpHeadStateEvaluationSynchronizationWait,
-        Self::MtpPromptHistoryInitializationSpan,
-        Self::MtpTargetVerificationSynchronizationWait,
-        Self::MtpRejectedDraftStateRestoration,
-        Self::MtpTargetRepair,
-        Self::MtpPredictorCommitReplay,
-        Self::MtpQueuedFrontierRestoration,
         Self::PrefillStateAsyncEvaluationSubmission,
         Self::PrefillStateGraphicsProcessorCompletionWait,
         Self::PrefillLinearAttentionGraphicsProcessorCompletionWait,
@@ -371,18 +355,6 @@ impl PerformanceOperation {
             Self::ForcedThinkingTransitionTokenArrayConstruction => {
                 "forced_thinking_transition_token_array_construction"
             }
-            Self::MtpHeadForwardGraphConstruction => "mtp_head_forward_graph_construction",
-            Self::MtpHeadStateEvaluationSynchronizationWait => {
-                "mtp_head_state_evaluation_synchronization_wait"
-            }
-            Self::MtpPromptHistoryInitializationSpan => "mtp_prompt_history_initialization_span",
-            Self::MtpTargetVerificationSynchronizationWait => {
-                "mtp_target_verification_synchronization_wait"
-            }
-            Self::MtpRejectedDraftStateRestoration => "mtp_rejected_draft_state_restoration",
-            Self::MtpTargetRepair => "mtp_target_repair",
-            Self::MtpPredictorCommitReplay => "mtp_predictor_commit_replay",
-            Self::MtpQueuedFrontierRestoration => "mtp_queued_frontier_restoration",
             Self::PrefillStateAsyncEvaluationSubmission => {
                 "prefill_state_async_evaluation_submission"
             }
@@ -518,7 +490,6 @@ impl PerformanceOperation {
             self,
             Self::PromptPrefillAdvanceSpan
                 | Self::DecodeAdvanceSpan
-                | Self::MtpPromptHistoryInitializationSpan
                 | Self::AttentionForwardSpan
                 | Self::MlpForwardSpan
                 | Self::GenerationPreparation

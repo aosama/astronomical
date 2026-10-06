@@ -241,7 +241,6 @@ fn runtime_model_policy(
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 262_144,
         configured_chunking_fields: Default::default(),
-        acceleration_availability: Default::default(),
         worker_model_configuration: WorkerModelConfiguration::Autoregressive(
             WorkerAutoregressiveModelConfiguration {
                 model_id: model_id.to_owned(),
@@ -260,8 +259,6 @@ fn runtime_model_policy(
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
-                mtp_enabled: true,
-                mtp_draft_depth: None,
             },
         ),
     }

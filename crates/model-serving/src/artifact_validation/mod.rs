@@ -23,7 +23,7 @@ pub(crate) use required_files::{
     validate_required_files,
 };
 pub use tensor_inventory::{
-    TensorDeclarationOrigin, TensorFeature, TensorInventory, TensorInventoryError, TensorLocation,
+    TensorDeclarationOrigin, TensorInventory, TensorInventoryError, TensorLocation,
     TensorSemanticRole, TensorSourceId,
 };
 pub use types::{RequiredFileProfile, TensorDtype, TensorProfile};
@@ -33,4 +33,4 @@ pub use validated_artifact::{
 };
 pub(crate) use validated_safetensors_source::ValidatedSafetensorsSource;
 #[doc(hidden)]
-pub use validated_safetensors_source::validate_safetensors_profile_partitions_for_tests;
+pub use validated_safetensors_source::validate_safetensors_required_profiles_for_tests;

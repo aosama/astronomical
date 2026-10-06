@@ -5,7 +5,7 @@ use crate::artifact_validation::{
     ValidatedSafetensorsSource, ValidatedWeightsFile,
 };
 
-use super::{Qwen3_5Config, Qwen3_5MtpArtifactCapability, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
+use super::{Qwen3_5Config, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
 
 /// Descriptor-backed validated ownership of the complete Qwen3.5 artifact.
 #[derive(Debug)]
@@ -17,11 +17,9 @@ pub struct ValidatedQwen3_5Artifact {
     pub(super) total_payload_bytes: u64,
     pub(super) has_separate_vision_sidecar: bool,
     pub(super) has_validated_vision_tower: bool,
-    pub(super) mtp_artifact_capability: Qwen3_5MtpArtifactCapability,
     pub(super) tensor_inventory: TensorInventory,
     pub(super) safetensors_sources: HashMap<TensorSourceId, ValidatedSafetensorsSource>,
     pub(super) source_id_by_file_name: BTreeMap<String, TensorSourceId>,
-    pub(super) mtp_sidecar_file_name: Option<String>,
     pub(super) model_id: String,
     pub(super) revision: String,
     pub(super) max_output_tokens: u32,
@@ -49,16 +47,8 @@ impl ValidatedQwen3_5Artifact {
         self.has_separate_vision_sidecar
     }
     #[must_use]
-    pub const fn mtp_artifact_capability(&self) -> &Qwen3_5MtpArtifactCapability {
-        &self.mtp_artifact_capability
-    }
-    #[must_use]
     pub const fn tensor_inventory(&self) -> &TensorInventory {
         &self.tensor_inventory
-    }
-    #[must_use]
-    pub fn mtp_sidecar_file_name(&self) -> Option<&str> {
-        self.mtp_sidecar_file_name.as_deref()
     }
     #[must_use]
     pub fn model_id(&self) -> &str {

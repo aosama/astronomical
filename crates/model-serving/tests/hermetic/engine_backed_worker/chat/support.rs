@@ -44,19 +44,10 @@ pub(crate) fn worker_model_configuration(model_id: &str) -> WorkerModelConfigura
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
         },
-        mtp_enabled: true,
-        mtp_draft_depth: None,
     })
 }
 
 pub(super) fn ready_event() -> WorkerEvent {
-    ready_event_with_load_details(MtpRuntimeState::Disabled, None)
-}
-
-pub(super) fn ready_event_with_load_details(
-    mtp_runtime_state: MtpRuntimeState,
-    mtp_unavailable_reason: Option<String>,
-) -> WorkerEvent {
     WorkerEvent::Ready {
         model_id: "example/scripted-chat".to_owned(),
         capabilities: ChatModelCapabilities {
@@ -68,9 +59,6 @@ pub(super) fn ready_event_with_load_details(
             context_window: 262_144,
         }
         .into(),
-        mtp_runtime_state,
-        mtp_unavailable_reason,
-        mtp_depth_status: Default::default(),
     }
 }
 

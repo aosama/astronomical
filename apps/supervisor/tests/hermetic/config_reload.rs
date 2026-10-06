@@ -242,27 +242,6 @@ fn should_restart_worker_when_any_per_model_execution_policy_changes() {
 }
 
 #[test]
-fn should_restart_worker_when_per_model_mtp_enablement_changes() {
-    let current = sample_resolved_config();
-    let mut candidate = sample_resolved_config();
-    Arc::make_mut(&mut candidate.model_policy_catalog)
-        .get_mut("default")
-        .expect("sample policy should exist")
-        .worker_model_configuration
-        .autoregressive_mut()
-        .expect("sample policy should be autoregressive")
-        .mtp_enabled = false;
-
-    let decision = ConfigReloadDiff::compare(&current, &candidate);
-
-    assert!(matches!(
-        decision,
-        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
-            if reloaded_fields == &["model_policies".to_owned()]
-    ));
-}
-
-#[test]
 fn should_require_an_application_restart_when_performance_attribution_changes() {
     let mut current = sample_resolved_config();
     current.performance_attribution_enabled = false;
@@ -409,7 +388,6 @@ fn sample_runtime_model_policy() -> RuntimeModelPolicy {
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 65_536,
         configured_chunking_fields: Default::default(),
-        acceleration_availability: Default::default(),
         worker_model_configuration: WorkerModelConfiguration::Autoregressive(
             WorkerAutoregressiveModelConfiguration {
                 model_id: "default".to_owned(),
@@ -428,8 +406,6 @@ fn sample_runtime_model_policy() -> RuntimeModelPolicy {
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
-                mtp_enabled: true,
-                mtp_draft_depth: None,
             },
         ),
     }
@@ -491,7 +467,6 @@ fn image_runtime_model_policy(revision: &str) -> RuntimeModelPolicy {
         configured_maximum_context_tokens: None,
         default_maximum_context_tokens: 0,
         configured_chunking_fields: Default::default(),
-        acceleration_availability: Default::default(),
         worker_model_configuration: WorkerModelConfiguration::Flux2Klein(
             WorkerFlux2KleinModelConfiguration {
                 model_id: "FLUX.2-klein-4B".to_owned(),

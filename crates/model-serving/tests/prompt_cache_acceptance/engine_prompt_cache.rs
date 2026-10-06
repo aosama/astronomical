@@ -260,7 +260,6 @@ pub(super) async fn load_persistent_prompt_cache_acceptance_engine(
         248_069,
         model_directory.to_path_buf(),
         worker_chunking_configuration,
-        true,
     )
     .expect("the engine should accept the prompt-cache directory");
     qwen3_5_engine

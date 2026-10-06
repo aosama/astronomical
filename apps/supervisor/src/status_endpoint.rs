@@ -37,14 +37,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
-    let loaded_model_runtime_configuration = worker_health_snapshot
-        .worker_runtime_feature_configuration
-        .as_ref()
-        .and_then(|configuration| configuration.loaded_model.as_ref());
-    let mtp_enabled = !matches!(
-        worker_health_snapshot.mtp_runtime_state,
-        astronomical_ipc_protocol::MtpRuntimeState::Disabled
-    );
     let mut status_json = serde_json::json!({
         "application": {
             "version": build_identity.version,
@@ -57,20 +49,6 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         },
         "status": worker_health_snapshot.status.as_str(),
         "activity": worker_health_snapshot.activity.as_str(),
-        "mtp_enabled": mtp_enabled,
-        "mtp_configured_draft_depth": loaded_model_runtime_configuration
-            .and_then(|configuration| configuration.autoregressive())
-            .and_then(|configuration| configuration.mtp_draft_depth)
-            .or(worker_health_snapshot.mtp_depth_status.configured_draft_depth),
-        "mtp_artifact_maximum_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_maximum_draft_depth,
-        "mtp_artifact_default_draft_depth": worker_health_snapshot.mtp_depth_status.artifact_default_draft_depth,
-        "mtp_resolved_requested_draft_depth": worker_health_snapshot.mtp_depth_status.resolved_requested_draft_depth,
-        "mtp_capped_draft_depth": worker_health_snapshot.mtp_depth_status.capped_draft_depth,
-        "mtp_effective_execution_draft_depth": worker_health_snapshot.mtp_depth_status.effective_execution_draft_depth,
-        "mtp_depth_resolution_reason": worker_health_snapshot.mtp_depth_status.resolution_reason.map(|reason| reason.to_string()),
-        "mtp_runtime_state": serde_json::to_value(worker_health_snapshot.mtp_runtime_state())
-            .unwrap_or_else(|_| serde_json::json!("disabled")),
-        "mtp_unavailable_reason": worker_health_snapshot.mtp_unavailable_reason(),
         "worker_runtime_feature_configuration_applied": worker_health_snapshot.worker_runtime_feature_configuration.is_some(),
         // Keep the exact worker acknowledgement available beside the derived convenience fields.
         // The menu compares this complete value with the reload response before declaring a

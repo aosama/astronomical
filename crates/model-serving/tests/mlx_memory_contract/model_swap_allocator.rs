@@ -200,7 +200,6 @@ fn create_engine(
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
         true,
-        false,
         model_loading_performance_attribution,
         performance_attribution_log,
     )

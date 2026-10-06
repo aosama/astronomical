@@ -24,17 +24,6 @@ pub(crate) fn frozen_test_index_bytes() -> Vec<u8> {
     )
 }
 
-pub(crate) fn frozen_test_index_bytes_with_mtp_tensor_names(
-    mtp_tensor_names: impl IntoIterator<Item = String>,
-    language_tensor_profiles: &[TensorProfile],
-) -> Vec<u8> {
-    frozen_test_index_bytes_with_optional_language_tensor_and_mtp_tensor_replacement(
-        None,
-        mtp_tensor_names,
-        language_tensor_profiles,
-    )
-}
-
 pub(crate) fn frozen_test_index_bytes_with_language_tensor_replacement(
     replacement_tensor_index: usize,
     replacement_tensor_name: &str,
@@ -48,18 +37,6 @@ pub(crate) fn frozen_test_index_bytes_with_language_tensor_replacement(
 
 fn frozen_test_index_bytes_with_optional_language_tensor_replacement(
     replacement_tensor: Option<(usize, &str)>,
-    language_tensor_profiles: &[TensorProfile],
-) -> Vec<u8> {
-    frozen_test_index_bytes_with_optional_language_tensor_and_mtp_tensor_replacement(
-        replacement_tensor,
-        std::iter::empty(),
-        language_tensor_profiles,
-    )
-}
-
-fn frozen_test_index_bytes_with_optional_language_tensor_and_mtp_tensor_replacement(
-    replacement_tensor: Option<(usize, &str)>,
-    mtp_tensor_names: impl IntoIterator<Item = String>,
     language_tensor_profiles: &[TensorProfile],
 ) -> Vec<u8> {
     let mut weight_map = BTreeMap::new();
@@ -76,9 +53,6 @@ fn frozen_test_index_bytes_with_optional_language_tensor_and_mtp_tensor_replacem
             tensor_name.to_owned(),
             LANGUAGE_SHARD_FILE_NAMES[language_tensor_index % LANGUAGE_SHARD_FILE_NAMES.len()],
         );
-    }
-    for mtp_tensor_name in mtp_tensor_names {
-        weight_map.insert(mtp_tensor_name, LANGUAGE_SHARD_FILE_NAMES[0]);
     }
     for vision_tensor_index in 0..333 {
         weight_map.insert(
