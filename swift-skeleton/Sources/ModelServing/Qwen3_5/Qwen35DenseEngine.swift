@@ -40,6 +40,7 @@ public final class Qwen35DenseEngine: InferenceEngine {
     private let prefillChunkTokenCount: Int;
     private var denseModel: (any LanguageModel)?;
     private var totalLayerCount: UInt32 = 0;
+    private var modelPayloadBytes: UInt64 = 0;
     private var activeCache: [KVCache]?;
     private var activeSampler: (any LogitSampler)?;
     private var promptTokenIds: Array<UInt32> = [];
@@ -60,8 +61,9 @@ public final class Qwen35DenseEngine: InferenceEngine {
     }
 
     /// Constructs the dense model from artifact config bytes with the
-    /// in-memory path; weight loading from the validated shards lands with
-    /// the artifact streaming slice.
+    /// in-memory path; journeys that need a real forward pass without a
+    /// packaged artifact use this, while production loads stream through
+    /// `loadValidatedArtifact`.
     public func loadInMemoryModel(configBytes: Data) throws {
         let upstreamConfiguration: Qwen35Configuration;
         do {
@@ -90,14 +92,33 @@ public final class Qwen35DenseEngine: InferenceEngine {
     }
 
     public func load() throws -> EngineLoadResult {
-        // The in-memory construction happens at loadInMemoryModel; the
-        // artifact-weight path reports the engine floor until it lands.
         guard self.denseModel != nil else {
             throw InferenceEngineError.modelLoad(
-                reason: "dense weight loading lands with the artifact streaming slice");
+                reason: "no dense model is loaded");
         }
         return EngineLoadResult(
             minimumMlxMemoryCeilingBytes: 1, expertMemoryMode: nil);
+    }
+
+    /// Loads the dense model from a validated artifact's shard descriptors.
+    ///
+    /// The artifact is consumed: its shard sources transfer exactly once,
+    /// so one validated artifact feeds exactly one engine load. Model-load,
+    /// shard-read, and weight-bind attribution spans switch through
+    /// configuration.
+    public func loadValidatedArtifact(_ validatedArtifact: ValidatedQwen35Artifact) throws {
+        let modelLoadStart: ContinuousClock.Instant? =
+            ServingPerformanceAttribution.startedOperation(
+                operationName: "qwen35_model_load", attributionEnabled: self.attributionEnabled);
+        let loadedModel: Qwen35Model = try Qwen35ArtifactWeightLoading.loadArtifactBoundModel(
+            validatedArtifact: validatedArtifact, attributionEnabled: self.attributionEnabled);
+        ServingPerformanceAttribution.endedOperation(
+            operationName: "qwen35_model_load",
+            operationStart: modelLoadStart,
+            attributionEnabled: self.attributionEnabled);
+        self.denseModel = loadedModel;
+        self.totalLayerCount = validatedArtifact.config().layerCount();
+        self.modelPayloadBytes = validatedArtifact.totalPayloadBytes();
     }
 
     public func startGeneration(
@@ -241,13 +262,16 @@ public final class Qwen35DenseEngine: InferenceEngine {
 
     public func collectMlxMemorySnapshot() -> WorkerMlxMemorySnapshot? {
         let memoryObservation: Memory.Snapshot = Memory.snapshot();
+        let modelCorePayloadBytes: UInt64 = self.modelPayloadBytes > 0
+            ? self.modelPayloadBytes
+            : UInt64(max(0, memoryObservation.activeMemory));
         return WorkerMlxMemorySnapshot(
             source: .idlePoll,
             activeMemoryBytes: UInt64(max(0, memoryObservation.activeMemory)),
             allocatorCacheMemoryBytes: UInt64(max(0, memoryObservation.cacheMemory)),
             peakMemoryBytes: UInt64(max(0, memoryObservation.peakMemory)),
             expertPayloadBytes: 0,
-            modelCorePayloadBytes: UInt64(max(0, memoryObservation.activeMemory)),
+            modelCorePayloadBytes: modelCorePayloadBytes,
             contextStatePayloadBytes: 0,
             memoryCeilingUtilization: nil);
     }

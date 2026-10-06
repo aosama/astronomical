@@ -4,6 +4,7 @@ import Testing;
 
 import IpcProtocol;
 import ModelServing;
+import JourneyCategories;
 
 @testable import ModelServing;
 
@@ -18,7 +19,7 @@ import ModelServing;
  * frames around prompt processing, the preparation barrier, the first-decode
  * measurement, ordered output batches, and finalization before completion.
  */
-@Suite(.serialized)
+@Suite(.serialized, .tags(.hermeticJourney))
 final class EngineBackedWorkerTests {
 
     static let romeoAndJulietPrompt: String = "What is the play about?";

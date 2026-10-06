@@ -6,11 +6,11 @@ import Foundation;
 /// the tokenizer config. Every id stays inside the tiny dense model's
 /// 512-entry vocabulary so the same ids run through the real engine
 /// forward pass.
-enum TinyTokenizerFixture {
+public enum TinyTokenizerFixture {
 
-    static let endOfSequenceTokenId: Int = 3;
-    static let thinkOpenTokenId: Int = 12;
-    static let thinkCloseTokenId: Int = 13;
+    public static let endOfSequenceTokenId: Int = 3;
+    public static let thinkOpenTokenId: Int = 12;
+    public static let thinkCloseTokenId: Int = 13;
 
     /// Control markers exposed as added special tokens.
     private static let addedTokens: Array<(Int, String)> = [
@@ -29,7 +29,7 @@ enum TinyTokenizerFixture {
 
     /// Vocabulary: control markers at their fixed ids, fixture words at
     /// 20+, the unknown fallback, and one id per distinct character.
-    static func vocabulary() -> [String: Int] {
+    public static func vocabulary() -> [String: Int] {
         var vocabulary: [String: Int] = [:];
         for (tokenId, tokenText) in addedTokens {
             vocabulary[tokenText] = tokenId;
@@ -50,7 +50,7 @@ enum TinyTokenizerFixture {
 
     /// One merge pair per word step, chaining characters into the word so
     /// BPE reduction reaches the whole-word token.
-    static func merges() -> Array<Array<String>> {
+    public static func merges() -> Array<Array<String>> {
         var merges: Array<Array<String>> = [];
         for fixtureWord in fixtureWords {
             let characters: Array<String> = fixtureWord.map { String($0) };
@@ -83,7 +83,7 @@ enum TinyTokenizerFixture {
 
     /// Writes `tokenizer.json` and `tokenizer_config.json` into the model
     /// directory with a Qwen-style chat template.
-    static func writeFiles(modelDirectoryUrl: URL) throws -> Void {
+    public static func writeFiles(modelDirectoryUrl: URL) throws -> Void {
         let addedTokensJson: String = addedTokens.map { (addedToken: (Int, String)) -> String in
             return """
                     {"id": \(addedToken.0), "content": "\(addedToken.1)", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true}

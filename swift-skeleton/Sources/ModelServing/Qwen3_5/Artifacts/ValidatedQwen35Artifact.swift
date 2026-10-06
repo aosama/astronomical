@@ -90,6 +90,13 @@ public final class ValidatedQwen35Artifact {
         return self.requiredFiles["tokenizer.json"]?.capturedBytes;
     }
 
+    /// The validated `config.json` bytes captured during validation; the
+    /// runtime uses them to construct the upstream model configuration
+    /// without reopening the mutable pathname.
+    public func configBytes() -> Data? {
+        return self.requiredFiles["config.json"]?.capturedBytes;
+    }
+
     public func generationConfigBytes() -> Data? {
         return self.requiredFiles["generation_config.json"]?.capturedBytes;
     }

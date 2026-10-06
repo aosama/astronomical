@@ -4,6 +4,7 @@ import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -12,7 +13,7 @@ import IpcProtocol;
  * default filling, request-id allocation, frame relay, and terminal-frame
  * stream closure. The executor is a stub, so no worker process runs.
  */
-@Suite final class DaemonIpcChatTests {
+@Suite(.tags(.hermeticJourney)) final class DaemonIpcChatTests {
 
     @Test
     func should_relay_streamed_frames_and_close_at_the_terminal_frame() throws {
