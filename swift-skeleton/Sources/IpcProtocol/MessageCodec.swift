@@ -43,12 +43,12 @@ public enum MessageCodec {
     public static func decodeEvent(_ serializedEvent: Data) throws -> WorkerEvent {
         let workerEvent: WorkerEvent = try MessageCodec.decodeMessage(serializedEvent);
         switch (workerEvent) {
-        case .ready(_, let workerCapabilities, _, _, _):
+        case .ready(_, let workerCapabilities):
             do { try workerCapabilities.validate(); }
             catch let validationError as WorkerModelCapabilitiesValidationError {
                 throw ProtocolError.invalidWorkerModelCapabilities(validationError);
             }
-        case .modelSwapped(_, let workerCapabilities, _, _, _, _, _):
+        case .modelSwapped(_, let workerCapabilities, _, _):
             do { try workerCapabilities.validate(); }
             catch let validationError as WorkerModelCapabilitiesValidationError {
                 throw ProtocolError.invalidWorkerModelCapabilities(validationError);
