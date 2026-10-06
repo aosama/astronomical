@@ -3,6 +3,8 @@ import Foundation;
 import Testing;
 
 import IpcProtocol;
+import ModelServingTestSupport;
+import JourneyCategories;
 
 @testable import InferenceWorker;
 
@@ -15,7 +17,7 @@ import IpcProtocol;
  * lifecycle spans the test, and a parallel neighbor could otherwise reopen
  * and then lose a reused descriptor number mid-journey.
  */
-@Suite(.serialized)
+@Suite(.serialized, .tags(.hermeticMlxJourney))
 final class WorkerCommandLoopTests {
 
     /**
@@ -517,20 +519,17 @@ final class WorkerLoopRun {
 extension WorkerCommandLoopTests {
 
     /**
-     * The real model family factory classifies a real directory and fails
-     * the swap closed while the dense artifact-weight path is pending; the
-     * worker stays responsive for the next command.
+     * The real model family factory classifies a real directory, streams
+     * the validated artifact weights into the dense engine, and the swap
+     * completes with the model's capabilities; the worker stays responsive
+     * for the next command.
      */
-    @Test(.timeLimit(.minutes(1)))
-    func should_fail_closed_a_real_qwen35_directory_swap_until_the_artifact_slice() throws {
-        let modelDirectoryUrl: URL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("qwen35-factory-journey-\(UUID().uuidString)");
-        try FileManager.default.createDirectory(at: modelDirectoryUrl, withIntermediateDirectories: true);
+    @Test(.timeLimit(.minutes(2)))
+    func should_swap_a_real_qwen35_directory_through_the_artifact_weight_path() throws {
+        MLXMetallibLocator.overrideMetallibPathIfNecessary();
+        let (modelDirectoryUrl, _): (URL, TinyDenseArtifactFixture.SynthesizedLayout) =
+            try TinyDenseArtifactFixture.writeModelDirectory(includeTokenizerFiles: true);
         defer { try? FileManager.default.removeItem(at: modelDirectoryUrl); }
-        let configJson: String = """
-            {"architectures": ["Qwen3_5ForConditionalGeneration"], "model_type": "qwen3_5"}
-            """;
-        try Data(configJson.utf8).write(to: modelDirectoryUrl.appendingPathComponent("config.json"));
 
         let loopRun: WorkerLoopRun = try self.startBootstrappedLoop(
             startupConfiguration: self.startupConfiguration(
@@ -543,18 +542,31 @@ extension WorkerCommandLoopTests {
         try loopRun.commandWriter.sendCommand(.swapModel(
             modelDirectory: modelDirectoryUrl.path,
             modelConfiguration: self.autoregressiveModelConfiguration()));
-        let swapFailure: WorkerEvent = try self.expectEvent(loopRun.eventReader);
-        guard case let .modelSwapFailed(loadedModelRemainsReady, modelLoadFailureReason) = swapFailure else {
-            Issue.record("expected a fail-closed swap, got \(swapFailure)");
+        let swapAnswer: WorkerEvent = try self.expectEvent(loopRun.eventReader);
+        guard case let .modelSwapped(swappedModelId, capabilities, expertMemoryMode, minimumMlxMemoryCeilingBytes) = swapAnswer else {
+            Issue.record("expected a completed swap, got \(swapAnswer)");
             return;
         }
-        #expect(loadedModelRemainsReady == false);
-        #expect(modelLoadFailureReason.contains("artifact streaming slice") == true);
+        #expect(swappedModelId == "qwen3.5");
+        #expect(capabilities.chat != nil);
+        #expect(capabilities.chat?.contextWindow == 4096);
+        #expect(expertMemoryMode == nil);
+        #expect(minimumMlxMemoryCeilingBytes == 1);
+
+        // A successful swap publishes the runtime feature configuration
+        // bound to the freshly loaded model before the worker answers the
+        // next command; the fail-closed path never emits it.
+        let featureConfigurationEvent: WorkerEvent = try self.expectEvent(loopRun.eventReader);
+        guard case let .runtimeFeatureConfigurationApplied(featureConfiguration) = featureConfigurationEvent else {
+            Issue.record("expected the runtime feature configuration after the swap, got \\(featureConfigurationEvent)");
+            return;
+        }
+        #expect(featureConfiguration.loadedModel?.modelId() == "qwen3.5");
 
         try loopRun.commandWriter.sendCommand(.sampleMlxMemory);
         let pollAnswer: WorkerEvent = try self.expectEvent(loopRun.eventReader);
         guard case .mlxMemorySample = pollAnswer else {
-            Issue.record("expected a memory sample after the fail-closed swap, got \(pollAnswer)");
+            Issue.record("expected a memory sample after the swap, got \(pollAnswer)");
             return;
         }
     }

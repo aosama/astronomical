@@ -7,7 +7,7 @@ import MLX;
 /// lookup cannot see the resource. The search walks the package build tree
 /// from the current working directory and never depends on an absolute or
 /// machine-specific path.
-enum MLXMetallibLocator {
+public enum MLXMetallibLocator {
 
     private static let bundleName: String = "mlx-swift_Cmlx.bundle";
     private static let resourcePathComponents: Array<String> = [
@@ -17,7 +17,7 @@ enum MLXMetallibLocator {
 
     /// Points MLX at the discovered metallib; a no-op when the automatic
     /// lookup already resolves one or the bundle is not on disk.
-    static func overrideMetallibPathIfNecessary() -> Void {
+    public static func overrideMetallibPathIfNecessary() -> Void {
         if GPU.metallib != nil {
             return;
         }
@@ -29,7 +29,7 @@ enum MLXMetallibLocator {
 
     /// Depth-limited search under the working directory for the SwiftPM
     /// resource bundle MLX ships its kernels in.
-    static func locateDefaultMetallib() -> URL? {
+    public static func locateDefaultMetallib() -> URL? {
         let workingDirectoryUrl: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath);
         return Self.searchMetallib(under: workingDirectoryUrl, depth: 0);
     }

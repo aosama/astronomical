@@ -4,6 +4,7 @@ import Testing;
 
 import AstronomicalConfig;
 import IpcProtocol;
+import JourneyCategories;
 
 @testable import Supervisor;
 
@@ -13,7 +14,7 @@ import IpcProtocol;
  * swap-on-demand path, containment, and shutdown. The fake workers are short
  * shell scripts that emit genuine framed events over real pipes.
  */
-@Suite(.serialized)
+@Suite(.serialized, .tags(.hermeticJourney))
 final class WorkerSupervisorTests {
 
     @Test
