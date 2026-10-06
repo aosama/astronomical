@@ -8,6 +8,11 @@ public enum AstronomicalRuntimeInstance: String, Equatable {
     private static let STABLE_LOOPBACK_PORT: UInt16 = 6732;
     private static let DEVELOPMENT_LOOPBACK_PORT: UInt16 = 6733;
 
+    /** The wire/config name of the instance ("stable" or "development"). */
+    public var rawInstanceName: String {
+        return self.rawValue;
+    }
+
     public var displayName: String {
         switch (self) {
         case .stable:
