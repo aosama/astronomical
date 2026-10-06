@@ -60,6 +60,25 @@ struct AstronomicalDaemonMain {
             FileHandle.standardError.write(Data("astronomicald: could not take the instance lock: \(error)\n".utf8));
             exit(2);
         }
+        // The worker-launch configuration resolves before the IPC endpoint
+        // opens: an unresolvable config is a startup failure, and the
+        // operator sees what the daemon will serve before anything connects.
+        let runtimeConfigResolver: ResolvedRuntimeConfigResolver;
+        do {
+            runtimeConfigResolver = ResolvedRuntimeConfigResolver(
+                instancePaths: instancePaths,
+                fallbackWorkerExecutablePath: try FallbackWorkerExecutablePath.derive());
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: could not locate the worker executable: \(error)\n".utf8));
+            exit(2);
+        }
+        let resolvedRuntimeConfig: ResolvedRuntimeConfig;
+        do {
+            resolvedRuntimeConfig = try runtimeConfigResolver.load();
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: could not resolve the runtime configuration: \(error)\n".utf8));
+            exit(2);
+        }
         let workerHealthState: WorkerHealthState = WorkerHealthState();
         let service: DaemonIpcService;
         do {
@@ -70,9 +89,14 @@ struct AstronomicalDaemonMain {
             FileHandle.standardError.write(Data("astronomicald: could not start the daemon IPC service: \(error)\n".utf8));
             exit(2);
         }
-        // Live progress instead of silent waits: the operator sees the socket
-        // the daemon answers on before anything can talk to it.
-        print("astronomicald \(daemonArguments.runtimeInstance.rawInstanceName) serving on \(service.socketPath)");
+        // Live progress instead of silent waits: the operator sees the
+        // resolved serving identity and the socket the daemon answers on
+        // before anything can talk to it.
+        let generationPrefix: String = String(resolvedRuntimeConfig.configurationGeneration.prefix(12));
+        print("astronomicald \(daemonArguments.runtimeInstance.rawInstanceName) resolved "
+            + "\(resolvedRuntimeConfig.discoveredModels.count) models, "
+            + "generation \(generationPrefix), "
+            + "serving on \(service.socketPath)");
         FileHandle.standardOutput.synchronizeFile();
 
         let shutdownSemaphore = DispatchSemaphore(value: 0);
