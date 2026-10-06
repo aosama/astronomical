@@ -43,7 +43,7 @@ public enum LogLevel: Equatable, Sendable {
 }
 
 /// Runtime logging configuration, porting LoggingConfig from logging_config.rs.
-public struct LoggingConfig: Equatable {
+public struct LoggingConfig: Equatable, Sendable {
 
     /// Each buffered log line is flushed once the buffer reaches this many
     /// lines; the value comes straight from LOG_BUFFERED_LINE_LIMIT.
