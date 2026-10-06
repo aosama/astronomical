@@ -20,7 +20,7 @@ public enum ModelIdentity {
     /// The last path-style segment of a model identifier. Empty subsequences
     /// are preserved so a trailing slash yields an empty leaf exactly like
     /// Rust's rsplit('/').next().
-    internal static func leafModelId(modelId: String) -> String {
+    public static func leafModelId(modelId: String) -> String {
         let leafCandidates = modelId.split(separator: "/", omittingEmptySubsequences: false);
         if let lastLeafCandidate = leafCandidates.last {
             return String(lastLeafCandidate);
@@ -28,7 +28,7 @@ public enum ModelIdentity {
         return "";
     }
 
-    internal static func nearModelMatches(requestedModelId: String, candidateModelIds: Array<String>) -> Array<String> {
+    public static func nearModelMatches(requestedModelId: String, candidateModelIds: Array<String>) -> Array<String> {
         let normalizedRequestedModelId = requestedModelId.lowercased();
         let leadingTokenCandidates = normalizedRequestedModelId.split(
             omittingEmptySubsequences: false,

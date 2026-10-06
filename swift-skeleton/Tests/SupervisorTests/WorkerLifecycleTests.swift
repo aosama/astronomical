@@ -118,7 +118,7 @@ final class WorkerLifecycleTests: XCTestCase {
             healthState.currentSnapshot().workerRuntimeFeatureConfiguration?.configurationGeneration,
             "gen-1");
         XCTAssertTrue(healthState.hasAcknowledgedLifecycle());
-        try workerProcess.close();
+        _ = try workerProcess.close();
     }
 
     func testRelaunchRecoveryTimesOutAgainstASilentReplacement() throws {
@@ -154,7 +154,7 @@ final class WorkerLifecycleTests: XCTestCase {
                 return XCTFail("expected a candidate acknowledgement timeout, got \(thrownError)");
             }
         }
-        try workerProcess.close();
+        _ = try workerProcess.close();
     }
 }
 
