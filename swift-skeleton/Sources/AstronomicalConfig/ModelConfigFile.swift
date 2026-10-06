@@ -7,12 +7,12 @@ import Foundation;
  * no surrounding whitespace or control characters) and the per-model chunking
  * merge against the global section land with resolved-model-config.
  */
-internal struct ModelConfigFile: Equatable {
-    internal let limits: ModelLimitsConfigFile?;
-    internal let generationDefaults: GenerationDefaultsConfigFile?;
-    internal let chunking: ChunkingConfigFile?;
+public struct ModelConfigFile: Equatable {
+    public let limits: ModelLimitsConfigFile?;
+    public let generationDefaults: GenerationDefaultsConfigFile?;
+    public let chunking: ChunkingConfigFile?;
 
-    internal init(
+    public init(
         limits: ModelLimitsConfigFile?,
         generationDefaults: GenerationDefaultsConfigFile?,
         chunking: ChunkingConfigFile?
@@ -22,7 +22,7 @@ internal struct ModelConfigFile: Equatable {
         self.chunking = chunking;
     }
 
-    internal static func fromJsonObject(_ jsonObject: Dictionary<String, Any>) throws -> ModelConfigFile {
+    public static func fromJsonObject(_ jsonObject: Dictionary<String, Any>) throws -> ModelConfigFile {
         try StrictJson.requireKnownKeys(
             object: jsonObject,
             knownKeys: ["limits", "generation_defaults", "chunking"],
