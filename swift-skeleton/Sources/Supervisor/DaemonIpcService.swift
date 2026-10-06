@@ -7,27 +7,34 @@ import IpcProtocol;
 ///
 /// Mirrors apps/supervisor/src/daemon_ipc.rs: ephemeral CLI verbs talk over
 /// the owner-only unix socket, one request is served per connection, and the
-/// service shares no transport with the REST surface. Generation, library,
-/// and embeddings handlers land with their supervisor slices; this shell
-/// serves the handshake and status verbs and rejects the rest with the same
-/// wire frame the Rust service uses for rejected requests.
+/// service shares no transport with the REST surface. Every verb is served
+/// through the streaming writer — simple verbs send one frame and close,
+/// exactly as the Rust service does — and the chat verb streams ordered
+/// frames until a terminal one. Library and embeddings handlers land with
+/// their supervisor slices; those verbs reject with the same wire frame the
+/// Rust service uses for rejected requests.
 public final class DaemonIpcService: @unchecked Sendable {
 
     private let listener: DaemonIpcListener;
     private let socketFilePath: String;
     private let stateLock: NSLock;
     private let healthProvider: () -> DaemonStatusReport;
+    private let chatContext: DaemonIpcChatContext?;
+    private let requestIdAllocator: ChatRequestIdAllocator;
     private var isShutdownRequested: Bool;
     private var serviceThread: Thread?;
 
     private init(
         listener: DaemonIpcListener,
         socketFilePath: String,
-        healthProvider: @escaping () -> DaemonStatusReport
+        healthProvider: @escaping () -> DaemonStatusReport,
+        chatContext: DaemonIpcChatContext?
     ) {
         self.listener = listener;
         self.socketFilePath = socketFilePath;
         self.healthProvider = healthProvider;
+        self.chatContext = chatContext;
+        self.requestIdAllocator = ChatRequestIdAllocator();
         self.stateLock = NSLock();
         self.isShutdownRequested = false;
     }
@@ -44,7 +51,8 @@ public final class DaemonIpcService: @unchecked Sendable {
     /// local connection, so stopping the service never depends on a client.
     public static func start(
         instancePaths: AstronomicalInstancePaths,
-        healthProvider: @escaping () -> DaemonStatusReport
+        healthProvider: @escaping () -> DaemonStatusReport,
+        chatContext: DaemonIpcChatContext? = nil
     ) throws -> DaemonIpcService {
         let socketFilePath: String = instancePaths.ipcSocketFilePath.string;
         let listener: DaemonIpcListener = try DaemonIpcListener.bind(
@@ -52,7 +60,8 @@ public final class DaemonIpcService: @unchecked Sendable {
         let service: DaemonIpcService = DaemonIpcService(
             listener: listener,
             socketFilePath: socketFilePath,
-            healthProvider: healthProvider);
+            healthProvider: healthProvider,
+            chatContext: chatContext);
         let serviceThread: Thread = Thread {
             service.serveUntilShutdown();
         };
@@ -96,9 +105,33 @@ public final class DaemonIpcService: @unchecked Sendable {
             if shouldShutdown {
                 return;
             }
-            // One misbehaving local client must not take the endpoint down.
-            try? self.listener.serveNextRequest { (daemonRequest: DaemonRequest) -> DaemonResponse in
-                return self.handleDaemonRequest(daemonRequest);
+            // One misbehaving local client must not take the endpoint down;
+            // only a failed accept ends the loop, exactly as the Rust service
+            // treats AcceptFailed as terminal and every request error as
+            // survivable.
+            do {
+                try self.listener.serveStreamingRequest { (daemonRequest: DaemonRequest, streamingResponseWriter: StreamingResponseWriter) throws -> Void in
+                    try self.handleDaemonRequest(daemonRequest, streamingResponseWriter: streamingResponseWriter);
+                }
+            } catch let transportError as DaemonTransportError {
+                if case .acceptFailed = transportError {
+                    return;
+                }
+                self.stateLock.lock();
+                let shouldShutdownAfterFailure: Bool = self.isShutdownRequested;
+                self.stateLock.unlock();
+                if shouldShutdownAfterFailure {
+                    return;
+                }
+                continue;
+            } catch {
+                self.stateLock.lock();
+                let shouldShutdownAfterFailure: Bool = self.isShutdownRequested;
+                self.stateLock.unlock();
+                if shouldShutdownAfterFailure {
+                    return;
+                }
+                continue;
             }
             self.stateLock.lock();
             let shouldShutdownAfterServe: Bool = self.isShutdownRequested;
@@ -109,22 +142,40 @@ public final class DaemonIpcService: @unchecked Sendable {
         }
     }
 
-    private func handleDaemonRequest(_ daemonRequest: DaemonRequest) -> DaemonResponse {
+    private func handleDaemonRequest(
+        _ daemonRequest: DaemonRequest,
+        streamingResponseWriter: StreamingResponseWriter
+    ) throws -> Void {
         switch (daemonRequest) {
         case .handshake:
-            return DaemonResponse.handshakeAccepted(
+            try streamingResponseWriter.sendResponse(DaemonResponse.handshakeAccepted(
                 protocolVersion: DaemonProtocol.protocolVersion,
-                applicationName: DaemonProtocol.applicationName);
+                applicationName: DaemonProtocol.applicationName));
+            try streamingResponseWriter.close();
         case .status:
             let statusReport: DaemonStatusReport = self.healthProvider();
-            return DaemonResponse.status(
+            try streamingResponseWriter.sendResponse(DaemonResponse.status(
                 workerStatus: statusReport.workerStatus,
                 readyModelId: statusReport.readyModelId,
-                defaultModelId: nil);
-        case .chatGenerate, .embedGenerate, .modelsList, .catalog, .downloadStart,
+                defaultModelId: nil));
+            try streamingResponseWriter.close();
+        case .chatGenerate:
+            guard let chatContext: DaemonIpcChatContext = self.chatContext else {
+                try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                    reason: "this daemon verb is not wired into the Swift supervisor yet"));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcChat.serve(
+                daemonRequest,
+                chatContext: chatContext,
+                requestIdAllocator: self.requestIdAllocator,
+                streamingResponseWriter: streamingResponseWriter);
+        case .embedGenerate, .modelsList, .catalog, .downloadStart,
              .downloadStatus, .defaultModelSet:
-            return DaemonResponse.requestRejected(
-                reason: "this daemon verb is not wired into the Swift supervisor yet");
+            try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                reason: "this daemon verb is not wired into the Swift supervisor yet"));
+            try streamingResponseWriter.close();
         }
     }
 }

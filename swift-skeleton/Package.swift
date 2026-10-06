@@ -56,7 +56,9 @@ let package: Package = Package(
                 .product(name: "MLXLLM", package: "mlx-swift-lm")
             ]),
         // Wave 3 — apps/inference-worker
-        .executableTarget(name: "InferenceWorker"),
+        .executableTarget(
+            name: "InferenceWorker",
+            dependencies: ["IpcProtocol", "RuntimeIntegration"]),
         // One test target per module, mirroring Sources/.
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol"]),
