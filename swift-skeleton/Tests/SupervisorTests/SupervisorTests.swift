@@ -1,5 +1,7 @@
 import XCTest;
 
+import IpcProtocol;
+
 @testable import Supervisor;
 @testable import AstronomicalConfig;
 
@@ -121,5 +123,41 @@ final class SupervisorTests: XCTestCase {
         // Dropping the first holder releases the advisory lock with its file
         // descriptor, so the next acquisition for the same path succeeds.
         _ = firstLock;
+    }
+
+    func testDaemonIpcServiceAnswersHandshakeAndStatusAndCleansItsSocketOnShutdown() throws {
+        let temporaryStateDirectory: String = NSTemporaryDirectory() + "asup-\(UUID().uuidString.prefix(8))";
+        try FileManager.default.createDirectory(atPath: temporaryStateDirectory, withIntermediateDirectories: true);
+        let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
+            FilePath(string: temporaryStateDirectory),
+            runtimeInstance: AstronomicalRuntimeInstance.development);
+        let service: DaemonIpcService = try DaemonIpcService.start(
+            instancePaths: instancePaths,
+            healthProvider: { return DaemonWorkerStatus.unavailable; });
+        defer {
+            service.shutdown();
+            try? FileManager.default.removeItem(atPath: temporaryStateDirectory);
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: service.socketPath));
+
+        let handshakeClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: service.socketPath);
+        try handshakeClient.sendRequest(DaemonRequest.handshake);
+        XCTAssertEqual(
+            try handshakeClient.nextResponse(),
+            DaemonResponse.handshakeAccepted(
+                protocolVersion: DaemonProtocol.protocolVersion,
+                applicationName: DaemonProtocol.applicationName));
+
+        let statusClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: service.socketPath);
+        try statusClient.sendRequest(DaemonRequest.status);
+        XCTAssertEqual(
+            try statusClient.nextResponse(),
+            DaemonResponse.status(
+                workerStatus: DaemonWorkerStatus.unavailable,
+                readyModelId: nil,
+                defaultModelId: nil));
+
+        service.shutdown();
+        XCTAssertFalse(FileManager.default.fileExists(atPath: service.socketPath));
     }
 }
