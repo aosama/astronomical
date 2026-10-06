@@ -63,10 +63,8 @@ public struct Qwen3_5ShardIndex: Equatable {
                 visionShardFileNames.insert(weightEntry.shardFileName);
                 visionTensorShardEntries.append(weightEntry);
             }
-            // Other tensor prefixes are silently skipped. MTP tensors inside
-            // language shards fail closed through the language tensor-name
-            // validation below: the codebase ships target-only until
-            // speculative decoding is rebuilt from first principles.
+            // Other tensor prefixes are silently skipped; the language
+            // tensor-name validation below fails closed on unknown names.
         }
         try Qwen3_5TensorSpec.validateLanguageTensorNames(
             actualLanguageTensorNames: languageTensorNames,
