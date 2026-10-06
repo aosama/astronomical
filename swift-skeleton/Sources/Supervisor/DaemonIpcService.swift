@@ -11,7 +11,7 @@ import IpcProtocol;
 /// and embeddings handlers land with their supervisor slices; this shell
 /// serves the handshake and status verbs and rejects the rest with the same
 /// wire frame the Rust service uses for rejected requests.
-public final class DaemonIpcService {
+public final class DaemonIpcService: @unchecked Sendable {
 
     private let listener: DaemonIpcListener;
     private let socketFilePath: String;

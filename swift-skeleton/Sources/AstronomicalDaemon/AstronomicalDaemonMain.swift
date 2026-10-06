@@ -80,6 +80,17 @@ struct AstronomicalDaemonMain {
             exit(2);
         }
         let workerHealthState: WorkerHealthState = WorkerHealthState();
+        let restServer: RestHttpServer;
+        do {
+            restServer = try RestHttpServer.start(
+                bindEndpoint: resolvedRuntimeConfig.bindEndpoint,
+                routeTable: RestEndpointRoutes.foundationRouteTable(readinessProvider: {
+                    return workerHealthState.currentSnapshot().status;
+                }));
+        } catch {
+            FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
+            exit(2);
+        }
         let service: DaemonIpcService;
         do {
             service = try DaemonIpcService.start(
@@ -90,17 +101,19 @@ struct AstronomicalDaemonMain {
             exit(2);
         }
         // Live progress instead of silent waits: the operator sees the
-        // resolved serving identity and the socket the daemon answers on
+        // resolved serving identity and the endpoints the daemon answers on
         // before anything can talk to it.
         let generationPrefix: String = String(resolvedRuntimeConfig.configurationGeneration.prefix(12));
         print("astronomicald \(daemonArguments.runtimeInstance.rawInstanceName) resolved "
             + "\(resolvedRuntimeConfig.discoveredModels.count) models, "
             + "generation \(generationPrefix), "
-            + "serving on \(service.socketPath)");
-        FileHandle.standardOutput.synchronizeFile();
+            + "serving IPC on \(service.socketPath), "
+            + "serving REST on http://\(restServer.boundEndpoint.description)");
+        fflush(stdout);
 
         let shutdownSemaphore = DispatchSemaphore(value: 0);
         let signalSourceShutdown: () -> Void = {
+            restServer.stop();
             service.shutdown();
             shutdownSemaphore.signal();
         };

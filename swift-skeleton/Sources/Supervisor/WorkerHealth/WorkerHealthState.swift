@@ -8,7 +8,7 @@ import IpcProtocol;
 /// apps/supervisor/src/worker_health.rs: the worker event thread publishes
 /// snapshots and field updates while the daemon IPC thread reads them for the
 /// status verb, so every access crosses threads under one lock.
-public final class WorkerHealthState {
+public final class WorkerHealthState: @unchecked Sendable {
 
     private let stateLock: NSLock;
     private var snapshot: WorkerHealthSnapshot;
