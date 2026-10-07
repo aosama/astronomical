@@ -94,6 +94,14 @@ let package: Package = Package(
         .executableTarget(
             name: "InferenceWorker",
             dependencies: ["IpcProtocol", "RuntimeIntegration", "ModelServing", "AstronomicalConfig"]),
+        // The deterministic supervisor test worker, migrating the Rust
+        // astronomical-supervisor-idle-worker fixture bin: a real framed
+        // protocol speaker over stdin/stdout whose scripted behaviors the
+        // worker journey suites steer by model identity. Built by swift test
+        // like every executable; journeys locate it from the package root.
+        .executableTarget(
+            name: "SupervisorIdleWorker",
+            dependencies: ["IpcProtocol"]),
         // One test target per module, mirroring Sources/.
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig", "JourneyCategories"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol", "JourneyCategories"]),
