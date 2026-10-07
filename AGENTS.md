@@ -2,6 +2,8 @@
 
 - This is our constitution at repo-root/docs/north-star-product-vision.md everything is derived from there.
 
+- Never pipe command output through `tail` (or `head`-style truncation) when investigating failures: it silently hides the logs and evidence needed for diagnosis — a self-inflicted wound. Capture full output to a file and read the complete log (chunked if large) instead.
+
 - Call free functions through their owning module: import the module, never the bare function (`use crate::support;` then `support::run_journey_with_timeout(...)`), so every call site names its owner; all new and refactored Rust code must follow this.
 
 - You keep repo-root/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs.

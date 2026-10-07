@@ -20,6 +20,16 @@ public struct RestHttpResponse {
     /// Extra header lines (already formatted `Name: value`) such as `Allow`.
     public let additionalHeaderLines: Array<String>;
 
+    /// The same answer with more header lines appended, the seam the CORS
+    /// decoration uses without rebuilding every endpoint response.
+    public func withAdditionalHeaderLines(_ extraHeaderLines: Array<String>) -> RestHttpResponse {
+        return RestHttpResponse(
+            statusCode: self.statusCode,
+            contentType: self.contentType,
+            bodyBytes: self.bodyBytes,
+            additionalHeaderLines: self.additionalHeaderLines + extraHeaderLines);
+    }
+
     public init(
         statusCode: Int,
         contentType: String,
@@ -54,6 +64,8 @@ public struct RestHttpResponse {
     public func reasonPhrase() -> String {
         switch (self.statusCode) {
         case 200: return "OK";
+        case 202: return "Accepted";
+        case 204: return "No Content";
         case 400: return "Bad Request";
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
