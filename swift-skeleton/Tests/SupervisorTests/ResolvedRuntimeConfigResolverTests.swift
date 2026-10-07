@@ -146,4 +146,124 @@ final class ResolvedRuntimeConfigResolverTests {
             "Library ownership clears the authored ambiguity for its identities: \(resolvedConfig.modelDiscoveryDiagnostics)");
         #expect(resolvedConfig.modelPolicyCatalog.count == 2);
     }
+
+    @Test
+    func should_treat_a_missing_automatic_models_directory_as_an_empty_library_without_creating_it() throws {
+        let temporaryRootPath: String = try self.makeTemporaryRoot();
+        let resolver: ResolvedRuntimeConfigResolver = try self.makeResolver(
+            stateDirectoryPath: temporaryRootPath + "/state",
+            configContents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[]}}");
+        let automaticModelsDirectory: FilePath = resolver.resolvedInstancePaths.modelsDirectory;
+
+        let resolvedConfig: ResolvedRuntimeConfig = try resolver.load();
+
+        #expect(resolvedConfig.discoveredModels.isEmpty);
+        #expect(resolvedConfig.configuredModelDirectories.isEmpty);
+        #expect(FileManager.default.fileExists(atPath: automaticModelsDirectory.string) == false,
+            "resolving must not materialize the automatic library root");
+    }
+
+    @Test
+    func should_discover_the_automatic_organization_model_tree_before_configured_roots() throws {
+        let temporaryRootPath: String = try self.makeTemporaryRoot();
+        let stateDirectoryPath: String = temporaryRootPath + "/state";
+        let resolver: ResolvedRuntimeConfigResolver = try self.makeResolver(
+            stateDirectoryPath: stateDirectoryPath,
+            configContents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[\"\(temporaryRootPath + "/configured-models")\"]}}");
+        let automaticModelsDirectory: FilePath = resolver.resolvedInstancePaths.modelsDirectory;
+        try FileManager.default.createDirectory(atPath: automaticModelsDirectory.string, withIntermediateDirectories: true);
+        try self.writeModernbertModel(modelId: "AutomaticBert", modelsRootPath: automaticModelsDirectory.string);
+        try self.writeModernbertModel(modelId: "ConfiguredBert", modelsRootPath: temporaryRootPath + "/configured-models");
+
+        let resolvedConfig: ResolvedRuntimeConfig = try resolver.load();
+
+        let discoveredModelIds: Array<String> = resolvedConfig.discoveredModels.map { (discoveredModel: DiscoveryDiscoveredModel) -> String in
+            return discoveredModel.modelId;
+        };
+        #expect(discoveredModelIds == ["AutomaticBert", "ConfiguredBert"]);
+        #expect(resolvedConfig.discoveredModels.allSatisfy({ (discoveredModel: DiscoveryDiscoveredModel) -> Bool in
+            return discoveredModel.modelSizeBytes > 0;
+        }));
+        #expect(resolvedConfig.configuredModelDirectories == [FilePath(string: temporaryRootPath + "/configured-models")]);
+    }
+
+    @Test
+    func should_scan_a_repeated_automatic_root_once_while_preserving_authored_configuration() throws {
+        let temporaryRootPath: String = try self.makeTemporaryRoot();
+        // Derive the automatic Library root from the instance paths the
+        // resolver itself uses, so the authored config repeats the exact
+        // root rather than a hardcoded layout assumption.
+        let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forStateDirectory(
+            FilePath(string: temporaryRootPath + "/state"),
+            runtimeInstance: AstronomicalRuntimeInstance.development);
+        let automaticModelsDirectory: FilePath = instancePaths.modelsDirectory;
+        let resolver: ResolvedRuntimeConfigResolver = try self.makeResolver(
+            stateDirectoryPath: temporaryRootPath + "/state",
+            configContents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[\"\(automaticModelsDirectory.string)\"]}}");
+        try FileManager.default.createDirectory(atPath: automaticModelsDirectory.string, withIntermediateDirectories: true);
+        try self.writeModernbertModel(modelId: "RepeatedBert", modelsRootPath: automaticModelsDirectory.string);
+
+        let resolvedConfig: ResolvedRuntimeConfig = try resolver.load();
+
+        #expect(resolvedConfig.discoveredModels.count == 1);
+        #expect(resolvedConfig.configuredModelDirectories == [automaticModelsDirectory]);
+    }
+
+    @Test
+    func should_start_when_the_automatic_models_path_is_not_a_directory() throws {
+        let temporaryRootPath: String = try self.makeTemporaryRoot();
+        let resolver: ResolvedRuntimeConfigResolver = try self.makeResolver(
+            stateDirectoryPath: temporaryRootPath + "/state",
+            configContents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[]}}");
+        let automaticModelsDirectory: FilePath = resolver.resolvedInstancePaths.modelsDirectory;
+        try FileManager.default.createDirectory(
+            atPath: (automaticModelsDirectory.string as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true);
+        try Data("not a directory".utf8).write(to: URL(fileURLWithPath: automaticModelsDirectory.string));
+
+        let resolvedConfig: ResolvedRuntimeConfig = try resolver.load();
+
+        #expect(resolvedConfig.discoveredModels.isEmpty);
+        #expect(resolvedConfig.modelDiscoveryDiagnostics.isEmpty);
+    }
+
+    @Test
+    func should_return_a_typed_error_when_automatic_root_metadata_cannot_be_read() throws {
+        let temporaryRootPath: String = try self.makeTemporaryRoot();
+        let resolver: ResolvedRuntimeConfigResolver = try self.makeResolver(
+            stateDirectoryPath: temporaryRootPath + "/state",
+            configContents: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[]}}");
+        let automaticModelsDirectory: FilePath = resolver.resolvedInstancePaths.modelsDirectory;
+        try FileManager.default.createDirectory(
+            atPath: (automaticModelsDirectory.string as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true);
+        // A symlink loop makes every metadata read of the automatic root
+        // fail: the resolver must surface that as a typed error instead of
+        // silently serving an empty library.
+        try FileManager.default.createSymbolicLink(
+            atPath: automaticModelsDirectory.string,
+            withDestinationPath: "models");
+
+        let resolutionOutcome: Error? = {
+            do {
+                _ = try resolver.load();
+                return nil;
+            } catch let resolutionError {
+                return resolutionError;
+            }
+        }();
+        let resolutionError: DiscoveryDiscoveredModelError = try #require(
+            resolutionOutcome as? DiscoveryDiscoveredModelError,
+            "expected a typed discovery error, got \(String(describing: resolutionOutcome))");
+        guard case let .readDirectory(directoryPath, _) = resolutionError else {
+            Issue.record("expected an automatic-root metadata error, got \(resolutionError)");
+            return;
+        }
+        #expect(directoryPath == automaticModelsDirectory);
+    }
 }

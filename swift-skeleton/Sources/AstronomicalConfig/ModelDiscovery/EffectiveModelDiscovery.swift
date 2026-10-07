@@ -42,6 +42,20 @@ public enum EffectiveModelDiscovery {
                 ]));
         }
         guard metadataResult && isAutomaticDirectoryPresent.boolValue else {
+            // `fileExists` reports a path whose metadata cannot be read — a
+            // symlink loop, an unreadable parent — the same way it reports an
+            // absent one. The Rust AutomaticModelDirectoryMetadata arm keeps
+            // those fatal to resolution, so absence is confirmed with stat:
+            // only ENOENT (no such entry) is a genuine empty library.
+            var pathMetadata: stat = stat();
+            let statOutcome: Int32 = stat(automaticModelsDirectory.string, &pathMetadata);
+            if (statOutcome != 0 && errno != ENOENT) {
+                throw DiscoveryDiscoveredModelError.readDirectory(
+                    directoryPath: automaticModelsDirectory,
+                    underlyingError: NSError(domain: NSCocoaErrorDomain, code: 4, userInfo: [
+                        NSFilePathErrorKey: automaticModelsDirectory.string,
+                    ]));
+            }
             let discoveryReport: DiscoveryModelDiscoveryReport = try DiscoveryModels.discoverModelsExcludingAmbiguousIdentities(
                 modelDirectories: configuredModelDirectories);
             return Outcome(

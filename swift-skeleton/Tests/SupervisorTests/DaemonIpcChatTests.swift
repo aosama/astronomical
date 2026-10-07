@@ -230,6 +230,36 @@ import JourneyCategories;
     }
 
     @Test
+    func should_map_an_empty_object_schema_to_the_json_object_constraint() throws {
+        let recordingExecutor: RecordingChatExecutor = RecordingChatExecutor(
+            healthSnapshot: DaemonIpcChatTests.readySnapshot(modelId: "m1"),
+            streamEvents: [.completed(
+                promptTokenCount: 1,
+                generatedTokenCount: 0,
+                reasoningTokenCount: 0,
+                cachedTokenCount: 0,
+                reason: .endOfSequence)]);
+        let service: DaemonIpcService = try DaemonIpcChatTests.startService(chatExecutor: recordingExecutor);
+        defer { service.shutdown() }
+
+        let schemaClient: DaemonIpcClient = try DaemonIpcClient.connect(socketPath: service.socketPath);
+        try schemaClient.sendRequest(DaemonRequest.chatGenerate(
+            model: "m1",
+            messages: [.user(content: "structured please", images: [])],
+            settings: DaemonIpcChatTests.explicitSettings(),
+            schemaJson: "{}"));
+        let completionFrame: DaemonResponse? = try schemaClient.nextResponse();
+        let completionResponse: DaemonResponse = try #require(completionFrame);
+        guard case .chatGenerationCompleted = completionResponse else {
+            Issue.record("expected a completed frame for the empty-object schema, got \(completionResponse)");
+            return;
+        }
+
+        let schemaCommand: ChatGenerationCommand = try #require(recordingExecutor.receivedCommands.first);
+        #expect(schemaCommand.structuredGeneration == .jsonObject);
+    }
+
+    @Test
     func should_keep_handshake_and_status_single_frame_through_the_streaming_dispatch() throws {
         let recordingExecutor: RecordingChatExecutor = RecordingChatExecutor(
             healthSnapshot: DaemonIpcChatTests.readySnapshot(modelId: "m1"),

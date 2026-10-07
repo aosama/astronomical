@@ -124,6 +124,11 @@ struct AstronomicalDaemonMain {
                 "astronomicald: failed to create the generation or completion attribution logs: \(error)\n".utf8));
             exit(2);
         }
+        // The operator log keeps the supervisor's own worker-failure
+        // diagnostics — exit status and stderr tail — durable in the same
+        // logs directory, lossy so a slow disk never stalls serving.
+        let supervisorOperatorLog: SupervisorOperatorLog = SupervisorOperatorLog.open(
+            logDirectory: loggingDirectory);
         // The supervisor owns the one live health snapshot: the REST routes
         // and the daemon IPC status verb read from it, so every surface sees
         // the same worker facts.
@@ -136,7 +141,8 @@ struct AstronomicalDaemonMain {
                 modelPolicyCatalog: resolvedRuntimeConfig.modelPolicyCatalog,
                 modelLoadTimeout: AstronomicalDaemonMain.workerModelLoadTimeoutSeconds,
                 generationPerformanceLog: generationPerformanceLog,
-                completionAttributionLog: completionAttributionLog);
+                completionAttributionLog: completionAttributionLog,
+                operatorLog: supervisorOperatorLog);
         } catch {
             FileHandle.standardError.write(Data(
                 "astronomicald worker unavailable: \(error)\n".utf8));
