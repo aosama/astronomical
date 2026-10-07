@@ -59,7 +59,7 @@ final class RestCacheClearEndpointTests {
         let journey: CacheClearJourney = try CacheClearJourney.launch();
         defer { journey.dispose() }
         let activeOutcome: GenerationJourneyOutcome = journey.harness.startGenerationThread(requestId: 41);
-        journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
 
         let globalClearResponse: RestHttpResponse = try journey.deleteCache(modelQuery: nil);
         #expect(globalClearResponse.statusCode == 202);
@@ -92,9 +92,9 @@ final class RestCacheClearEndpointTests {
         let journey: CacheClearJourney = try CacheClearJourney.launch();
         defer { journey.dispose() }
         let firstOutcome: GenerationJourneyOutcome = journey.harness.startGenerationThread(requestId: 51);
-        journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
         let queuedOutcome: GenerationJourneyOutcome = journey.harness.startGenerationThread(requestId: 52);
-        journey.harness.awaitQueueFill(expectedOutstandingCount: 2);
+        try journey.harness.awaitQueueFill(expectedOutstandingCount: 2);
 
         let clearResponse: RestHttpResponse = try journey.deleteCache(modelQuery: nil);
         #expect(clearResponse.statusCode == 202);
@@ -104,7 +104,7 @@ final class RestCacheClearEndpointTests {
         CacheClearJourney.join(firstOutcome, deadline: Date().addingTimeInterval(10));
 
         // The clear must remain pending while the queued generation runs.
-        journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
         let duringQueuedStats: [String: Any] = try journey.getCacheStats();
         #expect(!CacheClearJourney.pendingCacheClearIsNull(duringQueuedStats),
             "cache clear must remain pending while the queued generation runs");

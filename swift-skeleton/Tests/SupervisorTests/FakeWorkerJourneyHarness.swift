@@ -132,13 +132,15 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
 
     /// Blocks until the issued admission tickets reach the expected
     /// outstanding count, proving the just-started requests are queued (or
-    /// active) before the journey proceeds.
-    func awaitQueueFill(expectedOutstandingCount: Int) -> Void {
+    /// active) before the journey proceeds. A timeout throws so only the
+    /// offending journey fails; a fatal error here would trap the whole
+    /// test process and hide every later result.
+    func awaitQueueFill(expectedOutstandingCount: Int) throws -> Void {
         let fillDeadline: Date = Date().addingTimeInterval(5);
         while supervisor.outstandingAdmissionTicketCount < expectedOutstandingCount {
             if Date() >= fillDeadline {
-                assertionFailure("the queue never reached \(expectedOutstandingCount) outstanding requests");
-                return;
+                throw FakeWorkerJourneyHarnessFailure.queueNeverReached(
+                    expectedOutstandingCount: expectedOutstandingCount);
             }
             Thread.sleep(forTimeInterval: 0.01);
         }
@@ -326,4 +328,10 @@ final class GenerationJourneyOutcome: @unchecked Sendable {
         self.observedOutcomeValue = .failure(error);
         self.outcomeLock.unlock();
     }
+}
+
+/// Typed failures of the fake-worker journey harness.
+enum FakeWorkerJourneyHarnessFailure: Error {
+
+    case queueNeverReached(expectedOutstandingCount: Int);
 }
