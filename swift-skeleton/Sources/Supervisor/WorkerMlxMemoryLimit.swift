@@ -100,12 +100,20 @@ extension WorkerSupervisor {
             return .queued;
         }
         self.stateLock.unlock();
-        return try self.applyMlxMemoryLimitUpdate(
-            PendingMlxMemoryLimitUpdate(
-                effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes,
-                configurationGeneration: configurationGeneration),
-            workerProcess: workerProcess,
-            eventPump: eventPump);
+        do {
+            return try self.applyMlxMemoryLimitUpdate(
+                PendingMlxMemoryLimitUpdate(
+                    effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes,
+                    configurationGeneration: configurationGeneration),
+                workerProcess: workerProcess,
+                eventPump: eventPump)
+        } catch let controlError {
+            // An unacknowledged or failed ceiling change cannot trust the
+            // worker anymore: contain it exactly as the Rust handle does
+            // before the typed error surfaces.
+            self.containWorkerFailure(controlError: controlError)
+            throw controlError
+        }
     }
 
     /// Applies the raise a finished generation left queued, so the release of

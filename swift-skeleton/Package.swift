@@ -102,6 +102,13 @@ let package: Package = Package(
         .executableTarget(
             name: "SupervisorIdleWorker",
             dependencies: ["IpcProtocol"]),
+        // The stderr-diagnostic probe fixture, migrating the Rust
+        // astronomical-supervisor-stderr-probe-worker bin: one event, visible
+        // stderr, clean exit — the raw material for the stream-closure
+        // diagnostics journeys.
+        .executableTarget(
+            name: "SupervisorStderrProbeWorker",
+            dependencies: ["IpcProtocol"]),
         // One test target per module, mirroring Sources/.
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig", "JourneyCategories"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol", "JourneyCategories"]),
