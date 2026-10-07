@@ -93,7 +93,10 @@ extension WorkerSupervisor {
     ) throws -> Array<ChatGenerationStreamEvent> {
         var streamEvents: Array<ChatGenerationStreamEvent> = Array<ChatGenerationStreamEvent>();
         var generationStartedAt: Date?;
+        var firstOutputAt: Date?;
         var prefillElapsedMillis: UInt64 = 0;
+        var maximumMlxPeakMemoryBytes: UInt64?;
+        var lastMlxActiveMemoryBytes: UInt64?;
         while true {
             self.stateLock.lock();
             let isShutdownRequested: Bool = self.isShutdownRequested;
@@ -110,6 +113,9 @@ extension WorkerSupervisor {
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
                 if generationStartedAt == nil {
                     generationStartedAt = Date();
+                }
+                if firstOutputAt == nil {
+                    firstOutputAt = Date();
                 }
                 self.publishGenerationProgress(
                     generatedTokenCount: UInt32(generatedTokenCount),
@@ -131,6 +137,10 @@ extension WorkerSupervisor {
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
                 prefillElapsedMillis = max(prefillElapsedMillis, elapsedMillis);
                 if let mlxMemorySnapshot = mlxMemorySnapshot {
+                    maximumMlxPeakMemoryBytes = max(
+                        maximumMlxPeakMemoryBytes ?? 0,
+                        mlxMemorySnapshot.peakMemoryBytes);
+                    lastMlxActiveMemoryBytes = mlxMemorySnapshot.activeMemoryBytes;
                     try WorkerEventHandler.handle(
                         .mlxMemorySample(
                             mlxMemorySnapshot: mlxMemorySnapshot,
@@ -206,7 +216,7 @@ extension WorkerSupervisor {
                 generatedTokenCount,
                 reasoningTokenCount,
                 cachedTokenCount,
-                _,
+                persistentPromptCacheDiagnostics,
                 reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
                 self.recordServingSessionTotals(
@@ -215,6 +225,20 @@ extension WorkerSupervisor {
                     generatedTokenCount: generatedTokenCount,
                     prefillElapsedMillis: prefillElapsedMillis,
                     generationStartedAt: generationStartedAt);
+                self.recordCompletionAttribution(
+                    requestId: requestId,
+                    requestStartedAt: requestStartedAt,
+                    generationStartedAt: generationStartedAt,
+                    firstOutputAt: firstOutputAt,
+                    promptTokenCount: promptTokenCount,
+                    cachedTokenCount: cachedTokenCount,
+                    generatedTokenCount: generatedTokenCount,
+                    prefillElapsedMillis: prefillElapsedMillis,
+                    maximumMlxPeakMemoryBytes: maximumMlxPeakMemoryBytes,
+                    lastMlxActiveMemoryBytes: lastMlxActiveMemoryBytes,
+                    persistentPromptCacheDiagnostics: persistentPromptCacheDiagnostics,
+                    completionReason: reason,
+                    streamEvents: streamEvents);
                 self.publishServingActivity(.idle, progress: nil);
                 streamEvents.append(.completed(
                     promptTokenCount: promptTokenCount,
