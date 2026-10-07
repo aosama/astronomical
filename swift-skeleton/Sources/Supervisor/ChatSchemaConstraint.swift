@@ -41,7 +41,11 @@ public enum ChatSchemaConstraint {
             enforcedGeneration = try EnforcedStructuredGeneration.enforced_generation_from_json_schema(
                 parsedSchema);
         } catch {
-            throw ChatSchemaRejectionError(reason: "the --schema file was rejected: \(error)");
+            // Interpolating the Error existential prints the enum case name,
+            // not the operator-facing wording the rejection must carry.
+            let rejectionDescription: String = (error as? LocalizedError)?.errorDescription
+                ?? String(describing: error);
+            throw ChatSchemaRejectionError(reason: "the --schema file was rejected: \(rejectionDescription)");
         }
         // Re-serializing through the constraint keeps the compact canonical
         // form the worker's DFA compiler sees and drops trailing whitespace.

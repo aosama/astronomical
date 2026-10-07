@@ -12,6 +12,30 @@ import CryptoKit;
 /// libraries (`models/Org-Model-OptiQ-4bit/`) both discover.
 public enum DiscoveryModels {
 
+    /// One config-backed chat family's projection: capabilities plus the
+    /// measured artifact size the resolver surfaces for disk accounting.
+    internal struct DiscoveryChatModelEvidence {
+        internal let capabilities: DiscoveryChatModelCapabilities;
+        internal let modelSizeBytes: UInt64;
+
+        internal init(capabilities: DiscoveryChatModelCapabilities, modelSizeBytes: UInt64) {
+            self.capabilities = capabilities;
+            self.modelSizeBytes = modelSizeBytes;
+        }
+    }
+
+    /// One config-backed embeddings family's projection: capabilities plus
+    /// the measured artifact size the resolver surfaces for disk accounting.
+    internal struct DiscoveryEmbeddingModelEvidence {
+        internal let capabilities: DiscoveryEmbeddingModelCapabilities;
+        internal let modelSizeBytes: UInt64;
+
+        internal init(capabilities: DiscoveryEmbeddingModelCapabilities, modelSizeBytes: UInt64) {
+            self.capabilities = capabilities;
+            self.modelSizeBytes = modelSizeBytes;
+        }
+    }
+
     private static let MAXIMUM_SCAN_DEPTH: Int = 4;
     private static let MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: Int = 32;
     private static let LIBRARY_PROVENANCE_FILE_NAME: String = ".astronomical-library-provenance.json";
@@ -210,19 +234,21 @@ public enum DiscoveryModels {
                 modelDirectory: modelDirectory,
                 modelId: modelId,
                 modelFamily: modelFamily,
-                license: nil) { (configObject: Dictionary<String, Any>) -> DiscoveryChatModelCapabilities? in
+                license: nil) { (configObject: Dictionary<String, Any>) -> DiscoveryChatModelEvidence? in
                 guard let metadata: Qwen35.DiscoveredModelMetadata = Qwen35.discoverModelMetadata(
                     modelDirectory: modelDirectory,
                     configObject: configObject) else {
                     return nil;
                 }
-                return DiscoveryChatModelCapabilities(
-                    contextWindowTokens: metadata.contextWindowTokens,
-                    maximumInputTokens: metadata.maximumInputTokens,
-                    maximumOutputTokens: metadata.maximumOutputTokens,
-                    supportsVision: metadata.hasVision,
-                    supportsReasoning: metadata.supportsReasoning,
-                    supportsToolCalls: metadata.supportsToolCalls);
+                return DiscoveryChatModelEvidence(
+                    capabilities: DiscoveryChatModelCapabilities(
+                        contextWindowTokens: metadata.contextWindowTokens,
+                        maximumInputTokens: metadata.maximumInputTokens,
+                        maximumOutputTokens: metadata.maximumOutputTokens,
+                        supportsVision: metadata.hasVision,
+                        supportsReasoning: metadata.supportsReasoning,
+                        supportsToolCalls: metadata.supportsToolCalls),
+                    modelSizeBytes: metadata.modelSizeBytes);
             };
         case .k2HorizonMova:
             guard let configBytes: Data = DiscoveryModels.readFileBytes(
@@ -255,15 +281,17 @@ public enum DiscoveryModels {
         case .modernbert:
             return DiscoveryModels.discoverEmbeddingsModel(
                 modelDirectory: modelDirectory,
-                modelId: modelId) { (configObject: Dictionary<String, Any>) -> DiscoveryEmbeddingModelCapabilities? in
+                modelId: modelId) { (configObject: Dictionary<String, Any>) -> DiscoveryEmbeddingModelEvidence? in
                 guard let metadata: Modernbert.DiscoveredModelMetadata = Modernbert.discoverModelMetadata(
                     modelDirectory: modelDirectory,
                     configObject: configObject) else {
                     return nil;
                 }
-                return DiscoveryEmbeddingModelCapabilities(
-                    vectorWidth: metadata.vectorWidth,
-                    maximumInputTokens: metadata.maximumInputTokens);
+                return DiscoveryEmbeddingModelEvidence(
+                    capabilities: DiscoveryEmbeddingModelCapabilities(
+                        vectorWidth: metadata.vectorWidth,
+                        maximumInputTokens: metadata.maximumInputTokens),
+                    modelSizeBytes: metadata.modelSizeBytes);
             };
         case .flux2Klein:
             guard let evidence: Flux2Klein.DirectoryEvidence = try? Flux2Klein.verifyModelDirectory(
@@ -302,7 +330,7 @@ public enum DiscoveryModels {
         modelId: String,
         modelFamily: ModelFamily,
         license: ModelLicense?,
-        projectCapabilities: (Dictionary<String, Any>) -> DiscoveryChatModelCapabilities?
+        projectEvidence: (Dictionary<String, Any>) -> DiscoveryChatModelEvidence?
     ) -> DiscoveryDiscoveredModel? {
         guard let configBytes: Data = DiscoveryModels.readFileBytes(
             path: modelDirectory.appending(component: "config.json")) else {
@@ -312,7 +340,7 @@ public enum DiscoveryModels {
               let configObject: Dictionary<String, Any> = configRootValue as? Dictionary<String, Any> else {
             return nil;
         }
-        guard let capabilities: DiscoveryChatModelCapabilities = projectCapabilities(configObject) else {
+        guard let evidence: DiscoveryChatModelEvidence = projectEvidence(configObject) else {
             return nil;
         }
         let provenance: (providerModelId: String, revision: String)? = DiscoveryModels.immutableModelProvenance(
@@ -324,16 +352,16 @@ public enum DiscoveryModels {
             revision: provenance?.revision
                 ?? DiscoveryModels.deriveRevisionFromConfigBytes(configBytes: configBytes),
             modelDirectory: modelDirectory,
-            capabilities: .chat(capabilities),
+            capabilities: .chat(evidence.capabilities),
             license: license,
-            modelSizeBytes: 0);
+            modelSizeBytes: evidence.modelSizeBytes);
     }
 
     /** Projects the embeddings family, which reads a JSON config object. */
     private static func discoverEmbeddingsModel(
         modelDirectory: FilePath,
         modelId: String,
-        projectCapabilities: (Dictionary<String, Any>) -> DiscoveryEmbeddingModelCapabilities?
+        projectEvidence: (Dictionary<String, Any>) -> DiscoveryEmbeddingModelEvidence?
     ) -> DiscoveryDiscoveredModel? {
         guard let configBytes: Data = DiscoveryModels.readFileBytes(
             path: modelDirectory.appending(component: "config.json")) else {
@@ -343,7 +371,7 @@ public enum DiscoveryModels {
               let configObject: Dictionary<String, Any> = configRootValue as? Dictionary<String, Any> else {
             return nil;
         }
-        guard let capabilities: DiscoveryEmbeddingModelCapabilities = projectCapabilities(configObject) else {
+        guard let evidence: DiscoveryEmbeddingModelEvidence = projectEvidence(configObject) else {
             return nil;
         }
         let provenance: (providerModelId: String, revision: String)? = DiscoveryModels.immutableModelProvenance(
@@ -355,9 +383,9 @@ public enum DiscoveryModels {
             revision: provenance?.revision
                 ?? DiscoveryModels.deriveRevisionFromConfigBytes(configBytes: configBytes),
             modelDirectory: modelDirectory,
-            capabilities: .embeddings(capabilities),
+            capabilities: .embeddings(evidence.capabilities),
             license: nil,
-            modelSizeBytes: 0);
+            modelSizeBytes: evidence.modelSizeBytes);
     }
 
     // MARK: - Identity rejections

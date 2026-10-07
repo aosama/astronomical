@@ -99,7 +99,89 @@ final class WorkerSupervisorAttributionJourneyTests {
         #expect(recordedArguments["json"] as? String == "{\"path\":\"romeo-and-juliet.md\"}");
     }
 
+    @Test
+    func should_persist_worker_cache_diagnostics_for_a_completed_user_request() throws -> Void {
+        let loggingDirectory: FilePath = try AttributionJourneySupport.freshTemporaryDirectory(
+            named: "worker-cache-diagnostics");
+        defer { try? FileManager.default.removeItem(atPath: loggingDirectory.string); }
+        let generationPerformanceLog: GenerationPerformanceLog = try GenerationPerformanceLog.open(
+            logDirectory: loggingDirectory);
+
+        let scriptedWorker: String = FakeWorkerEventEmitter.frameEmitterFunction()
+            + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.residentReadyEventPayload(modelId: "m123"))
+            + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.residentRuntimePolicyPayload(modelId: "m123"))
+            + FakeWorkerEventEmitter.emitLine(payload: WorkerSupervisorAttributionJourneyTests.cacheDiagnosticsCompletedPayload(requestId: 9))
+            + "read _\n"
+            + "exit 0\n";
+        let supervisor: WorkerSupervisor = try WorkerSupervisor.launch(
+            workerExecutablePath: "/bin/bash",
+            workerArguments: ["-c", scriptedWorker],
+            workerStartupConfiguration: WorkerSupervisorAttributionJourneyTests.startupConfiguration(),
+            modelPolicyCatalog: [:],
+            modelLoadTimeout: 10,
+            generationPerformanceLog: generationPerformanceLog);
+        defer { _ = try? supervisor.shutdown() }
+        #expect(supervisor.workerHealthSnapshot().readyModelId == "m123");
+
+        let streamEvents: Array<ChatGenerationStreamEvent> = try supervisor.startChatGeneration(
+            WorkerSupervisorAttributionJourneyTests.chatGenerationCommand(requestId: 9, modelId: "m123"));
+        #expect(streamEvents.contains(where: { (streamEvent: ChatGenerationStreamEvent) -> Bool in
+            if case let .completed(_, generatedTokenCount, _, _, reason) = streamEvent {
+                return generatedTokenCount == 1 && reason == .endOfSequence;
+            }
+            return false;
+        }));
+
+        let performanceRow: [String: Any] = try WorkerSupervisorAttributionJourneyTests.readOnlyRow(
+            loggingDirectory: loggingDirectory,
+            fileName: "performance.jsonl");
+        let cacheDiagnostics: [String: Any] = try #require(
+            performanceRow["persistent_prompt_cache_diagnostics"] as? [String: Any],
+            "the completed request should persist its cache diagnostics");
+        #expect(cacheDiagnostics["lookup_outcome"] as? String == "miss");
+        #expect(cacheDiagnostics["block_token_count"] as? Int == 2_048);
+        #expect(cacheDiagnostics["matched_sequence_state_block_count"] as? Int == 0);
+        #expect(cacheDiagnostics["restored_block_count"] as? Int == 0);
+        #expect(cacheDiagnostics["first_missing_sequence_state_block_index"] as? Int == 0);
+        #expect(cacheDiagnostics["miss_reason"] as? String == "root_sequence_state_block_missing");
+        let startupCleanupEvidence: [String: Any] = try #require(
+            cacheDiagnostics["startup_cleanup_evidence"] as? [String: Any]);
+        let obsoleteFormat: [String: Any] = try #require(startupCleanupEvidence["obsolete_format"] as? [String: Any]);
+        #expect(obsoleteFormat["artifact_count"] as? Int == 2);
+        let corruptCurrentFormat: [String: Any] = try #require(startupCleanupEvidence["corrupt_current_format"] as? [String: Any]);
+        #expect(corruptCurrentFormat["block_count"] as? Int == 1);
+        #expect(cacheDiagnostics["published_block_count"] as? Int == 1);
+
+        let performanceLogDocument: String = try String(
+            contentsOf: URL(fileURLWithPath: loggingDirectory.string + "/performance.jsonl"),
+            encoding: String.Encoding.utf8);
+        #expect(performanceLogDocument.contains("/fictional/") == false);
+        #expect(performanceLogDocument.contains("model_directory") == false);
+    }
+
     // MARK: Journey fixtures
+
+    private static func cacheDiagnosticsCompletedPayload(requestId: UInt64) -> String {
+        return "{\"kind\":\"completed\",\"request_id\":\(requestId),"
+            + "\"prompt_token_count\":12,\"generated_token_count\":1,\"reasoning_token_count\":0,"
+            + "\"cached_token_count\":0,"
+            + "\"persistent_prompt_cache_diagnostics\":{"
+            + "\"lookup_outcome\":\"miss\",\"block_token_count\":2048,"
+            + "\"complete_prompt_block_count\":1,\"maximum_restorable_block_count\":1,"
+            + "\"matched_sequence_state_block_count\":0,\"restored_block_count\":0,"
+            + "\"partial_tail_block_token_count\":null,"
+            + "\"first_missing_sequence_state_block_index\":0,"
+            + "\"miss_reason\":\"root_sequence_state_block_missing\","
+            + "\"expected_block_hash_prefix\":null,"
+            + "\"startup_cleanup_evidence\":{"
+            + "\"interrupted_transaction_recovery\":{\"artifact_count\":0,\"block_count\":0,\"byte_count\":0},"
+            + "\"obsolete_format\":{\"artifact_count\":2,\"block_count\":0,\"byte_count\":3},"
+            + "\"corrupt_current_format\":{\"artifact_count\":0,\"block_count\":1,\"byte_count\":4},"
+            + "\"quota_eviction\":{\"artifact_count\":0,\"block_count\":0,\"byte_count\":0}},"
+            + "\"published_block_count\":1,\"allocator_bytes_cleared_for_publication\":0,"
+            + "\"expert_bytes_reclaimed_for_publication\":0,\"expert_bytes_reclaimed_for_restore\":0},"
+            + "\"reason\":\"end_of_sequence\"}";
+    }
 
     private static func toolCallOutputPayload(requestId: UInt64) -> String {
         return "{\"kind\":\"output\",\"request_id\":\(requestId),\"sequence_number\":0,"
