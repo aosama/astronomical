@@ -95,20 +95,20 @@ public enum WorkerImageGenerationModelFamily: Equatable, Sendable {
     case flux2Klein;
     case qwenImage21;
 
-    private static let expectedVariantNames: Array<String> = ["flux_2_klein", "qwen_image_2_1"];
+    private static let expectedVariantNames: Array<String> = ["flux2_klein", "qwen_image21"];
 
     internal func wireValue() -> JsonWireValue {
         switch (self) {
-        case .flux2Klein: return .string("flux_2_klein");
-        case .qwenImage21: return .string("qwen_image_2_1");
+        case .flux2Klein: return .string("flux2_klein");
+        case .qwenImage21: return .string("qwen_image21");
         }
     }
 
     internal static func fromWireValue(_ wireValue: JsonWireValue) throws -> WorkerImageGenerationModelFamily {
         let wireName = try JsonWireValue.extractString(wireValue);
         switch wireName {
-        case "flux_2_klein": return .flux2Klein;
-        case "qwen_image_2_1": return .qwenImage21;
+        case "flux2_klein": return .flux2Klein;
+        case "qwen_image21": return .qwenImage21;
         default:
             throw JsonWireProblem.malformedDocument(problem: "unknown variant `\(wireName)`, expected one of \(JsonWireProblem.formattedFieldList(WorkerImageGenerationModelFamily.expectedVariantNames))");
         }
@@ -273,7 +273,7 @@ public enum WorkerModelConfiguration: Equatable, Sendable {
     case embeddings(WorkerEmbeddingModelConfiguration);
 
     private static let expectedVariantNames: Array<String> = [
-        "autoregressive", "flux_2_klein", "qwen_image_2_1", "embeddings",
+        "autoregressive", "flux2_klein", "qwen_image21", "embeddings",
     ];
 
     /// Returns the canonical requestable model identity for either execution family.
@@ -317,9 +317,9 @@ public enum WorkerModelConfiguration: Equatable, Sendable {
         case let .autoregressive(configuration):
             return WorkerModelConfiguration.taggedWireObject(variantName: "autoregressive", payloadWireValue: configuration.wireValue());
         case let .flux2Klein(configuration):
-            return WorkerModelConfiguration.taggedWireObject(variantName: "flux_2_klein", payloadWireValue: configuration.wireValue());
+            return WorkerModelConfiguration.taggedWireObject(variantName: "flux2_klein", payloadWireValue: configuration.wireValue());
         case let .qwenImage21(configuration):
-            return WorkerModelConfiguration.taggedWireObject(variantName: "qwen_image_2_1", payloadWireValue: configuration.wireValue());
+            return WorkerModelConfiguration.taggedWireObject(variantName: "qwen_image21", payloadWireValue: configuration.wireValue());
         case let .embeddings(configuration):
             return WorkerModelConfiguration.taggedWireObject(variantName: "embeddings", payloadWireValue: configuration.wireValue());
         }
@@ -333,12 +333,12 @@ public enum WorkerModelConfiguration: Equatable, Sendable {
                 try WorkerAutoregressiveModelConfiguration.fromWireValue(.object(try wireObject.decodeObject(fieldName: "configuration"))));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["configuration"]);
             return parsedConfiguration;
-        case "flux_2_klein":
+        case "flux2_klein":
             let parsedConfiguration = WorkerModelConfiguration.flux2Klein(
                 try WorkerFlux2KleinModelConfiguration.fromWireValue(.object(try wireObject.decodeObject(fieldName: "configuration"))));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["configuration"]);
             return parsedConfiguration;
-        case "qwen_image_2_1":
+        case "qwen_image21":
             let parsedConfiguration = WorkerModelConfiguration.qwenImage21(
                 try WorkerQwenImage21ModelConfiguration.fromWireValue(.object(try wireObject.decodeObject(fieldName: "configuration"))));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["configuration"]);
@@ -369,7 +369,7 @@ public enum WorkerLoadedModelRuntimeConfiguration: Equatable, Sendable {
     case embeddings(WorkerEmbeddingModelConfiguration);
 
     private static let expectedVariantNames: Array<String> = [
-        "autoregressive", "flux_2_klein", "qwen_image_2_1", "embeddings",
+        "autoregressive", "flux2_klein", "qwen_image21", "embeddings",
     ];
 
     /// Returns the canonical requestable model identity for either execution family.
@@ -395,9 +395,9 @@ public enum WorkerLoadedModelRuntimeConfiguration: Equatable, Sendable {
         case let .autoregressive(configuration):
             return WorkerLoadedModelRuntimeConfiguration.taggedWireObject(variantName: "autoregressive", payloadWireValue: configuration.wireValue());
         case let .flux2Klein(configuration):
-            return WorkerLoadedModelRuntimeConfiguration.taggedWireObject(variantName: "flux_2_klein", payloadWireValue: configuration.wireValue());
+            return WorkerLoadedModelRuntimeConfiguration.taggedWireObject(variantName: "flux2_klein", payloadWireValue: configuration.wireValue());
         case let .qwenImage21(configuration):
-            return WorkerLoadedModelRuntimeConfiguration.taggedWireObject(variantName: "qwen_image_2_1", payloadWireValue: configuration.wireValue());
+            return WorkerLoadedModelRuntimeConfiguration.taggedWireObject(variantName: "qwen_image21", payloadWireValue: configuration.wireValue());
         case let .embeddings(configuration):
             return WorkerLoadedModelRuntimeConfiguration.taggedWireObject(variantName: "embeddings", payloadWireValue: configuration.wireValue());
         }
@@ -411,12 +411,12 @@ public enum WorkerLoadedModelRuntimeConfiguration: Equatable, Sendable {
                 try WorkerLoadedAutoregressiveModelRuntimeConfiguration.fromWireValue(.object(try wireObject.decodeObject(fieldName: "configuration"))));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["configuration"]);
             return parsedConfiguration;
-        case "flux_2_klein":
+        case "flux2_klein":
             let parsedConfiguration = WorkerLoadedModelRuntimeConfiguration.flux2Klein(
                 try WorkerFlux2KleinModelConfiguration.fromWireValue(.object(try wireObject.decodeObject(fieldName: "configuration"))));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["configuration"]);
             return parsedConfiguration;
-        case "qwen_image_2_1":
+        case "qwen_image21":
             let parsedConfiguration = WorkerLoadedModelRuntimeConfiguration.qwenImage21(
                 try WorkerQwenImage21ModelConfiguration.fromWireValue(.object(try wireObject.decodeObject(fieldName: "configuration"))));
             try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["configuration"]);

@@ -532,10 +532,29 @@ final class RestStatusEndpointTests {
                 buildNumber: 418,
                 commit: "cafebabe",
                 isDirty: false),
-            configurationValidationError: configurationValidationError);
+            configurationValidationError: configurationValidationError,
+            configReloadContext: RestConfigReloadRouteContext(
+                transitionState: ConfigTransitionState(
+                    reloadableConfig: resolvedRuntimeConfig,
+                    configuredConfigSnapshot: resolvedRuntimeConfig),
+                runtimeConfigResolver: try RestStatusEndpointTests.journeyResolver(
+                    instancePaths: instancePaths),
+                workerControl: nil,
+                workerHealthState: workerHealthState,
+                generationActivityIdleProvider: { return true }));
         return try RestHttpServer.start(
             bindEndpoint: SocketEndpoint.loopback(port: 0),
             routeTable: routeTable);
+    }
+
+    /// A resolver over the journey's explicit state directory; the reload
+    /// context requires one but these journeys never trigger a reload.
+    private static func journeyResolver(
+        instancePaths: AstronomicalInstancePaths
+    ) throws -> ResolvedRuntimeConfigResolver {
+        return try ResolvedRuntimeConfigResolver(
+            instancePaths: instancePaths,
+            fallbackWorkerExecutablePath: RestChatJourneySupport.makeResolvedConfig().workerExecutablePath);
     }
 
     private func readyWorkerSnapshot(
