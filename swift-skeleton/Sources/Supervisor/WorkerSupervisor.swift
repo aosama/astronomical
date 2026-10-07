@@ -139,7 +139,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
                 healthState: supervisor.healthState,
                 modelLoadTimeout: modelLoadTimeout);
         } catch {
-            supervisor.containAndAttemptRelaunch(controlError: error);
+            supervisor.containWorkerFailure(controlError: error);
             throw error;
         }
         return supervisor;
@@ -233,37 +233,25 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
 
     // MARK: - Containment
 
-    /// Terminates an untrusted worker, then brings a replacement up so the
-    /// daemon keeps serving, unless shutdown already claimed the handle.
-    func containAndAttemptRelaunch(controlError: Error) -> Void {
+    /// Terminates an untrusted worker and publishes health unavailable,
+    /// mirroring worker_containment.rs's contain_worker_failure: the handle
+    /// stays unavailable until an explicit replacement (config reload or
+    /// restart) brings a fresh worker up; recovery relaunching is reserved
+    /// for the cancellation-failure path, exactly as in Rust. The dead
+    /// process references drop here so later admissions refuse immediately
+    /// instead of writing into a terminated pipe.
+    func containWorkerFailure(controlError: Error) -> Void {
         self.stateLock.lock();
         let workerProcess: WorkerProcess? = self.workerProcess;
-        let eventPump: WorkerEventPump? = self.eventPump;
+        self.workerProcess = nil;
+        self.eventPump = nil;
         self.stateLock.unlock();
-        guard let workerProcess = workerProcess, let eventPump = eventPump else {
+        guard let workerProcess = workerProcess else {
             return;
         }
         WorkerLifecycle.containFailure(
             workerProcess: workerProcess,
             healthState: self.healthState,
             operationFailure: controlError);
-        self.stateLock.lock();
-        let isShutdownRequested: Bool = self.isShutdownRequested;
-        self.stateLock.unlock();
-        if isShutdownRequested {
-            return;
-        }
-        do {
-            try WorkerLifecycle.relaunchAfterFailure(
-                workerProcess: workerProcess,
-                eventPump: eventPump,
-                healthState: self.healthState,
-                recoveryAcknowledgementTimeout: self.modelLoadTimeout);
-        } catch let relaunchError {
-            WorkerLifecycle.containFailure(
-                workerProcess: workerProcess,
-                healthState: self.healthState,
-                operationFailure: relaunchError);
-        }
     }
 }

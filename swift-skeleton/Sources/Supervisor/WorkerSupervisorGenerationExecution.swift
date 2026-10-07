@@ -29,7 +29,7 @@ extension WorkerSupervisor {
         } catch {
             // The startup acknowledgement never arrived for this process; a
             // fresh attempt is the only recovery.
-            self.containAndAttemptRelaunch(controlError: error);
+            self.containWorkerFailure(controlError: error);
             throw GenerationStartError.workerUnavailable;
         }
         try WorkerGenerate.prepareResidentModel(
@@ -40,7 +40,7 @@ extension WorkerSupervisor {
             modelPolicyCatalog: self.modelPolicyCatalog,
             modelLoadTimeout: self.modelLoadTimeout,
             containment: { (controlError: Error) -> Void in
-                self.containAndAttemptRelaunch(controlError: controlError);
+                self.containWorkerFailure(controlError: controlError);
             });
         do {
             try workerProcess.sendCommand(.generate(generationCommand));
@@ -50,10 +50,10 @@ extension WorkerSupervisor {
                     actualIpcMessageBytes: actualMessageBytes,
                     maximumIpcMessageBytes: maximumMessageBytes);
             }
-            self.containAndAttemptRelaunch(controlError: protocolError);
+            self.containWorkerFailure(controlError: protocolError);
             throw GenerationStartError.workerUnavailable;
         } catch let sendError {
-            self.containAndAttemptRelaunch(controlError: sendError);
+            self.containWorkerFailure(controlError: sendError);
             throw GenerationStartError.workerUnavailable;
         }
         self.publishServingActivity(.promptProcessing, progress: nil);
@@ -64,7 +64,7 @@ extension WorkerSupervisor {
                 maximumOutputTokens: generationCommand.settings.maxOutputTokens,
                 eventPump: eventPump);
         } catch let controlError as WorkerControlError {
-            self.containAndAttemptRelaunch(controlError: controlError);
+            self.containWorkerFailure(controlError: controlError);
             throw GenerationStartError.workerUnavailable;
         }
     }
@@ -327,7 +327,7 @@ extension WorkerSupervisor {
         } catch {
             // The startup acknowledgement never arrived for this process; a
             // fresh attempt is the only recovery.
-            self.containAndAttemptRelaunch(controlError: error);
+            self.containWorkerFailure(controlError: error);
             throw GenerationStartError.workerUnavailable;
         }
         try WorkerGenerate.prepareResidentModel(
@@ -338,7 +338,7 @@ extension WorkerSupervisor {
             modelPolicyCatalog: self.modelPolicyCatalog,
             modelLoadTimeout: self.modelLoadTimeout,
             containment: { (controlError: Error) -> Void in
-                self.containAndAttemptRelaunch(controlError: controlError);
+                self.containWorkerFailure(controlError: controlError);
             });
         do {
             try workerProcess.sendCommand(.generateEmbeddings(embeddingsCommand));
@@ -348,10 +348,10 @@ extension WorkerSupervisor {
                     actualIpcMessageBytes: actualMessageBytes,
                     maximumIpcMessageBytes: maximumMessageBytes);
             }
-            self.containAndAttemptRelaunch(controlError: protocolError);
+            self.containWorkerFailure(controlError: protocolError);
             throw GenerationStartError.workerUnavailable;
         } catch let sendError {
-            self.containAndAttemptRelaunch(controlError: sendError);
+            self.containWorkerFailure(controlError: sendError);
             throw GenerationStartError.workerUnavailable;
         }
         do {
@@ -359,7 +359,7 @@ extension WorkerSupervisor {
                 embeddingsCommand.requestId,
                 eventPump: eventPump);
         } catch let controlError as WorkerControlError {
-            self.containAndAttemptRelaunch(controlError: controlError);
+            self.containWorkerFailure(controlError: controlError);
             throw EmbeddingsExecutionError.workerUnavailable;
         }
     }
@@ -370,6 +370,7 @@ extension WorkerSupervisor {
         _ requestId: RequestId,
         eventPump: WorkerEventPump
     ) throws -> EmbeddingsOutput {
+        var stagedEmbeddingsOutcome: Result<EmbeddingsOutput, EmbeddingsExecutionError>? = nil;
         while true {
             self.stateLock.lock();
             let isShutdownRequested: Bool = self.isShutdownRequested;
@@ -385,18 +386,47 @@ extension WorkerSupervisor {
             case let .embeddingsCompleted(
                 eventRequestId, embeddings, inputTokenCounts, _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                self.publishServingActivity(.idle, progress: nil);
-                return EmbeddingsOutput(
+                if (stagedEmbeddingsOutcome != nil) {
+                    throw WorkerControlError.workerProtocolViolation(
+                        description: "duplicate embeddings terminal outcome");
+                }
+                stagedEmbeddingsOutcome = .success(EmbeddingsOutput(
                     embeddings: embeddings,
-                    inputTokenCounts: inputTokenCounts);
+                    inputTokenCounts: inputTokenCounts));
+                continue
             case let .embeddingsFailed(eventRequestId, reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if (stagedEmbeddingsOutcome != nil) {
+                    throw WorkerControlError.workerProtocolViolation(
+                        description: "duplicate embeddings terminal outcome");
+                }
+                stagedEmbeddingsOutcome = .failure(EmbeddingsExecutionError.workerFailure(reason));
+                continue
+            case let .embeddingsFinalized(eventRequestId, _, mlxMemorySnapshot):
+                // The request resolves at its release acknowledgement exactly
+                // as the Rust executor pairs the terminal frame with the
+                // finalized frame, so no trailing release frame is ever left
+                // for the next waiter to trip over.
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if let mlxMemorySnapshot = mlxMemorySnapshot {
+                    try WorkerEventHandler.handle(
+                        .mlxMemorySample(
+                            mlxMemorySnapshot: mlxMemorySnapshot,
+                            expertResidency: nil),
+                        healthState: self.healthState);
+                }
                 self.publishServingActivity(.idle, progress: nil);
-                throw EmbeddingsExecutionError.workerFailure(reason);
-            case .embeddingsFinalized:
-                // The request-scoped release acknowledgement; the outcome
-                // event always arrives first.
-                continue;
+                guard let resolvedEmbeddingsOutcome: Result<EmbeddingsOutput, EmbeddingsExecutionError> =
+                    stagedEmbeddingsOutcome else {
+                    throw WorkerControlError.workerProtocolViolation(
+                        description: "embeddings finalized before a terminal outcome");
+                }
+                switch (resolvedEmbeddingsOutcome) {
+                case let .success(embeddingsOutput):
+                    return embeddingsOutput;
+                case let .failure(embeddingsError):
+                    throw embeddingsError;
+                }
             case let .output(eventRequestId, _, _, _, _, _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
                 throw WorkerControlError.workerProtocolViolation(
@@ -419,7 +449,7 @@ extension WorkerSupervisor {
         }
     }
 
-    private static func requireActiveRequest(
+    static func requireActiveRequest(
         _ eventRequestId: RequestId,
         requestId: RequestId
     ) throws -> Void {
@@ -428,140 +458,4 @@ extension WorkerSupervisor {
                 description: "generation event \(eventRequestId.value()) does not belong to the active request");
         }
     }
-
-    // MARK: - Image execution
-
-    /// Runs one image command through the worker: startup wait, model swap,
-    /// command send, and bounded output collection.
-    func runImageGeneration(
-        _ imageGenerationCommand: ImageGenerationCommand,
-        timeouts: ImageGenerationTimeouts
-    ) throws -> ImageGenerationOutput {
-        self.stateLock.lock();
-        let workerProcess: WorkerProcess? = self.workerProcess;
-        let eventPump: WorkerEventPump? = self.eventPump;
-        self.stateLock.unlock();
-        guard let workerProcess = workerProcess, let eventPump = eventPump else {
-            throw GenerationStartError.workerUnavailable;
-        }
-        do {
-            try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
-                workerProcess: workerProcess,
-                eventPump: eventPump,
-                healthState: self.healthState,
-                modelLoadTimeout: self.modelLoadTimeout);
-        } catch {
-            // The startup acknowledgement never arrived for this process; a
-            // fresh attempt is the only recovery.
-            self.containAndAttemptRelaunch(controlError: error);
-            throw GenerationStartError.workerUnavailable;
-        }
-        try WorkerGenerate.prepareResidentModel(
-            targetModelId: imageGenerationCommand.model,
-            workerProcess: workerProcess,
-            eventPump: eventPump,
-            healthState: self.healthState,
-            modelPolicyCatalog: self.modelPolicyCatalog,
-            modelLoadTimeout: self.modelLoadTimeout,
-            containment: { (controlError: Error) -> Void in
-                self.containAndAttemptRelaunch(controlError: controlError);
-            });
-        do {
-            try workerProcess.sendCommand(.generateImage(imageGenerationCommand));
-        } catch let protocolError as ProtocolError {
-            if case let .outgoingMessageTooLarge(actualMessageBytes, maximumMessageBytes) = protocolError {
-                throw GenerationStartError.requestTooLarge(
-                    actualIpcMessageBytes: actualMessageBytes,
-                    maximumIpcMessageBytes: maximumMessageBytes);
-            }
-            self.containAndAttemptRelaunch(controlError: protocolError);
-            throw GenerationStartError.workerUnavailable;
-        } catch let sendError {
-            self.containAndAttemptRelaunch(controlError: sendError);
-            throw GenerationStartError.workerUnavailable;
-        }
-        self.publishServingActivity(.imageGeneration, progress: nil);
-        do {
-            return try self.collectImageGenerationEvents(
-                imageGenerationCommand.requestId,
-                eventPump: eventPump,
-                timeouts: timeouts);
-        } catch let controlError as WorkerControlError {
-            self.containAndAttemptRelaunch(controlError: controlError);
-            throw ImageGenerationExecutionError.workerUnavailable;
-        }
-    }
-
-    /// Drains worker events until this image request completes or fails,
-    /// bounding both the total execution and the gap without any forward
-    /// event, exactly as the Rust executor's two timeouts do.
-    func collectImageGenerationEvents(
-        _ requestId: RequestId,
-        eventPump: WorkerEventPump,
-        timeouts: ImageGenerationTimeouts
-    ) throws -> ImageGenerationOutput {
-        let executionDeadline: Date = Date().addingTimeInterval(timeouts.executionTimeoutSeconds);
-        var lastProgressDate: Date = Date();
-        while true {
-            self.stateLock.lock();
-            let isShutdownRequested: Bool = self.isShutdownRequested;
-            self.stateLock.unlock();
-            if isShutdownRequested {
-                throw WorkerControlError.workerEventStreamClosed;
-            }
-            guard let workerEvent: WorkerEvent = try eventPump.nextEvent(
-                within: WorkerSupervisor.generationPollSeconds) else {
-                if Date() >= executionDeadline || Date().addingTimeInterval(
-                    -timeouts.progressStallTimeoutSeconds) > lastProgressDate {
-                    throw ImageGenerationExecutionError.deadlineExceeded;
-                }
-                continue;
-            }
-            lastProgressDate = Date();
-            switch (workerEvent) {
-            case let .imageGenerationProgress(
-                eventRequestId,
-                phase,
-                completedSteps,
-                totalSteps,
-                elapsedMillis,
-                mlxMemorySnapshot):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                if let mlxMemorySnapshot = mlxMemorySnapshot {
-                    try WorkerEventHandler.handle(
-                        .mlxMemorySample(
-                            mlxMemorySnapshot: mlxMemorySnapshot,
-                            expertResidency: nil),
-                        healthState: self.healthState);
-                }
-                self.publishServingActivity(.imageGeneration, progress: .imageGeneration(
-                    phase: phase,
-                    completedSteps: completedSteps,
-                    totalSteps: totalSteps,
-                    elapsedMillis: elapsedMillis));
-                continue;
-            case let .imageGenerationCompleted(eventRequestId, generatedImage, resultMetadata):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                self.publishServingActivity(.idle, progress: nil);
-                return ImageGenerationOutput(
-                    generatedImage: generatedImage,
-                    resultMetadata: resultMetadata);
-            case let .imageGenerationFailed(eventRequestId, reason):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                self.publishServingActivity(.idle, progress: nil);
-                throw ImageGenerationExecutionError.workerFailure(reason);
-            case .imageGenerationFinalized:
-                // The request-scoped release acknowledgement; the outcome
-                // event always arrives first and already restored idle.
-                continue;
-            case .generationPreparationStarted, .generationProgress, .firstDecodeCompleted,
-                 .promptWorkReuse, .generationFinalized, .prefillProgress:
-                // Request-scoped telemetry resets the forward-progress bound.
-                continue;
-            default:
-                try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
-            }
-        }
-    }
-
 }

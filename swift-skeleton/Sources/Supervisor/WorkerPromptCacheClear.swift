@@ -103,7 +103,7 @@ extension WorkerSupervisor {
                     let timeoutError: WorkerControlError = WorkerControlError.promptCacheClearTimeout(
                         cacheClearTimeoutMillis: UInt64(
                             WorkerSupervisor.promptCacheClearTimeoutSeconds * 1000));
-                    self.containAndAttemptRelaunch(controlError: timeoutError);
+                    self.containWorkerFailure(controlError: timeoutError);
                     throw WorkerControlError.missingActiveWorker;
                 }
                 continue;
@@ -113,7 +113,7 @@ extension WorkerSupervisor {
                 if clearedModelId != modelId {
                     let scopeError: WorkerControlError = WorkerControlError.workerProtocolViolation(
                         description: "prompt-cache clear acknowledgement scope mismatch");
-                    self.containAndAttemptRelaunch(controlError: scopeError);
+                    self.containWorkerFailure(controlError: scopeError);
                     throw WorkerControlError.missingActiveWorker;
                 }
                 return .applied(

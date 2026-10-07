@@ -147,8 +147,10 @@ final class ScriptedHuggingFaceHub: @unchecked Sendable {
     }
 
     func clearServedByteCorruption(repositoryId: String, relativePath: String) {
-        self.stateQueue.sync {
-            self.resolveByteOverrides.removeValue(forKey: "\(repositoryId)\n\(relativePath)")
+        _ = self.stateQueue.sync {
+            () -> Bool in
+            return self.resolveByteOverrides.removeValue(
+                forKey: "\(repositoryId)\n\(relativePath)") != nil
         }
     }
 
@@ -170,7 +172,7 @@ final class ScriptedHuggingFaceHub: @unchecked Sendable {
     // MARK: - Request loop
 
     private func receiveRequest(_ connection: NWConnection, accumulated: Data) {
-        nonisolated(unsafe) let unsafeConnection: NWConnection = connection
+        let unsafeConnection: NWConnection = connection
         unsafeConnection.receive(minimumIncompleteLength: 1, maximumLength: 256 * 1024) {
             (receivedData: Data?, _: NWConnection.ContentContext?, isComplete: Bool, receiveError: NWError?) in
             var requestData: Data = accumulated
@@ -376,7 +378,7 @@ final class ScriptedHuggingFaceHub: @unchecked Sendable {
             responseHeader += rangeHeaderLine + "\r\n"
         }
         responseHeader += "Connection: keep-alive\r\n\r\n"
-        nonisolated(unsafe) let unsafeConnection: NWConnection = connection
+        let unsafeConnection: NWConnection = connection
         connection.send(
             content: Data(responseHeader.utf8),
             contentContext: .defaultMessage,
@@ -387,7 +389,7 @@ final class ScriptedHuggingFaceHub: @unchecked Sendable {
     }
 
     private func streamPacedBody(_ body: Data, connection: NWConnection, offset: Int) {
-        nonisolated(unsafe) let unsafeConnection: NWConnection = connection
+        let unsafeConnection: NWConnection = connection
         guard offset < body.count else {
             connection.send(
                 content: Data(),
@@ -402,7 +404,7 @@ final class ScriptedHuggingFaceHub: @unchecked Sendable {
         self.stateQueue.sync {
             self.payloadBytesStreamed = self.payloadBytesStreamed + UInt64(chunk.count)
         }
-        let sendChunk: () -> Void = {
+        let sendChunk: @Sendable () -> Void = {
             connection.send(
                 content: chunk,
                 contentContext: .defaultMessage,
@@ -461,7 +463,6 @@ final class ScriptedHuggingFaceHub: @unchecked Sendable {
         responseText += "Connection: keep-alive\r\n\r\n"
         var responseBytes: Data = Data(responseText.utf8)
         responseBytes.append(body)
-        nonisolated(unsafe) let plainConnection: NWConnection = connection
         connection.send(
             content: responseBytes,
             contentContext: .defaultMessage,
