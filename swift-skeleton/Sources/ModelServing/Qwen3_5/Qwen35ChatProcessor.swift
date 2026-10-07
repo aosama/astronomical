@@ -10,10 +10,10 @@ import MLXHuggingFace;
 /// collector, and end-of-sequence ids from the artifact config.
 ///
 /// Mirrors the serving behavior of the Rust `ModelGenerationProcessor`
-/// implementation on the adapter seam. The structured tool-call output
-/// parser, the thinking channel seed, the thinking budget enforcement, and
-/// token-masked structured generation land with their epic slices and fail
-/// closed here with bounded rejection reasons.
+/// implementation on the adapter seam. The thinking channel seed and the
+/// thinking budget enforcement land with their epic slices and fail closed
+/// here with bounded rejection reasons; tool-call output parses fail-open
+/// through `Qwen35OutputParser`.
 public final class Qwen35ChatProcessor: ModelGenerationProcessor {
 
     private let tokenizer: any Tokenizer;
@@ -46,7 +46,7 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
             autoregressiveConfiguration.maximumOutputTokens, maximumPositionCount);
         return ChatModelCapabilities(
             supportsReasoning: true,
-            supportsToolCalls: false,
+            supportsToolCalls: true,
             hasVision: false,
             maxInputTokens: maximumPositionCount > maximumOutputTokens
                 ? maximumPositionCount - maximumOutputTokens : 0,
@@ -73,12 +73,15 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
             throw ChatPreparationRejection(reason: .invalidRequest(
                 reason: "the thinking budget lands with the thinking-budget slice"));
         }
-        if chatGenerationCommand.tools.isEmpty == false {
-            // The tool-call output parser lands with the structured
-            // generation slice; until then a tool-bearing conversation would
-            // render without its marker parser, so it fails closed.
-            throw ChatPreparationRejection(reason: .invalidRequest(
-                reason: "tool-call parsing lands with the structured generation slice"));
+        // The parser validates declared tool schemas up front so a broken
+        // declaration surfaces as a typed malformed-output rejection naming
+        // the offending tool, mirroring the Rust request-output parser path.
+        let outputParser: Qwen35OutputParser;
+        do {
+            outputParser = try Qwen35OutputParser(
+                declaredTools: chatGenerationCommand.tools, startsInsideThinking: true);
+        } catch {
+            throw ChatPreparationRejection(reason: .malformedModelOutput);
         }
         var guidedConstraint: Qwen35GuidedConstraint? = nil;
         if let enforcedConstraint = chatGenerationCommand.structuredGeneration {
@@ -110,7 +113,7 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
         }
         return Qwen35ActiveChatGeneration(
             tokenizer: self.tokenizer,
-            reasoningConfig: self.reasoningConfig,
+            outputParser: outputParser,
             inferenceRequest: Qwen35PreparedInferenceRequest(
                 promptTokenIds: promptTokenIds.map { (promptTokenId: Int) -> UInt32 in
                     return UInt32(clamping: promptTokenId);
@@ -179,26 +182,26 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
     }
 }
 
-/// Request-local translation over the upstream reasoning collector: decoded
-/// deltas route to the reasoning and assistant-visible text channels, and
-/// the collector's token retention keeps multibyte characters intact.
+/// Request-local translation over the Swift Qwen3.5 output parser: decoded
+/// deltas route through the parser's reasoning, text, and tool-call channels,
+/// mirroring the Rust request-output decode loop. The streaming detokenizer
+/// keeps multibyte characters intact across token boundaries.
 final class Qwen35ActiveChatGeneration: ActiveChatGeneration {
 
-    /// The protocol's translation seam is non-mutating, so the value-type
-    /// collector lives behind one box owned by this active generation.
-    private let collectorBox: MutableBox<ReasoningTokenCollector>;
+    private let outputParser: Qwen35OutputParser;
+    private var detokenizer: NaiveStreamingDetokenizer;
     let inferenceRequest: any PreparedInferenceRequest;
     let promptTokenCount: Int;
     private let endOfSequenceTokenIds: Set<UInt32>;
 
     init(
         tokenizer: any Tokenizer,
-        reasoningConfig: ReasoningConfig,
+        outputParser: Qwen35OutputParser,
         inferenceRequest: Qwen35PreparedInferenceRequest,
         endOfSequenceTokenIds: Set<UInt32>
     ) {
-        self.collectorBox = MutableBox(ReasoningTokenCollector(
-            config: reasoningConfig, primedInside: false, tokenizer: tokenizer));
+        self.outputParser = outputParser;
+        self.detokenizer = NaiveStreamingDetokenizer(tokenizer: tokenizer);
         self.inferenceRequest = inferenceRequest;
         self.promptTokenCount = inferenceRequest.promptTokenCount;
         self.endOfSequenceTokenIds = endOfSequenceTokenIds;
@@ -211,24 +214,29 @@ final class Qwen35ActiveChatGeneration: ActiveChatGeneration {
     func translateGeneratedToken(
         _ generatedTokenId: UInt32
     ) throws -> ModelGeneratedTokenTranslation {
-        let segments: Array<ReasoningEventEmitter.Segment> = self.collectorBox.value
-            .ingest(Int(generatedTokenId));
+        self.detokenizer.append(token: Int(generatedTokenId));
+        guard let decodedFragment = self.detokenizer.next() else {
+            return ModelGeneratedTokenTranslation(publicOutputs: []);
+        }
+        let outputEvents = try self.outputParser.pushFragment(decodedFragment);
         return ModelGeneratedTokenTranslation(
-            publicOutputs: Qwen35ActiveChatGeneration.outputs(from: segments));
+            publicOutputs: Qwen35ActiveChatGeneration.outputs(from: outputEvents));
     }
 
     func finishOutputs() throws -> Array<ChatGenerationOutput> {
-        let segments: Array<ReasoningEventEmitter.Segment> = self.collectorBox.value.finalize();
-        return Qwen35ActiveChatGeneration.outputs(from: segments);
+        return Qwen35ActiveChatGeneration.outputs(from: self.outputParser.finish());
     }
 
     private static func outputs(
-        from segments: Array<ReasoningEventEmitter.Segment>
+        from outputEvents: Array<Qwen35OutputEvent>
     ) -> Array<ChatGenerationOutput> {
-        return segments.map { (segment: ReasoningEventEmitter.Segment) -> ChatGenerationOutput in
-            switch segment {
-            case let .reasoning(text): return .reasoning(text: text);
-            case let .response(text): return .text(text: text);
+        return outputEvents.map { (outputEvent: Qwen35OutputEvent) -> ChatGenerationOutput in
+            switch outputEvent {
+            case let .reasoningDelta(text): return .reasoning(text: text);
+            case let .textDelta(text): return .text(text: text);
+            case let .toolCall(toolCall): return .toolCall(
+                toolCallIndex: toolCall.index, functionName: toolCall.functionName,
+                argumentsJson: toolCall.argumentsJson);
             }
         };
     }
