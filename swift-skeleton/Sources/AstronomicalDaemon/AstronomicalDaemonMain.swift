@@ -110,6 +110,47 @@ struct AstronomicalDaemonMain {
         let configTransitionState: ConfigTransitionState = ConfigTransitionState(
             reloadableConfig: resolvedRuntimeConfig,
             configuredConfigSnapshot: resolvedRuntimeConfig);
+        // The Library download manager: the bundled release catalog joined
+        // with live discovery, transferring through the pinned Hub client.
+        // Recovery runs before the REST endpoint accepts anything, so a job
+        // interrupted mid-publish resumes under the same identity.
+        let libraryDownloadCatalog: DownloadCatalog;
+        do {
+            libraryDownloadCatalog = try DownloadCatalog.loadBundled();
+        } catch {
+            FileHandle.standardError.write(Data(
+                "astronomicald: the bundled library catalog is invalid: \(error)\n".utf8));
+            exit(2);
+        }
+        let libraryJobRecordStore: LibraryDownloadJobRecordStore = LibraryDownloadJobRecordStore(
+            stateDirectory: instancePaths.stateDirectory);
+        let libraryDownloadCoordinator: LibraryDownloadCoordinator = LibraryDownloadCoordinator(
+            downloadCatalog: libraryDownloadCatalog,
+            modelsDirectory: instancePaths.modelsDirectory,
+            stateDirectory: instancePaths.stateDirectory,
+            hubEndpoint: HubDownloadService.productionHubEndpoint,
+            discoveryRefresh: {
+                // Publication refresh re-resolves discovery so the models
+                // advertisement and catalog readiness follow the new files.
+                let refreshedRuntimeConfig: ResolvedRuntimeConfig = try runtimeConfigResolver.load();
+                configTransitionState.replaceReloadableConfig(refreshedRuntimeConfig);
+            },
+            availableCapacityBytes: { (volumeDirectory: FilePath) -> UInt64? in
+                let volumeUrl: URL = URL(fileURLWithPath: volumeDirectory.string);
+                guard let volumeValues: URLResourceValues = try? volumeUrl.resourceValues(
+                    forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+                    let availableCapacity: Int64 = volumeValues.volumeAvailableCapacityForImportantUsage
+                else {
+                    return nil;
+                }
+                return UInt64(availableCapacity);
+            });
+        let libraryRecoverySemaphore: DispatchSemaphore = DispatchSemaphore(value: 0);
+        Task<Void, Never> {
+            await libraryDownloadCoordinator.recoverStartupState();
+            libraryRecoverySemaphore.signal();
+        }
+        libraryRecoverySemaphore.wait();
         let restServer: RestHttpServer;
         do {
             restServer = try RestHttpServer.start(
@@ -151,7 +192,28 @@ struct AstronomicalDaemonMain {
                     configRevealContext: RestConfigRevealRouteContext(revealActiveConfig: {
                         let configFilePath: FilePath = instancePaths.configFilePath;
                         return ConfigRevealOpener.revealInFinder(configFilePath: configFilePath);
-                    })),
+                    }),
+                    libraryCatalogContext: RestLibraryCatalogRouteContext(
+                        downloadCatalog: libraryDownloadCatalog,
+                        discoveredModelsProvider: {
+                            return configTransitionState.currentReloadableConfig().discoveredModels;
+                        },
+                        validatedPublicationsProvider: {
+                            return libraryDownloadCoordinator.validatedPublications.snapshot();
+                        },
+                        currentJobProvider: {
+                            guard let jobRecord: LibraryDownloadJobRecord = try? libraryJobRecordStore.load() else {
+                                return nil;
+                            }
+                            return LibraryDownloadJobSummary(
+                                huggingfaceId: jobRecord.huggingfaceId,
+                                stateName: jobRecord.state.rawValue);
+                        },
+                        destinationDirectoryProvider: { (huggingfaceId: String) -> String? in
+                            return libraryDownloadCoordinator.destinationDirectory(huggingfaceId: huggingfaceId).string;
+                        }),
+                    libraryDownloadContext: RestLibraryDownloadRouteContext(
+                        coordinator: libraryDownloadCoordinator)),
                 corsPolicy: RestCorsPolicy.canvasShell());
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
@@ -201,6 +263,12 @@ struct AstronomicalDaemonMain {
         }
 
         shutdownSemaphore.wait();
+        // The requesting handler signals shutdown from inside its own call,
+        // before its 202 has been written; this bounded beat lets the
+        // per-connection thread flush that reply before the process exits.
+        // Half a second absorbs a fully loaded machine and stays
+        // imperceptible next to process teardown.
+        Thread.sleep(forTimeInterval: 0.5);
         // The lock releases when this process exits; instanceLock is held so
         // the compiler keeps it alive for the whole serving lifetime.
         _ = instanceLock;

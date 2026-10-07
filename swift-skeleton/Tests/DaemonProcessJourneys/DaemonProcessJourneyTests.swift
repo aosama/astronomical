@@ -22,6 +22,55 @@ import JourneyCategories;
 final class DaemonProcessJourneyTests {
 
     @Test
+    func should_serve_the_library_catalog_console_and_auto_discovery_in_the_real_daemon() throws {
+        let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();
+        let stateDirectoryPath: String = try DaemonProcessJourneySupport.makeStateDirectory(journeyName: "library-daemon");
+        defer { DaemonProcessJourneySupport.removeStateDirectory(stateDirectoryPath); };
+        try DaemonProcessJourneySupport.writeInstanceConfig(stateDirectoryPath: stateDirectoryPath);
+        // A pre-published library model: the exact fixture shape discovery
+        // recognizes, so /v1/models and the catalog readiness join answer
+        // from disk before any download ran.
+        let publishedModelDirectory: String = stateDirectoryPath + "/models/astronomical-test/example-qwen";
+        try FileManager.default.createDirectory(atPath: publishedModelDirectory, withIntermediateDirectories: true);
+        let modelConfigJson: String = "{\"model_type\":\"qwen3_5_moe\",\"text_config\":{\"max_position_embeddings\":262144}}";
+        try modelConfigJson.write(toFile: publishedModelDirectory + "/config.json", atomically: true, encoding: .utf8);
+        try "{\"version\":1,\"model\":{\"type\":\"BPE\"}}".write(
+            toFile: publishedModelDirectory + "/tokenizer.json", atomically: true, encoding: .utf8);
+        try "fictional-shard".write(toFile: publishedModelDirectory + "/model-00001.safetensors", atomically: true, encoding: .utf8);
+        try "{\"metadata\":{\"total_size\":15},\"weight_map\":{\"model.embed_tokens.weight\":\"model-00001.safetensors\"}}".write(
+            toFile: publishedModelDirectory + "/model.safetensors.index.json", atomically: true, encoding: .utf8);
+
+        let runningDaemon: (daemonProcess: Process, restPort: UInt16) = try DaemonProcessJourneySupport.spawnDaemon(
+            daemonExecutablePath: daemonExecutablePath,
+            runtimeInstance: "development",
+            stateDirectoryPath: stateDirectoryPath);
+
+        let catalogResponse: String? = DaemonProcessJourneySupport.waitUntilEndpointContains(
+            port: runningDaemon.restPort,
+            endpointPath: "/v1/library/catalog",
+            expectedFragment: "\"schema_version\":2", deadlineSeconds: 10);
+        #expect(catalogResponse?.hasPrefix("HTTP/1.1 200 OK") == true, "the bundled catalog serves from the real daemon");
+
+        let consoleResponse: String? = DaemonProcessJourneySupport.getEndpoint(
+            port: runningDaemon.restPort,
+            endpointPath: "/library");
+        #expect(
+            consoleResponse?.contains("data-observatory-view=\"library\"") == true,
+            "the console library view is served by the daemon");
+
+        let modelsResponse: String? = DaemonProcessJourneySupport.waitUntilEndpointContains(
+            port: runningDaemon.restPort,
+            endpointPath: "/v1/models",
+            expectedFragment: "example-qwen", deadlineSeconds: 10);
+        #expect(modelsResponse != nil, "auto-discovery lists the published library model");
+
+        let exitStatus: Int32? = DaemonProcessJourneySupport.terminateAndWait(
+            daemonProcess: runningDaemon.daemonProcess,
+            deadlineSeconds: 5);
+        #expect(exitStatus == 0);
+    }
+
+    @Test
     func should_reject_a_second_daemon_for_the_same_instance_state() throws {
         let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();
         let stateDirectoryPath: String = try DaemonProcessJourneySupport.makeStateDirectory(journeyName: "second-daemon");
