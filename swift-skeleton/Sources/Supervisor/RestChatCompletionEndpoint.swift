@@ -14,17 +14,29 @@ public struct RestChatRouteContext: @unchecked Sendable {
     let requestIdAllocator: ChatRequestIdAllocator;
     let resolvedRuntimeConfig: ResolvedRuntimeConfig;
     let instancePaths: AstronomicalInstancePaths;
+    let liveResolvedRuntimeConfigProvider: @Sendable () -> ResolvedRuntimeConfig;
 
     public init(
         chatExecutor: any ChatGenerationExecuting,
         requestIdAllocator: ChatRequestIdAllocator,
         resolvedRuntimeConfig: ResolvedRuntimeConfig,
-        instancePaths: AstronomicalInstancePaths
+        instancePaths: AstronomicalInstancePaths,
+        liveResolvedRuntimeConfigProvider: @escaping @Sendable () -> ResolvedRuntimeConfig? = { nil }
     ) {
         self.chatExecutor = chatExecutor;
         self.requestIdAllocator = requestIdAllocator;
         self.resolvedRuntimeConfig = resolvedRuntimeConfig;
         self.instancePaths = instancePaths;
+        self.liveResolvedRuntimeConfigProvider = {
+            return liveResolvedRuntimeConfigProvider() ?? resolvedRuntimeConfig;
+        };
+    }
+
+    /// One consistent live snapshot for the whole request: with reload
+    /// support the serving surfaces read the reloadable configuration, so a
+    /// reloaded discovery snapshot reaches listing and routing together.
+    public func liveResolvedRuntimeConfig() -> ResolvedRuntimeConfig {
+        return self.liveResolvedRuntimeConfigProvider();
     }
 }
 
@@ -45,15 +57,16 @@ enum RestChatCompletionEndpoint {
         _ request: RestHttpRequest,
         chatContext: RestChatRouteContext
     ) -> RestHttpResponse {
+        let liveResolvedRuntimeConfig: ResolvedRuntimeConfig = chatContext.liveResolvedRuntimeConfig();
         let attributionStart: ContinuousClock.Instant? = DaemonIpcPerformanceAttribution.startedOperation(
             operationName: "rest_chat_completion",
-            performanceAttributionEnabled: chatContext.resolvedRuntimeConfig.performanceAttributionEnabled);
+            performanceAttributionEnabled: liveResolvedRuntimeConfig.performanceAttributionEnabled);
         defer {
             DaemonIpcPerformanceAttribution.finishedOperation(
                 operationName: "rest_chat_completion",
                 operationStart: attributionStart,
                 operationOutcome: "served",
-                performanceAttributionEnabled: chatContext.resolvedRuntimeConfig.performanceAttributionEnabled);
+                performanceAttributionEnabled: liveResolvedRuntimeConfig.performanceAttributionEnabled);
         }
         let requestDiagnosticSnapshot: OpenAiChatRequestDiagnosticSnapshot =
             OpenAiChatRequestDiagnostics.buildRequestDiagnosticSnapshot(
@@ -104,7 +117,7 @@ enum RestChatCompletionEndpoint {
         guard let resolvedModelId: String = RestChatCompletionEndpoint.resolveAvailableGenerationModelId(
             requestedModelId: requestedModelId,
             workerHealthSnapshot: workerHealthSnapshot,
-            resolvedRuntimeConfig: chatContext.resolvedRuntimeConfig) else {
+            resolvedRuntimeConfig: liveResolvedRuntimeConfig) else {
             return RestChatCompletionEndpoint.invalidRequestParameterResponse(
                 message: "model is not loaded by the local worker",
                 parameter: "model",
@@ -151,7 +164,7 @@ enum RestChatCompletionEndpoint {
         // Policy defaults fill omissions only, so presence comes from the
         // public parts before translation normalizes the budget fields.
         let generationSettings: ChatGenerationSettings = RequestGenerationDefaults.apply(
-            resolvedRuntimeConfig: chatContext.resolvedRuntimeConfig,
+            resolvedRuntimeConfig: liveResolvedRuntimeConfig,
             modelId: resolvedModelId,
             settingsPresence: RequestGenerationSettingsPresence(
                 maximumOutputTokensRequested: requestParts.requestedMaximumOutputTokens != nil,
@@ -166,7 +179,7 @@ enum RestChatCompletionEndpoint {
             toolChoice: chatGenerationCommand.toolChoice,
             settings: generationSettings,
             qwenThinkingChannelSeed: QwenThinkingChannelSeed.load(
-                resolvedRuntimeConfig: chatContext.resolvedRuntimeConfig,
+                resolvedRuntimeConfig: liveResolvedRuntimeConfig,
                 instancePaths: chatContext.instancePaths,
                 modelId: resolvedModelId),
             structuredGeneration: chatGenerationCommand.structuredGeneration);
@@ -235,7 +248,7 @@ enum RestChatCompletionEndpoint {
         _ chatContext: RestChatRouteContext,
         resolvedModelId: String
     ) -> Bool {
-        guard let discoveredModel: DiscoveryDiscoveredModel = chatContext.resolvedRuntimeConfig.discoveredModels
+        guard let discoveredModel: DiscoveryDiscoveredModel = chatContext.liveResolvedRuntimeConfig().discoveredModels
             .first(where: { (candidateModel: DiscoveryDiscoveredModel) -> Bool in
                 return candidateModel.modelId == resolvedModelId;
             }) else {

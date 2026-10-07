@@ -13,17 +13,28 @@ public struct RestResponsesRouteContext: @unchecked Sendable {
     let requestIdAllocator: ChatRequestIdAllocator;
     let resolvedRuntimeConfig: ResolvedRuntimeConfig;
     let instancePaths: AstronomicalInstancePaths;
+    let liveResolvedRuntimeConfigProvider: @Sendable () -> ResolvedRuntimeConfig;
 
     public init(
         responsesExecutor: any ChatGenerationExecuting,
         requestIdAllocator: ChatRequestIdAllocator,
         resolvedRuntimeConfig: ResolvedRuntimeConfig,
-        instancePaths: AstronomicalInstancePaths
+        instancePaths: AstronomicalInstancePaths,
+        liveResolvedRuntimeConfigProvider: @escaping @Sendable () -> ResolvedRuntimeConfig? = { nil }
     ) {
         self.responsesExecutor = responsesExecutor;
         self.requestIdAllocator = requestIdAllocator;
         self.resolvedRuntimeConfig = resolvedRuntimeConfig;
         self.instancePaths = instancePaths;
+        self.liveResolvedRuntimeConfigProvider = {
+            return liveResolvedRuntimeConfigProvider() ?? resolvedRuntimeConfig;
+        };
+    }
+
+    /// One consistent live snapshot for the whole request, mirroring the
+    /// chat surface's reloadable-configuration read.
+    public func liveResolvedRuntimeConfig() -> ResolvedRuntimeConfig {
+        return self.liveResolvedRuntimeConfigProvider();
     }
 }
 
@@ -44,15 +55,16 @@ enum RestResponsesEndpoint {
         _ request: RestHttpRequest,
         responsesContext: RestResponsesRouteContext
     ) -> RestHttpResponse {
+        let liveResolvedRuntimeConfig: ResolvedRuntimeConfig = responsesContext.liveResolvedRuntimeConfig();
         let attributionStart: ContinuousClock.Instant? = DaemonIpcPerformanceAttribution.startedOperation(
             operationName: "rest_responses",
-            performanceAttributionEnabled: responsesContext.resolvedRuntimeConfig.performanceAttributionEnabled);
+            performanceAttributionEnabled: liveResolvedRuntimeConfig.performanceAttributionEnabled);
         defer {
             DaemonIpcPerformanceAttribution.finishedOperation(
                 operationName: "rest_responses",
                 operationStart: attributionStart,
                 operationOutcome: "served",
-                performanceAttributionEnabled: responsesContext.resolvedRuntimeConfig.performanceAttributionEnabled);
+                performanceAttributionEnabled: liveResolvedRuntimeConfig.performanceAttributionEnabled);
         }
         let responsesWireValue: JsonWireValue;
         do {
@@ -86,7 +98,7 @@ enum RestResponsesEndpoint {
         guard let resolvedModelId: String = RestResponsesEndpoint.resolveAvailableGenerationModelId(
             requestedModelId: requestParts.model,
             workerHealthSnapshot: workerHealthSnapshot,
-            resolvedRuntimeConfig: responsesContext.resolvedRuntimeConfig) else {
+            resolvedRuntimeConfig: liveResolvedRuntimeConfig) else {
             return RestResponsesEndpoint.invalidRequestParameterResponse(
                 message: "model is not loaded by the local worker",
                 parameter: "model",
@@ -117,7 +129,7 @@ enum RestResponsesEndpoint {
         // Policy defaults fill omissions only, so presence comes from the
         // public parts before translation normalizes the budget fields.
         let generationSettings: ChatGenerationSettings = RequestGenerationDefaults.apply(
-            resolvedRuntimeConfig: responsesContext.resolvedRuntimeConfig,
+            resolvedRuntimeConfig: liveResolvedRuntimeConfig,
             modelId: resolvedModelId,
             settingsPresence: RequestGenerationSettingsPresence(
                 maximumOutputTokensRequested: requestParts.requestedMaximumOutputTokens != nil,
@@ -132,7 +144,7 @@ enum RestResponsesEndpoint {
             toolChoice: chatGenerationCommand.toolChoice,
             settings: generationSettings,
             qwenThinkingChannelSeed: QwenThinkingChannelSeed.load(
-                resolvedRuntimeConfig: responsesContext.resolvedRuntimeConfig,
+                resolvedRuntimeConfig: liveResolvedRuntimeConfig,
                 instancePaths: responsesContext.instancePaths,
                 modelId: resolvedModelId),
             structuredGeneration: chatGenerationCommand.structuredGeneration);
@@ -202,7 +214,7 @@ enum RestResponsesEndpoint {
         _ responsesContext: RestResponsesRouteContext,
         resolvedModelId: String
     ) -> Bool {
-        guard let discoveredModel: DiscoveryDiscoveredModel = responsesContext.resolvedRuntimeConfig.discoveredModels
+        guard let discoveredModel: DiscoveryDiscoveredModel = responsesContext.liveResolvedRuntimeConfig().discoveredModels
             .first(where: { (candidateModel: DiscoveryDiscoveredModel) -> Bool in
                 return candidateModel.modelId == resolvedModelId;
             }) else {
