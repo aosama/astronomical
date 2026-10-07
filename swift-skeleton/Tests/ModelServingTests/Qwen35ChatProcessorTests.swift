@@ -141,7 +141,7 @@ final class Qwen35ChatProcessorTests {
         let chatCapabilities: ChatModelCapabilities? = capabilities.chat;
         #expect(chatCapabilities?.contextWindow == 4096);
         #expect(chatCapabilities?.supportsReasoning == true);
-        #expect(chatCapabilities?.supportsToolCalls == false);
+        #expect(chatCapabilities?.supportsToolCalls == true);
     }
 
     @Test(.timeLimit(.minutes(2)))
