@@ -109,18 +109,19 @@ enum DaemonProcessJourneySupport {
     }
 
     /// Runs the daemon expecting a startup refusal and returns its exit
-    /// status and stderr; the wait is bounded so an unexpectedly serving
-    /// daemon fails the journey instead of hanging it.
+    /// status, stdout, and stderr; the wait is bounded so an unexpectedly
+    /// serving daemon fails the journey instead of hanging it.
     static func runDaemonExpectingStartupFailure(
         daemonExecutablePath: String,
         arguments: Array<String>,
         deadlineSeconds: Double
-    ) throws -> (exitStatus: Int32, standardError: String) {
+    ) throws -> (exitStatus: Int32, standardOutput: String, standardError: String) {
         let daemonProcess: Process = Process();
         daemonProcess.executableURL = URL(fileURLWithPath: daemonExecutablePath);
         daemonProcess.arguments = arguments;
+        let stdoutPipe: Pipe = Pipe();
         let stderrPipe: Pipe = Pipe();
-        daemonProcess.standardOutput = FileHandle.nullDevice;
+        daemonProcess.standardOutput = stdoutPipe;
         daemonProcess.standardError = stderrPipe;
         daemonProcess.standardInput = FileHandle.nullDevice;
         try daemonProcess.run();
@@ -132,7 +133,11 @@ enum DaemonProcessJourneySupport {
             throw DaemonProcessJourneySupportFailure.daemonDidNotExitBeforeDeadline;
         }
         let stderrData: Data = stderrPipe.fileHandleForReading.readDataToEndOfFile();
-        return (finishedExitStatus, String(decoding: stderrData, as: UTF8.self));
+        let stdoutData: Data = stdoutPipe.fileHandleForReading.readDataToEndOfFile();
+        return (
+            finishedExitStatus,
+            String(decoding: stdoutData, as: UTF8.self),
+            String(decoding: stderrData, as: UTF8.self));
     }
 
     /// Sends SIGTERM — the signal the real LaunchAgents own — and returns

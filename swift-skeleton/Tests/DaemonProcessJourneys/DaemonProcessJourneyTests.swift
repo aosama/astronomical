@@ -2,6 +2,7 @@ import Foundation;
 
 import Testing;
 
+import Supervisor;
 import JourneyCategories;
 
 /**
@@ -63,11 +64,93 @@ final class DaemonProcessJourneyTests {
             endpointPath: "/v1/models",
             expectedFragment: "example-qwen", deadlineSeconds: 10);
         #expect(modelsResponse != nil, "auto-discovery lists the published library model");
+        // Attribution stays off by default: a serving daemon must not leave a
+        // supervisor attribution file behind in the instance state.
+        #expect(
+            FileManager.default.fileExists(
+                atPath: stateDirectoryPath + "/logs/supervisor-performance-attribution.jsonl") == false,
+            "a disabled attribution flag must not create the attribution file");
 
         let exitStatus: Int32? = DaemonProcessJourneySupport.terminateAndWait(
             daemonProcess: runningDaemon.daemonProcess,
             deadlineSeconds: 5);
         #expect(exitStatus == 0);
+    }
+
+    @Test
+    func should_record_the_startup_catalog_load_when_attribution_is_enabled() throws {
+        let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();
+        let stateDirectoryPath: String = try DaemonProcessJourneySupport.makeStateDirectory(
+            journeyName: "library-attribution");
+        defer { DaemonProcessJourneySupport.removeStateDirectory(stateDirectoryPath); };
+        try DaemonProcessJourneySupport.writeRawConfig(
+            stateDirectoryPath: stateDirectoryPath,
+            configJson: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[]},"
+                + "\"chunking\":{\"fixed_prompt_processing_chunk_size_tokens\":2048},"
+                + "\"diagnostics\":{\"performance_attribution_enabled\":true}}");
+
+        let runningDaemon: (daemonProcess: Process, restPort: UInt16) = try DaemonProcessJourneySupport.spawnDaemon(
+            daemonExecutablePath: daemonExecutablePath,
+            runtimeInstance: "development",
+            stateDirectoryPath: stateDirectoryPath);
+
+        // spawnDaemon returned only after the startup line, so the catalog
+        // attribution row must already be flushed to disk before serving.
+        let attributionText: String = try String(
+            contentsOfFile: stateDirectoryPath + "/logs/supervisor-performance-attribution.jsonl",
+            encoding: .utf8);
+        let parsedAttributionDocument: Any = try JSONSerialization.jsonObject(
+            with: Data(attributionText.trimmingCharacters(in: .whitespacesAndNewlines).utf8),
+            options: []);
+        guard let attributionRecord: [String: Any] = parsedAttributionDocument as? [String: Any] else {
+            Issue.record("the startup attribution record should contain a JSON object: \(attributionText)");
+            return;
+        }
+        #expect(attributionRecord["operation"] as? String == "library_catalog_load");
+        #expect(attributionRecord["outcome"] as? String == "success");
+        let bundledCatalog: DownloadCatalog = try DownloadCatalog.loadBundled();
+        #expect(
+            attributionRecord["catalog_entry_count"] as? Int == bundledCatalog.entryCount,
+            "the attribution row must carry the bundled catalog's entry count");
+
+        let exitStatus: Int32? = DaemonProcessJourneySupport.terminateAndWait(
+            daemonProcess: runningDaemon.daemonProcess,
+            deadlineSeconds: 5);
+        #expect(exitStatus == 0);
+    }
+
+    @Test
+    func should_fail_before_binding_when_the_startup_attribution_file_cannot_open() throws {
+        let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();
+        let stateDirectoryPath: String = try DaemonProcessJourneySupport.makeStateDirectory(
+            journeyName: "library-attribution-refused");
+        defer { DaemonProcessJourneySupport.removeStateDirectory(stateDirectoryPath); };
+        try DaemonProcessJourneySupport.writeRawConfig(
+            stateDirectoryPath: stateDirectoryPath,
+            configJson: "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
+                + "\"runtime\":{\"model_directories\":[]},"
+                + "\"chunking\":{\"fixed_prompt_processing_chunk_size_tokens\":2048},"
+                + "\"diagnostics\":{\"performance_attribution_enabled\":true}}");
+        // A directory occupies the attribution file path, so the open must
+        // fail and the daemon must refuse to serve anything.
+        try FileManager.default.createDirectory(
+            atPath: stateDirectoryPath + "/logs/supervisor-performance-attribution.jsonl",
+            withIntermediateDirectories: true);
+
+        let refusedDaemon: (exitStatus: Int32, standardOutput: String, standardError: String) =
+            try DaemonProcessJourneySupport.runDaemonExpectingStartupFailure(
+                daemonExecutablePath: daemonExecutablePath,
+                arguments: ["--instance", "development", "--state-directory", stateDirectoryPath],
+                deadlineSeconds: 10);
+
+        #expect(refusedDaemon.exitStatus != 0, "an unopenable attribution file must fail startup");
+        #expect(
+            refusedDaemon.standardOutput.contains("serving REST on http://") == false,
+            "the daemon must never announce a bound endpoint");
+        #expect(
+            refusedDaemon.standardError.contains("failed to create the supervisor performance-attribution log"),
+            "the refusal must name the attribution log failure: \(refusedDaemon.standardError)");
     }
 
     @Test
@@ -81,7 +164,7 @@ final class DaemonProcessJourneyTests {
             runtimeInstance: "development",
             stateDirectoryPath: stateDirectoryPath);
 
-        let secondDaemon: (exitStatus: Int32, standardError: String) =
+        let secondDaemon: (exitStatus: Int32, standardOutput: String, standardError: String) =
             try DaemonProcessJourneySupport.runDaemonExpectingStartupFailure(
                 daemonExecutablePath: daemonExecutablePath,
                 arguments: ["--instance", "development", "--state-directory", stateDirectoryPath],
@@ -108,7 +191,7 @@ final class DaemonProcessJourneyTests {
             ["--state-directory", "relative-state"],
             ["--instance", "stable", "--instance", "development"]
         ] {
-            let daemonOutcome: (exitStatus: Int32, standardError: String) =
+            let daemonOutcome: (exitStatus: Int32, standardOutput: String, standardError: String) =
                 try DaemonProcessJourneySupport.runDaemonExpectingStartupFailure(
                     daemonExecutablePath: daemonExecutablePath,
                     arguments: invalidArguments,
@@ -159,7 +242,7 @@ final class DaemonProcessJourneyTests {
             stateDirectoryPath: stateDirectoryPath,
             configJson: "{\"supervisor\":{\"bind_address\":\"127.0.0.1:0\"}");
 
-        let daemonOutcome: (exitStatus: Int32, standardError: String) =
+        let daemonOutcome: (exitStatus: Int32, standardOutput: String, standardError: String) =
             try DaemonProcessJourneySupport.runDaemonExpectingStartupFailure(
                 daemonExecutablePath: daemonExecutablePath,
                 arguments: ["--instance", "development", "--state-directory", stateDirectoryPath],
@@ -182,7 +265,7 @@ final class DaemonProcessJourneyTests {
                 + "\"runtime\":{\"model_directories\":[]},"
                 + "\"supervisor\":{\"bind_address\":\"127.0.0.1:6732\"}}");
 
-        let daemonOutcome: (exitStatus: Int32, standardError: String) =
+        let daemonOutcome: (exitStatus: Int32, standardOutput: String, standardError: String) =
             try DaemonProcessJourneySupport.runDaemonExpectingStartupFailure(
                 daemonExecutablePath: daemonExecutablePath,
                 arguments: ["--instance", "development", "--state-directory", stateDirectoryPath],

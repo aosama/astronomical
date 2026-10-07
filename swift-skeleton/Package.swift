@@ -109,7 +109,8 @@ let package: Package = Package(
         // they live in their own target — a separate process under
         // `swift test`, like the Rust tree's separate integration-test
         // binary — so they can never starve the parallel hermetic suites.
-        .testTarget(name: "DaemonProcessJourneys", dependencies: ["JourneyCategories"]),
+        .testTarget(        name: "DaemonProcessJourneys",
+        dependencies: ["Supervisor", "JourneyCategories"]),
         .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor", "JourneyCategories"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
         .testTarget(

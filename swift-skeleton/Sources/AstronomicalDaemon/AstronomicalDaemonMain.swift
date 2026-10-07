@@ -102,12 +102,18 @@ struct AstronomicalDaemonMain {
             exit(2);
         }
         let supervisorAttributionLog: SupervisorPerformanceAttributionLog;
-        let generationPerformanceLog: GenerationPerformanceLog;
-        let completionAttributionLog: CompletionAttributionLog;
         do {
             supervisorAttributionLog = try SupervisorPerformanceAttributionLog.open(
                 logDirectory: loggingDirectory,
                 performanceAttributionEnabled: resolvedRuntimeConfig.performanceAttributionEnabled);
+        } catch {
+            FileHandle.standardError.write(Data(
+                "astronomicald: failed to create the supervisor performance-attribution log: \(error)\n".utf8));
+            exit(2);
+        }
+        let generationPerformanceLog: GenerationPerformanceLog;
+        let completionAttributionLog: CompletionAttributionLog;
+        do {
             generationPerformanceLog = try GenerationPerformanceLog.open(
                 logDirectory: loggingDirectory);
             completionAttributionLog = try CompletionAttributionLog.open(
@@ -115,7 +121,7 @@ struct AstronomicalDaemonMain {
                 completionAttributionEnabled: resolvedRuntimeConfig.completionAttributionEnabled);
         } catch {
             FileHandle.standardError.write(Data(
-                "astronomicald: could not open the attribution logs: \(error)\n".utf8));
+                "astronomicald: failed to create the generation or completion attribution logs: \(error)\n".utf8));
             exit(2);
         }
         // The supervisor owns the one live health snapshot: the REST routes
