@@ -286,7 +286,11 @@ final class WorkerStartupHandshakeTests {
                 modelLoadTimeout: 10);
             Issue.record("expected a stream closure");
         } catch let workerControlError as WorkerControlError {
-            guard case WorkerControlError.workerEventStreamClosed = workerControlError else {
+            // A real subprocess closing its output carries process
+            // diagnostics, exactly as the Rust worker's next_event composes
+            // them; the bare stream-closed case is reserved for non-process
+            // fixtures.
+            guard case WorkerControlError.workerProcessExited = workerControlError else {
                 Issue.record(Comment(stringLiteral: "expected a stream closure, got \(workerControlError)"));
                 return;
             }
