@@ -178,20 +178,28 @@ final class WorkerStartupHandshakeTests {
     }
 
     @Test
-    func should_return_from_the_startup_wait_immediately_without_a_startup_configuration() throws {
+    func should_await_readiness_when_a_worker_launches_without_a_startup_configuration() throws {
+        // A no-policy launch still consumes the fixture's idle event, exactly
+        // as the Rust worker loop does; a silent worker times the wait out.
+        let fakeWorkerScript: String = FakeWorkerEventEmitter.frameEmitterFunction()
+            + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.idleEventPayload())
+            + "exec sleep 30\n";
         let workerProcess: WorkerProcess = try WorkerProcess.launch(
-            workerExecutablePath: "/bin/sleep",
-            arguments: ["30"]);
+            workerExecutablePath: "/bin/bash",
+            arguments: ["-c", fakeWorkerScript]);
         defer {
             _ = try? workerProcess.close();
         }
+        let healthState: WorkerHealthState = WorkerHealthState();
         let eventPump: WorkerEventPump = WorkerEventPump(workerProcess: workerProcess);
         try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
             workerProcess: workerProcess,
             eventPump: eventPump,
-            healthState: WorkerHealthState(),
-            modelLoadTimeout: 1);
-        #expect(!workerProcess.isStartupRuntimeConfigurationApplied());
+            healthState: healthState,
+            modelLoadTimeout: 2);
+        #expect(workerProcess.isStartupRuntimeConfigurationApplied());
+        #expect(healthState.currentSnapshot().status == .ready);
+        #expect(healthState.currentSnapshot().workerRuntimeFeatureConfiguration == nil);
     }
 
     @Test
