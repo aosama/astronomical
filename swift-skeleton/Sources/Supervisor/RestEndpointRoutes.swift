@@ -198,6 +198,42 @@ public enum RestEndpointRoutes {
                     statusCode: 200,
                     wireValue: SystemTelemetry.sampleDocument().wireValue());
             });
+        // The embedded Observatory console: every shell deep link renders the
+        // single-page index, and the exact asset routes serve their bundled
+        // files. Unknown destinations stay 404, including the removed ones.
+        for shellRoute: String in ConsoleAssets.shellRoutes {
+            routeTable.register(
+                method: "GET",
+                path: shellRoute,
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    return ConsoleAssets.textResponse(
+                        relativePath: "index.html",
+                        contentType: ConsoleAssets.htmlContentType)
+                        ?? RestHttpResponse.text(statusCode: 404, body: "console shell missing");
+                });
+        }
+        for assetRoute: (routePath: String, relativePath: String) in ConsoleAssets.assetRoutes {
+            routeTable.register(
+                method: "GET",
+                path: assetRoute.routePath,
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    let contentType: String = assetRoute.relativePath.hasSuffix(".css")
+                        ? ConsoleAssets.cssContentType
+                        : ConsoleAssets.javascriptContentType;
+                    return ConsoleAssets.textResponse(
+                        relativePath: assetRoute.relativePath,
+                        contentType: contentType)
+                        ?? RestHttpResponse.text(statusCode: 404, body: "console asset missing");
+                });
+        }
+        routeTable.registerPrefix(
+            method: "GET",
+            pathPrefix: "/render/",
+            handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                let renderRelativePath: String = String(request.path.dropFirst("/render/".count));
+                return ConsoleAssets.renderAssetResponse(renderRelativePath: renderRelativePath)
+                    ?? RestHttpResponse.text(statusCode: 404, body: "render asset not found");
+            });
         if let cacheClearContext = cacheClearContext {
             routeTable.register(
                 method: RestCacheClearEndpoint.routeMethod,
