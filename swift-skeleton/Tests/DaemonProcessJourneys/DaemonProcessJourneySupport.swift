@@ -21,6 +21,14 @@ enum DaemonProcessJourneySupport {
     /// CARGO_BIN_EXE-style variable, so the executable is located from this
     /// source file's package root, checking both build layouts.
     static func locateDaemonExecutable() throws -> String {
+        return try DaemonProcessJourneySupport.locateBuiltExecutable(
+            executableName: DaemonProcessJourneySupport.daemonExecutableName);
+    }
+
+    /// Any binary built by this package, located beside the daemon under
+    /// both build layouts; the fixture-worker journeys reuse the daemon
+    /// lookup for the probe worker executable.
+    static func locateBuiltExecutable(executableName: String) throws -> String {
         let packageRootUrl: URL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -32,7 +40,7 @@ enum DaemonProcessJourneySupport {
         for buildLayout: String in buildLayouts {
             let daemonExecutableUrl: URL = packageRootUrl
                 .appendingPathComponent(buildLayout)
-                .appendingPathComponent(DaemonProcessJourneySupport.daemonExecutableName);
+                .appendingPathComponent(executableName);
             if FileManager.default.isExecutableFile(atPath: daemonExecutableUrl.path) {
                 return daemonExecutableUrl.path;
             }
@@ -54,6 +62,25 @@ enum DaemonProcessJourneySupport {
 
     static func removeStateDirectory(_ stateDirectoryPath: String) -> Void {
         try? FileManager.default.removeItem(atPath: stateDirectoryPath);
+    }
+
+    /// Concatenates every `supervisor.`-prefixed log file under the state
+    /// directory's logs directory, the journey-side view of the operator
+    /// log the daemon persists worker-failure diagnostics into.
+    static func readSupervisorLogs(stateDirectoryPath: String) -> String {
+        let logDirectoryPath: String = stateDirectoryPath + "/logs";
+        let logFileNames: Array<String> =
+            (try? FileManager.default.contentsOfDirectory(atPath: logDirectoryPath)) ?? [];
+        var supervisorLogText: String = "";
+        for logFileName: String in logFileNames.sorted() {
+            if logFileName.hasPrefix("supervisor."),
+               let logText: String = try? String(
+                   contentsOfFile: logDirectoryPath + "/" + logFileName,
+                   encoding: String.Encoding.utf8) {
+                supervisorLogText += logText;
+            }
+        }
+        return supervisorLogText;
     }
 
     static func writeInstanceConfig(stateDirectoryPath: String) throws -> Void {
