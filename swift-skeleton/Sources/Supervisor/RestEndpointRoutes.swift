@@ -170,6 +170,14 @@ public enum RestEndpointRoutes {
                 return try RestEndpointRoutes.cacheStatsResponse(
                     workerHealthState: workerHealthState);
             });
+        routeTable.register(
+            method: "GET",
+            path: "/v1/system/telemetry",
+            handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                return try RestHttpResponse.json(
+                    statusCode: 200,
+                    wireValue: SystemTelemetry.sampleDocument().wireValue());
+            });
         if let cacheClearContext = cacheClearContext {
             routeTable.register(
                 method: RestCacheClearEndpoint.routeMethod,
