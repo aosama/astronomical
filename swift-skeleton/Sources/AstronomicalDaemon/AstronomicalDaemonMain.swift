@@ -227,6 +227,14 @@ struct AstronomicalDaemonMain {
                 chatContext: DaemonIpcChatContext(
                     chatExecutor: workerSupervisor,
                     resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    instancePaths: instancePaths),
+                modelsContext: DaemonIpcModelsContext(
+                    embeddingsExecutor: workerSupervisor,
+                    liveResolvedRuntimeConfigProvider: {
+                        return configTransitionState.currentReloadableConfig();
+                    },
+                    downloadCatalog: libraryDownloadCatalog,
+                    libraryDownloadCoordinator: libraryDownloadCoordinator,
                     instancePaths: instancePaths));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the daemon IPC service: \(error)\n".utf8));

@@ -1,15 +1,13 @@
-import Foundation;
+import Foundation
 
 import AstronomicalConfig;
 import IpcProtocol;
-import Supervisor;
 
-/// The `astronomical status` verb: worker state, resident model, and the
-/// effective default model, reported against the resident daemon.
-///
-/// Mirrors apps/astronomical/src/status_command.rs. The Library download
-/// section reports the active job when the daemon serves the verb, and says
-/// so explicitly when the daemon has not wired that verb yet.
+/**
+ * The `astronomical status` verb: worker state, resident model, effective
+ * default model, and the active download job, if any. Porting
+ * status_command.rs; the report shape is the carried contract.
+ */
 public enum StatusCommand {
 
     /// Runs the status journey against the resident daemon and returns the
@@ -20,6 +18,13 @@ public enum StatusCommand {
         let candidateSocketPaths: Array<String> = [
             instancePaths.ipcSocketFilePath.string,
         ];
+        return try StatusCommand.run(candidateSocketPaths: candidateSocketPaths);
+    }
+
+    /// Runs the status journey over the given instance sockets.
+    public static func run(
+        candidateSocketPaths: Array<String>
+    ) throws -> String {
         let statusSnapshot: DaemonStatusSnapshot;
         do {
             statusSnapshot = try DaemonProbe.statusSnapshot(
@@ -27,22 +32,27 @@ public enum StatusCommand {
         } catch let probeError as DaemonProbeError {
             switch (probeError) {
             case .daemonNotRunning:
-                return "astronomical: the daemon is not running for this instance";
-            case .daemonStoppedResponding:
-                return "astronomical: the daemon stopped responding";
-            case let .daemonRejected(reason):
-                return "astronomical: the daemon declined the request: \(reason)";
+                throw StatusError.daemonNotRunning;
+            default:
+                throw StatusError.daemonStoppedResponding;
             }
         }
-        var report: String = String();
-        report += "worker:   \(renderWorkerStatus(statusSnapshot))\n";
-        if let readyModelId: String = statusSnapshot.readyModelId {
-            report += "model:    \(readyModelId)\n";
+        let activeDownloadJob: DaemonDownloadJob?;
+        do {
+            activeDownloadJob = try DaemonProbe.downloadStatus(
+                candidateSocketPaths: candidateSocketPaths);
+        } catch let probeError as DaemonProbeError {
+            switch (probeError) {
+            case .daemonNotRunning:
+                throw StatusError.daemonNotRunning;
+            default:
+                throw StatusError.daemonStoppedResponding;
+            }
         }
-        if let defaultModelId: String = statusSnapshot.defaultModelId {
-            report += "default:  \(defaultModelId)\n";
-        }
-        report += renderDownloadLine(candidateSocketPaths: candidateSocketPaths);
+        var report: String = "";
+        report += "worker:   \(StatusCommand.renderWorkerStatus(statusSnapshot))\n";
+        report += "default:  \(statusSnapshot.defaultModelId ?? "none")\n";
+        report += "download: \(StatusCommand.renderDownloadLine(activeDownloadJob))\n";
         return report;
     }
 
@@ -59,21 +69,18 @@ public enum StatusCommand {
         return workerState;
     }
 
-    private static func renderDownloadLine(candidateSocketPaths: Array<String>) -> String {
-        let activeDownloadJob: DaemonDownloadJob?;
-        do {
-            activeDownloadJob = try DaemonProbe.activeDownloadJob(
-                candidateSocketPaths: candidateSocketPaths);
-        } catch DaemonProbeError.daemonRejected {
-            // The daemon has not wired the Library verbs yet; say so instead
-            // of pretending no download is active.
-            return "download:  unavailable (daemon has not wired Library verbs yet)\n";
-        } catch {
-            return "download:  none\n";
+    private static func renderDownloadLine(_ activeDownloadJob: DaemonDownloadJob?) -> String {
+        guard let activeDownloadJob: DaemonDownloadJob = activeDownloadJob else {
+            return "none";
         }
-        if activeDownloadJob == nil {
-            return "download:  none\n";
+        if let downloadError: String = activeDownloadJob.error {
+            return "\(activeDownloadJob.huggingfaceId) (failed: \(downloadError))";
         }
-        return "download:  active\n";
+        if (activeDownloadJob.bytesTotal == 0) {
+            return "\(activeDownloadJob.huggingfaceId) (\(activeDownloadJob.state))";
+        }
+        return "\(activeDownloadJob.huggingfaceId) — \(activeDownloadJob.state) "
+            + "\(CliFormatting.formatGigabytes(activeDownloadJob.bytesCompleted)) GB / "
+            + "\(CliFormatting.formatGigabytes(activeDownloadJob.bytesTotal)) GB";
     }
 }
