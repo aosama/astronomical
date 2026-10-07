@@ -47,6 +47,10 @@ final class SupervisorIdleWorkerMain {
                 controlDirectoryPath: SupervisorIdleWorkerMain.controlDirectoryFromArguments(
                     CommandLine.arguments));
             exit(0);
+        } catch IdleWorkerChatScenario.ChatFixtureExit.processExitAfterChatAdmission {
+            // A fixture whose scripted breach is ending the process: the
+            // clean exit is the journey's premise, not a fixture failure.
+            exit(0);
         } catch let fixtureError {
             let failureNotice: String = "supervisor idle worker fixture failed: \(fixtureError)\n"
             FileHandle.standardError.write(Data(failureNotice.utf8))

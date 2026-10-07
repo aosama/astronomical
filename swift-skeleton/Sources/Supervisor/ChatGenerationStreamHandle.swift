@@ -185,6 +185,11 @@ extension WorkerSupervisor {
             let isShutdownRequested: Bool = self.isShutdownRequested;
             self.stateLock.unlock();
             if !isShutdownRequested {
+                // The client still owns the handle, so the terminal word
+                // belongs to it before the worker is taken down: the Rust
+                // loop delivers Error(WorkerUnavailable) to the stream and
+                // terminates the worker in the same breach.
+                streamDispatch.eventSink.deliver(.streamError(.workerUnavailable));
                 self.containWorkerFailure(controlError: controlError);
             }
         }
