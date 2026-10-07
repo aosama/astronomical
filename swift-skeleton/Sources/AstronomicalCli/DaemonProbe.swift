@@ -55,17 +55,104 @@ public enum DaemonProbe {
             defaultModelId: defaultModelId);
     }
 
-    /// Whether a Library download is active, when the daemon serves the verb.
-    public static func activeDownloadJob(
+    /// The models discovered on this Mac, with their resident markers.
+    public static func modelsList(
+        candidateSocketPaths: Array<String>
+    ) throws -> Array<DaemonListedModel> {
+        let listResponse: DaemonResponse = try requestOnFreshConnection(
+            candidateSocketPaths: candidateSocketPaths,
+            daemonRequest: .modelsList);
+        switch (listResponse) {
+        case let .modelsList(models):
+            return models;
+        case let .requestRejected(reason):
+            throw DaemonProbeError.daemonRejected(reason: reason);
+        default:
+            throw DaemonProbeError.daemonStoppedResponding;
+        }
+    }
+
+    /// The release download catalog with local readiness per entry.
+    public static func catalog(
+        candidateSocketPaths: Array<String>
+    ) throws -> Array<DaemonCatalogEntry> {
+        let catalogResponse: DaemonResponse = try requestOnFreshConnection(
+            candidateSocketPaths: candidateSocketPaths,
+            daemonRequest: .catalog);
+        switch (catalogResponse) {
+        case let .catalog(entries):
+            return entries;
+        case let .requestRejected(reason):
+            throw DaemonProbeError.daemonRejected(reason: reason);
+        default:
+            throw DaemonProbeError.daemonStoppedResponding;
+        }
+    }
+
+    /// Starts (or resumes) a download; the daemon's refusal arrives as an error.
+    public static func downloadStart(
+        modelId: String,
+        candidateSocketPaths: Array<String>
+    ) throws -> Void {
+        let startResponse: DaemonResponse = try requestOnFreshConnection(
+            candidateSocketPaths: candidateSocketPaths,
+            daemonRequest: .downloadStart(modelId: modelId));
+        switch (startResponse) {
+        case .downloadStarted:
+            return;
+        case let .requestRejected(reason):
+            throw DaemonProbeError.daemonRejected(reason: reason);
+        default:
+            throw DaemonProbeError.daemonStoppedResponding;
+        }
+    }
+
+    /// Persists a new default model id; the daemon's refusal arrives as an error.
+    public static func defaultModelSet(
+        modelId: String,
+        candidateSocketPaths: Array<String>
+    ) throws -> String {
+        let setResponse: DaemonResponse = try requestOnFreshConnection(
+            candidateSocketPaths: candidateSocketPaths,
+            daemonRequest: .defaultModelSet(modelId: modelId));
+        switch (setResponse) {
+        case let .defaultModelSet(defaultModelId):
+            return defaultModelId;
+        case let .requestRejected(reason):
+            throw DaemonProbeError.daemonRejected(reason: reason);
+        default:
+            throw DaemonProbeError.daemonStoppedResponding;
+        }
+    }
+
+    /// Opens a connection the caller owns for its own request.
+    public static func connect(
+        candidateSocketPaths: Array<String>
+    ) throws -> DaemonIpcClient {
+        for candidateSocketPath: String in candidateSocketPaths {
+            if let daemonClient: DaemonIpcClient = try? DaemonIpcClient.connect(
+                socketPath: candidateSocketPath) {
+                return daemonClient;
+            }
+        }
+        throw DaemonProbeError.daemonNotRunning;
+    }
+
+    /// The active download job, if one runs.
+    public static func downloadStatus(
         candidateSocketPaths: Array<String>
     ) throws -> DaemonDownloadJob? {
         let downloadResponse: DaemonResponse = try requestOnFreshConnection(
             candidateSocketPaths: candidateSocketPaths,
             daemonRequest: .downloadStatus);
-        guard case let .downloadStatus(job) = downloadResponse else {
+        switch (downloadResponse) {
+        case let .downloadStatus(job):
+            return job;
+        case let .requestRejected(reason):
+            throw DaemonProbeError.daemonRejected(reason: reason);
+        default:
             throw DaemonProbeError.daemonStoppedResponding;
         }
-        return job;
     }
 
     private static func requestOnFreshConnection(

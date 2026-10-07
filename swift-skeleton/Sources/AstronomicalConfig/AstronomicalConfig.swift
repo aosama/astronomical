@@ -65,6 +65,11 @@ public struct AstronomicalConfig {
         return self.loadedInstancePaths;
     }
 
+    /** The user-persisted default model id for one-shot verbs, when set. */
+    public var defaultModel: String? {
+        return self.loadedUserConfigFile.runtime.defaultModel;
+    }
+
     public var modelDirectories: Array<FilePath> {
         var directoryPaths: Array<FilePath> = Array<FilePath>();
         for modelDirectoryString: String in self.loadedUserConfigFile.runtime.modelDirectories {

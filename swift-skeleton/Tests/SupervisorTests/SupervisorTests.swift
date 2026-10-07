@@ -220,7 +220,7 @@ final class SupervisorTests {
                 == DaemonResponse.status(
                     workerStatus: DaemonWorkerStatus.unavailable,
                     readyModelId: nil,
-                    defaultModelId: nil));
+                    defaultModelId: DefaultModel.builtinDefaultModelId));
 
         service.shutdown();
         #expect(!FileManager.default.fileExists(atPath: service.socketPath));

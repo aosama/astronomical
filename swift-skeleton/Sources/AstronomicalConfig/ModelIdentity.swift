@@ -43,7 +43,7 @@ public enum ModelIdentity {
             if normalizedCandidateModelId.contains(normalizedRequestedModelId)
                 || normalizedRequestedModelId.contains(normalizedCandidateModelId)
                 || normalizedCandidateModelId.hasPrefix(leadingToken) {
-                matchingCandidateModelIds.append(candidateModelId);
+                matchingCandidateModelIds.append(normalizedCandidateModelId);
             }
         }
         matchingCandidateModelIds.sort();
