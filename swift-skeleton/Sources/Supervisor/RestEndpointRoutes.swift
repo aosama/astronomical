@@ -57,6 +57,19 @@ public enum RestEndpointRoutes {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
         });
+        // With reload support the listing and routing surfaces read the live
+        // reloadable snapshot, so one reloaded discovery snapshot reaches
+        // both, exactly like ApplicationState::discovered_models_snapshot.
+        let baseResolvedRuntimeConfig: ResolvedRuntimeConfig = resolvedRuntimeConfig;
+        var liveResolvedRuntimeConfigProvider: @Sendable () -> ResolvedRuntimeConfig =
+            { return baseResolvedRuntimeConfig; };
+        if let reloadContext: RestConfigReloadRouteContext = configReloadContext {
+            liveResolvedRuntimeConfigProvider = {
+                return reloadContext.transitionState.currentReloadableConfig();
+            };
+        }
+        let servingResolvedRuntimeConfigProvider: @Sendable () -> ResolvedRuntimeConfig =
+            liveResolvedRuntimeConfigProvider;
         routeTable.register(
             method: "GET",
             path: "/v1/status",
@@ -89,7 +102,7 @@ public enum RestEndpointRoutes {
             path: "/v1/models",
             handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
                 return try RestEndpointRoutes.advertiseModelsResponse(
-                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    resolvedRuntimeConfig: servingResolvedRuntimeConfigProvider(),
                     workerHealthState: workerHealthState);
             });
         routeTable.registerPrefix(
@@ -98,7 +111,7 @@ public enum RestEndpointRoutes {
             handler: { (request: RestHttpRequest) -> RestHttpResponse in
                 let requestedModelId: String = String(request.path.dropFirst("/v1/models/".count));
                 let advertisedModels: Array<OpenAiModel> = try RestEndpointRoutes.advertiseModels(
-                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    resolvedRuntimeConfig: servingResolvedRuntimeConfigProvider(),
                     workerHealthState: workerHealthState);
                 let resolvedModelId: String = RestAdvertisedModels.resolveRequestedModelId(
                     requestedModelId: requestedModelId,
