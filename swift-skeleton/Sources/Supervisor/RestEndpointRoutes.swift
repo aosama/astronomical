@@ -52,7 +52,8 @@ public enum RestEndpointRoutes {
         cacheClearContext: RestCacheClearRouteContext? = nil,
         shutdownController: ShutdownController? = nil,
         memoryContext: RestMaximumMlxMemoryRouteContext? = nil,
-        configReloadContext: RestConfigReloadRouteContext? = nil
+        configReloadContext: RestConfigReloadRouteContext? = nil,
+        configRevealContext: RestConfigRevealRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -268,6 +269,14 @@ public enum RestEndpointRoutes {
                 path: RestConfigReloadEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
                     return RestConfigReloadEndpoint.handle(request, reloadContext: configReloadContext);
+                });
+        }
+        if let configRevealContext = configRevealContext {
+            routeTable.register(
+                method: RestConfigRevealEndpoint.routeMethod,
+                path: RestConfigRevealEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return RestConfigRevealEndpoint.handle(request, revealContext: configRevealContext);
                 });
         }
         return routeTable;
