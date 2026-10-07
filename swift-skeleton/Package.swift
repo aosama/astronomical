@@ -65,7 +65,11 @@ let package: Package = Package(
         // Wave 2 — apps/astronomical
         .executableTarget(name: "AstronomicalCli", dependencies: ["AstronomicalConfig", "IpcProtocol", "Supervisor"]),
         // Wave 3 — crates/runtime-integration
-        .target(name: "RuntimeIntegration"),
+        .target(
+            name: "RuntimeIntegration",
+            dependencies: [
+                .product(name: "MLX", package: "mlx-swift")
+            ]),
         // Wave 3 — crates/model-serving
         .target(
             name: "ModelServing",
@@ -127,7 +131,14 @@ let package: Package = Package(
         .testTarget(        name: "DaemonProcessJourneys",
         dependencies: ["Supervisor", "JourneyCategories"]),
         .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor", "JourneyCategories"]),
-        .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
+        .testTarget(
+            name: "RuntimeIntegrationTests",
+            dependencies: [
+                "RuntimeIntegration",
+                "JourneyCategories",
+                "ModelServingTestSupport",
+                .product(name: "MLX", package: "mlx-swift")
+            ]),
         .testTarget(
             name: "ModelServingTests",
             dependencies: [

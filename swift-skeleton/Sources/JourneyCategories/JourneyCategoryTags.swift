@@ -15,11 +15,15 @@ import Testing;
  *   kilobyte-scale models). Suite-serialized; always runs under plain
  *   `swift test`. These never load installed model weights.
  * - `realModelJourney`: loads an installed artifact's real weights through
- *   `RealModelJourneyGate`'s environment resolution. Disabled unless the
- *   gate resolves a directory, so plain `swift test` can never pick one
- *   up; suites carrying this tag must also be `.serialized` and must run
- *   one suite at a time (SwiftPM's default `--no-parallel` keeps this
- *   structural — never pass `--parallel` to a real-model run).
+ *   `RealModelJourneyGate`'s environment resolution, and also covers the
+ *   opt-in heavy MLX journeys that need no installed weights but write
+ *   and read roughly 160 MiB of synthesized tensors on this machine
+ *   (gated by their own environment variables for the same reason).
+ *   Disabled unless the gate resolves, so plain `swift test` can never
+ *   pick one up; suites
+ *   carrying this tag must also be `.serialized` and must run one suite
+ *   at a time (SwiftPM's default `--no-parallel` keeps this structural —
+ *   never pass `--parallel` to a real-model run).
  */
 public extension Tag {
 

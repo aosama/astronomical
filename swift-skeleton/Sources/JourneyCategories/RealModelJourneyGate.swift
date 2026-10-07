@@ -24,6 +24,17 @@ public enum RealModelJourneyGate {
     public static func installedArtifactDirectory(
         environmentVariableName: String
     ) -> String? {
+        return RealModelJourneyGate.nonBlankEnvironmentValue(
+            environmentVariableName: environmentVariableName);
+    }
+
+    /// Resolves one non-blank value from an environment variable; nil when
+    /// the variable is unset or blank. Artifact directories and plain
+    /// opt-in flags share this resolution so no journey gate re-implements
+    /// blank-value handling.
+    private static func nonBlankEnvironmentValue(
+        environmentVariableName: String
+    ) -> String? {
         guard let rawValue: String = ProcessInfo.processInfo
             .environment[environmentVariableName]?
             .trimmingCharacters(in: .whitespacesAndNewlines) else {
@@ -40,5 +51,16 @@ public enum RealModelJourneyGate {
     public static func qwen35ArtifactDirectory() -> String? {
         return RealModelJourneyGate.installedArtifactDirectory(
             environmentVariableName: "ASTRONOMICAL_QWEN35_ARTIFACT_DIRECTORY");
+    }
+
+    /// The opt-in switch for the heavy SafeTensors concurrency journey,
+    /// resolved from `ASTRONOMICAL_SAFETENSORS_CONCURRENCY_JOURNEY`. The
+    /// journey writes and reads roughly 160 MiB (four 40 MiB tensors)
+    /// without needing an installed model, so any non-blank value opts
+    /// this machine in; it stays out of the default hermetic run by
+    /// construction.
+    public static func safetensorsConcurrencyJourneyEnabled() -> Bool {
+        return RealModelJourneyGate.installedArtifactDirectory(
+            environmentVariableName: "ASTRONOMICAL_SAFETENSORS_CONCURRENCY_JOURNEY") != nil;
     }
 }
