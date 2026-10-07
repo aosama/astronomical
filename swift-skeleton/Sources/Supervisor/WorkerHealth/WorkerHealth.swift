@@ -152,8 +152,8 @@ public struct WorkerHealthSnapshot: Equatable {
     }
 
     /// Builds a fresh resident-model snapshot without resetting daemon-session
-    /// totals. The prompt-cache pending state and serving-session totals join
-    /// this carry-over when their slices land.
+    /// totals; the pending prompt-cache clear and serving-session totals carry
+    /// over so a replacement never loses queued maintenance work.
     public static func readyWithReplacementModel(
         modelId: String,
         capabilities: WorkerModelCapabilities,
@@ -169,6 +169,7 @@ public struct WorkerHealthSnapshot: Equatable {
         replacementHealthSnapshot.workerRuntimeFeatureConfiguration = previousHealthSnapshot.workerRuntimeFeatureConfiguration;
         replacementHealthSnapshot.servingSession = previousHealthSnapshot.servingSession;
         replacementHealthSnapshot.persistentPromptCacheStats = previousHealthSnapshot.persistentPromptCacheStats;
+        replacementHealthSnapshot.pendingPromptCacheClear = previousHealthSnapshot.pendingPromptCacheClear;
         return replacementHealthSnapshot;
     }
 }
