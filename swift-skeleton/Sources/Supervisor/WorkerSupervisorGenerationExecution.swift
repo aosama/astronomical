@@ -101,6 +101,7 @@ extension WorkerSupervisor {
             streamEvents.append(streamEvent);
             onStreamEvent?(streamEvent);
         }
+        var validationState: ChatGenerationRequestValidationState = ChatGenerationRequestValidationState();
         var generationStartedAt: Date?;
         var firstOutputAt: Date?;
         var prefillElapsedMillis: UInt64 = 0;
@@ -121,8 +122,14 @@ extension WorkerSupervisor {
                 continue;
             }
             switch (workerEvent) {
-            case let .output(eventRequestId, _, generatedTokenCount, outputs, _, _):
+            case let .output(eventRequestId, sequenceNumber, generatedTokenCount, outputs, mlxMemorySnapshot, expertResidency):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try ChatGenerationEventValidation.acceptOutputBatch(
+                    sequenceNumber: sequenceNumber,
+                    generatedTokenCount: generatedTokenCount,
+                    outputs: outputs,
+                    maximumOutputTokens: maximumOutputTokens,
+                    validationState: &validationState);
                 if generationStartedAt == nil {
                     generationStartedAt = Date();
                 }
@@ -133,6 +140,9 @@ extension WorkerSupervisor {
                     generatedTokenCount: UInt32(generatedTokenCount),
                     maximumOutputTokens: UInt32(maximumOutputTokens),
                     generationStartedAt: generationStartedAt!);
+                try self.publishGenerationTelemetry(
+                    mlxMemorySnapshot: mlxMemorySnapshot,
+                    expertResidency: expertResidency);
                 for workerOutput: ChatGenerationOutput in outputs {
                     emitStreamEvent(ChatGenerationStreamEvent.fromWorkerOutput(workerOutput));
                 }
@@ -180,8 +190,19 @@ extension WorkerSupervisor {
                 totalLayerCount,
                 residentExpertCount,
                 residentExpertPayloadBytes,
-                _):
+                preparationMlxMemorySnapshot):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try ChatGenerationEventValidation.acceptGenerationPreparation(
+                    residentExpertCount: residentExpertCount,
+                    residentExpertPayloadBytes: residentExpertPayloadBytes,
+                    validationState: &validationState);
+                if let preparationMlxMemorySnapshot = preparationMlxMemorySnapshot {
+                    try WorkerEventHandler.handle(
+                        .mlxMemorySample(
+                            mlxMemorySnapshot: preparationMlxMemorySnapshot,
+                            expertResidency: nil),
+                        healthState: self.healthState);
+                }
                 let preparationStartedAt: Date = Date();
                 self.publishServingActivity(.generationPreparation, progress: .generationPreparation(
                     requestStartedAt: requestStartedAt,
@@ -195,9 +216,14 @@ extension WorkerSupervisor {
                 generatedTokenCount,
                 eventMaximumOutputTokens,
                 _,
-                _,
-                _):
+                progressMlxMemorySnapshot,
+                progressExpertResidency):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try ChatGenerationEventValidation.acceptGenerationProgress(
+                    generatedTokenCount: generatedTokenCount,
+                    eventMaximumOutputTokens: eventMaximumOutputTokens,
+                    maximumOutputTokens: maximumOutputTokens,
+                    validationState: &validationState);
                 if generationStartedAt == nil {
                     generationStartedAt = Date();
                 }
@@ -205,9 +231,14 @@ extension WorkerSupervisor {
                     generatedTokenCount: UInt32(generatedTokenCount),
                     maximumOutputTokens: UInt32(eventMaximumOutputTokens),
                     generationStartedAt: generationStartedAt!);
+                try self.publishGenerationTelemetry(
+                    mlxMemorySnapshot: progressMlxMemorySnapshot,
+                    expertResidency: progressExpertResidency);
                 continue;
             case let .firstDecodeCompleted(eventRequestId, _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try ChatGenerationEventValidation.acceptFirstDecodeCompleted(
+                    validationState: &validationState);
                 if generationStartedAt == nil {
                     generationStartedAt = Date();
                 }
@@ -231,6 +262,11 @@ extension WorkerSupervisor {
                 persistentPromptCacheDiagnostics,
                 reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try ChatGenerationEventValidation.acceptCompletion(
+                    generatedTokenCount: generatedTokenCount,
+                    reason: reason,
+                    maximumOutputTokens: maximumOutputTokens,
+                    validationState: &validationState);
                 self.recordServingSessionTotals(
                     promptTokenCount: promptTokenCount,
                     cachedTokenCount: cachedTokenCount,
@@ -264,13 +300,54 @@ extension WorkerSupervisor {
                 self.publishServingActivity(.idle, progress: nil);
                 emitStreamEvent(.failed(reason: reason));
                 return streamEvents;
-            case .generationFinalized:
-                // The request-scoped release acknowledgement; the outcome
-                // event always arrives first and already restored idle.
+            case let .generationFinalized(
+                eventRequestId,
+                finalizedExpertMemoryMode,
+                finalizedMlxMemorySnapshot,
+                finalizedExpertResidency):
+                // The request-scoped release acknowledgement: it carries the
+                // final residency memory that replaces any prefill-era
+                // telemetry, exactly as the Rust finalized arm publishes it.
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try WorkerEventHandler.handle(
+                    .mlxMemorySample(
+                        mlxMemorySnapshot: finalizedMlxMemorySnapshot,
+                        expertResidency: finalizedExpertResidency),
+                    healthState: self.healthState);
+                if let finalizedExpertMemoryMode = finalizedExpertMemoryMode {
+                    try self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) -> Void in
+                        snapshot.expertMemoryMode = snapshot.readyModelId.map({ (_: String) -> ExpertMemoryMode in
+                            return finalizedExpertMemoryMode;
+                        });
+                    });
+                }
                 continue;
             default:
                 try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
             }
+        }
+    }
+
+    /// Publishes one generation frame's live memory observation and expert
+    /// residency into health state, mirroring the Rust output and progress
+    /// arms: an absent snapshot leaves the last observation untouched, and
+    /// residency only ever replaces itself when the frame carries one.
+    private func publishGenerationTelemetry(
+        mlxMemorySnapshot: WorkerMlxMemorySnapshot?,
+        expertResidency: WorkerExpertResidencySnapshot?
+    ) throws -> Void {
+        if let mlxMemorySnapshot = mlxMemorySnapshot {
+            try WorkerEventHandler.handle(
+                .mlxMemorySample(
+                    mlxMemorySnapshot: mlxMemorySnapshot,
+                    expertResidency: expertResidency),
+                healthState: self.healthState);
+            return;
+        }
+        if let expertResidency = expertResidency {
+            try self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) -> Void in
+                snapshot.expertResidency = expertResidency;
+            });
         }
     }
 
@@ -315,150 +392,6 @@ extension WorkerSupervisor {
             generatedTokenCount: generatedTokenCount,
             maximumOutputTokens: maximumOutputTokens,
             elapsedMillis: elapsedMillis));
-    }
-
-    /// Runs one embeddings command through the worker: startup wait, model
-    /// swap, command send, and the completed output collection, mirroring the
-    /// chat generation path's containment.
-    func runEmbeddingsGeneration(
-        _ embeddingsCommand: EmbeddingsCommand
-    ) throws -> EmbeddingsOutput {
-        self.stateLock.lock();
-        let workerProcess: WorkerProcess? = self.workerProcess;
-        let eventPump: WorkerEventPump? = self.eventPump;
-        self.stateLock.unlock();
-        guard let workerProcess = workerProcess, let eventPump = eventPump else {
-            throw GenerationStartError.workerUnavailable;
-        }
-        do {
-            try WorkerStartupRuntime.waitForStartupRuntimeConfiguration(
-                workerProcess: workerProcess,
-                eventPump: eventPump,
-                healthState: self.healthState,
-                modelLoadTimeout: self.modelLoadTimeout);
-        } catch {
-            // The startup acknowledgement never arrived for this process; a
-            // fresh attempt is the only recovery.
-            self.containWorkerFailure(controlError: error);
-            throw GenerationStartError.workerUnavailable;
-        }
-        try WorkerGenerate.prepareResidentModel(
-            targetModelId: embeddingsCommand.model,
-            workerProcess: workerProcess,
-            eventPump: eventPump,
-            healthState: self.healthState,
-            modelPolicyCatalog: self.modelPolicyCatalog,
-            modelLoadTimeout: self.modelLoadTimeout,
-            containment: { (controlError: Error) -> Void in
-                self.containWorkerFailure(controlError: controlError);
-            });
-        do {
-            try workerProcess.sendCommand(.generateEmbeddings(embeddingsCommand));
-        } catch let protocolError as ProtocolError {
-            if case let .outgoingMessageTooLarge(actualMessageBytes, maximumMessageBytes) = protocolError {
-                throw GenerationStartError.requestTooLarge(
-                    actualIpcMessageBytes: actualMessageBytes,
-                    maximumIpcMessageBytes: maximumMessageBytes);
-            }
-            self.containWorkerFailure(controlError: protocolError);
-            throw GenerationStartError.workerUnavailable;
-        } catch let sendError {
-            self.containWorkerFailure(controlError: sendError);
-            throw GenerationStartError.workerUnavailable;
-        }
-        do {
-            return try self.collectEmbeddingsEvents(
-                embeddingsCommand.requestId,
-                eventPump: eventPump);
-        } catch let controlError as WorkerControlError {
-            self.containWorkerFailure(controlError: controlError);
-            throw EmbeddingsExecutionError.workerUnavailable;
-        }
-    }
-
-    /// Drains worker events until this embeddings request completes or fails,
-    /// applying the same active-request matching as the chat collection.
-    func collectEmbeddingsEvents(
-        _ requestId: RequestId,
-        eventPump: WorkerEventPump
-    ) throws -> EmbeddingsOutput {
-        var stagedEmbeddingsOutcome: Result<EmbeddingsOutput, EmbeddingsExecutionError>? = nil;
-        while true {
-            self.stateLock.lock();
-            let isShutdownRequested: Bool = self.isShutdownRequested;
-            self.stateLock.unlock();
-            if isShutdownRequested {
-                throw WorkerControlError.workerEventStreamClosed;
-            }
-            guard let workerEvent: WorkerEvent = try eventPump.nextEvent(
-                within: WorkerSupervisor.generationPollSeconds) else {
-                continue;
-            }
-            switch (workerEvent) {
-            case let .embeddingsCompleted(
-                eventRequestId, embeddings, inputTokenCounts, _):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                if (stagedEmbeddingsOutcome != nil) {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "duplicate embeddings terminal outcome");
-                }
-                stagedEmbeddingsOutcome = .success(EmbeddingsOutput(
-                    embeddings: embeddings,
-                    inputTokenCounts: inputTokenCounts));
-                continue
-            case let .embeddingsFailed(eventRequestId, reason):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                if (stagedEmbeddingsOutcome != nil) {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "duplicate embeddings terminal outcome");
-                }
-                stagedEmbeddingsOutcome = .failure(EmbeddingsExecutionError.workerFailure(reason));
-                continue
-            case let .embeddingsFinalized(eventRequestId, _, mlxMemorySnapshot):
-                // The request resolves at its release acknowledgement exactly
-                // as the Rust executor pairs the terminal frame with the
-                // finalized frame, so no trailing release frame is ever left
-                // for the next waiter to trip over.
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                if let mlxMemorySnapshot = mlxMemorySnapshot {
-                    try WorkerEventHandler.handle(
-                        .mlxMemorySample(
-                            mlxMemorySnapshot: mlxMemorySnapshot,
-                            expertResidency: nil),
-                        healthState: self.healthState);
-                }
-                self.publishServingActivity(.idle, progress: nil);
-                guard let resolvedEmbeddingsOutcome: Result<EmbeddingsOutput, EmbeddingsExecutionError> =
-                    stagedEmbeddingsOutcome else {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "embeddings finalized before a terminal outcome");
-                }
-                switch (resolvedEmbeddingsOutcome) {
-                case let .success(embeddingsOutput):
-                    return embeddingsOutput;
-                case let .failure(embeddingsError):
-                    throw embeddingsError;
-                }
-            case let .output(eventRequestId, _, _, _, _, _):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "the embeddings request received a chat output frame");
-            case let .completed(eventRequestId, _, _, _, _, _, _):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "the embeddings request received a chat terminal frame");
-            case let .failed(eventRequestId, _):
-                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "the embeddings request received a chat terminal frame");
-            case .generationPreparationStarted, .generationProgress, .firstDecodeCompleted,
-                 .promptWorkReuse, .generationFinalized, .prefillProgress:
-                // Request-scoped telemetry without endpoint presentation.
-                continue;
-            default:
-                try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
-            }
-        }
     }
 
     static func requireActiveRequest(

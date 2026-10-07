@@ -23,6 +23,8 @@ enum IdleWorkerCancellationScenario {
         "astronomical/mlx-memory-during-cancellation-fixture"
     static let MLX_MEMORY_CLEAR_DURING_CANCELLATION_MODEL_ID: String =
         "astronomical/mlx-memory-clear-during-cancellation-fixture"
+    static let DELAYED_FRAGMENT_CHAT_MODEL_ID: String =
+        "astronomical/delayed-fragment-chat-fixture"
     static let CANCELLATION_ACKNOWLEDGEMENT_DELAY_SECONDS: TimeInterval = 4
 
     /// One in-flight request whose completion waits for the supervisor's
@@ -44,6 +46,11 @@ enum IdleWorkerCancellationScenario {
 
         /// Acknowledges only after a delay longer than the default bound.
         case delayedAcknowledgement;
+
+        /// Stays silent on the generate command and acknowledges a later
+        /// cancel immediately: the in-flight request whose disconnected
+        /// client frees capacity through the bounded cancellation path.
+        case immediateAcknowledgement;
 
         /// Acknowledges a foreign request, breaching the cancellation
         /// protocol.
@@ -76,6 +83,8 @@ enum IdleWorkerCancellationScenario {
             cancellationKind = .publishMemoryThenAcknowledgement;
         case IdleWorkerCancellationScenario.MLX_MEMORY_CLEAR_DURING_CANCELLATION_MODEL_ID:
             cancellationKind = .clearMemoryThenAcknowledgement;
+        case IdleWorkerCancellationScenario.DELAYED_FRAGMENT_CHAT_MODEL_ID:
+            cancellationKind = .immediateAcknowledgement;
         default:
             cancellationKind = nil;
         }
@@ -117,6 +126,8 @@ enum IdleWorkerCancellationScenario {
             return;
         case .delayedAcknowledgement:
             Thread.sleep(forTimeInterval: IdleWorkerCancellationScenario.CANCELLATION_ACKNOWLEDGEMENT_DELAY_SECONDS);
+            try eventWriter.sendEvent(IdleWorkerCancellationScenario.cancelledCompletion(requestId));
+        case .immediateAcknowledgement:
             try eventWriter.sendEvent(IdleWorkerCancellationScenario.cancelledCompletion(requestId));
         case .unexpectedEvent:
             try eventWriter.sendEvent(IdleWorkerCancellationScenario.cancelledCompletion(
