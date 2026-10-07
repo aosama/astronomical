@@ -60,6 +60,13 @@ internal enum ConfigFileStore {
                 );
             }
         }
+        // The load path validates the global chunking section exactly as the
+        // Rust validate_user_config_file -> UserConfigFile::validate chain
+        // does, so an invalid document fails the strict read instead of
+        // surfacing later as a reload-time surprise.
+        let _ = try ChunkingConfig.resolve(
+            configuredChunkingFile: userConfigFile.chunking ?? ChunkingConfigFile.defaultFile()
+        );
     }
 
     private static func createFirstRunConfig(configFilePath: FilePath) throws -> UserConfigFile {
