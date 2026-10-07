@@ -88,6 +88,11 @@ let package: Package = Package(
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol", "JourneyCategories"]),
         .testTarget(name: "RestContractTests", dependencies: ["RestContract", "JourneyCategories"]),
         .testTarget(name: "SupervisorTests", dependencies: ["Supervisor", "JourneyCategories"]),
+        // The daemon-process journeys spawn the real astronomicald binary;
+        // they live in their own target — a separate process under
+        // `swift test`, like the Rust tree's separate integration-test
+        // binary — so they can never starve the parallel hermetic suites.
+        .testTarget(name: "DaemonProcessJourneys", dependencies: ["JourneyCategories"]),
         .testTarget(name: "AstronomicalCliTests", dependencies: ["AstronomicalCli", "AstronomicalConfig", "IpcProtocol", "Supervisor", "JourneyCategories"]),
         .testTarget(name: "RuntimeIntegrationTests", dependencies: ["RuntimeIntegration"]),
         .testTarget(

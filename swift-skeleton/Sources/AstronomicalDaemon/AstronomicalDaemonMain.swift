@@ -22,7 +22,10 @@ struct AstronomicalDaemonMain {
         do {
             daemonCommand = try DaemonArguments.parse(processArguments: Array(CommandLine.arguments));
         } catch let argumentError as DaemonArgumentError {
+            // The usage block rides the rejection the way the Rust argument
+            // parser prints it, so a bad invocation teaches the fix inline.
             FileHandle.standardError.write(Data("astronomicald: \(argumentError)\n".utf8));
+            FileHandle.standardError.write(Data("\(DaemonArguments.helpText())\n".utf8));
             exit(2);
         } catch {
             FileHandle.standardError.write(Data("astronomicald: unexpected argument failure\n".utf8));
@@ -144,7 +147,12 @@ struct AstronomicalDaemonMain {
                         runtimeConfigResolver: runtimeConfigResolver,
                         workerControl: workerSupervisor,
                         workerHealthState: workerHealthState,
-                        generationActivityIdleProvider: { return true })));
+                        generationActivityIdleProvider: { return true }),
+                    configRevealContext: RestConfigRevealRouteContext(revealActiveConfig: {
+                        let configFilePath: FilePath = instancePaths.configFilePath;
+                        return ConfigRevealOpener.revealInFinder(configFilePath: configFilePath);
+                    })),
+                corsPolicy: RestCorsPolicy.canvasShell());
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);
