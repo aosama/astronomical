@@ -290,6 +290,13 @@ public struct WorkerPersistentPromptCacheRequestDiagnostics: Equatable {
         return .object(wireObject);
     }
 
+    /// The serde-shaped object the supervisor embeds into the local
+    /// `performance.jsonl` row; identical to the IPC wire shape because the
+    /// Rust record serializes the same struct into both.
+    public func performanceLogWireValue() -> JsonWireValue {
+        return self.wireValue();
+    }
+
     internal static func fromWireValue(_ wireValue: JsonWireValue) throws -> WorkerPersistentPromptCacheRequestDiagnostics {
         let wireObject = try JsonWireValue.extractObject(wireValue);
         let parsedDiagnostics = WorkerPersistentPromptCacheRequestDiagnostics(
