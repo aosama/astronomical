@@ -64,22 +64,61 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
     public func prepareChatGeneration(
         _ chatGenerationCommand: ChatGenerationCommand
     ) throws -> any ActiveChatGeneration {
-        if let thinkingChannelSeed = chatGenerationCommand.qwenThinkingChannelSeed,
-            thinkingChannelSeed.isEmpty == false {
-            throw ChatPreparationRejection(reason: .invalidRequest(
-                reason: "the thinking channel seed lands with the thinking-budget slice"));
+        // A zero budget disables the thinking channel entirely: the template's
+        // opened block closes immediately and generation starts in the visible
+        // answer channel, mirroring the Rust enable-thinking rule.
+        let enableThinking = chatGenerationCommand.settings.thinkingBudget != 0;
+        let forcedTransitionTokenIds = self.forcedThinkingTransitionTokenIds();
+        let effectiveThinkingAllowance = Qwen35ThinkingAllowance
+            .resolveEffectiveThinkingAllowance(
+                requestedThinkingBudget: chatGenerationCommand.settings.thinkingBudget,
+                enableThinking: enableThinking,
+                maximumOutputTokens: chatGenerationCommand.settings.maxOutputTokens,
+                transitionTokenCount: forcedTransitionTokenIds.count);
+        if let effectiveThinkingAllowance,
+            let requestedBudget = chatGenerationCommand.settings.thinkingBudget,
+            enableThinking && requestedBudget > 0
+        {
+            let minimumBoundedOutputTokens = Qwen35ThinkingAllowance
+                .minimumBoundedOutputTokenCount(
+                    thinkingBudget: effectiveThinkingAllowance,
+                    forcedTransitionTokenCount: forcedTransitionTokenIds.count) ?? Int.max;
+            if Int(chatGenerationCommand.settings.maxOutputTokens) < minimumBoundedOutputTokens {
+                throw ChatPreparationRejection(reason: .invalidRequest(
+                    reason:
+                        "the thinking allowance \(effectiveThinkingAllowance) cannot reserve its forced reasoning transition (\(forcedTransitionTokenIds.count) tokens) and one visible answer token within the \(chatGenerationCommand.settings.maxOutputTokens) output-token limit"));
+            }
         }
-        if chatGenerationCommand.settings.thinkingBudget != nil {
+        let thinkingBudgetState: Qwen35ThinkingBudgetState;
+        do {
+            thinkingBudgetState = try Qwen35ThinkingBudgetState(
+                startsInsideThinking: enableThinking,
+                thinkingBudget: effectiveThinkingAllowance,
+                forcedTransitionTokenIds: forcedTransitionTokenIds,
+                naturalReasoningEndTokenIds: Array(
+                    self.naturalReasoningEndTokenIdsIncludingToolCalls()));
+        } catch {
             throw ChatPreparationRejection(reason: .invalidRequest(
-                reason: "the thinking budget lands with the thinking-budget slice"));
+                reason: "invalid Qwen3.5 thinking-budget configuration: \(error)"));
         }
+        // The seed is untrusted Markdown: it is marker-escaped before it enters
+        // the prompt, and the trimmed text echoes back as the first reasoning
+        // fragment so clients observe the seeded context.
+        let normalizedThinkingSeed = enableThinking
+            ? chatGenerationCommand.qwenThinkingChannelSeed.flatMap {
+                (seed: String) -> String? in
+                let trimmedSeed = seed.trimmingCharacters(in: .whitespacesAndNewlines);
+                return trimmedSeed.isEmpty ? nil : trimmedSeed;
+            }
+            : nil;
         // The parser validates declared tool schemas up front so a broken
         // declaration surfaces as a typed malformed-output rejection naming
         // the offending tool, mirroring the Rust request-output parser path.
         let outputParser: Qwen35OutputParser;
         do {
             outputParser = try Qwen35OutputParser(
-                declaredTools: chatGenerationCommand.tools, startsInsideThinking: true);
+                declaredTools: chatGenerationCommand.tools,
+                startsInsideThinking: enableThinking);
         } catch {
             throw ChatPreparationRejection(reason: .malformedModelOutput);
         }
@@ -99,7 +138,7 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
                     reason: "the structured-generation constraint failed to compile"));
             }
         }
-        let promptTokenIds: Array<Int>;
+        var promptTokenIds: Array<Int>;
         do {
             promptTokenIds = try self.tokenizer.applyChatTemplate(
                 messages: Qwen35ChatProcessor.templateMessages(
@@ -111,9 +150,21 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
             throw ChatPreparationRejection(reason: .invalidRequest(
                 reason: "the conversation could not be rendered into the model chat template"));
         }
+        // The stock template opened the thinking channel; a disabled channel
+        // closes it immediately and an enabled channel receives the escaped
+        // seed right after the open, mirroring the Rust prompt renderer.
+        if enableThinking == false {
+            promptTokenIds += self.tokenizer.encode(
+                text: self.reasoningConfig.endDelimiter + "\n\n", addSpecialTokens: false);
+        } else if let normalizedThinkingSeed {
+            promptTokenIds += self.tokenizer.encode(
+                text: Qwen35TemplateSafeContent.escapedContent(normalizedThinkingSeed) + "\n",
+                addSpecialTokens: false);
+        }
         return Qwen35ActiveChatGeneration(
             tokenizer: self.tokenizer,
             outputParser: outputParser,
+            seededReasoningText: normalizedThinkingSeed,
             inferenceRequest: Qwen35PreparedInferenceRequest(
                 promptTokenIds: promptTokenIds.map { (promptTokenId: Int) -> UInt32 in
                     return UInt32(clamping: promptTokenId);
@@ -121,9 +172,54 @@ public final class Qwen35ChatProcessor: ModelGenerationProcessor {
                 samplingSettings: Qwen35SamplingSettings(
                     chatGenerationSettings: chatGenerationCommand.settings),
                 guidedConstraint: guidedConstraint,
-                startsInsideThinking: true,
-                naturalReasoningEndTokenIds: self.naturalReasoningEndTokenIds()),
+                startsInsideThinking: enableThinking,
+                naturalReasoningEndTokenIds: self.naturalReasoningEndTokenIdsIncludingToolCalls(),
+                thinkingBudgetState: thinkingBudgetState),
             endOfSequenceTokenIds: self.endOfSequenceTokenIds);
+    }
+
+    /// Resolves the forced reasoning-transition ids: the template-authored
+    /// pivot text tokenized without special tokens, closed by the single
+    /// think-end token id so the transition ends at a recognized reasoning
+    /// boundary. A tokenizer without a single-id think close cannot serve a
+    /// positive budget — the state constructor rejects the empty transition.
+    private func forcedThinkingTransitionTokenIds() -> Array<UInt32> {
+        var transitionTokenIds = self.tokenizer.encode(
+            text: Qwen35ThinkingBudgetState.thinkingBudgetTransitionText,
+            addSpecialTokens: false).map { (transitionTokenId: Int) -> UInt32 in
+            return UInt32(clamping: transitionTokenId);
+        };
+        if let thinkEndTokenId = singleAddedTokenId(forText: self.reasoningConfig.endDelimiter) {
+            transitionTokenIds.append(thinkEndTokenId);
+        }
+        return transitionTokenIds;
+    }
+
+    /// The reasoning-end ids plus the `<tool_call>` start: mlx-lm transitions
+    /// from reasoning to tool on a tool-call start, so an emitted tool call
+    /// also closes the thinking channel naturally. Only single-id special
+    /// tokens count as boundaries — a tokenizer that spells a marker as
+    /// character pieces has no such boundary, and inventing one from a
+    /// character or unknown-fallback id would corrupt the budget validation.
+    private func naturalReasoningEndTokenIdsIncludingToolCalls() -> Set<UInt32> {
+        var boundaryTokenIds: Set<UInt32> = [];
+        if let thinkEndTokenId = singleAddedTokenId(forText: self.reasoningConfig.endDelimiter) {
+            boundaryTokenIds.insert(thinkEndTokenId);
+        }
+        if let toolCallStartTokenId = singleAddedTokenId(forText: "<tool_call>") {
+            boundaryTokenIds.insert(toolCallStartTokenId);
+        }
+        return boundaryTokenIds;
+    }
+
+    /// The token id for `text` only when the tokenizer encodes it as exactly
+    /// one added token.
+    private func singleAddedTokenId(forText text: String) -> UInt32? {
+        let encodedTokenIds = self.tokenizer.encode(text: text, addSpecialTokens: false);
+        guard encodedTokenIds.count == 1, let singleTokenId = encodedTokenIds.first else {
+            return nil;
+        }
+        return UInt32(clamping: singleTokenId);
     }
 
     /// Resolves the `</think>` boundary token ids from the tokenizer so the
@@ -190,6 +286,10 @@ final class Qwen35ActiveChatGeneration: ActiveChatGeneration {
 
     private let outputParser: Qwen35OutputParser;
     private var detokenizer: NaiveStreamingDetokenizer;
+    /// The seeded reasoning text emitted once as the first reasoning fragment:
+    /// the seed is assistant reasoning already present in the prompt, so
+    /// clients must observe it before model-generated continuations.
+    private var pendingSeededReasoningText: String?;
     let inferenceRequest: any PreparedInferenceRequest;
     let promptTokenCount: Int;
     private let endOfSequenceTokenIds: Set<UInt32>;
@@ -197,11 +297,13 @@ final class Qwen35ActiveChatGeneration: ActiveChatGeneration {
     init(
         tokenizer: any Tokenizer,
         outputParser: Qwen35OutputParser,
+        seededReasoningText: String?,
         inferenceRequest: Qwen35PreparedInferenceRequest,
         endOfSequenceTokenIds: Set<UInt32>
     ) {
         self.outputParser = outputParser;
         self.detokenizer = NaiveStreamingDetokenizer(tokenizer: tokenizer);
+        self.pendingSeededReasoningText = seededReasoningText;
         self.inferenceRequest = inferenceRequest;
         self.promptTokenCount = inferenceRequest.promptTokenCount;
         self.endOfSequenceTokenIds = endOfSequenceTokenIds;
@@ -219,12 +321,26 @@ final class Qwen35ActiveChatGeneration: ActiveChatGeneration {
             return ModelGeneratedTokenTranslation(publicOutputs: []);
         }
         let outputEvents = try self.outputParser.pushFragment(decodedFragment);
-        return ModelGeneratedTokenTranslation(
-            publicOutputs: Qwen35ActiveChatGeneration.outputs(from: outputEvents));
+        var publicOutputs = Qwen35ActiveChatGeneration.outputs(from: outputEvents);
+        self.prependSeededReasoningIfNeeded(into: &publicOutputs);
+        return ModelGeneratedTokenTranslation(publicOutputs: publicOutputs);
     }
 
     func finishOutputs() throws -> Array<ChatGenerationOutput> {
-        return Qwen35ActiveChatGeneration.outputs(from: self.outputParser.finish());
+        var publicOutputs = Qwen35ActiveChatGeneration.outputs(
+            from: self.outputParser.finish());
+        self.prependSeededReasoningIfNeeded(into: &publicOutputs);
+        return publicOutputs;
+    }
+
+    private func prependSeededReasoningIfNeeded(
+        into publicOutputs: inout Array<ChatGenerationOutput>
+    ) {
+        guard let seededReasoningText = self.pendingSeededReasoningText else {
+            return;
+        }
+        self.pendingSeededReasoningText = nil;
+        publicOutputs.insert(.reasoning(text: seededReasoningText), at: 0);
     }
 
     private static func outputs(
