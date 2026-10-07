@@ -54,7 +54,7 @@ public actor LibraryDownloadCoordinator {
     private let hubDownloadService: HubDownloadService
     private let jobRecordStore: LibraryDownloadJobRecordStore
     private let discoveryRefresh: @Sendable () async throws -> Void
-    private let availableCapacityBytes: @Sendable (_ volumeDirectory: FilePath) -> UInt64?
+    private let diskPreflight: DownloadDiskPreflight<LibraryDownloadCoordinator.CoordinatorDiskCapacityQuery>
 
     private var activeTask: Task<Void, Never>?
     private var liveProgress: LiveProgress?
@@ -76,7 +76,31 @@ public actor LibraryDownloadCoordinator {
             cacheDirectory: stateDirectory.appending(component: "hub-blob-cache"))
         self.jobRecordStore = LibraryDownloadJobRecordStore(stateDirectory: stateDirectory)
         self.discoveryRefresh = discoveryRefresh
-        self.availableCapacityBytes = availableCapacityBytes
+        self.diskPreflight = DownloadDiskPreflight(
+            capacityQuery: LibraryDownloadCoordinator.CoordinatorDiskCapacityQuery(
+                availableCapacityBytes: availableCapacityBytes))
+    }
+
+    /// Adapts the coordinator's injectable volume-capacity closure onto the
+    /// typed preflight query seam; an unanswered query is a typed failure,
+    /// not a silently skipped check.
+    private struct CoordinatorDiskCapacityQuery: DiskCapacityQuery {
+
+        private let availableCapacityBytes: @Sendable (_ volumeDirectory: FilePath) -> UInt64?;
+
+        fileprivate init(
+            availableCapacityBytes: @escaping @Sendable (_ volumeDirectory: FilePath) -> UInt64?
+        ) {
+            self.availableCapacityBytes = availableCapacityBytes;
+        }
+
+        func availableSpaceBytes(existingSameVolumePath: FilePath) -> Result<UInt64, DiskCapacityQueryError> {
+            if let availableBytes: UInt64 = self.availableCapacityBytes(existingSameVolumePath) {
+                return .success(availableBytes);
+            }
+            return .failure(.volumeUnavailable(
+                reason: "the volume capacity query returned no answer"));
+        }
     }
 
     public func recoverStartupState() {
@@ -199,11 +223,13 @@ public actor LibraryDownloadCoordinator {
             huggingfaceId: identity,
             modelsDirectory: self.modelsDirectory)
         do {
-            if let capacityBytes: UInt64 = self.availableCapacityBytes(self.modelsDirectory) {
-                if capacityBytes < catalogEntry.approximateSizeBytes * 2 {
-                    self.failJob(errorCode: .insufficientDisk)
-                    return
-                }
+            do {
+                _ = try self.diskPreflight.checkInitialDownload(
+                    existingSameVolumePath: self.modelsDirectory,
+                    catalogApproximateBytes: catalogEntry.approximateSizeBytes);
+            } catch {
+                self.failJob(errorCode: .insufficientDisk);
+                return;
             }
             _ = try await self.hubDownloadService.fetchModelMetadata(
                 repositoryId: identity,
@@ -238,7 +264,7 @@ public actor LibraryDownloadCoordinator {
             let stagingDestination: FilePath = self.stagingRootDirectory
                 .appending(component: catalogEntry.huggingfaceId)
             let destinationUrl: URL = URL(fileURLWithPath: stagingDestination.string)
-            try await self.hubDownloadService.downloadSnapshot(
+            _ = try await self.hubDownloadService.downloadSnapshot(
                 repositoryId: identity,
                 revision: catalogEntry.revision,
                 matching: [],

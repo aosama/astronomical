@@ -125,7 +125,10 @@ final class LibraryDownloadJourneyHarness {
                 }
             },
             availableCapacityBytes: { (_ volumeDirectory: FilePath) -> UInt64? in
-                return nil
+                // Abundant scripted capacity: the disk-preflight contract has
+                // its own suite; these journeys exercise the transfer, not
+                // the volume, and an unanswered query now fails closed.
+                return 1_000_000_000_000;
             })
         await downloadCoordinator.recoverStartupState()
 

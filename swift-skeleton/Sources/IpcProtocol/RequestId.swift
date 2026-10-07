@@ -1,7 +1,7 @@
 import Foundation;
 
 /// Supervisor-local correlation identifier for one generation request.
-public struct RequestId: Equatable, Hashable {
+public struct RequestId: Equatable, Hashable, Sendable {
     internal let rawRequestId: UInt64;
 
     /// Creates a request identifier from a supervisor-local monotonic value.
