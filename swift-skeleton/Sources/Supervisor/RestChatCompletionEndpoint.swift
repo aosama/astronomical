@@ -14,6 +14,7 @@ public struct RestChatRouteContext: @unchecked Sendable {
     let requestIdAllocator: ChatRequestIdAllocator;
     let resolvedRuntimeConfig: ResolvedRuntimeConfig;
     let instancePaths: AstronomicalInstancePaths;
+    let completionIdNamespace: CompletionIdNamespace;
     let liveResolvedRuntimeConfigProvider: @Sendable () -> ResolvedRuntimeConfig;
 
     public init(
@@ -21,12 +22,14 @@ public struct RestChatRouteContext: @unchecked Sendable {
         requestIdAllocator: ChatRequestIdAllocator,
         resolvedRuntimeConfig: ResolvedRuntimeConfig,
         instancePaths: AstronomicalInstancePaths,
+        completionIdNamespace: CompletionIdNamespace? = nil,
         liveResolvedRuntimeConfigProvider: @escaping @Sendable () -> ResolvedRuntimeConfig? = { nil }
     ) {
         self.chatExecutor = chatExecutor;
         self.requestIdAllocator = requestIdAllocator;
         self.resolvedRuntimeConfig = resolvedRuntimeConfig;
         self.instancePaths = instancePaths;
+        self.completionIdNamespace = completionIdNamespace ?? CompletionIdNamespace.nextApplicationInstance();
         self.liveResolvedRuntimeConfigProvider = {
             return liveResolvedRuntimeConfigProvider() ?? resolvedRuntimeConfig;
         };
@@ -197,7 +200,7 @@ enum RestChatCompletionEndpoint {
                 code: "chat_stream_timestamp_failed");
         }
         let completionId: String =
-            "chatcmpl-\(CompletionIdNamespace.shared.rawValue)-\(requestIdentifier)";
+            "chatcmpl-\(chatContext.completionIdNamespace.rawValue)-\(requestIdentifier)";
         let chatResponse: RestHttpResponse;
         if requestParts.stream {
             chatResponse = RestChatCompletionEndpoint.streamingResponse(
@@ -468,29 +471,46 @@ enum RestChatCompletionEndpoint {
     }
 }
 
-/// Per-process completion-id namespace: startup nanoseconds, process id, and
-/// an in-process counter distinguish every daemon lifetime, mirroring the
-/// Rust completion_id_namespace().
+/// Per-application completion-id namespace: startup nanoseconds, process id,
+/// and a per-process counter distinguish every application instance, mirroring
+/// the Rust completion_id_namespace() — each built application (route table)
+/// takes its own, so identifiers never repeat across restarts.
 public final class CompletionIdNamespace: @unchecked Sendable {
 
-    static let shared: CompletionIdNamespace = CompletionIdNamespace();
+    static let shared: CompletionIdNamespace = CompletionIdNamespace(applicationInstanceId: 0);
+
+    /// The per-process application-instance counter, lock-guarded for Swift
+    /// concurrency while staying a plain integer like the Rust atomic.
+    private static let applicationInstanceCounter: ApplicationInstanceCounter = ApplicationInstanceCounter();
 
     let rawValue: String;
 
-    private let counterLock: NSLock;
-    private var nextInstanceCounter: UInt64;
+    /// One namespace per built application, exactly like the Rust builder's
+    /// NEXT_APPLICATION_INSTANCE_ID counter.
+    static func nextApplicationInstance() -> CompletionIdNamespace {
+        return CompletionIdNamespace(
+            applicationInstanceId: CompletionIdNamespace.applicationInstanceCounter.takeNext());
+    }
 
-    private init() {
+    private init(applicationInstanceId: UInt64) {
         let startedAtUnixNanoseconds: UInt64 = UInt64(
             Date().timeIntervalSince1970 * 1_000_000_000);
         let processIdentifier: UInt64 = UInt64(ProcessInfo.processInfo.processIdentifier);
-        self.counterLock = NSLock();
-        self.nextInstanceCounter = 0;
-        self.counterLock.lock();
-        let applicationInstanceId: UInt64 = self.nextInstanceCounter;
-        self.nextInstanceCounter += 1;
-        self.counterLock.unlock();
         self.rawValue = String(format: "%llx-%llx-%llx",
             startedAtUnixNanoseconds, processIdentifier, applicationInstanceId);
+    }
+}
+
+private final class ApplicationInstanceCounter: @unchecked Sendable {
+
+    private let counterLock: NSLock = NSLock();
+    private var nextApplicationInstanceId: UInt64 = 0;
+
+    func takeNext() -> UInt64 {
+        self.counterLock.lock();
+        let applicationInstanceId: UInt64 = self.nextApplicationInstanceId;
+        self.nextApplicationInstanceId &+= 1;
+        self.counterLock.unlock();
+        return applicationInstanceId;
     }
 }

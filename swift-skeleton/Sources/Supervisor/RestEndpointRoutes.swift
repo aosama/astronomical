@@ -57,6 +57,10 @@ public enum RestEndpointRoutes {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
         });
+        // One completion-id namespace per built application, shared by every
+        // answering surface so identifiers stay stable within a daemon
+        // lifetime and never repeat across restarts.
+        let completionIdNamespace: CompletionIdNamespace = CompletionIdNamespace.nextApplicationInstance();
         // With reload support the listing and routing surfaces read the live
         // reloadable snapshot, so one reloaded discovery snapshot reaches
         // both, exactly like ApplicationState::discovered_models_snapshot.
@@ -132,7 +136,15 @@ public enum RestEndpointRoutes {
                 method: RestChatCompletionEndpoint.routeMethod,
                 path: RestChatCompletionEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
-                    return RestChatCompletionEndpoint.handle(request, chatContext: chatContext);
+                    return RestChatCompletionEndpoint.handle(request, chatContext: RestChatRouteContext(
+                        chatExecutor: chatContext.chatExecutor,
+                        requestIdAllocator: chatContext.requestIdAllocator,
+                        resolvedRuntimeConfig: chatContext.resolvedRuntimeConfig,
+                        instancePaths: chatContext.instancePaths,
+                        completionIdNamespace: completionIdNamespace,
+                        liveResolvedRuntimeConfigProvider: {
+                            return chatContext.liveResolvedRuntimeConfig();
+                        }));
                 });
         }
         if let responsesContext = responsesContext {
@@ -140,7 +152,15 @@ public enum RestEndpointRoutes {
                 method: RestResponsesEndpoint.routeMethod,
                 path: RestResponsesEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
-                    return RestResponsesEndpoint.handle(request, responsesContext: responsesContext);
+                    return RestResponsesEndpoint.handle(request, responsesContext: RestResponsesRouteContext(
+                        responsesExecutor: responsesContext.responsesExecutor,
+                        requestIdAllocator: responsesContext.requestIdAllocator,
+                        resolvedRuntimeConfig: responsesContext.resolvedRuntimeConfig,
+                        instancePaths: responsesContext.instancePaths,
+                        completionIdNamespace: completionIdNamespace,
+                        liveResolvedRuntimeConfigProvider: {
+                            return responsesContext.liveResolvedRuntimeConfig();
+                        }));
                 });
         }
         if let embeddingsContext = embeddingsContext {
