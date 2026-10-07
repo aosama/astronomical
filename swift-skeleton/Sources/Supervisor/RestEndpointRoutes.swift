@@ -49,7 +49,8 @@ public enum RestEndpointRoutes {
         responsesContext: RestResponsesRouteContext? = nil,
         embeddingsContext: RestEmbeddingsRouteContext? = nil,
         imageContext: RestImageGenerationRouteContext? = nil,
-        cacheClearContext: RestCacheClearRouteContext? = nil
+        cacheClearContext: RestCacheClearRouteContext? = nil,
+        shutdownController: ShutdownController? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -147,6 +148,16 @@ public enum RestEndpointRoutes {
                     return try RestCacheClearEndpoint.handle(
                         request,
                         cacheClearContext: cacheClearContext);
+                });
+        }
+        if let shutdownController = shutdownController {
+            routeTable.register(
+                method: RestShutdownControlEndpoint.routeMethod,
+                path: RestShutdownControlEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return try RestShutdownControlEndpoint.handle(
+                        request,
+                        shutdownController: shutdownController);
                 });
         }
         return routeTable;
