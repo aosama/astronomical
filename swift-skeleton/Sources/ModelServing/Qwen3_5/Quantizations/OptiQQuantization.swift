@@ -107,7 +107,9 @@ public struct OptiQQuantizationConfig: Equatable {
             }
             let overrideObject: JsonWireObject = try JsonWireValue.extractObject(
                 try quantizationObject.requireObjectValue(fieldName: propertyName));
-            try overrideObject.rejectUnknownFields(allowedFieldNames: ["bits", "group_size"]);
+            // Real mixed-precision artifacts repeat `mode` inside each override;
+            // serde ignores unknown override fields, so unknown keys here must
+            // not reject the artifact.
             moduleOverrides.append((
                 propertyName,
                 OptiQQuantizationOverride(

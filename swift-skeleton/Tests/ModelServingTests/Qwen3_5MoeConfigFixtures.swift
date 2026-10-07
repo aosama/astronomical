@@ -171,6 +171,107 @@ enum Qwen3_5MoeConfigFixtures {
             path: ["per_layer"], newValue: .object(measuredModuleBits)));
     }
 
+    /// Freezes a sparse mixed-precision quantization configuration shape:
+    /// a 6-bit affine default with a sparse override map whose unlisted expected
+    /// modules (router gates) are stored as native floating point and
+    /// resolved through the shard-index scan.
+    static func frozenSparseMixedPrecisionConfigBytes() throws -> Array<UInt8> {
+        var configValue: JsonWireValue = try wireValue("""
+    {
+        "architectures": ["Qwen3_5MoeForConditionalGeneration"],
+        "model_type": "qwen3_5_moe",
+        "dtype": "bfloat16",
+        "eos_token_id": [248046, 248044],
+        "tie_word_embeddings": false,
+        "text_config": {
+            "model_type": "qwen3_5_moe_text",
+            "hidden_act": "silu",
+            "hidden_size": 2048,
+            "num_hidden_layers": 40,
+            "num_attention_heads": 16,
+            "num_key_value_heads": 2,
+            "head_dim": 256,
+            "rms_norm_eps": 0.000001,
+            "rope_parameters": {
+                "mrope_interleaved": true,
+                "mrope_section": [11, 11, 10],
+                "partial_rotary_factor": 0.25,
+                "rope_theta": 10000000.0,
+                "type": "default"
+            },
+            "partial_rotary_factor": 0.25,
+            "attention_bias": false,
+            "mlp_bias": false,
+            "norm_topk_prob": true,
+            "output_router_logits": false,
+            "vocab_size": 248320,
+            "max_position_embeddings": 262144,
+            "full_attention_interval": 4,
+            "linear_conv_kernel_dim": 4,
+            "linear_num_key_heads": 16,
+            "linear_num_value_heads": 32,
+            "linear_key_head_dim": 128,
+            "linear_value_head_dim": 128,
+            "num_experts": 256,
+            "num_experts_per_tok": 8,
+            "moe_intermediate_size": 512,
+            "shared_expert_intermediate_size": 512
+        }
+    }
+    """);
+        var quantization: JsonWireValue = try wireValue(
+            #"{"group_size": 64, "bits": 6, "mode": "affine"}"#);
+        // Every layer lifts the shared expert to 8-bit; the gate stays at group 64
+        // while its projections widen to group 128.
+        for decoderLayerIndex: Int in 0..<40 {
+            let layerPrefix: String = "language_model.model.layers.\(decoderLayerIndex)";
+            quantization = quantization.settingObjectKey(
+                path: ["\(layerPrefix).mlp.shared_expert_gate"],
+                newValue: try wireValue(#"{"group_size": 64, "bits": 8}"#));
+            for projectionName: String in ["gate_proj", "up_proj", "down_proj"] {
+                quantization = quantization.settingObjectKey(
+                    path: ["\(layerPrefix).mlp.shared_expert.\(projectionName)"],
+                    newValue: try wireValue(#"{"group_size": 128, "bits": 8}"#));
+            }
+        }
+        // Linear-attention output projections all widen to group 128 at the default
+        // 6-bit width.
+        for decoderLayerIndex: Int in 0..<40 where decoderLayerIndex % 4 != 3 {
+            quantization = quantization.settingObjectKey(
+                path: ["language_model.model.layers.\(decoderLayerIndex).linear_attn.out_proj"],
+                newValue: try wireValue(#"{"group_size": 128, "bits": 6}"#));
+        }
+        // Only a sparse subset of attention input projections is lifted to 8-bit;
+        // the remaining full-attention and linear-attention layers keep the 6-bit
+        // group-64 default.
+        for decoderLayerIndex: Int in [3, 7, 31, 35, 39] {
+            for projectionName: String in ["q_proj", "k_proj", "v_proj", "o_proj"] {
+                quantization = quantization.settingObjectKey(
+                    path: ["language_model.model.layers.\(decoderLayerIndex).self_attn.\(projectionName)"],
+                    newValue: try wireValue(#"{"group_size": 64, "bits": 8}"#));
+            }
+        }
+        for decoderLayerIndex: Int in [0, 10] {
+            for projectionName: String in ["in_proj_qkv", "in_proj_z", "in_proj_b", "in_proj_a"] {
+                quantization = quantization.settingObjectKey(
+                    path: ["language_model.model.layers.\(decoderLayerIndex).linear_attn.\(projectionName)"],
+                    newValue: try wireValue(#"{"group_size": 64, "bits": 8}"#));
+            }
+        }
+        quantization = quantization.settingObjectKey(
+            path: ["language_model.model.embed_tokens"],
+            newValue: try wireValue(#"{"group_size": 64, "bits": 8}"#));
+        quantization = quantization.settingObjectKey(
+            path: ["language_model.lm_head"],
+            newValue: try wireValue(#"{"group_size": 64, "bits": 8}"#));
+        configValue = configValue.settingObjectKey(path: ["quantization"], newValue: quantization);
+        configValue = configValue.settingObjectKey(path: ["quantization_config"], newValue: quantization);
+        configValue = configValue.settingObjectKey(
+            path: ["text_config", "layer_types"],
+            newValue: JsonWireValue.stringArray(expectedLayerTypes()));
+        return try serializedBytes(configValue);
+    }
+
     static func minimalValidConfigJson() throws -> JsonWireValue {
         var configValue: JsonWireValue = try wireValue("""
     {
