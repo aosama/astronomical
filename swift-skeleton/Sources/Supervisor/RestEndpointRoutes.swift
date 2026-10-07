@@ -48,7 +48,8 @@ public enum RestEndpointRoutes {
         chatContext: RestChatRouteContext? = nil,
         responsesContext: RestResponsesRouteContext? = nil,
         embeddingsContext: RestEmbeddingsRouteContext? = nil,
-        imageContext: RestImageGenerationRouteContext? = nil
+        imageContext: RestImageGenerationRouteContext? = nil,
+        cacheClearContext: RestCacheClearRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -134,8 +135,20 @@ public enum RestEndpointRoutes {
             method: "GET",
             path: "/v1/cache/stats",
             handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
-                return try RestEndpointRoutes.cacheStatsResponse(resolvedRuntimeConfig: resolvedRuntimeConfig);
+                return try RestEndpointRoutes.cacheStatsResponse(
+                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    workerHealthState: workerHealthState);
             });
+        if let cacheClearContext = cacheClearContext {
+            routeTable.register(
+                method: RestCacheClearEndpoint.routeMethod,
+                path: RestCacheClearEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return try RestCacheClearEndpoint.handle(
+                        request,
+                        cacheClearContext: cacheClearContext);
+                });
+        }
         return routeTable;
     }
 
@@ -168,7 +181,10 @@ public enum RestEndpointRoutes {
         }
     }
 
-    private static func cacheStatsResponse(resolvedRuntimeConfig: ResolvedRuntimeConfig) throws -> RestHttpResponse {
+    private static func cacheStatsResponse(
+        resolvedRuntimeConfig: ResolvedRuntimeConfig,
+        workerHealthState: WorkerHealthState
+    ) throws -> RestHttpResponse {
         // The persistent prompt cache statistics come from worker events; the
         // summary is zeroed until the worker session machinery (E2/E4) starts
         // reporting them. The configured maximum is served from resolution.
@@ -190,7 +206,20 @@ public enum RestEndpointRoutes {
         statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_misses", value: .unsignedInteger(0));
         statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_rows_loaded", value: .unsignedInteger(0));
         statsObject.appendEntry(key: "persistent_prompt_cache_partial_tail_hits", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "pending_cache_clear", value: .null);
+        let pendingCacheClear: PendingPromptCacheClear? = workerHealthState
+            .currentSnapshot()
+            .pendingPromptCacheClear;
+        statsObject.appendEntry(
+            key: "pending_cache_clear",
+            value: pendingCacheClear.map({ (pendingClear: PendingPromptCacheClear) -> JsonWireValue in
+                var pendingClearObject: JsonWireObject = JsonWireObject(entries: Array());
+                pendingClearObject.appendEntry(
+                    key: "model_id",
+                    value: pendingClear.modelId.map({ (pendingModelId: String) -> JsonWireValue in
+                        return .string(pendingModelId);
+                    }) ?? .null);
+                return .object(pendingClearObject);
+            }) ?? .null);
         return try RestHttpResponse.json(statusCode: 200, wireValue: .object(statsObject));
     }
 }
