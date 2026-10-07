@@ -56,10 +56,10 @@ public enum ProtocolError: Error, CustomStringConvertible {
             return "failed to read an IPC frame";
         case .writeFrame:
             return "failed to write an IPC frame";
-        case .serializeMessage:
-            return "failed to serialize an IPC message";
-        case .deserializeMessage:
-            return "failed to deserialize an IPC message";
+        case let .serializeMessage(wireProblem):
+            return "failed to serialize an IPC message: \(wireProblem)";
+        case let .deserializeMessage(wireProblem):
+            return "failed to deserialize an IPC message: \(wireProblem)";
         }
     }
 }

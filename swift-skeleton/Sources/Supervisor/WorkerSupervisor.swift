@@ -20,6 +20,10 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     static let shutdownDrainWaitSeconds: TimeInterval = 10;
     static let promptCacheClearTimeoutSeconds: TimeInterval = 60;
     static let generationPollSeconds: TimeInterval = 0.25;
+    /// The default bound a supervisor waits for a worker's cancellation
+    /// acknowledgement before replacing the worker, mirroring Rust's
+    /// DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT.
+    public static let defaultCancellationAcknowledgementTimeoutSeconds: TimeInterval = 60;
 
     /// The completion-reason token the attribution logs record, matching the
     /// Rust ChatGenerationCompletionReason wire names.
@@ -41,12 +45,14 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     var pendingMlxMemoryLimitUpdate: PendingMlxMemoryLimitUpdate?;
     var pendingPromptCacheClear: PendingPromptCacheClear?;
     var isShutdownRequested: Bool;
+    var cancellationContainmentCount: Int;
     let healthState: WorkerHealthState;
     var modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>;
     let workerExecutablePath: String;
     let workerArguments: Array<String>;
     let workerStartupConfiguration: WorkerStartupConfiguration?;
     let modelLoadTimeout: TimeInterval;
+    let cancellationAcknowledgementTimeout: TimeInterval;
     let generationPerformanceLog: GenerationPerformanceLog;
     let completionAttributionLog: CompletionAttributionLog;
 
@@ -56,6 +62,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         workerStartupConfiguration: WorkerStartupConfiguration?,
         modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
         modelLoadTimeout: TimeInterval,
+        cancellationAcknowledgementTimeout: TimeInterval,
         generationPerformanceLog: GenerationPerformanceLog,
         completionAttributionLog: CompletionAttributionLog
     ) {
@@ -68,12 +75,14 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         self.pendingMlxMemoryLimitUpdate = nil;
         self.pendingPromptCacheClear = nil;
         self.isShutdownRequested = false;
+        self.cancellationContainmentCount = 0;
         self.healthState = WorkerHealthState();
         self.modelPolicyCatalog = modelPolicyCatalog;
         self.workerExecutablePath = workerExecutablePath;
         self.workerArguments = workerArguments;
         self.workerStartupConfiguration = workerStartupConfiguration;
         self.modelLoadTimeout = modelLoadTimeout;
+        self.cancellationAcknowledgementTimeout = cancellationAcknowledgementTimeout;
         self.generationPerformanceLog = generationPerformanceLog;
         self.completionAttributionLog = completionAttributionLog;
     }
@@ -90,6 +99,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
             workerStartupConfiguration: nil,
             modelPolicyCatalog: modelPolicyCatalog,
             modelLoadTimeout: 0,
+            cancellationAcknowledgementTimeout: 0,
             generationPerformanceLog: GenerationPerformanceLog.disabled(),
             completionAttributionLog: CompletionAttributionLog.disabled());
     }
@@ -104,6 +114,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         workerStartupConfiguration: WorkerStartupConfiguration?,
         modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
         modelLoadTimeout: TimeInterval,
+        cancellationAcknowledgementTimeout: TimeInterval = WorkerSupervisor.defaultCancellationAcknowledgementTimeoutSeconds,
         generationPerformanceLog: GenerationPerformanceLog = GenerationPerformanceLog.disabled(),
         completionAttributionLog: CompletionAttributionLog = CompletionAttributionLog.disabled()
     ) throws -> WorkerSupervisor {
@@ -113,6 +124,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
             workerStartupConfiguration: workerStartupConfiguration,
             modelPolicyCatalog: modelPolicyCatalog,
             modelLoadTimeout: modelLoadTimeout,
+            cancellationAcknowledgementTimeout: cancellationAcknowledgementTimeout,
             generationPerformanceLog: generationPerformanceLog,
             completionAttributionLog: completionAttributionLog);
         let launchedWorker: WorkerProcess;

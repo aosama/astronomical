@@ -34,6 +34,7 @@ enum IdleWorkerScenario {
     private final class AcknowledgedState {
         var loadedModelId: String? = nil
         var runtimeConfiguration: WorkerRuntimeFeatureConfiguration? = nil
+        var pendingCancellation: IdleWorkerCancellationScenario.PendingCancellation? = nil
     }
 
     enum FixtureFailure: Error, CustomStringConvertible {
@@ -94,12 +95,26 @@ enum IdleWorkerScenario {
                 eventWriter: eventWriter,
                 controlDirectoryPath: controlDirectoryPath)
         case let .generate(generationCommand):
+            if let pendingCancellation: IdleWorkerCancellationScenario.PendingCancellation =
+                IdleWorkerCancellationScenario.pendingCancellation(for: generationCommand) {
+                acknowledgedState.pendingCancellation = pendingCancellation
+                try IdleWorkerCancellationScenario.emitOnGenerate(
+                    pendingCancellation,
+                    eventWriter: eventWriter)
+                return
+            }
             if (acknowledgedState.loadedModelId == IdleWorkerScenario.DELAYED_COMPLETION_MODEL_ID) {
                 Thread.sleep(forTimeInterval: 0.25)
             }
             try eventWriter.sendEvent(IdleWorkerScenario.chatCompleted(generationCommand.requestId))
-        case .cancel:
-            return
+        case let .cancel(requestId):
+            let pendingCancellation: IdleWorkerCancellationScenario.PendingCancellation? =
+                acknowledgedState.pendingCancellation
+            acknowledgedState.pendingCancellation = nil
+            try IdleWorkerCancellationScenario.acknowledgeCancellation(
+                pendingCancellation,
+                requestId: requestId,
+                eventWriter: eventWriter)
         case .sampleMlxMemory:
             try IdleWorkerScenario.emitMemorySnapshot(
                 eventWriter,
