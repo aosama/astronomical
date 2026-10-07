@@ -521,6 +521,43 @@ final class RestChatCompletionEndpointTests {
         #expect(warningHeaderValue == ResponseFormatConstants.UNENFORCED_RESPONSE_FORMAT_WARNING);
     }
 
+    @Test
+    func should_forward_enforced_regex_constraint_to_the_worker() throws {
+        let scriptedExecutor: ScriptedChatExecutor = ScriptedChatExecutor(
+            healthSnapshot: WorkerHealthSnapshot.readyWithModel(
+                modelId: RestChatJourneySupport.nonStreamingModelId,
+                capabilities: RestChatJourneySupport.readyChatCapabilities()),
+            streamEvents: [
+                .textFragment("Romeo"),
+                .completed(
+                    promptTokenCount: 8,
+                    generatedTokenCount: 1,
+                    reasoningTokenCount: 0,
+                    cachedTokenCount: 0,
+                    reason: .endOfSequence),
+            ]);
+        let routeTable: RestRouteTable = try RestChatJourneySupport.chatRouteTable(
+            resolvedRuntimeConfig: try RestChatJourneySupport.makeResolvedConfig(),
+            chatExecutor: scriptedExecutor);
+
+        let chatResponse: RestHttpResponse = try RestChatJourneySupport.postChat(
+            routeTable: routeTable,
+            requestBody: "{\"model\":\"\(RestChatJourneySupport.nonStreamingModelId)\",\"messages\":[{\"role\":\"user\",\"content\":\"Who answers?\"}],\"structured_outputs\":{\"regex\":\"Romeo|Juliet\"},\"stream\":false}");
+
+        #expect(chatResponse.statusCode == 200);
+        let receivedCommands: Array<ChatGenerationCommand> = scriptedExecutor.receivedCommands;
+        guard receivedCommands.count == 1 else {
+            Issue.record(Comment(stringLiteral:
+                "expected exactly one worker command, received \(receivedCommands.count)"));
+            return
+        }
+        #expect(receivedCommands[0].structuredGeneration == .regex(pattern: "Romeo|Juliet"));
+        let warningHeaderValue: String? = RestChatJourneySupport.responseHeaderValue(
+            chatResponse, headerName: "Warning");
+        #expect(warningHeaderValue == nil,
+            "an enforced extra-body constraint must not carry the unenforced degradation warning");
+    }
+
     // MARK: Shared fixture helpers
 
     static func routeTable(
