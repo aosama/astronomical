@@ -75,17 +75,18 @@ public enum RestEndpointRoutes {
             path: "/v1/status",
             handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
                 // With a reload context the status triple follows the live
-                // transition state; otherwise the startup snapshot is both
-                // the configured and the resolved view.
+                // transition state; without one there is no accepted
+                // persisted snapshot, so the configured view stays null —
+                // exactly like the Rust plain application builders.
                 let liveConfiguredRuntimeConfig: ResolvedRuntimeConfig? = configReloadContext.flatMap(
                     { (reloadContext: RestConfigReloadRouteContext) -> ResolvedRuntimeConfig? in
                         return reloadContext.transitionState.currentConfiguredConfigSnapshot()
                             ?? reloadContext.transitionState.currentReloadableConfig();
-                    }) ?? resolvedRuntimeConfig;
-                let liveResolvedRuntimeConfig: ResolvedRuntimeConfig = configReloadContext.map(
+                    });
+                let liveResolvedRuntimeConfig: ResolvedRuntimeConfig? = configReloadContext.map(
                     { (reloadContext: RestConfigReloadRouteContext) -> ResolvedRuntimeConfig in
                         return reloadContext.transitionState.currentReloadableConfig();
-                    }) ?? resolvedRuntimeConfig;
+                    });
                 let liveValidationError: String? = configReloadContext.flatMap(
                     { (reloadContext: RestConfigReloadRouteContext) -> String? in
                         return reloadContext.transitionState.currentConfigurationValidationError();

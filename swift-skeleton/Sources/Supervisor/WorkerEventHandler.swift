@@ -85,7 +85,11 @@ public enum WorkerEventHandler {
                 snapshot.pendingMlxMemoryCeilingBytes = nil;
                 snapshot.mlxMemoryLimitError = reason;
             });
-        case .expertMemoryModeChanged, .persistentPromptCacheStats:
+        case let .persistentPromptCacheStats(persistentPromptCacheStats):
+            return try healthState.apply({ (snapshot: inout WorkerHealthSnapshot) in
+                snapshot.persistentPromptCacheStats = persistentPromptCacheStats;
+            });
+        case .expertMemoryModeChanged:
             throw WorkerControlError.workerProtocolViolation(
                 description: "live memory or cache event before its supervisor surface is wired");
         }
