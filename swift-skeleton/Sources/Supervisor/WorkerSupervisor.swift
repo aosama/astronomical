@@ -55,6 +55,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     let cancellationAcknowledgementTimeout: TimeInterval;
     let generationPerformanceLog: GenerationPerformanceLog;
     let completionAttributionLog: CompletionAttributionLog;
+    let operatorLog: SupervisorOperatorLog;
 
     private init(
         workerExecutablePath: String,
@@ -64,7 +65,8 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         modelLoadTimeout: TimeInterval,
         cancellationAcknowledgementTimeout: TimeInterval,
         generationPerformanceLog: GenerationPerformanceLog,
-        completionAttributionLog: CompletionAttributionLog
+        completionAttributionLog: CompletionAttributionLog,
+        operatorLog: SupervisorOperatorLog = SupervisorOperatorLog.disabled()
     ) {
         self.stateLock = NSCondition();
         self.workerProcess = nil;
@@ -85,6 +87,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         self.cancellationAcknowledgementTimeout = cancellationAcknowledgementTimeout;
         self.generationPerformanceLog = generationPerformanceLog;
         self.completionAttributionLog = completionAttributionLog;
+        self.operatorLog = operatorLog;
     }
 
     /// Creates a handle that reports an unavailable worker without starting a
@@ -116,7 +119,8 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         modelLoadTimeout: TimeInterval,
         cancellationAcknowledgementTimeout: TimeInterval = WorkerSupervisor.defaultCancellationAcknowledgementTimeoutSeconds,
         generationPerformanceLog: GenerationPerformanceLog = GenerationPerformanceLog.disabled(),
-        completionAttributionLog: CompletionAttributionLog = CompletionAttributionLog.disabled()
+        completionAttributionLog: CompletionAttributionLog = CompletionAttributionLog.disabled(),
+        operatorLog: SupervisorOperatorLog = SupervisorOperatorLog.disabled()
     ) throws -> WorkerSupervisor {
         let supervisor: WorkerSupervisor = WorkerSupervisor(
             workerExecutablePath: workerExecutablePath,
@@ -126,7 +130,8 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
             modelLoadTimeout: modelLoadTimeout,
             cancellationAcknowledgementTimeout: cancellationAcknowledgementTimeout,
             generationPerformanceLog: generationPerformanceLog,
-            completionAttributionLog: completionAttributionLog);
+            completionAttributionLog: completionAttributionLog,
+            operatorLog: operatorLog);
         let launchedWorker: WorkerProcess;
         do {
             launchedWorker = try WorkerProcess.launch(
@@ -253,6 +258,14 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     /// process references drop here so later admissions refuse immediately
     /// instead of writing into a terminated pipe.
     func containWorkerFailure(controlError: Error) -> Void {
+        // The composed diagnostics — exit status and stderr tail among them —
+        // persist in the operator log exactly where the Rust tracing
+        // subscriber recorded them, so an unexplained worker exit stays
+        // diagnosable after the process is gone. Rendering goes through the
+        // typed describer: interpolating an Error existential prints the
+        // reflected enum case, losing the human diagnostic text.
+        self.operatorLog.recordDiagnosticLine(
+            "worker containment: \(WorkerControlError.describe(controlError))");
         self.stateLock.lock();
         let workerProcess: WorkerProcess? = self.workerProcess;
         self.workerProcess = nil;
