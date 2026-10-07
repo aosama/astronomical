@@ -51,6 +51,22 @@ struct RestConfigReloadResponse {
             workerRuntimeFeatureConfiguration: nil);
     }
 
+    static func workerRestartCompleted(
+        reloadedFields: Array<String>,
+        discoveredModelCount: Int,
+        acknowledgedConfiguration: WorkerRuntimeFeatureConfiguration
+    ) -> RestConfigReloadResponse {
+        return RestConfigReloadResponse(
+            statusText: "reloaded",
+            messageText: "Config reloaded and applied by the worker",
+            workerRestartCompleted: true,
+            restApiRestartRequired: false,
+            restartRequiredFields: Array<String>(),
+            reloadedFields: reloadedFields,
+            discoveredModelCount: discoveredModelCount,
+            workerRuntimeFeatureConfiguration: acknowledgedConfiguration);
+    }
+
     static func invalidConfig(_ validationError: String) -> RestConfigReloadResponse {
         return RestConfigReloadResponse.failure(
             status: "invalid_config",

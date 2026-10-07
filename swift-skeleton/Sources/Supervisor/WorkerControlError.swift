@@ -32,6 +32,10 @@ public indirect enum WorkerControlError: Error, Equatable {
     /// No living worker process exists to receive the control command.
     case missingActiveWorker;
 
+    /// A generation is active or queued, so control actions that would
+    /// disturb serving must wait.
+    case generationBusy;
+
     /// The worker stayed responsive but never acknowledged the requested
     /// memory-ceiling change in time.
     case mlxMemoryLimitUpdateTimeout(memoryLimitUpdateTimeoutMillis: UInt64);
@@ -58,6 +62,8 @@ public indirect enum WorkerControlError: Error, Equatable {
             return "worker event stream closed before the awaited state arrived";
         case .missingActiveWorker:
             return "no living worker process exists to receive the control command";
+        case .generationBusy:
+            return "a generation is active or queued; the control action must wait";
         case let .mlxMemoryLimitUpdateTimeout(memoryLimitUpdateTimeoutMillis):
             return "worker did not acknowledge the memory-ceiling change within the \(memoryLimitUpdateTimeoutMillis)-millisecond timeout";
         case let .promptCacheClearTimeout(cacheClearTimeoutMillis):
