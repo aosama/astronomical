@@ -103,6 +103,13 @@ enum IdleWorkerScenario {
                     eventWriter: eventWriter)
                 return
             }
+            if try IdleWorkerChatScenario.emitScriptedSequence(
+                modelId: generationCommand.model,
+                requestId: generationCommand.requestId,
+                eventWriter: eventWriter,
+                maximumOutputTokens: generationCommand.settings.maxOutputTokens) {
+                return
+            }
             if (acknowledgedState.loadedModelId == IdleWorkerScenario.DELAYED_COMPLETION_MODEL_ID) {
                 Thread.sleep(forTimeInterval: 0.25)
             }
