@@ -62,8 +62,30 @@ public enum WorkerEventHandler {
              .embeddingsFinalized:
             throw WorkerControlError.workerProtocolViolation(
                 description: "image or embeddings event without an active request");
-        case .expertMemoryModeChanged, .mlxMemoryLimitChanged, .mlxMemoryLimitRejected,
-             .persistentPromptCacheStats:
+        case let .mlxMemoryLimitChanged(
+            effectiveMlxMemoryCeilingBytes,
+            minimumMlxMemoryCeilingBytes,
+            expertMemoryMode,
+            mlxMemorySnapshot,
+            expertResidency):
+            return try healthState.apply({ (snapshot: inout WorkerHealthSnapshot) in
+                snapshot.effectiveMlxMemoryCeilingBytes = effectiveMlxMemoryCeilingBytes;
+                snapshot.minimumMlxMemoryCeilingBytes = minimumMlxMemoryCeilingBytes;
+                snapshot.pendingMlxMemoryCeilingBytes = nil;
+                snapshot.mlxMemoryLimitError = nil;
+                snapshot.latestMlxMemorySnapshot = mlxMemorySnapshot;
+                snapshot.expertMemoryMode = snapshot.readyModelId.map({ _ in expertMemoryMode });
+                if let expertResidency = expertResidency {
+                    snapshot.expertResidency = expertResidency;
+                }
+            });
+        case let .mlxMemoryLimitRejected(_, minimumMlxMemoryCeilingBytes, _, reason):
+            return try healthState.apply({ (snapshot: inout WorkerHealthSnapshot) in
+                snapshot.minimumMlxMemoryCeilingBytes = minimumMlxMemoryCeilingBytes;
+                snapshot.pendingMlxMemoryCeilingBytes = nil;
+                snapshot.mlxMemoryLimitError = reason;
+            });
+        case .expertMemoryModeChanged, .persistentPromptCacheStats:
             throw WorkerControlError.workerProtocolViolation(
                 description: "live memory or cache event before its supervisor surface is wired");
         }
