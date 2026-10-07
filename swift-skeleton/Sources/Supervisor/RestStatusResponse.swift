@@ -16,7 +16,7 @@ public enum RestStatusResponse {
 
     public static func statusResponse(
         configuredRuntimeConfig: ResolvedRuntimeConfig?,
-        resolvedRuntimeConfig: ResolvedRuntimeConfig,
+        resolvedRuntimeConfig: ResolvedRuntimeConfig?,
         workerHealthSnapshot: WorkerHealthSnapshot,
         configurationValidationError: String?,
         instancePaths: AstronomicalInstancePaths,
@@ -30,6 +30,13 @@ public enum RestStatusResponse {
                 buildIdentity: buildIdentity));
         statusObject.appendEntry(key: "status", value: .string(workerHealthSnapshot.status.readinessText()));
         statusObject.appendEntry(key: "activity", value: .string(workerHealthSnapshot.activity.activityText()));
+        statusObject.appendEntry(
+            key: "serving_session",
+            value: RestStatusResponse.servingSessionSection(workerHealthSnapshot.servingSession));
+        statusObject.appendEntry(
+            key: "persistent_prompt_cache",
+            value: RestStatusResponse.persistentPromptCacheSection(
+                workerHealthSnapshot.persistentPromptCacheStats));
         if let activeRequestProgress: ActiveRequestProgress = workerHealthSnapshot.activeRequestProgress {
             statusObject.appendEntry(
                 key: "progress",
@@ -85,6 +92,44 @@ public enum RestStatusResponse {
             key: "configured_maximum_mlx_memory_gb",
             value: RestStatusResponse.configuredMaximumMlxMemoryGbWireValue(configuredRuntimeConfig?.maximumMlxMemoryBytes));
         return try RestHttpResponse.json(statusCode: 200, wireValue: .object(statusObject));
+    }
+
+    /// Serializes the lifetime serving totals.
+    private static func servingSessionSection(
+        _ servingSession: ServingSessionSnapshot
+    ) -> JsonWireValue {
+        var servingSessionObject: JsonWireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
+        servingSessionObject.appendEntry(key: "completed_request_count", value: .unsignedInteger(servingSession.completedRequestCount));
+        servingSessionObject.appendEntry(key: "total_prompt_token_count", value: .unsignedInteger(servingSession.totalPromptTokenCount));
+        servingSessionObject.appendEntry(key: "total_reused_prompt_token_count", value: .unsignedInteger(servingSession.totalReusedPromptTokenCount));
+        servingSessionObject.appendEntry(key: "target_prompt_work_token_count", value: .unsignedInteger(servingSession.targetPromptWorkTokenCount));
+        servingSessionObject.appendEntry(key: "target_reused_prompt_work_token_count", value: .unsignedInteger(servingSession.targetReusedPromptWorkTokenCount));
+        servingSessionObject.appendEntry(key: "average_prefill_tok_per_second", value: .double(servingSession.averagePrefillTokPerSecond));
+        servingSessionObject.appendEntry(key: "average_generation_tok_per_second", value: .double(servingSession.averageGenerationTokPerSecond));
+        return .object(servingSessionObject);
+    }
+
+    /// Serializes the persistent prompt-cache summary with its rounded hit
+    /// rate; an absent observation reports the zero state.
+    private static func persistentPromptCacheSection(
+        _ persistentPromptCacheStats: WorkerPersistentPromptCacheStats?
+    ) -> JsonWireValue {
+        let hits: UInt64 = persistentPromptCacheStats?.persistentPromptCacheHits ?? 0;
+        let misses: UInt64 = persistentPromptCacheStats?.persistentPromptCacheMisses ?? 0;
+        let tokensSaved: UInt64 = persistentPromptCacheStats?.persistentPromptCacheTokensSaved ?? 0;
+        let queryCount: UInt64 = hits &+ misses;
+        let hitRate: Double;
+        if queryCount == 0 {
+            hitRate = 0;
+        } else {
+            hitRate = (Double(hits) / Double(queryCount) * 10_000).rounded() / 10_000;
+        }
+        var promptCacheObject: JsonWireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
+        promptCacheObject.appendEntry(key: "hits", value: .unsignedInteger(hits));
+        promptCacheObject.appendEntry(key: "misses", value: .unsignedInteger(misses));
+        promptCacheObject.appendEntry(key: "tokens_saved", value: .unsignedInteger(tokensSaved));
+        promptCacheObject.appendEntry(key: "hit_rate", value: .double(hitRate));
+        return .object(promptCacheObject);
     }
 
     /// Serializes the active request's progress observation, mirroring the
@@ -189,12 +234,12 @@ public enum RestStatusResponse {
     private static func readyModelSizeWireValue(
         readyModelId: String,
         configuredRuntimeConfig: ResolvedRuntimeConfig?,
-        resolvedRuntimeConfig: ResolvedRuntimeConfig
+        resolvedRuntimeConfig: ResolvedRuntimeConfig?
     ) -> JsonWireValue {
         // The live resolved snapshot wins; the configured snapshot answers
         // when the reload path has not published the model yet.
         let discoveredModelSizes: Array<UInt64?> = [
-            resolvedRuntimeConfig.discoveredModels.first { (discoveredModel: DiscoveryDiscoveredModel) -> Bool in
+            resolvedRuntimeConfig?.discoveredModels.first { (discoveredModel: DiscoveryDiscoveredModel) -> Bool in
                 return discoveredModel.modelId == readyModelId;
             }?.modelSizeBytes,
             configuredRuntimeConfig?.discoveredModels.first { (discoveredModel: DiscoveryDiscoveredModel) -> Bool in
