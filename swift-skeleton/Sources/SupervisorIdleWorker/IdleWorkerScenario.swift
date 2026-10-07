@@ -35,6 +35,7 @@ enum IdleWorkerScenario {
         var loadedModelId: String? = nil
         var runtimeConfiguration: WorkerRuntimeFeatureConfiguration? = nil
         var pendingCancellation: IdleWorkerCancellationScenario.PendingCancellation? = nil
+        var pendingImageCancellation: IdleWorkerImageScenario.PendingImageCancellation? = nil
     }
 
     enum FixtureFailure: Error, CustomStringConvertible {
@@ -90,10 +91,16 @@ enum IdleWorkerScenario {
                 embeddingsCommand,
                 eventWriter: eventWriter)
         case let .generateImage(generationCommand):
-            try IdleWorkerScenario.handleGenerateImage(
+            if (generationCommand.prompt == IdleWorkerScenario.DISCONNECT_TRIPWIRE_PROMPT) {
+                // The supervisor must never dispatch this command after its
+                // requester went away; the marker plus the nonzero exit make a
+                // silent violation observable by the journey that armed it.
+                IdleWorkerScenario.writeDisconnectTripwireMarker(controlDirectoryPath)
+                throw FixtureFailure.imageGenerationDispatchedAfterDisconnect
+            }
+            acknowledgedState.pendingImageCancellation = try IdleWorkerImageScenario.emitScriptedImageSequence(
                 generationCommand,
-                eventWriter: eventWriter,
-                controlDirectoryPath: controlDirectoryPath)
+                eventWriter: eventWriter)
         case let .generate(generationCommand):
             if let pendingCancellation: IdleWorkerCancellationScenario.PendingCancellation =
                 IdleWorkerCancellationScenario.pendingCancellation(for: generationCommand) {
@@ -115,6 +122,15 @@ enum IdleWorkerScenario {
             }
             try eventWriter.sendEvent(IdleWorkerScenario.chatCompleted(generationCommand.requestId))
         case let .cancel(requestId):
+            if let pendingImageCancellation: IdleWorkerImageScenario.PendingImageCancellation =
+                acknowledgedState.pendingImageCancellation {
+                acknowledgedState.pendingImageCancellation = nil;
+                try IdleWorkerImageScenario.acknowledgePendingCancellation(
+                    pendingImageCancellation,
+                    requestId: requestId,
+                    eventWriter: eventWriter);
+                return;
+            }
             let pendingCancellation: IdleWorkerCancellationScenario.PendingCancellation? =
                 acknowledgedState.pendingCancellation
             acknowledgedState.pendingCancellation = nil
@@ -241,54 +257,6 @@ enum IdleWorkerScenario {
             requestId: embeddingsCommand.requestId,
             elapsedMillis: 2,
             mlxMemorySnapshot: nil))
-    }
-
-    private static func handleGenerateImage(
-        _ generationCommand: ImageGenerationCommand,
-        eventWriter: ProtocolWriter,
-        controlDirectoryPath: String?
-    ) throws -> Void {
-        if (generationCommand.prompt == IdleWorkerScenario.DISCONNECT_TRIPWIRE_PROMPT) {
-            // The supervisor must never dispatch this command after its
-            // requester went away; the marker plus the nonzero exit make a
-            // silent violation observable by the journey that armed it.
-            IdleWorkerScenario.writeDisconnectTripwireMarker(controlDirectoryPath)
-            throw FixtureFailure.imageGenerationDispatchedAfterDisconnect
-        }
-        let encodedPngBytes: Array<UInt8> = try IdleWorkerPngEncoder.encodeTruecolorPng(
-            widthPixels: generationCommand.settings.widthPixels,
-            heightPixels: generationCommand.settings.heightPixels)
-        try eventWriter.sendEvent(.imageGenerationProgress(
-            requestId: generationCommand.requestId,
-            phase: ImageGenerationPhase.denoising,
-            completedSteps: generationCommand.settings.steps,
-            totalSteps: generationCommand.settings.steps,
-            elapsedMillis: 20,
-            mlxMemorySnapshot: nil))
-        try eventWriter.sendEvent(.imageGenerationCompleted(
-            requestId: generationCommand.requestId,
-            generatedImage: GeneratedImage(
-                mimeType: "image/png",
-                encodedBytes: encodedPngBytes),
-            resultMetadata: ImageGenerationResultMetadata(
-                widthPixels: generationCommand.settings.widthPixels,
-                heightPixels: generationCommand.settings.heightPixels,
-                steps: generationCommand.settings.steps,
-                guidanceThousandths: generationCommand.settings.guidanceThousandths,
-                seed: generationCommand.settings.seed,
-                elapsedMillis: 25)))
-        try eventWriter.sendEvent(.imageGenerationFinalized(
-            requestId: generationCommand.requestId,
-            elapsedMillis: 30,
-            mlxMemorySnapshot: WorkerMlxMemorySnapshot(
-                source: MlxMemorySnapshotSource.finalized,
-                activeMemoryBytes: 96_000_000,
-                allocatorCacheMemoryBytes: 0,
-                peakMemoryBytes: 512_000_000,
-                expertPayloadBytes: 0,
-                modelCorePayloadBytes: 96_000_000,
-                contextStatePayloadBytes: 0,
-                memoryCeilingUtilization: nil)))
     }
 
     private static func handleUpdateMlxMemoryLimit(

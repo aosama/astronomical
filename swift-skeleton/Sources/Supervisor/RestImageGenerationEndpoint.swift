@@ -126,6 +126,23 @@ enum RestImageGenerationEndpoint {
                 guidanceThousandths: 1_000,
                 seed: requestParts.seed
                     ?? RestImageGenerationEndpoint.generatedSeed(requestIdentifier)));
+        // The serialized command must fit the worker transport before the
+        // executor is touched — the same pre-dispatch bound the Rust
+        // endpoint enforces with encode_command.
+        do {
+            _ = try MessageCodec.encodeCommand(.generateImage(imageGenerationCommand));
+        } catch let transportError as ProtocolError {
+            if case .outgoingMessageTooLarge = transportError {
+                return RestImageGenerationEndpoint.invalidRequestResponse(
+                    message: "the image request exceeds the local worker transport limit",
+                    parameter: nil,
+                    code: "request_too_large",
+                    statusCodeOverride: 413);
+            }
+            return RestImageGenerationEndpoint.workerUnavailableResponse();
+        } catch {
+            return RestImageGenerationEndpoint.workerUnavailableResponse();
+        }
         let imageOutput: ImageGenerationOutput;
         do {
             imageOutput = try imageContext.imageExecutor.startImageGeneration(
