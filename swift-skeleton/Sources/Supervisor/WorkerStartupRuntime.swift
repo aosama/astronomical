@@ -15,28 +15,36 @@ import IpcProtocol;
 /// is why the applied flag latches.
 public enum WorkerStartupRuntime {
 
-    /// Blocks until the worker's runtime-policy acknowledgement is recorded
-    /// in health, the wait already happened for this process, or the worker
-    /// launched with no startup policy at all.
+    /// Blocks until the worker's readiness and runtime-policy acknowledgement
+    /// are recorded in health, the wait already happened for this process, or
+    /// the worker launched with no startup policy at all — in which case
+    /// readiness alone is awaited, exactly as the Rust worker loop consumes
+    /// an idle event without a policy wait.
     public static func waitForStartupRuntimeConfiguration(
         workerProcess: WorkerProcess,
         eventPump: WorkerEventPump,
         healthState: WorkerHealthState,
         modelLoadTimeout: TimeInterval
     ) throws -> Void {
-        if workerProcess.expectedConfigurationGeneration() == nil {
-            return;
-        }
         if workerProcess.isStartupRuntimeConfigurationApplied() {
             return;
         }
-        if healthState.hasRuntimeFeatureConfiguration() {
+        let awaitsRuntimeConfiguration: Bool = workerProcess.expectedConfigurationGeneration() != nil;
+        if awaitsRuntimeConfiguration && healthState.hasRuntimeFeatureConfiguration() {
+            workerProcess.markStartupRuntimeConfigurationApplied();
+            return;
+        }
+        if !awaitsRuntimeConfiguration && healthState.hasAcknowledgedLifecycle() {
             workerProcess.markStartupRuntimeConfigurationApplied();
             return;
         }
         let waitDeadline: Date = Date().addingTimeInterval(modelLoadTimeout);
         while true {
-            if healthState.hasRuntimeFeatureConfiguration() {
+            if awaitsRuntimeConfiguration && healthState.hasRuntimeFeatureConfiguration() {
+                workerProcess.markStartupRuntimeConfigurationApplied();
+                return;
+            }
+            if !awaitsRuntimeConfiguration && healthState.hasAcknowledgedLifecycle() {
                 workerProcess.markStartupRuntimeConfigurationApplied();
                 return;
             }
