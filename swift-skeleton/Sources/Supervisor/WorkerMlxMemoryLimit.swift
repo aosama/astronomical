@@ -29,6 +29,39 @@ struct PendingMlxMemoryLimitUpdate {
 /// against the new ceiling (issue #515's guarantee).
 extension WorkerSupervisor {
 
+    /// Stages generation attribution before a memory command can race to
+    /// acknowledgement, mirroring
+    /// WorkerHandle::stage_memory_configuration_generation.
+    public func stageMemoryConfigurationGeneration(_ configurationGeneration: String) -> Void {
+        try? self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) in
+            snapshot.pendingConfigurationGeneration = configurationGeneration;
+        });
+    }
+
+    /// Finalizes generation attribution after the memory control outcome is
+    /// known, mirroring
+    /// WorkerHandle::record_memory_configuration_generation. A queued raise
+    /// keeps its staged generation until the deferred application lands.
+    public func recordMemoryConfigurationGeneration(
+        _ configurationGeneration: String,
+        _ updateOutcome: MlxMemoryLimitUpdateOutcome
+    ) -> Void {
+        try? self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) in
+            if updateOutcome == .applied {
+                if let acknowledgedConfiguration: WorkerRuntimeFeatureConfiguration = snapshot.workerRuntimeFeatureConfiguration {
+                    snapshot.workerRuntimeFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
+                        configurationGeneration: configurationGeneration,
+                        persistentPromptCacheEnabled: acknowledgedConfiguration.persistentPromptCacheEnabled,
+                        promptCacheMaximumSizeBytes: acknowledgedConfiguration.promptCacheMaximumSizeBytes,
+                        loadedModel: acknowledgedConfiguration.loadedModel);
+                }
+                snapshot.pendingConfigurationGeneration = nil;
+            } else if updateOutcome == .rejected {
+                snapshot.pendingConfigurationGeneration = nil;
+            }
+        });
+    }
+
     /// Applies an idle MLX ceiling immediately or queues it behind one
     /// active generation, mirroring WorkerHandle::update_mlx_memory_limit.
     ///

@@ -38,6 +38,15 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
                 residentModelId: FakeWorkerJourneyHarness.modelPolicy(modelId: residentModelId),
             ],
             modelLoadTimeout: 10);
+        // The resident ready event zeroes the memory ceilings, so the
+        // journey publishes the fixture worker's startup probe (40 GB
+        // machine, 8 GB effective, 1 byte minimum) directly into health
+        // state, exactly what the Rust idle fixture reports.
+        try supervisor.ownedHealthState().apply({ (snapshot: inout WorkerHealthSnapshot) in
+            snapshot.machineMlxMemoryCeilingBytes = 40_000_000_000;
+            snapshot.effectiveMlxMemoryCeilingBytes = 8_000_000_000;
+            snapshot.minimumMlxMemoryCeilingBytes = 1;
+        });
         return FakeWorkerJourneyHarness(
             supervisor: supervisor,
             controlDirectoryPath: controlDirectoryPath);
@@ -81,6 +90,15 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
     func pokeMemoryRaise(_ effectiveMlxMemoryCeilingBytes: UInt64) throws -> Void {
         try String(effectiveMlxMemoryCeilingBytes).write(
             toFile: self.controlDirectoryPath + "/apply_memory_raise",
+            atomically: true,
+            encoding: .utf8);
+    }
+
+    /// Arms the next memory-ceiling command to answer with a rejection, so
+    /// journeys can steer the worker's refusal of a raised ceiling.
+    func pokeMemoryRaiseRejection(_ requestedMlxMemoryCeilingBytes: UInt64) throws -> Void {
+        try String(requestedMlxMemoryCeilingBytes).write(
+            toFile: self.controlDirectoryPath + "/reject_memory_raise",
             atomically: true,
             encoding: .utf8);
     }
@@ -146,6 +164,15 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
             + "\"effective_mlx_memory_ceiling_bytes\":'\"$raised_ceiling_bytes\"',"
             + "\"minimum_mlx_memory_ceiling_bytes\":1,\"expert_memory_mode\":\"resident\","
             + "\"mlx_memory_snapshot\":null,\"expert_residency\":null}'\n"
+            + "  fi\n"
+            + "  if [ -f \"\(controlDirectoryPath)/reject_memory_raise\" ]; then\n"
+            + "    rejected_ceiling_bytes=$(cat \"\(controlDirectoryPath)/reject_memory_raise\")\n"
+            + "    rm -f \"\(controlDirectoryPath)/reject_memory_raise\"\n"
+            + "    emit_frame '{\"kind\":\"mlx_memory_limit_rejected\","
+            + "\"requested_mlx_memory_ceiling_bytes\":'\"$rejected_ceiling_bytes\"',"
+            + "\"minimum_mlx_memory_ceiling_bytes\":1,"
+            + "\"machine_mlx_memory_ceiling_bytes\":40000000000,"
+            + "\"reason\":\"fixture rejected the memory raise\"}'\n"
             + "  fi\n"
             + "  if [ -f \"\(controlDirectoryPath)/cache_clear_ack\" ]; then\n"
             + "    clear_ack_content=$(cat \"\(controlDirectoryPath)/cache_clear_ack\")\n"
