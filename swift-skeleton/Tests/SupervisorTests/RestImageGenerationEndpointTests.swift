@@ -302,6 +302,29 @@ final class RestImageGenerationEndpointTests {
         #expect(errorObject["code"] as? String == "invalid_json");
     }
 
+    @Test
+    func should_reject_transport_overflow_before_dispatch() throws {
+        let scriptedExecutor: ScriptedImageGenerationExecutor = RestImageGenerationEndpointTests.imageExecutor();
+        let routeTable: RestRouteTable = try RestImageGenerationEndpointTests.imageRouteTable(
+            discoveredModels: [RestImageGenerationEndpointTests.fluxImageModel()],
+            imageExecutor: scriptedExecutor);
+        let oversizedPrompt: String = String(repeating: "R", count: 32 * 1024 * 1024);
+
+        let imageResponse: RestHttpResponse = try RestChatJourneySupport.postChat(
+            routeTable: routeTable,
+            routePath: RestImageGenerationEndpoint.routePath,
+            requestBody: "{\"model\":\"\(RestImageGenerationEndpointTests.imageModelId)\","
+                + "\"prompt\":\"\(oversizedPrompt)\",\"width\":1024,\"height\":1024,"
+                + "\"response_format\":\"b64_json\"}");
+
+        #expect(imageResponse.statusCode == 413);
+        let errorObject: [String: Any] = try RestChatJourneySupport.requireErrorObject(
+            try RestChatJourneySupport.decodeObjectEnvelope(imageResponse));
+        #expect(errorObject["code"] as? String == "request_too_large");
+        #expect(scriptedExecutor.receivedCommands.isEmpty,
+            "the oversized request must never reach the image executor");
+    }
+
     // MARK: Shared fixture helpers
 
     private static func readySnapshot() -> WorkerHealthSnapshot {

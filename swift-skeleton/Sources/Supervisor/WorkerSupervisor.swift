@@ -210,11 +210,30 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     public func startImageGeneration(
         _ imageGenerationCommand: ImageGenerationCommand
     ) throws -> ImageGenerationOutput {
+        return try self.startImageGeneration(
+            imageGenerationCommand,
+            timeouts: ImageGenerationTimeouts.default,
+            isClientAbandoned: nil);
+    }
+
+    /// The journey-facing shape: journeys bound the two image timeouts and
+    /// observe a requester that stops waiting, the synchronous analog of the
+    /// Rust executor's injected timeouts and dropped receiver.
+    public func startImageGeneration(
+        _ imageGenerationCommand: ImageGenerationCommand,
+        timeouts: ImageGenerationTimeouts,
+        isClientAbandoned: (() -> Bool)?
+    ) throws -> ImageGenerationOutput {
+        let requestArrivedAt: Date = Date();
         try self.admitGenerationSlot();
         defer { self.finishAdmissionSlot(); }
         return try self.runImageGeneration(
             imageGenerationCommand,
-            timeouts: ImageGenerationTimeouts.default);
+            timeouts: timeouts,
+            isClientAbandoned: isClientAbandoned,
+            journeyTiming: ImageGenerationExecutionTiming(
+                requestArrivedAt: requestArrivedAt,
+                admissionServedAt: Date()));
     }
 
     /// Shuts down and reaps the owned inference worker process. Queued
