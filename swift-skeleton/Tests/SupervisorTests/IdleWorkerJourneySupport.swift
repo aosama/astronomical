@@ -26,15 +26,19 @@ enum IdleWorkerJourneySupport {
     static let DELAYED_IMAGE_POLICY_ACK_MODEL_ID: String = "astronomical/delayed-image-policy-ack-model"
     static let DISCONNECT_TRIPWIRE_MARKER_FILE_NAME: String = "dispatched_after_disconnect"
     static let WORKER_EXECUTABLE_NAME: String = "SupervisorIdleWorker"
+    static let STDERR_PROBE_EXECUTABLE_NAME: String = "SupervisorStderrProbeWorker"
+    static let REQUESTED_MODEL_ID: String = "astronomical/requested-model"
+    static let INVALID_MODEL_ID: String = "astronomical/invalid-model"
+    static let HANGING_MODEL_ID: String = "astronomical/hanging-model"
 
     enum IdleWorkerJourneyFailure: Error, CustomStringConvertible {
-        case missingWorkerExecutable(path: String)
+        case missingBuiltExecutable(name: String, path: String)
         case workerNeverBecameReady(lastStatus: String)
 
         var description: String {
             switch (self) {
-            case let .missingWorkerExecutable(path):
-                return "the built supervisor test worker was not found at \(path)"
+            case let .missingBuiltExecutable(name, path):
+                return "the built \(name) executable was not found at \(path)"
             case let .workerNeverBecameReady(lastStatus):
                 return "the idle worker did not become ready; last status was \(lastStatus)"
             }
@@ -70,28 +74,7 @@ enum IdleWorkerJourneySupport {
     static func launchIdleWorkerFixture(
         configurationGeneration: String = "test-configuration-generation"
     ) throws -> IdleWorkerHarness {
-        let workerExecutablePath: String = try IdleWorkerJourneySupport.locateIdleWorkerExecutable()
-        let journeyDirectoryUrl: URL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("astronomical-idle-worker-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: journeyDirectoryUrl, withIntermediateDirectories: true)
-        let journeyDirectoryPath: String = journeyDirectoryUrl.path
-        let controlDirectoryPath: String = journeyDirectoryPath + "/control"
-        try FileManager.default.createDirectory(
-            atPath: controlDirectoryPath,
-            withIntermediateDirectories: true)
-        let supervisor: WorkerSupervisor = try WorkerSupervisor.launch(
-            workerExecutablePath: workerExecutablePath,
-            workerArguments: [controlDirectoryPath],
-            workerStartupConfiguration: WorkerStartupConfiguration(
-                configurationGeneration: configurationGeneration,
-                globalPromptCacheRootDirectory: journeyDirectoryPath + "/prompt-cache",
-                globalPromptCacheMaximumSizeBytes: 50_000_000_000,
-                persistentPromptCacheEnabled: true,
-                configuredMaximumMlxMemoryBytes: nil,
-                performanceAttributionEnabled: false,
-                loggingDirectory: journeyDirectoryPath,
-                loggingLevel: .warn,
-                retainedLogFileCount: 7),
+        return try IdleWorkerJourneySupport.launchWorkerHarness(
             modelPolicyCatalog: [
                 IdleWorkerJourneySupport.DELAYED_COMPLETION_MODEL_ID:
                     IdleWorkerJourneySupport.runtimeModelPolicy(
@@ -127,6 +110,52 @@ enum IdleWorkerJourneySupport {
                         modelDirectory: "/models/delayed-image-policy-ack-model"),
             ],
             modelLoadTimeout: 10,
+            startupConfiguration: WorkerStartupConfiguration(
+                configurationGeneration: configurationGeneration,
+                globalPromptCacheRootDirectory: "/tmp/astronomical-journey-prompt-cache",
+                globalPromptCacheMaximumSizeBytes: 50_000_000_000,
+                persistentPromptCacheEnabled: true,
+                configuredMaximumMlxMemoryBytes: nil,
+                performanceAttributionEnabled: false,
+                loggingDirectory: "/tmp/astronomical-journey-logs",
+                loggingLevel: .warn,
+                retainedLogFileCount: 7))
+    }
+
+    /// Launches the fixture worker with no startup configuration at all —
+    /// the lazy model-load world of worker_launch.rs, where the supervisor
+    /// waits only for the worker's idle readiness.
+    static func launchUnconfiguredIdleWorker(
+        modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
+        modelLoadTimeout: TimeInterval
+    ) throws -> IdleWorkerHarness {
+        return try IdleWorkerJourneySupport.launchWorkerHarness(
+            modelPolicyCatalog: modelPolicyCatalog,
+            modelLoadTimeout: modelLoadTimeout,
+            startupConfiguration: nil)
+    }
+
+    private static func launchWorkerHarness(
+        modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
+        modelLoadTimeout: TimeInterval,
+        startupConfiguration: WorkerStartupConfiguration?
+    ) throws -> IdleWorkerHarness {
+        let workerExecutablePath: String = try IdleWorkerJourneySupport.locateBuiltExecutable(
+            executableName: IdleWorkerJourneySupport.WORKER_EXECUTABLE_NAME)
+        let journeyDirectoryUrl: URL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("astronomical-idle-worker-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: journeyDirectoryUrl, withIntermediateDirectories: true)
+        let journeyDirectoryPath: String = journeyDirectoryUrl.path
+        let controlDirectoryPath: String = journeyDirectoryPath + "/control"
+        try FileManager.default.createDirectory(
+            atPath: controlDirectoryPath,
+            withIntermediateDirectories: true)
+        let supervisor: WorkerSupervisor = try WorkerSupervisor.launch(
+            workerExecutablePath: workerExecutablePath,
+            workerArguments: [controlDirectoryPath],
+            workerStartupConfiguration: startupConfiguration,
+            modelPolicyCatalog: modelPolicyCatalog,
+            modelLoadTimeout: modelLoadTimeout,
             generationPerformanceLog: GenerationPerformanceLog.open(
                 logDirectory: FilePath(string: journeyDirectoryPath)))
         let harness: IdleWorkerHarness = IdleWorkerHarness(
@@ -137,11 +166,11 @@ enum IdleWorkerJourneySupport {
         return harness
     }
 
-    /// The fixture binary built by this package; SwiftPM builds every
+    /// A fixture binary built by this package; SwiftPM builds every
     /// executable target before tests run, and gives tests no
     /// CARGO_BIN_EXE-style variable, so the executable is located from this
     /// source file's package root, checking both build layouts.
-    static func locateIdleWorkerExecutable() throws -> String {
+    static func locateBuiltExecutable(executableName: String) throws -> String {
         let packageRootUrl: URL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -153,12 +182,13 @@ enum IdleWorkerJourneySupport {
         for buildLayout: String in buildLayouts {
             let workerExecutableUrl: URL = packageRootUrl
                 .appendingPathComponent(buildLayout)
-                .appendingPathComponent(IdleWorkerJourneySupport.WORKER_EXECUTABLE_NAME)
+                .appendingPathComponent(executableName)
             if (FileManager.default.isExecutableFile(atPath: workerExecutableUrl.path)) {
                 return workerExecutableUrl.path
             }
         }
-        throw IdleWorkerJourneyFailure.missingWorkerExecutable(
+        throw IdleWorkerJourneyFailure.missingBuiltExecutable(
+            name: executableName,
             path: packageRootUrl.appendingPathComponent(".build/...").path)
     }
 

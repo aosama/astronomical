@@ -29,6 +29,9 @@ public indirect enum WorkerControlError: Error, Equatable {
     /// The worker closed its event stream before the awaited state arrived.
     case workerEventStreamClosed;
 
+    /// The worker process closed IPC and supplied bounded process diagnostics.
+    case workerProcessExited(processExitStatus: String, workerLifetimeMillis: UInt64, stderrTail: String);
+
     /// No living worker process exists to receive the control command.
     case missingActiveWorker;
 
@@ -60,6 +63,9 @@ public indirect enum WorkerControlError: Error, Equatable {
             return "candidate worker did not acknowledge readiness and runtime configuration within the \(acknowledgementTimeoutMillis)-millisecond timeout";
         case .workerEventStreamClosed:
             return "worker event stream closed before the awaited state arrived";
+        case let .workerProcessExited(processExitStatus, workerLifetimeMillis, stderrTail):
+            return "worker process exited after closing its event stream (\(processExitStatus)) "
+                + "after \(workerLifetimeMillis) milliseconds; worker stderr tail: \(stderrTail)";
         case .missingActiveWorker:
             return "no living worker process exists to receive the control command";
         case .generationBusy:

@@ -36,12 +36,17 @@ public final class WorkerProcess {
     private static let SHUTDOWN_TIMEOUT_SECONDS: TimeInterval = 5;
     private static let STDERR_TAIL_MAXIMUM_BYTE_COUNT: Int = 8_192;
     private static let EXIT_POLL_INTERVAL_SECONDS: TimeInterval = 0.02;
+    /// Stderr and stdout are independent pipes; this settle window lets the
+    /// drain capture the bytes written beside the final stdout close before
+    /// the diagnostic tail is snapshotted.
+    private static let EXIT_DIAGNOSTIC_SETTLE_SECONDS: TimeInterval = 0.1;
+    private static let NATURAL_EXIT_GRACE_SECONDS: TimeInterval = 1;
     private static let STDERR_DRAIN_CHUNK_BYTE_COUNT: Int = 4_096;
 
     private let workerExecutablePath: String;
     private let workerArguments: Array<String>;
     private let startupConfiguration: WorkerStartupConfiguration?;
-    private let workerStartedAt: Date;
+    private var workerStartedAt: Date;
 
     private let lifecycleLock: NSLock;
     private var childProcessIdentifier: pid_t;
@@ -50,6 +55,7 @@ public final class WorkerProcess {
     private var stderrReadFileDescriptor: Int32;
     private var hasReapedExit: Bool;
     private var exitWasSuccessful: Bool;
+    private var reapedWaitStatus: Int32?;
     private var escalatedToSignal: Bool;
     private var adoptedByAnotherLifecycle: Bool;
     private var startupRuntimeConfigurationAppliedFlag: Bool;
@@ -83,6 +89,7 @@ public final class WorkerProcess {
         self.stderrReadFileDescriptor = stderrReadFileDescriptor;
         self.hasReapedExit = false;
         self.exitWasSuccessful = false;
+        self.reapedWaitStatus = nil;
         self.escalatedToSignal = false;
         self.adoptedByAnotherLifecycle = false;
         self.startupRuntimeConfigurationAppliedFlag = false;
@@ -285,8 +292,10 @@ public final class WorkerProcess {
         self.stderrReadFileDescriptor = replacementWorker.currentStderrReadFileDescriptor();
         self.hasReapedExit = false;
         self.exitWasSuccessful = false;
+        self.reapedWaitStatus = nil;
         self.escalatedToSignal = false;
         self.startupRuntimeConfigurationAppliedFlag = false;
+        self.workerStartedAt = Date();
         self.commandWriter = replacementWorker.currentCommandWriter();
         self.eventReader = replacementWorker.currentEventReader();
         self.lifecycleLock.unlock();
@@ -350,6 +359,42 @@ public final class WorkerProcess {
         return !self.hasLivingProcess();
     }
 
+    /// Composes the process-diagnostics error for a worker that closed its
+    /// event stream, mirroring worker_process.rs's worker_process_exit_error:
+    /// a short settle lets the stderr drain capture the bytes written beside
+    /// the final stdout close, the exit status resolves through a bounded
+    /// grace wait, and the tail stays bounded.
+    public func workerProcessExitError() -> WorkerControlError {
+        Thread.sleep(forTimeInterval: WorkerProcess.EXIT_DIAGNOSTIC_SETTLE_SECONDS);
+        let processExitStatus: String = self.processExitStatusDescription();
+        let workerLifetimeMillis: UInt64 = UInt64(
+            max(0, Date().timeIntervalSince(self.workerStartedAt) * 1_000));
+        return WorkerControlError.workerProcessExited(
+            processExitStatus: processExitStatus,
+            workerLifetimeMillis: workerLifetimeMillis,
+            stderrTail: self.stderrTail);
+    }
+
+    /// Resolves "exit code N", "terminated by signal N", or the
+    /// still-running statement for a child that closed its stdout.
+    private func processExitStatusDescription() -> String {
+        if self.hasLivingProcess() {
+            if !self.waitForExit(within: WorkerProcess.NATURAL_EXIT_GRACE_SECONDS) {
+                return "process still running after closing stdout";
+            }
+        }
+        self.lifecycleLock.lock();
+        let reapedWaitStatus: Int32? = self.reapedWaitStatus;
+        self.lifecycleLock.unlock();
+        guard let reapedWaitStatus: Int32 = reapedWaitStatus else {
+            return "failed to inspect process exit status: exit status was never reaped";
+        }
+        if (reapedWaitStatus & 0x7F) == 0 {
+            return "exit code \((reapedWaitStatus >> 8) & 0xFF)";
+        }
+        return "terminated by signal \(reapedWaitStatus & 0x7F)";
+    }
+
     /// Reaps the exit if it has not been reaped yet, returning whether the
     /// child reported a successful exit.
     private func reapExitIfPending() -> Bool {
@@ -370,6 +415,7 @@ public final class WorkerProcess {
     private func recordReapedExit(waitStatus: Int32) {
         self.hasReapedExit = true;
         self.exitWasSuccessful = (waitStatus & 0x7F) == 0 && ((waitStatus >> 8) & 0xFF) == 0;
+        self.reapedWaitStatus = waitStatus;
     }
 
     private func currentChildProcessIdentifier() -> pid_t {
