@@ -210,7 +210,7 @@ public enum EnforcedStructuredGeneration: Equatable {
 }
 
 /// Why extra-body structured generation was rejected.
-public enum OpenAiStructuredOutputsValidationError: Error, Equatable {
+public enum OpenAiStructuredOutputsValidationError: Error, Equatable, LocalizedError {
 
     case multipleOrEmptyFields;
     case emptyChoice;
