@@ -54,32 +54,37 @@ final class Qwen35ChatProcessorTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func should_reject_the_seed_budget_and_structured_paths_with_bounded_reasons() throws {
+    func should_serve_the_seed_and_budget_paths_the_former_rejections_covered() throws {
         let processor: Qwen35ChatProcessor = try Self.makeProcessor();
 
-        var seededCommand: ChatGenerationCommand = Self.chatCommand(requestId: 121);
-        seededCommand = ChatGenerationCommand(
-            requestId: seededCommand.requestId, model: seededCommand.model,
-            messages: seededCommand.messages, tools: seededCommand.tools,
-            toolChoice: seededCommand.toolChoice, settings: seededCommand.settings,
+        let seededCommand: ChatGenerationCommand = ChatGenerationCommand(
+            requestId: RequestId(rawRequestId: 121), model: "qwen3.5",
+            messages: Self.chatCommand(requestId: 121).messages, tools: [],
+            toolChoice: .auto, settings: Self.chatCommand(requestId: 121).settings,
             qwenThinkingChannelSeed: "remember the balcony",
             structuredGeneration: nil);
-        #expect(throws: ChatPreparationRejection.self) {
-            _ = try processor.prepareChatGeneration(seededCommand);
-        }
+        let seededGeneration = try processor.prepareChatGeneration(seededCommand);
+        let seededRequest = try #require(
+            seededGeneration.inferenceRequest as? Qwen35PreparedInferenceRequest);
+        #expect(seededRequest.startsInsideThinking == true);
 
-        var budgetedCommand: ChatGenerationCommand = Self.chatCommand(requestId: 122);
-        budgetedCommand = ChatGenerationCommand(
-            requestId: budgetedCommand.requestId, model: budgetedCommand.model,
-            messages: budgetedCommand.messages, tools: budgetedCommand.tools,
-            toolChoice: budgetedCommand.toolChoice,
+        let budgetedCommand: ChatGenerationCommand = ChatGenerationCommand(
+            requestId: RequestId(rawRequestId: 122), model: "qwen3.5",
+            messages: Self.chatCommand(requestId: 122).messages, tools: [],
+            toolChoice: .auto,
+            // The tiny fixture renders the forced transition into dozens of
+            // tokens, so the output limit must hold the full allowance plus
+            // the transition plus one visible token.
             settings: ChatGenerationSettings(
-                maxOutputTokens: 16, temperatureThousandths: nil, topPThousandths: nil,
+                maxOutputTokens: 200, temperatureThousandths: nil, topPThousandths: nil,
                 seed: nil, thinkingBudget: 8),
             qwenThinkingChannelSeed: nil, structuredGeneration: nil);
-        #expect(throws: ChatPreparationRejection.self) {
-            _ = try processor.prepareChatGeneration(budgetedCommand);
-        }
+        let budgetedGeneration = try processor.prepareChatGeneration(budgetedCommand);
+        let budgetedRequest = try #require(
+            budgetedGeneration.inferenceRequest as? Qwen35PreparedInferenceRequest);
+        let budgetState = try #require(budgetedRequest.thinkingBudgetState);
+        #expect(budgetState.activeThinkingBudget == 8);
+        #expect(budgetState.isInsideThinking == true);
     }
 
     // MARK: - Reasoning channel routing
