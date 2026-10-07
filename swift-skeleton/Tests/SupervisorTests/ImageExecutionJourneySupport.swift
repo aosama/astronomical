@@ -62,7 +62,7 @@ enum ImageExecutionJourneySupport {
         _ supervisor: WorkerSupervisor,
         imageCommand: ImageGenerationCommand,
         timeouts: ImageGenerationTimeouts = ImageGenerationTimeouts.default,
-        isClientAbandoned: (() -> Bool)? = nil
+        isClientAbandoned: (@Sendable () -> Bool)? = nil
     ) -> ImageGenerationJourneyOutcome {
         let imageOutcome: ImageGenerationJourneyOutcome = ImageGenerationJourneyOutcome(
             workerThread: Thread());

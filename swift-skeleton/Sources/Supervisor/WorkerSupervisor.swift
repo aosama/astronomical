@@ -222,7 +222,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     public func startImageGeneration(
         _ imageGenerationCommand: ImageGenerationCommand,
         timeouts: ImageGenerationTimeouts,
-        isClientAbandoned: (() -> Bool)?
+        isClientAbandoned: (@Sendable () -> Bool)?
     ) throws -> ImageGenerationOutput {
         let requestArrivedAt: Date = Date();
         try self.admitGenerationSlot();

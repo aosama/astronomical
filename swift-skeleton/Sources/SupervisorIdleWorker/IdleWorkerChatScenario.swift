@@ -15,9 +15,17 @@ import IpcProtocol
 enum IdleWorkerChatScenario {
 
     static let ACCEPTED_CHAT_MODEL_ID: String = "astronomical/accepted-chat-fixture"
+    /// Disk discovery names a model by its directory leaf, so a daemon
+    /// journey that publishes the fixture under its leaf spelling reaches
+    /// the same scripted sequence.
+    static let ACCEPTED_CHAT_DISCOVERED_MODEL_ID: String = "accepted-chat-fixture"
     static let PREFILL_PROGRESS_MODEL_ID: String = "astronomical/prefill-progress-fixture"
     static let ACTIVITY_TRANSITION_MODEL_ID: String = "astronomical/activity-transition-fixture"
     static let MALFORMED_OUTPUT_MODEL_ID: String = "astronomical/malformed-output-fixture"
+    /// Mirrors the Rust delayed-malformed-output-fixture: token progress
+    /// first, a pause the status endpoint can observe mid-generation, then
+    /// the malformed-output failure.
+    static let DELAYED_MALFORMED_OUTPUT_MODEL_ID: String = "delayed-malformed-output-fixture"
     static let DUPLICATE_GENERATION_PREPARATION_MODEL_ID: String =
         "astronomical/duplicate-generation-preparation-fixture"
     static let OUT_OF_ORDER_MODEL_ID: String = "astronomical/out-of-order-chat-fixture"
@@ -50,9 +58,11 @@ enum IdleWorkerChatScenario {
     static func scriptedModelIds() -> Array<String> {
         return [
             IdleWorkerChatScenario.ACCEPTED_CHAT_MODEL_ID,
+            IdleWorkerChatScenario.ACCEPTED_CHAT_DISCOVERED_MODEL_ID,
             IdleWorkerChatScenario.PREFILL_PROGRESS_MODEL_ID,
             IdleWorkerChatScenario.ACTIVITY_TRANSITION_MODEL_ID,
             IdleWorkerChatScenario.MALFORMED_OUTPUT_MODEL_ID,
+            IdleWorkerChatScenario.DELAYED_MALFORMED_OUTPUT_MODEL_ID,
             IdleWorkerChatScenario.DUPLICATE_GENERATION_PREPARATION_MODEL_ID,
             IdleWorkerChatScenario.OUT_OF_ORDER_MODEL_ID,
             IdleWorkerChatScenario.EMPTY_OUTPUT_BATCH_MODEL_ID,
@@ -76,7 +86,8 @@ enum IdleWorkerChatScenario {
         maximumOutputTokens: UInt16
     ) throws -> Bool {
         switch (modelId) {
-        case IdleWorkerChatScenario.ACCEPTED_CHAT_MODEL_ID:
+        case IdleWorkerChatScenario.ACCEPTED_CHAT_MODEL_ID,
+             IdleWorkerChatScenario.ACCEPTED_CHAT_DISCOVERED_MODEL_ID:
             try IdleWorkerChatScenario.emitAcceptedChat(requestId, eventWriter: eventWriter)
         case IdleWorkerChatScenario.PREFILL_PROGRESS_MODEL_ID:
             try IdleWorkerChatScenario.emitPrefillProgress(requestId, eventWriter: eventWriter)
@@ -86,6 +97,11 @@ enum IdleWorkerChatScenario {
             try eventWriter.sendEvent(.failed(
                 requestId: requestId,
                 reason: .malformedModelOutput))
+        case IdleWorkerChatScenario.DELAYED_MALFORMED_OUTPUT_MODEL_ID:
+            try IdleWorkerChatScenario.emitDelayedMalformedOutput(
+                requestId,
+                eventWriter: eventWriter,
+                maximumOutputTokens: maximumOutputTokens)
         case IdleWorkerChatScenario.DUPLICATE_GENERATION_PREPARATION_MODEL_ID:
             try IdleWorkerChatScenario.emitDuplicateGenerationPreparation(
                 requestId,
@@ -272,6 +288,28 @@ enum IdleWorkerChatScenario {
             promptTokenCount: 1,
             generatedTokenCount: 1,
             reason: .endOfSequence))
+    }
+
+    /// The observable-mid-flight failure: three generated tokens against the
+    /// requested budget, a pause long enough for the status document to
+    /// report the generating phase, then the malformed-output failure that
+    /// ends the stream — the daemon-process journey's scripted premise.
+    private static func emitDelayedMalformedOutput(
+        _ requestId: RequestId,
+        eventWriter: ProtocolWriter,
+        maximumOutputTokens: UInt16
+    ) throws -> Void {
+        try eventWriter.sendEvent(.generationProgress(
+            requestId: requestId,
+            generatedTokenCount: 3,
+            maximumOutputTokens: maximumOutputTokens,
+            elapsedMillis: 250,
+            mlxMemorySnapshot: nil,
+            expertResidency: nil))
+        Thread.sleep(forTimeInterval: 0.75)
+        try eventWriter.sendEvent(.failed(
+            requestId: requestId,
+            reason: .malformedModelOutput))
     }
 
     /// Twice the same once-only preparation boundary: the second frame is

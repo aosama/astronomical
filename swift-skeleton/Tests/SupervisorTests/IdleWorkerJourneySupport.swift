@@ -50,7 +50,7 @@ enum IdleWorkerJourneySupport {
      * its startup configuration and tripwire markers live in. `dispose()`
      * reaps the worker and removes the directories; journeys always call it.
      */
-    final class IdleWorkerHarness {
+    final class IdleWorkerHarness: Sendable {
         let supervisor: WorkerSupervisor
         let controlDirectoryPath: String
         let journeyDirectoryPath: String
