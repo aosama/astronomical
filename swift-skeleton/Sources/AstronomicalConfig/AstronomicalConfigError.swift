@@ -23,6 +23,7 @@ public enum AstronomicalConfigError: Error, CustomStringConvertible {
     case nonLoopbackBindAddress(supervisorBindAddress: SocketEndpoint)
     case invalidMaximumMlxMemoryGb(description: String)
     case invalidPromptCacheMaxSizeGb(description: String)
+    case invalidDefaultModel(description: String)
     case configuredContextExceedsArtifact(
         modelId: String,
         configuredMaximumContextTokens: UInt32,
@@ -64,6 +65,8 @@ public enum AstronomicalConfigError: Error, CustomStringConvertible {
         case .nonLoopbackBindAddress(let supervisorBindAddress):
             return "supervisor bind address \(supervisorBindAddress) must be a loopback address";
         case .invalidPromptCacheMaxSizeGb(let problemDescription):
+            return problemDescription;
+        case .invalidDefaultModel(let problemDescription):
             return problemDescription;
         case let .configuredContextExceedsArtifact(modelId, configuredMaximumContextTokens, artifactMaximumContextTokens):
             return "models[\(modelId)].limits.maximum_context_tokens (\(configuredMaximumContextTokens)) exceeds the discovered artifact maximum (\(artifactMaximumContextTokens))";

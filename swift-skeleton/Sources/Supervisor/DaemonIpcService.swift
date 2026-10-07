@@ -17,9 +17,11 @@ public final class DaemonIpcService: @unchecked Sendable {
 
     private let listener: DaemonIpcListener;
     private let socketFilePath: String;
+    private let instancePaths: AstronomicalInstancePaths;
     private let stateLock: NSLock;
     private let healthProvider: () -> DaemonStatusReport;
     private let chatContext: DaemonIpcChatContext?;
+    private let modelsContext: DaemonIpcModelsContext?;
     private let requestIdAllocator: ChatRequestIdAllocator;
     private var isShutdownRequested: Bool;
     private var serviceThread: Thread?;
@@ -27,13 +29,17 @@ public final class DaemonIpcService: @unchecked Sendable {
     private init(
         listener: DaemonIpcListener,
         socketFilePath: String,
+        instancePaths: AstronomicalInstancePaths,
         healthProvider: @escaping () -> DaemonStatusReport,
-        chatContext: DaemonIpcChatContext?
+        chatContext: DaemonIpcChatContext?,
+        modelsContext: DaemonIpcModelsContext?
     ) {
         self.listener = listener;
         self.socketFilePath = socketFilePath;
+        self.instancePaths = instancePaths;
         self.healthProvider = healthProvider;
         self.chatContext = chatContext;
+        self.modelsContext = modelsContext;
         self.requestIdAllocator = ChatRequestIdAllocator();
         self.stateLock = NSLock();
         self.isShutdownRequested = false;
@@ -52,7 +58,8 @@ public final class DaemonIpcService: @unchecked Sendable {
     public static func start(
         instancePaths: AstronomicalInstancePaths,
         healthProvider: @escaping () -> DaemonStatusReport,
-        chatContext: DaemonIpcChatContext? = nil
+        chatContext: DaemonIpcChatContext? = nil,
+        modelsContext: DaemonIpcModelsContext? = nil
     ) throws -> DaemonIpcService {
         let socketFilePath: String = instancePaths.ipcSocketFilePath.string;
         let listener: DaemonIpcListener = try DaemonIpcListener.bind(
@@ -60,8 +67,11 @@ public final class DaemonIpcService: @unchecked Sendable {
         let service: DaemonIpcService = DaemonIpcService(
             listener: listener,
             socketFilePath: socketFilePath,
+            instancePaths: instancePaths,
             healthProvider: healthProvider,
-            chatContext: chatContext);
+            chatContext: chatContext,
+            modelsContext: modelsContext
+        );
         let serviceThread: Thread = Thread {
             service.serveUntilShutdown();
         };
@@ -157,7 +167,8 @@ public final class DaemonIpcService: @unchecked Sendable {
             try streamingResponseWriter.sendResponse(DaemonResponse.status(
                 workerStatus: statusReport.workerStatus,
                 readyModelId: statusReport.readyModelId,
-                defaultModelId: nil));
+                defaultModelId: DaemonIpcService.effectiveDefaultModelId(
+                    instancePaths: self.instancePaths)));
             try streamingResponseWriter.close();
         case .chatGenerate:
             guard let chatContext: DaemonIpcChatContext = self.chatContext else {
@@ -171,12 +182,86 @@ public final class DaemonIpcService: @unchecked Sendable {
                 chatContext: chatContext,
                 requestIdAllocator: self.requestIdAllocator,
                 streamingResponseWriter: streamingResponseWriter);
-        case .embedGenerate, .modelsList, .catalog, .downloadStart,
-             .downloadStatus, .defaultModelSet:
-            try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
-                reason: "this daemon verb is not wired into the Swift supervisor yet"));
-            try streamingResponseWriter.close();
+        case let .embedGenerate(model, inputs, dimensions):
+            guard let modelsContext: DaemonIpcModelsContext = self.modelsContext else {
+                try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                    reason: "this daemon verb is not wired into the Swift supervisor yet"));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcEmbeddings.serve(
+                model: model,
+                inputs: inputs,
+                dimensions: dimensions,
+                modelsContext: modelsContext,
+                requestIdAllocator: self.requestIdAllocator,
+                streamingResponseWriter: streamingResponseWriter);
+        case .modelsList:
+            guard let modelsContext: DaemonIpcModelsContext = self.modelsContext else {
+                try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                    reason: "this daemon verb is not wired into the Swift supervisor yet"));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcModels.handleModelsList(
+                modelsContext: modelsContext,
+                streamingResponseWriter: streamingResponseWriter);
+        case .catalog:
+            guard let modelsContext: DaemonIpcModelsContext = self.modelsContext else {
+                try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                    reason: "this daemon verb is not wired into the Swift supervisor yet"));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcModels.handleCatalog(
+                modelsContext: modelsContext,
+                streamingResponseWriter: streamingResponseWriter);
+        case let .downloadStart(modelId):
+            guard let modelsContext: DaemonIpcModelsContext = self.modelsContext else {
+                try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                    reason: "the daemon has no Library download coordinator wired"));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcModels.handleDownloadStart(
+                modelId: modelId,
+                modelsContext: modelsContext,
+                streamingResponseWriter: streamingResponseWriter);
+        case .downloadStatus:
+            guard let modelsContext: DaemonIpcModelsContext = self.modelsContext else {
+                // No Library coordinator is wired: no download can be active.
+                try streamingResponseWriter.sendResponse(DaemonResponse.downloadStatus(job: nil));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcModels.handleDownloadStatus(
+                modelsContext: modelsContext,
+                streamingResponseWriter: streamingResponseWriter);
+        case let .defaultModelSet(modelId):
+            guard let modelsContext: DaemonIpcModelsContext = self.modelsContext else {
+                try streamingResponseWriter.sendResponse(DaemonResponse.requestRejected(
+                    reason: "this daemon verb is not wired into the Swift supervisor yet"));
+                try streamingResponseWriter.close();
+                return;
+            }
+            return try DaemonIpcModels.handleDefaultModelSet(
+                modelId: modelId,
+                modelsContext: modelsContext,
+                streamingResponseWriter: streamingResponseWriter);
         }
+    }
+
+    /// The model ID CLI verbs fall back to: the user-configured default
+    /// model, or the built-in fallback when none is configured. The config
+    /// file is read fresh so a `models default` made on another CLI process
+    /// is visible here.
+    private static func effectiveDefaultModelId(
+        instancePaths: AstronomicalInstancePaths
+    ) -> String {
+        let configuredDefaultModelId: String? = (try? AstronomicalConfig.loadFromInstancePaths(
+            instancePaths
+        ))?.defaultModel;
+        return configuredDefaultModelId ?? DefaultModel.builtinDefaultModelId;
     }
 }
 

@@ -249,7 +249,7 @@ import JourneyCategories;
         #expect(try statusClient.nextResponse() == .status(
             workerStatus: .ready,
             readyModelId: "m1",
-            defaultModelId: nil));
+            defaultModelId: DefaultModel.builtinDefaultModelId));
         #expect(try statusClient.nextResponse() == nil);
     }
 
