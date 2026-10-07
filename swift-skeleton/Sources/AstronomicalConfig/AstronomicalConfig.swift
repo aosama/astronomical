@@ -44,6 +44,23 @@ public struct AstronomicalConfig {
         return try loadFromInstancePaths(developmentInstancePaths);
     }
 
+    /**
+     * Parses one candidate document from exact bytes without touching the
+     * source of truth, the Swift port of
+     * `AstronomicalConfig::load_v1_bytes`; the memory-update endpoint
+     * resolves its prepared candidate through this boundary.
+     */
+    public static func loadFromV1Bytes(
+        instancePaths: AstronomicalInstancePaths,
+        configBytes: Data
+    ) throws -> AstronomicalConfig {
+        let userConfigFile: UserConfigFile = try ConfigFileStore.parseAndValidateV1(
+            configFilePath: instancePaths.configFilePath,
+            configBytes: configBytes
+        );
+        return AstronomicalConfig(instancePaths: instancePaths, userConfigFile: userConfigFile);
+    }
+
     public var instancePaths: AstronomicalInstancePaths {
         return self.loadedInstancePaths;
     }
