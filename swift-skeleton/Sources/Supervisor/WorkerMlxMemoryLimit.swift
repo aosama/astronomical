@@ -29,6 +29,15 @@ struct PendingMlxMemoryLimitUpdate {
 /// against the new ceiling (issue #515's guarantee).
 extension WorkerSupervisor {
 
+    /// Whether the worker accepts a control action right now: no admission
+    /// ticket is outstanding, so no generation is active or queued,
+    /// mirroring WorkerHandle::is_generation_idle_for_control_action.
+    public func isGenerationIdleForControlAction() -> Bool {
+        self.stateLock.lock();
+        defer { self.stateLock.unlock(); }
+        return self.issuedAdmissionTicketCount == self.servedAdmissionTicket;
+    }
+
     /// Stages generation attribution before a memory command can race to
     /// acknowledgement, mirroring
     /// WorkerHandle::stage_memory_configuration_generation.
