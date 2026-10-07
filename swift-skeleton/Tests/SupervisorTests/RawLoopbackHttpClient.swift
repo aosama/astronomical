@@ -7,7 +7,11 @@ import Foundation;
 /// tests exercise the wire instead of a Foundation URL stack.
 final class RawLoopbackHttpClient: @unchecked Sendable {
 
-    private static let receiveTimeoutSeconds: Int = 5;
+    // Generous on purpose: under a fully parallel test stampede on a machine
+    // that is also serving a live instance, the serving threads can be
+    // starved for tens of seconds. The bound still catches a wedged server
+    // well inside the 120-second journey cap.
+    private static let receiveTimeoutSeconds: Int = 30;
 
     static func exchange(port: UInt16, requestText: String) -> String? {
         let connectionDescriptor: Int32 = self.openConnectedSocket(port: port);
