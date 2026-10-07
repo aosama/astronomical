@@ -11,10 +11,11 @@ import RestContract;
 /**
  * Serving activity and per-request progress journeys, migrating the
  * progress slice of apps/supervisor/tests/rest_api/application/
- * image_status.rs and the contracts fixtures: the status document reports
- * the active request's phase through activity and progress sections, live
- * elapsed time keeps advancing between worker frames, and a completed
- * request restores idle without progress.
+ * image_status.rs and the status-document slice of its contracts.rs: the
+ * status document reports the ready model with a zeroed serving session
+ * and prompt-cache summary, the active request's phase through activity
+ * and progress sections, live elapsed time keeps advancing between worker
+ * frames, and a completed request restores idle without progress.
  */
 @Suite(.serialized, .tags(.hermeticJourney))
 final class RestStatusProgressTests {
@@ -76,6 +77,96 @@ final class RestStatusProgressTests {
         #expect((progressDocument["elapsed_ms"] as? Int ?? 0) >= 1_000,
             "the elapsed time must keep advancing after the last worker frame");
         #expect(progressDocument["completed_prefill_chunk_tokens"] as? Int == 64);
+    }
+
+    /// A ready idle worker answers the full status contract: the ready model
+    /// identity and size, no MLX snapshot yet, a zeroed serving session, and
+    /// a zeroed persistent prompt-cache summary.
+    @Test
+    func should_report_ready_status_idle_activity_and_model_id_for_a_ready_worker() throws {
+        let statusJourney: StatusProgressJourney = try StatusProgressJourney.launch(discoveredModels: [
+            StatusProgressJourney.discoveredReadyModel(modelSizeBytes: 18_420_000_000),
+        ]);
+        defer { statusJourney.dispose() }
+        var healthSnapshot: WorkerHealthSnapshot = WorkerHealthSnapshot.readyWithModel(
+            modelId: StatusProgressJourney.modelId,
+            capabilities: RestChatJourneySupport.readyChatCapabilities());
+        healthSnapshot.effectiveMlxMemoryCeilingBytes = 40_000_000_000;
+        statusJourney.workerHealthState.publish(healthSnapshot);
+
+        let statusDocument: [String: Any] = try statusJourney.getStatusDocument();
+
+        #expect(statusDocument["status"] as? String == "ready");
+        #expect(statusDocument["activity"] as? String == "idle");
+        #expect(statusDocument["ready_model_id"] as? String == StatusProgressJourney.modelId);
+        #expect(statusDocument["ready_model_size_bytes"] as? UInt64 == 18_420_000_000);
+        #expect(statusDocument["mlx_memory_snapshot"] is NSNull);
+        #expect(
+            statusDocument["last_request_mlx_active_memory_bytes"] == nil,
+            "the per-request memory observation must not appear before any request");
+        #expect(
+            statusDocument["expert_storage_format"] == nil,
+            "the removed storage-format key must stay absent");
+        #expect(statusDocument["mlx_memory_ceiling_bytes"] as? UInt64 == 40_000_000_000);
+        let servingSessionDocument: [String: Any] = try StatusProgressJourney.requireObject(
+            statusDocument, field: "serving_session");
+        #expect(servingSessionDocument["completed_request_count"] as? UInt64 == 0);
+        #expect(servingSessionDocument["total_prompt_token_count"] as? UInt64 == 0);
+        #expect(servingSessionDocument["total_reused_prompt_token_count"] as? UInt64 == 0);
+        #expect(servingSessionDocument["average_prefill_tok_per_second"] as? Double == 0.0);
+        #expect(servingSessionDocument["average_generation_tok_per_second"] as? Double == 0.0);
+        let persistentPromptCacheDocument: [String: Any] = try StatusProgressJourney.requireObject(
+            statusDocument, field: "persistent_prompt_cache");
+        #expect(persistentPromptCacheDocument["hits"] as? UInt64 == 0);
+        #expect(persistentPromptCacheDocument["misses"] as? UInt64 == 0);
+        #expect(persistentPromptCacheDocument["tokens_saved"] as? UInt64 == 0);
+        #expect(persistentPromptCacheDocument["hit_rate"] as? Double == 0.0);
+    }
+
+    /// An actively generating worker reports the generating activity while
+    /// staying ready.
+    @Test
+    func should_report_generating_activity_for_an_active_worker() throws {
+        let statusJourney: StatusProgressJourney = try StatusProgressJourney.launch();
+        defer { statusJourney.dispose() }
+        var healthSnapshot: WorkerHealthSnapshot = WorkerHealthSnapshot.readyWithModel(
+            modelId: StatusProgressJourney.modelId,
+            capabilities: RestChatJourneySupport.readyChatCapabilities());
+        healthSnapshot.activity = .generating;
+        statusJourney.workerHealthState.publish(healthSnapshot);
+
+        let statusDocument: [String: Any] = try statusJourney.getStatusDocument();
+
+        #expect(statusDocument["status"] as? String == "ready");
+        #expect(statusDocument["activity"] as? String == "generating");
+    }
+
+    /// Initial prefill progress must not claim a chunk size before the
+    /// engine measures one.
+    @Test
+    func should_omit_completed_prefill_chunk_tokens_before_the_first_measurement() throws {
+        let statusJourney: StatusProgressJourney = try StatusProgressJourney.launch();
+        defer { statusJourney.dispose() }
+        var healthSnapshot: WorkerHealthSnapshot = WorkerHealthSnapshot.readyWithModel(
+            modelId: StatusProgressJourney.modelId,
+            capabilities: RestChatJourneySupport.readyChatCapabilities());
+        healthSnapshot.activity = .promptProcessing;
+        healthSnapshot.activeRequestProgress = .prefill(
+            promptProcessingPhase: .target,
+            processedTokens: 0,
+            totalTokens: 2_200,
+            requestStartedAt: Date(),
+            elapsedMillis: 0,
+            completedPrefillChunkTokens: nil);
+        statusJourney.workerHealthState.publish(healthSnapshot);
+
+        let progressDocument: [String: Any] = try StatusProgressJourney.requireObject(
+            try statusJourney.getStatusDocument(), field: "progress");
+
+        #expect(progressDocument["phase"] as? String == "target");
+        #expect(
+            progressDocument["completed_prefill_chunk_tokens"] == nil,
+            "initial progress must not claim a chunk size before the engine measures one");
     }
 
     /// Generation preparation reports the layer topology with both elapsed
@@ -188,24 +279,64 @@ final class StatusProgressJourney {
         self.homeDirectoryUrl = homeDirectoryUrl;
     }
 
-    static func launch() throws -> StatusProgressJourney {
+    static func launch(
+        discoveredModels: Array<DiscoveryDiscoveredModel> = Array()
+    ) throws -> StatusProgressJourney {
         let homeDirectoryUrl: URL = FileManager.default.temporaryDirectory
             .appendingPathComponent("astronomical-status-progress-\(UUID().uuidString)", isDirectory: true);
         try FileManager.default.createDirectory(at: homeDirectoryUrl, withIntermediateDirectories: true);
         let instancePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
             FilePath(string: homeDirectoryUrl.path),
             runtimeInstance: AstronomicalRuntimeInstance.development);
-        let resolvedRuntimeConfig: ResolvedRuntimeConfig = try RestChatJourneySupport.makeResolvedConfig();
+        let resolvedRuntimeConfig: ResolvedRuntimeConfig = try RestChatJourneySupport.makeResolvedConfig(
+            discoveredModels: discoveredModels);
         let workerHealthState: WorkerHealthState = WorkerHealthState();
+        // Discovered models mirror the Rust build_application_with_discovered_models
+        // builder: the status document answers the ready model's size from
+        // the accepted discovery snapshot the reload transition carries.
+        var configReloadContext: RestConfigReloadRouteContext? = nil;
+        if discoveredModels.isEmpty == false {
+            configReloadContext = RestConfigReloadRouteContext(
+                transitionState: ConfigTransitionState(
+                    reloadableConfig: resolvedRuntimeConfig,
+                    configuredConfigSnapshot: resolvedRuntimeConfig),
+                runtimeConfigResolver: ResolvedRuntimeConfigResolver(
+                    instancePaths: instancePaths,
+                    fallbackWorkerExecutablePath: resolvedRuntimeConfig.workerExecutablePath),
+                workerControl: nil,
+                workerHealthState: workerHealthState,
+                generationActivityIdleProvider: { return true });
+        }
         let routeTable: RestRouteTable = RestEndpointRoutes.servingRouteTable(
             resolvedRuntimeConfig: resolvedRuntimeConfig,
             workerHealthState: workerHealthState,
             instancePaths: instancePaths,
-            buildIdentity: RestChatJourneySupport.journeyBuildIdentity());
+            buildIdentity: RestChatJourneySupport.journeyBuildIdentity(),
+            configReloadContext: configReloadContext);
         return StatusProgressJourney(
             workerHealthState: workerHealthState,
             routeTable: routeTable,
             homeDirectoryUrl: homeDirectoryUrl);
+    }
+
+    /// The discovered-model fixture whose size the status document echoes for
+    /// the ready model.
+    static func discoveredReadyModel(modelSizeBytes: UInt64) -> DiscoveryDiscoveredModel {
+        return DiscoveryDiscoveredModel(
+            modelId: StatusProgressJourney.modelId,
+            providerModelId: nil,
+            modelFamily: .qwen35,
+            revision: "status-progress-revision",
+            modelDirectory: FilePath(string: "/fictional/models/status-progress-model"),
+            capabilities: .chat(DiscoveryChatModelCapabilities(
+                contextWindowTokens: 262_144,
+                maximumInputTokens: 241_664,
+                maximumOutputTokens: 20_480,
+                supportsVision: true,
+                supportsReasoning: true,
+                supportsToolCalls: true)),
+            license: nil,
+            modelSizeBytes: modelSizeBytes);
     }
 
     func dispose() -> Void {

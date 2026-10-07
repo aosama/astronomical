@@ -65,7 +65,7 @@ final class RestMaximumMlxMemoryEndpointTests {
         let journey: MaximumMlxMemoryJourney = try MaximumMlxMemoryJourney.launch();
         defer { journey.dispose() }
         let firstGeneration: GenerationJourneyOutcome = journey.harness.startGenerationThread(requestId: 9_001);
-        journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
 
         let queuedResponse: RestHttpResponse = journey.putMaximumMlxMemory(maximumMlxMemoryGb: 31);
         #expect(queuedResponse.statusCode == 202);
@@ -78,7 +78,7 @@ final class RestMaximumMlxMemoryEndpointTests {
         MaximumMlxMemoryJourney.waitForPersistedMaximum(journey, expectedGigabytes: 31);
 
         let secondGeneration: GenerationJourneyOutcome = journey.harness.startGenerationThread(requestId: 9_002);
-        journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try journey.harness.awaitQueueFill(expectedOutstandingCount: 1);
         let secondQueuedResponse: RestHttpResponse = journey.putMaximumMlxMemory(maximumMlxMemoryGb: 31);
         #expect(secondQueuedResponse.statusCode == 202);
         MaximumMlxMemoryJourney.writeConfigFile(

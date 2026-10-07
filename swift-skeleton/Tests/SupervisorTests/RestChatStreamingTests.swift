@@ -186,6 +186,68 @@ final class RestChatStreamingTests {
             == "the local inference engine is already processing another request");
     }
 
+    /// Every stream failure answers with its own meaningful code and message,
+    /// and no failure ever carries the [DONE] terminator.
+    @Test
+    func should_emit_meaningful_openai_errors_for_each_stream_failure() throws {
+        let failureCases: Array<(streamEvent: ChatGenerationStreamEvent, expectedCode: String, expectedMessage: String)> =
+            [
+                (
+                    streamEvent: .failed(reason: .contextLengthExceeded(
+                        actualTotalContextTokens: 262_145,
+                        maximumContextTokens: 262_144)),
+                    expectedCode: "context_length_exceeded",
+                    expectedMessage: "requested context uses 262145 tokens, exceeding the "
+                        + "262144-token model context window"),
+                (
+                    streamEvent: .failed(reason: .invalidRequest(
+                        reason: "rendered prompt exceeds the 262144-byte worker limit")),
+                    expectedCode: "chat_invalid_request",
+                    expectedMessage: "the local worker rejected the chat request: "
+                        + "rendered prompt exceeds the 262144-byte worker limit"),
+                (
+                    streamEvent: .failed(reason: .engineBusy),
+                    expectedCode: "chat_engine_busy",
+                    expectedMessage: "the local inference engine is already processing another request"),
+                (
+                    streamEvent: .failed(reason: .malformedModelOutput),
+                    expectedCode: "chat_malformed_model_output",
+                    expectedMessage: "the model produced malformed structured output"),
+                (
+                    streamEvent: .failed(reason: .fatalExecution(
+                        reason: "GPU allocation exceeded the platform buffer limit while evaluating the model; "
+                            + "reduce the prompt size or configured prefill chunk size")),
+                    expectedCode: "chat_worker_unavailable",
+                    expectedMessage: "the local worker stopped after a fatal model execution error: "
+                        + "GPU allocation exceeded the platform buffer limit while evaluating the model; "
+                        + "reduce the prompt size or configured prefill chunk size"),
+                (
+                    streamEvent: .streamError(.workerUnavailable),
+                    expectedCode: "chat_worker_unavailable",
+                    expectedMessage: "the local worker became unavailable while processing the chat request"),
+            ];
+
+        for failureCase in failureCases {
+            let routeTable: RestRouteTable = try RestChatStreamingTests.routeTable(
+                streamEvents: [failureCase.streamEvent]);
+            let chatResponse: RestHttpResponse = try RestChatJourneySupport.postChat(
+                routeTable: routeTable,
+                requestBody: "{\"model\":\"\(RestChatJourneySupport.streamingModelId)\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"stream\":true}");
+
+            #expect(chatResponse.statusCode == 200);
+            let responseText: String = RestChatJourneySupport.responseText(chatResponse);
+            #expect(
+                responseText.contains("\"code\":\"\(failureCase.expectedCode)\""),
+                "each stream failure must carry its own error code");
+            #expect(
+                responseText.contains("\"message\":\"\(failureCase.expectedMessage)\""),
+                "each stream failure must carry its human-readable message");
+            #expect(
+                responseText.contains("[DONE]") == false,
+                "a failed stream must never end with the done terminator");
+        }
+    }
+
     // MARK: Shared fixture helpers
 
     private static func routeTable(
