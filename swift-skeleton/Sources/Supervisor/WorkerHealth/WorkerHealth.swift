@@ -88,6 +88,10 @@ public struct WorkerHealthSnapshot: Equatable {
     public var activity: WorkerActivity = .idle;
     /// Latest progress observation for the active request, if one is active.
     public var activeRequestProgress: ActiveRequestProgress? = nil;
+    /// Lifetime-of-daemon serving totals; survives model swaps.
+    public var servingSession: ServingSessionSnapshot = ServingSessionSnapshot.empty();
+    /// Latest worker-reported persistent prompt-cache statistics.
+    public var persistentPromptCacheStats: WorkerPersistentPromptCacheStats? = nil;
 
     /// Builds a ready snapshot from the worker's enriched readiness event.
     public static func readyWithModel(
@@ -163,6 +167,8 @@ public struct WorkerHealthSnapshot: Equatable {
         replacementHealthSnapshot.effectiveMlxMemoryCeilingBytes = previousHealthSnapshot.effectiveMlxMemoryCeilingBytes;
         replacementHealthSnapshot.minimumMlxMemoryCeilingBytes = minimumMlxMemoryCeilingBytes;
         replacementHealthSnapshot.workerRuntimeFeatureConfiguration = previousHealthSnapshot.workerRuntimeFeatureConfiguration;
+        replacementHealthSnapshot.servingSession = previousHealthSnapshot.servingSession;
+        replacementHealthSnapshot.persistentPromptCacheStats = previousHealthSnapshot.persistentPromptCacheStats;
         return replacementHealthSnapshot;
     }
 }

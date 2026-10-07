@@ -93,6 +93,7 @@ extension WorkerSupervisor {
     ) throws -> Array<ChatGenerationStreamEvent> {
         var streamEvents: Array<ChatGenerationStreamEvent> = Array<ChatGenerationStreamEvent>();
         var generationStartedAt: Date?;
+        var prefillElapsedMillis: UInt64 = 0;
         while true {
             self.stateLock.lock();
             let isShutdownRequested: Bool = self.isShutdownRequested;
@@ -128,6 +129,7 @@ extension WorkerSupervisor {
                 mlxMemorySnapshot,
                 _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                prefillElapsedMillis = max(prefillElapsedMillis, elapsedMillis);
                 if let mlxMemorySnapshot = mlxMemorySnapshot {
                     try WorkerEventHandler.handle(
                         .mlxMemorySample(
@@ -192,9 +194,11 @@ extension WorkerSupervisor {
                     maximumOutputTokens: UInt32(maximumOutputTokens),
                     generationStartedAt: generationStartedAt!);
                 continue;
-            case .promptWorkReuse:
-                // Request-scoped telemetry without CLI presentation; the
-                // attribution slice consumes it from health state later.
+            case let .promptWorkReuse(eventRequestId, promptWorkReuse):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                try? self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) -> Void in
+                    snapshot.servingSession.recordPromptWorkReuse(promptWorkReuse);
+                });
                 continue;
             case let .completed(
                 eventRequestId,
@@ -205,6 +209,12 @@ extension WorkerSupervisor {
                 _,
                 reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.recordServingSessionTotals(
+                    promptTokenCount: promptTokenCount,
+                    cachedTokenCount: cachedTokenCount,
+                    generatedTokenCount: generatedTokenCount,
+                    prefillElapsedMillis: prefillElapsedMillis,
+                    generationStartedAt: generationStartedAt);
                 self.publishServingActivity(.idle, progress: nil);
                 streamEvents.append(.completed(
                     promptTokenCount: promptTokenCount,
@@ -226,6 +236,34 @@ extension WorkerSupervisor {
                 try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
             }
         }
+    }
+
+    /// Records one completed request into the lifetime serving totals with
+    /// its measured throughput, mirroring the Rust completion-event path.
+    private func recordServingSessionTotals(
+        promptTokenCount: UInt32,
+        cachedTokenCount: UInt32,
+        generatedTokenCount: UInt16,
+        prefillElapsedMillis: UInt64,
+        generationStartedAt: Date?
+    ) -> Void {
+        let generationElapsedMillis: UInt64 = generationStartedAt.map({ (startedAt: Date) -> UInt64 in
+            return UInt64((Date().timeIntervalSince(startedAt) * 1000).rounded());
+        }) ?? 0;
+        let throughput: (prefillTokPerSecond: Double?, generationTokPerSecond: Double?) =
+            ServingSessionSnapshot.computeThroughput(
+                promptTokenCount: promptTokenCount,
+                cachedTokenCount: cachedTokenCount,
+                generatedTokenCount: generatedTokenCount,
+                prefillElapsedMillis: prefillElapsedMillis,
+                generationElapsedMillis: generationElapsedMillis);
+        try? self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) -> Void in
+            snapshot.servingSession.recordCompletedRequest(
+                promptTokenCount: promptTokenCount,
+                cachedTokenCount: cachedTokenCount,
+                prefillTokPerSecond: throughput.prefillTokPerSecond,
+                generationTokPerSecond: throughput.generationTokPerSecond);
+        });
     }
 
     /// Publishes the generating activity with elapsed time measured from the
