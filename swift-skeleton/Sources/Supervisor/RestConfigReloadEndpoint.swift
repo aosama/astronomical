@@ -38,8 +38,7 @@ public struct RestConfigReloadRouteContext: @unchecked Sendable {
 /// migrating apps/supervisor/src/config_reload_endpoint.rs:
 /// POST /v1/config/reload answers 200 reloaded, 400 invalid_config with
 /// path-safe feedback, 409 while a generation or memory transition is in
-/// flight, and 500 when the worker rejects the reload or cannot be replaced
-/// yet (worker replacement is its own migration slice).
+/// flight, and 500 when the worker rejects the reload or cannot be replaced.
 public enum RestConfigReloadEndpoint {
 
     public static let routeMethod: String = "POST";
@@ -170,6 +169,27 @@ public enum RestConfigReloadEndpoint {
                         candidate: candidateGeneration,
                         effective: RestConfigReloadEndpoint.effectiveWorkerGeneration(reloadContext)));
         case .restartWorker:
+            return RestConfigReloadEndpoint.restartServingWorker(
+                reloadContext: reloadContext,
+                candidateResolvedConfig: candidateResolvedConfig,
+                reloadedFields: reloadedFields,
+                discoveredModelCount: discoveredModelCount);
+        }
+    }
+
+    /// Replaces the serving worker with a candidate resolved from the reload
+    /// candidate, mirroring config_reload_endpoint.rs's restart_worker: the
+    /// acknowledged runtime configuration becomes the new effective
+    /// generation, a busy race stays 409, and any other replacement failure
+    /// keeps the previous worker serving untouched.
+    private static func restartServingWorker(
+        reloadContext: RestConfigReloadRouteContext,
+        candidateResolvedConfig: ResolvedRuntimeConfig,
+        reloadedFields: Array<String>,
+        discoveredModelCount: Int
+    ) -> RestHttpResponse {
+        let candidateGeneration: String = candidateResolvedConfig.configurationGeneration;
+        guard let workerControl: WorkerSupervisor = reloadContext.workerControl else {
             return RestConfigReloadEndpoint.jsonResponse(
                 500,
                 .failed(
@@ -179,6 +199,32 @@ public enum RestConfigReloadEndpoint {
                         candidate: candidateGeneration,
                         effective: RestConfigReloadEndpoint.effectiveWorkerGeneration(reloadContext)));
         }
+        let acknowledgedConfiguration: WorkerRuntimeFeatureConfiguration;
+        do {
+            acknowledgedConfiguration = try workerControl.restartWorkerWithStartupConfiguration(
+                candidateWorkerExecutablePath: candidateResolvedConfig.workerExecutablePath.string,
+                candidateModelPolicyCatalog: candidateResolvedConfig.modelPolicyCatalog,
+                candidateStartupConfiguration: candidateResolvedConfig.workerStartupConfiguration());
+        } catch WorkerControlError.generationBusy {
+            return RestConfigReloadEndpoint.jsonResponse(409, .busy());
+        } catch {
+            return RestConfigReloadEndpoint.jsonResponse(
+                500,
+                .failed(
+                    "Config was valid, but worker replacement failed; inspect local diagnostics and retry",
+                    discoveredModelCount: discoveredModelCount)
+                    .withGenerations(
+                        candidate: candidateGeneration,
+                        effective: RestConfigReloadEndpoint.effectiveWorkerGeneration(reloadContext)));
+        }
+        reloadContext.transitionState.replaceReloadableConfig(candidateResolvedConfig);
+        return RestConfigReloadEndpoint.jsonResponse(
+            200,
+            .workerRestartCompleted(
+                reloadedFields: reloadedFields,
+                discoveredModelCount: discoveredModelCount,
+                acknowledgedConfiguration: acknowledgedConfiguration)
+                .withGenerations(candidate: candidateGeneration, effective: candidateGeneration));
     }
 
     /// Applies the memory-only slice of a reload against the live worker.
