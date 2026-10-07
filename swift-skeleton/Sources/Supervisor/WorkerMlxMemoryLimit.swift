@@ -129,7 +129,7 @@ extension WorkerSupervisor {
                 workerProcess: workerProcess,
                 eventPump: eventPump);
         } catch let controlError {
-            self.containAndAttemptRelaunch(controlError: controlError);
+            self.containWorkerFailure(controlError: controlError);
         }
     }
 

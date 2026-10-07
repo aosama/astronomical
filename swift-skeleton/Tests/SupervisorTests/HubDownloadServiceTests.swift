@@ -21,7 +21,12 @@ final class HubDownloadServiceTests {
 
     @Test
     func should_download_a_scripted_snapshot_with_live_progress_and_cache_reuse() async throws {
-        let weightsBytes: Data = Data((0 ..< 1024 * 1024).map({ (byteIndex: Int) -> UInt8 in
+        // 4 MiB at the scripted 16 KiB/40 ms pacing holds the weights
+        // transfer open for roughly ten seconds: the upstream progress
+        // sampler ticks every 100 ms on the cooperative pool, and under the
+        // commit gate's concurrent load a shorter transfer let the whole
+        // window pass without one schedulable sample tick.
+        let weightsBytes: Data = Data((0 ..< 4 * 1024 * 1024).map({ (byteIndex: Int) -> UInt8 in
             return UInt8(byteIndex % 251)
         }))
         let configBytes: Data = Data("{\"model_family\": \"example\"}".utf8)
