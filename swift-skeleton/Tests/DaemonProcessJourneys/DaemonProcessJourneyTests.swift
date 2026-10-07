@@ -234,6 +234,74 @@ final class DaemonProcessJourneyTests {
     }
 
     @Test
+    func should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavailable() throws {
+        let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();
+        let probeWorkerExecutablePath: String = try DaemonProcessJourneySupport.locateBuiltExecutable(
+            executableName: "SupervisorStderrProbeWorker");
+        let stateDirectoryPath: String = try DaemonProcessJourneySupport.makeStateDirectory(
+            journeyName: "stderr-diagnostic");
+        defer { DaemonProcessJourneySupport.removeStateDirectory(stateDirectoryPath); };
+        try DaemonProcessJourneySupport.writeInstanceConfig(stateDirectoryPath: stateDirectoryPath);
+        // A synthetic bundle: the daemon and the probe worker copied beside
+        // each other, so the daemon's worker-path derivation finds the probe
+        // — the worker that writes its stderr diagnostic, idles, and exits.
+        // The SwiftPM resource bundles ride along beside the binaries: Rust
+        // embeds its assets, Swift loads them from the bundle directories
+        // next to the executable.
+        let bundleBinDirectoryPath: String = stateDirectoryPath + "/bin";
+        try FileManager.default.createDirectory(
+            atPath: bundleBinDirectoryPath,
+            withIntermediateDirectories: true);
+        try FileManager.default.copyItem(
+            atPath: daemonExecutablePath,
+            toPath: bundleBinDirectoryPath + "/" + DaemonProcessJourneySupport.daemonExecutableName);
+        try FileManager.default.copyItem(
+            atPath: probeWorkerExecutablePath,
+            toPath: bundleBinDirectoryPath + "/astronomical-inference-worker");
+        let daemonProductsDirectoryPath: String =
+            (daemonExecutablePath as NSString).deletingLastPathComponent;
+        let productsEntryNames: Array<String> = try FileManager.default.contentsOfDirectory(
+            atPath: daemonProductsDirectoryPath);
+        for productsEntryName: String in productsEntryNames {
+            if (productsEntryName as NSString).pathExtension == "bundle" {
+                try FileManager.default.copyItem(
+                    atPath: daemonProductsDirectoryPath + "/" + productsEntryName,
+                    toPath: bundleBinDirectoryPath + "/" + productsEntryName);
+            }
+        }
+        let daemon: (daemonProcess: Process, restPort: UInt16) = try DaemonProcessJourneySupport.spawnDaemon(
+            daemonExecutablePath: bundleBinDirectoryPath + "/" + DaemonProcessJourneySupport.daemonExecutableName,
+            runtimeInstance: "development",
+            stateDirectoryPath: stateDirectoryPath);
+
+        // The bound covers the exit-diagnostics settle plus test-machine
+        // spawn jitter; a healthy containment lands in well under half of it.
+        let diagnosticDeadline: Date = Date().addingTimeInterval(10);
+        var supervisorLogText: String = "";
+        while (Date() < diagnosticDeadline) {
+            supervisorLogText = DaemonProcessJourneySupport.readSupervisorLogs(
+                stateDirectoryPath: stateDirectoryPath);
+            if supervisorLogText.contains("worker process exited after closing its event stream") {
+                break;
+            }
+            Thread.sleep(forTimeInterval: 0.025);
+        }
+        #expect(
+            supervisorLogText.contains("worker process exited after closing its event stream"),
+            "the supervisor log must retain the worker exit diagnostic");
+        #expect(
+            supervisorLogText.contains("exit code 0"),
+            "the supervisor log must retain the worker exit status");
+        #expect(
+            supervisorLogText.contains("stderr-probe worker observed visible stderr"),
+            "the supervisor log must retain the exact worker stderr tail");
+        let exitStatus: Int32? = DaemonProcessJourneySupport.terminateAndWait(
+            daemonProcess: daemon.daemonProcess,
+            deadlineSeconds: 5);
+        #expect(exitStatus == 0, "SIGTERM must end the daemon cleanly, got \(String(describing: exitStatus))");
+    }
+
+    @Test
     func should_fail_startup_when_user_config_is_malformed() throws {
         let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();
         let stateDirectoryPath: String = try DaemonProcessJourneySupport.makeStateDirectory(journeyName: "malformed-config");
