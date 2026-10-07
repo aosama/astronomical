@@ -83,7 +83,7 @@ final class DiscoveryModelsTests {
         let rootPath: String = try self.makeTemporaryRoot();
         // A Diffusers pipeline root is terminal: nested component configs
         // are not independently requestable.
-        try self.writeFile(
+        _ = try self.writeFile(
             relativePath: "pipelines/flux-pipeline/model_index.json",
             contents: "{\"_class_name\":\"FluxPipeline\"}",
             beneathRoot: rootPath);

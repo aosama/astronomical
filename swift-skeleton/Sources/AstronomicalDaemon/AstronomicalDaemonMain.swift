@@ -104,6 +104,9 @@ struct AstronomicalDaemonMain {
         let chatRequestIdAllocator: ChatRequestIdAllocator = ChatRequestIdAllocator();
         // The menu bar app requests the same graceful close over HTTP.
         let shutdownController: ShutdownController = ShutdownController();
+        let configTransitionState: ConfigTransitionState = ConfigTransitionState(
+            reloadableConfig: resolvedRuntimeConfig,
+            configuredConfigSnapshot: resolvedRuntimeConfig);
         let restServer: RestHttpServer;
         do {
             restServer = try RestHttpServer.start(
@@ -125,7 +128,11 @@ struct AstronomicalDaemonMain {
                         instancePaths: instancePaths),
                     cacheClearContext: RestCacheClearRouteContext(
                         cacheClearExecutor: workerSupervisor),
-                    shutdownController: shutdownController));
+                    shutdownController: shutdownController,
+                    memoryContext: RestMaximumMlxMemoryRouteContext(
+                        workerControl: workerSupervisor,
+                        runtimeConfigResolver: runtimeConfigResolver,
+                        transitionState: configTransitionState)));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);
