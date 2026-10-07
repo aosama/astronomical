@@ -182,7 +182,7 @@ public enum ImageGenerationPhase: Equatable, Sendable {
         "preparing", "encoding_prompt", "denoising", "decoding", "encoding_image",
     ];
 
-    internal var wireName: String {
+    public var wireName: String {
         switch (self) {
         case .preparing: return "preparing";
         case .encodingPrompt: return "encoding_prompt";
