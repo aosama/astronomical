@@ -86,6 +86,38 @@ struct AstronomicalDaemonMain {
             FileHandle.standardError.write(Data("astronomicald: could not resolve the runtime configuration: \(error)\n".utf8));
             exit(2);
         }
+        // The attribution plumbing opens before the worker launches: the
+        // instance's logs directory receives the per-generation performance
+        // rows, the completion rows when the operator enabled that toggle,
+        // and the supervisor-owned operation attribution rows when the
+        // performance-attribution diagnostics flag is on.
+        let loggingDirectory: FilePath = instancePaths.loggingDirectory;
+        do {
+            try FileManager.default.createDirectory(
+                atPath: loggingDirectory.string,
+                withIntermediateDirectories: true);
+        } catch {
+            FileHandle.standardError.write(Data(
+                "astronomicald: could not create the logs directory: \(error)\n".utf8));
+            exit(2);
+        }
+        let supervisorAttributionLog: SupervisorPerformanceAttributionLog;
+        let generationPerformanceLog: GenerationPerformanceLog;
+        let completionAttributionLog: CompletionAttributionLog;
+        do {
+            supervisorAttributionLog = try SupervisorPerformanceAttributionLog.open(
+                logDirectory: loggingDirectory,
+                performanceAttributionEnabled: resolvedRuntimeConfig.performanceAttributionEnabled);
+            generationPerformanceLog = try GenerationPerformanceLog.open(
+                logDirectory: loggingDirectory);
+            completionAttributionLog = try CompletionAttributionLog.open(
+                logDirectory: loggingDirectory,
+                completionAttributionEnabled: resolvedRuntimeConfig.completionAttributionEnabled);
+        } catch {
+            FileHandle.standardError.write(Data(
+                "astronomicald: could not open the attribution logs: \(error)\n".utf8));
+            exit(2);
+        }
         // The supervisor owns the one live health snapshot: the REST routes
         // and the daemon IPC status verb read from it, so every surface sees
         // the same worker facts.
@@ -96,7 +128,9 @@ struct AstronomicalDaemonMain {
                 workerArguments: [],
                 workerStartupConfiguration: resolvedRuntimeConfig.workerStartupConfiguration(),
                 modelPolicyCatalog: resolvedRuntimeConfig.modelPolicyCatalog,
-                modelLoadTimeout: AstronomicalDaemonMain.workerModelLoadTimeoutSeconds);
+                modelLoadTimeout: AstronomicalDaemonMain.workerModelLoadTimeoutSeconds,
+                generationPerformanceLog: generationPerformanceLog,
+                completionAttributionLog: completionAttributionLog);
         } catch {
             FileHandle.standardError.write(Data(
                 "astronomicald worker unavailable: \(error)\n".utf8));
@@ -116,7 +150,26 @@ struct AstronomicalDaemonMain {
         // interrupted mid-publish resumes under the same identity.
         let libraryDownloadCatalog: DownloadCatalog;
         do {
-            libraryDownloadCatalog = try DownloadCatalog.loadBundled();
+            // Catalog loading is a supervisor-owned operation: its duration
+            // and entry count land in the supervisor attribution log when the
+            // diagnostics flag is on, and never block the load otherwise.
+            let catalogOutcome: Result<DownloadCatalog, any Error> = try supervisorAttributionLog.measureOperation(
+                operation: .libraryCatalogLoad,
+                measuredOperation: { () -> Result<DownloadCatalog, any Error> in
+                    return Result(catching: { () throws -> DownloadCatalog in
+                        return try DownloadCatalog.loadBundled();
+                    });
+                },
+                describeMeasurement: { (outcome: Result<DownloadCatalog, any Error>) -> SupervisorPerformanceMeasurement in
+                    switch (outcome) {
+                    case let .success(loadedCatalog):
+                        return SupervisorPerformanceMeasurement.successfulCatalogLoad(
+                            catalogEntryCount: loadedCatalog.entryCount);
+                    case .failure:
+                        return SupervisorPerformanceMeasurement.failure();
+                    }
+                });
+            libraryDownloadCatalog = try catalogOutcome.get();
         } catch {
             FileHandle.standardError.write(Data(
                 "astronomicald: the bundled library catalog is invalid: \(error)\n".utf8));

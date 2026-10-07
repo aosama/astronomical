@@ -21,6 +21,17 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     static let promptCacheClearTimeoutSeconds: TimeInterval = 60;
     static let generationPollSeconds: TimeInterval = 0.25;
 
+    /// The completion-reason token the attribution logs record, matching the
+    /// Rust ChatGenerationCompletionReason wire names.
+    static func completionReasonName(_ completionReason: ChatGenerationCompletionReason) -> String {
+        switch (completionReason) {
+        case .endOfSequence: return "end_of_sequence";
+        case .maximumOutputTokens: return "maximum_output_tokens";
+        case .toolCalls: return "tool_calls";
+        case .cancelled: return "cancelled";
+        }
+    }
+
     let stateLock: NSCondition;
     var workerProcess: WorkerProcess?;
     var eventPump: WorkerEventPump?;
@@ -36,13 +47,17 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     let workerArguments: Array<String>;
     let workerStartupConfiguration: WorkerStartupConfiguration?;
     let modelLoadTimeout: TimeInterval;
+    let generationPerformanceLog: GenerationPerformanceLog;
+    let completionAttributionLog: CompletionAttributionLog;
 
     private init(
         workerExecutablePath: String,
         workerArguments: Array<String>,
         workerStartupConfiguration: WorkerStartupConfiguration?,
         modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
-        modelLoadTimeout: TimeInterval
+        modelLoadTimeout: TimeInterval,
+        generationPerformanceLog: GenerationPerformanceLog,
+        completionAttributionLog: CompletionAttributionLog
     ) {
         self.stateLock = NSCondition();
         self.workerProcess = nil;
@@ -59,6 +74,8 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         self.workerArguments = workerArguments;
         self.workerStartupConfiguration = workerStartupConfiguration;
         self.modelLoadTimeout = modelLoadTimeout;
+        self.generationPerformanceLog = generationPerformanceLog;
+        self.completionAttributionLog = completionAttributionLog;
     }
 
     /// Creates a handle that reports an unavailable worker without starting a
@@ -72,7 +89,9 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
             workerArguments: [],
             workerStartupConfiguration: nil,
             modelPolicyCatalog: modelPolicyCatalog,
-            modelLoadTimeout: 0);
+            modelLoadTimeout: 0,
+            generationPerformanceLog: GenerationPerformanceLog.disabled(),
+            completionAttributionLog: CompletionAttributionLog.disabled());
     }
 
     /// Spawns the worker with the supervisor-resolved bootstrap settings and
@@ -84,14 +103,18 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         workerArguments: Array<String>,
         workerStartupConfiguration: WorkerStartupConfiguration?,
         modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
-        modelLoadTimeout: TimeInterval
+        modelLoadTimeout: TimeInterval,
+        generationPerformanceLog: GenerationPerformanceLog = GenerationPerformanceLog.disabled(),
+        completionAttributionLog: CompletionAttributionLog = CompletionAttributionLog.disabled()
     ) throws -> WorkerSupervisor {
         let supervisor: WorkerSupervisor = WorkerSupervisor(
             workerExecutablePath: workerExecutablePath,
             workerArguments: workerArguments,
             workerStartupConfiguration: workerStartupConfiguration,
             modelPolicyCatalog: modelPolicyCatalog,
-            modelLoadTimeout: modelLoadTimeout);
+            modelLoadTimeout: modelLoadTimeout,
+            generationPerformanceLog: generationPerformanceLog,
+            completionAttributionLog: completionAttributionLog);
         let launchedWorker: WorkerProcess;
         do {
             launchedWorker = try WorkerProcess.launch(
