@@ -120,12 +120,18 @@ struct AstronomicalDaemonMain {
                         chatExecutor: workerSupervisor,
                         requestIdAllocator: chatRequestIdAllocator,
                         resolvedRuntimeConfig: resolvedRuntimeConfig,
-                        instancePaths: instancePaths),
+                        instancePaths: instancePaths,
+                        liveResolvedRuntimeConfigProvider: {
+                            return configTransitionState.currentReloadableConfig();
+                        }),
                     responsesContext: RestResponsesRouteContext(
                         responsesExecutor: workerSupervisor,
                         requestIdAllocator: chatRequestIdAllocator,
                         resolvedRuntimeConfig: resolvedRuntimeConfig,
-                        instancePaths: instancePaths),
+                        instancePaths: instancePaths,
+                        liveResolvedRuntimeConfigProvider: {
+                            return configTransitionState.currentReloadableConfig();
+                        }),
                     cacheClearContext: RestCacheClearRouteContext(
                         cacheClearExecutor: workerSupervisor),
                     shutdownController: shutdownController,
