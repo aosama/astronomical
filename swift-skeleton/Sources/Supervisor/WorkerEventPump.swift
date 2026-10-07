@@ -35,8 +35,9 @@ public final class WorkerEventPump: @unchecked Sendable {
     }
 
     /// Returns the next event, throws the stream failure when the reader hit
-    /// one, throws `workerEventStreamClosed` when the worker closed its
-    /// output, and returns `nil` only when the bounded wait expired.
+    /// one, throws the composed process-exit diagnostics (exit status,
+    /// lifetime, stderr tail) when the worker closed its output, and returns
+    /// `nil` only when the bounded wait expired.
     public func nextEvent(within maximumWait: TimeInterval) throws -> WorkerEvent? {
         self.pumpCondition.lock();
         defer { self.pumpCondition.unlock(); }
@@ -82,16 +83,20 @@ public final class WorkerEventPump: @unchecked Sendable {
                 return;
             }
             do {
-                // A nil return is the clean frame-boundary EOF; anything
+                // A nil return is the clean frame-boundary EOF; the stream
+                // end carries the process diagnostics the way the Rust
+                // worker's next_event composes its exit error. Anything
                 // thrown is a framing or decoding failure on this stream.
                 guard let workerEvent: WorkerEvent = try self.workerProcess.nextEvent() else {
-                    self.finishStream(failure: nil, generation: generation);
+                    self.finishStream(
+                        failure: self.workerProcess.workerProcessExitError(),
+                        generation: generation);
                     return;
                 }
-                self.enqueue(workerEvent);
+                self.enqueue(workerEvent)
             } catch let readFailure {
-                self.finishStream(failure: readFailure, generation: generation);
-                return;
+                self.finishStream(failure: readFailure, generation: generation)
+                return
             }
         }
     }
