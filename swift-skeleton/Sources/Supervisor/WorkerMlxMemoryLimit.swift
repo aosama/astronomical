@@ -1,0 +1,133 @@
+import Foundation;
+
+import IpcProtocol;
+
+/// Completion state of one supervisor-side MLX memory-ceiling request,
+/// mirroring apps/supervisor/src/worker_memory_limit.rs's
+/// MlxMemoryLimitUpdateOutcome.
+public enum MlxMemoryLimitUpdateOutcome: Equatable {
+
+    /// The worker applied the new ceiling immediately.
+    case applied;
+    /// A generation is active; the ceiling raise waits behind it.
+    case queued;
+    /// The worker refused the ceiling without mutating its accounting.
+    case rejected;
+}
+
+/// A live ceiling raise that waits because a generation is already running.
+struct PendingMlxMemoryLimitUpdate {
+
+    let effectiveMlxMemoryCeilingBytes: UInt64;
+    let configurationGeneration: String;
+}
+
+/// The supervisor's side of the live MLX memory-ceiling control: immediate
+/// application on an idle worker, queueing behind an active generation with
+/// the pending ceiling published to health state, and application of the
+/// queued raise during the admission-slot release so the next request starts
+/// against the new ceiling (issue #515's guarantee).
+extension WorkerSupervisor {
+
+    /// Applies an idle MLX ceiling immediately or queues it behind one
+    /// active generation, mirroring WorkerHandle::update_mlx_memory_limit.
+    ///
+    /// The idle-application window races a concurrent admission only in the
+    /// favorable direction: the worker itself refuses ceiling changes during
+    /// a generation, so the worst case is a `rejected` outcome, never a
+    /// mutated ceiling under a running request.
+    public func updateMlxMemoryLimit(
+        _ effectiveMlxMemoryCeilingBytes: UInt64,
+        configurationGeneration: String
+    ) throws -> MlxMemoryLimitUpdateOutcome {
+        self.stateLock.lock();
+        guard let workerProcess: WorkerProcess = self.workerProcess,
+              let eventPump: WorkerEventPump = self.eventPump else {
+            self.stateLock.unlock();
+            throw WorkerControlError.missingActiveWorker;
+        }
+        let hasActiveGenerationSlot: Bool = self.issuedAdmissionTicketCount > self.servedAdmissionTicket;
+        if hasActiveGenerationSlot {
+            self.pendingMlxMemoryLimitUpdate = PendingMlxMemoryLimitUpdate(
+                effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes,
+                configurationGeneration: configurationGeneration);
+            self.stateLock.unlock();
+            try self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) in
+                snapshot.pendingMlxMemoryCeilingBytes = effectiveMlxMemoryCeilingBytes;
+            });
+            return .queued;
+        }
+        self.stateLock.unlock();
+        return try self.applyMlxMemoryLimitUpdate(
+            PendingMlxMemoryLimitUpdate(
+                effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes,
+                configurationGeneration: configurationGeneration),
+            workerProcess: workerProcess,
+            eventPump: eventPump);
+    }
+
+    /// Applies the raise a finished generation left queued, so the release of
+    /// the admission slot never hands the worker to the next request against
+    /// a ceiling the user already replaced.
+    func applyPendingMlxMemoryLimitUpdateAfterFinalization() -> Void {
+        self.stateLock.lock();
+        let pendingUpdate: PendingMlxMemoryLimitUpdate? = self.pendingMlxMemoryLimitUpdate;
+        self.pendingMlxMemoryLimitUpdate = nil;
+        let isShutdownRequested: Bool = self.isShutdownRequested;
+        let workerProcess: WorkerProcess? = self.workerProcess;
+        let eventPump: WorkerEventPump? = self.eventPump;
+        self.stateLock.unlock();
+        guard let pendingUpdate = pendingUpdate, !isShutdownRequested,
+              let workerProcess = workerProcess, let eventPump = eventPump else {
+            return;
+        }
+        do {
+            _ = try self.applyMlxMemoryLimitUpdate(
+                pendingUpdate,
+                workerProcess: workerProcess,
+                eventPump: eventPump);
+        } catch let controlError {
+            self.containAndAttemptRelaunch(controlError: controlError);
+        }
+    }
+
+    /// Sends one ceiling command and pumps events until the worker
+    /// acknowledges it, publishing the outcome to health state and bounding
+    /// the wait exactly as worker_memory_limit.rs's apply_mlx_memory_limit.
+    func applyMlxMemoryLimitUpdate(
+        _ pendingUpdate: PendingMlxMemoryLimitUpdate,
+        workerProcess: WorkerProcess,
+        eventPump: WorkerEventPump
+    ) throws -> MlxMemoryLimitUpdateOutcome {
+        try workerProcess.sendCommand(.updateMlxMemoryLimit(
+            effectiveMlxMemoryCeilingBytes: pendingUpdate.effectiveMlxMemoryCeilingBytes,
+            configurationGeneration: pendingUpdate.configurationGeneration));
+        let updateDeadline: Date = Date().addingTimeInterval(self.modelLoadTimeout);
+        while true {
+            self.stateLock.lock();
+            let isShutdownRequested: Bool = self.isShutdownRequested;
+            self.stateLock.unlock();
+            if isShutdownRequested {
+                throw WorkerControlError.workerEventStreamClosed;
+            }
+            guard let workerEvent: WorkerEvent = try eventPump.nextEvent(
+                within: WorkerSupervisor.generationPollSeconds) else {
+                if Date() >= updateDeadline {
+                    throw WorkerControlError.mlxMemoryLimitUpdateTimeout(
+                        memoryLimitUpdateTimeoutMillis: UInt64(self.modelLoadTimeout * 1000));
+                }
+                continue;
+            }
+            switch (workerEvent) {
+            case .mlxMemoryLimitChanged, .mlxMemoryLimitRejected:
+                try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
+                if case .mlxMemoryLimitChanged = workerEvent {
+                    return .applied;
+                }
+                return .rejected;
+            default:
+                try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
+            }
+        }
+    }
+}

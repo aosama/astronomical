@@ -145,9 +145,10 @@ final class WorkerSupervisorTests {
     }
 
     @Test
-    func should_reject_concurrent_generation_while_one_request_owns_the_worker() throws {
+    func should_queue_a_concurrent_generation_and_abandon_it_at_shutdown() throws {
         // The fake worker never answers the swap, so the first generate stays
-        // inside its bounded model-load wait while the admission check runs.
+        // inside its bounded model-load wait while the second request queues
+        // behind it.
         let silentWorkerScript: String = FakeWorkerEventEmitter.frameEmitterFunction()
             + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.idleEventPayload())
             + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.modelLessRuntimePolicyPayload())
@@ -162,28 +163,46 @@ final class WorkerSupervisorTests {
             modelLoadTimeout: 4);
         defer { _ = try? supervisor.shutdown() }
 
-        let blockedGeneration = Thread {
-            _ = try? supervisor.startChatGeneration(
-                WorkerSupervisorTests.chatGenerationCommand(requestId: 8, modelId: "m1"));
+        let blockedOutcome: GenerationJourneyOutcome = GenerationJourneyOutcome(workerThread: Thread());
+        let blockedGeneration: Thread = Thread {
+            do {
+                _ = try supervisor.startChatGeneration(
+                    WorkerSupervisorTests.chatGenerationCommand(requestId: 8, modelId: "m1"));
+            } catch {
+                // The bounded model-load wait or the shutdown close ends this
+                // request; its outcome is not the subject of this journey.
+            }
         };
         blockedGeneration.name = "blocked-generate";
+        blockedOutcome.workerThread = blockedGeneration;
         blockedGeneration.start();
-        // Let the blocked generation take the admission slot before probing.
+        // Let the blocked generation take the admission slot before queueing.
         Thread.sleep(forTimeInterval: 0.5);
 
-        do {
-            _ = try supervisor.startChatGeneration(
-                WorkerSupervisorTests.chatGenerationCommand(requestId: 9, modelId: "m1"));
-            Issue.record("expected a capacity rejection");
-        } catch let thrownError as GenerationStartError {
-            #expect(thrownError == .capacityUnavailable);
-        }
+        let queuedOutcome: GenerationJourneyOutcome = GenerationJourneyOutcome(workerThread: Thread());
+        let queuedGeneration: Thread = Thread {
+            do {
+                _ = try supervisor.startChatGeneration(
+                    WorkerSupervisorTests.chatGenerationCommand(requestId: 9, modelId: "m1"));
+                queuedOutcome.record(streamEvents: []);
+            } catch {
+                queuedOutcome.record(error: error);
+            }
+        };
+        queuedGeneration.name = "queued-generate";
+        queuedOutcome.workerThread = queuedGeneration;
+        queuedGeneration.start();
+        Thread.sleep(forTimeInterval: 0.5);
 
-        // The blocked request must not wedge the supervisor: shutdown waits a
-        // bounded time for it and still closes the worker.
+        // The queued request must not wedge the supervisor: shutdown wakes
+        // it, waits a bounded time for the active request, and still closes
+        // the worker.
         let terminationOutcome: WorkerTerminationOutcome = try supervisor.shutdown();
         #expect(supervisor.isAvailable() == false);
         WorkerSupervisorTests.join(blockedGeneration, deadline: Date().addingTimeInterval(10));
+        WorkerSupervisorTests.join(queuedGeneration, deadline: Date().addingTimeInterval(10));
+        // The queued waiter abandons its ticket once shutdown is visible.
+        #expect(queuedOutcome.thrownErrorAsGenerationStart == .workerUnavailable);
         // The blocked request's containment force-terminated the fake before
         // shutdown ran, so shutdown finds no living process and reports a
         // graceful close.
@@ -200,28 +219,11 @@ final class WorkerSupervisorTests {
     }
 
     private static func readyEventPayload(modelId: String) -> String {
-        return "{\"kind\":\"ready\",\"model_id\":\"\(modelId)\",\"capabilities\":{"
-            + "\"chat\":{\"supports_reasoning\":true,\"supports_tool_calls\":true,\"has_vision\":false,"
-            + "\"max_input_tokens\":4095,\"max_output_tokens\":1024,\"context_window\":4096},"
-            + "\"image_generation\":null,\"embeddings\":null}}";
+        return FakeWorkerEventEmitter.residentReadyEventPayload(modelId: modelId);
     }
 
     private static func loadedRuntimePolicyPayload(modelId: String) -> String {
-        return "{\"kind\":\"runtime_feature_configuration_applied\","
-            + "\"worker_runtime_feature_configuration\":{\"configuration_generation\":\"gen-1\","
-            + "\"persistent_prompt_cache_enabled\":true,\"prompt_cache_maximum_size_bytes\":1073741824,"
-            + "\"loaded_model\":{\"kind\":\"autoregressive\",\"configuration\":{\"model_id\":\"\(modelId)\","
-            + "\"maximum_context_tokens\":4096,\"maximum_output_tokens\":1024,"
-            + "\"chunking\":{\"fixed_prompt_processing_chunk_size_tokens\":512,"
-            + "\"fixed_ssd_streaming_prompt_processing_chunk_size_tokens\":512,"
-            + "\"full_attention_key_value_growth_tokens\":512,"
-            + "\"prefill_graph_submission_layer_interval\":1,"
-            + "\"experimental_ssd_paging_prefill_graph_submission_layer_interval\":1,"
-            + "\"experimental_ssd_paging_generation_graph_submission_layer_interval\":1,"
-            + "\"prompt_cache_block_tokens\":null,\"prompt_cache_common_prefix_stride_blocks\":1,"
-            + "\"experimental_decode_stage_attribution_enabled\":false,"
-            + "\"experimental_quantized_kv_cache_enabled\":false,"
-            + "\"experimental_fused_moe_decode_enabled\":false}}}}}";
+        return FakeWorkerEventEmitter.residentRuntimePolicyPayload(modelId: modelId);
     }
 
     private static func failedEventPayload(requestId: UInt64, reason: String) -> String {
