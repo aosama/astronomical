@@ -19,6 +19,7 @@ extension WorkerSupervisor {
     /// application stays alive across the swap.
     public func restartWorkerWithStartupConfiguration(
         candidateWorkerExecutablePath: String,
+        candidateWorkerArguments: Array<String>,
         candidateModelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
         candidateStartupConfiguration: WorkerStartupConfiguration
     ) throws -> WorkerRuntimeFeatureConfiguration {
@@ -35,7 +36,7 @@ extension WorkerSupervisor {
         do {
             candidateWorkerProcess = try WorkerProcess.launch(
                 workerExecutablePath: candidateWorkerExecutablePath,
-                arguments: Array<String>(),
+                arguments: candidateWorkerArguments,
                 workerStartupConfiguration: candidateStartupConfiguration);
         } catch let candidateLaunchError {
             throw WorkerControlError.startWorker(
@@ -110,31 +111,28 @@ enum WorkerTransactionalReplacement {
             switch (workerEvent) {
             case .idle, .ready:
                 if readinessEvent != nil {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "candidate emitted duplicate initial readiness");
+                    throw WorkerControlError.candidateProtocolViolation(
+                        description: "candidate emitted duplicate initial readiness")
                 }
-                readinessEvent = workerEvent;
+                readinessEvent = workerEvent
             case let .runtimeFeatureConfigurationApplied(configuration):
                 if runtimeFeatureConfiguration != nil {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "candidate emitted duplicate runtime configuration");
+                    throw WorkerControlError.candidateProtocolViolation(
+                        description: "candidate emitted duplicate runtime configuration")
                 }
                 if configuration.configurationGeneration != expectedConfigurationGeneration {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "candidate acknowledged configuration generation "
-                            + "'\(configuration.configurationGeneration)' instead of the "
-                            + "expected '\(expectedConfigurationGeneration)'");
+                    throw WorkerControlError.candidateConfigurationGenerationMismatch
                 }
-                runtimeFeatureConfiguration = configuration;
+                runtimeFeatureConfiguration = configuration
             case .mlxMemorySample, .expertMemoryModeChanged, .persistentPromptCacheStats:
-                deferredProcessEventCount += 1;
+                deferredProcessEventCount += 1
                 if deferredProcessEventCount >= maximumDeferredCandidateProcessEventCount {
-                    throw WorkerControlError.workerProtocolViolation(
-                        description: "candidate emitted too many process events before acknowledgement");
+                    throw WorkerControlError.candidateProtocolViolation(
+                        description: "candidate emitted too many process events before acknowledgement")
                 }
             default:
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "candidate emitted an unexpected startup event");
+                throw WorkerControlError.unexpectedCandidateEvent(
+                    unexpectedWorkerEventSummary: workerEvent.diagnosticSummary())
             }
             if let acknowledgedReadiness: WorkerEvent = readinessEvent,
                let acknowledgedConfiguration: WorkerRuntimeFeatureConfiguration = runtimeFeatureConfiguration {
@@ -159,27 +157,27 @@ enum WorkerTransactionalReplacement {
     ) throws -> Void {
         switch (readinessEvent) {
         case .idle where runtimeConfiguration.loadedModel == nil:
-            return;
+            return
         case let .ready(modelId, _):
             guard let loadedModel: WorkerLoadedModelRuntimeConfiguration = runtimeConfiguration.loadedModel else {
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "ready candidate did not acknowledge its loaded model policy");
+                throw WorkerControlError.candidateProtocolViolation(
+                    description: "ready candidate did not acknowledge its loaded model policy")
             }
             guard let candidatePolicy: RuntimeModelPolicy = candidateModelPolicyCatalog[modelId] else {
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "ready candidate model is absent from the candidate catalog");
+                throw WorkerControlError.candidateProtocolViolation(
+                    description: "ready candidate model is absent from the candidate catalog")
             }
             if loadedModel != candidatePolicy.workerModelConfiguration.runtimeConfiguration() {
-                throw WorkerControlError.workerProtocolViolation(
-                    description: "ready candidate model disagrees with its acknowledged policy");
+                throw WorkerControlError.candidateProtocolViolation(
+                    description: "ready candidate model disagrees with its acknowledged policy")
             }
-            return;
+            return
         case .idle:
-            throw WorkerControlError.workerProtocolViolation(
-                description: "idle candidate acknowledged an unexpected loaded model");
+            throw WorkerControlError.candidateProtocolViolation(
+                description: "idle candidate acknowledged an unexpected loaded model")
         default:
-            throw WorkerControlError.workerProtocolViolation(
-                description: "candidate readiness event is unsupported");
+            throw WorkerControlError.candidateProtocolViolation(
+                description: "candidate readiness event is unsupported")
         }
     }
 
@@ -203,7 +201,7 @@ enum WorkerTransactionalReplacement {
             supervisor.healthState.publish(.unavailable(.unavailable));
             if let cleanupDescription = cleanupDescription {
                 throw WorkerControlError.operationAndCleanupFailed(
-                    operationDescription: String(describing: trustedCloseError),
+                    operationDescription: WorkerControlError.describe(trustedCloseError),
                     cleanupDescription: cleanupDescription);
             }
             throw trustedCloseError;
@@ -223,7 +221,7 @@ enum WorkerTransactionalReplacement {
             supervisor.healthState.publish(.unavailable(.unavailable));
             if let cleanupDescription = cleanupDescription {
                 throw WorkerControlError.operationAndCleanupFailed(
-                    operationDescription: String(describing: publishError),
+                    operationDescription: WorkerControlError.describe(publishError),
                     cleanupDescription: cleanupDescription);
             }
             throw publishError;
@@ -255,8 +253,8 @@ enum WorkerTransactionalReplacement {
         } catch {
             _ = try? candidateWorkerProcess.forceTerminate();
             return WorkerControlError.operationAndCleanupFailed(
-                operationDescription: String(describing: candidateError),
-                cleanupDescription: String(describing: error));
+                operationDescription: WorkerControlError.describe(candidateError),
+                cleanupDescription: WorkerControlError.describe(error));
         }
     }
 

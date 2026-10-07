@@ -53,7 +53,7 @@ enum IdleWorkerJourneySupport {
     final class IdleWorkerHarness {
         let supervisor: WorkerSupervisor
         let controlDirectoryPath: String
-        private let journeyDirectoryPath: String
+        let journeyDirectoryPath: String
 
         init(supervisor: WorkerSupervisor, controlDirectoryPath: String, journeyDirectoryPath: String) {
             self.supervisor = supervisor
@@ -110,16 +110,18 @@ enum IdleWorkerJourneySupport {
                         modelDirectory: "/models/delayed-image-policy-ack-model"),
             ],
             modelLoadTimeout: 10,
-            startupConfiguration: WorkerStartupConfiguration(
-                configurationGeneration: configurationGeneration,
-                globalPromptCacheRootDirectory: "/tmp/astronomical-journey-prompt-cache",
-                globalPromptCacheMaximumSizeBytes: 50_000_000_000,
-                persistentPromptCacheEnabled: true,
-                configuredMaximumMlxMemoryBytes: nil,
-                performanceAttributionEnabled: false,
-                loggingDirectory: "/tmp/astronomical-journey-logs",
-                loggingLevel: .warn,
-                retainedLogFileCount: 7))
+            startupConfigurationBuilder: { (journeyDirectoryPath: String) -> WorkerStartupConfiguration? in
+                return WorkerStartupConfiguration(
+                    configurationGeneration: configurationGeneration,
+                    globalPromptCacheRootDirectory: journeyDirectoryPath + "/prompt-cache",
+                    globalPromptCacheMaximumSizeBytes: 50_000_000_000,
+                    persistentPromptCacheEnabled: true,
+                    configuredMaximumMlxMemoryBytes: nil,
+                    performanceAttributionEnabled: false,
+                    loggingDirectory: journeyDirectoryPath,
+                    loggingLevel: .warn,
+                    retainedLogFileCount: 7)
+            })
     }
 
     /// Launches the fixture worker with no startup configuration at all —
@@ -132,13 +134,37 @@ enum IdleWorkerJourneySupport {
         return try IdleWorkerJourneySupport.launchWorkerHarness(
             modelPolicyCatalog: modelPolicyCatalog,
             modelLoadTimeout: modelLoadTimeout,
-            startupConfiguration: nil)
+            startupConfigurationBuilder: { (journeyDirectoryPath: String) -> WorkerStartupConfiguration? in
+                return nil
+            })
+    }
+
+    /// Launches the fixture worker with full caller control over the
+    /// supervisor inputs: the scenario argv the worker runs under, the
+    /// startup configuration it must acknowledge (built against the journey
+    /// directory the harness created), and the cancellation bound its
+    /// abandonments are held to.
+    static func launchConfiguredIdleWorker(
+        modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
+        modelLoadTimeout: TimeInterval,
+        startupConfigurationBuilder: (String) -> WorkerStartupConfiguration?,
+        workerArguments: Array<String>,
+        cancellationAcknowledgementTimeout: TimeInterval
+    ) throws -> IdleWorkerHarness {
+        return try IdleWorkerJourneySupport.launchWorkerHarness(
+            modelPolicyCatalog: modelPolicyCatalog,
+            modelLoadTimeout: modelLoadTimeout,
+            startupConfigurationBuilder: startupConfigurationBuilder,
+            workerArguments: workerArguments,
+            cancellationAcknowledgementTimeout: cancellationAcknowledgementTimeout)
     }
 
     private static func launchWorkerHarness(
         modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
         modelLoadTimeout: TimeInterval,
-        startupConfiguration: WorkerStartupConfiguration?
+        startupConfigurationBuilder: (String) -> WorkerStartupConfiguration?,
+        workerArguments: Array<String> = [],
+        cancellationAcknowledgementTimeout: TimeInterval = WorkerSupervisor.defaultCancellationAcknowledgementTimeoutSeconds
     ) throws -> IdleWorkerHarness {
         let workerExecutablePath: String = try IdleWorkerJourneySupport.locateBuiltExecutable(
             executableName: IdleWorkerJourneySupport.WORKER_EXECUTABLE_NAME)
@@ -152,10 +178,11 @@ enum IdleWorkerJourneySupport {
             withIntermediateDirectories: true)
         let supervisor: WorkerSupervisor = try WorkerSupervisor.launch(
             workerExecutablePath: workerExecutablePath,
-            workerArguments: [controlDirectoryPath],
-            workerStartupConfiguration: startupConfiguration,
+            workerArguments: workerArguments.isEmpty ? [controlDirectoryPath] : workerArguments,
+            workerStartupConfiguration: startupConfigurationBuilder(journeyDirectoryPath),
             modelPolicyCatalog: modelPolicyCatalog,
             modelLoadTimeout: modelLoadTimeout,
+            cancellationAcknowledgementTimeout: cancellationAcknowledgementTimeout,
             generationPerformanceLog: GenerationPerformanceLog.open(
                 logDirectory: FilePath(string: journeyDirectoryPath)))
         let harness: IdleWorkerHarness = IdleWorkerHarness(
@@ -205,6 +232,75 @@ enum IdleWorkerJourneySupport {
             }
             Thread.sleep(forTimeInterval: 0.01)
         }
+    }
+
+    /// Waits until the worker is ready with one exact effective
+    /// configuration generation acknowledged, mirroring the Rust
+    /// wait_for_effective_generation loop of worker_replacement.rs.
+    static func waitForEffectiveGeneration(
+        _ supervisor: WorkerSupervisor,
+        expectedGeneration: String
+    ) throws -> Void {
+        let acknowledgementDeadline: Date = Date().addingTimeInterval(2)
+        while (true) {
+            let healthSnapshot: WorkerHealthSnapshot = supervisor.workerHealthSnapshot()
+            let acknowledgedGeneration: String? =
+                healthSnapshot.workerRuntimeFeatureConfiguration?.configurationGeneration
+            if (healthSnapshot.status == .ready && acknowledgedGeneration == expectedGeneration) {
+                return
+            }
+            if (Date() >= acknowledgementDeadline) {
+                throw IdleWorkerJourneyFailure.workerNeverBecameReady(
+                    lastStatus: healthSnapshot.status.readinessText()
+                        + " (generation \(acknowledgedGeneration ?? "none"))")
+            }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+    }
+
+    /// The five-thousand-word Romeo and Juliet corpus every real-text LLM
+    /// journey uses, read from the shared repository fixture.
+    static func romeoAndJulietFiveThousandWords() throws -> String {
+        let repositoryRootUrl: URL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let corpusUrl: URL = repositoryRootUrl
+            .appendingPathComponent("apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt")
+        return try String(contentsOf: corpusUrl, encoding: String.Encoding.utf8)
+    }
+
+    /// Proves a rejected replacement candidate was reaped: the candidate
+    /// fixture records its process identifier at initialization, and the
+    /// probe must find no living process behind it afterwards.
+    static func assertCandidateWasReaped(journeyDirectoryPath: String) -> Void {
+        let pidFilePath: String = journeyDirectoryPath + "/replacement-candidate.pid"
+        let processIdText: String =
+            (try? String(contentsOfFile: pidFilePath, encoding: String.Encoding.utf8))
+            ?? "<missing pid file>"
+        let candidateProcessId: pid_t = pid_t(processIdText.trimmingCharacters(
+            in: CharacterSet.whitespacesAndNewlines)) ?? -1
+        #expect(candidateProcessId > 0, "the candidate fixture should record its process identifier")
+        let probeOutcome: Int32 = kill(candidateProcessId, 0)
+        #expect(probeOutcome == -1 && errno == ESRCH, "the rejected candidate must be reaped")
+    }
+
+    /// The FLUX runtime policy with a caller-chosen artifact revision, the
+    /// exact policy shape the tagged-revision replacement journeys compare
+    /// the candidate acknowledgement against.
+    static func fluxRuntimeModelPolicy(artifactRevision: String) -> RuntimeModelPolicy {
+        return RuntimeModelPolicy(
+            modelDirectory: FilePath(string: "/fictional/models/FLUX.2-klein-4B"),
+            generationDefaults: RuntimeModelGenerationDefaults.inert(),
+            configuredMaximumContextTokens: nil,
+            defaultMaximumContextTokens: 0,
+            configuredChunkingFields: ConfiguredChunkingFields.inactive(),
+            workerModelConfiguration: .flux2Klein(
+                WorkerFlux2KleinModelConfiguration(
+                    modelId: "FLUX.2-klein-4B",
+                    modelFamily: .flux2Klein,
+                    artifactRevision: artifactRevision)))
     }
 
     /// Asserts the generation's terminal event is a clean end-of-sequence

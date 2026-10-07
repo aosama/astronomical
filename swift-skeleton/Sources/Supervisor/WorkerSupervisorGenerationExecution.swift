@@ -85,13 +85,22 @@ extension WorkerSupervisor {
     /// Drains worker events until this request's terminal event, routing
     /// process-scoped events to health state and generation events for other
     /// requests to protocol violations, mirroring the Rust loop's
-    /// active-request matching.
+    /// active-request matching. The optional sink receives each public
+    /// stream event as it is produced (the streaming serving surface), and
+    /// the optional abandonment probe diverts into cancellation the moment
+    /// the client stops consuming.
     func collectGenerationEvents(        _ requestId: RequestId,
         requestStartedAt: Date,
         maximumOutputTokens: UInt16,
-        eventPump: WorkerEventPump
+        eventPump: WorkerEventPump,
+        onStreamEvent: ((ChatGenerationStreamEvent) -> Void)? = nil,
+        isClientAbandoned: (() -> Bool)? = nil
     ) throws -> Array<ChatGenerationStreamEvent> {
         var streamEvents: Array<ChatGenerationStreamEvent> = Array<ChatGenerationStreamEvent>();
+        func emitStreamEvent(_ streamEvent: ChatGenerationStreamEvent) -> Void {
+            streamEvents.append(streamEvent);
+            onStreamEvent?(streamEvent);
+        }
         var generationStartedAt: Date?;
         var firstOutputAt: Date?;
         var prefillElapsedMillis: UInt64 = 0;
@@ -103,6 +112,9 @@ extension WorkerSupervisor {
             self.stateLock.unlock();
             if isShutdownRequested {
                 throw WorkerControlError.workerEventStreamClosed;
+            }
+            if let isClientAbandoned = isClientAbandoned, isClientAbandoned() {
+                throw ChatGenerationClientAbandonment.abandonedByClient;
             }
             guard let workerEvent: WorkerEvent = try eventPump.nextEvent(
                 within: WorkerSupervisor.generationPollSeconds) else {
@@ -122,7 +134,7 @@ extension WorkerSupervisor {
                     maximumOutputTokens: UInt32(maximumOutputTokens),
                     generationStartedAt: generationStartedAt!);
                 for workerOutput: ChatGenerationOutput in outputs {
-                    streamEvents.append(ChatGenerationStreamEvent.fromWorkerOutput(workerOutput));
+                    emitStreamEvent(ChatGenerationStreamEvent.fromWorkerOutput(workerOutput));
                 }
             case let .prefillProgress(
                 eventRequestId,
@@ -154,7 +166,7 @@ extension WorkerSupervisor {
                     requestStartedAt: requestStartedAt,
                     elapsedMillis: elapsedMillis,
                     completedPrefillChunkTokens: completedPrefillChunkTokens));
-                streamEvents.append(.prefillProgress(
+                emitStreamEvent(.prefillProgress(
                     processedTokens: processedTokens,
                     totalTokens: totalTokens,
                     elapsedMillis: elapsedMillis,
@@ -240,7 +252,7 @@ extension WorkerSupervisor {
                     completionReason: reason,
                     streamEvents: streamEvents);
                 self.publishServingActivity(.idle, progress: nil);
-                streamEvents.append(.completed(
+                emitStreamEvent(.completed(
                     promptTokenCount: promptTokenCount,
                     generatedTokenCount: generatedTokenCount,
                     reasoningTokenCount: reasoningTokenCount,
@@ -250,7 +262,7 @@ extension WorkerSupervisor {
             case let .failed(eventRequestId, reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
                 self.publishServingActivity(.idle, progress: nil);
-                streamEvents.append(.failed(reason: reason));
+                emitStreamEvent(.failed(reason: reason));
                 return streamEvents;
             case .generationFinalized:
                 // The request-scoped release acknowledgement; the outcome
