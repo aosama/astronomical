@@ -80,6 +80,9 @@ public struct WorkerHealthSnapshot: Equatable {
     public var mlxMemoryLimitError: String?;
     /// The newest cache clear waiting for generations to drain.
     public var pendingPromptCacheClear: PendingPromptCacheClear? = nil;
+    /// The configuration generation a live memory mutation has staged but
+    /// not yet finalized on the worker.
+    public var pendingConfigurationGeneration: String? = nil;
 
     /// Builds a ready snapshot from the worker's enriched readiness event.
     public static func readyWithModel(

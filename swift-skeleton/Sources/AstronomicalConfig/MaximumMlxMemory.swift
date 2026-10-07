@@ -7,7 +7,7 @@ import Foundation;
  * candidate document without touching the source of truth; commit swaps it in
  * only while the file still holds the bytes the candidate was derived from.
  */
-internal enum MaximumMlxMemory {
+public enum MaximumMlxMemory {
 
     private static let BYTES_PER_DECIMAL_GIGABYTE: UInt64 = 1_000_000_000;
     private static let CONFIG_FILE_NAME: String = "config.json";
@@ -16,7 +16,7 @@ internal enum MaximumMlxMemory {
      * Converts a positive decimal SI gigabyte setting to exact bytes, rejecting
      * zero and values whose byte product does not fit in 64 bits.
      */
-    internal static func maximumMlxMemoryGbToBytes(_ maximumMlxMemoryGb: UInt64) throws -> UInt64 {
+    public static func maximumMlxMemoryGbToBytes(_ maximumMlxMemoryGb: UInt64) throws -> UInt64 {
         if (maximumMlxMemoryGb == 0) {
             throw AstronomicalConfigError.invalidMaximumMlxMemoryGb(
                 description: "maximum MLX memory must be positive"
@@ -36,7 +36,7 @@ internal enum MaximumMlxMemory {
     /**
      * Builds a validated byte transaction without mutating the source of truth.
      */
-    internal static func prepareMaximumMlxMemoryGbUpdate(
+    public static func prepareMaximumMlxMemoryGbUpdate(
         stateDirectory: FilePath,
         maximumMlxMemoryGb: UInt64?
     ) throws -> MaximumMlxMemoryConfigUpdate {
@@ -90,7 +90,7 @@ internal enum MaximumMlxMemory {
      * Commits a prepared update only while the document it was based on still
      * owns the file.
      */
-    internal static func commitMaximumMlxMemoryGbUpdate(
+    public static func commitMaximumMlxMemoryGbUpdate(
         stateDirectory: FilePath,
         configUpdate: MaximumMlxMemoryConfigUpdate
     ) throws -> Void {

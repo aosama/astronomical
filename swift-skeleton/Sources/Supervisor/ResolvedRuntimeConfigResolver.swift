@@ -5,7 +5,7 @@ import AstronomicalConfig;
 /// Resolves startup and reload config from one user configuration directory.
 ///
 /// Migrates the resolver half of apps/supervisor/src/config_reload.rs.
-public struct ResolvedRuntimeConfigResolver {
+public struct ResolvedRuntimeConfigResolver: Sendable {
 
     private let instancePaths: AstronomicalInstancePaths;
     private let fallbackWorkerExecutablePath: FilePath;

@@ -24,7 +24,7 @@ internal enum ConfigFileStore {
         return try ConfigFileStore.parseAndValidateV1(configFilePath: configFilePath, configBytes: existingConfigBytes);
     }
 
-    private static func parseAndValidateV1(configFilePath: FilePath, configBytes: Data) throws -> UserConfigFile {
+    internal static func parseAndValidateV1(configFilePath: FilePath, configBytes: Data) throws -> UserConfigFile {
         // Duplicate object keys must fail the strict read exactly as the Rust
         // unit does; a silently last-wins dictionary would mask operator typos.
         let jsonRootValue: Any = try DuplicateKeyJson.parseJsonRejectingDuplicates(
