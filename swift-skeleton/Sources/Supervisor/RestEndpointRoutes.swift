@@ -51,7 +51,8 @@ public enum RestEndpointRoutes {
         imageContext: RestImageGenerationRouteContext? = nil,
         cacheClearContext: RestCacheClearRouteContext? = nil,
         shutdownController: ShutdownController? = nil,
-        memoryContext: RestMaximumMlxMemoryRouteContext? = nil
+        memoryContext: RestMaximumMlxMemoryRouteContext? = nil,
+        configReloadContext: RestConfigReloadRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -60,14 +61,29 @@ public enum RestEndpointRoutes {
             method: "GET",
             path: "/v1/status",
             handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                // With a reload context the status triple follows the live
+                // transition state; otherwise the startup snapshot is both
+                // the configured and the resolved view.
+                let liveConfiguredRuntimeConfig: ResolvedRuntimeConfig? = configReloadContext.flatMap(
+                    { (reloadContext: RestConfigReloadRouteContext) -> ResolvedRuntimeConfig? in
+                        return reloadContext.transitionState.currentConfiguredConfigSnapshot()
+                            ?? reloadContext.transitionState.currentReloadableConfig();
+                    }) ?? resolvedRuntimeConfig;
+                let liveResolvedRuntimeConfig: ResolvedRuntimeConfig = configReloadContext.map(
+                    { (reloadContext: RestConfigReloadRouteContext) -> ResolvedRuntimeConfig in
+                        return reloadContext.transitionState.currentReloadableConfig();
+                    }) ?? resolvedRuntimeConfig;
+                let liveValidationError: String? = configReloadContext.flatMap(
+                    { (reloadContext: RestConfigReloadRouteContext) -> String? in
+                        return reloadContext.transitionState.currentConfigurationValidationError();
+                    }) ?? configurationValidationError;
                 return try RestStatusResponse.statusResponse(
-                    configuredRuntimeConfig: resolvedRuntimeConfig,
-                    resolvedRuntimeConfig: resolvedRuntimeConfig,
+                    configuredRuntimeConfig: liveConfiguredRuntimeConfig,
+                    resolvedRuntimeConfig: liveResolvedRuntimeConfig,
                     workerHealthSnapshot: workerHealthState.currentSnapshot(),
-                    configurationValidationError: configurationValidationError,
+                    configurationValidationError: liveValidationError,
                     instancePaths: instancePaths,
-                    buildIdentity: buildIdentity);
-            });
+                    buildIdentity: buildIdentity);            });
         routeTable.register(
             method: "GET",
             path: "/v1/models",
@@ -167,6 +183,14 @@ public enum RestEndpointRoutes {
                 path: RestMaximumMlxMemoryEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
                     return RestMaximumMlxMemoryEndpoint.handle(request, memoryContext: memoryContext);
+                });
+        }
+        if let configReloadContext = configReloadContext {
+            routeTable.register(
+                method: RestConfigReloadEndpoint.routeMethod,
+                path: RestConfigReloadEndpoint.routePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return RestConfigReloadEndpoint.handle(request, reloadContext: configReloadContext);
                 });
         }
         return routeTable;
