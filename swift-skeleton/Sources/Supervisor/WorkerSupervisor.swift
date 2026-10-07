@@ -31,7 +31,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     var pendingPromptCacheClear: PendingPromptCacheClear?;
     var isShutdownRequested: Bool;
     let healthState: WorkerHealthState;
-    let modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>;
+    var modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>;
     let workerExecutablePath: String;
     let workerArguments: Array<String>;
     let workerStartupConfiguration: WorkerStartupConfiguration?;
