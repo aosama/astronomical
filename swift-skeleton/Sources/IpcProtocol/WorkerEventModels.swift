@@ -93,7 +93,7 @@ public struct WorkerPersistentPromptCacheStats: Equatable {
         return parsedStats;
     }
 
-    private static let wireFieldNames: Array<String> = [
+    static let wireFieldNames: Array<String> = [
         "persistent_prompt_cache_hits", "persistent_prompt_cache_misses", "persistent_prompt_cache_tokens_saved",
         "persistent_prompt_cache_partial_tail_hits", "persistent_prompt_cache_block_token_count",
         "persistent_prompt_cache_sequence_state_block_count", "persistent_prompt_cache_boundary_state_snapshot_count",

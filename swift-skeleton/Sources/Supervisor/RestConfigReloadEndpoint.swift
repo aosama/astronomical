@@ -203,6 +203,7 @@ public enum RestConfigReloadEndpoint {
         do {
             acknowledgedConfiguration = try workerControl.restartWorkerWithStartupConfiguration(
                 candidateWorkerExecutablePath: candidateResolvedConfig.workerExecutablePath.string,
+                candidateWorkerArguments: Array<String>(),
                 candidateModelPolicyCatalog: candidateResolvedConfig.modelPolicyCatalog,
                 candidateStartupConfiguration: candidateResolvedConfig.workerStartupConfiguration());
         } catch WorkerControlError.generationBusy {

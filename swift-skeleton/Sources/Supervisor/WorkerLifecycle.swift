@@ -176,7 +176,7 @@ public enum WorkerLifecycle {
     }
 
     /// Containment events go to stderr so an attached operator sees them live.
-    private static func writeContainmentLine(_ line: String) -> Void {
+    static func writeContainmentLine(_ line: String) -> Void {
         FileHandle.standardError.write(Data("astronomicald: \(line)\n".utf8));
     }
 }

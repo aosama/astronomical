@@ -232,9 +232,20 @@ extension WorkerEvent {
             ]);
             return parsedEvent;
         case "persistent_prompt_cache_stats":
+            // The Rust wire form flattens the stats fields into the tagged
+            // envelope; the decoder strips the tag and reuses the object
+            // decoder so field validation stays in one place.
+            var statsWireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
+            for wireEntry in wireObject.entries {
+                if wireEntry.key != "kind" {
+                    statsWireObject.appendEntry(key: wireEntry.key, value: wireEntry.value);
+                }
+            }
             let parsedEvent = WorkerEvent.persistentPromptCacheStats(
-                try WorkerPersistentPromptCacheStats.fromWireValue(try wireObject.requireObjectValue(fieldName: "persistent_prompt_cache_stats")));
-            try wireObject.rejectUnknownFieldsBesidesTag(tagFieldName: "kind", allowedFieldNames: ["persistent_prompt_cache_stats"]);
+                try WorkerPersistentPromptCacheStats.fromWireValue(.object(statsWireObject)));
+            try wireObject.rejectUnknownFieldsBesidesTag(
+                tagFieldName: "kind",
+                allowedFieldNames: WorkerPersistentPromptCacheStats.wireFieldNames);
             return parsedEvent;
         default:
             let parsedEvent = WorkerEvent.promptCacheCleared(
