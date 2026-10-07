@@ -20,19 +20,24 @@ public final class Qwen35PreparedInferenceRequest: PreparedInferenceRequest {
     public let startsInsideThinking: Bool;
     /// The token ids that close the thinking channel naturally.
     public let naturalReasoningEndTokenIds: Set<UInt32>;
+    /// The request-local hard reasoning-budget controller, present only when
+    /// the request carries a thinking allowance.
+    public let thinkingBudgetState: Qwen35ThinkingBudgetState?;
 
     public init(
         promptTokenIds: Array<UInt32>,
         samplingSettings: Qwen35SamplingSettings,
         guidedConstraint: Qwen35GuidedConstraint? = nil,
         startsInsideThinking: Bool = false,
-        naturalReasoningEndTokenIds: Set<UInt32> = Set()
+        naturalReasoningEndTokenIds: Set<UInt32> = Set(),
+        thinkingBudgetState: Qwen35ThinkingBudgetState? = nil
     ) {
         self.promptTokenIds = promptTokenIds;
         self.samplingSettings = samplingSettings;
         self.guidedConstraint = guidedConstraint;
         self.startsInsideThinking = startsInsideThinking;
         self.naturalReasoningEndTokenIds = naturalReasoningEndTokenIds;
+        self.thinkingBudgetState = thinkingBudgetState;
     }
 
     public var promptTokenCount: Int {
@@ -66,6 +71,7 @@ public final class Qwen35DenseEngine: InferenceEngine {
     private var hasEmittedPreparation: Bool = false;
     private var hasEmittedFirstDecode: Bool = false;
     private var cancelledRequestIds: Set<RequestId> = [];
+    private var activeThinkingBudgetState: Qwen35ThinkingBudgetState? = nil;
     private var activeGuidedConstraint: Qwen35GuidedConstraint?;
     private var isInsideThinking: Bool = false;
     private var activeReasoningEndTokenIds: Set<UInt32> = Set();
@@ -163,6 +169,7 @@ public final class Qwen35DenseEngine: InferenceEngine {
         self.activeGuidedConstraint = preparedRequest.guidedConstraint;
         self.isInsideThinking = preparedRequest.startsInsideThinking;
         self.activeReasoningEndTokenIds = preparedRequest.naturalReasoningEndTokenIds;
+        self.activeThinkingBudgetState = preparedRequest.thinkingBudgetState;
         self.activeCache = try denseModel.newCache(parameters: nil);
         return EngineGenerationStart(
             cachedTokenCount: 0,
@@ -195,14 +202,23 @@ public final class Qwen35DenseEngine: InferenceEngine {
             throw InferenceEngineError.fatalExecution(
                 reason: "the dense engine lost its sampler or logits before decode");
         }
-        let sampledTokenId: Int = try self.sampleTokenId(
-            sampler: activeSampler, lastLogits: lastLogits);
+        // The forced transition token is selected before ordinary sampling and
+        // fed through the decoder exactly; the budget state observes the
+        // commit and reports whether the committed text stays in reasoning.
+        let selectedTokenId: Int;
+        if let forcedTokenId = try self.nextForcedThinkingTransitionTokenId() {
+            selectedTokenId = Int(forcedTokenId);
+        } else {
+            selectedTokenId = try self.sampleTokenId(
+                sampler: activeSampler, lastLogits: lastLogits);
+        }
+        let isReasoningToken: Bool = try self.observeCommittedThinkingToken(selectedTokenId);
         let decodeForwardStart: ContinuousClock.Instant? =
             ServingPerformanceAttribution.startedOperation(
                 operationName: "qwen35_decode_step",
                 attributionEnabled: self.attributionEnabled);
         let decodeOutput: LMOutput = denseModel(
-            LMInput.Text(tokens: MLXArray([sampledTokenId], [1, 1])),
+            LMInput.Text(tokens: MLXArray([selectedTokenId], [1, 1])),
             cache: activeCache,
             state: nil);
         let firstDecodeForwardElapsedMillis: UInt64? = self.hasEmittedFirstDecode
@@ -214,12 +230,47 @@ public final class Qwen35DenseEngine: InferenceEngine {
             operationStart: decodeForwardStart,
             attributionEnabled: self.attributionEnabled);
         return .tokenId(
-            generatedTokenId: UInt32(clamping: sampledTokenId),
-            isReasoningToken: false,
+            generatedTokenId: UInt32(clamping: selectedTokenId),
+            isReasoningToken: isReasoningToken,
             expertMemoryMode: nil,
             mlxMemorySnapshot: nil,
             firstDecodeForwardElapsedMillis: firstDecodeForwardElapsedMillis,
             generationFinalization: nil);
+    }
+
+    /// Selects the next budgeted forced-transition token, if the hard
+    /// allowance has been exhausted. Budget-state violations are fatal: a
+    /// diverging forced stream would corrupt decoder history.
+    private func nextForcedThinkingTransitionTokenId() throws -> UInt32? {
+        guard var budgetState = self.activeThinkingBudgetState else {
+            return nil;
+        }
+        do {
+            let forcedTokenId = try budgetState.nextForcedTransitionTokenId();
+            self.activeThinkingBudgetState = budgetState;
+            return forcedTokenId;
+        } catch {
+            throw InferenceEngineError.fatalExecution(
+                reason: "invalid Qwen3.5 thinking-budget state: \(error)");
+        }
+    }
+
+    /// Observes the token committed to decoder history through the budget
+    /// state and keeps the engine's thinking-phase flag in sync.
+    private func observeCommittedThinkingToken(_ committedTokenId: Int) throws -> Bool {
+        guard var budgetState = self.activeThinkingBudgetState else {
+            return false;
+        }
+        do {
+            let isReasoningToken = try budgetState.observeCommittedToken(
+                UInt32(clamping: committedTokenId));
+            self.isInsideThinking = budgetState.isInsideThinking;
+            self.activeThinkingBudgetState = budgetState;
+            return isReasoningToken;
+        } catch {
+            throw InferenceEngineError.fatalExecution(
+                reason: "invalid Qwen3.5 thinking-budget state: \(error)");
+        }
     }
 
     private func decodeNextPrefillChunk(activeCache: [KVCache]) throws -> GeneratedToken {
@@ -354,6 +405,7 @@ public final class Qwen35DenseEngine: InferenceEngine {
         self.hasEmittedPreparation = false;
         self.hasEmittedFirstDecode = false;
         self.activeGuidedConstraint = nil;
+        self.activeThinkingBudgetState = nil;
         self.isInsideThinking = false;
     }
 
