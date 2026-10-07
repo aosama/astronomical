@@ -22,7 +22,13 @@ let package: Package = Package(
         // The tokenizer engine the mlx-swift-lm tokenizer bridge adapts;
         // 3.32.3 defines the bridge but ships no tokenizer implementation,
         // so the consuming package owns this dependency (upstream recipe).
-        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.3.0")
+        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.3.0"),
+        // The Library download engine (#1059): transport, tree listing,
+        // gated-metadata preflight, ETag blob cache with HTTP Range
+        // resume, progress, and Xet support. Already resolved transitively
+        // via mlx-swift-lm; pinned exactly because the supervisor calls
+        // its public download surface directly.
+        .package(url: "https://github.com/huggingface/swift-huggingface.git", exact: "0.13.0")
     ],
     targets: [
         // Wave 1 — crates/config
@@ -40,12 +46,17 @@ let package: Package = Package(
         // Wave 2 — apps/supervisor
         .target(
             name: "Supervisor",
-            dependencies: ["AstronomicalConfig", "IpcProtocol", "RestContract"],
+            dependencies: ["AstronomicalConfig", "IpcProtocol", "RestContract",
+                .product(name: "HuggingFace", package: "swift-huggingface")],
             resources: [
                 // The Observatory console, symlinked to its one canonical
                 // home under apps/supervisor/console so no copy drifts while
                 // the Rust tree retires.
-                .copy("Resources/console")
+                .copy("Resources/console"),
+                // The release download catalog, snapshotted from the
+                // repository registry the way Rust's include_str! embeds it;
+                // refresh when the registry document changes.
+                .copy("Resources/download_catalog.json")
             ]),
         // Wave 2 — the astronomicald daemon binary itself.
         .executableTarget(
@@ -87,7 +98,13 @@ let package: Package = Package(
         .testTarget(name: "AstronomicalConfigTests", dependencies: ["AstronomicalConfig", "JourneyCategories"]),
         .testTarget(name: "IpcProtocolTests", dependencies: ["IpcProtocol", "JourneyCategories"]),
         .testTarget(name: "RestContractTests", dependencies: ["RestContract", "JourneyCategories"]),
-        .testTarget(name: "SupervisorTests", dependencies: ["Supervisor", "JourneyCategories"]),
+        .testTarget(
+            name: "SupervisorTests",
+            dependencies: [
+                "Supervisor",
+                "JourneyCategories",
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+            ]),
         // The daemon-process journeys spawn the real astronomicald binary;
         // they live in their own target — a separate process under
         // `swift test`, like the Rust tree's separate integration-test

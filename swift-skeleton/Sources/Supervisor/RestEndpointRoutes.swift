@@ -53,7 +53,9 @@ public enum RestEndpointRoutes {
         shutdownController: ShutdownController? = nil,
         memoryContext: RestMaximumMlxMemoryRouteContext? = nil,
         configReloadContext: RestConfigReloadRouteContext? = nil,
-        configRevealContext: RestConfigRevealRouteContext? = nil
+        configRevealContext: RestConfigRevealRouteContext? = nil,
+        libraryCatalogContext: RestLibraryCatalogRouteContext? = nil,
+        libraryDownloadContext: RestLibraryDownloadRouteContext? = nil
     ) -> RestRouteTable {
         var routeTable: RestRouteTable = RestEndpointRoutes.foundationRouteTable(readinessProvider: {
             return workerHealthState.currentSnapshot().status;
@@ -277,6 +279,48 @@ public enum RestEndpointRoutes {
                 path: RestConfigRevealEndpoint.routePath,
                 handler: { (request: RestHttpRequest) -> RestHttpResponse in
                     return RestConfigRevealEndpoint.handle(request, revealContext: configRevealContext);
+                });
+        }
+        if let libraryCatalogContext = libraryCatalogContext {
+            routeTable.register(
+                method: "GET",
+                path: "/v1/library/catalog",
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    return try LibraryCatalogEndpoint.catalogResponse(context: libraryCatalogContext);
+                });
+        }
+        if let libraryDownloadContext = libraryDownloadContext {
+            routeTable.register(
+                method: "GET",
+                path: LibraryDownloadEndpoint.downloadRoutePath,
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    return try LibraryDownloadEndpoint.currentDownloadResponse(context: libraryDownloadContext);
+                });
+            routeTable.register(
+                method: "POST",
+                path: LibraryDownloadEndpoint.downloadRoutePath,
+                handler: { (request: RestHttpRequest) -> RestHttpResponse in
+                    return try LibraryDownloadEndpoint.startDownloadResponse(
+                        request: request,
+                        context: libraryDownloadContext);
+                });
+            routeTable.register(
+                method: "POST",
+                path: LibraryDownloadEndpoint.pauseRoutePath,
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    return try LibraryDownloadEndpoint.pauseResponse(context: libraryDownloadContext);
+                });
+            routeTable.register(
+                method: "POST",
+                path: LibraryDownloadEndpoint.resumeRoutePath,
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    return try LibraryDownloadEndpoint.resumeResponse(context: libraryDownloadContext);
+                });
+            routeTable.register(
+                method: "POST",
+                path: LibraryDownloadEndpoint.cancelRoutePath,
+                handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
+                    return try LibraryDownloadEndpoint.cancelResponse(context: libraryDownloadContext);
                 });
         }
         return routeTable;
