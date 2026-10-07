@@ -34,7 +34,7 @@ public enum WorkerPromptProcessingPhase: Equatable {
     /// The target model is processing protected or selected prompt work.
     case target;
 
-    internal var wireName: String {
+    public var wireName: String {
         switch self {
         case .target: return "target";
         }

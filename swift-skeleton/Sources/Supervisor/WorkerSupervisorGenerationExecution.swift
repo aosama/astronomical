@@ -56,9 +56,12 @@ extension WorkerSupervisor {
             self.containAndAttemptRelaunch(controlError: sendError);
             throw GenerationStartError.workerUnavailable;
         }
+        self.publishServingActivity(.promptProcessing, progress: nil);
         do {
             return try self.collectGenerationEvents(
                 generationCommand.requestId,
+                requestStartedAt: Date(),
+                maximumOutputTokens: generationCommand.settings.maxOutputTokens,
                 eventPump: eventPump);
         } catch let controlError as WorkerControlError {
             self.containAndAttemptRelaunch(controlError: controlError);
@@ -66,14 +69,30 @@ extension WorkerSupervisor {
         }
     }
 
+    /// Publishes the request-phase activity and its latest progress
+    /// observation to health state, mirroring the Rust publish_activity +
+    /// publish_active_request_progress pair.
+    func publishServingActivity(
+        _ activity: WorkerActivity,
+        progress: ActiveRequestProgress?
+    ) -> Void {
+        try? self.healthState.apply({ (snapshot: inout WorkerHealthSnapshot) -> Void in
+            snapshot.activity = activity;
+            snapshot.activeRequestProgress = progress;
+        });
+    }
+
     /// Drains worker events until this request's terminal event, routing
     /// process-scoped events to health state and generation events for other
     /// requests to protocol violations, mirroring the Rust loop's
     /// active-request matching.
     func collectGenerationEvents(        _ requestId: RequestId,
+        requestStartedAt: Date,
+        maximumOutputTokens: UInt16,
         eventPump: WorkerEventPump
     ) throws -> Array<ChatGenerationStreamEvent> {
         var streamEvents: Array<ChatGenerationStreamEvent> = Array<ChatGenerationStreamEvent>();
+        var generationStartedAt: Date?;
         while true {
             self.stateLock.lock();
             let isShutdownRequested: Bool = self.isShutdownRequested;
@@ -86,14 +105,21 @@ extension WorkerSupervisor {
                 continue;
             }
             switch (workerEvent) {
-            case let .output(eventRequestId, _, _, outputs, _, _):
+            case let .output(eventRequestId, _, generatedTokenCount, outputs, _, _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if generationStartedAt == nil {
+                    generationStartedAt = Date();
+                }
+                self.publishGenerationProgress(
+                    generatedTokenCount: UInt32(generatedTokenCount),
+                    maximumOutputTokens: UInt32(maximumOutputTokens),
+                    generationStartedAt: generationStartedAt!);
                 for workerOutput: ChatGenerationOutput in outputs {
                     streamEvents.append(ChatGenerationStreamEvent.fromWorkerOutput(workerOutput));
                 }
             case let .prefillProgress(
                 eventRequestId,
-                _,
+                promptProcessingPhase,
                 processedTokens,
                 totalTokens,
                 elapsedMillis,
@@ -102,6 +128,20 @@ extension WorkerSupervisor {
                 mlxMemorySnapshot,
                 _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if let mlxMemorySnapshot = mlxMemorySnapshot {
+                    try WorkerEventHandler.handle(
+                        .mlxMemorySample(
+                            mlxMemorySnapshot: mlxMemorySnapshot,
+                            expertResidency: nil),
+                        healthState: self.healthState);
+                }
+                self.publishServingActivity(.promptProcessing, progress: .prefill(
+                    promptProcessingPhase: promptProcessingPhase,
+                    processedTokens: processedTokens,
+                    totalTokens: totalTokens,
+                    requestStartedAt: requestStartedAt,
+                    elapsedMillis: elapsedMillis,
+                    completedPrefillChunkTokens: completedPrefillChunkTokens));
                 streamEvents.append(.prefillProgress(
                     processedTokens: processedTokens,
                     totalTokens: totalTokens,
@@ -111,6 +151,51 @@ extension WorkerSupervisor {
                     mlxActiveMemoryBytes: mlxMemorySnapshot?.activeMemoryBytes,
                     mlxAllocatorCacheMemoryBytes: mlxMemorySnapshot?.allocatorCacheMemoryBytes,
                     mlxPeakMemoryBytes: mlxMemorySnapshot?.peakMemoryBytes));
+            case let .generationPreparationStarted(
+                eventRequestId,
+                totalLayerCount,
+                residentExpertCount,
+                residentExpertPayloadBytes,
+                _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                let preparationStartedAt: Date = Date();
+                self.publishServingActivity(.generationPreparation, progress: .generationPreparation(
+                    requestStartedAt: requestStartedAt,
+                    preparationStartedAt: preparationStartedAt,
+                    totalLayerCount: totalLayerCount,
+                    residentExpertCount: residentExpertCount,
+                    residentExpertPayloadBytes: residentExpertPayloadBytes));
+                continue;
+            case let .generationProgress(
+                eventRequestId,
+                generatedTokenCount,
+                eventMaximumOutputTokens,
+                _,
+                _,
+                _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if generationStartedAt == nil {
+                    generationStartedAt = Date();
+                }
+                self.publishGenerationProgress(
+                    generatedTokenCount: UInt32(generatedTokenCount),
+                    maximumOutputTokens: UInt32(eventMaximumOutputTokens),
+                    generationStartedAt: generationStartedAt!);
+                continue;
+            case let .firstDecodeCompleted(eventRequestId, _):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if generationStartedAt == nil {
+                    generationStartedAt = Date();
+                }
+                self.publishGenerationProgress(
+                    generatedTokenCount: 1,
+                    maximumOutputTokens: UInt32(maximumOutputTokens),
+                    generationStartedAt: generationStartedAt!);
+                continue;
+            case .promptWorkReuse:
+                // Request-scoped telemetry without CLI presentation; the
+                // attribution slice consumes it from health state later.
+                continue;
             case let .completed(
                 eventRequestId,
                 promptTokenCount,
@@ -120,6 +205,7 @@ extension WorkerSupervisor {
                 _,
                 reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.publishServingActivity(.idle, progress: nil);
                 streamEvents.append(.completed(
                     promptTokenCount: promptTokenCount,
                     generatedTokenCount: generatedTokenCount,
@@ -129,17 +215,32 @@ extension WorkerSupervisor {
                 return streamEvents;
             case let .failed(eventRequestId, reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.publishServingActivity(.idle, progress: nil);
                 streamEvents.append(.failed(reason: reason));
                 return streamEvents;
-            case .generationPreparationStarted, .generationProgress, .firstDecodeCompleted,
-                 .promptWorkReuse, .generationFinalized:
-                // Request-scoped telemetry without CLI presentation; the
-                // attribution slice consumes it from health state later.
+            case .generationFinalized:
+                // The request-scoped release acknowledgement; the outcome
+                // event always arrives first and already restored idle.
                 continue;
             default:
                 try WorkerEventHandler.handle(workerEvent, healthState: self.healthState);
             }
         }
+    }
+
+    /// Publishes the generating activity with elapsed time measured from the
+    /// first decode observation, mirroring the Rust generation-output path.
+    private func publishGenerationProgress(
+        generatedTokenCount: UInt32,
+        maximumOutputTokens: UInt32,
+        generationStartedAt: Date
+    ) -> Void {
+        let elapsedMillis: UInt64 = UInt64(
+            (Date().timeIntervalSince(generationStartedAt) * 1000).rounded());
+        self.publishServingActivity(.generating, progress: .generation(
+            generatedTokenCount: generatedTokenCount,
+            maximumOutputTokens: maximumOutputTokens,
+            elapsedMillis: elapsedMillis));
     }
 
     /// Runs one embeddings command through the worker: startup wait, model
@@ -222,11 +323,13 @@ extension WorkerSupervisor {
             case let .embeddingsCompleted(
                 eventRequestId, embeddings, inputTokenCounts, _):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.publishServingActivity(.idle, progress: nil);
                 return EmbeddingsOutput(
                     embeddings: embeddings,
                     inputTokenCounts: inputTokenCounts);
             case let .embeddingsFailed(eventRequestId, reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.publishServingActivity(.idle, progress: nil);
                 throw EmbeddingsExecutionError.workerFailure(reason);
             case .embeddingsFinalized:
                 // The request-scoped release acknowledgement; the outcome
@@ -315,6 +418,7 @@ extension WorkerSupervisor {
             self.containAndAttemptRelaunch(controlError: sendError);
             throw GenerationStartError.workerUnavailable;
         }
+        self.publishServingActivity(.imageGeneration, progress: nil);
         do {
             return try self.collectImageGenerationEvents(
                 imageGenerationCommand.requestId,
@@ -353,17 +457,40 @@ extension WorkerSupervisor {
             }
             lastProgressDate = Date();
             switch (workerEvent) {
+            case let .imageGenerationProgress(
+                eventRequestId,
+                phase,
+                completedSteps,
+                totalSteps,
+                elapsedMillis,
+                mlxMemorySnapshot):
+                try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                if let mlxMemorySnapshot = mlxMemorySnapshot {
+                    try WorkerEventHandler.handle(
+                        .mlxMemorySample(
+                            mlxMemorySnapshot: mlxMemorySnapshot,
+                            expertResidency: nil),
+                        healthState: self.healthState);
+                }
+                self.publishServingActivity(.imageGeneration, progress: .imageGeneration(
+                    phase: phase,
+                    completedSteps: completedSteps,
+                    totalSteps: totalSteps,
+                    elapsedMillis: elapsedMillis));
+                continue;
             case let .imageGenerationCompleted(eventRequestId, generatedImage, resultMetadata):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.publishServingActivity(.idle, progress: nil);
                 return ImageGenerationOutput(
                     generatedImage: generatedImage,
                     resultMetadata: resultMetadata);
             case let .imageGenerationFailed(eventRequestId, reason):
                 try WorkerSupervisor.requireActiveRequest(eventRequestId, requestId: requestId);
+                self.publishServingActivity(.idle, progress: nil);
                 throw ImageGenerationExecutionError.workerFailure(reason);
             case .imageGenerationFinalized:
                 // The request-scoped release acknowledgement; the outcome
-                // event always arrives first.
+                // event always arrives first and already restored idle.
                 continue;
             case .generationPreparationStarted, .generationProgress, .firstDecodeCompleted,
                  .promptWorkReuse, .generationFinalized, .prefillProgress:
