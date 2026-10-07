@@ -16,6 +16,7 @@ public final class ConfigTransitionState: @unchecked Sendable {
     private var reloadableConfigValue: ResolvedRuntimeConfig;
     private var configuredConfigSnapshotValue: ResolvedRuntimeConfig?;
     private var pendingMemoryConfigGenerationValue: String?;
+    private var configurationValidationErrorValue: String?;
     private let configurationTransitionLock: NSLock = NSLock();
 
     public init(
@@ -61,6 +62,20 @@ public final class ConfigTransitionState: @unchecked Sendable {
         self.stateLock.lock();
         defer { self.stateLock.unlock(); }
         self.pendingMemoryConfigGenerationValue = configurationGeneration;
+    }
+
+    /// The newest reload validation failure, surfaced by the status route
+    /// until a later reload accepts the document.
+    public func currentConfigurationValidationError() -> String? {
+        self.stateLock.lock();
+        defer { self.stateLock.unlock(); }
+        return self.configurationValidationErrorValue;
+    }
+
+    public func setConfigurationValidationError(_ validationError: String?) -> Void {
+        self.stateLock.lock();
+        defer { self.stateLock.unlock(); }
+        self.configurationValidationErrorValue = validationError;
     }
 
     /// Serializes one whole configuration transition: the guard spans the

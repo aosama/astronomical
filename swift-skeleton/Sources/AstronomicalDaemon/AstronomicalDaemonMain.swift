@@ -132,7 +132,13 @@ struct AstronomicalDaemonMain {
                     memoryContext: RestMaximumMlxMemoryRouteContext(
                         workerControl: workerSupervisor,
                         runtimeConfigResolver: runtimeConfigResolver,
-                        transitionState: configTransitionState)));
+                        transitionState: configTransitionState),
+                    configReloadContext: RestConfigReloadRouteContext(
+                        transitionState: configTransitionState,
+                        runtimeConfigResolver: runtimeConfigResolver,
+                        workerControl: workerSupervisor,
+                        workerHealthState: workerHealthState,
+                        generationActivityIdleProvider: { return true })));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);
