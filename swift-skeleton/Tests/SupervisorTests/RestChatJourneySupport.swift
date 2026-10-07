@@ -123,6 +123,19 @@ enum RestChatJourneySupport {
         return try AstronomicalConfig.loadFromInstancePaths(instancePaths);
     }
 
+    /// The state-directory fixture the journey route tables share.
+    static func journeyInstancePaths() -> AstronomicalInstancePaths {
+        return AstronomicalInstancePaths.forExplicitStateDirectory(
+            FilePath(string: "/rest-chat-journey-state"),
+            defaultBindAddress: SocketEndpoint.loopback(port: 0));
+    }
+
+    /// The build identity the journey route tables share.
+    static func journeyBuildIdentity() -> ApplicationBuildIdentity {
+        return ApplicationBuildIdentity(
+            version: "0.0.0-test", buildNumber: 0, commit: "journey", isDirty: false);
+    }
+
     /// Builds the serving route table with the chat route attached, exactly
     /// as the daemon wires it, over a scripted executor.
     static func chatRouteTable(

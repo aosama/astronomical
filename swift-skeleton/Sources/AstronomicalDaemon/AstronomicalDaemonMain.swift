@@ -120,7 +120,9 @@ struct AstronomicalDaemonMain {
                         responsesExecutor: workerSupervisor,
                         requestIdAllocator: chatRequestIdAllocator,
                         resolvedRuntimeConfig: resolvedRuntimeConfig,
-                        instancePaths: instancePaths)));
+                        instancePaths: instancePaths),
+                    cacheClearContext: RestCacheClearRouteContext(
+                        cacheClearExecutor: workerSupervisor)));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);
