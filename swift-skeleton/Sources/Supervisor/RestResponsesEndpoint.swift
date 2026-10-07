@@ -13,6 +13,7 @@ public struct RestResponsesRouteContext: @unchecked Sendable {
     let requestIdAllocator: ChatRequestIdAllocator;
     let resolvedRuntimeConfig: ResolvedRuntimeConfig;
     let instancePaths: AstronomicalInstancePaths;
+    let completionIdNamespace: CompletionIdNamespace;
     let liveResolvedRuntimeConfigProvider: @Sendable () -> ResolvedRuntimeConfig;
 
     public init(
@@ -20,12 +21,14 @@ public struct RestResponsesRouteContext: @unchecked Sendable {
         requestIdAllocator: ChatRequestIdAllocator,
         resolvedRuntimeConfig: ResolvedRuntimeConfig,
         instancePaths: AstronomicalInstancePaths,
+        completionIdNamespace: CompletionIdNamespace? = nil,
         liveResolvedRuntimeConfigProvider: @escaping @Sendable () -> ResolvedRuntimeConfig? = { nil }
     ) {
         self.responsesExecutor = responsesExecutor;
         self.requestIdAllocator = requestIdAllocator;
         self.resolvedRuntimeConfig = resolvedRuntimeConfig;
         self.instancePaths = instancePaths;
+        self.completionIdNamespace = completionIdNamespace ?? CompletionIdNamespace.nextApplicationInstance();
         self.liveResolvedRuntimeConfigProvider = {
             return liveResolvedRuntimeConfigProvider() ?? resolvedRuntimeConfig;
         };
@@ -162,7 +165,7 @@ enum RestResponsesEndpoint {
                 code: "response_timestamp_failed");
         }
         let responseId: String =
-            "resp_\(CompletionIdNamespace.shared.rawValue)-\(requestIdentifier)";
+            "resp_\(responsesContext.completionIdNamespace.rawValue)-\(requestIdentifier)";
         let responsesResponse: RestHttpResponse;
         if requestParts.stream {
             responsesResponse = RestResponsesEndpoint.streamingResponse(
