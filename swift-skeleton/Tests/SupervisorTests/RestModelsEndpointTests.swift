@@ -89,7 +89,8 @@ final class RestModelsEndpointTests {
         #expect(statusCode == 200);
         #expect(envelope["persistent_prompt_cache_hits"] as? UInt64 == 0);
         #expect(envelope["persistent_prompt_cache_misses"] as? UInt64 == 0);
-        #expect(envelope["persistent_prompt_cache_maximum_size_bytes"] as? UInt64 == 50_000_000_000);
+        // The maximum is worker-reported; no observation means zero.
+        #expect(envelope["persistent_prompt_cache_maximum_size_bytes"] as? UInt64 == 0);
         server.stop();
     }
 
