@@ -38,7 +38,15 @@ let package: Package = Package(
         // library the way Rust serde derives decode over serde_json).
         .target(name: "RestContract", dependencies: ["IpcProtocol"]),
         // Wave 2 — apps/supervisor
-        .target(name: "Supervisor", dependencies: ["AstronomicalConfig", "IpcProtocol", "RestContract"]),
+        .target(
+            name: "Supervisor",
+            dependencies: ["AstronomicalConfig", "IpcProtocol", "RestContract"],
+            resources: [
+                // The Observatory console, symlinked to its one canonical
+                // home under apps/supervisor/console so no copy drifts while
+                // the Rust tree retires.
+                .copy("Resources/console")
+            ]),
         // Wave 2 — the astronomicald daemon binary itself.
         .executableTarget(
             name: "AstronomicalDaemon",
