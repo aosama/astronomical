@@ -41,6 +41,7 @@ final class RestModelsEndpointTests {
         #expect(advertisedModel["owned_by"] as? String == "astronomical");
         #expect((advertisedModel["created"] as? UInt64 ?? 0) > 0);
         #expect(advertisedModel["context_window"] as? UInt32 == 4_096);
+        #expect(advertisedModel["max_input_tokens"] as? UInt32 == 4_095);
         #expect(advertisedModel["max_output_tokens"] as? UInt32 == 1_024);
         let supportedEndpoints: Array<String> = (advertisedModel["supported_endpoints"] as? [String]) ?? [];
         #expect(supportedEndpoints.contains("/v1/chat/completions"));

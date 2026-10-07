@@ -22,12 +22,12 @@ final class GenerationQueueTests {
         defer { harness.dispose() }
 
         let firstOutcome: GenerationJourneyOutcome = harness.startGenerationThread(requestId: 1);
-        harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try harness.awaitQueueFill(expectedOutstandingCount: 1);
 
         // The second request must queue, not reject, while the first owns
         // the worker.
         let queuedOutcome: GenerationJourneyOutcome = harness.startGenerationThread(requestId: 2);
-        harness.awaitQueueFill(expectedOutstandingCount: 2);
+        try harness.awaitQueueFill(expectedOutstandingCount: 2);
 
         try harness.pokeCompletion(requestId: 1);
         GenerationQueueTests.join(firstOutcome, deadline: Date().addingTimeInterval(10));
@@ -81,7 +81,7 @@ final class GenerationQueueTests {
         defer { harness.dispose() }
 
         let activeOutcome: GenerationJourneyOutcome = harness.startGenerationThread(requestId: 1);
-        harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try harness.awaitQueueFill(expectedOutstandingCount: 1);
 
         #expect(try harness.supervisor.updateMlxMemoryLimit(
             32_000_000_000,
@@ -103,14 +103,14 @@ final class GenerationQueueTests {
         defer { harness.dispose() }
 
         let activeOutcome: GenerationJourneyOutcome = harness.startGenerationThread(requestId: 1);
-        harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try harness.awaitQueueFill(expectedOutstandingCount: 1);
 
         #expect(try harness.supervisor.updateMlxMemoryLimit(
             32_000_000_000,
             configurationGeneration: "raise-before-next-chat") == .queued);
 
         let nextOutcome: GenerationJourneyOutcome = harness.startGenerationThread(requestId: 2);
-        harness.awaitQueueFill(expectedOutstandingCount: 2);
+        try harness.awaitQueueFill(expectedOutstandingCount: 2);
 
         try harness.pokeCompletion(requestId: 1);
         try harness.pokeMemoryRaise(32_000_000_000);
@@ -141,7 +141,7 @@ final class GenerationQueueTests {
         defer { harness.dispose() }
 
         let activeOutcome: GenerationJourneyOutcome = harness.startGenerationThread(requestId: 1);
-        harness.awaitQueueFill(expectedOutstandingCount: 1);
+        try harness.awaitQueueFill(expectedOutstandingCount: 1);
 
         var queuedOutcomes: Array<GenerationJourneyOutcome> = Array<GenerationJourneyOutcome>();
         for waiterIndex: Int in 0..<GenerationQueueDepth.maximumWaiterCount {
@@ -149,7 +149,7 @@ final class GenerationQueueTests {
             // ticket, so the FIFO order is the started request-id order and
             // the completion pokes can address the active request exactly.
             queuedOutcomes.append(harness.startGenerationThread(requestId: UInt64(waiterIndex) + 2));
-            harness.awaitQueueFill(expectedOutstandingCount: waiterIndex + 2);
+            try harness.awaitQueueFill(expectedOutstandingCount: waiterIndex + 2);
         }
 
         do {
