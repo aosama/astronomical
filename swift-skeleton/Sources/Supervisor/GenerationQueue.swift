@@ -75,7 +75,13 @@ extension WorkerSupervisor {
         self.servedAdmissionTicket += 1;
         self.skipAbandonedHeadTicketsWhileLocked();
         self.stateLock.broadcast();
+        let hasQueuedWaiters: Bool = self.issuedAdmissionTicketCount > self.servedAdmissionTicket;
         self.stateLock.unlock();
+        // The queued cache clear waits for the whole admission queue to
+        // drain, so it never deletes content under a resident consumer.
+        if !hasQueuedWaiters {
+            self.applyPendingPromptCacheClearIfIdle();
+        }
     }
 
     /// Advances past abandoned head tickets; the caller holds the lock.

@@ -18,6 +18,7 @@ import IpcProtocol;
 public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecuting {
 
     static let shutdownDrainWaitSeconds: TimeInterval = 10;
+    static let promptCacheClearTimeoutSeconds: TimeInterval = 60;
     static let generationPollSeconds: TimeInterval = 0.25;
 
     let stateLock: NSCondition;
@@ -27,6 +28,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     var servedAdmissionTicket: Int;
     var abandonedAdmissionTickets: Set<Int>;
     var pendingMlxMemoryLimitUpdate: PendingMlxMemoryLimitUpdate?;
+    var pendingPromptCacheClear: PendingPromptCacheClear?;
     var isShutdownRequested: Bool;
     let healthState: WorkerHealthState;
     let modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>;
@@ -49,6 +51,7 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         self.servedAdmissionTicket = 0;
         self.abandonedAdmissionTickets = Set<Int>();
         self.pendingMlxMemoryLimitUpdate = nil;
+        self.pendingPromptCacheClear = nil;
         self.isShutdownRequested = false;
         self.healthState = WorkerHealthState();
         self.modelPolicyCatalog = modelPolicyCatalog;

@@ -36,6 +36,10 @@ public indirect enum WorkerControlError: Error, Equatable {
     /// memory-ceiling change in time.
     case mlxMemoryLimitUpdateTimeout(memoryLimitUpdateTimeoutMillis: UInt64);
 
+    /// The worker stayed responsive but never acknowledged the requested
+    /// prompt-cache deletion in time.
+    case promptCacheClearTimeout(cacheClearTimeoutMillis: UInt64);
+
     public var errorDescription: String? {
         switch (self) {
         case let .startWorker(underlyingDescription):
@@ -56,6 +60,8 @@ public indirect enum WorkerControlError: Error, Equatable {
             return "no living worker process exists to receive the control command";
         case let .mlxMemoryLimitUpdateTimeout(memoryLimitUpdateTimeoutMillis):
             return "worker did not acknowledge the memory-ceiling change within the \(memoryLimitUpdateTimeoutMillis)-millisecond timeout";
+        case let .promptCacheClearTimeout(cacheClearTimeoutMillis):
+            return "worker did not acknowledge the prompt-cache deletion within the \(cacheClearTimeoutMillis)-millisecond timeout";
         }
     }
 }

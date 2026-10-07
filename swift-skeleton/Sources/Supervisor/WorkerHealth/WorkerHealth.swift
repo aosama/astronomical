@@ -78,6 +78,8 @@ public struct WorkerHealthSnapshot: Equatable {
     public var pendingMlxMemoryCeilingBytes: UInt64?;
     /// The failure that blocked applying an authored memory ceiling.
     public var mlxMemoryLimitError: String?;
+    /// The newest cache clear waiting for generations to drain.
+    public var pendingPromptCacheClear: PendingPromptCacheClear? = nil;
 
     /// Builds a ready snapshot from the worker's enriched readiness event.
     public static func readyWithModel(
