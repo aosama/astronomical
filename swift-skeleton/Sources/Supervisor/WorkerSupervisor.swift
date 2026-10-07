@@ -20,10 +20,13 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     static let shutdownDrainWaitSeconds: TimeInterval = 10;
     static let generationPollSeconds: TimeInterval = 0.25;
 
-    let stateLock: NSLock;
+    let stateLock: NSCondition;
     var workerProcess: WorkerProcess?;
     var eventPump: WorkerEventPump?;
-    var isGenerationAdmitted: Bool;
+    var issuedAdmissionTicketCount: Int;
+    var servedAdmissionTicket: Int;
+    var abandonedAdmissionTickets: Set<Int>;
+    var pendingMlxMemoryLimitUpdate: PendingMlxMemoryLimitUpdate?;
     var isShutdownRequested: Bool;
     let healthState: WorkerHealthState;
     let modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>;
@@ -39,10 +42,13 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
         modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy>,
         modelLoadTimeout: TimeInterval
     ) {
-        self.stateLock = NSLock();
+        self.stateLock = NSCondition();
         self.workerProcess = nil;
         self.eventPump = nil;
-        self.isGenerationAdmitted = false;
+        self.issuedAdmissionTicketCount = 0;
+        self.servedAdmissionTicket = 0;
+        self.abandonedAdmissionTickets = Set<Int>();
+        self.pendingMlxMemoryLimitUpdate = nil;
         self.isShutdownRequested = false;
         self.healthState = WorkerHealthState();
         self.modelPolicyCatalog = modelPolicyCatalog;
@@ -134,14 +140,15 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
 
     /// Runs one bounded chat generation to its terminal event.
     ///
-    /// Requests are serialized: the first admitted request owns the worker
-    /// until its terminal event, model swap included; a concurrent request is
-    /// rejected with capacityUnavailable instead of queueing.
+    /// Requests are serialized through the bounded FIFO admission queue: the
+    /// first request owns the worker until its terminal event, model swap
+    /// included; further requests wait in the queue while it has room and
+    /// are rejected with capacityUnavailable once it is full.
     public func startChatGeneration(
         _ generationCommand: ChatGenerationCommand
     ) throws -> Array<ChatGenerationStreamEvent> {
-        try self.admitGeneration();
-        defer { self.releaseAdmission(); }
+        try self.admitGenerationSlot();
+        defer { self.finishAdmissionSlot(); }
         return try self.runGeneration(generationCommand);
     }
 
@@ -150,8 +157,8 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     public func startEmbeddingsGeneration(
         _ embeddingsCommand: EmbeddingsCommand
     ) throws -> EmbeddingsOutput {
-        try self.admitGeneration();
-        defer { self.releaseAdmission(); }
+        try self.admitGenerationSlot();
+        defer { self.finishAdmissionSlot(); }
         return try self.runEmbeddingsGeneration(embeddingsCommand);
     }
 
@@ -160,44 +167,29 @@ public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecutin
     public func startImageGeneration(
         _ imageGenerationCommand: ImageGenerationCommand
     ) throws -> ImageGenerationOutput {
-        try self.admitGeneration();
-        defer { self.releaseAdmission(); }
+        try self.admitGenerationSlot();
+        defer { self.finishAdmissionSlot(); }
         return try self.runImageGeneration(
             imageGenerationCommand,
             timeouts: ImageGenerationTimeouts.default);
     }
 
-    private func admitGeneration() throws -> Void {
-        self.stateLock.lock();
-        defer { self.stateLock.unlock(); }
-        if self.isShutdownRequested || self.workerProcess == nil {
-            throw GenerationStartError.workerUnavailable;
-        }
-        if self.isGenerationAdmitted {
-            throw GenerationStartError.capacityUnavailable;
-        }
-        self.isGenerationAdmitted = true;
-    }
-
-    private func releaseAdmission() -> Void {
-        self.stateLock.lock();
-        self.isGenerationAdmitted = false;
-        self.stateLock.unlock();
-    }
-
-    /// Shuts down and reaps the owned inference worker process. A generation
-    /// still holding the worker is interrupted through its bounded drain and
-    /// waited out before the close, so shutdown never races a live request.
+    /// Shuts down and reaps the owned inference worker process. Queued
+    /// waiters wake and abandon their tickets; a generation still holding
+    /// the worker is interrupted through its bounded drain and waited out
+    /// before the close, so shutdown never races a live request.
     public func shutdown() throws -> WorkerTerminationOutcome {
         self.stateLock.lock();
         self.isShutdownRequested = true;
+        self.stateLock.broadcast();
         self.stateLock.unlock();
         let drainDeadline: Date = Date().addingTimeInterval(WorkerSupervisor.shutdownDrainWaitSeconds);
         while true {
             self.stateLock.lock();
-            let isGenerationAdmitted: Bool = self.isGenerationAdmitted;
+            let hasOutstandingAdmissionTicket: Bool =
+                self.issuedAdmissionTicketCount > self.servedAdmissionTicket;
             self.stateLock.unlock();
-            if !isGenerationAdmitted || Date() >= drainDeadline {
+            if !hasOutstandingAdmissionTicket || Date() >= drainDeadline {
                 break;
             }
             Thread.sleep(forTimeInterval: 0.05);
