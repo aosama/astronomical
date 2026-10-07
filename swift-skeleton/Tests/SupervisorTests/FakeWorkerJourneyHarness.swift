@@ -13,7 +13,7 @@ import IpcProtocol;
  * pending generation with a chosen request id, one acknowledges a memory
  * raise, and one acknowledges a prompt-cache clear with a chosen scope.
  */
-final class FakeWorkerJourneyHarness {
+final class FakeWorkerJourneyHarness: @unchecked Sendable {
 
     let supervisor: WorkerSupervisor;
     private let controlDirectoryPath: String;
@@ -228,7 +228,7 @@ final class FakeWorkerJourneyHarness {
 
 /// One in-flight generation executed on its own thread, with its terminal
 /// outcome captured for the journey thread to inspect after a bounded join.
-final class GenerationJourneyOutcome {
+final class GenerationJourneyOutcome: @unchecked Sendable {
 
     var workerThread: Thread;
     private let outcomeLock: NSLock;

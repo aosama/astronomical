@@ -102,6 +102,8 @@ struct AstronomicalDaemonMain {
         }
         let workerHealthState: WorkerHealthState = workerSupervisor.ownedHealthState();
         let chatRequestIdAllocator: ChatRequestIdAllocator = ChatRequestIdAllocator();
+        // The menu bar app requests the same graceful close over HTTP.
+        let shutdownController: ShutdownController = ShutdownController();
         let restServer: RestHttpServer;
         do {
             restServer = try RestHttpServer.start(
@@ -122,7 +124,8 @@ struct AstronomicalDaemonMain {
                         resolvedRuntimeConfig: resolvedRuntimeConfig,
                         instancePaths: instancePaths),
                     cacheClearContext: RestCacheClearRouteContext(
-                        cacheClearExecutor: workerSupervisor)));
+                        cacheClearExecutor: workerSupervisor),
+                    shutdownController: shutdownController));
         } catch {
             FileHandle.standardError.write(Data("astronomicald: could not start the REST endpoint: \(error)\n".utf8));
             exit(2);
@@ -152,12 +155,13 @@ struct AstronomicalDaemonMain {
         fflush(stdout);
 
         let shutdownSemaphore = DispatchSemaphore(value: 0);
-        let signalSourceShutdown: () -> Void = {
+        let signalSourceShutdown: @Sendable () -> Void = {
             restServer.stop();
             service.shutdown();
             _ = try? workerSupervisor.shutdown();
             shutdownSemaphore.signal();
         };
+        shutdownController.subscribe(signalSourceShutdown);
         for signalNumber: Int32 in [SIGINT, SIGTERM] {
             let signalSource: DispatchSourceSignal = DispatchSource.makeSignalSource(
                 signal: signalNumber,
