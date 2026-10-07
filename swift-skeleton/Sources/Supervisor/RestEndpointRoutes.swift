@@ -168,7 +168,6 @@ public enum RestEndpointRoutes {
             path: "/v1/cache/stats",
             handler: { (_ request: RestHttpRequest) -> RestHttpResponse in
                 return try RestEndpointRoutes.cacheStatsResponse(
-                    resolvedRuntimeConfig: resolvedRuntimeConfig,
                     workerHealthState: workerHealthState);
             });
         if let cacheClearContext = cacheClearContext {
@@ -240,30 +239,63 @@ public enum RestEndpointRoutes {
     }
 
     private static func cacheStatsResponse(
-        resolvedRuntimeConfig: ResolvedRuntimeConfig,
         workerHealthState: WorkerHealthState
     ) throws -> RestHttpResponse {
-        // The persistent prompt cache statistics come from worker events; the
-        // summary is zeroed until the worker session machinery (E2/E4) starts
-        // reporting them. The configured maximum is served from resolution.
-        let maximumSizeBytes: UInt64 = resolvedRuntimeConfig.configuredPromptCacheMaximumSizeBytes
-            ?? resolvedRuntimeConfig.promptCacheConfig.globalPromptCacheMaximumSizeBytes;
+        // Every statistic is worker-reported: the supervisor forwards the
+        // latest persistent prompt-cache observation, zeroed until the
+        // worker publishes one, exactly like the Rust cache_stats endpoint.
+        let persistentPromptCacheStats: WorkerPersistentPromptCacheStats? = workerHealthState
+            .currentSnapshot()
+            .persistentPromptCacheStats;
+        let hits: UInt64 = persistentPromptCacheStats?.persistentPromptCacheHits ?? 0;
+        let misses: UInt64 = persistentPromptCacheStats?.persistentPromptCacheMisses ?? 0;
+        let queryCount: UInt64 = hits &+ misses;
+        let hitRate: Double;
+        if queryCount == 0 {
+            hitRate = 0;
+        } else {
+            hitRate = (Double(hits) / Double(queryCount) * 10_000).rounded() / 10_000;
+        }
         var statsObject: JsonWireObject = JsonWireObject(entries: Array());
-        statsObject.appendEntry(key: "persistent_prompt_cache_hits", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_misses", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_tokens_saved", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_block_token_count", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_sequence_state_block_count", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_boundary_state_snapshot_count", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_count", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_total_size_bytes", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_total_size_bytes", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_maximum_size_bytes", value: .unsignedInteger(maximumSizeBytes));
-        statsObject.appendEntry(key: "persistent_prompt_cache_hit_rate", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_hits", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_misses", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_visual_embedding_rows_loaded", value: .unsignedInteger(0));
-        statsObject.appendEntry(key: "persistent_prompt_cache_partial_tail_hits", value: .unsignedInteger(0));
+        statsObject.appendEntry(key: "persistent_prompt_cache_hits", value: .unsignedInteger(hits));
+        statsObject.appendEntry(key: "persistent_prompt_cache_misses", value: .unsignedInteger(misses));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_tokens_saved",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheTokensSaved ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_block_token_count",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheBlockTokenCount ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_sequence_state_block_count",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheSequenceStateBlockCount ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_boundary_state_snapshot_count",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheBoundaryStateSnapshotCount ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_visual_embedding_count",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheVisualEmbeddingCount ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_total_size_bytes",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheTotalSizeBytes ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_visual_embedding_total_size_bytes",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheVisualEmbeddingTotalSizeBytes ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_maximum_size_bytes",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheMaximumSizeBytes ?? 0));
+        statsObject.appendEntry(key: "persistent_prompt_cache_hit_rate", value: .double(hitRate));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_visual_embedding_hits",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheVisualEmbeddingHits ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_visual_embedding_misses",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheVisualEmbeddingMisses ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_visual_embedding_rows_loaded",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCacheVisualEmbeddingRowsLoaded ?? 0));
+        statsObject.appendEntry(
+            key: "persistent_prompt_cache_partial_tail_hits",
+            value: .unsignedInteger(persistentPromptCacheStats?.persistentPromptCachePartialTailHits ?? 0));
         let pendingCacheClear: PendingPromptCacheClear? = workerHealthState
             .currentSnapshot()
             .pendingPromptCacheClear;
