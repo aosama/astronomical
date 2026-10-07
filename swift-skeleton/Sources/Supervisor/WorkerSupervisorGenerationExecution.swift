@@ -94,7 +94,7 @@ extension WorkerSupervisor {
         maximumOutputTokens: UInt16,
         eventPump: WorkerEventPump,
         onStreamEvent: ((ChatGenerationStreamEvent) -> Void)? = nil,
-        isClientAbandoned: (() -> Bool)? = nil
+        isClientAbandoned: (@Sendable () -> Bool)? = nil
     ) throws -> Array<ChatGenerationStreamEvent> {
         var streamEvents: Array<ChatGenerationStreamEvent> = Array<ChatGenerationStreamEvent>();
         func emitStreamEvent(_ streamEvent: ChatGenerationStreamEvent) -> Void {

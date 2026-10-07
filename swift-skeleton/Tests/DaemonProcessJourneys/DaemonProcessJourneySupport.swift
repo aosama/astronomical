@@ -198,6 +198,91 @@ enum DaemonProcessJourneySupport {
             requestText: "POST \(endpointPath) HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
     }
 
+    /// Posts one JSON document and reads until the daemon closes, the
+    /// request shape every scripted chat, responses, and control journey
+    /// speaks over the loopback.
+    static func postJsonEndpoint(
+        port: UInt16,
+        endpointPath: String,
+        bodyJson: String
+    ) -> String? {
+        let bodyBytes: Array<UInt8> = Array(bodyJson.utf8);
+        return DaemonProcessJourneySupport.exchange(
+            port: port,
+            requestText: "POST \(endpointPath) HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                + "Content-Type: application/json\r\nContent-Length: \(bodyBytes.count)\r\n"
+                + "Connection: close\r\n\r\n"
+                + bodyJson);
+    }
+
+    /// Assembles the synthetic bundle the scripted-worker journeys spawn
+    /// from: the daemon and the supervisor test worker copied beside each
+    /// other, so the daemon's worker-path derivation finds the test worker
+    /// under its production name. The SwiftPM resource bundles ride along
+    /// beside the binaries the way the daemon loads them from disk.
+    static func makeWorkerBearingBundleDirectory(
+        stateDirectoryPath: String,
+        daemonExecutablePath: String,
+        workerExecutablePath: String
+    ) throws -> String {
+        let bundleBinDirectoryPath: String = stateDirectoryPath + "/bin";
+        try FileManager.default.createDirectory(
+            atPath: bundleBinDirectoryPath,
+            withIntermediateDirectories: true);
+        try FileManager.default.copyItem(
+            atPath: daemonExecutablePath,
+            toPath: bundleBinDirectoryPath + "/" + DaemonProcessJourneySupport.daemonExecutableName);
+        try FileManager.default.copyItem(
+            atPath: workerExecutablePath,
+            toPath: bundleBinDirectoryPath + "/astronomical-inference-worker");
+        let daemonProductsDirectoryPath: String =
+            (daemonExecutablePath as NSString).deletingLastPathComponent;
+        let productsEntryNames: Array<String> = try FileManager.default.contentsOfDirectory(
+            atPath: daemonProductsDirectoryPath);
+        for productsEntryName: String in productsEntryNames {
+            if (productsEntryName as NSString).pathExtension == "bundle" {
+                try FileManager.default.copyItem(
+                    atPath: daemonProductsDirectoryPath + "/" + productsEntryName,
+                    toPath: bundleBinDirectoryPath + "/" + productsEntryName);
+            }
+        }
+        return bundleBinDirectoryPath;
+    }
+
+    /// Publishes one discoverable chat model under the instance's models
+    /// directory: the exact on-disk fixture shape discovery recognizes, so
+    /// the daemon's catalog carries the model by its directory leaf name
+    /// and a client request can load it onto the scripted worker.
+    static func writeDiscoveredChatModelFixture(
+        stateDirectoryPath: String,
+        modelDirectoryName: String
+    ) throws -> Void {
+        let publishedModelDirectory: String =
+            stateDirectoryPath + "/models/astronomical-test/" + modelDirectoryName;
+        try FileManager.default.createDirectory(
+            atPath: publishedModelDirectory,
+            withIntermediateDirectories: true);
+        let modelConfigJson: String =
+            "{\"model_type\":\"qwen3_5_moe\",\"text_config\":{\"max_position_embeddings\":262144}}";
+        try modelConfigJson.write(
+            toFile: publishedModelDirectory + "/config.json",
+            atomically: true,
+            encoding: String.Encoding.utf8);
+        try "{\"version\":1,\"model\":{\"type\":\"BPE\"}}".write(
+            toFile: publishedModelDirectory + "/tokenizer.json",
+            atomically: true,
+            encoding: String.Encoding.utf8);
+        try "fictional-shard".write(
+            toFile: publishedModelDirectory + "/model-00001.safetensors",
+            atomically: true,
+            encoding: String.Encoding.utf8);
+        try "{\"metadata\":{\"total_size\":15},\"weight_map\":{\"model.embed_tokens.weight\":\"model-00001.safetensors\"}}"
+            .write(
+                toFile: publishedModelDirectory + "/model.safetensors.index.json",
+                atomically: true,
+                encoding: String.Encoding.utf8);
+    }
+
     /// Speaks exactly the bytes a command-line client would send and reads
     /// until the daemon closes, bounded by a receive timeout so a wedged
     /// daemon fails the journey instead of hanging it.
