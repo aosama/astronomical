@@ -15,7 +15,7 @@ import IpcProtocol;
 /// The Rust FIFO queue depth (eight waiters behind one active request) is a
 /// REST-surface contract and lands with the REST chat endpoint slice; this
 /// boundary rejects a second concurrent request with capacityUnavailable.
-public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecuting {
+public final class WorkerSupervisor: @unchecked Sendable, ChatGenerationExecuting, EmbeddingsExecuting {
 
     static let shutdownDrainWaitSeconds: TimeInterval = 10;
     static let promptCacheClearTimeoutSeconds: TimeInterval = 60;
