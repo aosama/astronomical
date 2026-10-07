@@ -83,6 +83,11 @@ public struct WorkerHealthSnapshot: Equatable {
     /// The configuration generation a live memory mutation has staged but
     /// not yet finalized on the worker.
     public var pendingConfigurationGeneration: String? = nil;
+    /// Serving activity of the current request phase, published from the
+    /// generation event flow.
+    public var activity: WorkerActivity = .idle;
+    /// Latest progress observation for the active request, if one is active.
+    public var activeRequestProgress: ActiveRequestProgress? = nil;
 
     /// Builds a ready snapshot from the worker's enriched readiness event.
     public static func readyWithModel(

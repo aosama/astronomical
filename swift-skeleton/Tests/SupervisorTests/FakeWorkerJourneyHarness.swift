@@ -87,6 +87,15 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
             encoding: .utf8);
     }
 
+    /// Emits one prefill-progress frame for the pending generation without
+    /// completing it, so progress journeys can observe the in-flight phase.
+    func pokePrefillProgress(requestId: UInt64, processedTokens: UInt32, totalTokens: UInt32) throws -> Void {
+        try "\(requestId)|\(processedTokens)|\(totalTokens)".write(
+            toFile: self.controlDirectoryPath + "/prefill_request",
+            atomically: true,
+            encoding: .utf8);
+    }
+
     func pokeMemoryRaise(_ effectiveMlxMemoryCeilingBytes: UInt64) throws -> Void {
         try String(effectiveMlxMemoryCeilingBytes).write(
             toFile: self.controlDirectoryPath + "/apply_memory_raise",
@@ -149,6 +158,18 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
             + FakeWorkerEventEmitter.emitLine(payload: FakeWorkerEventEmitter.residentRuntimePolicyPayload(
                 modelId: residentModelId))
             + "while true; do\n"
+            + "  if [ -f \"\(controlDirectoryPath)/prefill_request\" ]; then\n"
+            + "    preflight_content=$(cat \"\(controlDirectoryPath)/prefill_request\")\n"
+            + "    rm -f \"\(controlDirectoryPath)/prefill_request\"\n"
+            + "    prefill_request_id=$(printf '%s' \"$preflight_content\" | cut -d'|' -f1)\n"
+            + "    prefill_processed=$(printf '%s' \"$preflight_content\" | cut -d'|' -f2)\n"
+            + "    prefill_total=$(printf '%s' \"$preflight_content\" | cut -d'|' -f3)\n"
+            + "    emit_frame '{\"kind\":\"prefill_progress\",\"request_id\":'\"$prefill_request_id\"',"
+            + "\"prompt_processing_phase\":\"target\",\"processed_tokens\":'\"$prefill_processed\"',"
+            + "\"total_tokens\":'\"$prefill_total\"',\"elapsed_millis\":500,"
+            + "\"forward_prefill_chunk_elapsed_millis\":null,\"completed_prefill_chunk_tokens\":64,"
+            + "\"mlx_memory_snapshot\":null,\"expert_residency\":null}'\n"
+            + "  fi\n"
             + "  if [ -f \"\(controlDirectoryPath)/complete_request\" ]; then\n"
             + "    completion_request_id=$(cat \"\(controlDirectoryPath)/complete_request\")\n"
             + "    rm -f \"\(controlDirectoryPath)/complete_request\"\n"

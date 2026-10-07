@@ -29,6 +29,12 @@ public enum RestStatusResponse {
                 instancePaths: instancePaths,
                 buildIdentity: buildIdentity));
         statusObject.appendEntry(key: "status", value: .string(workerHealthSnapshot.status.readinessText()));
+        statusObject.appendEntry(key: "activity", value: .string(workerHealthSnapshot.activity.activityText()));
+        if let activeRequestProgress: ActiveRequestProgress = workerHealthSnapshot.activeRequestProgress {
+            statusObject.appendEntry(
+                key: "progress",
+                value: RestStatusResponse.progressSection(activeRequestProgress));
+        }
         statusObject.appendEntry(
             key: "worker_runtime_feature_configuration_applied",
             value: .boolean(workerHealthSnapshot.workerRuntimeFeatureConfiguration != nil));
@@ -79,6 +85,73 @@ public enum RestStatusResponse {
             key: "configured_maximum_mlx_memory_gb",
             value: RestStatusResponse.configuredMaximumMlxMemoryGbWireValue(configuredRuntimeConfig?.maximumMlxMemoryBytes));
         return try RestHttpResponse.json(statusCode: 200, wireValue: .object(statusObject));
+    }
+
+    /// Serializes the active request's progress observation, mirroring the
+    /// Rust status endpoint: prefill and preparation report live elapsed
+    /// time that keeps advancing between worker frames; generation collapses
+    /// into the shared processed/total tokens shape.
+    private static func progressSection(
+        _ activeRequestProgress: ActiveRequestProgress
+    ) -> JsonWireValue {
+        var progressObject: JsonWireObject = JsonWireObject(entries: Array<(key: String, value: JsonWireValue)>());
+        switch (activeRequestProgress) {
+        case let .prefill(
+            promptProcessingPhase,
+            processedTokens,
+            totalTokens,
+            requestStartedAt,
+            elapsedMillis,
+            completedPrefillChunkTokens):
+            let liveElapsedMillis: UInt64 = max(
+                elapsedMillis,
+                UInt64((Date().timeIntervalSince(requestStartedAt) * 1000).rounded()));
+            progressObject.appendEntry(key: "phase", value: .string(promptProcessingPhase.wireName));
+            progressObject.appendEntry(key: "processed_tokens", value: .unsignedInteger(UInt64(processedTokens)));
+            progressObject.appendEntry(key: "total_tokens", value: .unsignedInteger(UInt64(totalTokens)));
+            progressObject.appendEntry(key: "elapsed_ms", value: .unsignedInteger(liveElapsedMillis));
+            if let completedPrefillChunkTokens = completedPrefillChunkTokens {
+                progressObject.appendEntry(
+                    key: "completed_prefill_chunk_tokens",
+                    value: .unsignedInteger(UInt64(completedPrefillChunkTokens)));
+            }
+        case let .generationPreparation(
+            requestStartedAt,
+            preparationStartedAt,
+            totalLayerCount,
+            residentExpertCount,
+            residentExpertPayloadBytes):
+            progressObject.appendEntry(key: "phase", value: .string("generation_preparation"));
+            progressObject.appendEntry(key: "processed_tokens", value: .unsignedInteger(0));
+            progressObject.appendEntry(key: "total_tokens", value: .unsignedInteger(1));
+            progressObject.appendEntry(
+                key: "elapsed_ms",
+                value: .unsignedInteger(UInt64((Date().timeIntervalSince(preparationStartedAt) * 1000).rounded())));
+            progressObject.appendEntry(
+                key: "request_elapsed_ms",
+                value: .unsignedInteger(UInt64((Date().timeIntervalSince(requestStartedAt) * 1000).rounded())));
+            progressObject.appendEntry(key: "total_layer_count", value: .unsignedInteger(UInt64(totalLayerCount)));
+            progressObject.appendEntry(key: "resident_expert_count", value: .unsignedInteger(UInt64(residentExpertCount)));
+            progressObject.appendEntry(key: "resident_expert_payload_bytes", value: .unsignedInteger(residentExpertPayloadBytes));
+        case let .generation(
+            generatedTokenCount,
+            maximumOutputTokens,
+            elapsedMillis):
+            progressObject.appendEntry(key: "phase", value: .string("generation"));
+            progressObject.appendEntry(key: "processed_tokens", value: .unsignedInteger(UInt64(generatedTokenCount)));
+            progressObject.appendEntry(key: "total_tokens", value: .unsignedInteger(UInt64(maximumOutputTokens)));
+            progressObject.appendEntry(key: "elapsed_ms", value: .unsignedInteger(elapsedMillis));
+        case let .imageGeneration(
+            phase,
+            completedSteps,
+            totalSteps,
+            elapsedMillis):
+            progressObject.appendEntry(key: "phase", value: .string(phase.wireName));
+            progressObject.appendEntry(key: "completed_steps", value: .unsignedInteger(UInt64(completedSteps)));
+            progressObject.appendEntry(key: "total_steps", value: .unsignedInteger(UInt64(totalSteps)));
+            progressObject.appendEntry(key: "elapsed_ms", value: .unsignedInteger(elapsedMillis));
+        }
+        return .object(progressObject);
     }
 
     private static func applicationSection(
