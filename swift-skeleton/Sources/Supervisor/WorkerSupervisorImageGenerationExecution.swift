@@ -14,7 +14,7 @@ extension WorkerSupervisor {
     func runImageGeneration(
         _ imageGenerationCommand: ImageGenerationCommand,
         timeouts: ImageGenerationTimeouts,
-        isClientAbandoned: (() -> Bool)?,
+        isClientAbandoned: (@Sendable () -> Bool)?,
         journeyTiming: ImageGenerationExecutionTiming
     ) throws -> ImageGenerationOutput {
         self.stateLock.lock();
@@ -119,7 +119,7 @@ extension WorkerSupervisor {
         _ imageGenerationCommand: ImageGenerationCommand,
         eventPump: WorkerEventPump,
         timeouts: ImageGenerationTimeouts,
-        isClientAbandoned: (() -> Bool)?,
+        isClientAbandoned: (@Sendable () -> Bool)?,
         journeyTiming: ImageGenerationExecutionTiming
     ) throws -> ImageGenerationOutput {
         let requestId: RequestId = imageGenerationCommand.requestId;

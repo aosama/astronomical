@@ -52,7 +52,7 @@ final class ModelsCommandTests {
 
     @Test
     func should_list_installed_models_with_the_resident_marker() throws {
-        try CliJourneySupport.withStubDaemon("models-list", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
+        CliJourneySupport.withStubDaemon("models-list", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
             let stdout: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let stderr: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let modelsOutcome: Result<Void, Error> = CliJourneySupport.runModels(
@@ -78,7 +78,7 @@ final class ModelsCommandTests {
 
     @Test
     func should_render_the_catalog_with_local_states() throws {
-        try CliJourneySupport.withStubDaemon("models-supported", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
+        CliJourneySupport.withStubDaemon("models-supported", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
             let stdout: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let stderr: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let modelsOutcome: Result<Void, Error> = CliJourneySupport.runModels(
@@ -101,7 +101,7 @@ final class ModelsCommandTests {
 
     @Test
     func should_show_and_set_the_default_model() throws {
-        try CliJourneySupport.withStubDaemon("models-default", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
+        CliJourneySupport.withStubDaemon("models-default", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
             let stdout: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let stderr: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let showOutcome: Result<Void, Error> = CliJourneySupport.runModels(
@@ -154,7 +154,7 @@ final class ModelsCommandTests {
             stubDownloadJob("test/downloaded-model", "downloading", 500_000_000, 2_000_000_000, nil),
             nil,
         ];
-        try CliJourneySupport.withStubDaemon("models-default-dl", stubConfig) { (socketPath: String, stubDaemon: StubDaemon) in
+        CliJourneySupport.withStubDaemon("models-default-dl", stubConfig) { (socketPath: String, stubDaemon: StubDaemon) in
             let stdout: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let stderr: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let modelsOutcome: Result<Void, Error> = CliJourneySupport.runModels(
@@ -182,7 +182,7 @@ final class ModelsCommandTests {
             stubDownloadJob("test/downloaded-model", "downloading", 500_000_000, 2_000_000_000, nil),
             nil,
         ];
-        try CliJourneySupport.withStubDaemon("models-download", stubConfig) { (socketPath: String, stubDaemon: StubDaemon) in
+        CliJourneySupport.withStubDaemon("models-download", stubConfig) { (socketPath: String, stubDaemon: StubDaemon) in
             let stdout: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let stderr: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let modelsOutcome: Result<Void, Error> = CliJourneySupport.runModels(
@@ -203,7 +203,7 @@ final class ModelsCommandTests {
 
     @Test
     func should_fail_to_download_a_model_outside_the_catalog() throws {
-        try CliJourneySupport.withStubDaemon("models-outside", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
+        CliJourneySupport.withStubDaemon("models-outside", CliJourneySupport.catalogStubConfig()) { (socketPath: String, stubDaemon: StubDaemon) in
             let stdout: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let stderr: BufferedTextOutputWriter = BufferedTextOutputWriter();
             let modelsOutcome: Result<Void, Error> = CliJourneySupport.runModels(

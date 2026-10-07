@@ -12,12 +12,11 @@ import JourneyCategories;
  * rejected before serving, ambiguous or relative arguments are rejected
  * before startup with the usage text, health survives a missing worker,
  * malformed and retired-configuration files fail startup with a diagnostic,
- * and the stable and development instances start and stop independently.
- *
- * The journeys that script a live worker (unexpected-model readiness,
- * malformed-output progress, responses JSON and SSE through the daemon)
- * stay in the Rust suite until the Swift test-worker family exists — they
- * are recorded as blocked on that family, not as ported.
+ * the stable and development instances start and stop independently, the
+ * daemon stays ready with whichever model a request loads onto the
+ * scripted worker, generation progress stays observable while a
+ * malformed-output stream is in flight, and the Responses surface answers
+ * JSON and SSE through the daemon process itself.
  */
 @Suite(.serialized, .tags(.hermeticJourney))
 final class DaemonProcessJourneyTests {
@@ -242,33 +241,13 @@ final class DaemonProcessJourneyTests {
             journeyName: "stderr-diagnostic");
         defer { DaemonProcessJourneySupport.removeStateDirectory(stateDirectoryPath); };
         try DaemonProcessJourneySupport.writeInstanceConfig(stateDirectoryPath: stateDirectoryPath);
-        // A synthetic bundle: the daemon and the probe worker copied beside
-        // each other, so the daemon's worker-path derivation finds the probe
-        // — the worker that writes its stderr diagnostic, idles, and exits.
-        // The SwiftPM resource bundles ride along beside the binaries: Rust
-        // embeds its assets, Swift loads them from the bundle directories
-        // next to the executable.
-        let bundleBinDirectoryPath: String = stateDirectoryPath + "/bin";
-        try FileManager.default.createDirectory(
-            atPath: bundleBinDirectoryPath,
-            withIntermediateDirectories: true);
-        try FileManager.default.copyItem(
-            atPath: daemonExecutablePath,
-            toPath: bundleBinDirectoryPath + "/" + DaemonProcessJourneySupport.daemonExecutableName);
-        try FileManager.default.copyItem(
-            atPath: probeWorkerExecutablePath,
-            toPath: bundleBinDirectoryPath + "/astronomical-inference-worker");
-        let daemonProductsDirectoryPath: String =
-            (daemonExecutablePath as NSString).deletingLastPathComponent;
-        let productsEntryNames: Array<String> = try FileManager.default.contentsOfDirectory(
-            atPath: daemonProductsDirectoryPath);
-        for productsEntryName: String in productsEntryNames {
-            if (productsEntryName as NSString).pathExtension == "bundle" {
-                try FileManager.default.copyItem(
-                    atPath: daemonProductsDirectoryPath + "/" + productsEntryName,
-                    toPath: bundleBinDirectoryPath + "/" + productsEntryName);
-            }
-        }
+        // A synthetic bundle: the daemon and the probe worker beside each
+        // other, so the daemon's worker-path derivation finds the probe —
+        // the worker that writes its stderr diagnostic, idles, and exits.
+        let bundleBinDirectoryPath: String = try DaemonProcessJourneySupport.makeWorkerBearingBundleDirectory(
+            stateDirectoryPath: stateDirectoryPath,
+            daemonExecutablePath: daemonExecutablePath,
+            workerExecutablePath: probeWorkerExecutablePath);
         let daemon: (daemonProcess: Process, restPort: UInt16) = try DaemonProcessJourneySupport.spawnDaemon(
             daemonExecutablePath: bundleBinDirectoryPath + "/" + DaemonProcessJourneySupport.daemonExecutableName,
             runtimeInstance: "development",
@@ -300,7 +279,6 @@ final class DaemonProcessJourneyTests {
             deadlineSeconds: 5);
         #expect(exitStatus == 0, "SIGTERM must end the daemon cleanly, got \(String(describing: exitStatus))");
     }
-
     @Test
     func should_fail_startup_when_user_config_is_malformed() throws {
         let daemonExecutablePath: String = try DaemonProcessJourneySupport.locateDaemonExecutable();

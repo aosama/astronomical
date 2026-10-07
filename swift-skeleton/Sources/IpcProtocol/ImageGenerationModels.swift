@@ -1,7 +1,7 @@
 import Foundation;
 
 /// One validated text-to-image request sent to the local inference worker.
-public struct ImageGenerationCommand: Equatable {
+public struct ImageGenerationCommand: Equatable, Sendable {
     public let requestId: RequestId;
     public let model: String;
     public let prompt: String;
@@ -38,7 +38,7 @@ public struct ImageGenerationCommand: Equatable {
 }
 
 /// Bounded image dimensions, diffusion controls, and deterministic seed.
-public struct ImageGenerationSettings: Equatable {
+public struct ImageGenerationSettings: Equatable, Sendable {
     public let widthPixels: UInt32;
     public let heightPixels: UInt32;
     public let steps: UInt16;
