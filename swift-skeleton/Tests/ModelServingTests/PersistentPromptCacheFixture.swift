@@ -238,6 +238,65 @@ enum PersistentPromptCacheFixture {
             commonPrefixCheckpointStrideBlocks: 4);
     }
 
+    /// A boundary-state-only contract whose two fixed tensors carry the
+    /// hybrid layer's composite role vocabulary — `linear.convolution` and
+    /// `linear.gated_delta_recurrent` — so published snapshots feed the
+    /// state bridge's absorb directly.
+    static func syntheticCompositeBoundaryContract() throws -> PersistentPromptCacheModelContract {
+        let decoderCacheLayout: DecoderCacheLayout = try DecoderCacheLayout(layers: [
+            .composite(components: [
+                .recurrentTensor(tensor: .fixed(
+                    tensorRoleName: "linear.convolution",
+                    dtype: .float32,
+                    dimensions: [1, 1, 4])),
+                .recurrentTensor(tensor: .fixed(
+                    tensorRoleName: "linear.gated_delta_recurrent",
+                    dtype: .float32,
+                    dimensions: [1, 2, 2, 2])),
+            ]),
+        ]);
+        return try PersistentPromptCacheModelContract.resolve(
+            modelId: "fictional-composite-model",
+            modelRevision: "fictional-revision",
+            decoderCacheLayout: decoderCacheLayout,
+            maximumContextTokenCount: 100,
+            effectiveMlxMemoryCeilingBytes: 1_000_000,
+            globalSsdQuotaBytes: 100_000,
+            configuredBlockTokenCount: nil,
+            commonPrefixCheckpointStrideBlocks: 4);
+    }
+
+    /// A sequence-only contract whose full-attention tensors match the live
+    /// decoder state's rank-four slab shape [batch, heads, tokens, head
+    /// dimension], so published blocks feed the state bridge's restore
+    /// directly: keys and values are [1, 2, 0, 4] with the token axis at
+    /// position two.
+    static func syntheticRankFourSequenceContract() throws -> PersistentPromptCacheModelContract {
+        let decoderCacheLayout: DecoderCacheLayout = try DecoderCacheLayout(layers: [
+            .appendOnlyAttention(
+                keys: .sequence(
+                    tensorRoleName: "attention.keys",
+                    dtype: .float16,
+                    dimensions: [1, 2, 0, 4],
+                    sequenceAxis: 2),
+                values: .sequence(
+                    tensorRoleName: "attention.values",
+                    dtype: .float16,
+                    dimensions: [1, 2, 0, 4],
+                    sequenceAxis: 2),
+                capacityGrowthTokens: 16),
+        ]);
+        return try PersistentPromptCacheModelContract.resolve(
+            modelId: "fictional-rank-four-model",
+            modelRevision: "fictional-revision",
+            decoderCacheLayout: decoderCacheLayout,
+            maximumContextTokenCount: 128,
+            effectiveMlxMemoryCeilingBytes: 1_000_000,
+            globalSsdQuotaBytes: 1_000_000,
+            configuredBlockTokenCount: nil,
+            commonPrefixCheckpointStrideBlocks: 4);
+    }
+
     /// Sums regular-file bytes under one directory tree, mirroring the Rust
     /// journeys' directory size helper.
     static func directoryFileSizeBytes(directoryPath: URL) throws -> UInt64 {

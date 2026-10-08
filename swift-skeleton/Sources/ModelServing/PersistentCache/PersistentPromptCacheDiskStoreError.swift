@@ -67,6 +67,10 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
     /// publication path so retry classification can inspect the source.
     case saveSafetensors(source: MlxRuntimeError);
 
+    /// Wraps an MLX reader failure from the load-back path: a published
+    /// state file exists but its tensor payloads could not be mapped.
+    case loadSafetensors(source: MlxRuntimeError);
+
     case writeSafetensorsDescriptor(filePath: String, problem: String);
 
     /// The caller named a state file outside the two contract-owned names,
@@ -164,6 +168,8 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             return "the block file at \(blockFilePath) failed validation: \(problem)";
         case let .saveSafetensors(source):
             return "the safetensors state write failed: \(source)";
+        case let .loadSafetensors(source):
+            return "the safetensors state load failed: \(source)";
         case let .writeSafetensorsDescriptor(filePath, problem):
             return "the safetensors descriptor at \(filePath) could not be written: \(problem)";
         case let .invalidStateFileName(stateFileName):
