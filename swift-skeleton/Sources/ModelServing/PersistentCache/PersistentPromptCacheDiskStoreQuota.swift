@@ -204,7 +204,7 @@ extension PersistentPromptCacheDiskStore {
                 || PersistentPromptCacheRetentionPolicy.boundaryIsCommonPrefixCheckpoint(
                     blockIndex: trackedEntry.trackedBlock.blockIndex,
                     commonPrefixCheckpointStrideBlocks: self.modelContract
-                        .commonPrefixCheckpointStrideBlocks) == false {
+                        .commonPrefixCheckpointStrideBlocks) {
                 continue;
             }
             let modifiedAt: Date;
@@ -241,7 +241,9 @@ extension PersistentPromptCacheDiskStore {
             try PersistentPromptCacheStoreFile.synchronizeDirectory(directoryPath: URL(
                 fileURLWithPath: reclaimableBoundary.blockDirectoryPath));
             self.stateLock.lock();
-            self.trackedFiles.removeBlock(blockHash: reclaimableBoundary.blockHash);
+            self.trackedFiles.removeFile(
+                fileKind: .boundaryStateSnapshot,
+                blockHash: reclaimableBoundary.blockHash);
             self.stateLock.unlock();
             committedSizeBytes = committedSizeBytes
                 .subtractingReportingOverflow(reclaimableBoundary.boundaryFileSizeBytes)

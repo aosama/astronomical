@@ -132,7 +132,9 @@ extension PersistentPromptCacheDiskStore {
             try PersistentPromptCacheStoreFile.synchronizeDirectory(directoryPath: URL(
                 fileURLWithPath: parentBoundaryReclaim.blockDirectoryPath));
             self.stateLock.lock();
-            self.trackedFiles.removeBlock(blockHash: parentBoundaryReclaim.blockHash);
+            self.trackedFiles.removeFile(
+                fileKind: .boundaryStateSnapshot,
+                blockHash: parentBoundaryReclaim.blockHash);
             self.stateLock.unlock();
         }
         try self.refreshGlobalPromptCacheAccounting();
