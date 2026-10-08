@@ -8,7 +8,7 @@ import Foundation
  * I/O failures because a nested enum cannot gain cases from another
  * file.
  */
-public enum MlxRuntimeError: Error, Equatable {
+public enum MlxRuntimeError: Error, Equatable, Sendable {
 
     /// A tensor lookup by safetensors header name found no entry.
     case tensorLookupFailed(tensorName: String)
@@ -28,4 +28,12 @@ public enum MlxRuntimeError: Error, Equatable {
     /// A runtime operation failed for the stated reason; the operation
     /// name keeps the failure attributable to its owning step.
     case runtimeOperation(operation: String, description: String)
+
+    /// The MLX active-memory ceiling rejected an allocation, with the
+    /// allocator evidence callers need to plan checkpoint and reclamation
+    /// recovery.
+    case activeMemoryLimitExceeded(
+        activeMemoryBytes: Int,
+        attemptedAllocationBytes: Int,
+        allowedActiveMemoryBytes: Int)
 }
