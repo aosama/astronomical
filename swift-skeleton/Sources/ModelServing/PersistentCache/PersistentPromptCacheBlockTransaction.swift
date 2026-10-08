@@ -107,7 +107,6 @@ extension PersistentPromptCacheDiskStore {
                 blockHash: blockKey.blockHash());
         }
         do {
-            print("DEBUG-RENAME: stagingExists=\(FileManager.default.fileExists(atPath: stagingBlockDirectory.path)) blocksDirExists=\(FileManager.default.fileExists(atPath: self.blocksDirectory.path)) stagingPath=\(stagingBlockDirectory.path) finalParent=\(finalBlockDirectory.deletingLastPathComponent().path)");
             try FileManager.default.moveItem(
                 at: stagingBlockDirectory, to: finalBlockDirectory);
         } catch {
