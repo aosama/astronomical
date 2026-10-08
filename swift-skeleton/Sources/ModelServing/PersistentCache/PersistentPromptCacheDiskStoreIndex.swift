@@ -154,4 +154,37 @@ public struct PersistentPromptCacheDiskStoreIndex: Sendable {
     public mutating func removeVisualEmbedding(fileHash: Data) -> TrackedFile? {
         return self.visualEmbeddingsByHash.removeValue(forKey: fileHash);
     }
+
+    /// Removes every tracked file at the given paths; entries whose file was
+    /// removed concurrently disappear from the index without error.
+    mutating func removeFilesByPath(filePaths: [String]) {
+        for filePath: String in filePaths {
+            self.visualEmbeddingsByHash = self.visualEmbeddingsByHash.filter(
+                { (_, trackedFile: TrackedFile) -> Bool in
+                    return trackedFile.filePath != filePath;
+                });
+            for (blockHash, trackedBlock) in self.blocksByHash {
+                let sequenceFileRemoved: Bool = trackedBlock.sequenceStateFile?.filePath == filePath;
+                let boundaryFileRemoved: Bool = trackedBlock.boundaryStateFile?.filePath == filePath;
+                if sequenceFileRemoved || boundaryFileRemoved {
+                    self.blocksByHash[blockHash] = TrackedBlock(
+                        blockDirectoryPath: trackedBlock.blockDirectoryPath,
+                        blockIndex: trackedBlock.blockIndex,
+                        parentBlockHash: trackedBlock.parentBlockHash,
+                        sequenceStateFile: sequenceFileRemoved ? nil : trackedBlock.sequenceStateFile,
+                        boundaryStateFile: boundaryFileRemoved ? nil : trackedBlock.boundaryStateFile);
+                }
+            }
+        }
+    }
+
+    /// Removes every tracked block whose directory was reclaimed as part of
+    /// an eviction subtree.
+    mutating func removeBlocksByDirectoryPaths(directoryPaths: [String]) {
+        let removedDirectoryPaths: Set<String> = Set(directoryPaths);
+        self.blocksByHash = self.blocksByHash.filter(
+            { (_, trackedBlock: TrackedBlock) -> Bool in
+                return removedDirectoryPaths.contains(trackedBlock.blockDirectoryPath) == false;
+            });
+    }
 }

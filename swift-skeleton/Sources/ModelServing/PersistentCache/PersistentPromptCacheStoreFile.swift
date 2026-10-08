@@ -40,6 +40,26 @@ public enum PersistentPromptCacheStoreFile {
         return blockHash;
     }
 
+    /// Persists a directory entry after publication: fsyncing file contents
+    /// does not guarantee the directory entry survives a crash, so callers
+    /// sync the parent directory after every rename.
+    public static func synchronizeDirectory(directoryPath: URL) throws {
+        let directoryFileHandle: FileHandle;
+        do {
+            directoryFileHandle = try FileHandle(forReadingFrom: directoryPath);
+        } catch {
+            throw PersistentPromptCacheDiskStoreError.openBlockFile(
+                blockFilePath: directoryPath.path, problem: String(describing: error));
+        }
+        defer { try? directoryFileHandle.close(); }
+        do {
+            try directoryFileHandle.synchronize();
+        } catch {
+            throw PersistentPromptCacheDiskStoreError.readBlockMetadata(
+                blockFilePath: directoryPath.path, problem: String(describing: error));
+        }
+    }
+
     /// Removes one cache-owned directory tree, tolerating an already-absent
     /// path so cleanup stays idempotent under concurrent scanners.
     public static func removeCacheOwnedDirectoryOrConfirmAbsent(
