@@ -74,6 +74,7 @@ public struct PersistentPromptCacheStartupCleanupEvidence: Equatable, Sendable {
     /// The cleanup reasons the startup scan distinguishes.
     enum Reason {
         case interruptedTransactionRecovery;
+        case obsoleteFormat;
         case corruptCurrentFormat;
         case quotaEviction;
     }
@@ -84,6 +85,8 @@ public struct PersistentPromptCacheStartupCleanupEvidence: Equatable, Sendable {
         switch reason {
         case .interruptedTransactionRecovery:
             self.interruptedTransactionRecovery.recordArtifact(removedByteCount: removedByteCount);
+        case .obsoleteFormat:
+            self.obsoleteFormat.recordArtifact(removedByteCount: removedByteCount);
         case .corruptCurrentFormat:
             self.corruptCurrentFormat.recordArtifact(removedByteCount: removedByteCount);
         case .quotaEviction:
@@ -97,6 +100,8 @@ public struct PersistentPromptCacheStartupCleanupEvidence: Equatable, Sendable {
         switch reason {
         case .interruptedTransactionRecovery:
             self.interruptedTransactionRecovery.recordBlock(removedByteCount: removedByteCount);
+        case .obsoleteFormat:
+            self.obsoleteFormat.recordBlock(removedByteCount: removedByteCount);
         case .corruptCurrentFormat:
             self.corruptCurrentFormat.recordBlock(removedByteCount: removedByteCount);
         case .quotaEviction:

@@ -36,6 +36,12 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case unsafePromptCacheDirectory(directoryPath: String);
 
+    case createPromptCacheDirectory(directoryPath: String, problem: String);
+
+    case activePromptCacheDirectoryOutsideGlobalRoot(
+        activeModelPromptCacheDirectory: String,
+        globalPromptCacheRootDirectory: String);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -66,6 +72,12 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             return "failed to remove the prompt-cache file at \(filePath): \(problem)";
         case let .unsafePromptCacheDirectory(directoryPath):
             return "the prompt-cache directory at \(directoryPath) is not a safe cache-owned path";
+        case let .createPromptCacheDirectory(directoryPath, problem):
+            return "failed to create the prompt-cache directory at \(directoryPath): \(problem)";
+        case let .activePromptCacheDirectoryOutsideGlobalRoot(
+            activeModelPromptCacheDirectory, globalPromptCacheRootDirectory):
+            return "the active model prompt-cache directory \(activeModelPromptCacheDirectory) "
+                + "lies outside the global root \(globalPromptCacheRootDirectory)";
         }
     }
 }
