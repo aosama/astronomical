@@ -26,6 +26,14 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case removeCacheOwnedFile(filePath: String, problem: String);
 
+    case readPromptCacheDirectory(directoryPath: String, problem: String);
+
+    case readBlockMetadata(blockFilePath: String, problem: String);
+
+    case openBlockFile(blockFilePath: String, problem: String);
+
+    case removePromptCacheFile(filePath: String, problem: String);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -46,6 +54,14 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             return "invalid prompt-cache block manifest at \(manifestFilePath): \(description)";
         case let .removeCacheOwnedFile(filePath, problem):
             return "failed to remove the cache-owned file at \(filePath): \(problem)";
+        case let .readPromptCacheDirectory(directoryPath, problem):
+            return "failed to read the prompt-cache directory at \(directoryPath): \(problem)";
+        case let .readBlockMetadata(blockFilePath, problem):
+            return "failed to read prompt-cache file metadata at \(blockFilePath): \(problem)";
+        case let .openBlockFile(blockFilePath, problem):
+            return "failed to open the prompt-cache block file at \(blockFilePath): \(problem)";
+        case let .removePromptCacheFile(filePath, problem):
+            return "failed to remove the prompt-cache file at \(filePath): \(problem)";
         }
     }
 }
