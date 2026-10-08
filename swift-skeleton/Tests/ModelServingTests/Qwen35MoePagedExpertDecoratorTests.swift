@@ -89,6 +89,9 @@ final class Qwen35MoePagedExpertDecoratorTests {
             switchGlu: pagingFixture.pagedSwitchGlu,
             inputTokenId: 12);
 
+        #expect(
+            pagingFixture.expertPageMaterializer.requestedExpertIdsByCall == [[0, 1, 2]],
+            "the sorted path must materialize exactly the distinct routed experts");
         let residentOutputs: MLXArray = pagingFixture.residentOutputs(routingIndices: routingIndices);
         let decoratedOutputs: MLXArray = try decorator.decoratedLayerOutputs(
             layerIndex: 0,
@@ -97,9 +100,6 @@ final class Qwen35MoePagedExpertDecoratorTests {
             switchGlu: pagingFixture.pagedSwitchGlu,
             inputTokenId: 12);
 
-        #expect(
-            pagingFixture.expertPageMaterializer.requestedExpertIdsByCall == [[0, 1, 2]],
-            "the sorted path must materialize exactly the distinct routed experts");
         let maximumDifference: Float = maximumAbsoluteDifference(decoratedOutputs, residentOutputs);
         #expect(
             maximumDifference == 0,

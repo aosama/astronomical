@@ -13,6 +13,15 @@ public enum ExpertPagingError: Error, Equatable, Sendable {
     case completeLayerPayloadAccountingOverflow(layerPrefix: String)
     /// A validated source or manifest invariant failed at startup time.
     case manifestValidationFailure(description: String)
+    /// A page request named a decoder layer the startup plans do not cover.
+    case layerIndexOutOfRange(layerIndex: Int, layerCount: Int)
+    /// The loaded page lacks one tensor the layer plan requires, so no
+    /// partial page can reach execution.
+    case pageTensorMissing(tensorName: String, layerPrefix: String)
+    /// A loaded page tensor holds a different expert-row count than the
+    /// page manifest seated, so slices cannot be indexed by compact slot.
+    case pageTensorExpertCountMismatch(
+        tensorName: String, expectedSlotCount: Int, actualSlotCount: Int)
     /// A direct native runtime failure observed while streaming expert
     /// layers.
     case nativeRuntime(MlxRuntimeError)

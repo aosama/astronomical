@@ -225,7 +225,6 @@ public final class Qwen35MoePagedExpertDecorator {
                 guard let currentArray: MLXArray = currentParametersByName[parameterName] else {
                     throw Qwen35MoePagedExpertDecoratorError.missingLayerParameter(parameterName: parameterName)
                 }
-                let parameterShape: [Int] = currentArray.shape
                 // Assembly base carries over every already-installed expert's
                 // rows: a runtime miss must only add experts, never wipe the
                 // retained payload installed by an earlier materialization.
