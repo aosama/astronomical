@@ -28,24 +28,18 @@ const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeBuildProfile {
     should_build_memory_contract_probe: bool,
-    should_build_experimental_aligned_expert_packs: bool,
 }
 
 impl NativeBuildProfile {
     pub const fn core() -> Self {
         Self {
             should_build_memory_contract_probe: false,
-            should_build_experimental_aligned_expert_packs: false,
         }
     }
 
-    pub const fn new(
-        should_build_memory_contract_probe: bool,
-        should_build_experimental_aligned_expert_packs: bool,
-    ) -> Self {
+    pub const fn new(should_build_memory_contract_probe: bool) -> Self {
         Self {
             should_build_memory_contract_probe,
-            should_build_experimental_aligned_expert_packs,
         }
     }
 
@@ -53,19 +47,11 @@ impl NativeBuildProfile {
         self.should_build_memory_contract_probe
     }
 
-    pub const fn should_build_experimental_aligned_expert_packs(self) -> bool {
-        self.should_build_experimental_aligned_expert_packs
-    }
-
     pub fn identity_name(self) -> &'static str {
-        match (
-            self.should_build_memory_contract_probe,
-            self.should_build_experimental_aligned_expert_packs,
-        ) {
-            (false, false) => "core",
-            (true, false) => "core+memory-contract",
-            (false, true) => "core+experimental-aligned-expert-packs",
-            (true, true) => "core+memory-contract+experimental-aligned-expert-packs",
+        if self.should_build_memory_contract_probe {
+            "core+memory-contract"
+        } else {
+            "core"
         }
     }
 
@@ -76,9 +62,7 @@ impl NativeBuildProfile {
     pub fn from_identity_name(identity_name: &str) -> Option<Self> {
         match identity_name {
             "core" => Some(Self::core()),
-            "core+memory-contract" => Some(Self::new(true, false)),
-            "core+experimental-aligned-expert-packs" => Some(Self::new(false, true)),
-            "core+memory-contract+experimental-aligned-expert-packs" => Some(Self::new(true, true)),
+            "core+memory-contract" => Some(Self::new(true)),
             _ => None,
         }
     }
@@ -270,16 +254,6 @@ impl NativeBuildStore {
                 &payload_directory.join("bin/mlx_memory_contract_probe"),
             )?;
         }
-        if self
-            .native_build_profile
-            .should_build_experimental_aligned_expert_packs()
-        {
-            copy_required_file(
-                &cmake_build_directory.join("lib/libastronomical_metal_expert_loader.a"),
-                &payload_directory.join("lib/libastronomical_metal_expert_loader.a"),
-            )?;
-        }
-
         sync_directory_tree(&payload_directory)?;
         write_manifest(
             &payload_directory,

@@ -130,7 +130,7 @@ parse_arguments() {
 
 validate_profile() {
     case "$NATIVE_BUILD_PROFILE" in
-        core|core+memory-contract|core+experimental-aligned-expert-packs|core+memory-contract+experimental-aligned-expert-packs) ;;
+        core|core+memory-contract) ;;
         *)
             print_error "unsupported native build profile: $NATIVE_BUILD_PROFILE"
             exit 2

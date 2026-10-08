@@ -185,10 +185,6 @@ pub fn build_pinned_native_runtime(
         .arg(format!(
             "-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE={}",
             cmake_boolean(native_build_profile.should_build_memory_contract_probe())
-        ))
-        .arg(format!(
-            "-DASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS={}",
-            cmake_boolean(native_build_profile.should_build_experimental_aligned_expert_packs())
         ));
     append_native_archive_configuration(&mut configure_command, native_build_inputs);
     run_command(
@@ -203,9 +199,6 @@ pub fn build_pinned_native_runtime(
         .arg(native_build_directory)
         .arg("--target")
         .arg("mlxc");
-    if native_build_profile.should_build_experimental_aligned_expert_packs() {
-        native_build_command.arg("astronomical_metal_expert_loader");
-    }
     native_build_command
         .arg("--parallel")
         .arg(native_parallel_job_count());

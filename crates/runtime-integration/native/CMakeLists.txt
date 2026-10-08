@@ -66,16 +66,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "${ASTRONOMICAL_MLX_MACOS_DEPLOYMENT_TARGET}" CACHE STRING "Pinned deployment target" FORCE)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 option(
-    ASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS
-    "Build the experimental aligned expert-pack Metal input/output loader"
-    OFF
-)
-option(
-    ASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS_TESTS
-    "Build deterministic native contracts for the experimental aligned expert-pack loader"
-    OFF
-)
-option(
     ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE
     "Build the explicit MLX allocator memory-contract probe"
     OFF
@@ -146,66 +136,6 @@ FetchContent_MakeAvailable(metal_cpp json fmt mlx mlx_c)
 
 if(NOT TARGET mlx OR NOT TARGET mlxc)
     message(FATAL_ERROR "Pinned archives did not define the expected mlx and mlxc targets")
-endif()
-
-if(ASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS)
-    add_library(
-        astronomical_metal_expert_loader
-        STATIC
-        experimental/aligned_expert_packs/astronomical_metal_expert_loader.cpp
-        experimental/aligned_expert_packs/metal_expert_loader_validation.cpp
-    )
-    target_compile_features(astronomical_metal_expert_loader PRIVATE cxx_std_20)
-    target_link_libraries(astronomical_metal_expert_loader PRIVATE mlx mlxc)
-    target_include_directories(
-        astronomical_metal_expert_loader
-        PRIVATE
-        "${mlx_SOURCE_DIR}"
-        "${mlx_c_SOURCE_DIR}"
-    )
-    set_target_properties(
-        astronomical_metal_expert_loader
-        PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    )
-
-    if(ASTRONOMICAL_BUILD_EXPERIMENTAL_ALIGNED_EXPERT_PACKS_TESTS)
-        target_compile_definitions(
-            astronomical_metal_expert_loader
-            PRIVATE ASTRONOMICAL_METAL_EXPERT_LOADER_TESTING
-        )
-        add_executable(
-            astronomical_metal_expert_loader_native_tests
-            EXCLUDE_FROM_ALL
-            experimental/aligned_expert_packs/tests/astronomical_metal_expert_loader_native_tests.cpp
-            experimental/aligned_expert_packs/tests/metal_expert_loader_async_failure_contracts.cpp
-            experimental/aligned_expert_packs/tests/metal_expert_loader_completion_contracts.cpp
-            experimental/aligned_expert_packs/tests/metal_expert_loader_lifetime_contracts.cpp
-        )
-        target_compile_features(astronomical_metal_expert_loader_native_tests PRIVATE cxx_std_20)
-        target_compile_definitions(
-            astronomical_metal_expert_loader_native_tests
-            PRIVATE ASTRONOMICAL_METAL_EXPERT_LOADER_TESTING
-        )
-        target_link_libraries(
-            astronomical_metal_expert_loader_native_tests
-            PRIVATE
-            astronomical_metal_expert_loader
-        )
-        target_include_directories(
-            astronomical_metal_expert_loader_native_tests
-            PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/experimental/aligned_expert_packs"
-            "${CMAKE_CURRENT_LIST_DIR}/experimental/aligned_expert_packs/tests"
-            "${mlx_SOURCE_DIR}"
-            "${mlx_c_SOURCE_DIR}"
-        )
-        set_target_properties(
-            astronomical_metal_expert_loader_native_tests
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-        )
-    endif()
 endif()
 
 if(ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE)

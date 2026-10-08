@@ -18,14 +18,14 @@ fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
 }
 
 #[test]
-fn should_allowlist_the_complete_mlx_c_surface_and_the_expert_loader_primitives() {
+fn should_allowlist_the_complete_mlx_c_surface() {
     // The bridge contract guarantees the complete MLX C surface, not a
-    // hand-picked subset: both allowlists must keep leading with the broad
-    // mlx_.* pattern so narrowing them back fails here instead of silently
-    // un-bridging functions the coverage inventory already declares.
+    // hand-picked subset: both allowlists must stay the broad mlx_.* pattern
+    // so narrowing them back fails here instead of silently un-bridging
+    // functions the coverage inventory already declares.
     for required_allowlist in [
-        "\"mlx_.*|astronomical_metal_expert_loader_(start|wait|free)\"",
-        "\"mlx_.*|astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle)\"",
+        "BINDGEN_FUNCTION_ALLOWLIST: &str = \"mlx_.*\"",
+        "BINDGEN_TYPE_ALLOWLIST: &str = \"mlx_.*\"",
     ] {
         assert!(
             BINDGEN_CONFIGURATION.contains(required_allowlist),

@@ -63,7 +63,7 @@ parse_arguments() {
         esac
     done
     case "$NATIVE_BUILD_PROFILE" in
-        core|core+memory-contract|core+experimental-aligned-expert-packs|core+memory-contract+experimental-aligned-expert-packs) ;;
+        core|core+memory-contract) ;;
         '')
             print_error "--profile is required"
             exit 2

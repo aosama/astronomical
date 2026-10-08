@@ -14,11 +14,10 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-use crate::build_native_store::{NativeBuildArtifacts, NativeBuildProfile};
+use crate::build_native_store::NativeBuildArtifacts;
 
 pub fn configure_rust_linking(
     native_build_artifacts: &NativeBuildArtifacts,
-    native_build_profile: NativeBuildProfile,
 ) -> Result<(), Box<dyn Error>> {
     let native_library_directory = native_build_artifacts.native_library_directory();
     require_file(
@@ -29,13 +28,6 @@ pub fn configure_rust_linking(
         &native_library_directory.join("libmlxc.a"),
         "MLX C static library",
     )?;
-    if native_build_profile.should_build_experimental_aligned_expert_packs() {
-        require_file(
-            &native_library_directory.join("libastronomical_metal_expert_loader.a"),
-            "experimental Astronomical Metal expert loader static library",
-        )?;
-        println!("cargo:rustc-link-lib=static=astronomical_metal_expert_loader");
-    }
     let metallib_path = native_build_artifacts.metallib_path();
     require_file(&metallib_path, "MLX AOT metallib")?;
     let metallib_size_bytes = metallib_path.metadata()?.len();

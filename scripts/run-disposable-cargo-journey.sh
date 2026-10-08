@@ -55,10 +55,7 @@ print_journeys() {
         measure-model-ssd-streaming-cached-suffix-streaming-prefill \
         measure-model-ssd-streaming-high-ram-cached-suffix-prefill \
         measure-model-ssd-streaming-large-sparse-moe-tight-ceiling-prefill \
-        measure-model-ssd-streaming-prefill-memory-progress \
-        measure-experimental-aligned-expert-packs-large-sparse-moe-generation \
-        measure-experimental-aligned-expert-packs-large-sparse-moe-prompt-processing \
-        measure-experimental-aligned-expert-packs-large-sparse-moe-data-plane
+        measure-model-ssd-streaming-prefill-memory-progress
 }
 
 main() {
@@ -204,18 +201,6 @@ main() {
         measure-model-ssd-streaming-prefill-memory-progress)
             lane_name="model-ssd-streaming-prefill-memory-progress"
             set -- cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_report_changing_bounded_mlx_memory_during_prefill -- --ignored --nocapture
-            ;;
-        measure-experimental-aligned-expert-packs-large-sparse-moe-generation)
-            lane_name="aligned-expert-generation"
-            set -- cargo test --release -p astronomical-experimental-aligned-expert-packs --test data_plane_measurement_tests should_measure_one_layer_generation_expert_data_plane -- --ignored --nocapture --test-threads 1
-            ;;
-        measure-experimental-aligned-expert-packs-large-sparse-moe-prompt-processing)
-            lane_name="aligned-expert-prompt-processing"
-            set -- cargo test --release -p astronomical-experimental-aligned-expert-packs --test data_plane_measurement_tests should_measure_one_layer_prompt_processing_expert_data_plane -- --ignored --nocapture --test-threads 1
-            ;;
-        measure-experimental-aligned-expert-packs-large-sparse-moe-data-plane)
-            lane_name="aligned-expert-large-sparse-moe"
-            set -- cargo test --release -p astronomical-experimental-aligned-expert-packs --test data_plane_measurement_tests should_measure_the_large_sparse_moe_expert_data_plane_in_both_orders -- --ignored --nocapture --test-threads 1
             ;;
         *)
             printf '%s\n' "Error: unknown disposable Cargo journey: ${journey_name}" >&2

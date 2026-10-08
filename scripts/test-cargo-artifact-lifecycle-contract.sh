@@ -509,9 +509,6 @@ expected_journeys = {
     "measure-model-ssd-streaming-high-ram-cached-suffix-prefill",
     "measure-model-ssd-streaming-large-sparse-moe-tight-ceiling-prefill",
     "measure-model-ssd-streaming-prefill-memory-progress",
-    "measure-experimental-aligned-expert-packs-large-sparse-moe-generation",
-    "measure-experimental-aligned-expert-packs-large-sparse-moe-prompt-processing",
-    "measure-experimental-aligned-expert-packs-large-sparse-moe-data-plane",
 }
 assert set(journey_list_path.read_text().splitlines()) == expected_journeys
 PYTHON

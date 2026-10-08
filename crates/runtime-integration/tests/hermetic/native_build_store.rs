@@ -172,7 +172,7 @@ fn should_never_publish_an_interrupted_native_build() {
 #[test]
 fn should_publish_and_reuse_the_memory_contract_profile_separately() {
     let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
-    let memory_contract_profile = NativeBuildProfile::new(true, false);
+    let memory_contract_profile = NativeBuildProfile::new(true);
     let native_build_store = NativeBuildStore::new(
         store_directory.path(),
         CORE_NATIVE_IDENTITY,
@@ -271,12 +271,7 @@ fn should_reject_symlinked_files_inside_a_native_entry() {
 
 #[test]
 fn should_round_trip_every_profile_through_its_identity_name() {
-    for native_build_profile in [
-        NativeBuildProfile::core(),
-        NativeBuildProfile::new(true, false),
-        NativeBuildProfile::new(false, true),
-        NativeBuildProfile::new(true, true),
-    ] {
+    for native_build_profile in [NativeBuildProfile::core(), NativeBuildProfile::new(true)] {
         let identity_name = native_build_profile.identity_name();
         let restored_profile = NativeBuildProfile::from_identity_name(identity_name)
             .unwrap_or_else(|| panic!("profile {identity_name} should round-trip"));
@@ -291,12 +286,8 @@ fn should_reject_an_unknown_identity_name() {
 }
 
 fn core_native_build_store(store_root: &Path, native_identity: &str) -> NativeBuildStore {
-    NativeBuildStore::new(
-        store_root,
-        native_identity,
-        NativeBuildProfile::new(false, false),
-    )
-    .expect("the native store fixture should be valid")
+    NativeBuildStore::new(store_root, native_identity, NativeBuildProfile::core())
+        .expect("the native store fixture should be valid")
 }
 
 fn fake_builder(build_count: Arc<AtomicUsize>) -> impl FnOnce(&Path) -> Result<(), Box<dyn Error>> {
@@ -325,12 +316,6 @@ fn create_fake_native_outputs(
         let binary_directory = build_directory.join("bin");
         fs::create_dir_all(&binary_directory)?;
         fs::write(binary_directory.join("mlx_memory_contract_probe"), b"probe")?;
-    }
-    if native_build_profile.should_build_experimental_aligned_expert_packs() {
-        fs::write(
-            library_directory.join("libastronomical_metal_expert_loader.a"),
-            b"experimental-library",
-        )?;
     }
     Ok(())
 }

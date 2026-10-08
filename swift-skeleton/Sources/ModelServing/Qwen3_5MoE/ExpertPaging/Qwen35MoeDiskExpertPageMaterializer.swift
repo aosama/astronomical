@@ -8,9 +8,7 @@ import RuntimeIntegration
  * quantized slices straight from the model's SafeTensors shard ranges.
  * Port of the Rust bounded expert streaming path
  * (`rust_expert_streaming` + `paged_expert_weights`) in the shape the
- * migration's decision record fixed: shard ranges are the only source —
- * the experimental per-expert pack format is expunged and has no ported
- * branch here.
+ * migration's decision record fixed: shard ranges are the only source.
  *
  * Deliberate divergence from Rust: allocation admission against the
  * composed memory budget stays with the memory-governor track and is not
