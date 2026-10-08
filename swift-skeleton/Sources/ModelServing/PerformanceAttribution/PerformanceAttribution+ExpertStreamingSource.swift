@@ -9,8 +9,7 @@ extension PerformanceAttribution {
         routedExpertCount: Int,
         streamedExpertCount: Int,
         sourceShardCount: Int,
-        payloadByteCount: UInt64,
-        streamedThroughExpertPacks: Bool
+        payloadByteCount: UInt64
     ) -> Void {
         guard var enabledAttribution = enabledAttribution else {
             return;
@@ -50,8 +49,7 @@ extension PerformanceAttribution {
             routedExpertCount: nonNegativeCountToUInt64(routedExpertCount),
             streamedExpertCount: nonNegativeCountToUInt64(streamedExpertCount),
             sourceShardCount: nonNegativeCountToUInt64(sourceShardCount),
-            payloadByteCount: payloadByteCount,
-            streamedThroughExpertPacks: streamedThroughExpertPacks);
+            payloadByteCount: payloadByteCount);
         enabledAttribution.expertStreamingSourceSummaries[summaryIndex] = mutableSummary;
         self.enabledAttribution = enabledAttribution;
     }

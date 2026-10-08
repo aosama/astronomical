@@ -126,7 +126,7 @@ internal enum Qwen35 {
      */
     internal static func requiredShardFileNames(weightMap: Dictionary<String, Any>) -> Set<String> {
         var requiredShardFileNames: Set<String> = Set<String>();
-        for (key: tensorName, value: tensorShardValue) in weightMap {
+        for (key: _, value: tensorShardValue) in weightMap {
             guard let shardFileName: String = tensorShardValue as? String else {
                 continue;
             }
@@ -260,12 +260,8 @@ internal enum Qwen35 {
                     pendingDirectories.append(entryPath);
                     continue;
                 }
-                // Converted per-expert streaming revisions store expert
-                // weights in `.apack` pack files beside the resident
-                // safetensors bundles; a model's measured disk size must
-                // include every weight payload.
                 let entryNameExtension: String = (entryName as NSString).pathExtension;
-                let isWeightPayloadFile: Bool = entryNameExtension == "safetensors" || entryNameExtension == "apack";
+                let isWeightPayloadFile: Bool = entryNameExtension == "safetensors";
                 if !isWeightPayloadFile || !DiscoveryPathNavigation.isExistingRegularFile(path: entryPath) {
                     continue;
                 }

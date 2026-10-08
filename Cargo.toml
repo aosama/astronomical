@@ -10,7 +10,6 @@ members = [
     "crates/native-build-tool",
     "crates/rest-contract",
     "crates/runtime-integration",
-    "experimental/aligned-expert-packs",
 ]
 default-members = [
     "crates/mlx-c-rust",

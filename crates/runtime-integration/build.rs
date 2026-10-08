@@ -25,8 +25,6 @@ use build_native_store::{NativeBuildProfile, NativeBuildStore};
 use build_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
-const EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE: &str =
-    "CARGO_FEATURE_EXPERIMENTAL_ALIGNED_EXPERT_PACKS";
 const MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX_MEMORY_CONTRACT_PROBE";
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -74,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         native_build_started_at.elapsed(),
     );
 
-    build_native_linking::configure_rust_linking(&native_build_artifacts, native_build_profile)?;
+    build_native_linking::configure_rust_linking(&native_build_artifacts)?;
     emit_native_source_rerun_contracts(
         &manifest_directory,
         &native_source_directory,
@@ -86,7 +84,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn emit_environment_rerun_contracts() {
     for environment_variable in [
         MLX_FEATURE_VARIABLE,
-        EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE,
         MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE,
         RUSTC_WRAPPER_VARIABLE,
         NATIVE_DEPENDENCY_CACHE_VARIABLE,
@@ -104,15 +101,10 @@ fn emit_environment_rerun_contracts() {
 fn selected_native_build_profile() -> NativeBuildProfile {
     let should_build_memory_contract_probe =
         env::var_os(MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE).is_some();
-    let should_build_experimental_aligned_expert_packs =
-        env::var_os(EXPERIMENTAL_ALIGNED_EXPERT_PACKS_FEATURE_VARIABLE).is_some();
-    if !should_build_memory_contract_probe && !should_build_experimental_aligned_expert_packs {
-        NativeBuildProfile::core()
+    if should_build_memory_contract_probe {
+        NativeBuildProfile::new(true)
     } else {
-        NativeBuildProfile::new(
-            should_build_memory_contract_probe,
-            should_build_experimental_aligned_expert_packs,
-        )
+        NativeBuildProfile::core()
     }
 }
 

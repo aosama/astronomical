@@ -126,9 +126,6 @@ extension ExpertStreamingSourceSummary {
         try container.encode(totalStreamedExpertCount, forKey: AnyCodingKey("total_streamed_expert_count"));
         try container.encode(totalSourceShardCount, forKey: AnyCodingKey("total_source_shard_count"));
         try container.encode(payloadByteCount, forKey: AnyCodingKey("payload_byte_count"));
-        try container.encode(
-            streamedThroughExpertPacks,
-            forKey: AnyCodingKey("streamed_through_expert_packs"));
     }
 }
 

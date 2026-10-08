@@ -38,7 +38,7 @@ print_status() {
 
 usage() {
     print_error "usage: $0 --profile <profile-name> [--repository-root <path>]"
-    print_error "supported profiles: core, core+memory-contract, core+experimental-aligned-expert-packs, core+memory-contract+experimental-aligned-expert-packs"
+    print_error "supported profiles: core, core+memory-contract"
 }
 
 while [ "$#" -gt 0 ]; do

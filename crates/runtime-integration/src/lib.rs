@@ -1,7 +1,5 @@
 //! Narrow unsafe ownership boundary around the official MLX C API.
 
-#[cfg(feature = "experimental-aligned-expert-packs")]
-mod experimental;
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
@@ -37,12 +35,6 @@ mod mlx_safetensors_writer;
 #[cfg(feature = "mlx")]
 mod positional_file_read_metrics;
 
-#[cfg(feature = "experimental-aligned-expert-packs")]
-pub use experimental::{
-    MlxMetalExpertPackLoad, MlxMetalExpertPackLoadMetrics,
-    MlxMetalExpertPackLoadMetricsAccumulator, MlxMetalExpertPackLoadMetricsSnapshot,
-    MlxMetalExpertPackLoadRange, MlxMetalExpertPackOutputTensor,
-};
 pub use mlx_metallib_path::resolve_mlx_metallib_path;
 #[cfg(feature = "mlx")]
 pub use mlx_runtime::{

@@ -6,7 +6,7 @@ import MLX
  * In-memory SafeTensors serialization through MLX's stock serializer,
  * continuing the Rust `BoundedSafetensorsSerializer` contract: an
  * unbounded form, and a bounded form that refuses byte counts above the
- * caller's ceiling so an oversized expert pack fails before its bytes are
+ * caller's ceiling so oversized payloads fail before their bytes are
  * ever paged anywhere.
  */
 enum BoundedSafetensorsSerializer {

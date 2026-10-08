@@ -15,12 +15,6 @@ unused_must_use = "deny"
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 
-[features]
-# The aligned-expert-pack loader inside astronomical-runtime-integration consumes
-# the populated-raw constructor on MlxArray; the gate keeps that constructor out
-# of builds that never load expert packs.
-experimental-aligned-expert-packs = []
-
 [dependencies]
 thiserror.workspace = true
 
