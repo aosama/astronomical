@@ -59,7 +59,7 @@ enum PersistentPromptCacheStorageGeometry {
             return leftTensor.tensorName < rightTensor.tensorName;
         });
         let metadataJson: String = "{"
-            + "\"block_token_count\":\(blockTokenCount),"
+            + "\"block_token_count\":\"\(blockTokenCount)\","
             + "\"format_version\":\"\(PersistentPromptCacheBlockHeader.FORMAT_VERSION)\","
             + "\"storage_contract_fingerprint\":\"\(PersistentPromptCacheStorageGeometry.FINGERPRINT_PLACEHOLDER)\""
             + "}";

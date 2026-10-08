@@ -57,6 +57,12 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
         reportedSizeBytes: UInt64,
         actualSizeBytes: UInt64);
 
+    case invalidRequestedBlockAncestry(blockIndex: UInt32);
+
+    case parentStateNotPublished(blockIndex: UInt32);
+
+    case validateBlock(blockFilePath: String, problem: String);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -110,6 +116,12 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
         case let .writtenFileSizeMismatch(filePath, reportedSizeBytes, actualSizeBytes):
             return "the staged file at \(filePath) reports \(reportedSizeBytes) bytes but wrote "
                 + "\(actualSizeBytes)";
+        case let .invalidRequestedBlockAncestry(blockIndex):
+            return "the requested block at index \(blockIndex) has no valid parent ancestry";
+        case let .parentStateNotPublished(blockIndex):
+            return "the parent of the requested block at index \(blockIndex) is not published";
+        case let .validateBlock(blockFilePath, problem):
+            return "the block file at \(blockFilePath) failed validation: \(problem)";
         }
     }
 }

@@ -61,6 +61,12 @@ public final class PersistentPromptCacheDiskStore {
     let modelContract: PersistentPromptCacheModelContract;
 
     let stateLock: NSLock;
+
+    /// Serializes scan/quota/rename/index mutations of one publication
+    /// inside this process; the lock does not weaken disk validation, so
+    /// existing content is still revalidated before idempotency is granted.
+    let writeOperationsLock: NSLock;
+
     var trackedFiles: PersistentPromptCacheDiskStoreIndex;
     var globalPromptCacheTotalSizeBytes: UInt64;
     var globalVisualEmbeddingTotalSizeBytes: UInt64;
@@ -132,6 +138,7 @@ public final class PersistentPromptCacheDiskStore {
         self.globalPromptCacheMaximumSizeBytes = globalPromptCacheMaximumSizeBytes;
         self.modelContract = modelContract;
         self.stateLock = NSLock();
+        self.writeOperationsLock = NSLock();
         self.trackedFiles = trackedFiles;
         self.globalPromptCacheTotalSizeBytes = 0;
         self.globalVisualEmbeddingTotalSizeBytes = 0;
