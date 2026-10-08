@@ -44,6 +44,12 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case globalPromptCacheSizeOverflow(rootDirectory: String);
 
+    case globalPromptCacheQuotaNotSatisfied(
+        maximumSizeBytes: UInt64,
+        remainingSizeBytes: UInt64);
+
+    case existingBlockTopologyMismatch(blockHash: Data);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -82,6 +88,15 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
                 + "lies outside the global root \(globalPromptCacheRootDirectory)";
         case let .globalPromptCacheSizeOverflow(rootDirectory):
             return "the global prompt-cache byte total overflowed at \(rootDirectory)";
+        case let .globalPromptCacheQuotaNotSatisfied(maximumSizeBytes, remainingSizeBytes):
+            return "the global prompt-cache quota of \(maximumSizeBytes) bytes could not be "
+                + "satisfied; \(remainingSizeBytes) bytes remain";
+        case let .existingBlockTopologyMismatch(blockHash):
+            return "a committed block for hash "
+                + blockHash.map({ (hashByte: UInt8) -> String in
+                    return String(format: "%02x", hashByte);
+                }).joined()
+                + " already exists with different topology";
         }
     }
 }
