@@ -42,6 +42,8 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
         activeModelPromptCacheDirectory: String,
         globalPromptCacheRootDirectory: String);
 
+    case globalPromptCacheSizeOverflow(rootDirectory: String);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -78,6 +80,8 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             activeModelPromptCacheDirectory, globalPromptCacheRootDirectory):
             return "the active model prompt-cache directory \(activeModelPromptCacheDirectory) "
                 + "lies outside the global root \(globalPromptCacheRootDirectory)";
+        case let .globalPromptCacheSizeOverflow(rootDirectory):
+            return "the global prompt-cache byte total overflowed at \(rootDirectory)";
         }
     }
 }
