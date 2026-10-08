@@ -72,4 +72,81 @@ final class PersistentPromptCacheDiskStoreGlobalQuotaTests {
         #expect(diskStore.totalSizeBytes() <= twoBlockQuotaBytes,
             "committed cache bytes must satisfy the configured two-block quota");
     }
+
+    @Test
+    func should_scope_protected_ancestry_to_its_model_namespace_when_hashes_match() throws {
+        let modelContract: PersistentPromptCacheModelContract = try PersistentPromptCacheFixture
+            .ornithModelContract();
+        let measurementStore: PersistentPromptCacheDiskStore = try PersistentPromptCacheFixture
+            .openDiskStore(modelContract: modelContract);
+        let rootTokens: [UInt32] = PersistentPromptCacheFixture
+            .promptTokensWithCompleteBlocksAndTrailingTokens(
+                modelContract: modelContract, completeBlockCount: 1, trailingTokenCount: 0);
+        let parentBlockKey: PersistentPromptCacheBlockKey = try PersistentPromptCacheBlockKey
+            .forRootBlock(
+                modelContract: modelContract,
+                blockTokens: Array(rootTokens[..<modelContract.blockTokenCount]));
+        let childBlockKey: PersistentPromptCacheBlockKey = try parentBlockKey.forChildBlock(
+            blockTokens: PersistentPromptCacheFixture.syntheticTailTokens(
+                tokenCount: modelContract.blockTokenCount, tokenSeed: 10_000));
+        let staging: PersistentPromptCacheStateFileStaging = PersistentPromptCacheFixture
+            .SyntheticStateFileStaging();
+        #expect(try measurementStore.publishBlock(
+            staging: staging, blockKey: parentBlockKey, parentBlockKey: nil) == .published);
+        let measuredBlockSizeBytes: UInt64 = measurementStore.totalSizeBytes();
+        let twoBlockQuotaBytes: UInt64 = measuredBlockSizeBytes &* 2 &+ 1_024;
+
+        let globalPromptCacheRoot: URL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("prompt-cache-\(UUID().uuidString)", isDirectory: true);
+        try FileManager.default.createDirectory(
+            at: globalPromptCacheRoot, withIntermediateDirectories: true);
+        let activeCache: PersistentPromptCacheDiskStore = try PersistentPromptCacheFixture
+            .openDiskStore(
+                globalRoot: globalPromptCacheRoot,
+                activeModelPromptCacheDirectory: globalPromptCacheRoot,
+                modelContract: modelContract,
+                globalPromptCacheMaximumSizeBytes: twoBlockQuotaBytes);
+        #expect(try activeCache.publishBlock(
+            staging: staging, blockKey: parentBlockKey, parentBlockKey: nil) == .published);
+        let parentBlockDirectory: URL = globalPromptCacheRoot
+            .appendingPathComponent("blocks", isDirectory: true)
+            .appendingPathComponent(
+                PersistentPromptCacheStoreFile.hexEncode(parentBlockKey.blockHash()),
+                isDirectory: true);
+
+        // Duplicate the same-hash manifest under a foreign model namespace
+        // with enough payload to consume the remaining quota, and backdate
+        // it so it becomes the oldest eviction candidate.
+        let foreignSameHashDirectory: URL = globalPromptCacheRoot
+            .appendingPathComponent("foreign-model/foreign-revision/blocks", isDirectory: true)
+            .appendingPathComponent(
+                PersistentPromptCacheStoreFile.hexEncode(parentBlockKey.blockHash()),
+                isDirectory: true);
+        try FileManager.default.createDirectory(
+            at: foreignSameHashDirectory, withIntermediateDirectories: true);
+        try FileManager.default.copyItem(
+            at: parentBlockDirectory.appendingPathComponent("manifest.json"),
+            to: foreignSameHashDirectory.appendingPathComponent("manifest.json"));
+        try Data(count: 4_096).write(
+            to: foreignSameHashDirectory.appendingPathComponent("foreign-payload.bin"));
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 0)],
+            ofItemAtPath: foreignSameHashDirectory.path);
+
+        #expect(try activeCache.publishBlock(
+            staging: staging, blockKey: childBlockKey, parentBlockKey: parentBlockKey)
+            == .published,
+            Comment("the child should evict only the foreign same-hash namespace"));
+
+        #expect(FileManager.default.fileExists(atPath: parentBlockDirectory.path),
+            Comment("the active parent must stay protected even though the foreign namespace carries an identical hash"));
+        #expect(FileManager.default.fileExists(
+            atPath: globalPromptCacheRoot.appendingPathComponent("blocks", isDirectory: true)
+                .appendingPathComponent(
+                    PersistentPromptCacheStoreFile.hexEncode(childBlockKey.blockHash()))
+                .path));
+        #expect(FileManager.default.fileExists(
+            atPath: foreignSameHashDirectory.path) == false,
+            "hash equality across namespaces must not make foreign bytes unevictable");
+    }
 }
