@@ -182,6 +182,11 @@ public struct PersistentPromptCacheDiskStoreIndex: Sendable {
         self.visualEmbeddingsByHash[fileHash] = trackedFile;
     }
 
+    /// Returns one tracked visual-embedding file by content hash.
+    public func visualEmbeddingFile(fileHash: Data) -> TrackedFile? {
+        return self.visualEmbeddingsByHash[fileHash];
+    }
+
     /// Removes one tracked visual-embedding file, returning it when present.
     public mutating func removeVisualEmbedding(fileHash: Data) -> TrackedFile? {
         return self.visualEmbeddingsByHash.removeValue(forKey: fileHash);
