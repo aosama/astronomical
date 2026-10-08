@@ -10,15 +10,6 @@ print_error() {
 }
 
 repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-verification_script="${repository_root}/scripts/verify-before-commit.sh"
-verification_script_text="$(LC_ALL=C tr '\n' ' ' < "$verification_script")"
-
-case "$verification_script_text" in
-    *"scripts/release/"*|*"release/tests"*)
-        print_error "ordinary commit verification references the release-only namespace"
-        exit 1
-        ;;
-esac
 
 for release_entry_point in \
     build-stable-app.sh \

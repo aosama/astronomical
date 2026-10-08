@@ -143,9 +143,7 @@ state with another. Real-model journeys are opt-in only — they never run
 without the gate variable below. Per-suite selection uses the runner's own
 filter, for example `swift test --filter WorkerCommandLoopTests`; no wrapper
 script owns test selection or timeouts — every journey carries its own
-`@Test(.timeLimit(...))` cap. The commit gate
-(`scripts/verify-before-commit.sh`) runs this suite as the
-`swift-skeleton-journeys` step and relays the live per-journey output.
+`@Test(.timeLimit(...))` cap.
 
 ## Journey categories (the test taxonomy)
 

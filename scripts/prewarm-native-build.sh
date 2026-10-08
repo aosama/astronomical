@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Builds Astronomical's pinned native runtime ahead of Cargo so the native
-# CMake compile never overlaps Rust compilation. CI, verify-before-commit, and
+# CMake compile never overlaps Rust compilation. CI and the direct verification
 # the macOS app build all call this before their first Cargo step; the later
 # build scripts then find the native build store warm and skip CMake entirely.
 #

@@ -158,8 +158,8 @@ To bump a pinned dependency:
    with the performance-throughput journeys and compare against the recorded
    band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
 7. Update this registry, the repo discovery guide, and
-   `docs/performance-optimizations-lessons.md`, then commit through
-   `scripts/verify-before-commit.sh`.
+   `docs/performance-optimizations-lessons.md`, then commit after
+   `cargo fmt --all -- --check` and `cargo test-hermetic-and-rest` pass.
 
 ## Bindgen headers and the C surface diff
 
