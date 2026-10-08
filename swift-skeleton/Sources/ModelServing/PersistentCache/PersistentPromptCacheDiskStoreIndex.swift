@@ -63,6 +63,11 @@ public struct PersistentPromptCacheDiskStoreIndex: Sendable {
         self.visualEmbeddingsByHash = [:];
     }
 
+    /// Tracks one flat cache-owned file under the given hash.
+    mutating func insertVisualEmbeddingFile(fileHash: Data, trackedFile: TrackedFile) {
+        self.visualEmbeddingsByHash[fileHash] = trackedFile;
+    }
+
     /// Blocks whose sequence-state file is present and validated.
     public var sequenceStateBlockCount: Int {
         return self.blocksByHash.values

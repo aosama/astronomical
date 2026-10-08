@@ -40,6 +40,23 @@ public enum PersistentPromptCacheStoreFile {
         return blockHash;
     }
 
+    /// Removes one cache-owned directory tree, tolerating an already-absent
+    /// path so cleanup stays idempotent under concurrent scanners.
+    public static func removeCacheOwnedDirectoryOrConfirmAbsent(
+        directoryPath: URL
+    ) throws {
+        do {
+            try FileManager.default.removeItem(at: directoryPath);
+        } catch let removeError as NSError
+            where removeError.code == NSFileNoSuchFileError
+                || removeError.code == NSFileReadNoSuchFileError {
+            return;
+        } catch {
+            throw PersistentPromptCacheDiskStoreError.removePromptCacheFile(
+                filePath: directoryPath.path, problem: String(describing: error));
+        }
+    }
+
     /// Removes one cache-owned file, tolerating an already-absent path: the
     /// store's cleanup paths must stay idempotent under concurrent readers.
     public static func removeCacheOwnedFileOrConfirmAbsent(
@@ -47,7 +64,9 @@ public enum PersistentPromptCacheStoreFile {
     ) throws {
         do {
             try FileManager.default.removeItem(at: filePath);
-        } catch let removeError as NSError where removeError.code == NSFileNoSuchFileError {
+        } catch let removeError as NSError
+            where removeError.code == NSFileNoSuchFileError
+                || removeError.code == NSFileReadNoSuchFileError {
             return;
         } catch {
             throw PersistentPromptCacheDiskStoreError.removeCacheOwnedFile(
