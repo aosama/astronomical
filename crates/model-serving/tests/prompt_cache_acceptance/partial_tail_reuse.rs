@@ -155,7 +155,6 @@ fn romeo_and_juliet_conversation_token_ids(
                         seed: None,
                         thinking_budget: Some(256),
                     },
-                    qwen_thinking_channel_seed: None,
                     structured_generation: None,
                 },
                 false,

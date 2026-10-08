@@ -20,8 +20,7 @@ final class RuntimeAccessorsTests {
 
     private static let OVERRIDDEN_CONFIG_JSON: String =
         "{\"$schema\":\"./astronomical-config.schema.json\",\"schema_version\":1,"
-        + "\"runtime\":{\"model_directories\":[],\"maximum_mlx_memory_gb\":32,"
-        + "\"experimental_qwen_thinking_channel_seed_enabled\":true},"
+        + "\"runtime\":{\"model_directories\":[],\"maximum_mlx_memory_gb\":32},"
         + "\"prompt_cache\":{\"enabled\":false,\"maximum_size_gb\":7},"
         + "\"diagnostics\":{\"log_level\":\"debug\",\"retained_log_files\":3,"
         + "\"performance_attribution_enabled\":true,\"completion_attribution_enabled\":true}}";
@@ -87,7 +86,6 @@ final class RuntimeAccessorsTests {
         #expect(try developmentConfig.maximumMlxMemoryBytes() == nil);
         #expect(!developmentConfig.performanceAttributionEnabled());
         #expect(!developmentConfig.completionAttributionEnabled());
-        #expect(!developmentConfig.experimentalQwenThinkingChannelSeedEnabled());
     }
 
     @Test
@@ -110,7 +108,6 @@ final class RuntimeAccessorsTests {
         #expect(try developmentConfig.maximumMlxMemoryBytes() == 32_000_000_000);
         #expect(developmentConfig.performanceAttributionEnabled());
         #expect(developmentConfig.completionAttributionEnabled());
-        #expect(developmentConfig.experimentalQwenThinkingChannelSeedEnabled());
     }
 
     @Test

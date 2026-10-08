@@ -277,7 +277,6 @@ fn prepared_chat_token_count(
                     seed: None,
                     thinking_budget: Some(THINKING_BUDGET_TOKEN_COUNT),
                 },
-                qwen_thinking_channel_seed: None,
                 structured_generation: None,
             },
             true,

@@ -57,7 +57,6 @@ async fn should_round_trip_an_unversioned_chat_command() {
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     });
     let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
@@ -283,7 +282,6 @@ async fn should_send_a_large_chat_command_as_one_bounded_frame() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     });
     let serialized_command_bytes = serde_json::to_vec(&worker_command)
@@ -333,7 +331,6 @@ async fn should_round_trip_a_fifty_thousand_word_command_without_material_delay(
             seed: Some(1),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     });
     let serialized_command_bytes = serde_json::to_vec(&worker_command)

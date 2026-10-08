@@ -24,7 +24,6 @@ public enum ChatGenerationValidationError: Error, Equatable, CustomStringConvert
     case emptyAssistantToolCallId;
     case emptyAssistantToolCallFunctionName;
     case emptyToolResultId;
-    case qwenThinkingChannelSeedTooLarge(actualSeedBytes: Int, maximumSeedBytes: Int);
 
     public var description: String {
         switch (self) {
@@ -70,8 +69,6 @@ public enum ChatGenerationValidationError: Error, Equatable, CustomStringConvert
             return "assistant tool-call function name must not be empty";
         case .emptyToolResultId:
             return "tool result ID must not be empty";
-        case let .qwenThinkingChannelSeedTooLarge(actualSeedBytes, maximumSeedBytes):
-            return "Qwen thinking-channel seed has \(actualSeedBytes) bytes, exceeding \(maximumSeedBytes)";
         }
     }
 }
@@ -94,12 +91,6 @@ private enum ChatGenerationValidation {
             throw ChatGenerationValidationError.outputTokenCountOutOfRange(
                 actualOutputTokens: command.settings.maxOutputTokens,
                 maximumOutputTokens: ChatGenerationValidation.maximumChatOutputTokens);
-        }
-        if let qwenThinkingChannelSeed = command.qwenThinkingChannelSeed,
-            qwenThinkingChannelSeed.utf8.count > ChatGenerationCommand.maximumQwenThinkingChannelSeedBytes {
-            throw ChatGenerationValidationError.qwenThinkingChannelSeedTooLarge(
-                actualSeedBytes: qwenThinkingChannelSeed.utf8.count,
-                maximumSeedBytes: ChatGenerationCommand.maximumQwenThinkingChannelSeedBytes);
         }
         if let temperatureThousandths = command.settings.temperatureThousandths,
             temperatureThousandths > ChatGenerationValidation.maximumChatTemperatureThousandths {

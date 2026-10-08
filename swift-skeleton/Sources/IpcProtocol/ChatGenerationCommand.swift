@@ -2,10 +2,6 @@ import Foundation;
 
 /// One bounded structured chat-generation command for the local inference worker.
 public struct ChatGenerationCommand: Equatable {
-    /// Bounds request-local memory before template escaping can expand
-    /// user-authored seed text.
-    public static let maximumQwenThinkingChannelSeedBytes: Int = 1_000_000;
-
     public let requestId: RequestId;
     /// The exact worker-advertised model ID the request targets.
     public let model: String;
@@ -17,9 +13,6 @@ public struct ChatGenerationCommand: Equatable {
     public let toolChoice: ChatToolChoice;
     /// Bounded sampling and output settings.
     public let settings: ChatGenerationSettings;
-    /// Optional reasoning text seeded after the Qwen3.5 `<think>` open.
-    /// Absent or empty means ordinary thinking.
-    public let qwenThinkingChannelSeed: String?;
     /// Token-masked structured generation. Absent means ordinary sampling.
     public let structuredGeneration: StructuredGenerationConstraint?;
 
@@ -30,7 +23,6 @@ public struct ChatGenerationCommand: Equatable {
         tools: Array<ChatToolDefinition>,
         toolChoice: ChatToolChoice,
         settings: ChatGenerationSettings,
-        qwenThinkingChannelSeed: String?,
         structuredGeneration: StructuredGenerationConstraint?
     ) {
         self.requestId = requestId;
@@ -39,13 +31,12 @@ public struct ChatGenerationCommand: Equatable {
         self.tools = tools;
         self.toolChoice = toolChoice;
         self.settings = settings;
-        self.qwenThinkingChannelSeed = qwenThinkingChannelSeed;
         self.structuredGeneration = structuredGeneration;
     }
 
     internal static let wireFieldNames: Array<String> = [
         "request_id", "model", "messages", "tools", "tool_choice", "settings",
-        "qwen_thinking_channel_seed", "structured_generation",
+        "structured_generation",
     ];
 
     internal func wireValue() -> JsonWireValue {
@@ -56,9 +47,6 @@ public struct ChatGenerationCommand: Equatable {
         wireObject.appendEntry(key: "tools", value: JsonWireValue.mappedArray(self.tools, mappedWireValue: { (tool: ChatToolDefinition) -> JsonWireValue in tool.wireValue() }));
         wireObject.appendEntry(key: "tool_choice", value: self.toolChoice.wireValue());
         wireObject.appendEntry(key: "settings", value: self.settings.wireValue());
-        if let unwrappedSeed = self.qwenThinkingChannelSeed {
-            wireObject.appendEntry(key: "qwen_thinking_channel_seed", value: .string(unwrappedSeed));
-        }
         if let unwrappedConstraint = self.structuredGeneration {
             wireObject.appendEntry(key: "structured_generation", value: unwrappedConstraint.wireValue());
         }
@@ -78,7 +66,6 @@ public struct ChatGenerationCommand: Equatable {
             }),
             toolChoice: try ChatToolChoice.fromWireValue(try wireObject.requireObjectValue(fieldName: "tool_choice")),
             settings: try ChatGenerationSettings.fromWireValue(try wireObject.requireObjectValue(fieldName: "settings")),
-            qwenThinkingChannelSeed: try wireObject.decodeOptionalStringAllowingAbsent(fieldName: "qwen_thinking_channel_seed"),
             structuredGeneration: try ChatGenerationCommand.decodeOptionalStructuredGeneration(wireObject: wireObject));
         try wireObject.rejectUnknownFields(allowedFieldNames: ChatGenerationCommand.wireFieldNames);
         return parsedCommand;

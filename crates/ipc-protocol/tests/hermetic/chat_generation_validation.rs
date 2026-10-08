@@ -22,7 +22,6 @@ fn should_reject_an_empty_model_id_before_worker_preprocessing() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -50,7 +49,6 @@ fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -77,7 +75,6 @@ fn should_reject_a_temperature_above_the_supported_sampling_range() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -108,7 +105,6 @@ fn should_reject_a_top_p_above_the_supported_sampling_range() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -146,7 +142,6 @@ fn should_reject_malformed_assistant_tool_call_arguments() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -185,7 +180,6 @@ fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_objec
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -221,7 +215,6 @@ fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -271,7 +264,6 @@ fn should_reject_a_duplicate_assistant_tool_call_id() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -339,7 +331,6 @@ fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -369,7 +360,6 @@ fn should_reject_a_system_message_after_conversation_history_begins() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -403,7 +393,6 @@ fn should_reject_a_tool_result_without_a_prior_assistant_tool_call() {
             seed: Some(7),
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 

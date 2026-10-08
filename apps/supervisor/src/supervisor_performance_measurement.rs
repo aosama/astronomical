@@ -152,10 +152,6 @@ impl SupervisorPerformanceMeasurement {
                     SupervisorPerformanceOperation::DiscoveryRefresh,
                     Some(SupervisorDownloadOperationDetail::DiscoveryRefresh { .. })
                 )
-                | (
-                    SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
-                    None
-                )
         )
     }
 }

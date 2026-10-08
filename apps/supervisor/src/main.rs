@@ -255,7 +255,6 @@ async fn run_daemon(
         shutdown_controller,
         download_catalog,
         library_download_coordinator,
-        supervisor_attribution_log,
     );
 
     println!("astronomicald listening on http://{bound_supervisor_address}");

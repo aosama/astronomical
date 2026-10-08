@@ -321,7 +321,6 @@ async fn measure_worker_summarization(
                 seed: None,
                 thinking_budget: Some(256),
             },
-            qwen_thinking_channel_seed: None,
             structured_generation: None,
         })
         .await

@@ -159,7 +159,6 @@ final class Qwen35GuidedConstraintTests {
             requestId: constrainedCommand.requestId, model: constrainedCommand.model,
             messages: constrainedCommand.messages, tools: constrainedCommand.tools,
             toolChoice: constrainedCommand.toolChoice, settings: constrainedCommand.settings,
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: .choice(choices: ["What", "Two"]));
 
         let preparedGeneration: any ActiveChatGeneration = try processor.prepareChatGeneration(
@@ -182,7 +181,6 @@ final class Qwen35GuidedConstraintTests {
             requestId: regexCommand.requestId, model: regexCommand.model,
             messages: regexCommand.messages, tools: regexCommand.tools,
             toolChoice: regexCommand.toolChoice, settings: regexCommand.settings,
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: .regex(pattern: "Romeo|Juliet"));
 
         #expect(throws: ChatPreparationRejection.self) {
@@ -222,7 +220,6 @@ final class Qwen35GuidedConstraintTests {
             settings: ChatGenerationSettings(
                 maxOutputTokens: 16, temperatureThousandths: nil, topPThousandths: nil,
                 seed: nil, thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 }

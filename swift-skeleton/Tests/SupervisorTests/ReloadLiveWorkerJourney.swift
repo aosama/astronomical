@@ -231,7 +231,6 @@ final class ReloadLiveWorkerJourney {
                             topPThousandths: nil,
                             seed: nil,
                             thinkingBudget: nil),
-                        qwenThinkingChannelSeed: nil,
                         structuredGeneration: nil));
                 generationOutcome.record(streamEvents: streamEvents);
             } catch {

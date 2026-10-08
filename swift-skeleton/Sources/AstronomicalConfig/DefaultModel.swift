@@ -148,8 +148,7 @@ public enum DefaultModel {
         let updatedRuntimeConfigFile: RuntimeConfigFile = RuntimeConfigFile(
             modelDirectories: sourceUserConfigFile.runtime.modelDirectories,
             maximumMlxMemoryGb: sourceUserConfigFile.runtime.maximumMlxMemoryGb,
-            defaultModel: defaultModel,
-            experimentalQwenThinkingChannelSeedEnabled: sourceUserConfigFile.runtime.experimentalQwenThinkingChannelSeedEnabled
+            defaultModel: defaultModel
         );
         return UserConfigFile(
             schemaReference: sourceUserConfigFile.schemaReference,

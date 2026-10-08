@@ -313,7 +313,6 @@ final class Qwen35MoeEngineBackedWorkerTests {
                 topPThousandths: nil,
                 seed: 42,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 }

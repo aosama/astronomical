@@ -115,7 +115,6 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
             seed: Some(7),
             thinking_budget: Some(256),
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -172,7 +171,6 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
             seed: None,
             thinking_budget: Some(0),
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 

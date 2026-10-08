@@ -161,9 +161,6 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
                         &self.tokenizer,
                         &chat_generation_command.tools,
                         request_enable_thinking,
-                        chat_generation_command
-                            .qwen_thinking_channel_seed
-                            .as_deref(),
                     )
                 },
             )
@@ -198,8 +195,7 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
             .push_token(generated_token_id)
             .map_err(translate_request_output_error)?;
         let translation = translate_output_events(&self.tokenizer, request_output, output_events)?;
-        let (mut public_outputs, model_feedback_token_ids) = translation.into_parts();
-        prepend_seeded_reasoning(request_output, &mut public_outputs);
+        let (public_outputs, model_feedback_token_ids) = translation.into_parts();
         Ok(ModelGeneratedTokenTranslation::new(
             public_outputs,
             model_feedback_token_ids,
@@ -213,9 +209,8 @@ impl ModelGenerationProcessor for Qwen3_5GenerationProcessor {
         let output_events = request_output
             .finish()
             .map_err(translate_request_output_error)?;
-        let (mut public_outputs, _model_feedback_token_ids) =
+        let (public_outputs, _model_feedback_token_ids) =
             translate_output_events(&self.tokenizer, request_output, output_events)?.into_parts();
-        prepend_seeded_reasoning(request_output, &mut public_outputs);
         Ok(public_outputs)
     }
 }
@@ -280,19 +275,12 @@ fn translate_output_events(
             Qwen3_5OutputEvent::ModelVisibleCorrection { correction_text } => {
                 let enable_thinking = request_output.enable_thinking();
                 let correction_token_ids = tokenizer
-                    .encode_model_visible_correction(
-                        &correction_text,
-                        enable_thinking,
-                        request_output.thinking_channel_seed(),
-                    )
+                    .encode_model_visible_correction(&correction_text, enable_thinking)
                     .map_err(|tokenizer_error| ModelGenerationOutputError::Fatal {
                         reason: tokenizer_error.to_string(),
                     })?;
                 model_feedback_token_ids.extend(correction_token_ids);
                 request_output.reset_after_model_visible_correction(enable_thinking);
-                if let Some(seeded_reasoning) = request_output.take_seeded_reasoning_output() {
-                    public_outputs.push(seeded_reasoning);
-                }
             }
         }
     }
@@ -301,17 +289,6 @@ fn translate_output_events(
         public_outputs,
         model_feedback_token_ids,
     ))
-}
-
-fn prepend_seeded_reasoning(
-    request_output: &mut Qwen3_5RequestOutput,
-    public_outputs: &mut Vec<ChatGenerationOutput>,
-) {
-    // The seed is assistant reasoning already present in the prompt, so clients must observe it
-    // before the model-generated continuation even when the first generated token is terminal.
-    if let Some(seeded_reasoning) = request_output.take_seeded_reasoning_output() {
-        public_outputs.insert(0, seeded_reasoning);
-    }
 }
 
 /// Maps request-output failures to model-neutral output errors.

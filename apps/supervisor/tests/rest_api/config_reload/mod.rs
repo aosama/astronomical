@@ -25,7 +25,6 @@ mod generation_admission;
 mod maximum_mlx_memory;
 mod mixed_reload_configuration_generation;
 mod output_limits;
-mod qwen_thinking_channel_seed;
 mod reload_status;
 mod reload_validation;
 mod shutdown;

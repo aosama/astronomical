@@ -96,7 +96,6 @@ enum OpenAiChatTranslation {
                 topPThousandths: try translateThousandths(requestParts.topP, parameterName: "top_p"),
                 seed: requestParts.seed,
                 thinkingBudget: thinkingBudgetTokens),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: requestParts.enforcedStructuredGeneration.map(
                 ChatSchemaConstraint.constraintFromEnforcedGeneration));
         do {
