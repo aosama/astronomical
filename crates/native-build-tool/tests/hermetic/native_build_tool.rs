@@ -32,12 +32,7 @@ fn should_parse_core_profile_arguments() {
 
 #[test]
 fn should_parse_every_supported_profile_identity_name() {
-    for profile_identity_name in [
-        "core",
-        "core+memory-contract",
-        "core+experimental-aligned-expert-packs",
-        "core+memory-contract+experimental-aligned-expert-packs",
-    ] {
+    for profile_identity_name in ["core", "core+memory-contract"] {
         let parsed_arguments =
             parse_with_profile(profile_identity_name).unwrap_or_else(|parse_error| {
                 panic!("profile {profile_identity_name} should parse: {parse_error}")

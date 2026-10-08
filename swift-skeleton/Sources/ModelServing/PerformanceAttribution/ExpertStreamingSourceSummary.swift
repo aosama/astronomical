@@ -24,9 +24,6 @@ struct ExpertStreamingSourceSummary: Sendable {
     private(set) var totalStreamedExpertCount: UInt64;
     private(set) var totalSourceShardCount: UInt64;
     private(set) var payloadByteCount: UInt64;
-    /// True when at least one recorded plan streamed through per-expert
-    /// `.apack` files instead of SafeTensors shard ranges.
-    private(set) var streamedThroughExpertPacks: Bool;
 
     static func empty(phase: ExpertStreamingPhase, layerIndex: Int) -> ExpertStreamingSourceSummary {
         ExpertStreamingSourceSummary(
@@ -37,8 +34,7 @@ struct ExpertStreamingSourceSummary: Sendable {
             totalRoutedExpertCount: 0,
             totalStreamedExpertCount: 0,
             totalSourceShardCount: 0,
-            payloadByteCount: 0,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 0);
     }
 
     mutating func recordSourcePlan(
@@ -46,8 +42,7 @@ struct ExpertStreamingSourceSummary: Sendable {
         routedExpertCount: UInt64,
         streamedExpertCount: UInt64,
         sourceShardCount: UInt64,
-        payloadByteCount: UInt64,
-        streamedThroughExpertPacks: Bool
+        payloadByteCount: UInt64
     ) -> Void {
         let (nextSourcePlanCount, planOverflow) = sourcePlanCount
             .addingReportingOverflow(1);
@@ -62,7 +57,5 @@ struct ExpertStreamingSourceSummary: Sendable {
             &+ sourceShardCount;
         self.payloadByteCount = self.payloadByteCount
             &+ payloadByteCount;
-        self.streamedThroughExpertPacks = self.streamedThroughExpertPacks
-            || streamedThroughExpertPacks;
     }
 }

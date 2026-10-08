@@ -110,8 +110,7 @@ pub fn parse_arguments(arguments: &[String]) -> Result<NativeBuildToolArguments,
     .ok_or_else(|| {
         format!(
             "unsupported native build profile: {profile_name} (supported profiles: core, \
-                     core+memory-contract, core+experimental-aligned-expert-packs, \
-                     core+memory-contract+experimental-aligned-expert-packs)"
+                     core+memory-contract)"
         )
     })?;
     Ok(NativeBuildToolArguments {

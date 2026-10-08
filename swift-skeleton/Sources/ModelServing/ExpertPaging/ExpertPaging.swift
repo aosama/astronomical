@@ -4,8 +4,7 @@
 //
 // Migrates from (wave 3): crates/model-serving/src/expert_paging/* —
 // bounded_expert_reader, quantized_expert_manifest (+validation),
-// safetensors_header, streaming_expert_packs (+plans, pages),
-// retained_expert_page_cache (+contract, reclamation),
+// safetensors_header, retained_expert_page_cache (+contract, reclamation),
 // expert_cache_statistics, source_manifests.
 //
 // Carried contracts:

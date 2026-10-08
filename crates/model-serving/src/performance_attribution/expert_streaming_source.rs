@@ -25,9 +25,6 @@ pub(crate) struct ExpertStreamingSourceSummary {
     total_streamed_expert_count: u64,
     total_source_shard_count: u64,
     payload_byte_count: u64,
-    /// True when at least one recorded plan streamed through per-expert
-    /// `.apack` files instead of SafeTensors shard ranges.
-    streamed_through_expert_packs: bool,
 }
 
 impl ExpertStreamingSourceSummary {
@@ -38,7 +35,6 @@ impl ExpertStreamingSourceSummary {
         streamed_expert_count: u64,
         source_shard_count: u64,
         payload_byte_count: u64,
-        streamed_through_expert_packs: bool,
     ) {
         self.source_plan_count = self.source_plan_count.saturating_add(1);
         self.total_route_token_count = self
@@ -54,8 +50,6 @@ impl ExpertStreamingSourceSummary {
             .total_source_shard_count
             .saturating_add(source_shard_count);
         self.payload_byte_count = self.payload_byte_count.saturating_add(payload_byte_count);
-        self.streamed_through_expert_packs =
-            self.streamed_through_expert_packs || streamed_through_expert_packs;
     }
 }
 
@@ -69,7 +63,6 @@ impl PerformanceAttribution {
         streamed_expert_count: usize,
         source_shard_count: usize,
         payload_byte_count: u64,
-        streamed_through_expert_packs: bool,
     ) {
         let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
             return;
@@ -119,7 +112,6 @@ impl PerformanceAttribution {
                 total_streamed_expert_count: 0,
                 total_source_shard_count: 0,
                 payload_byte_count: 0,
-                streamed_through_expert_packs: false,
             });
         summary.record_source_plan(
             route_token_count,
@@ -127,7 +119,6 @@ impl PerformanceAttribution {
             streamed_expert_count,
             source_shard_count,
             payload_byte_count,
-            streamed_through_expert_packs,
         );
     }
 }

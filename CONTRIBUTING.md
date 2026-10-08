@@ -20,7 +20,9 @@ Add the smallest meaningful behavior test for functional changes. Every test pro
 
 Run focused tests while developing. Before proposing a pull request, run:
 
-    scripts/verify-before-commit.sh
+    cargo fmt --all -- --check
+    cargo test-hermetic-and-rest
+    swift test --no-parallel --package-path swift-skeleton
     scripts/test-macos-menu-contracts.sh
 
 Run direct MLX or model-artifact acceptance only when the change crosses those boundaries. State exactly which checks ran and which hardware-dependent checks could not run.

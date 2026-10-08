@@ -162,12 +162,6 @@ fn require_profile_products(
             "published MLX memory contract probe",
         )?;
     }
-    if native_build_profile.should_build_experimental_aligned_expert_packs() {
-        require_regular_file(
-            &entry_directory.join("lib/libastronomical_metal_expert_loader.a"),
-            "published experimental native library",
-        )?;
-    }
     Ok(())
 }
 

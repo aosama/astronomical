@@ -183,14 +183,11 @@ fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
                 pending_directories.push(entry_path);
                 continue;
             }
-            // Converted per-expert streaming revisions store expert weights in
-            // `.apack` pack files beside the resident safetensors bundles; a
-            // model's measured disk size must include every weight payload.
             let is_weight_payload_file = matches!(
                 entry_path
                     .extension()
                     .and_then(|extension| extension.to_str()),
-                Some("safetensors") | Some("apack")
+                Some("safetensors")
             );
             if !is_weight_payload_file || !entry_path.is_file() {
                 continue;

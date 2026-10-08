@@ -4,6 +4,8 @@
 
 - Never pipe command output through `tail` (or `head`-style truncation) when investigating failures: it silently hides the logs and evidence needed for diagnosis — a self-inflicted wound. Capture full output to a file and read the complete log (chunked if large) instead.
 
+- NEVER hide progress. Never pipe a `cargo` or `swift` command through `tail`, `head`, `grep`, or any other truncating or filtering wrapper when running it: run the command bare so its full output streams live. Never pass quiet or silent flags (`--quiet`, `-q`, `--silent`) on build or test commands, and when a tool suppresses its own progress in pipes (SwiftPM shows no build progress unless `--verbose`), pass the verbose flag so every compile unit streams. If the output is huge, save it to a file with redirection and read the file afterward; never filter it inline. Silent output is treated as a defect: if a command produces no visible progress, rerun it with visibility enabled.
+
 - Call free functions through their owning module: import the module, never the bare function (`use crate::support;` then `support::run_journey_with_timeout(...)`), so every call site names its owner; all new and refactored Rust code must follow this.
 
 - You keep repo-root/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs.

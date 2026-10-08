@@ -10,7 +10,6 @@ version.workspace = true
 
 [features]
 default = []
-experimental-aligned-expert-packs = ["mlx", "astronomical-mlx-c-rust/experimental-aligned-expert-packs"]
 mlx = ["dep:astronomical-mlx-c-rust"]
 mlx-memory-contract-probe = ["mlx"]
 
