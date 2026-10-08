@@ -14,7 +14,9 @@
 #
 # Every step reports start, end, and elapsed seconds; every phase reports its
 # own elapsed time; the run closes with the slowest steps and the Cargo timing
-# report so slowness is attributable without re-reading the whole log.
+# report so slowness is attributable without re-reading the whole log. Phase
+# output streams live to the terminal through phase-tagged prefixes while tee
+# retains the full per-phase logs for failure forensics.
 #
 # Cargo invocations the Cargo core phase runs, in order:
 #   1. cargo fmt --all -- --check
@@ -53,7 +55,6 @@ readonly REPOSITORY_CONTRACT_STEP_COUNT=14
 readonly SWIFT_NODE_CONTRACT_STEP_COUNT=6
 readonly CARGO_CORE_STEP_COUNT=6
 readonly PHASE_PROGRESS_INTERVAL_SECONDS=2
-readonly FAILED_PHASE_LOG_TAIL_LINES=40
 # Grace window for phase process groups to exit after a termination signal
 # before the gate stops waiting on them; lane coordinators own their cleanup.
 readonly PHASE_TERMINATION_GRACE_SECONDS=5
@@ -91,15 +92,6 @@ resolve_timeout_executable() {
         print_error "GNU timeout is required; install Homebrew coreutils"
         exit 2
     fi
-}
-
-line_count() {
-    counted_file="$1"
-    counted_lines="$(wc -l < "$counted_file" 2>/dev/null | tr -d '[:space:]')" || counted_lines=0
-    case "$counted_lines" in
-        ''|*[!0-9]*) counted_lines=0 ;;
-    esac
-    printf '%s\n' "$counted_lines"
 }
 
 run_step() {
@@ -153,9 +145,11 @@ run_phase() {
     return "$phase_exit_status"
 }
 
-# Starts one phase as its own process group whose output lands in the phase
-# log; the phase writes its exit status to a marker file so the monitor can
-# detect completion without reaping the process from the monitoring loop.
+# Starts one phase as its own process group whose output streams LIVE to the
+# terminal through a phase-tagged line prefix while tee keeps the full log for
+# failure forensics; the phase writes its exit status to a marker file so the
+# monitor can detect completion without reaping the process from the
+# monitoring loop.
 start_phase() {
     phase_status_directory="$1"
     phase_label="$2"
@@ -168,7 +162,10 @@ start_phase() {
         run_phase "$phase_label" "$phase_step_total" "$phase_entry_point" || phase_status=$?
         printf '%s\n' "$phase_status" > "${phase_status_directory}/${phase_label}.status"
         exit "$phase_status"
-    ) > "$phase_log_path" 2>&1 &
+    ) 2>&1 | awk -v phase_prefix="[${phase_label}]" '{
+        printf "%s %s\n", phase_prefix, $0;
+        fflush();
+    }' | tee "$phase_log_path" &
 }
 
 phase_repository_contracts() {
@@ -197,8 +194,8 @@ phase_swift_node_contracts() {
     run_step test-macos-menu-contracts "$TEST_TIMEOUT_SECONDS" scripts/test-macos-menu-contracts.sh || return $?
     run_step thin-talk-contracts "$THIN_TALK_TIMEOUT_SECONDS" swift test --package-path apps/thin-talk || return $?
     # The Rust-to-Swift migration journeys: plain `swift test` streams every
-    # journey's name, verdict, and duration through this phase's log, which
-    # the monitor relays live, so progress and per-journey timing stay
+    # journey's name, verdict, and duration straight to this terminal through
+    # the phase's live tee pipeline, so progress and per-journey timing stay
     # visible without any wrapper-owned selection or silencing. The lane
     # runs with --no-parallel because MLX/GPU journeys must never run in
     # parallel (repo rule): concurrent in-process suites race the gather/sort
@@ -292,38 +289,17 @@ phase_cargo_core() {
     count_direct_mlx_lane_step
 }
 
-relay_phase_output() {
-    relay_phase_log="$1"
-    relay_state_file="${relay_phase_log}.relayed"
-    if [ -f "$relay_state_file" ]; then
-        relayed_lines="$(cat "$relay_state_file")"
-    else
-        relayed_lines=0
-    fi
-    phase_lines="$(line_count "$relay_phase_log")"
-    if [ "$phase_lines" -gt "$relayed_lines" ]; then
-        sed -n "$((relayed_lines + 1)),${phase_lines}p" "$relay_phase_log"
-        printf '%s\n' "$phase_lines" > "$relay_state_file"
-    fi
-}
-
+# Waits until every phase has published its completion marker. Phase output
+# streams live from start_phase's tee pipeline, so the monitor owns no
+# relaying and no silencing — it only observes completion.
 monitor_phases() {
     phase_status_directory="$1"
-    repository_log="$2"
-    swift_node_log="$3"
-    cargo_core_log="$4"
     while :; do
-        relay_phase_output "$repository_log"
-        relay_phase_output "$swift_node_log"
-        relay_phase_output "$cargo_core_log"
         [ -f "${phase_status_directory}/repository-contracts.status" ] \
             && [ -f "${phase_status_directory}/swift-node-contracts.status" ] \
             && [ -f "${phase_status_directory}/cargo-core.status" ] && break
         sleep "$PHASE_PROGRESS_INTERVAL_SECONDS"
     done
-    relay_phase_output "$repository_log"
-    relay_phase_output "$swift_node_log"
-    relay_phase_output "$cargo_core_log"
 }
 
 report_slowest_steps() {
@@ -426,14 +402,16 @@ main() {
     CARGO_CORE_PROCESS_ID=$!
     set +m
 
-    monitor_phases "$PHASE_LOG_DIRECTORY" "$REPOSITORY_CONTRACTS_LOG" "$SWIFT_NODE_CONTRACTS_LOG" "$CARGO_CORE_LOG"
+    monitor_phases "$PHASE_LOG_DIRECTORY"
 
-    repository_exit_status=0
-    wait "$REPOSITORY_CONTRACTS_PROCESS_ID" || repository_exit_status=$?
-    swift_node_exit_status=0
-    wait "$SWIFT_NODE_CONTRACTS_PROCESS_ID" || swift_node_exit_status=$?
-    cargo_core_exit_status=0
-    wait "$CARGO_CORE_PROCESS_ID" || cargo_core_exit_status=$?
+    # The pipeline's last element is tee; waiting on it drains every phase's
+    # streamed output, and the marker files carry the true phase exit codes.
+    wait "$REPOSITORY_CONTRACTS_PROCESS_ID" || true
+    wait "$SWIFT_NODE_CONTRACTS_PROCESS_ID" || true
+    wait "$CARGO_CORE_PROCESS_ID" || true
+    repository_exit_status="$(cat "${PHASE_LOG_DIRECTORY}/repository-contracts.status")"
+    swift_node_exit_status="$(cat "${PHASE_LOG_DIRECTORY}/swift-node-contracts.status")"
+    cargo_core_exit_status="$(cat "${PHASE_LOG_DIRECTORY}/cargo-core.status")"
 
     report_slowest_steps "$REPOSITORY_CONTRACTS_LOG" "$SWIFT_NODE_CONTRACTS_LOG" "$CARGO_CORE_LOG"
     report_cargo_timings_location
@@ -448,12 +426,6 @@ main() {
             VERIFICATION_FAILED=true
             printf '[commit-verification] status=failed phase=%s exit_code=%s\n' \
                 "$phase_result_name" "$phase_result_status" >&2
-            case "$phase_result_name" in
-                repository-contracts) failed_phase_log="$REPOSITORY_CONTRACTS_LOG" ;;
-                swift-node-contracts) failed_phase_log="$SWIFT_NODE_CONTRACTS_LOG" ;;
-                *) failed_phase_log="$CARGO_CORE_LOG" ;;
-            esac
-            tail -n "$FAILED_PHASE_LOG_TAIL_LINES" "$failed_phase_log" >&2 || true
             [ "$total_exit_status" -ne 0 ] || total_exit_status="$phase_result_status"
         }
     done
