@@ -27,7 +27,10 @@ public struct QuantizedExpertLayerPlan: Sendable {
     /// projection is affine. Execution must consult
     /// `quantizationModeForProjection` because mixed OptiQ layers can
     /// contain both encodings.
-    public var quantizationMode: QuantizationMode
+    public var quantizationMode: ExpertLayerQuantizationMode
+
+    /// Projection-specific encoding, needed for mixed-storage layers.
+    public var quantizationModeByProjectionName: [String: ExpertLayerQuantizationMode]
 
     public init(
         layerPrefix: String,
@@ -35,7 +38,8 @@ public struct QuantizedExpertLayerPlan: Sendable {
         expertCapacity: Int,
         quantizationBits: Int32,
         quantizationGroupSize: Int32,
-        quantizationMode: QuantizationMode
+        quantizationMode: ExpertLayerQuantizationMode,
+        quantizationModeByProjectionName: [String: ExpertLayerQuantizationMode] = [:]
     ) {
         self.layerPrefix = layerPrefix
         self.tensorSources = tensorSources
@@ -43,6 +47,12 @@ public struct QuantizedExpertLayerPlan: Sendable {
         self.quantizationBits = quantizationBits
         self.quantizationGroupSize = quantizationGroupSize
         self.quantizationMode = quantizationMode
+        self.quantizationModeByProjectionName = quantizationModeByProjectionName
+    }
+
+    /// Returns the encoding used by one projection, falling back to the layer's unanimous mode.
+    public func quantizationModeForProjection(projectionName: String) -> ExpertLayerQuantizationMode {
+        return self.quantizationModeByProjectionName[projectionName] ?? self.quantizationMode
     }
 
     /**
