@@ -99,7 +99,7 @@ async fn should_record_deterministic_async_manifest_measurement() {
 }
 
 #[tokio::test]
-async fn should_record_qwen_thinking_seed_loading_without_download_metadata() {
+async fn should_record_daemon_ipc_status_without_download_metadata() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let written_bytes = Arc::new(Mutex::new(Vec::new()));
         let clock_call_count = Arc::new(AtomicUsize::new(0));
@@ -114,24 +114,21 @@ async fn should_record_qwen_thinking_seed_loading_without_download_metadata() {
 
         attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
+                SupervisorPerformanceOperation::LibraryCatalogLoad,
                 || async {},
                 |_| SupervisorPerformanceMeasurement::success(),
             )
             .await
-            .expect("Qwen seed loading attribution should be recorded");
+            .expect("library catalog attribution should be recorded");
 
         let attribution_record = only_record(&written_bytes);
-        assert_eq!(
-            attribution_record["operation"],
-            "qwen_thinking_channel_seed_load"
-        );
+        assert_eq!(attribution_record["operation"], "library_catalog_load");
         assert_eq!(attribution_record["started_at_unix_millis"], 2_000);
         assert_eq!(attribution_record["ended_at_unix_millis"], 2_005);
         assert_eq!(attribution_record["outcome"], "success");
     })
     .await
-    .expect("Qwen seed attribution coverage must remain bounded");
+    .expect("daemon IPC status attribution coverage must remain bounded");
 }
 
 #[tokio::test]
@@ -144,7 +141,7 @@ async fn should_preserve_best_effort_operation_output_when_the_start_clock_fails
 
         let operation_output = attribution_log
             .measure_async_operation_best_effort(
-                SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
+                SupervisorPerformanceOperation::LibraryCatalogLoad,
                 || async { "Romeo and Juliet" },
                 |_| SupervisorPerformanceMeasurement::success(),
             )
@@ -170,7 +167,7 @@ async fn should_preserve_best_effort_operation_output_when_the_writer_fails() {
 
         let operation_output = attribution_log
             .measure_async_operation_best_effort(
-                SupervisorPerformanceOperation::QwenThinkingChannelSeedLoad,
+                SupervisorPerformanceOperation::LibraryCatalogLoad,
                 || async move {
                     operation_completed_for_operation.store(true, Ordering::SeqCst);
                     "Two households"

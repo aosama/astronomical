@@ -39,7 +39,6 @@ mod openai_responses_endpoint;
 mod openai_responses_stream;
 mod openai_responses_translation;
 mod queued_memory_reload;
-mod qwen_thinking_channel_seed;
 mod request_generation_defaults;
 mod resolved_configuration_generation;
 mod resolved_model_policy_catalog;
@@ -147,8 +146,6 @@ pub use openai_responses_stream::{
 pub use openai_responses_translation::{
     OpenAiResponsesTranslationError, translate_openai_responses_request,
 };
-pub(crate) use qwen_thinking_channel_seed::load_configured_qwen_thinking_channel_seed;
-pub use qwen_thinking_channel_seed::load_qwen_thinking_channel_seed;
 pub use resolved_configuration_generation::ResolvedConfigurationGeneration;
 pub use runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 pub use serving_session_snapshot::ServingSessionSnapshot;

@@ -73,10 +73,11 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
         checked_in_schema_json["$defs"]["prompt_cache"]["properties"]["maximum_size_gb"]["maximum"],
         18_446_744_073_u64
     );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["runtime"]["properties"]["experimental_qwen_thinking_channel_seed_enabled"]
-            ["x-astronomical-apply-mode"],
-        "worker-replacement"
+    assert!(
+        checked_in_schema_json["$defs"]["runtime"]["properties"]
+            .get("experimental_qwen_thinking_channel_seed_enabled")
+            .is_none(),
+        "thinking-channel seed must stay expunged from the runtime schema"
     );
     assert_eq!(
         checked_in_schema_json["$defs"]["diagnostics"]["properties"]["performance_attribution_enabled"]
@@ -109,22 +110,6 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
     assert!(astronomical_config.persistent_prompt_cache_enabled());
     assert!(!astronomical_config.performance_attribution_enabled());
     assert!(!astronomical_config.completion_attribution_enabled());
-    assert!(!astronomical_config.experimental_qwen_thinking_channel_seed_enabled());
-}
-
-#[test]
-fn should_enable_the_experimental_qwen_thinking_channel_seed_only_when_explicitly_configured() {
-    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"experimental_qwen_thinking_channel_seed_enabled":true}}"#,
-    );
-
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("the explicit experimental flag should load");
-
-    assert!(astronomical_config.experimental_qwen_thinking_channel_seed_enabled());
 }
 
 #[test]

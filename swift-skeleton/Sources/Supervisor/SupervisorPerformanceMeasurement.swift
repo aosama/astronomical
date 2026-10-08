@@ -184,11 +184,10 @@ public struct SupervisorPerformanceMeasurement: Sendable {
     /**
      * The operation/detail pairing contract, mirroring the Rust
      * `matches_operation` table: a download operation must carry its matching
-     * download detail, and only catalog loads and Qwen seed loads run without
-     * any download detail.
+     * download detail, and only catalog loads run without any download detail.
      */
     public func matchesOperation(_ operation: SupervisorPerformanceOperation) -> Bool {
-        if operation == .libraryCatalogLoad || operation == .qwenThinkingChannelSeedLoad {
+        if operation == .libraryCatalogLoad {
             return self.downloadDetail == nil
         }
         guard let detail: SupervisorDownloadMeasurementDetail = self.downloadDetail else {

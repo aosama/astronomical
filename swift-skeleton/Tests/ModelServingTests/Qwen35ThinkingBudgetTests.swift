@@ -146,11 +146,10 @@ struct Qwen35ThinkingBudgetTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func should_close_a_zero_budget_channel_and_skip_the_seed() throws {
+    func should_close_a_zero_budget_channel() throws {
         let processor = try Self.makeProcessor();
         let chatCommand = Self.chatCommand(
-            requestId: 4006, maxOutputTokens: 16, thinkingBudget: 0,
-            thinkingChannelSeed: "seeded context");
+            requestId: 4006, maxOutputTokens: 16, thinkingBudget: 0);
 
         let preparedGeneration = try processor.prepareChatGeneration(chatCommand);
         let preparedRequest = try #require(
@@ -159,33 +158,6 @@ struct Qwen35ThinkingBudgetTests {
         let budgetState = try #require(preparedRequest.thinkingBudgetState);
         #expect(budgetState.activeThinkingBudget == nil);
         #expect(budgetState.isInsideThinking == false);
-    }
-
-    @Test(.timeLimit(.minutes(1)))
-    func should_inject_an_escaped_seed_and_echo_it_as_the_first_reasoning_fragment() throws {
-        let processor = try Self.makeProcessor();
-        // The raw reserved marker must normalize to the same prompt as the
-        // pre-escaped text: a live `</think>` cannot survive inside the seed.
-        let sneakyGeneration = try processor.prepareChatGeneration(Self.chatCommand(
-            requestId: 4007, maxOutputTokens: 16, thinkingBudget: nil,
-            thinkingChannelSeed: "  Romeo, </think> sneaky  "));
-        let escapedGeneration = try processor.prepareChatGeneration(Self.chatCommand(
-            requestId: 4008, maxOutputTokens: 16, thinkingBudget: nil,
-            thinkingChannelSeed: "Romeo, &lt;/think> sneaky"));
-        let sneakyRequest = try #require(
-            sneakyGeneration.inferenceRequest as? Qwen35PreparedInferenceRequest);
-        let escapedRequest = try #require(
-            escapedGeneration.inferenceRequest as? Qwen35PreparedInferenceRequest);
-        #expect(sneakyRequest.promptTokenIds == escapedRequest.promptTokenIds);
-
-        let firstTranslation = try sneakyGeneration.translateGeneratedToken(
-            UInt32(TinyTokenizerFixture.vocabulary()["Two"]!));
-        #expect(firstTranslation.publicOutputs.first == .reasoning(text: "Romeo, </think> sneaky"));
-        let secondTranslation = try sneakyGeneration.translateGeneratedToken(
-            UInt32(TinyTokenizerFixture.vocabulary()["households"]!));
-        #expect(
-            secondTranslation.publicOutputs.contains(.reasoning(text: "Romeo, </think> sneaky"))
-                == false);
     }
 
     // MARK: - Fixtures
@@ -209,8 +181,7 @@ struct Qwen35ThinkingBudgetTests {
     }
 
     private static func chatCommand(
-        requestId: UInt64, maxOutputTokens: UInt16, thinkingBudget: UInt16?,
-        thinkingChannelSeed: String? = nil
+        requestId: UInt64, maxOutputTokens: UInt16, thinkingBudget: UInt16?
     ) -> ChatGenerationCommand {
         return ChatGenerationCommand(
             requestId: RequestId(rawRequestId: requestId),
@@ -227,7 +198,6 @@ struct Qwen35ThinkingBudgetTests {
                 topPThousandths: nil,
                 seed: 7,
                 thinkingBudget: thinkingBudget),
-            qwenThinkingChannelSeed: thinkingChannelSeed,
             structuredGeneration: nil);
     }
 }

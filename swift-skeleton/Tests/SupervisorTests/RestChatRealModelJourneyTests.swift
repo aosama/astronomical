@@ -162,7 +162,6 @@ final class RestChatRealModelJourneyTests {
             maximumMlxMemoryBytes: nil,
             performanceAttributionEnabled: false,
             completionAttributionEnabled: false,
-            experimentalQwenThinkingChannelSeedEnabled: false,
             persistentPromptCacheEnabled: false,
             configuredPersistentPromptCacheEnabled: nil,
             configuredPromptCacheMaximumSizeBytes: 0,

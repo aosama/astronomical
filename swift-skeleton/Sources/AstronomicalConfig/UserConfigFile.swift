@@ -43,8 +43,7 @@ internal struct UserConfigFile: Equatable {
             runtime: RuntimeConfigFile(
                 modelDirectories: Array<String>(),
                 maximumMlxMemoryGb: nil,
-                defaultModel: nil,
-                experimentalQwenThinkingChannelSeedEnabled: nil
+                defaultModel: nil
             ),
             promptCache: nil,
             chunking: ChunkingConfigFile(

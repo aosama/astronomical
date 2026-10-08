@@ -68,8 +68,7 @@ final class AstronomicalInstancePathsTests {
             instancePaths.modelsDirectory,
             instancePaths.loggingDirectory,
             instancePaths.daemonOwnershipFilePath,
-            instancePaths.instanceLockFilePath,
-            instancePaths.qwenThinkingChannelSeedFilePath
+            instancePaths.instanceLockFilePath
         ];
         let stateRootPrefix: String = testStateDirectory.string + "/";
         for writablePath: FilePath in writablePaths {
@@ -158,26 +157,6 @@ final class AstronomicalInstancePathsTests {
             }
             #expect(homeDirectory == nonexistentHomeDirectory);
         }
-    }
-
-    @Test
-    func should_resolve_thinking_markdown_under_the_instance_state_directory() throws -> Void {
-        let fictionalHomeDirectory: FilePath = try TestPaths.fromLiteral("/Users/example");
-        let developmentPaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
-            fictionalHomeDirectory,
-            runtimeInstance: AstronomicalRuntimeInstance.development
-        );
-        let stablePaths: AstronomicalInstancePaths = AstronomicalInstancePaths.forHomeDirectory(
-            fictionalHomeDirectory,
-            runtimeInstance: AstronomicalRuntimeInstance.stable
-        );
-
-        #expect(
-            developmentPaths.qwenThinkingChannelSeedFilePath
-                == fictionalHomeDirectory.appending(component: ".astronomical-dev").appending(component: "thinking.md"));
-        #expect(
-            stablePaths.qwenThinkingChannelSeedFilePath
-                == fictionalHomeDirectory.appending(component: ".astronomical").appending(component: "thinking.md"));
     }
 
     @Test

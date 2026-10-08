@@ -57,7 +57,6 @@ import JourneyCategories;
         #expect(receivedCommand.model == "m1");
         #expect(receivedCommand.tools == []);
         #expect(receivedCommand.toolChoice == .auto);
-        #expect(receivedCommand.qwenThinkingChannelSeed == nil);
         #expect(receivedCommand.structuredGeneration == nil);
 
         // Request identifiers stay monotonic across separate connections; the
@@ -326,7 +325,6 @@ import JourneyCategories;
             maximumMlxMemoryBytes: nil,
             performanceAttributionEnabled: false,
             completionAttributionEnabled: false,
-            experimentalQwenThinkingChannelSeedEnabled: false,
             persistentPromptCacheEnabled: true,
             configuredPersistentPromptCacheEnabled: nil,
             configuredPromptCacheMaximumSizeBytes: 50_000_000_000,

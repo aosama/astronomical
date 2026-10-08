@@ -165,7 +165,6 @@ fn mixed_reload_generation_command() -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     }
 }

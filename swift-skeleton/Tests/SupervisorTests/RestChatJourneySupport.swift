@@ -73,8 +73,7 @@ enum RestChatJourneySupport {
     }
 
     static func makeResolvedConfig(
-        discoveredModels: Array<DiscoveryDiscoveredModel> = Array(),
-        experimentalQwenThinkingChannelSeedEnabled: Bool = false
+        discoveredModels: Array<DiscoveryDiscoveredModel> = Array()
     ) throws -> ResolvedRuntimeConfig {
         var modelPolicyCatalog: Dictionary<String, RuntimeModelPolicy> = Dictionary();
         for discoveredModel: DiscoveryDiscoveredModel in discoveredModels {
@@ -94,7 +93,6 @@ enum RestChatJourneySupport {
             maximumMlxMemoryBytes: nil,
             performanceAttributionEnabled: false,
             completionAttributionEnabled: false,
-            experimentalQwenThinkingChannelSeedEnabled: experimentalQwenThinkingChannelSeedEnabled,
             persistentPromptCacheEnabled: true,
             configuredPersistentPromptCacheEnabled: nil,
             configuredPromptCacheMaximumSizeBytes: 50_000_000_000,

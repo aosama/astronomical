@@ -59,14 +59,12 @@ impl Qwen3_5PromptRenderer {
         tools: &[ChatToolDefinition],
         enable_thinking: bool,
         image_token_counts_per_user_message: &[Vec<usize>],
-        thinking_channel_seed: Option<&str>,
     ) -> Result<String, Qwen3_5PromptError> {
         Self::render_with_control_span(
             messages,
             tools,
             enable_thinking,
             image_token_counts_per_user_message,
-            thinking_channel_seed,
         )
         .map(Qwen3_5RenderedPrompt::into_string)
     }
@@ -78,7 +76,6 @@ impl Qwen3_5PromptRenderer {
         tools: &[ChatToolDefinition],
         enable_thinking: bool,
         image_token_counts_per_user_message: &[Vec<usize>],
-        thinking_channel_seed: Option<&str>,
     ) -> Result<Qwen3_5RenderedPrompt, Qwen3_5PromptError> {
         if messages.is_empty() {
             return Err(Qwen3_5PromptError::MissingMessages);
@@ -147,21 +144,21 @@ impl Qwen3_5PromptRenderer {
 
         rendered_prompt.push_str(IM_START);
         rendered_prompt.push_str("assistant\n");
-        super::thinking_channel_seed::append_open_thinking_block(
-            &mut rendered_prompt,
-            enable_thinking,
-            thinking_channel_seed,
-        );
+        // Thinking windows open and close under budget control only; callers
+        // cannot seed their own content into them (migration decision record).
+        rendered_prompt.push_str(THINK_START);
+        rendered_prompt.push('\n');
+        if !enable_thinking {
+            rendered_prompt.push('\n');
+            rendered_prompt.push_str(THINK_END);
+            rendered_prompt.push_str("\n\n");
+        }
         Ok(Qwen3_5RenderedPrompt { rendered_prompt })
     }
 
     /// Renders server-generated feedback after a malformed model tool call, then reopens assistant generation.
     #[must_use]
-    pub fn render_model_visible_correction(
-        correction_text: &str,
-        enable_thinking: bool,
-        thinking_channel_seed: Option<&str>,
-    ) -> String {
+    pub fn render_model_visible_correction(correction_text: &str, enable_thinking: bool) -> String {
         let mut rendered_correction = String::new();
         rendered_correction.push_str(IM_END);
         rendered_correction.push('\n');
@@ -179,11 +176,13 @@ impl Qwen3_5PromptRenderer {
         rendered_correction.push('\n');
         rendered_correction.push_str(IM_START);
         rendered_correction.push_str("assistant\n");
-        super::thinking_channel_seed::append_open_thinking_block(
-            &mut rendered_correction,
-            enable_thinking,
-            thinking_channel_seed,
-        );
+        rendered_correction.push_str(THINK_START);
+        rendered_correction.push('\n');
+        if !enable_thinking {
+            rendered_correction.push('\n');
+            rendered_correction.push_str(THINK_END);
+            rendered_correction.push_str("\n\n");
+        }
         rendered_correction
     }
 }

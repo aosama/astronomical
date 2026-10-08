@@ -183,7 +183,6 @@ final class ChatExecutorJourney {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil)
     }
 }

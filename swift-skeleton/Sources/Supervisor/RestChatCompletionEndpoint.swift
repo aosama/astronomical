@@ -181,10 +181,6 @@ enum RestChatCompletionEndpoint {
             tools: chatGenerationCommand.tools,
             toolChoice: chatGenerationCommand.toolChoice,
             settings: generationSettings,
-            qwenThinkingChannelSeed: QwenThinkingChannelSeed.load(
-                resolvedRuntimeConfig: liveResolvedRuntimeConfig,
-                instancePaths: chatContext.instancePaths,
-                modelId: resolvedModelId),
             structuredGeneration: chatGenerationCommand.structuredGeneration);
         let streamEvents: Array<ChatGenerationStreamEvent>;
         do {

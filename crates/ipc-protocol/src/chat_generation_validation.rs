@@ -3,10 +3,7 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::{
-    ChatGenerationCommand, ChatMessage, ChatToolChoice, ChatToolDefinition,
-    MAX_QWEN_THINKING_CHANNEL_SEED_BYTES,
-};
+use crate::{ChatGenerationCommand, ChatMessage, ChatToolChoice, ChatToolDefinition};
 
 const MAX_CHAT_TOOL_SCHEMA_NESTING_DEPTH: usize = 32;
 const MAX_CHAT_OUTPUT_TOKENS: u16 = u16::MAX;
@@ -27,16 +24,6 @@ impl ChatGenerationCommand {
                 actual_output_tokens: self.settings.max_output_tokens,
                 maximum_output_tokens: MAX_CHAT_OUTPUT_TOKENS,
             });
-        }
-        if let Some(qwen_thinking_channel_seed) = &self.qwen_thinking_channel_seed
-            && qwen_thinking_channel_seed.len() > MAX_QWEN_THINKING_CHANNEL_SEED_BYTES
-        {
-            return Err(
-                ChatGenerationValidationError::QwenThinkingChannelSeedTooLarge {
-                    actual_seed_bytes: qwen_thinking_channel_seed.len(),
-                    maximum_seed_bytes: MAX_QWEN_THINKING_CHANNEL_SEED_BYTES,
-                },
-            );
         }
         if let Some(temperature_thousandths) = self.settings.temperature_thousandths
             && temperature_thousandths > MAX_CHAT_TEMPERATURE_THOUSANDTHS
@@ -226,13 +213,6 @@ pub enum ChatGenerationValidationError {
     EmptyAssistantToolCallFunctionName,
     #[error("tool result ID must not be empty")]
     EmptyToolResultId,
-    #[error(
-        "Qwen thinking-channel seed has {actual_seed_bytes} bytes, exceeding {maximum_seed_bytes}"
-    )]
-    QwenThinkingChannelSeedTooLarge {
-        actual_seed_bytes: usize,
-        maximum_seed_bytes: usize,
-    },
 }
 
 fn validate_assistant_tool_call(

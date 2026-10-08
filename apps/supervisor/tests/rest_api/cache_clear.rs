@@ -266,7 +266,6 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
         configured_persistent_prompt_cache_enabled: None,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        experimental_qwen_thinking_channel_seed_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(
             temporary_directory.path().join("cache"),
             50_000_000_000,
@@ -333,7 +332,6 @@ fn delayed_generation_command(request_id: u64) -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     }
 }

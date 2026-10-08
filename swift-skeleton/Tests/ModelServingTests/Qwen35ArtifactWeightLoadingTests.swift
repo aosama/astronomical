@@ -317,7 +317,6 @@ final class Qwen35ArtifactWeightLoadingTests {
                 topPThousandths: nil,
                 seed: 7,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 }
