@@ -19,7 +19,7 @@ function removeHtmlComments(markdown) {
 const ISSUE_REFERENCE_PATTERN = /\b(Fixes|Closes|Resolves|Refs)\s+#([1-9]\d*)\b/gi;
 
 const SECTION_REFERENCE_FAILURE =
-    "The `## Linked issue` section must contain exactly one same-repository reference: `Fixes #N`, `Closes #N`, `Resolves #N`, or `Refs #N`.";
+    "The `## Linked issue` section must reference at least one issue, and every `#N` in the section must use a canonical keyword: `Fixes #N`, `Closes #N`, `Resolves #N`, or `Refs #N`.";
 const MISSING_SECTION_FAILURE =
     "Add a `## Linked issue` section containing `Fixes #N` for implementation work or `Refs #N` for documentation, CI, and maintenance work; a bare `Fixes #N` line anywhere in the body is also accepted.";
 const AMBIGUOUS_BODY_FAILURE =
@@ -65,14 +65,22 @@ function extractLinkedIssue(pullRequestBody) {
     const commentsRemoved = removeHtmlComments(referenceSearchText);
     const references = findIssueReferences(commentsRemoved);
     const referencedIssueNumbers = [...new Set(references.map((reference) => reference.issueNumber))];
-    // Every issue number mentioned in the searched text counts toward the
-    // single-reference rule, keyword or not, so `Fixes #224 and #225` cannot
-    // smuggle a second unlinked issue past the provenance contract.
+    // Every issue number mentioned in the searched text must carry a
+    // canonical keyword, so `Fixes #224 and #225` cannot smuggle a second
+    // unlinked issue past the provenance contract. A slice legitimately
+    // touches several issues (its implementation issue plus a verification
+    // or tracking issue), so several canonical references are accepted and
+    // the first one is the primary linked issue.
     const mentionedIssueNumbers = findMentionedIssueNumbers(commentsRemoved);
-    if (referencedIssueNumbers.length === 1 && mentionedIssueNumbers.length === 1) {
+    const everyMentionIsReferenced = mentionedIssueNumbers
+        .every((issueNumber) => referencedIssueNumbers.includes(issueNumber));
+    if (references.length >= 1 && everyMentionIsReferenced) {
         return {
-            relationship: references[0].relationship,
-            issueNumber: referencedIssueNumbers[0],
+            primary: {
+                relationship: references[0].relationship,
+                issueNumber: referencedIssueNumbers[0],
+            },
+            referencedIssueNumbers,
         };
     }
     if (linkedIssueHeadingIndex !== -1) {
@@ -82,25 +90,31 @@ function extractLinkedIssue(pullRequestBody) {
 }
 
 async function validatePullRequestIssue({ pullRequestBody, loadIssue }) {
-    const { relationship, issueNumber } = extractLinkedIssue(pullRequestBody);
+    const { primary, referencedIssueNumbers } = extractLinkedIssue(pullRequestBody);
 
-    let linkedIssue;
-    try {
-        linkedIssue = await loadIssue(issueNumber);
-    } catch (error) {
-        if (error?.status === 404) {
-            throw new Error(`Issue #${issueNumber} does not exist in this repository.`);
+    let primaryIssue;
+    for (const issueNumber of referencedIssueNumbers) {
+        let linkedIssue;
+        try {
+            linkedIssue = await loadIssue(issueNumber);
+        } catch (error) {
+            if (error?.status === 404) {
+                throw new Error(`Issue #${issueNumber} does not exist in this repository.`);
+            }
+            throw error;
         }
-        throw error;
-    }
 
-    if (linkedIssue.pull_request !== undefined) {
-        throw new Error(`#${issueNumber} identifies a pull request, not an issue.`);
+        if (linkedIssue.pull_request !== undefined) {
+            throw new Error(`#${issueNumber} identifies a pull request, not an issue.`);
+        }
+        if (issueNumber === primary.issueNumber) {
+            primaryIssue = linkedIssue;
+        }
     }
     return {
-        issueNumber,
-        relationship,
-        issueUrl: linkedIssue.html_url,
+        issueNumber: primary.issueNumber,
+        relationship: primary.relationship,
+        issueUrl: primaryIssue.html_url,
     };
 }
 
