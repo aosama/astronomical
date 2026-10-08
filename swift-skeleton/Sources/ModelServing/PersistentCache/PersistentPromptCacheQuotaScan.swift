@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Recursive global prompt-cache quota discovery, port of the Rust
 /// `disk_store_global_quota_scan`. This type has no deletion authority: it

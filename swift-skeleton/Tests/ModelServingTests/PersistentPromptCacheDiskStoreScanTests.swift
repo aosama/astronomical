@@ -129,7 +129,7 @@ final class PersistentPromptCacheDiskStoreScanTests {
         let manifest: PersistentPromptCacheBlockManifest = try PersistentPromptCacheBlockManifestTests
             .buildManifest(
                 blockKey: blockKey, parentBlockKey: parentBlockKey, modelContract: modelContract);
-        try manifest.writeToStagingDirectory(stagingBlockDirectory: blockDirectory);
+        _ = try manifest.writeToStagingDirectory(stagingBlockDirectory: blockDirectory);
         return blockDirectory;
     }
 

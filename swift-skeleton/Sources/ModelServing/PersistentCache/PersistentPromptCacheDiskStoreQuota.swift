@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// The quota-enforcement and retention-reconciliation half of
 /// `PersistentPromptCacheDiskStore`: pressure relief ordered unconditional
@@ -241,7 +240,7 @@ extension PersistentPromptCacheDiskStore {
             try PersistentPromptCacheStoreFile.synchronizeDirectory(directoryPath: URL(
                 fileURLWithPath: reclaimableBoundary.blockDirectoryPath));
             self.stateLock.lock();
-            self.trackedFiles.removeFile(
+            _ = self.trackedFiles.removeFile(
                 fileKind: .boundaryStateSnapshot,
                 blockHash: reclaimableBoundary.blockHash);
             self.stateLock.unlock();

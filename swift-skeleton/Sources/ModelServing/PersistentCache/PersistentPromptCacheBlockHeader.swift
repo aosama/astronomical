@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Bounded validator for persisted model-state files, port of the Rust
 /// `PersistentPromptCacheBlockHeader`. This type reads only the

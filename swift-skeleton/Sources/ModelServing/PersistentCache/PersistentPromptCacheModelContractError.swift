@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// A model and its live resource budgets could not form a safe
 /// persistent-state contract, port of the Rust

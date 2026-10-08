@@ -1,7 +1,6 @@
 import Foundation;
 
 import IpcProtocol;
-import ModelServing;
 
 /// One bounded failure while reading a persistent safetensors header, port
 /// of the Rust `PersistentSafetensorsHeaderError`.

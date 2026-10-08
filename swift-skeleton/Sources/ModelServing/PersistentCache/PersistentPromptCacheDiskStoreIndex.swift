@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Process-local index of prompt-cache files already validated against
 /// disk, port of the Rust `PersistentPromptCacheDiskStoreIndex`. The index

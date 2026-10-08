@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// The kind of one cache-owned file the store tracks.
 enum PersistentPromptCacheFileKind {
@@ -273,7 +272,7 @@ public final class PersistentPromptCacheDiskStore {
         else {
             return;
         }
-        self.trackedFiles.removeBlock(blockHash: fileHash);
+        _ = self.trackedFiles.removeBlock(blockHash: fileHash);
         self.globalPromptCacheTotalSizeBytes = self.globalPromptCacheTotalSizeBytes
             .subtractingReportingOverflow(removedTrackedFile.fileSizeBytes).partialValue;
         if sequenceState == false {

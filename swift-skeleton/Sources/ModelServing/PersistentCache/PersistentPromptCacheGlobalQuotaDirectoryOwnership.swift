@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// One global prompt-cache byte ceiling across every model and revision,
 /// port of the Rust `disk_store_global_quota` directory-ownership section.

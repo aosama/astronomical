@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Measured SSD space and prompt-cache blocks removed by one clear
 /// operation, port of the Rust `PersistentPromptCacheClearOutcome`.

@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Durable identity and topology record for one committed prompt-cache
 /// block, port of the Rust `PersistentPromptCacheBlockManifest`. The
@@ -165,7 +164,7 @@ public struct PersistentPromptCacheBlockManifest: Equatable, Sendable {
         }
         do {
             try temporaryFileHandle.write(contentsOf: manifestBytes);
-            try temporaryFileHandle.synchronizeFile();
+            temporaryFileHandle.synchronizeFile();
         } catch {
             try? PersistentPromptCacheStoreFile.removeCacheOwnedFileOrConfirmAbsent(
                 filePath: temporaryManifestFilePath);

@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Startup scan: discovers, validates, and cleans persistent prompt-cache
 /// files while the disk store opens, port of the Rust `disk_store_scan`.
