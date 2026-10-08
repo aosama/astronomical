@@ -34,6 +34,8 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case removePromptCacheFile(filePath: String, problem: String);
 
+    case unsafePromptCacheDirectory(directoryPath: String);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -62,6 +64,8 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             return "failed to open the prompt-cache block file at \(blockFilePath): \(problem)";
         case let .removePromptCacheFile(filePath, problem):
             return "failed to remove the prompt-cache file at \(filePath): \(problem)";
+        case let .unsafePromptCacheDirectory(directoryPath):
+            return "the prompt-cache directory at \(directoryPath) is not a safe cache-owned path";
         }
     }
 }
