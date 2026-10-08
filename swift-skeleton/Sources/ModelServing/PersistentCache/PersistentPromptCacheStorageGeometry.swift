@@ -64,7 +64,7 @@ enum PersistentPromptCacheStorageGeometry {
             + "\"storage_contract_fingerprint\":\"\(PersistentPromptCacheStorageGeometry.FINGERPRINT_PLACEHOLDER)\""
             + "}";
         var headerEntries: Array<(entryKey: String, entryJson: String)> =
-            [("__metadata__", metadataJson)];
+            [("__metadata__", "\"__metadata__\":\(metadataJson)")];
         var payloadOffsetBytes: UInt64 = 0;
         for tensorEntry in tensorGeometry {
             let tensorPayloadBytes: UInt64 = UInt64(max(tensorEntry.payloadBytes, 0));

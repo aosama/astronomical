@@ -50,6 +50,13 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case existingBlockTopologyMismatch(blockHash: Data);
 
+    case sizeBoundExceeded(maximumSizeBytes: UInt64, estimatedBlockBytes: UInt64);
+
+    case writtenFileSizeMismatch(
+        filePath: String,
+        reportedSizeBytes: UInt64,
+        actualSizeBytes: UInt64);
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -97,6 +104,12 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
                     return String(format: "%02x", hashByte);
                 }).joined()
                 + " already exists with different topology";
+        case let .sizeBoundExceeded(maximumSizeBytes, estimatedBlockBytes):
+            return "the staged artifact is \(estimatedBlockBytes) bytes, exceeding its "
+                + "\(maximumSizeBytes)-byte bound";
+        case let .writtenFileSizeMismatch(filePath, reportedSizeBytes, actualSizeBytes):
+            return "the staged file at \(filePath) reports \(reportedSizeBytes) bytes but wrote "
+                + "\(actualSizeBytes)";
         }
     }
 }
