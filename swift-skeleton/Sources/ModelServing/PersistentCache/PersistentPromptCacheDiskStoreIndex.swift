@@ -109,8 +109,41 @@ public struct PersistentPromptCacheDiskStoreIndex: Sendable {
     }
 
     /// Removes one tracked block, returning it when present.
-    public mutating func removeBlock(blockHash: Data) -> TrackedBlock? {
-        return self.blocksByHash.removeValue(forKey: blockHash);
+    /// Removes one tracked state file of the given kind from its block,
+    /// keeping the block's remaining state tracked, port of the Rust
+    /// `DiskStoreIndex::remove_file`.
+    mutating func removeFile(
+        fileKind: PersistentPromptCacheFileKind, blockHash: Data
+    ) -> TrackedFile? {
+        guard var trackedBlock: TrackedBlock = self.blocksByHash[blockHash] else {
+            return nil;
+        }
+        let removedFile: TrackedFile?;
+        switch fileKind {
+        case .sequenceStateBlock:
+            removedFile = trackedBlock.sequenceStateFile;
+            trackedBlock = TrackedBlock(
+                blockDirectoryPath: trackedBlock.blockDirectoryPath,
+                blockIndex: trackedBlock.blockIndex,
+                parentBlockHash: trackedBlock.parentBlockHash,
+                sequenceStateFile: nil,
+                boundaryStateFile: trackedBlock.boundaryStateFile);
+        case .boundaryStateSnapshot:
+            removedFile = trackedBlock.boundaryStateFile;
+            trackedBlock = TrackedBlock(
+                blockDirectoryPath: trackedBlock.blockDirectoryPath,
+                blockIndex: trackedBlock.blockIndex,
+                parentBlockHash: trackedBlock.parentBlockHash,
+                sequenceStateFile: trackedBlock.sequenceStateFile,
+                boundaryStateFile: nil);
+        case .visualEmbedding:
+            return self.visualEmbeddingsByHash.removeValue(forKey: blockHash);
+        }
+        self.blocksByHash[blockHash] = trackedBlock;
+        return removedFile;
+    }
+
+    public mutating func removeBlock(blockHash: Data) -> TrackedBlock? {        return self.blocksByHash.removeValue(forKey: blockHash);
     }
 
     /// Walks from tip to root collecting the directory paths quota eviction
