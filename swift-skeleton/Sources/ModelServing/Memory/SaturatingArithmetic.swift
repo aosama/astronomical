@@ -16,6 +16,15 @@ internal enum SaturatingArithmetic {
         return summedTotal
     }
 
+    /// Multiplies two byte counts, saturating at `UInt64.max`.
+    internal static func multiply(_ multiplicand: UInt64, _ multiplier: UInt64) -> UInt64 {
+        let (product, multiplyOverflowed) = multiplicand.multipliedReportingOverflow(by: multiplier)
+        if multiplyOverflowed {
+            return UInt64.max
+        }
+        return product
+    }
+
     /// Subtracts a byte count, saturating at zero.
     internal static func subtract(_ minuend: UInt64, _ subtrahend: UInt64) -> UInt64 {
         let (difference, subtractOverflowed) = minuend.subtractingReportingOverflow(subtrahend)
