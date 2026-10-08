@@ -136,7 +136,11 @@ final class FakeWorkerJourneyHarness: @unchecked Sendable {
     /// offending journey fails; a fatal error here would trap the whole
     /// test process and hide every later result.
     func awaitQueueFill(expectedOutstandingCount: Int) throws -> Void {
-        let fillDeadline: Date = Date().addingTimeInterval(5);
+        // Admission waits on a spawned fake-worker process; under a fully
+        // parallel suite that spawn can take seconds, so the bound stays far
+        // below the journeys' own time limits while never failing a healthy
+        // but loaded run.
+        let fillDeadline: Date = Date().addingTimeInterval(30);
         while supervisor.outstandingAdmissionTicketCount < expectedOutstandingCount {
             if Date() >= fillDeadline {
                 throw FakeWorkerJourneyHarnessFailure.queueNeverReached(
