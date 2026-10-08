@@ -238,6 +238,32 @@ enum PersistentPromptCacheFixture {
             commonPrefixCheckpointStrideBlocks: 4);
     }
 
+    /// Sums regular-file bytes under one directory tree, mirroring the Rust
+    /// journeys' directory size helper.
+    static func directoryFileSizeBytes(directoryPath: URL) throws -> UInt64 {
+        var pendingDirectories: [URL] = [directoryPath];
+        var totalByteCount: UInt64 = 0;
+        while let pendingDirectory: URL = pendingDirectories.popLast() {
+            for enumeratedEntry: URL in try FileManager.default.contentsOfDirectory(
+                at: pendingDirectory, includingPropertiesForKeys: [.fileSizeKey],
+                options: []) {
+                let entryPath: URL = pendingDirectory.appendingPathComponent(
+                    enumeratedEntry.lastPathComponent);
+                var isDirectory: ObjCBool = ObjCBool(false);
+                FileManager.default.fileExists(atPath: entryPath.path, isDirectory: &isDirectory);
+                if isDirectory.boolValue {
+                    pendingDirectories.append(entryPath);
+                } else {
+                    let fileAttributes: [FileAttributeKey: Any] = try FileManager.default
+                        .attributesOfItem(atPath: entryPath.path);
+                    totalByteCount = totalByteCount &+ ((fileAttributes[.size] as? NSNumber)?
+                        .uint64Value ?? 0);
+                }
+            }
+        }
+        return totalByteCount;
+    }
+
     /// Hashes the prompt's first `requestedBlockCount` complete blocks in
     /// chain order, mirroring the Rust key-walk helper.
     static func blockKeysForPrompt(
