@@ -1,6 +1,6 @@
 import Foundation;
 
-import ModelServing;
+import RuntimeIntegration;
 
 /// Bounded failure surface of the persistent prompt-cache disk store, port
 /// of the Rust `PersistentPromptCacheDiskStoreError`. The enum grows with
@@ -63,6 +63,34 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case validateBlock(blockFilePath: String, problem: String);
 
+    /// Wraps an MLX writer failure from the capture/restore slice's direct
+    /// publication path so retry classification can inspect the source.
+    case saveSafetensors(source: MlxRuntimeError);
+
+    case writeSafetensorsDescriptor(filePath: String, problem: String);
+
+    /// The exact active-memory bytes a retry must release before this
+    /// publication can succeed, when the failure was MLX active-memory
+    /// pressure; every other failure is not retryable as memory pressure.
+    public func activeMemoryDeficitBytes() -> UInt64? {
+        guard case let .saveSafetensors(
+            .activeMemoryLimitExceeded(
+                activeMemoryBytes: activeMemoryBytes,
+                attemptedAllocationBytes: attemptedAllocationBytes,
+                allowedActiveMemoryBytes: allowedActiveMemoryBytes)) = self
+        else {
+            return nil;
+        }
+        let (requestedBytes, addOverflowed) = activeMemoryBytes
+            .addingReportingOverflow(attemptedAllocationBytes);
+        if addOverflowed {
+            return UInt64.max;
+        }
+        let deficitBytes: Int = requestedBytes
+            .subtractingReportingOverflow(allowedActiveMemoryBytes).partialValue;
+        return UInt64(max(deficitBytes, 0));
+    }
+
     public var errorDescription: String? {
         switch self {
         case let .readBlockManifest(manifestFilePath, problem):
@@ -122,6 +150,10 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             return "the parent of the requested block at index \(blockIndex) is not published";
         case let .validateBlock(blockFilePath, problem):
             return "the block file at \(blockFilePath) failed validation: \(problem)";
+        case let .saveSafetensors(source):
+            return "the safetensors state write failed: \(source)";
+        case let .writeSafetensorsDescriptor(filePath, problem):
+            return "the safetensors descriptor at \(filePath) could not be written: \(problem)";
         }
     }
 }

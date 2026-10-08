@@ -190,6 +190,54 @@ enum PersistentPromptCacheFixture {
             modelContract: modelContract);
     }
 
+    /// Tiny synthetic contracts exercising the storage-layout variants the
+    /// frozen Ornith fixture cannot: one append-only attention layer with a
+    /// 16-token block (sequence state only), and one fixed recurrent tensor
+    /// (boundary state only).
+    static func syntheticSequenceOnlyContract() throws -> PersistentPromptCacheModelContract {
+        let decoderCacheLayout: DecoderCacheLayout = try DecoderCacheLayout(layers: [
+            .appendOnlyAttention(
+                keys: .sequence(
+                    tensorRoleName: "attention.keys",
+                    dtype: .float16,
+                    dimensions: [1, 0, 4],
+                    sequenceAxis: 1),
+                values: .sequence(
+                    tensorRoleName: "attention.values",
+                    dtype: .float16,
+                    dimensions: [1, 0, 4],
+                    sequenceAxis: 1),
+                capacityGrowthTokens: 16),
+        ]);
+        return try PersistentPromptCacheModelContract.resolve(
+            modelId: "fictional-sequence-only-model",
+            modelRevision: "fictional-revision",
+            decoderCacheLayout: decoderCacheLayout,
+            maximumContextTokenCount: 128,
+            effectiveMlxMemoryCeilingBytes: 1_000_000,
+            globalSsdQuotaBytes: 1_000_000,
+            configuredBlockTokenCount: nil,
+            commonPrefixCheckpointStrideBlocks: 4);
+    }
+
+    static func syntheticBoundaryOnlyContract() throws -> PersistentPromptCacheModelContract {
+        let decoderCacheLayout: DecoderCacheLayout = try DecoderCacheLayout(layers: [
+            .recurrentTensor(tensor: .fixed(
+                tensorRoleName: "recurrent.state",
+                dtype: .float32,
+                dimensions: [25])),
+        ]);
+        return try PersistentPromptCacheModelContract.resolve(
+            modelId: "fictional-boundary-only-model",
+            modelRevision: "fictional-revision",
+            decoderCacheLayout: decoderCacheLayout,
+            maximumContextTokenCount: 100,
+            effectiveMlxMemoryCeilingBytes: 1_000_000,
+            globalSsdQuotaBytes: 10_000,
+            configuredBlockTokenCount: nil,
+            commonPrefixCheckpointStrideBlocks: 4);
+    }
+
     /// Hashes the prompt's first `requestedBlockCount` complete blocks in
     /// chain order, mirroring the Rust key-walk helper.
     static func blockKeysForPrompt(
