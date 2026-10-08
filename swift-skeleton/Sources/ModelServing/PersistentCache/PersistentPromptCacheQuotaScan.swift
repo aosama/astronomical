@@ -139,10 +139,15 @@ enum PersistentPromptCacheQuotaScanEngine {
                     entryPath.path == excludedDirectory.path {
                     continue;
                 }
-                var isDirectory: ObjCBool = ObjCBool(false);
-                FileManager.default.fileExists(
-                    atPath: entryPath.path, isDirectory: &isDirectory);
-                if isDirectory.boolValue {
+                // Symlink classification must use lstat semantics like
+                // Rust's read_dir: a symlink pointing at a directory is a
+                // removable standalone entry, never a subtree to walk into
+                // and never followed outside the cache root.
+                let entryType: FileAttributeType? = (try? FileManager.default
+                    .attributesOfItem(atPath: entryPath.path))?[.type]
+                    as? FileAttributeType;
+                let isDirectory: Bool = entryType == .typeDirectory;
+                if isDirectory {
                     // A valid block directory is a leaf for this traversal:
                     // its contents are counted together by
                     // `scanBlockDirectory`.
