@@ -39,8 +39,6 @@ pub enum ExpertPagingError {
     },
     #[error("expert paging is not enabled for this model")]
     PagingNotEnabled,
-    #[error("streaming expert pack wiring failed: {0}")]
-    StreamingExpertPack(#[from] StreamingExpertPackError),
     #[error("failed to open resident expert source {source_file:?}: {source}")]
     ResidentSourceOpen {
         source_file: PathBuf,
