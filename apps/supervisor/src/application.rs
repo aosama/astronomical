@@ -63,8 +63,6 @@ pub(crate) struct ApplicationState {
     /// Keeps a persisted live-memory update transactional until the worker
     /// either applies or rejects a value queued behind active generation.
     pub(crate) pending_memory_config_generation: Arc<AsyncMutex<Option<String>>>,
-    /// Switchable timing for supervisor-owned request-path operations.
-    pub(crate) supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog,
     /// Internal shutdown controller for `POST /v1/control/shutdown`.
     pub(crate) shutdown_controller: Option<crate::shutdown_control::ShutdownController>,
 }
@@ -129,7 +127,6 @@ pub fn build_application_with_discovered_models(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
-        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     };
 
@@ -155,7 +152,6 @@ pub fn build_application_with_download_catalog(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
-        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     };
 
@@ -183,7 +179,6 @@ pub fn build_application_with_shutdown(
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
-        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: Some(shutdown_controller),
     };
 
@@ -230,7 +225,6 @@ pub fn build_development_application_with_reload(
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
-        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: None,
     };
 
@@ -359,7 +353,6 @@ pub fn build_application_with_full_control_and_download_catalog(
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
         pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
-        supervisor_attribution_log: crate::SupervisorPerformanceAttributionLog::disabled(),
         shutdown_controller: Some(shutdown_controller),
     };
 

@@ -4,7 +4,6 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_config::AstronomicalInstancePaths;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, DaemonResponse, DaemonTransportError, RequestId, StreamingResponseWriter,
@@ -20,10 +19,8 @@ use crate::{
     application::allocate_chat_request_id,
     config_reload::ResolvedRuntimeConfig,
     daemon_ipc_chat_schema::validated_chat_schema_constraint,
-    load_configured_qwen_thinking_channel_seed,
     request_generation_defaults::{RequestGenerationSettingsPresence, apply_generation_defaults},
     structured_output::{enforced_schema_output_instruction, insert_json_output_instruction},
-    supervisor_performance_attribution::SupervisorPerformanceAttributionLog,
     worker_health::{WorkerHealthSnapshot, WorkerHealthStatus},
 };
 
@@ -40,8 +37,6 @@ pub(super) struct DaemonIpcChatRequest {
 /// and streams events to the client until a terminal frame.
 pub(super) async fn stream_chat_generation(
     generation_context: &DaemonIpcGenerationContext,
-    seed_instance_paths: &AstronomicalInstancePaths,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
     chat_request: DaemonIpcChatRequest,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
@@ -111,13 +106,6 @@ pub(super) async fn stream_chat_generation(
         tools: vec![],
         tool_choice: ChatToolChoice::Auto,
         settings,
-        qwen_thinking_channel_seed: load_configured_qwen_thinking_channel_seed(
-            generation_context.reloadable_config.as_ref(),
-            Some(seed_instance_paths),
-            supervisor_attribution_log,
-            &model,
-        )
-        .await,
         structured_generation: structured_generation_constraint,
     };
     let stream_event_receiver = match generation_context

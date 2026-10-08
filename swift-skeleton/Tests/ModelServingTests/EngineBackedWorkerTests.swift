@@ -466,7 +466,6 @@ final class EngineBackedWorkerTests {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 }

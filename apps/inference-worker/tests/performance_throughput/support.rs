@@ -206,7 +206,6 @@ async fn drive_completion(
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
     let mut receiver = match worker_handle.start_chat_generation(command).await {

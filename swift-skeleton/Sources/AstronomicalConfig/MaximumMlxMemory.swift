@@ -152,8 +152,7 @@ public enum MaximumMlxMemory {
         let updatedRuntimeConfigFile: RuntimeConfigFile = RuntimeConfigFile(
             modelDirectories: sourceUserConfigFile.runtime.modelDirectories,
             maximumMlxMemoryGb: maximumMlxMemoryGb,
-            defaultModel: sourceUserConfigFile.runtime.defaultModel,
-            experimentalQwenThinkingChannelSeedEnabled: sourceUserConfigFile.runtime.experimentalQwenThinkingChannelSeedEnabled
+            defaultModel: sourceUserConfigFile.runtime.defaultModel
         );
         return UserConfigFile(
             schemaReference: sourceUserConfigFile.schemaReference,

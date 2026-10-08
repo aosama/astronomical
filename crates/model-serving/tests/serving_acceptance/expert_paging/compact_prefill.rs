@@ -168,7 +168,6 @@ pub(crate) fn prepare_reproduced_prompt_token_ids() -> Vec<u32> {
             seed: None,
             thinking_budget: Some(256),
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
     tokenizer

@@ -71,12 +71,6 @@
           "minLength": 1,
           "description": "Requestable model id used as the default by one-shot CLI verbs; omission falls back to the built-in default model.",
           "x-astronomical-apply-mode": "live"
-        },
-        "experimental_qwen_thinking_channel_seed_enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Whether Qwen requests may use the optional instance-state thinking.md seed.",
-          "x-astronomical-apply-mode": "worker-replacement"
         }
       }
     },

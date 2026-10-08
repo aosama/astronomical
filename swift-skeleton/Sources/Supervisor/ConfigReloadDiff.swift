@@ -85,10 +85,6 @@ public enum ConfigReloadDiff {
             // application restart keeps both owners aligned.
             restartRequiredFields.append("diagnostics.performance_attribution_enabled");
         }
-        if current.experimentalQwenThinkingChannelSeedEnabled != candidate.experimentalQwenThinkingChannelSeedEnabled {
-            workerRestartReloadedFields.append("experimental_qwen_thinking_channel_seed_enabled");
-            workerRestartRequired = true;
-        }
         if current.persistentPromptCacheEnabled != candidate.persistentPromptCacheEnabled {
             workerRestartReloadedFields.append("persistent_prompt_cache_enabled");
             workerRestartRequired = true;

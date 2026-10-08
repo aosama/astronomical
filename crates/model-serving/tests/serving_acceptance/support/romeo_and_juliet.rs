@@ -51,7 +51,6 @@ pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
                         seed: None,
                         thinking_budget: None,
                     },
-                    qwen_thinking_channel_seed: None,
                     structured_generation: None,
                 },
                 false,

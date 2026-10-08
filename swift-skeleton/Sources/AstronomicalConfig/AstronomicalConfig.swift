@@ -161,11 +161,6 @@ public struct AstronomicalConfig {
         return self.loadedUserConfigFile.diagnostics?.completionAttributionEnabled ?? false;
     }
 
-    /// Whether REST requests may read the optional Qwen thinking-channel seed.
-    public func experimentalQwenThinkingChannelSeedEnabled() -> Bool {
-        return self.loadedUserConfigFile.runtime.experimentalQwenThinkingChannelSeedEnabled ?? false;
-    }
-
     /// Canonical model identities the config carries preferences for.
     public var configuredModelIds: Array<String> {
         return Array<String>(self.loadedUserConfigFile.models.keys).sorted();

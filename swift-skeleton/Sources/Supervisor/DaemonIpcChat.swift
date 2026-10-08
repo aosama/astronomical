@@ -96,10 +96,6 @@ enum DaemonIpcChat {
             tools: [],
             toolChoice: .auto,
             settings: generationSettings,
-            qwenThinkingChannelSeed: QwenThinkingChannelSeed.load(
-                resolvedRuntimeConfig: chatContext.resolvedRuntimeConfig,
-                instancePaths: chatContext.instancePaths,
-                modelId: model),
             structuredGeneration: structuredGenerationConstraint);
         let streamEvents: Array<ChatGenerationStreamEvent>;
         do {

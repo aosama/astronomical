@@ -497,7 +497,6 @@ fn chat_command(model_id: &str) -> ChatGenerationCommand {
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     }
 }

@@ -78,7 +78,6 @@ async fn run_romeo_continuation() {
                     seed: None,
                     thinking_budget: None,
                 },
-                qwen_thinking_channel_seed: None,
                 structured_generation: None,
             },
             false,

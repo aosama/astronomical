@@ -447,7 +447,6 @@ final class DaemonIpcModelsTests {
             maximumMlxMemoryBytes: nil,
             performanceAttributionEnabled: false,
             completionAttributionEnabled: false,
-            experimentalQwenThinkingChannelSeedEnabled: false,
             persistentPromptCacheEnabled: true,
             configuredPersistentPromptCacheEnabled: nil,
             configuredPromptCacheMaximumSizeBytes: 50_000_000_000,

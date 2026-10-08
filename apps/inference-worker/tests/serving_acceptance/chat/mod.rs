@@ -8,4 +8,3 @@ mod public_chat_rest;
 mod structured_output_rest;
 mod thinking_budget_support;
 mod thinking_controls_rest;
-mod thinking_seed_rest;
