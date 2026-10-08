@@ -286,11 +286,10 @@ extension PersistentPromptCacheDiskStore {
         case .quotaEviction:
             reason = .quotaEviction;
         }
-        for _ in 0..<removedCandidate.removedArtifactCount {
-            startupCleanupEvidence.recordArtifact(reason: reason, removedByteCount: 0);
-        }
-        startupCleanupEvidence.recordBlock(
+        startupCleanupEvidence.recordCandidate(
             reason: reason,
+            removedArtifactCount: removedCandidate.removedArtifactCount,
+            removedBlockCount: removedCandidate.removedBlockCount,
             removedByteCount: removedCandidate.fileSizeBytes);
     }
 

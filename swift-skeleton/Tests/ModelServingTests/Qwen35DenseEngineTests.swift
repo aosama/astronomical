@@ -19,8 +19,10 @@ import JourneyCategories;
  * fail-closed load path. No downloads; the suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35DenseEngineTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35DenseEngineTests {
 
     private static let ROMEO_AND_JULIET_PROMPT: String = "What is the play about?";
 
@@ -265,4 +267,6 @@ final class Qwen35DenseEngineTests {
             }
         }
         """;
+}
+
 }

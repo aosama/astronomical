@@ -23,8 +23,10 @@ import JourneyCategories;
  * The suite is serialized so the MLX journeys never overlap (the
  * repository's one-model-at-a-time rule).
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35MoeArtifactRuntimeTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35MoeArtifactRuntimeTests {
 
     private static let ROMEO_AND_JULIET_PROMPT: String = "What is the play about?";
 
@@ -172,4 +174,6 @@ final class Qwen35MoeArtifactRuntimeTests {
                 thinkingBudget: nil),
             structuredGeneration: nil);
     }
+}
+
 }

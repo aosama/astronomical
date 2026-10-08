@@ -17,8 +17,10 @@ import Testing;
  * identical forward (issue #629 hermetic seed), and records the route
  * observations the on-device route predictor consumes.
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35MoePagedExpertDecoratorTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35MoePagedExpertDecoratorTests {
 
     init() {
         signal(SIGPIPE, SIG_IGN);
@@ -382,4 +384,6 @@ private final class QuantizedExpertPageFakeMaterializer: Qwen35MoeExpertPageMate
         }
         return Qwen35MoeMaterializedProjectionSlices(parametersByParameterBasename: requestedBasenameSlices);
     }
+}
+
 }

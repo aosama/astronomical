@@ -24,8 +24,10 @@ import JourneyCategories;
  * golden-master token streams. The suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class ArtifactRuntimeWorkerJourneyTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class ArtifactRuntimeWorkerJourneyTests {
 
     private static let ROMEO_AND_JULIET_PROMPT: String =
         "Two households, both alike in dignity: which play opens with this line?";
@@ -312,6 +314,7 @@ final class ArtifactRuntimeWorkerJourneyTests {
     }
 }
 
+}
 /**
  * Thin dispatch mirroring ModelFamilyFactory's Qwen3.5 dense case: the
  * ModelServingTests target cannot import the InferenceWorker executable,
