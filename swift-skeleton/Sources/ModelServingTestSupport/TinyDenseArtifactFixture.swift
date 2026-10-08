@@ -71,7 +71,7 @@ public enum TinyDenseArtifactFixture {
         let tensorProfiles: Array<TensorProfile> = Qwen3_5TensorSpec
             .qwen3_5LanguageTensorProfiles(qwen3_5Config: config);
 
-        let framedShardBytes: FramedShardBytes = TinyDenseArtifactFixture.safetensorsFileBytes(
+        let framedShardBytes: SynthesizedShardBytes = TinyDenseArtifactFixture.safetensorsFileBytes(
             tensorProfiles: tensorProfiles, weightVariantSalt: weightVariantSalt);
         let indexBytes: Array<UInt8> = TinyDenseArtifactFixture.weightMapIndexBytes(
             tensorNames: shardTensorNames, totalPayloadBytes: framedShardBytes.payloadBytes);
@@ -192,11 +192,29 @@ public enum TinyDenseArtifactFixture {
     }
 
     /// Frames one real safetensors file whose payload bytes vary by tensor
+    /// and position, at the default weight variant.
+    public static func synthesizedShardBytes(
+        tensorProfiles: Array<TensorProfile>
+    ) -> SynthesizedShardBytes {
+        return TinyDenseArtifactFixture.safetensorsFileBytes(
+            tensorProfiles: tensorProfiles,
+            weightVariantSalt: TinyDenseArtifactFixture.DEFAULT_WEIGHT_VARIANT_SALT);
+    }
+
+    /// Frames the shard index whose weight map names every tensor's shard.
+    public static func synthesizedIndexBytes(
+        tensorNames: Set<String>, totalPayloadBytes: UInt64
+    ) -> Array<UInt8> {
+        return TinyDenseArtifactFixture.weightMapIndexBytes(
+            tensorNames: tensorNames, totalPayloadBytes: totalPayloadBytes);
+    }
+
+    /// Frames one real safetensors file whose payload bytes vary by tensor
     /// and position. Float elements pin their exponent byte (0x3C or 0x3D
     /// per variant) and vary the mantissa bytes, so values stay small,
     /// finite, and distinct; packed-integer elements vary every byte.
     private static func safetensorsFileBytes(
-        tensorProfiles: Array<TensorProfile>, weightVariantSalt: UInt8) -> FramedShardBytes {
+        tensorProfiles: Array<TensorProfile>, weightVariantSalt: UInt8) -> SynthesizedShardBytes {
         var headerEntries: Array<String> = Array();
         var payloadBytes: Data = Data();
         var payloadOffsetBytes: UInt64 = 0;
@@ -236,7 +254,7 @@ public enum TinyDenseArtifactFixture {
         };
         framedBytes.append(contentsOf: Array(headerText.utf8));
         framedBytes.append(contentsOf: Array(payloadBytes));
-        return FramedShardBytes(fileBytes: Data(framedBytes), payloadBytes: payloadOffsetBytes);
+        return SynthesizedShardBytes(fileBytes: Data(framedBytes), payloadBytes: payloadOffsetBytes);
     }
 
     private static func weightMapIndexBytes(
@@ -267,8 +285,8 @@ public enum TinyDenseArtifactFixture {
         }
     }
 
-    private struct FramedShardBytes {
-        var fileBytes: Data;
-        var payloadBytes: UInt64;
+    public struct SynthesizedShardBytes {
+        public var fileBytes: Data;
+        public var payloadBytes: UInt64;
     }
 }
