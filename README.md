@@ -152,9 +152,14 @@ Point an OpenAI-compatible local client at that address, select a discovered mod
 
 ## Verification
 
-Run the bounded commit gate:
+Check Rust formatting, then run the Rust hermetic and REST suites:
 
-    scripts/verify-before-commit.sh
+    cargo fmt --all -- --check
+    cargo test-hermetic-and-rest
+
+Run the Swift migration journeys (serialized: MLX journeys never run in parallel):
+
+    swift test --no-parallel --package-path swift-skeleton
 
 Run the macOS menu contracts:
 
