@@ -275,11 +275,9 @@ public final class PersistentPromptCacheDiskStore {
         _ = self.trackedFiles.removeBlock(blockHash: fileHash);
         self.globalPromptCacheTotalSizeBytes = self.globalPromptCacheTotalSizeBytes
             .subtractingReportingOverflow(removedTrackedFile.fileSizeBytes).partialValue;
-        if sequenceState == false {
-            self.globalVisualEmbeddingTotalSizeBytes = self
-                .globalVisualEmbeddingTotalSizeBytes
-                .subtractingReportingOverflow(removedTrackedFile.fileSizeBytes).partialValue;
-        }
+        // Block state files are never visual embeddings, so the visual
+        // embedding counter is untouched here; it is refreshed from disk by
+        // the quota scan, which remains its authoritative source.
     }
 
     /// Serializes deletion against publication and keeps the active index valid.
