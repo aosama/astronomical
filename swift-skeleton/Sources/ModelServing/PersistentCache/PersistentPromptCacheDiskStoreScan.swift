@@ -36,7 +36,9 @@ enum PersistentPromptCacheDiskStoreScan {
             throw PersistentPromptCacheDiskStoreError.readPromptCacheDirectory(
                 directoryPath: directory.path, problem: String(describing: error));
         }
-        for entryPath: URL in directoryEntries {
+        for enumeratedEntryPath: URL in directoryEntries {
+            let entryPath: URL = PersistentPromptCacheStoreFile.storeFormEntryURL(
+                directory: directory, enumeratedEntry: enumeratedEntryPath);
             let entryIsRegularFile: Bool = (try? entryPath.resourceValues(
                 forKeys: [.isRegularFileKey]))?.isRegularFile ?? false;
             if entryPath.pathExtension == "tmp" {
@@ -104,7 +106,9 @@ enum PersistentPromptCacheDiskStoreScan {
             throw PersistentPromptCacheDiskStoreError.readPromptCacheDirectory(
                 directoryPath: blocksDirectory.path, problem: String(describing: error));
         }
-        for blockDirectoryPath: URL in directoryEntries {
+        for enumeratedEntryPath: URL in directoryEntries {
+            let blockDirectoryPath: URL = PersistentPromptCacheStoreFile.storeFormEntryURL(
+                directory: blocksDirectory, enumeratedEntry: enumeratedEntryPath);
             let entryIsDirectory: Bool = (try? blockDirectoryPath.resourceValues(
                 forKeys: [.isDirectoryKey]))?.isDirectory ?? false;
             if entryIsDirectory == false {

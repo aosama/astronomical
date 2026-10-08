@@ -40,23 +40,41 @@ public enum PersistentPromptCacheStoreFile {
         return blockHash;
     }
 
+    /// Re-anchors one enumerated entry onto the caller-provided directory
+    /// URL. Foundation enumeration resolves symlinked prefixes (/var becomes
+    /// /private/var on macOS) while every path the store derives from its
+    /// configuration keeps the caller's form; quota exclusion, ancestry
+    /// protection, and index removal all compare these paths as strings, so
+    /// the port joins names onto the given directory like Rust's read_dir.
+    public static func storeFormEntryURL(
+        directory: URL, enumeratedEntry: URL
+    ) -> URL {
+        return directory.appendingPathComponent(enumeratedEntry.lastPathComponent);
+    }
+
     /// Persists a directory entry after publication: fsyncing file contents
     /// does not guarantee the directory entry survives a crash, so callers
     /// sync the parent directory after every rename.
     public static func synchronizeDirectory(directoryPath: URL) throws {
-        let directoryFileHandle: FileHandle;
-        do {
-            directoryFileHandle = try FileHandle(forReadingFrom: directoryPath);
-        } catch {
+        // FileHandle cannot open directories on Darwin; the Rust original
+        // relied on File::open + sync_all, so the port fsyncs through the
+        // raw descriptor, preferring F_FULLFSYNC for the same power-loss
+        // durability Rust's sync_all provides.
+        let directoryFileDescriptor: Int32 = Darwin.open(directoryPath.path, O_RDONLY);
+        if directoryFileDescriptor < 0 {
             throw PersistentPromptCacheDiskStoreError.openBlockFile(
-                blockFilePath: directoryPath.path, problem: String(describing: error));
+                blockFilePath: directoryPath.path,
+                problem: String(cString: strerror(errno)));
         }
-        defer { try? directoryFileHandle.close(); }
-        do {
-            try directoryFileHandle.synchronize();
-        } catch {
+        defer { Darwin.close(directoryFileDescriptor); }
+        let fullSyncResult: Int32 = Darwin.fcntl(directoryFileDescriptor, F_FULLFSYNC);
+        let syncResult: Int32 = fullSyncResult == 0
+            ? 0
+            : Darwin.fsync(directoryFileDescriptor);
+        if syncResult != 0 {
             throw PersistentPromptCacheDiskStoreError.readBlockMetadata(
-                blockFilePath: directoryPath.path, problem: String(describing: error));
+                blockFilePath: directoryPath.path,
+                problem: String(cString: strerror(errno)));
         }
     }
 

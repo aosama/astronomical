@@ -113,8 +113,11 @@ enum PersistentPromptCacheQuotaScanEngine {
     ) throws {
         var pendingDirectories: [URL] = [globalPromptCacheRootDirectory];
         while let pendingDirectory: URL = pendingDirectories.popLast() {
+            // URL equality fails across trailing-slash variants (the
+            // `isDirectory:` appender adds one, enumeration does not), so the
+            // exclusion compares resolved path strings.
             if let excludedDirectory: URL = excludedDirectory,
-                pendingDirectory == excludedDirectory {
+                pendingDirectory.path == excludedDirectory.path {
                 continue;
             }
             let directoryEntries: [URL];
@@ -126,9 +129,14 @@ enum PersistentPromptCacheQuotaScanEngine {
                     directoryPath: pendingDirectory.path,
                     problem: String(describing: error));
             }
-            for entryPath: URL in directoryEntries {
+            for enumeratedEntryPath: URL in directoryEntries {
+                let entryPath: URL = PersistentPromptCacheStoreFile.storeFormEntryURL(
+                    directory: pendingDirectory, enumeratedEntry: enumeratedEntryPath);
+                // The store form now matches the caller-provided exclusion,
+                // so string path comparison covers both trailing-slash
+                // variants (URL equality fails across them).
                 if let excludedDirectory: URL = excludedDirectory,
-                    entryPath == excludedDirectory {
+                    entryPath.path == excludedDirectory.path {
                     continue;
                 }
                 var isDirectory: ObjCBool = ObjCBool(false);
