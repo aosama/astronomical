@@ -101,21 +101,6 @@ final class ConfigReloadDiffTests {
     }
 
     @Test
-    func should_restart_the_worker_to_acknowledge_the_experimental_thinking_seed_flag() throws -> Void {
-        let currentSnapshot: ResolvedRuntimeConfig = ConfigReloadDiffTests.classificationSnapshot();
-        var candidateSnapshot: ResolvedRuntimeConfig = ConfigReloadDiffTests.classificationSnapshot();
-        candidateSnapshot.experimentalQwenThinkingChannelSeedEnabled = true;
-
-        guard case let .restartWorker(reloadedFields, _) = ConfigReloadDiff.compare(
-            current: currentSnapshot,
-            candidate: candidateSnapshot) else {
-            Issue.record("the thinking-channel seed flag must replace the worker");
-            return;
-        }
-        #expect(reloadedFields == ["experimental_qwen_thinking_channel_seed_enabled"]);
-    }
-
-    @Test
     func should_classify_model_directories_change_as_worker_restart() throws -> Void {
         var currentSnapshot: ResolvedRuntimeConfig = ConfigReloadDiffTests.classificationSnapshot();
         currentSnapshot.modelPolicyCatalog["default"] = ConfigReloadDiffTests.chatPolicy(
@@ -191,7 +176,6 @@ final class ConfigReloadDiffTests {
             maximumMlxMemoryBytes: nil,
             performanceAttributionEnabled: false,
             completionAttributionEnabled: false,
-            experimentalQwenThinkingChannelSeedEnabled: false,
             persistentPromptCacheEnabled: true,
             configuredPersistentPromptCacheEnabled: nil,
             configuredPromptCacheMaximumSizeBytes: nil,

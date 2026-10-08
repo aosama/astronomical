@@ -77,7 +77,6 @@ final class OpenAiChatTranslationTests {
         #expect(chatCommand.settings.topPThousandths == nil);
         #expect(chatCommand.settings.seed == nil);
         #expect(chatCommand.settings.thinkingBudget == 2_048);
-        #expect(chatCommand.qwenThinkingChannelSeed == nil);
         #expect(chatCommand.structuredGeneration == nil);
     }
 

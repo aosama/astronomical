@@ -15,7 +15,6 @@ public enum SupervisorPerformanceOperation: Equatable, Sendable {
     case verification
     case publication
     case discoveryRefresh
-    case qwenThinkingChannelSeedLoad
     case daemonIpcHandshake
     case daemonIpcStatus
     case daemonIpcChatGenerate
@@ -36,7 +35,6 @@ public enum SupervisorPerformanceOperation: Equatable, Sendable {
         case .verification: return "verification"
         case .publication: return "publication"
         case .discoveryRefresh: return "discovery_refresh"
-        case .qwenThinkingChannelSeedLoad: return "qwen_thinking_channel_seed_load"
         case .daemonIpcHandshake: return "daemon_ipc_handshake"
         case .daemonIpcStatus: return "daemon_ipc_status"
         case .daemonIpcChatGenerate: return "daemon_ipc_chat_generate"

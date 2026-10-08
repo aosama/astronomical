@@ -465,7 +465,6 @@ fn command_for_model(model_id: &str, _timeout_millis: u64) -> ChatGenerationComm
             seed: None,
             thinking_budget: None,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     }
 }

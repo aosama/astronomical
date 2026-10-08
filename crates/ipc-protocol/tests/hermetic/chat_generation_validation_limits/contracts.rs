@@ -35,7 +35,6 @@ fn should_reject_a_second_tool_result_for_the_same_assistant_tool_call() {
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -67,7 +66,6 @@ fn should_reject_duplicate_declared_tool_names() {
         ],
         tool_choice: ChatToolChoice::Auto,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -90,7 +88,6 @@ fn should_reject_a_forced_tool_choice_for_an_undeclared_function() {
             name: "glob".to_owned(),
         },
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -113,7 +110,6 @@ fn should_reject_required_tool_choice_before_prompt_rendering() {
         tools: Vec::new(),
         tool_choice: ChatToolChoice::Required,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -138,7 +134,6 @@ fn should_reject_a_declared_forced_tool_choice_before_prompt_rendering() {
             name: "glob".to_owned(),
         },
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -196,7 +191,6 @@ fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
         ],
         tool_choice: ChatToolChoice::Auto,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -214,7 +208,6 @@ fn should_reject_an_empty_chat_history_before_worker_preprocessing() {
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -238,7 +231,6 @@ fn should_accept_large_chat_history_without_worker_message_count_cap() {
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -262,7 +254,6 @@ fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
             .collect(),
         tool_choice: ChatToolChoice::Auto,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -283,7 +274,6 @@ fn should_reject_a_zero_structured_chat_output_token_budget() {
             max_output_tokens: 0,
             ..support::standard_settings()
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -308,7 +298,6 @@ fn should_accept_large_structured_chat_output_budget_for_model_context_admission
             max_output_tokens: 20_000,
             ..support::standard_settings()
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -327,7 +316,6 @@ fn should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_th
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
     let serialized_command_bytes =
@@ -368,7 +356,6 @@ fn should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
     let serialized_command_bytes =
@@ -407,7 +394,6 @@ fn should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame
         }],
         tool_choice: ChatToolChoice::Auto,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
     let serialized_bytes =
@@ -433,7 +419,6 @@ fn should_accept_a_large_tool_description_when_the_ipc_frame_fits() {
         }],
         tool_choice: ChatToolChoice::Auto,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -461,7 +446,6 @@ fn should_accept_a_large_assistant_tool_call_id_when_the_ipc_frame_fits() {
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -490,7 +474,6 @@ fn should_accept_large_assistant_tool_call_arguments_when_the_ipc_frame_fits() {
         tools: Vec::new(),
         tool_choice: ChatToolChoice::None,
         settings: support::standard_settings(),
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 

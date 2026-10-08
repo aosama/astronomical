@@ -67,7 +67,6 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
             seed,
             thinking_budget,
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: crate::structured_output::ipc_constraint_from_enforced(
             enforced_structured_generation,
         ),

@@ -270,7 +270,6 @@ final class WorkerSupervisorTests {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 

@@ -88,7 +88,6 @@ public struct ResolvedRuntimeConfigResolver: Sendable {
             maximumMlxMemoryBytes: try userConfig.maximumMlxMemoryBytes(),
             performanceAttributionEnabled: userConfig.performanceAttributionEnabled(),
             completionAttributionEnabled: userConfig.completionAttributionEnabled(),
-            experimentalQwenThinkingChannelSeedEnabled: userConfig.experimentalQwenThinkingChannelSeedEnabled(),
             persistentPromptCacheEnabled: userConfig.persistentPromptCacheEnabled(),
             configuredPersistentPromptCacheEnabled: userConfig.configuredPersistentPromptCacheEnabled(),
             configuredPromptCacheMaximumSizeBytes: try userConfig.configuredPromptCacheMaximumSizeBytes(),

@@ -13,7 +13,6 @@ mod context_token_validation;
 mod template_safe_content;
 mod thinking_allowance;
 mod thinking_budget;
-mod thinking_channel_seed;
 mod token_decoder;
 mod token_ids;
 mod tokenizer;

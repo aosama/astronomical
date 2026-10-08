@@ -258,7 +258,6 @@ final class WorkerCommandLoopTests {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 

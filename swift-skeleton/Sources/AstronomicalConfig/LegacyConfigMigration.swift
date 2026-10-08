@@ -155,8 +155,7 @@ internal enum LegacyConfigMigration {
             runtime: RuntimeConfigFile(
                 modelDirectories: legacyConfig.modelDirectories,
                 maximumMlxMemoryGb: legacyConfig.maximumMlxMemoryGb,
-                defaultModel: nil,
-                experimentalQwenThinkingChannelSeedEnabled: nil
+                defaultModel: nil
             ),
             promptCache: PromptCacheConfigFile(enabled: legacyConfig.persistentPromptCacheEnabled, maximumSizeGb: legacyConfig.promptCacheMaxSizeGb),
             chunking: legacyConfig.chunking,

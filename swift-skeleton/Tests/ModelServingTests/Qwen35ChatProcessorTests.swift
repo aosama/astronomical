@@ -54,19 +54,8 @@ final class Qwen35ChatProcessorTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func should_serve_the_seed_and_budget_paths_the_former_rejections_covered() throws {
+    func should_serve_the_budget_path_the_former_rejections_covered() throws {
         let processor: Qwen35ChatProcessor = try Self.makeProcessor();
-
-        let seededCommand: ChatGenerationCommand = ChatGenerationCommand(
-            requestId: RequestId(rawRequestId: 121), model: "qwen3.5",
-            messages: Self.chatCommand(requestId: 121).messages, tools: [],
-            toolChoice: .auto, settings: Self.chatCommand(requestId: 121).settings,
-            qwenThinkingChannelSeed: "remember the balcony",
-            structuredGeneration: nil);
-        let seededGeneration = try processor.prepareChatGeneration(seededCommand);
-        let seededRequest = try #require(
-            seededGeneration.inferenceRequest as? Qwen35PreparedInferenceRequest);
-        #expect(seededRequest.startsInsideThinking == true);
 
         let budgetedCommand: ChatGenerationCommand = ChatGenerationCommand(
             requestId: RequestId(rawRequestId: 122), model: "qwen3.5",
@@ -78,7 +67,7 @@ final class Qwen35ChatProcessorTests {
             settings: ChatGenerationSettings(
                 maxOutputTokens: 200, temperatureThousandths: nil, topPThousandths: nil,
                 seed: nil, thinkingBudget: 8),
-            qwenThinkingChannelSeed: nil, structuredGeneration: nil);
+            structuredGeneration: nil);
         let budgetedGeneration = try processor.prepareChatGeneration(budgetedCommand);
         let budgetedRequest = try #require(
             budgetedGeneration.inferenceRequest as? Qwen35PreparedInferenceRequest);
@@ -298,7 +287,6 @@ final class Qwen35ChatProcessorTests {
                 topPThousandths: nil,
                 seed: 7,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 

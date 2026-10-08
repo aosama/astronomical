@@ -30,8 +30,6 @@ public struct ResolvedRuntimeConfig: Equatable, Sendable {
     public var performanceAttributionEnabled: Bool;
     /// Whether completion attribution captures emitted tool calls.
     public var completionAttributionEnabled: Bool;
-    /// Whether REST requests may read the optional Qwen thinking-channel seed.
-    public var experimentalQwenThinkingChannelSeedEnabled: Bool;
     /// Whether the worker may read and write the persistent prompt cache.
     public var persistentPromptCacheEnabled: Bool;
     /// Authored cache toggle before the enabled-by-default policy is applied.
@@ -58,7 +56,6 @@ public struct ResolvedRuntimeConfig: Equatable, Sendable {
         maximumMlxMemoryBytes: UInt64?,
         performanceAttributionEnabled: Bool,
         completionAttributionEnabled: Bool,
-        experimentalQwenThinkingChannelSeedEnabled: Bool,
         persistentPromptCacheEnabled: Bool,
         configuredPersistentPromptCacheEnabled: Bool?,
         configuredPromptCacheMaximumSizeBytes: UInt64?,
@@ -77,7 +74,6 @@ public struct ResolvedRuntimeConfig: Equatable, Sendable {
         self.maximumMlxMemoryBytes = maximumMlxMemoryBytes;
         self.performanceAttributionEnabled = performanceAttributionEnabled;
         self.completionAttributionEnabled = completionAttributionEnabled;
-        self.experimentalQwenThinkingChannelSeedEnabled = experimentalQwenThinkingChannelSeedEnabled;
         self.persistentPromptCacheEnabled = persistentPromptCacheEnabled;
         self.configuredPersistentPromptCacheEnabled = configuredPersistentPromptCacheEnabled;
         self.configuredPromptCacheMaximumSizeBytes = configuredPromptCacheMaximumSizeBytes;

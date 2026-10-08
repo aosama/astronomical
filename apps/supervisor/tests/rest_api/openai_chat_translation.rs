@@ -120,7 +120,6 @@ fn should_translate_captured_opencode_reasoning_effort_into_the_thinking_budget(
                 seed: None,
                 thinking_budget: Some(2048),
             },
-            qwen_thinking_channel_seed: None,
             structured_generation: None,
         }
     );
@@ -290,7 +289,6 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
                 seed: Some(7),
                 thinking_budget: None,
             },
-            qwen_thinking_channel_seed: None,
             structured_generation: None,
         }
     );

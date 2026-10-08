@@ -100,7 +100,7 @@ final class SupervisorPerformanceAttributionTests {
         _ = try await AttributionJourneySupport.awaitBounded(
             { () async throws -> Void in
                 return try await attributionLog.measureAsyncOperation(
-                    operation: .qwenThinkingChannelSeedLoad,
+                    operation: .libraryCatalogLoad,
                     measuredOperation: { () async -> Void in
                         return
                     },
@@ -111,7 +111,7 @@ final class SupervisorPerformanceAttributionTests {
 
         let attributionRecord: [String: Any] = try SupervisorPerformanceAttributionTests.parseOnlyRecord(
             sharedSink)
-        #expect(attributionRecord["operation"] as? String == "qwen_thinking_channel_seed_load")
+        #expect(attributionRecord["operation"] as? String == "library_catalog_load")
         #expect(attributionRecord["started_at_unix_millis"] as? Int == 2_000)
         #expect(attributionRecord["ended_at_unix_millis"] as? Int == 2_005)
         #expect(attributionRecord["outcome"] as? String == "success")
@@ -129,7 +129,7 @@ final class SupervisorPerformanceAttributionTests {
         let operationOutput: String = try await AttributionJourneySupport.awaitBounded(
             { () async throws -> String in
                 return await attributionLog.measureAsyncOperationBestEffort(
-                    operation: .qwenThinkingChannelSeedLoad,
+                    operation: .libraryCatalogLoad,
                     measuredOperation: { () async -> String in
                         return "Romeo and Juliet"
                     },
@@ -155,7 +155,7 @@ final class SupervisorPerformanceAttributionTests {
         let operationOutput: String = try await AttributionJourneySupport.awaitBounded(
             { () async throws -> String in
                 return await attributionLog.measureAsyncOperationBestEffort(
-                    operation: .qwenThinkingChannelSeedLoad,
+                    operation: .libraryCatalogLoad,
                     measuredOperation: { () async -> String in
                         operationCompleted.set()
                         return "Two households"

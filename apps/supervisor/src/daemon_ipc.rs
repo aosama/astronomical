@@ -85,7 +85,6 @@ pub async fn start_daemon_ipc_service(
     supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
 ) -> Result<DaemonIpcService, DaemonTransportError> {
     let socket_path = instance_paths.ipc_socket_file_path();
-    let seed_instance_paths = instance_paths.clone();
     let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone()).await?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     // The spawned task must own the log: the service loop runs far longer
@@ -95,7 +94,6 @@ pub async fn start_daemon_ipc_service(
         let mut shutdown_receiver = shutdown_receiver;
         loop {
             let generation_context = generation_context.clone();
-            let seed_instance_paths = seed_instance_paths.clone();
             let supervisor_attribution_log = service_attribution_log.clone();
             tokio::select! {
                 _ = shutdown_receiver.changed() => break,
@@ -103,7 +101,6 @@ pub async fn start_daemon_ipc_service(
                     move |daemon_request, streaming_response_writer| {
                         handle_streaming_daemon_request(
                             generation_context,
-                            seed_instance_paths,
                             supervisor_attribution_log,
                             daemon_request,
                             streaming_response_writer,
@@ -138,7 +135,6 @@ pub async fn start_daemon_ipc_service(
 
 async fn handle_streaming_daemon_request(
     generation_context: DaemonIpcGenerationContext,
-    seed_instance_paths: AstronomicalInstancePaths,
     supervisor_attribution_log: SupervisorPerformanceAttributionLog,
     daemon_request: DaemonRequest,
     mut streaming_response_writer: StreamingResponseWriter,
@@ -188,8 +184,6 @@ async fn handle_streaming_daemon_request(
                     || {
                         super::daemon_ipc_chat::stream_chat_generation(
                             &generation_context,
-                            &seed_instance_paths,
-                            &supervisor_attribution_log,
                             super::daemon_ipc_chat::DaemonIpcChatRequest {
                                 model,
                                 messages,

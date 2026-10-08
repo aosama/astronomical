@@ -58,7 +58,6 @@ final class MessageCodecTests {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
         let serializedCommand: Data = try MessageCodec.encodeCommand(.generate(commandWithBlankModelId));
 
@@ -245,7 +244,6 @@ final class MessageCodecTests {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil));
     }
 

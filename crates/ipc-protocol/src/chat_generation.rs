@@ -2,9 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::RequestId;
 
-/// Bounds request-local memory before template escaping can expand user-authored seed text.
-pub const MAX_QWEN_THINKING_CHANNEL_SEED_BYTES: usize = 1_000_000;
-
 /// Bounds the raw JSON schema text one chat request may carry. Schema DFA
 /// compilation cost grows with schema size, so a fixed ceiling keeps worker
 /// compilation predictable; the value sits far above any schema the
@@ -27,11 +24,6 @@ pub struct ChatGenerationCommand {
     pub tool_choice: ChatToolChoice,
     /// Bounded sampling and output settings.
     pub settings: ChatGenerationSettings,
-    /// Optional reasoning text seeded after the Qwen3.5 `<think>` open.
-    ///
-    /// Absent or empty means ordinary thinking.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub qwen_thinking_channel_seed: Option<String>,
     /// Token-masked structured generation. Absent means ordinary sampling.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub structured_generation: Option<StructuredGenerationConstraint>,

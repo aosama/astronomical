@@ -104,7 +104,6 @@ enum OpenAiResponsesTranslation {
                 // inside reasoning and never emits the structured JSON the
                 // caller asked for.
                 thinkingBudget: thinkingBudgetTokens),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: requestParts.enforcedStructuredGeneration.map(
                 ChatSchemaConstraint.constraintFromEnforcedGeneration));
         do {

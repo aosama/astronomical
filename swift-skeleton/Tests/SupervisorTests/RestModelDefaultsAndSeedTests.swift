@@ -10,19 +10,15 @@ import RestContract;
 
 /**
  * Application-layer setting application over the scripted chat surface,
- * migrating apps/supervisor/tests/rest_api/config_reload/output_limits.rs
- * and qwen_thinking_channel_seed.rs: each model's generation defaults fill
- * omitted chat and responses settings while explicit request values win, and
- * the config-gated Qwen thinking-channel seed reaches both surfaces only for
- * a discovered Qwen3.5 model with the experimental flag enabled.
+ * migrating apps/supervisor/tests/rest_api/config_reload/output_limits.rs:
+ * each model's generation defaults fill omitted chat and responses settings
+ * while explicit request values win.
  */
 @Suite(.serialized, .tags(.hermeticJourney))
 final class RestModelDefaultsAndSeedTests {
 
     static let primaryModelId: String = "astronomical/application-test-model";
     static let secondaryModelId: String = "organization/secondary-model";
-    static let romeoAndJulietThinkingSeed: String =
-        "Two households, both alike in dignity, in fair Verona.";
 
     @Test
     func should_apply_each_models_defaults_to_omitted_chat_settings() throws {
@@ -136,45 +132,6 @@ final class RestModelDefaultsAndSeedTests {
         #expect(receivedCommands[0].settings.temperatureThousandths == 300);
         #expect(receivedCommands[0].settings.topPThousandths == 600);
     }
-
-    @Test
-    func should_guard_both_chat_surfaces_with_the_experimental_thinking_seed_flag() throws {
-        let seedGuardCases: Array<(Bool, ModelFamily, String?)> = [
-            (false, ModelFamily.qwen35, nil),
-            (true, ModelFamily.qwen35, RestModelDefaultsAndSeedTests.romeoAndJulietThinkingSeed),
-            (true, ModelFamily.k2HorizonMova, nil),
-        ];
-        for (thinkingChannelSeedEnabled, modelFamily, expectedSeed) in seedGuardCases {
-            let journey: ModelDefaultsJourney = try ModelDefaultsJourney.launch(
-                modelDefaults: [(
-                    RestModelDefaultsAndSeedTests.primaryModelId,
-                    ModelDefaultsJourney.generationDefaults(
-                        maximumOutputTokens: 128,
-                        temperatureThousandths: nil,
-                        topPThousandths: nil))],
-                thinkingChannelSeedEnabled: thinkingChannelSeedEnabled,
-                thinkingSeedModelFamily: modelFamily);
-            defer { journey.dispose() }
-
-            let chatResponse: RestHttpResponse = try RestChatJourneySupport.postChat(
-                routeTable: journey.routeTable,
-                requestBody: "{\"model\":\"\(RestModelDefaultsAndSeedTests.primaryModelId)\","
-                    + "\"messages\":[{\"role\":\"user\",\"content\":\"Romeo and Juliet\"}],"
-                    + "\"stream\":true}");
-            let responsesResponse: RestHttpResponse = try RestResponsesJourneySupport.postResponses(
-                routeTable: journey.routeTable,
-                requestBody: "{\"model\":\"\(RestModelDefaultsAndSeedTests.primaryModelId)\","
-                    + "\"input\":\"Romeo and Juliet\",\"stream\":true}");
-            #expect(chatResponse.statusCode == 200);
-            #expect(responsesResponse.statusCode == 200);
-
-            let receivedCommands: Array<ChatGenerationCommand> = journey.executor.receivedCommands;
-            #expect(receivedCommands.count == 2);
-            for generationCommand: ChatGenerationCommand in receivedCommands {
-                #expect(generationCommand.qwenThinkingChannelSeed == expectedSeed);
-            }
-        }
-    }
 }
 
 /// One application-defaults journey: a resolved configuration advertising
@@ -197,18 +154,8 @@ final class ModelDefaultsJourney {
     }
 
     static func launch(
-        _ modelDefaults: Array<(String, RuntimeModelGenerationDefaults)>
-    ) throws -> ModelDefaultsJourney {
-        return try ModelDefaultsJourney.launch(
-            modelDefaults: modelDefaults,
-            thinkingChannelSeedEnabled: false,
-            thinkingSeedModelFamily: .qwen35);
-    }
-
-    static func launch(
-        modelDefaults: Array<(String, RuntimeModelGenerationDefaults)>,
-        thinkingChannelSeedEnabled: Bool,
-        thinkingSeedModelFamily: ModelFamily
+        _ modelDefaults: Array<(String, RuntimeModelGenerationDefaults)>,
+        thinkingSeedModelFamily: ModelFamily = .qwen35
     ) throws -> ModelDefaultsJourney {
         let homeDirectoryUrl: URL = FileManager.default.temporaryDirectory
             .appendingPathComponent("astronomical-model-defaults-\(UUID().uuidString)", isDirectory: true);
@@ -219,12 +166,7 @@ final class ModelDefaultsJourney {
         try FileManager.default.createDirectory(
             atPath: instancePaths.stateDirectory.string,
             withIntermediateDirectories: true);
-        try "\(RestModelDefaultsAndSeedTests.romeoAndJulietThinkingSeed)\n".write(
-            to: URL(fileURLWithPath: instancePaths.qwenThinkingChannelSeedFilePath.string),
-            atomically: true,
-            encoding: .utf8);
         var resolvedConfig: ResolvedRuntimeConfig = try RestChatJourneySupport.makeResolvedConfig();
-        resolvedConfig.experimentalQwenThinkingChannelSeedEnabled = thinkingChannelSeedEnabled;
         resolvedConfig.discoveredModels = modelDefaults.map({ (modelDefault: (String, RuntimeModelGenerationDefaults)) -> DiscoveryDiscoveredModel in
             return ModelDefaultsJourney.discoveredChatModel(
                 modelId: modelDefault.0,

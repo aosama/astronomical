@@ -261,22 +261,6 @@ fn should_require_an_application_restart_when_performance_attribution_changes() 
 }
 
 #[test]
-fn should_restart_the_worker_to_acknowledge_the_experimental_thinking_seed_flag() {
-    let current = sample_resolved_config();
-    let mut candidate = sample_resolved_config();
-    candidate.experimental_qwen_thinking_channel_seed_enabled = true;
-
-    let decision = ConfigReloadDiff::compare(&current, &candidate);
-
-    assert!(matches!(
-        decision,
-        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
-            if reloaded_fields
-                == &["experimental_qwen_thinking_channel_seed_enabled".to_owned()]
-    ));
-}
-
-#[test]
 fn should_classify_model_directories_change_as_worker_restart() {
     let mut current = sample_resolved_config();
     Arc::make_mut(&mut current.model_policy_catalog)
@@ -362,7 +346,6 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         configured_persistent_prompt_cache_enabled: None,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        experimental_qwen_thinking_channel_seed_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(
             PathBuf::from("/tmp/prompt-cache"),
             50_000_000_000,

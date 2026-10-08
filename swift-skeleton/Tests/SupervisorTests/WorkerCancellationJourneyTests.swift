@@ -365,7 +365,6 @@ final class WorkerCancellationJourney {
                 topPThousandths: nil,
                 seed: nil,
                 thinkingBudget: nil),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 }

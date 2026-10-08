@@ -48,7 +48,6 @@ final class ResolvedRuntimeConfigTests {
             maximumMlxMemoryBytes: nil,
             performanceAttributionEnabled: false,
             completionAttributionEnabled: false,
-            experimentalQwenThinkingChannelSeedEnabled: false,
             persistentPromptCacheEnabled: true,
             configuredPersistentPromptCacheEnabled: nil,
             configuredPromptCacheMaximumSizeBytes: nil,

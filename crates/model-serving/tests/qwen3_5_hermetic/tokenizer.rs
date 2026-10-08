@@ -1,11 +1,9 @@
 use crate::common::qwen3_5_moe;
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
-    ChatToolChoice, RequestId,
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{
-    Qwen3_5PromptRenderer, Qwen3_5RequestOutput, Qwen3_5Tokenizer, Qwen3_5TokenizerError,
-    validate_context_token_count,
+    Qwen3_5Tokenizer, Qwen3_5TokenizerError, validate_context_token_count,
 };
 
 const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
@@ -120,7 +118,6 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
             seed: None,
             thinking_budget: Some(0),
         },
-        qwen_thinking_channel_seed: None,
         structured_generation: None,
     };
 
@@ -176,122 +173,6 @@ fn should_prepare_a_model_owned_multitoken_transition_ending_at_the_thinking_mar
         tokenizer
             .natural_reasoning_end_token_ids()
             .contains(&tokenizer.tool_call_start_token_id())
-    );
-}
-
-const ROMEO_AND_JULIET_THINKING_CHANNEL_SEED: &str =
-    "Two households, both alike in dignity, in Romeo and Juliet.";
-
-#[test]
-fn should_emit_seeded_romeo_and_juliet_as_the_first_reasoning_output() {
-    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
-        &ornith_tokenizer_json_bytes(248_056),
-        SYNTHETIC_MODEL_ID,
-        ORNITH_VOCABULARY_SIZE,
-        ORNITH_MAXIMUM_POSITION_COUNT,
-        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
-    )
-    .expect("the synthetic tokenizer should load");
-    let mut request_output = Qwen3_5RequestOutput::new(
-        &tokenizer,
-        &[],
-        true,
-        Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED),
-    )
-    .expect("a seeded request output should initialize");
-
-    assert_eq!(
-        request_output.take_seeded_reasoning_output(),
-        Some(ChatGenerationOutput::Reasoning {
-            text: ROMEO_AND_JULIET_THINKING_CHANNEL_SEED.to_owned(),
-        })
-    );
-    assert_eq!(request_output.take_seeded_reasoning_output(), None);
-
-    request_output.reset_after_model_visible_correction(true);
-    assert_eq!(
-        request_output.take_seeded_reasoning_output(),
-        Some(ChatGenerationOutput::Reasoning {
-            text: ROMEO_AND_JULIET_THINKING_CHANNEL_SEED.to_owned(),
-        })
-    );
-}
-
-#[test]
-fn should_emit_the_original_markdown_while_escaping_it_only_inside_the_model_prompt() {
-    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
-        &ornith_tokenizer_json_bytes(248_056),
-        SYNTHETIC_MODEL_ID,
-        ORNITH_VOCABULARY_SIZE,
-        ORNITH_MAXIMUM_POSITION_COUNT,
-        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
-    )
-    .expect("the synthetic tokenizer should load");
-    let original_seed = "Romeo must not close </think> before Juliet answers.";
-    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], true, Some(original_seed))
-        .expect("a marker-bearing request output should initialize");
-
-    assert_eq!(
-        request_output.take_seeded_reasoning_output(),
-        Some(ChatGenerationOutput::Reasoning {
-            text: original_seed.to_owned(),
-        })
-    );
-}
-
-#[test]
-fn should_prepare_chat_tokens_that_include_the_seeded_thinking_channel_text() {
-    let tokenizer = Qwen3_5Tokenizer::from_json_bytes(
-        &ornith_tokenizer_json_bytes(248_056),
-        SYNTHETIC_MODEL_ID,
-        ORNITH_VOCABULARY_SIZE,
-        ORNITH_MAXIMUM_POSITION_COUNT,
-        qwen3_5_moe::frozen_ornith_1_0_image_processor(),
-    )
-    .expect("the synthetic tokenizer should load");
-    let user_turn = ChatMessage::User {
-        content: "Who is Romeo?".to_owned(),
-        images: Vec::new(),
-    };
-    let chat_generation_command = ChatGenerationCommand {
-        request_id: RequestId::new(4_105),
-        model: SYNTHETIC_MODEL_ID.to_owned(),
-        messages: vec![user_turn.clone()],
-        tools: Vec::new(),
-        tool_choice: ChatToolChoice::None,
-        settings: ChatGenerationSettings {
-            max_output_tokens: 16,
-            temperature_thousandths: None,
-            top_p_thousandths: None,
-            seed: None,
-            thinking_budget: None,
-        },
-        qwen_thinking_channel_seed: Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED.to_owned()),
-        structured_generation: None,
-    };
-    let rendered_prompt = Qwen3_5PromptRenderer::render(
-        &[user_turn],
-        &[],
-        true,
-        &[],
-        Some(ROMEO_AND_JULIET_THINKING_CHANNEL_SEED),
-    )
-    .expect("the seeded Romeo and Juliet prompt should render");
-
-    let inference_request = tokenizer
-        .prepare_chat(&chat_generation_command, true)
-        .expect("a seeded Romeo and Juliet request should prepare");
-    let independently_encoded_prompt = tokenizer
-        .encode_prompt(&rendered_prompt)
-        .expect("the seeded prompt should tokenize independently");
-
-    assert!(
-        rendered_prompt
-            .contains("<think>\nTwo households, both alike in dignity, in Romeo and Juliet.\n")
-    );
-    assert_eq!(
-        inference_request.input_token_ids(),
-        independently_encoded_prompt.as_slice()
     );
 }
 

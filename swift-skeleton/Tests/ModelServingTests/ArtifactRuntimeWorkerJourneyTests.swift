@@ -308,7 +308,6 @@ final class ArtifactRuntimeWorkerJourneyTests {
                 topPThousandths: nil,
                 seed: 7,
                 thinkingBudget: thinkingBudget),
-            qwenThinkingChannelSeed: nil,
             structuredGeneration: nil);
     }
 }

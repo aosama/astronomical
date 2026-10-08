@@ -213,12 +213,4 @@ public struct AstronomicalInstancePaths: Equatable, Sendable {
     public var ipcSocketFilePath: FilePath {
         return self.rootStateDirectory.appending(component: "ipc.sock");
     }
-
-    /**
-     * Optional user-authored Markdown seeded into Qwen3.5 reasoning. The file
-     * is never created automatically. Missing is a no-op at request time.
-     */
-    public var qwenThinkingChannelSeedFilePath: FilePath {
-        return self.rootStateDirectory.appending(component: "thinking.md");
-    }
 }
