@@ -33,28 +33,61 @@ public enum Qwen35ArtifactWeightLoading {
         validatedArtifact: ValidatedQwen35Artifact,
         attributionEnabled: Bool
     ) throws -> Qwen35Model {
+        let upstreamConfiguration: Qwen35Configuration = try Qwen35ArtifactWeightLoading
+            .decodeUpstreamConfiguration(
+                configBytes: Qwen35ArtifactWeightLoading.validatedConfigBytes(validatedArtifact));
+        let shardTensors: Dictionary<String, MLXArray> = try Qwen35ArtifactWeightLoading
+            .loadShardTensors(validatedArtifact: validatedArtifact, attributionEnabled: attributionEnabled);
+        return try Qwen35ArtifactWeightLoading.bindWeights(
+            model: Qwen35Model(upstreamConfiguration),
+            repositoryConfiguration: validatedArtifact.config(),
+            shardTensors: shardTensors,
+            attributionEnabled: attributionEnabled);
+    }
+
+    /// Loads and binds the validated artifact into the upstream MoE model.
+    ///
+    /// The MoE subclass only overrides `sanitize`, so the shard streaming,
+    /// quantization coverage, and verified bind are exactly the dense
+    /// loader's; the subclass constructor is the sole difference.
+    public static func loadArtifactBoundMoeModel(
+        validatedArtifact: ValidatedQwen35Artifact,
+        attributionEnabled: Bool
+    ) throws -> Qwen35MoEModel {
+        let upstreamConfiguration: Qwen35Configuration = try Qwen35ArtifactWeightLoading
+            .decodeUpstreamConfiguration(
+                configBytes: Qwen35ArtifactWeightLoading.validatedConfigBytes(validatedArtifact));
+        let shardTensors: Dictionary<String, MLXArray> = try Qwen35ArtifactWeightLoading
+            .loadShardTensors(validatedArtifact: validatedArtifact, attributionEnabled: attributionEnabled);
+        let boundModel: Qwen35Model = try Qwen35ArtifactWeightLoading.bindWeights(
+            model: Qwen35MoEModel(upstreamConfiguration),
+            repositoryConfiguration: validatedArtifact.config(),
+            shardTensors: shardTensors,
+            attributionEnabled: attributionEnabled);
+        guard let moeModel: Qwen35MoEModel = boundModel as? Qwen35MoEModel else {
+            throw InferenceEngineError.modelLoad(
+                reason: "the MoE artifact did not bind onto the MoE module tree");
+        }
+        return moeModel;
+    }
+
+    private static func validatedConfigBytes(
+        _ validatedArtifact: ValidatedQwen35Artifact
+    ) throws -> Data {
         guard let configBytes: Data = validatedArtifact.configBytes() else {
             throw InferenceEngineError.modelLoad(
                 reason: "the validated artifact carries no captured configuration bytes");
         }
-        let upstreamConfiguration: Qwen35Configuration;
+        return configBytes;
+    }
+
+    private static func decodeUpstreamConfiguration(configBytes: Data) throws -> Qwen35Configuration {
         do {
-            upstreamConfiguration = try JSONDecoder().decode(
-                Qwen35Configuration.self, from: configBytes);
+            return try JSONDecoder().decode(Qwen35Configuration.self, from: configBytes);
         } catch {
             throw InferenceEngineError.modelLoad(
-                reason: "the dense model configuration could not be decoded");
+                reason: "the model configuration could not be decoded");
         }
-
-        let shardTensors: Dictionary<String, MLXArray> = try Qwen35ArtifactWeightLoading
-            .loadShardTensors(validatedArtifact: validatedArtifact, attributionEnabled: attributionEnabled);
-
-        let boundModel: Qwen35Model = try Qwen35ArtifactWeightLoading.bindWeights(
-            upstreamConfiguration: upstreamConfiguration,
-            repositoryConfiguration: validatedArtifact.config(),
-            shardTensors: shardTensors,
-            attributionEnabled: attributionEnabled);
-        return boundModel;
     }
 
     /// Reads every indexed model shard through its validated descriptor.
@@ -144,7 +177,7 @@ public enum Qwen35ArtifactWeightLoading {
 
     /// Sanitizes, quantizes, binds, and prepares the upstream model.
     private static func bindWeights(
-        upstreamConfiguration: Qwen35Configuration,
+        model: Qwen35Model,
         repositoryConfiguration: Qwen3_5Config,
         shardTensors: Dictionary<String, MLXArray>,
         attributionEnabled: Bool
@@ -156,7 +189,7 @@ public enum Qwen35ArtifactWeightLoading {
                 operationName: "qwen35_artifact_weight_bind",
                 operationStart: bindStart, attributionEnabled: attributionEnabled);
         }
-        let boundModel: Qwen35Model = Qwen35Model(upstreamConfiguration);
+        let boundModel: Qwen35Model = model;
         let sanitizedTensors: Dictionary<String, MLXArray> = boundModel.sanitize(weights: shardTensors);
         try Qwen35ArtifactWeightLoading.validateQuantizationCoverage(
             repositoryConfiguration: repositoryConfiguration,
@@ -172,13 +205,13 @@ public enum Qwen35ArtifactWeightLoading {
                 parameters: ModuleParameters.unflattened(sanitizedTensors), verify: [.all]);
         } catch {
             throw InferenceEngineError.modelLoad(
-                reason: "the validated tensors did not bind onto the dense module tree");
+                reason: "the validated tensors did not bind onto the module tree");
         }
         do {
             try boundModel.prepare();
         } catch {
             throw InferenceEngineError.modelLoad(
-                reason: "the dense model's derived inference state could not be prepared");
+                reason: "the model's derived inference state could not be prepared");
         }
         // Derived state and bound parameters leave the loader fully
         // materialized; forward passes stay read-only.

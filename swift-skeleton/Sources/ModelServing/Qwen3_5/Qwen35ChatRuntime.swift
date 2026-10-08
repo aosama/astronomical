@@ -16,8 +16,9 @@ import Tokenizers;
 public enum Qwen35ChatRuntime {
 
     /// Builds the production runtime: the directory is validated end to
-    /// end, the validated shard descriptors stream into the dense engine,
-    /// and the tokenizer bridges from the same directory.
+    /// end, the architecture routes the validated artifact onto the dense
+    /// or the paged MoE engine, and the tokenizer bridges from the same
+    /// directory.
     public static func buildArtifactRuntime(
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration,
@@ -33,7 +34,33 @@ public enum Qwen35ChatRuntime {
                 modelDirectory: modelDirectory,
                 maxOutputTokens: autoregressiveConfiguration.maximumOutputTokens,
                 performanceAttributionEnabled: performanceAttributionEnabled);
-        let repositoryConfiguration: Qwen3_5Config = validatedArtifact.config();
+        switch validatedArtifact.config().feedForwardArchitecture() {
+        case .dense:
+            return try Qwen35ChatRuntime.buildDenseRuntime(
+                validatedArtifact: validatedArtifact,
+                modelDirectory: modelDirectory,
+                autoregressiveConfiguration: autoregressiveConfiguration,
+                prefillChunkTokenCount: prefillChunkTokenCount,
+                performanceAttributionEnabled: performanceAttributionEnabled);
+        case .mixtureOfExperts:
+            return try Qwen35MoeChatRuntime.buildPagedRuntime(
+                validatedArtifact: validatedArtifact,
+                modelDirectory: modelDirectory,
+                autoregressiveConfiguration: autoregressiveConfiguration,
+                prefillChunkTokenCount: prefillChunkTokenCount,
+                performanceAttributionEnabled: performanceAttributionEnabled);
+        }
+    }
+
+    /// Streams the validated dense artifact into the dense engine and pairs
+    /// the runtime tail.
+    private static func buildDenseRuntime(
+        validatedArtifact: ValidatedQwen35Artifact,
+        modelDirectory: String,
+        autoregressiveConfiguration: WorkerAutoregressiveModelConfiguration,
+        prefillChunkTokenCount: Int,
+        performanceAttributionEnabled: Bool
+    ) throws -> LoadedChatRuntime {
         let engine: Qwen35DenseEngine = Qwen35DenseEngine(
             attributionEnabled: performanceAttributionEnabled,
             prefillChunkTokenCount: prefillChunkTokenCount);
@@ -47,7 +74,7 @@ public enum Qwen35ChatRuntime {
         }
         return try Qwen35ChatRuntime.pairTokenizerWithProcessor(
             modelDirectory: modelDirectory,
-            repositoryConfiguration: repositoryConfiguration,
+            repositoryConfiguration: validatedArtifact.config(),
             autoregressiveConfiguration: autoregressiveConfiguration,
             engine: engine);
     }
@@ -96,11 +123,11 @@ public enum Qwen35ChatRuntime {
 
     /// Bridges the directory tokenizer and builds the matched processor
     /// around one loaded engine — the tail both runtime builders share.
-    private static func pairTokenizerWithProcessor(
+    static func pairTokenizerWithProcessor(
         modelDirectory: String,
         repositoryConfiguration: Qwen3_5Config,
         autoregressiveConfiguration: WorkerAutoregressiveModelConfiguration,
-        engine: Qwen35DenseEngine
+        engine: any InferenceEngine
     ) throws -> LoadedChatRuntime {
         let directoryUrl: URL = URL(fileURLWithPath: modelDirectory);
         let bridgedTokenizer: any MLXLMCommon.Tokenizer;

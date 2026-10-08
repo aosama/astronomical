@@ -53,6 +53,14 @@ public enum RealModelJourneyGate {
             environmentVariableName: "ASTRONOMICAL_QWEN35_ARTIFACT_DIRECTORY");
     }
 
+    /// The installed Qwen3.5 MoE artifact directory for the paged
+    /// real-model journeys, resolved from
+    /// `ASTRONOMICAL_QWEN35_MOE_ARTIFACT_DIRECTORY`.
+    public static func qwen35MoeArtifactDirectory() -> String? {
+        return RealModelJourneyGate.installedArtifactDirectory(
+            environmentVariableName: "ASTRONOMICAL_QWEN35_MOE_ARTIFACT_DIRECTORY");
+    }
+
     /// The opt-in switch for the heavy SafeTensors concurrency journey,
     /// resolved from `ASTRONOMICAL_SAFETENSORS_CONCURRENCY_JOURNEY`. The
     /// journey writes and reads roughly 160 MiB (four 40 MiB tensors)

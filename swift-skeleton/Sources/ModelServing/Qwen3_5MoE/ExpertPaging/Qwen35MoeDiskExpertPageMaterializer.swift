@@ -16,7 +16,7 @@ import RuntimeIntegration
  * property (it only asks for experts the layer does not already hold),
  * so one call is exactly one page read.
  */
-public final class Qwen35MoeDiskExpertPageMaterializer {
+public final class Qwen35MoeDiskExpertPageMaterializer: Qwen35MoeExpertPageMaterializing {
 
     private static let AFFINE_PARAMETER_BASENAMES: [String] = ["weight", "scales", "biases"]
     private static let NATIVE_PARAMETER_BASENAMES: [String] = ["weight"]
