@@ -162,7 +162,7 @@ start_phase() {
         run_phase "$phase_label" "$phase_step_total" "$phase_entry_point" || phase_status=$?
         printf '%s\n' "$phase_status" > "${phase_status_directory}/${phase_label}.status"
         exit "$phase_status"
-    ) 2>&1 | awk -v phase_prefix="[${phase_label}]" '{
+    ) 2>&1 | tr '\r' '\n' | awk -v phase_prefix="[${phase_label}]" '{
         printf "%s %s\n", phase_prefix, $0;
         fflush();
     }' | tee "$phase_log_path" &
@@ -202,7 +202,7 @@ phase_swift_node_contracts() {
     # paging journey into intermittent NaN or stale-buffer divergence
     # (#1081), while the suite-level serialized trait only orders a suite's
     # own tests. Serial runs cost seconds on this hermetic package.
-    run_step swift-skeleton-journeys "$SWIFT_SKELETON_TIMEOUT_SECONDS" swift test --no-parallel --package-path swift-skeleton || return $?
+    run_step swift-skeleton-journeys "$SWIFT_SKELETON_TIMEOUT_SECONDS" swift test --verbose --no-parallel --package-path swift-skeleton || return $?
     run_step test-pull-request-policy-contracts "$TEST_TIMEOUT_SECONDS" node \
         --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js || return $?
     run_step test-observatory-contracts "$TEST_TIMEOUT_SECONDS" node --test --test-reporter=spec \

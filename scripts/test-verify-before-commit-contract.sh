@@ -280,7 +280,7 @@ main() {
         print_error "verification did not run the Thin Talk Swift package contracts"
         exit 1
     }
-    grep -Fx -- 'test --no-parallel --package-path swift-skeleton' "$swift_log" >/dev/null || {
+    grep -Fx -- 'test --verbose --no-parallel --package-path swift-skeleton' "$swift_log" >/dev/null || {
         print_error "verification did not run the Swift migration skeleton journeys"
         exit 1
     }
