@@ -5,7 +5,7 @@ import Foundation;
 /// are never represented as independent files: they are grouped into
 /// ancestry-closed subtrees so eviction cannot leave a descendant whose
 /// required sequence-state parent has disappeared.
-public enum PersistentPromptCacheEvictionCandidate {
+public enum PersistentPromptCacheEvictionCandidate: Sendable {
 
     /// The per-reason category a cleanup reclamation is recorded under.
     public enum CleanupClassification: Equatable, Sendable {
