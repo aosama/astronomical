@@ -19,24 +19,21 @@ final class ExpertStreamingSourceTests {
             routedExpertCount: 8,
             streamedExpertCount: 256,
             sourceShardCount: 3,
-            payloadByteCount: 900,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 900);
         performanceAttribution.recordExpertStreamingSourcePlan(
             layerIndex: 7,
             routeTokenCount: 417,
             routedExpertCount: 7,
             streamedExpertCount: 256,
             sourceShardCount: 3,
-            payloadByteCount: 900,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 900);
         performanceAttribution.recordExpertStreamingSourcePlan(
             layerIndex: 7,
             routeTokenCount: 1,
             routedExpertCount: 8,
             streamedExpertCount: 8,
             sourceShardCount: 2,
-            payloadByteCount: 30,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 30);
 
         #expect(
             performanceAttribution
@@ -102,24 +99,21 @@ final class ExpertStreamingSourceTests {
             routedExpertCount: 8,
             streamedExpertCount: 256,
             sourceShardCount: 1,
-            payloadByteCount: 100,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 100);
         performanceAttribution.recordExpertStreamingSourcePlan(
             layerIndex: 4,
             routeTokenCount: 128,
             routedExpertCount: 8,
             streamedExpertCount: 256,
             sourceShardCount: 1,
-            payloadByteCount: 100,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 100);
         performanceAttribution.recordExpertStreamingSourcePlan(
             layerIndex: 2,
             routeTokenCount: 128,
             routedExpertCount: 8,
             streamedExpertCount: 256,
             sourceShardCount: 1,
-            payloadByteCount: 100,
-            streamedThroughExpertPacks: false);
+            payloadByteCount: 100);
 
         let performanceAttributionReport = try #require(
             performanceAttribution.finishGeneration(

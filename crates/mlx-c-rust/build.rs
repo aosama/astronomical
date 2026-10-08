@@ -21,13 +21,9 @@ const DEFAULT_NATIVE_DEPENDENCY_CACHE_SUFFIX: &str =
 const EXTRACTION_TREE_MLX_C: &str = "mlx_c-src";
 const COMPLETION_MARKER_FILE_NAME: &str = "complete";
 
-const BINDGEN_FUNCTION_ALLOWLIST: &str =
-    "mlx_.*|astronomical_metal_expert_loader_(start|wait|free)";
+const BINDGEN_FUNCTION_ALLOWLIST: &str = "mlx_.*";
 
-const BINDGEN_TYPE_ALLOWLIST: &str =
-    "mlx_.*|astronomical_metal_expert_loader_(output_tensor|load_range|metrics|handle)";
-
-const EXPERT_LOADER_HEADER_REPOSITORY_RELATIVE_PATH: &str = "crates/runtime-integration/native/experimental/aligned_expert_packs/astronomical_metal_expert_loader.h";
+const BINDGEN_TYPE_ALLOWLIST: &str = "mlx_.*";
 
 /// The generated inventory module consumed by `raw.rs`; it exposes the exact
 /// bridged symbol sets the coverage contract compares against the pinned
@@ -53,32 +49,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("cargo:rerun-if-changed={}", headers_root.display());
 
-    // The Astronomical Metal expert-loader header is part of the same native
-    // image and its functions take MLX C types, so it must be bound in this
-    // same bindgen unit: C types declared in two bindgen outputs are nominal
-    // Rust types that do not unify. Its symbols are referenced only by the
-    // experimental loader, so profiles that exclude it never demand them.
-    let expert_loader_header = repository_root.join(EXPERT_LOADER_HEADER_REPOSITORY_RELATIVE_PATH);
-    if !expert_loader_header.is_file() {
-        return Err(format!(
-            "missing Astronomical Metal expert loader header at {}",
-            expert_loader_header.display()
-        )
-        .into());
-    }
-    println!("cargo:rerun-if-changed={}", expert_loader_header.display());
-
     let bindings = bindgen::Builder::default()
         .header(mlx_c_header.to_string_lossy())
-        .header(expert_loader_header.to_string_lossy())
         .clang_arg(format!("-I{}", include_directory.display()))
-        .clang_arg(format!(
-            "-I{}",
-            expert_loader_header
-                .parent()
-                .ok_or("Astronomical Metal expert loader header has no parent directory")?
-                .display()
-        ))
         .allowlist_function(BINDGEN_FUNCTION_ALLOWLIST)
         .allowlist_type(BINDGEN_TYPE_ALLOWLIST)
         .generate_comments(false)

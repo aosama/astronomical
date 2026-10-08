@@ -12,7 +12,6 @@ use thiserror::Error;
 
 use crate::expert_paging::{
     ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
-    StreamingExpertPackError, StreamingExpertPackSources,
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
@@ -62,9 +61,6 @@ pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
     pub(super) memory_budget: MlxAllocationAdmission,
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
-    /// Present only for converted per-expert streaming revisions; routed
-    /// pages then load through `.apack` files instead of shard ranges.
-    pub(super) streaming_expert_pack_sources: Option<StreamingExpertPackSources>,
 }
 
 /// Exact compact or complete expert arrays loaded by Rust for one layer use.
@@ -105,12 +101,6 @@ fn affine_payload_byte_count(affine_weights: &Qwen3_5AffineWeights) -> u64 {
 impl Qwen3_5ExpertPager {
     pub(crate) fn layer_plans(&self) -> &[QuantizedExpertLayerPlan] {
         &self.layer_plans
-    }
-
-    /// True when this pager routes pages through converted per-expert pack
-    /// files instead of SafeTensors shards.
-    pub(crate) fn has_streaming_expert_pack_sources(&self) -> bool {
-        self.streaming_expert_pack_sources.is_some()
     }
 
     pub(crate) fn complete_expert_payload_byte_count(&self) -> Result<u64, ExpertPagingError> {

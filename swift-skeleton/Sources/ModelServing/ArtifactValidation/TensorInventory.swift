@@ -120,10 +120,9 @@ public final class TensorInventory {
         return self.locationsByCanonicalName.count;
     }
 
-    /// Removes locations by canonical name. Streaming revisions carry expert
-    /// tensors in per-expert pack files instead of the indexed weight sources;
-    /// stripping their locations keeps source validation and binding honest
-    /// without weakening the remaining inventory contracts.
+    /// Removes locations by canonical name. Stripping retired locations
+    /// keeps source validation and binding honest without weakening the
+    /// remaining inventory contracts.
     public func removeCanonicalNames(canonicalNames: Set<String>) -> Void {
         self.locationsByCanonicalName = self.locationsByCanonicalName.filter({ (canonicalName: String, _: TensorLocation) -> Bool in
             return canonicalNames.contains(canonicalName) == false;

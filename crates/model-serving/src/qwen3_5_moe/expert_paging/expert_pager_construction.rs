@@ -42,27 +42,13 @@ impl Qwen3_5ExpertPager {
         configured_mlx_memory_cap_bytes: usize,
     ) -> Result<Self, ExpertPagingError> {
         let decoder_layer_count = config.layer_count() as usize;
-        // Converted per-expert streaming revisions publish manifest.json (format
-        // version 3) beside their `.apack` files. Their layer plans derive from
-        // the pack headers, and routed pages stream through the packs. A shard-
-        // backed revision keeps the safetensors-index plan path unchanged.
-        let (layer_plans, streaming_expert_pack_sources) =
-            if model_dir.join("manifest.json").is_file() {
-                let (layer_plans, streaming_expert_pack_sources) =
-                    expert_paging::build_streaming_expert_layer_plans(&model_dir, config)?;
-                (layer_plans, Some(streaming_expert_pack_sources))
-            } else {
-                (
-                    self_shard_layer_plans(
-                        decoder_layer_count,
-                        &model_dir,
-                        weight_map,
-                        stored_tensor_name_by_canonical_name,
-                        config,
-                    )?,
-                    None,
-                )
-            };
+        let layer_plans = self_shard_layer_plans(
+            decoder_layer_count,
+            &model_dir,
+            weight_map,
+            stored_tensor_name_by_canonical_name,
+            config,
+        )?;
 
         // Streaming workspace and temporary decode routes are bounded by complete
         // layer geometry. Track the largest complete layer so budgets and telemetry
@@ -82,7 +68,6 @@ impl Qwen3_5ExpertPager {
             layer_plans,
             memory_budget,
             resident_expert_source_files,
-            streaming_expert_pack_sources,
         })
     }
 }
