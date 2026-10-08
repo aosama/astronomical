@@ -28,7 +28,7 @@ final class PersistentPromptCacheBlockManifestTests {
 
         let manifest: PersistentPromptCacheBlockManifest = try Self.buildManifest(
             blockKey: blockKey, parentBlockKey: nil, modelContract: modelContract);
-        try manifest.writeToStagingDirectory(stagingBlockDirectory: stagingDirectory);
+        _ = try manifest.writeToStagingDirectory(stagingBlockDirectory: stagingDirectory);
 
         let validatedManifest: PersistentPromptCacheBlockManifest = try
             PersistentPromptCacheBlockManifest.readFromBlockDirectory(
@@ -57,7 +57,7 @@ final class PersistentPromptCacheBlockManifestTests {
         defer { try? FileManager.default.removeItem(at: stagingDirectory); }
         let manifest: PersistentPromptCacheBlockManifest = try Self.buildManifest(
             blockKey: blockKey, parentBlockKey: nil, modelContract: modelContract);
-        try manifest.writeToStagingDirectory(stagingBlockDirectory: stagingDirectory);
+        _ = try manifest.writeToStagingDirectory(stagingBlockDirectory: stagingDirectory);
         let manifestFileUrl: URL = stagingDirectory
             .appendingPathComponent(PersistentPromptCacheStoreFile.BLOCK_MANIFEST_FILE_NAME);
 

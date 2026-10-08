@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// The staging seam the publication transaction writes state files
 /// through. The MLX direct writer provides the production implementation
@@ -132,7 +131,7 @@ extension PersistentPromptCacheDiskStore {
             try PersistentPromptCacheStoreFile.synchronizeDirectory(directoryPath: URL(
                 fileURLWithPath: parentBoundaryReclaim.blockDirectoryPath));
             self.stateLock.lock();
-            self.trackedFiles.removeFile(
+            _ = self.trackedFiles.removeFile(
                 fileKind: .boundaryStateSnapshot,
                 blockHash: parentBoundaryReclaim.blockHash);
             self.stateLock.unlock();
@@ -283,7 +282,7 @@ extension PersistentPromptCacheDiskStore {
                         blockTokenCount: blockKey.tokenCount()));
             boundaryStateFileSizeBytes = stagedSize;
         }
-        try PersistentPromptCacheBlockManifest(
+        _ = try PersistentPromptCacheBlockManifest(
             blockKey: blockKey, parentBlockKey: parentBlockKey, modelContract: self.modelContract)
             .writeToStagingDirectory(stagingBlockDirectory: stagingBlockDirectory);
         let manifestFileSizeBytes: UInt64 = try PersistentPromptCacheDiskStoreScan

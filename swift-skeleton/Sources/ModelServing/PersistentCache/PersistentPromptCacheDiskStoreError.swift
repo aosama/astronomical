@@ -69,6 +69,18 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
 
     case writeSafetensorsDescriptor(filePath: String, problem: String);
 
+    /// The caller named a state file outside the two contract-owned names,
+    /// which would bypass state-kind validation and broaden cleanup authority.
+    case invalidStateFileName(stateFileName: String);
+
+    /// The captured tensor map's presence disagrees with the contract's
+    /// state kind: a required kind is missing tensors, or tensors were
+    /// supplied for a kind the contract leaves empty.
+    case stateKindTensorPresenceMismatch(
+        stateFileName: String,
+        expectedTensorCount: Int,
+        actualTensorCount: Int);
+
     /// The exact active-memory bytes a retry must release before this
     /// publication can succeed, when the failure was MLX active-memory
     /// pressure; every other failure is not retryable as memory pressure.
@@ -154,6 +166,13 @@ public enum PersistentPromptCacheDiskStoreError: Error, Equatable, Sendable {
             return "the safetensors state write failed: \(source)";
         case let .writeSafetensorsDescriptor(filePath, problem):
             return "the safetensors descriptor at \(filePath) could not be written: \(problem)";
+        case let .invalidStateFileName(stateFileName):
+            return "the state file name \(stateFileName) is outside the contract-owned "
+                + "state file names";
+        case let .stateKindTensorPresenceMismatch(
+            stateFileName, expectedTensorCount, actualTensorCount):
+            return "the state file \(stateFileName) requires \(expectedTensorCount) tensors "
+                + "but \(actualTensorCount) were captured";
         }
     }
 }

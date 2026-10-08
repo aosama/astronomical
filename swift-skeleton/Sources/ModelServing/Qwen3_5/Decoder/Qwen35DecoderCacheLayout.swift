@@ -1,6 +1,5 @@
 import Foundation;
 
-import ModelServing;
 
 /// Exact live execution dtypes for one Qwen decoder layer's persistent
 /// state, port of the Rust `Qwen3_5DecoderLayerCacheDtypes`.

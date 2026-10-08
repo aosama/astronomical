@@ -40,7 +40,7 @@ extension PersistentPromptCacheDiskStore {
         if let trackedBlock: PersistentPromptCacheDiskStoreIndex.TrackedBlock = existingBlock,
             FileManager.default.fileExists(atPath: trackedBlock.blockDirectoryPath) == false {
             self.stateLock.lock();
-            self.trackedFiles.removeBlock(blockHash: blockHash);
+            _ = self.trackedFiles.removeBlock(blockHash: blockHash);
             self.stateLock.unlock();
             try self.refreshGlobalPromptCacheAccounting();
             existingBlock = nil;

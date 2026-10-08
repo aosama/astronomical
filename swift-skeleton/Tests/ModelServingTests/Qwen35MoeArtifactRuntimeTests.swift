@@ -42,7 +42,7 @@ extension HermeticMlxJourneyContainer {
      */
     @Test(.timeLimit(.minutes(2)))
     func should_serve_a_paged_generation_from_the_moe_artifact_runtime() throws {
-        let (modelDirectoryUrl, layout): (URL, TinyMoeArtifactFixture.SynthesizedLayout) =
+        let (modelDirectoryUrl, _): (URL, TinyMoeArtifactFixture.SynthesizedLayout) =
             try TinyMoeArtifactFixture.writeModelDirectory(includeTokenizerFiles: true);
         defer { try? FileManager.default.removeItem(at: modelDirectoryUrl); }
         let runtime: LoadedChatRuntime = try Qwen35ChatRuntime.buildArtifactRuntime(
