@@ -31,6 +31,25 @@ public struct PersistentPromptCacheStartupCleanupCategory: Equatable, Sendable {
         self.byteCount = self.byteCount &+ removedByteCount;
     }
 
+    /// Adds one candidate's total bytes to this category after its artifacts
+    /// and blocks have been counted separately.
+    mutating func addRemovedBytes(_ removedByteCount: UInt64) {
+        self.byteCount = self.byteCount &+ removedByteCount;
+    }
+
+    /// Counts one removed eviction candidate's artifacts and blocks and adds
+    /// its total bytes once.
+    mutating func recordCandidate(
+        removedArtifactCount: Int, removedBlockCount: Int, removedByteCount: UInt64
+    ) {
+        for _ in 0..<max(removedArtifactCount, 0) {
+            self.recordArtifact(removedByteCount: 0);
+        }
+        self.recordBlocks(
+            removedBlockCount: removedBlockCount, removedByteCount: 0);
+        self.addRemovedBytes(removedByteCount);
+    }
+
     func isEmpty() -> Bool {
         return self.artifactCount == 0 && self.blockCount == 0 && self.byteCount == 0;
     }
@@ -106,6 +125,37 @@ public struct PersistentPromptCacheStartupCleanupEvidence: Equatable, Sendable {
             self.corruptCurrentFormat.recordBlock(removedByteCount: removedByteCount);
         case .quotaEviction:
             self.quotaEviction.recordBlock(removedByteCount: removedByteCount);
+        }
+    }
+
+    /// Records one removed eviction candidate under its cleanup reason,
+    /// counting its artifacts and blocks separately and adding its total
+    /// bytes once, port of the Rust `record_removed_startup_candidate`.
+    mutating func recordCandidate(
+        reason: Reason, removedArtifactCount: Int, removedBlockCount: Int,
+        removedByteCount: UInt64
+    ) {
+        switch reason {
+        case .interruptedTransactionRecovery:
+            self.interruptedTransactionRecovery.recordCandidate(
+                removedArtifactCount: removedArtifactCount,
+                removedBlockCount: removedBlockCount,
+                removedByteCount: removedByteCount);
+        case .obsoleteFormat:
+            self.obsoleteFormat.recordCandidate(
+                removedArtifactCount: removedArtifactCount,
+                removedBlockCount: removedBlockCount,
+                removedByteCount: removedByteCount);
+        case .corruptCurrentFormat:
+            self.corruptCurrentFormat.recordCandidate(
+                removedArtifactCount: removedArtifactCount,
+                removedBlockCount: removedBlockCount,
+                removedByteCount: removedByteCount);
+        case .quotaEviction:
+            self.quotaEviction.recordCandidate(
+                removedArtifactCount: removedArtifactCount,
+                removedBlockCount: removedBlockCount,
+                removedByteCount: removedByteCount);
         }
     }
 

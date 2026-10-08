@@ -17,8 +17,10 @@ import JourneyCategories;
  * links into the serving module. No model downloads and no long GPU
  * journeys — tiny arrays only.
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class MlxDependencyBringUpTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class MlxDependencyBringUpTests {
 
     init() {
         signal(SIGPIPE, SIG_IGN);
@@ -60,4 +62,6 @@ final class MlxDependencyBringUpTests {
         #expect(rotaryOutput.shape == [1, 2, 2, 4]);
         _ = cacheConfiguration;
     }
+}
+
 }

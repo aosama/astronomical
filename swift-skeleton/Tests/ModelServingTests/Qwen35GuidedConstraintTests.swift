@@ -21,8 +21,10 @@ import JourneyCategories;
  * an enforced constraint into the prepared request while the unsupported
  * guided-regex kind fails closed with a bounded reason.
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35GuidedConstraintTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35GuidedConstraintTests {
 
     init() {
         signal(SIGPIPE, SIG_IGN);
@@ -222,4 +224,6 @@ final class Qwen35GuidedConstraintTests {
                 seed: nil, thinkingBudget: nil),
             structuredGeneration: nil);
     }
+}
+
 }

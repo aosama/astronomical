@@ -14,8 +14,10 @@ import RuntimeIntegration
 /// loader and asserts per-expert slice identity, projection parameter
 /// coverage (affine triplets versus native weight-only), read-volume
 /// accounting, and fail-closed behavior on invalid layer requests.
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35MoeDiskExpertPageMaterializerTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35MoeDiskExpertPageMaterializerTests {
 
     init() {
         MLXMetallibLocator.overrideMetallibPathIfNecessary()
@@ -380,4 +382,6 @@ final class Qwen35MoeDiskExpertPageMaterializerTests {
             writtenTensors: writtenTensors,
             fileSizeBytes: UInt64(fileBytes.count))
     }
+}
+
 }

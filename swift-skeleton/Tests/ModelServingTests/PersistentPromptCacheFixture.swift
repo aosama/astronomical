@@ -177,13 +177,14 @@ enum PersistentPromptCacheFixture {
     /// journey can reopen the same directory across publication and restart.
     static func openDiskStore(
         globalRoot: URL,
+        activeModelPromptCacheDirectory: URL? = nil,
         modelContract: PersistentPromptCacheModelContract,
         globalPromptCacheMaximumSizeBytes: UInt64 = 50_000_000_000
     ) throws -> PersistentPromptCacheDiskStore {
         return try PersistentPromptCacheDiskStore.open(
             diskStoreConfig: PersistentPromptCacheDiskStoreConfig(
-                activeModelPromptCacheDirectory: globalRoot
-                    .appendingPathComponent("org/model-a/rev-1", isDirectory: true),
+                activeModelPromptCacheDirectory: activeModelPromptCacheDirectory
+                    ?? globalRoot.appendingPathComponent("org/model-a/rev-1", isDirectory: true),
                 globalPromptCacheRootDirectory: globalRoot,
                 globalPromptCacheMaximumSizeBytes: globalPromptCacheMaximumSizeBytes),
             modelContract: modelContract);

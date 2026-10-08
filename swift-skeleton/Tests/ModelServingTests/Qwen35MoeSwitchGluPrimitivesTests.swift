@@ -19,8 +19,10 @@ import Testing;
  * independent per-expert reference built from plain matrix multiplies —
  * never against golden-master constants.
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35MoeSwitchGluPrimitivesTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35MoeSwitchGluPrimitivesTests {
 
     init() {
         signal(SIGPIPE, SIG_IGN);
@@ -128,6 +130,7 @@ final class Qwen35MoeSwitchGluPrimitivesTests {
     }
 }
 
+}
 /// One SwitchGLU whose expert weights are deterministic constructed values,
 /// together with an independent per-expert reference computation built from
 /// plain matrix multiplies so the comparison never reuses upstream code.

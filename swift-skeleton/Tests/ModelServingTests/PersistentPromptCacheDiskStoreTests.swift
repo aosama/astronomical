@@ -42,4 +42,36 @@ final class PersistentPromptCacheDiskStoreTests {
         #expect(reopenedStore.startupCleanupEvidence() == nil,
             "a clean tree must produce no startup cleanup evidence");
     }
+
+    /// The Rust disk_store journey `should_publish_a_block_directly_and_
+    /// report_idempotent_republication`: a block publishes durably under
+    /// its content hash, and republishing the exact block reports
+    /// AlreadyPublished after full revalidation instead of rewriting.
+    @Test
+    func should_publish_a_block_directly_and_report_idempotent_republication() throws {
+        let modelContract: PersistentPromptCacheModelContract = try PersistentPromptCacheFixture
+            .ornithModelContract();
+        let diskStore: PersistentPromptCacheDiskStore = try PersistentPromptCacheFixture
+            .openDiskStore(modelContract: modelContract);
+        let promptTokens: [UInt32] = PersistentPromptCacheFixture
+            .promptTokensWithCompleteBlocksAndTrailingTokens(
+                modelContract: modelContract, completeBlockCount: 1, trailingTokenCount: 0);
+        let blockKey: PersistentPromptCacheBlockKey = try PersistentPromptCacheBlockKey
+            .forRootBlock(
+                modelContract: modelContract,
+                blockTokens: Array(promptTokens[..<modelContract.blockTokenCount]));
+        let staging: PersistentPromptCacheStateFileStaging = PersistentPromptCacheFixture
+            .SyntheticStateFileStaging();
+
+        let publicationOutcome: PersistentPromptCachePublicationOutcome = try diskStore
+            .publishBlock(staging: staging, blockKey: blockKey, parentBlockKey: nil);
+        #expect(publicationOutcome == .published);
+
+        let duplicatePublicationOutcome: PersistentPromptCachePublicationOutcome = try diskStore
+            .publishBlock(staging: staging, blockKey: blockKey, parentBlockKey: nil);
+        #expect(duplicatePublicationOutcome == .alreadyPublished);
+
+        #expect(diskStore.sequenceStateBlockCount() == 1);
+        #expect(diskStore.boundaryStateSnapshotCount() == 1);
+    }
 }

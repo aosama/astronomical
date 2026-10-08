@@ -15,8 +15,10 @@ import RuntimeIntegration
 /// collisions, attaches positional-read metrics, and fails closed on an
 /// invalid manifest instead of pairing one projection's weight with
 /// another projection's metadata.
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class QuantizedExpertPageLoaderTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class QuantizedExpertPageLoaderTests {
 
     init() {
         MLXMetallibLocator.overrideMetallibPathIfNecessary()
@@ -455,4 +457,6 @@ final class QuantizedExpertPageLoaderTests {
         })
         #expect(loadedValues == expectedValues)
     }
+}
+
 }
