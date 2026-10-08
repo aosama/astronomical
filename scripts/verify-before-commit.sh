@@ -199,8 +199,13 @@ phase_swift_node_contracts() {
     # The Rust-to-Swift migration journeys: plain `swift test` streams every
     # journey's name, verdict, and duration through this phase's log, which
     # the monitor relays live, so progress and per-journey timing stay
-    # visible without any wrapper-owned selection or silencing.
-    run_step swift-skeleton-journeys "$SWIFT_SKELETON_TIMEOUT_SECONDS" swift test --package-path swift-skeleton || return $?
+    # visible without any wrapper-owned selection or silencing. The lane
+    # runs with --no-parallel because MLX/GPU journeys must never run in
+    # parallel (repo rule): concurrent in-process suites race the gather/sort
+    # paging journey into intermittent NaN or stale-buffer divergence
+    # (#1081), while the suite-level serialized trait only orders a suite's
+    # own tests. Serial runs cost seconds on this hermetic package.
+    run_step swift-skeleton-journeys "$SWIFT_SKELETON_TIMEOUT_SECONDS" swift test --no-parallel --package-path swift-skeleton || return $?
     run_step test-pull-request-policy-contracts "$TEST_TIMEOUT_SECONDS" node \
         --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js || return $?
     run_step test-observatory-contracts "$TEST_TIMEOUT_SECONDS" node --test --test-reporter=spec \
