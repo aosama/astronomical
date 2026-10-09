@@ -127,14 +127,16 @@ jobs:
             # Cap the disk cache so one generation cannot outgrow the 10 GB
             # repository cache budget or the one-minute cache segment timeout;
             # sccache enforces the cap on writes and every default-branch build
-            # writes new artifacts. The cap must exist before the first server
-            # start because sccache reads it once at startup. sccache parses
-            # the value as a binary multiple, so 2700M budgets 2.83 decimal GB
-            # of tracked entries: enough headroom below the decimal 3 GB entry
-            # ceiling enforced by scripts/ci/save-sccache-cache.sh and
-            # scripts/ci/prune-ci-caches.sh that the trimmed directory plus
-            # cache-archive overhead stays within budget.
-            printf 'SCCACHE_CACHE_SIZE=%s\n' "2700M"
+            # writes new artifacts, so this is the proactive enforcement point:
+            # the cache cannot grow past the cap while compiling. The cap must
+            # exist before the first server start because sccache reads it once
+            # at startup. sccache parses the value as a binary multiple, so
+            # 930M budgets 0.975 decimal GB of tracked entries: enough headroom
+            # below the decimal 1 GB entry ceiling enforced by
+            # scripts/ci/save-sccache-cache.sh and scripts/ci/prune-ci-caches.sh
+            # that the trimmed directory plus cache-archive overhead stays
+            # within budget.
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "930M"
             # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
           } >> "$GITHUB_ENV"
           printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"

@@ -10,8 +10,8 @@
 # saves are default-branch-only, so a non-default-ref sccache entry can never
 # be superseded by a newer generation; keeping one preserves a stale
 # multi-gigabyte directory forever, and the family keeps zero of them. On top
-# of the count policy, sccache entries above a decimal 3 GB ceiling are
-# deleted even when newest: the sccache cap budgets 2.83 decimal GB of tracked
+# of the count policy, sccache entries above a decimal 1 GB ceiling are
+# deleted even when newest: the sccache cap budgets 0.975 decimal GB of tracked
 # entries, so a larger generation was never trimmed, cannot restore inside the
 # one-minute cache segment timeout, and only hastens the 10 GB eviction that
 # kills the native-build cache. Count alone cannot bound the budget because
@@ -40,9 +40,9 @@ NATIVE_BUILD_KEEP_COUNT=2
 DEFAULT_KEEP_COUNT=1
 # Size ceilings are family-scoped because only sccache generations ratchet
 # upward; 0 disables the ceiling for families that own bounded artifacts. The
-# sccache cap (SCCACHE_CACHE_SIZE=2700M, 2.83 decimal GB of tracked entries)
+# sccache cap (SCCACHE_CACHE_SIZE=930M, 0.975 decimal GB of tracked entries)
 # plus archive overhead must land under this decimal ceiling.
-SCCACHE_MAX_ENTRY_BYTES=3000000000
+SCCACHE_MAX_ENTRY_BYTES=1000000000
 DEFAULT_MAX_ENTRY_BYTES=0
 # sccache saves are default-branch-only, so a non-default-ref sccache entry is
 # never superseded and only burns budget; every other family keeps one entry

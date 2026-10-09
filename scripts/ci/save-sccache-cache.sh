@@ -8,9 +8,9 @@
 # the primary key, and reports the save decision through GitHub Actions
 # outputs so the workflow's save step stays a thin conditional.
 #
-# Unit accounting: sccache parses its cap as a binary multiple (2700M budgets
-# 2.83 decimal GB of tracked entries) while GitHub reports entry sizes in
-# decimal bytes, so the directory budget sits below the decimal 3 GB entry
+# Unit accounting: sccache parses its cap as a binary multiple (930M budgets
+# 0.975 decimal GB of tracked entries) while GitHub reports entry sizes in
+# decimal bytes, so the directory budget sits below the decimal 1 GB entry
 # ceiling to absorb cache-archive overhead.
 #
 # Usage:
@@ -21,9 +21,9 @@
 #   GH_TOKEN / GITHUB_TOKEN           token used by the gh CLI
 #   SCCACHE_DIR                       sccache cache directory to measure
 #   SCCACHE_SAVE_MAX_DIRECTORY_BYTES  decimal bytes; a larger directory skips
-#                                     the save (default 2900000000)
+#                                     the save (default 1000000000)
 #   SCCACHE_SAVE_MAX_ENTRY_BYTES      decimal bytes; stored entries above this
-#                                     are deleted (default 3000000000)
+#                                     are deleted (default 1000000000)
 #   GITHUB_OUTPUT                     GitHub Actions outputs file when run
 #                                     inside a workflow
 
@@ -35,8 +35,8 @@ if (set -o pipefail) 2>/dev/null; then
     set -o pipefail
 fi
 
-DEFAULT_MAX_DIRECTORY_BYTES=2900000000
-DEFAULT_MAX_ENTRY_BYTES=3000000000
+DEFAULT_MAX_DIRECTORY_BYTES=1000000000
+DEFAULT_MAX_ENTRY_BYTES=1000000000
 
 print_error() {
     printf '%s\n' "Error: $1" >&2
