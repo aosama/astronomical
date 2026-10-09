@@ -27,7 +27,7 @@ write_executable() {
 }
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     notices_script="${repository_root}/scripts/generate-rust-dependency-notices.sh"
     pinned_cargo_about_version="$(tr -d '[:space:]' < "${repository_root}/third-party/cargo-about-version")"
     [ "$pinned_cargo_about_version" = "0.9.2" ] || {
@@ -106,9 +106,9 @@ CARGO_ABOUT
     fi
     printf '%s\n' '[rust-dependency-notices-contract] case=ci-installs-only-the-pinned-version status=success'
     printf '%s\n' '[verification-tools-contract] status=start'
-    "${repository_root}/scripts/test-install-verification-tools.sh"
+    "${repository_root}/tests/scripts/test-install-verification-tools.sh"
     printf '%s\n' '[rust-dependency-notices-digest] status=start'
-    "${repository_root}/scripts/test-rust-dependency-notices-digest.sh"
+    "${repository_root}/tests/scripts/test-rust-dependency-notices-digest.sh"
     printf '%s\n' '[rust-dependency-notices-contract] status=success'
 }
 

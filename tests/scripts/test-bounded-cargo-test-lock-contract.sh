@@ -46,7 +46,7 @@ main() {
         timeout_executable="$(command -v gtimeout)"
     fi
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-bounded-lock.XXXXXX")"
     cleanup() {
         if [ -z "${SANDBOX_DIRECTORY:-}" ] || [ ! -d "$SANDBOX_DIRECTORY" ]; then

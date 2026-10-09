@@ -403,7 +403,7 @@ main() {
         require_command "$required_command"
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-ci-native-cache.XXXXXX")"
     fixture_root="${SANDBOX_DIRECTORY}/repository"
     create_fingerprint_fixture "$fixture_root"

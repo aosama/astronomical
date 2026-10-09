@@ -33,7 +33,7 @@ require_command() {
     }
 }
 
-repository_root="$(cd "$(dirname "$0")/.." && pwd)"
+repository_root="$(cd "$(dirname "$0")/../.." && pwd)"
 
 require_command jq
 require_command shellcheck
