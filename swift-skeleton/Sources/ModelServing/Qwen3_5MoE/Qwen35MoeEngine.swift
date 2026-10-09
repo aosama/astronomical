@@ -23,17 +23,22 @@ import MLXNN;
 public final class Qwen35MoeEngine: InferenceEngine {
 
     let attributionEnabled: Bool;
-    private let prefillChunkTokenCount: Int;
+    let prefillChunkTokenCount: Int;
     var moeModel: (any LanguageModel)?;
     var moeRepositoryConfiguration: Qwen3_5Config?;
     var expertResidency: (any Qwen35MoeExpertResidency)?;
     var pagedForwardContext: Qwen35MoePagedForwardContext?;
     var pagedExpertDecorator: Qwen35MoePagedExpertDecorator?;
     private var totalLayerCount: UInt32 = 0;
-    private var activeCache: [KVCache]?;
+    var activeCache: [KVCache]?;
     private var activeSampler: (any LogitSampler)?;
-    private var promptTokenIds: Array<UInt32> = [];
-    private var prefillNextTokenOffset: Int = 0;
+    var promptTokenIds: Array<UInt32> = [];
+    var prefillNextTokenOffset: Int = 0;
+    // Persistent prompt-cache wiring; the behavior lives in the
+    // Qwen35MoeEnginePromptCache extension beside the storage owners.
+    var promptCacheController: Qwen35MoePromptCacheController?;
+    var captureChainParentBlockKey: PersistentPromptCacheBlockKey?;
+    var activeRestoredPromptCacheTokenCount: Int = 0;
     private var prefillStartClock: ContinuousClock.Instant?;
     private var prefillElapsedMillis: UInt64 = 0;
     private var lastLogits: MLXArray?;
@@ -198,9 +203,14 @@ public final class Qwen35MoeEngine: InferenceEngine {
         if self.pagedForwardContext != nil {
             self.activeCache = Qwen35MoeEngine.pagedExecutionCaches(self.activeCache!);
         }
+        // The restored prefix must sit in the live caches before the first
+        // prefill chunk, so the cursor starts at the proven boundary.
+        self.activeRestoredPromptCacheTokenCount =
+            Int(try self.restorePersistentPromptCachePrefixForActiveRequest());
         return EngineGenerationStart(
-            cachedTokenCount: 0,
-            restoredPromptPrefixTokenCount: 0,
+            cachedTokenCount: UInt32(clamping: self.activeRestoredPromptCacheTokenCount),
+            restoredPromptPrefixTokenCount:
+                UInt32(clamping: self.activeRestoredPromptCacheTokenCount),
             expertMemoryMode: self.expertResidency?.expertMemoryMode,
             promptProcessingPhase: .target);
     }
@@ -314,9 +324,23 @@ public final class Qwen35MoeEngine: InferenceEngine {
         if self.prefillStartClock == nil {
             self.prefillStartClock = ContinuousClock.now;
         }
-        let chunkEnd: Int = min(
+        let unclampedChunkEnd: Int = min(
             self.prefillNextTokenOffset + self.prefillChunkTokenCount,
             self.promptTokenIds.count);
+        // Cache-enabled prefill is clamped to one durable boundary per
+        // forward, so the captured state and the token slice describe the
+        // same exact point.
+        let chunkEnd: Int;
+        if let promptCacheController: Qwen35MoePromptCacheController = self.promptCacheController,
+            promptCacheController.isOpen {
+            chunkEnd = PersistentPromptCachePrefillBoundary.clampedPrefillChunkEnd(
+                prefillChunkStart: self.prefillNextTokenOffset,
+                requestedPrefillChunkEnd: unclampedChunkEnd,
+                persistentPromptCacheBlockTokenCount:
+                    promptCacheController.modelContract.blockTokenCount);
+        } else {
+            chunkEnd = unclampedChunkEnd;
+        }
         let chunkTokenIds: Array<UInt32> = Array(
             self.promptTokenIds[self.prefillNextTokenOffset ..< chunkEnd]);
         self.pagedForwardContext?.currentInputTokenId = chunkTokenIds.first ?? 0;
@@ -325,10 +349,6 @@ public final class Qwen35MoeEngine: InferenceEngine {
             cache: activeCache,
             state: nil);
         try self.throwIfPagedForwardFaulted();
-        self.prefillNextTokenOffset = chunkEnd;
-        if self.prefillNextTokenOffset >= self.promptTokenIds.count {
-            self.lastLogits = chunkOutput.logits;
-        }
         let chunkElapsedMillis: UInt64 = Qwen35MoeEngine.millisSince(chunkStart);
         self.prefillElapsedMillis = self.prefillElapsedMillis.addingReportingOverflow(
             chunkElapsedMillis).partialValue;
@@ -336,6 +356,15 @@ public final class Qwen35MoeEngine: InferenceEngine {
             operationName: "qwen35_moe_prefill_chunk",
             operationStart: chunkStart,
             attributionEnabled: self.attributionEnabled);
+        // Publication is synchronous: the cursor below advances only after
+        // every boundary this chunk completed is durably captured.
+        let chunkStartOffset: Int = self.prefillNextTokenOffset;
+        self.prefillNextTokenOffset = chunkEnd;
+        try self.capturePersistentPromptCacheAfterPrefillChunk(
+            activeCache: activeCache, chunkStart: chunkStartOffset, chunkEnd: chunkEnd);
+        if self.prefillNextTokenOffset >= self.promptTokenIds.count {
+            self.lastLogits = chunkOutput.logits;
+        }
         return .prefillProgress(
             processedTokenCount: UInt32(chunkTokenIds.count),
             elapsedMillis: chunkElapsedMillis,
@@ -344,8 +373,7 @@ public final class Qwen35MoeEngine: InferenceEngine {
             mlxMemorySnapshot: nil,
             expertResidencyTelemetry: self.expertResidency?.telemetry,
             expertMemoryMode: self.expertResidency?.expertMemoryMode,
-            promptWorkReuse: WorkerPromptWorkReuse(
-                targetEligibleTokenCount: 0, targetRestoredTokenCount: 0));
+            promptWorkReuse: self.promptWorkReuseForActiveRequest());
     }
 
     public func injectInputTokens(requestId: RequestId, inputTokenIds: Array<UInt32>) throws {
@@ -450,6 +478,8 @@ public final class Qwen35MoeEngine: InferenceEngine {
         self.activeGuidedConstraint = nil;
         self.activeThinkingBudgetState = nil;
         self.isInsideThinking = false;
+        self.captureChainParentBlockKey = nil;
+        self.activeRestoredPromptCacheTokenCount = 0;
     }
 
     private static func millisSince(
