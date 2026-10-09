@@ -26,7 +26,7 @@ cleanup() {
 trap cleanup 0
 
 print_usage() {
-    print_error "Usage: scripts/native-build-cache-fingerprint.sh [--source-only] --profile PROFILE [repository-root]"
+    print_error "Usage: scripts/ci/native-build-cache-fingerprint.sh [--source-only] --profile PROFILE [repository-root]"
 }
 
 parse_arguments() {
@@ -87,7 +87,7 @@ resolve_repository_root() {
     if [ -n "$REPOSITORY_ROOT_ARGUMENT" ]; then
         repository_root_candidate="$REPOSITORY_ROOT_ARGUMENT"
     else
-        repository_root_candidate="$(dirname -- "$0")/.."
+        repository_root_candidate="$(dirname -- "$0")/../.."
     fi
     repository_root="$(CDPATH='' cd -- "$repository_root_candidate" && pwd -P)" || {
         print_error "repository root is unavailable: ${repository_root_candidate}"
@@ -115,7 +115,7 @@ append_source_identity() {
     git -C "$repository_root" ls-files --cached --others --exclude-standard -- \
         crates/runtime-integration/native-build-store-schema-version \
         crates/runtime-integration/native \
-        scripts/native-build-cache-fingerprint.sh \
+        scripts/ci/native-build-cache-fingerprint.sh \
         third-party/native-dependency-manifest.cmake \
         third-party/pins \
         third-party/patches \

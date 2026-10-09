@@ -173,7 +173,8 @@ fn resolve_headers_root(repository_root: &Path) -> Result<PathBuf, Box<dyn Error
 }
 
 fn resolve_extraction_identity(repository_root: &Path) -> Result<String, Box<dyn Error>> {
-    let fingerprint_script_path = repository_root.join("scripts/native-build-cache-fingerprint.sh");
+    let fingerprint_script_path =
+        repository_root.join("scripts/ci/native-build-cache-fingerprint.sh");
     let mut identity_command = Command::new(&fingerprint_script_path);
     identity_command
         .arg("--source-only")

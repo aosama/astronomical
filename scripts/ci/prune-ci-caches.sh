@@ -19,7 +19,7 @@
 # restore-key prefix chain.
 #
 # Usage:
-#   scripts/prune-ci-caches.sh [--dry-run] [--repo owner/name]
+#   scripts/ci/prune-ci-caches.sh [--dry-run] [--repo owner/name]
 #
 # Environment:
 #   GITHUB_TOKEN / GH_TOKEN  token used by the gh CLI (CI passes github.token)

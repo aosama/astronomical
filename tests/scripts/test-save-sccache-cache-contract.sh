@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Proves scripts/save-sccache-cache.sh saves a new generation when no stored
+# Proves scripts/ci/save-sccache-cache.sh saves a new generation when no stored
 # primary-key entry exists, skips the save when the stored entry is within the
 # entry ceiling, deletes and replaces a stored oversize entry, skips the save
 # when the trimmed directory exceeds the directory budget, always removes
@@ -46,7 +46,7 @@ repository_root="$(cd "$(dirname "$0")/../.." && pwd)"
 require_command jq
 require_command shellcheck
 
-shellcheck "${repository_root}/scripts/save-sccache-cache.sh"
+shellcheck "${repository_root}/scripts/ci/save-sccache-cache.sh"
 
 SANDBOX_DIRECTORY="$(mktemp -d)"
 FIXTURE_BIN_DIRECTORY="${SANDBOX_DIRECTORY}/bin"
@@ -128,7 +128,7 @@ run_save_script() {
     SCCACHE_DIR="$CACHE_DIRECTORY" \
     SCCACHE_SAVE_MAX_DIRECTORY_BYTES="${SCCACHE_SAVE_MAX_DIRECTORY_BYTES:-1000}" \
     SCCACHE_SAVE_MAX_ENTRY_BYTES="${SCCACHE_SAVE_MAX_ENTRY_BYTES:-2000}" \
-        sh "${repository_root}/scripts/save-sccache-cache.sh" \
+        sh "${repository_root}/scripts/ci/save-sccache-cache.sh" \
         "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA" \
         >"$SCRIPT_OUTPUT_FILE" 2>&1
 }

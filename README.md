@@ -120,7 +120,7 @@ Required tools:
 
 Provision the pinned, checksum-verified native dependencies:
 
-    scripts/bootstrap-native-dependencies.sh
+    scripts/ci/bootstrap-native-dependencies.sh
 
 Build and validate the Development app without replacing or stopping Stable:
 
@@ -159,7 +159,7 @@ Check Rust formatting, then run the Rust hermetic and REST suites:
 
 Run the macOS menu contracts:
 
-    scripts/test-macos-menu-contracts.sh
+    scripts/ci/test-macos-menu-contracts.sh
 
 Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts. See the [repository discovery guide](repo-discovery-guide-for-agents.md) for the maintained command map.
 
