@@ -121,7 +121,7 @@ notices_digest_is_current() {
 main() {
     check_only=false
     if [ "$#" -gt 1 ]; then
-        print_error "usage: scripts/generate-rust-dependency-notices.sh [--check]"
+        print_error "usage: scripts/ci/generate-rust-dependency-notices.sh [--check]"
         exit 2
     fi
     if [ "$#" -eq 1 ]; then
@@ -133,7 +133,7 @@ main() {
     fi
 
     started_at_seconds="$(date +%s)"
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     required_cargo_about_version="$(read_pinned_cargo_about_version "${repository_root}/third-party/cargo-about-version")"
     require_pinned_cargo_about "$required_cargo_about_version"
     generated_notices_path="${repository_root}/third-party/RUST_DEPENDENCY_NOTICES"
@@ -178,7 +178,7 @@ main() {
             exit 1
         fi
         if ! notices_digest_is_current "$digest_path" "$generated_notices_path" "$input_digest"; then
-            print_error "third-party/RUST_DEPENDENCY_NOTICES.digest is stale; run scripts/generate-rust-dependency-notices.sh"
+            print_error "third-party/RUST_DEPENDENCY_NOTICES.digest is stale; run scripts/ci/generate-rust-dependency-notices.sh"
             exit 1
         fi
         printf '[rust-dependency-notices] status=current reason=harvest elapsed_seconds=%s cargo_about=%s\n' \

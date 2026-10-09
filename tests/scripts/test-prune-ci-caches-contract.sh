@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Proves scripts/prune-ci-caches.sh keeps the newest cache per family and ref
+# Proves scripts/ci/prune-ci-caches.sh keeps the newest cache per family and ref
 # class, keeps zero non-default-ref sccache entries because sccache saves are
 # default-branch-only, deletes sccache entries above the decimal 3 GB family
 # ceiling even when they are the newest, never applies the sccache ceiling to
@@ -125,7 +125,7 @@ run_prune() {
     GH_SHIM_REPO_JSON="$FIXTURE_REPO_JSON" \
     GH_SHIM_DELETIONS_FILE="$DELETIONS_FILE" \
     GH_SHIM_FAIL_DELETIONS="${GH_SHIM_FAIL_DELETIONS:-}" \
-        sh "${repository_root}/scripts/prune-ci-caches.sh" "$@" >"$PRUNE_OUTPUT_FILE" 2>&1
+        sh "${repository_root}/scripts/ci/prune-ci-caches.sh" "$@" >"$PRUNE_OUTPUT_FILE" 2>&1
 }
 
 assert_deletions_match() {
@@ -140,7 +140,7 @@ assert_deletions_match() {
     fi
 }
 
-shellcheck "${repository_root}/scripts/prune-ci-caches.sh"
+shellcheck "${repository_root}/scripts/ci/prune-ci-caches.sh"
 
 # Contract 1: default run keeps the newest sccache on main, keeps the two
 # newest native-build entries, and deletes the stale main sccache, the

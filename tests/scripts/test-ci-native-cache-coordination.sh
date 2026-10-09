@@ -36,9 +36,9 @@ create_fingerprint_fixture() {
         "${fixture_root}/crates/runtime-integration/native" \
         "${fixture_root}/third-party/pins" \
         "${fixture_root}/third-party/patches" \
-        "${fixture_root}/scripts"
-    cp "${repository_root}/scripts/native-build-cache-fingerprint.sh" \
-        "${fixture_root}/scripts/native-build-cache-fingerprint.sh"
+        "${fixture_root}/scripts/ci"
+    cp "${repository_root}/scripts/ci/native-build-cache-fingerprint.sh" \
+        "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh"
     printf '%s\n' '[workspace]' 'version = "1.0.0"' > "${fixture_root}/Cargo.toml"
     printf '%s\n' 'version = 4' > "${fixture_root}/Cargo.lock"
     printf '%s\n' '[toolchain]' > "${fixture_root}/rust-toolchain.toml"
@@ -69,13 +69,13 @@ full_fingerprint() {
     ASTRONOMICAL_NATIVE_IDENTITY_RUSTC='rustc 1.97.1 stable aarch64-apple-darwin' \
     ASTRONOMICAL_NATIVE_IDENTITY_TARGET="$target_identity" \
     ASTRONOMICAL_NATIVE_BUILD_TYPE='Release' \
-        "${fixture_root}/scripts/native-build-cache-fingerprint.sh" \
+        "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh" \
         --profile "$native_profile" "$fixture_root"
 }
 
 source_fingerprint() {
     fixture_root="$1"
-    "${fixture_root}/scripts/native-build-cache-fingerprint.sh" \
+    "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh" \
         --source-only --profile core "$fixture_root"
 }
 
@@ -108,7 +108,7 @@ assert_cache_classification() {
         CACHE_STARTED_AT_EPOCH_SECONDS='100' \
         CACHE_FINISHED_AT_EPOCH_SECONDS='112' \
         GITHUB_STEP_SUMMARY="${SANDBOX_DIRECTORY}/step-summary.md" \
-        "${repository_root}/scripts/report-build-cache-restoration.sh"
+        "${repository_root}/scripts/ci/report-build-cache-restoration.sh"
     )"
     case "$report_output" in
         *"owner=native-build operation=restore classification=${expected_classification} elapsed_seconds=12"*) ;;
@@ -136,7 +136,7 @@ create_change_scope_fixture() {
         "${change_scope_repository}/.github/workflows" \
         "${change_scope_repository}/crates/model-serving/src" \
         "${change_scope_repository}/crates/runtime-integration/native" \
-        "${change_scope_repository}/scripts" \
+        "${change_scope_repository}/scripts/ci" \
         "${change_scope_repository}/third-party/pins" \
         "${change_scope_repository}/third-party/patches"
     printf '%s\n' '# Project' > "${change_scope_repository}/README.md"
@@ -158,7 +158,7 @@ create_change_scope_fixture() {
     printf '%s\n' 'project(runtime)' > \
         "${change_scope_repository}/crates/runtime-integration/native/CMakeLists.txt"
     printf '%s\n' '#!/usr/bin/env sh' > \
-        "${change_scope_repository}/scripts/native-build-cache-fingerprint.sh"
+        "${change_scope_repository}/scripts/ci/native-build-cache-fingerprint.sh"
     printf '%s\n' 'set(MLX_VERSION 1)' > \
         "${change_scope_repository}/third-party/native-dependency-manifest.cmake"
     printf '%s\n' 'set(MLX_PIN 1)' > "${change_scope_repository}/third-party/pins/mlx.cmake"
@@ -187,7 +187,7 @@ assert_change_scope() {
     CURRENT_SHA="$head_sha" \
     GITHUB_OUTPUT="$output_file" \
     REPOSITORY_ROOT="$change_scope_repository" \
-        "${repository_root}/scripts/classify-ci-change-scope.sh"
+        "${repository_root}/scripts/ci/classify-ci-change-scope.sh"
 
     actual_code_changed=""
     actual_native_inputs_changed=""
@@ -445,7 +445,7 @@ main() {
         "${change_scope_fixture_root}/crates/runtime-integration/native-build-store-schema-version"
     store_schema_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" store-schema)"
     printf '%s\n' '#!/usr/bin/env sh' '# updated identity policy' > \
-        "${change_scope_fixture_root}/scripts/native-build-cache-fingerprint.sh"
+        "${change_scope_fixture_root}/scripts/ci/native-build-cache-fingerprint.sh"
     fingerprint_policy_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" fingerprint-policy)"
     printf '%s\n' 'set(MLX_VERSION 2)' > \
         "${change_scope_fixture_root}/third-party/native-dependency-manifest.cmake"
@@ -552,7 +552,7 @@ main() {
         ASTRONOMICAL_NATIVE_IDENTITY_RUSTC='rustc 1.97.1 stable aarch64-apple-darwin' \
         ASTRONOMICAL_NATIVE_IDENTITY_TARGET='aarch64-apple-darwin' \
         ASTRONOMICAL_NATIVE_BUILD_TYPE='Debug' \
-        "${fixture_root}/scripts/native-build-cache-fingerprint.sh" \
+        "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh" \
         --profile core "$fixture_root" >/dev/null 2>&1
     then
         print_error "an unsupported native build type was accepted"
@@ -573,7 +573,7 @@ main() {
         CACHE_PRIMARY_KEY='astronomical-v2-native-build-current' \
         CACHE_STARTED_AT_EPOCH_SECONDS='100' \
         CACHE_FINISHED_AT_EPOCH_SECONDS='112' \
-        "${repository_root}/scripts/report-build-cache-restoration.sh" >/dev/null 2>&1
+        "${repository_root}/scripts/ci/report-build-cache-restoration.sh" >/dev/null 2>&1
     then
         print_error "an inconsistent primary cache state was accepted"
         exit 1

@@ -159,7 +159,7 @@ provision() {
 }
 
 extraction_identity="$(
-    timeout 120 sh "${repository_root}/scripts/native-build-cache-fingerprint.sh" \
+    timeout 120 sh "${repository_root}/scripts/ci/native-build-cache-fingerprint.sh" \
         --source-only --profile core "$repository_root"
 )"
 EXTRACTION_DIRECTORY="${HEADERS_ROOT_DIRECTORY}/${extraction_identity}"
@@ -261,7 +261,7 @@ assert_contains "$PROVISION_OUTPUT_FILE" "bootstrap-native-dependencies.sh" \
 # one-byte difference.
 provision
 built_identity="$(
-    timeout 120 sh "${repository_root}/scripts/native-build-cache-fingerprint.sh" \
+    timeout 120 sh "${repository_root}/scripts/ci/native-build-cache-fingerprint.sh" \
         --profile core "$repository_root"
 )"
 FIXTURE_ENTRY_DIRECTORY="${FIXTURE_STORE_DIRECTORY}/v1/entries/${built_identity}"

@@ -66,4 +66,4 @@ runs:
         CACHE_MATCHED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
         CACHE_PRIMARY_KEY: ${{ inputs.key }}
         CACHE_STARTED_AT_EPOCH_SECONDS: ${{ steps.timer.outputs.started_at }}
-      run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" "$GITHUB_WORKSPACE/scripts/report-build-cache-restoration.sh"
+      run: CACHE_FINISHED_AT_EPOCH_SECONDS="$(date +%s)" "$GITHUB_WORKSPACE/scripts/ci/report-build-cache-restoration.sh"

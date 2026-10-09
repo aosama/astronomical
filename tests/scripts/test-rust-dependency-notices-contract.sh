@@ -28,7 +28,7 @@ write_executable() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
-    notices_script="${repository_root}/scripts/generate-rust-dependency-notices.sh"
+    notices_script="${repository_root}/scripts/ci/generate-rust-dependency-notices.sh"
     pinned_cargo_about_version="$(tr -d '[:space:]' < "${repository_root}/third-party/cargo-about-version")"
     [ "$pinned_cargo_about_version" = "0.9.2" ] || {
         print_error "third-party/cargo-about-version must pin 0.9.2"
@@ -87,8 +87,8 @@ CARGO_ABOUT
 
     printf '%s\n' '[rust-dependency-notices-contract] case=ci-installs-only-the-pinned-version status=start'
     workflow_path="${repository_root}/.github/workflows/ci.yml"
-    installer_path="${repository_root}/scripts/install-verification-tools.sh"
-    grep -F 'scripts/install-verification-tools.sh' "$workflow_path" >/dev/null || {
+    installer_path="${repository_root}/scripts/ci/install-verification-tools.sh"
+    grep -F 'scripts/ci/install-verification-tools.sh' "$workflow_path" >/dev/null || {
         print_error "CI does not install verification tools through the pinned-archive installer"
         exit 1
     }

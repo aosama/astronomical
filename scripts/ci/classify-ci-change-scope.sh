@@ -32,7 +32,7 @@ resolve_repository_root() {
     if [ -n "${REPOSITORY_ROOT:-}" ]; then
         repository_root_candidate="$REPOSITORY_ROOT"
     else
-        repository_root_candidate="$(dirname -- "$0")/.."
+        repository_root_candidate="$(dirname -- "$0")/../.."
     fi
     repository_root="$(CDPATH='' cd -- "$repository_root_candidate" && pwd -P)" || {
         print_error "repository root is unavailable: ${repository_root_candidate}"
@@ -112,7 +112,7 @@ classify_native_input_changes() {
         crates/runtime-integration/build_native_store_manifest.rs \
         crates/runtime-integration/native-build-store-schema-version \
         crates/runtime-integration/native \
-        scripts/native-build-cache-fingerprint.sh \
+        scripts/ci/native-build-cache-fingerprint.sh \
         third-party/native-dependency-manifest.cmake \
         third-party/pins \
         third-party/patches \

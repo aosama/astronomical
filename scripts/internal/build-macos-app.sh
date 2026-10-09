@@ -284,7 +284,7 @@ main() {
     # ── Phase 2: Verify native dependencies ───────────────────────────────
 
     start_phase 2 "verify native MLX dependencies"
-    "${repository_root}/scripts/bootstrap-native-dependencies.sh" --verify
+    "${repository_root}/scripts/ci/bootstrap-native-dependencies.sh" --verify
     finish_phase "success"
 
     # ── Phase 3: Build release binaries ──────────────────────────────────
@@ -307,7 +307,7 @@ main() {
     fi
     # The native build store is machine-wide, so pre-warming once here keeps
     # the release build's build script from invoking CMake at all.
-    "${repository_root}/scripts/prewarm-native-build.sh" --profile core
+    "${repository_root}/scripts/ci/prewarm-native-build.sh" --profile core
     # Cargo prints its own live compilation progress to stderr.
     cargo build --release --target "$host_target_triple" \
         -p astronomical-inference-worker --bin astronomical-inference-worker \

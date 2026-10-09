@@ -121,7 +121,7 @@ run_installer() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
-    INSTALLER_SCRIPT="${repository_root}/scripts/install-verification-tools.sh"
+    INSTALLER_SCRIPT="${repository_root}/scripts/ci/install-verification-tools.sh"
     pinned_cargo_about_version="$(tr -d '[:space:]' < "${repository_root}/third-party/cargo-about-version")"
     pinned_sccache_version="$(tr -d '[:space:]' < "${repository_root}/third-party/sccache-version")"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-verification-tools-test.XXXXXX")"

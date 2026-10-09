@@ -13,7 +13,7 @@ TEMPORARY_MANIFEST_PATH=""
 TEMPORARY_ARCHIVE_PATH=""
 
 print_usage() {
-    printf '%s\n' "Usage: scripts/bootstrap-native-dependencies.sh [--cache-dir ABSOLUTE_PATH] [--verify]"
+    printf '%s\n' "Usage: scripts/ci/bootstrap-native-dependencies.sh [--cache-dir ABSOLUTE_PATH] [--verify]"
     printf '%s\n' ""
     printf '%s\n' "Downloads and SHA-256-verifies Astronomical's pinned MLX source archives."
     printf '%s\n' "Default native dependency cache: \$HOME/${DEFAULT_NATIVE_DEPENDENCY_CACHE_DIRECTORY_SUFFIX}"
@@ -249,7 +249,7 @@ main() {
     finish_step "validate-inputs" "success"
 
     start_step "read-pinned-manifest"
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     TEMPORARY_MANIFEST_PATH="$(mktemp "${TMPDIR:-/tmp}/astronomical-native-dependencies.XXXXXX")"
     cmake \
         "-DASTRONOMICAL_NATIVE_DEPENDENCY_MANIFEST_PATH=${TEMPORARY_MANIFEST_PATH}" \
