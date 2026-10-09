@@ -57,11 +57,7 @@ impl Qwen3_5EngineState {
                     "generation context memory reservation overflowed",
                 )
             })?;
-        let (
-            prefill_activation_workspace_bytes,
-            complete_layer_scratch_bytes,
-            complete_experts_are_resident,
-        ) = {
+        let (prefill_activation_workspace_bytes, complete_experts_are_resident) = {
             let model = self
                 .model
                 .as_ref()
@@ -71,7 +67,7 @@ impl Qwen3_5EngineState {
             // live inside the seated active snapshot. Adding them again stacks
             // exclusive paper peaks on top of RAM that is already allocated.
             if complete_experts_are_resident {
-                (0, 0, true)
+                (0, true)
             } else {
                 let ram_budget = model.mlx_ram_budget();
                 // The activation reserve belongs to one forward, so it is
@@ -96,21 +92,7 @@ impl Qwen3_5EngineState {
                             "prefill activation workspace exceeds the platform range",
                         )
                     })?;
-                let complete_layer_scratch_bytes = usize::try_from(
-                    ram_budget
-                        .model_geometry()
-                        .largest_complete_expert_layer_bytes,
-                )
-                .map_err(|_| {
-                    memory_admission::invalid_request_error(
-                        "complete-layer scratch reservation exceeds the platform range",
-                    )
-                })?;
-                (
-                    prefill_activation_workspace_bytes,
-                    complete_layer_scratch_bytes,
-                    false,
-                )
+                (prefill_activation_workspace_bytes, false)
             }
         };
         let temporary_workspace_reservation_bytes = request_context_temporary_workspace_bytes(
@@ -119,7 +101,6 @@ impl Qwen3_5EngineState {
             0,
             0,
             prefill_activation_workspace_bytes,
-            complete_layer_scratch_bytes,
         )
         .ok_or_else(|| {
             memory_admission::invalid_request_error(
@@ -134,7 +115,6 @@ impl Qwen3_5EngineState {
             0,
             0,
             prefill_activation_workspace_bytes,
-            complete_layer_scratch_bytes,
             temporary_workspace_reservation_bytes,
             0,
         );
