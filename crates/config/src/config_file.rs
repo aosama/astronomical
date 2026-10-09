@@ -64,29 +64,55 @@ pub(crate) fn parse_and_validate_v1(
 }
 
 pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -> bool {
-    let mut removed_retired_fields = false;
+    let mut removed_field_names = Vec::new();
     if let Some(root_object) = config_json.as_object_mut() {
-        removed_retired_fields |= remove_field_from_object(root_object, "speculative_prefill");
-        removed_retired_fields |= remove_nested_field(
+        if remove_field_from_object(root_object, "speculative_prefill") {
+            removed_field_names.push("speculative_prefill".to_owned());
+        }
+        if remove_nested_field(
             root_object,
             "chunking",
             "speculative_prefill_draft_forward_tokens",
-        );
+        ) {
+            removed_field_names
+                .push("chunking.speculative_prefill_draft_forward_tokens".to_owned());
+        }
+        if remove_nested_field(
+            root_object,
+            "runtime",
+            "experimental_qwen_thinking_channel_seed_enabled",
+        ) {
+            removed_field_names
+                .push("runtime.experimental_qwen_thinking_channel_seed_enabled".to_owned());
+        }
         if let Some(models) = root_object
             .get_mut("models")
             .and_then(serde_json::Value::as_object_mut)
         {
-            for model_config in models.values_mut() {
+            for (model_id, model_config) in models.iter_mut() {
                 let Some(model_object) = model_config.as_object_mut() else {
                     continue;
                 };
-                removed_retired_fields |= remove_nested_field(
+                if remove_nested_field(
                     model_object,
                     "chunking",
                     "speculative_prefill_draft_forward_tokens",
-                );
-                removed_retired_fields |=
-                    remove_nested_field(model_object, "acceleration", "speculative_prefill");
+                ) {
+                    removed_field_names.push(format!(
+                        "models.{model_id}.chunking.speculative_prefill_draft_forward_tokens"
+                    ));
+                }
+                // The whole acceleration container was retired: speculative prefill
+                // first, then multi-token prediction. Strip every retired member and
+                // drop the emptied container so strict parsing accepts the document.
+                if remove_nested_field(model_object, "acceleration", "speculative_prefill") {
+                    removed_field_names.push(format!(
+                        "models.{model_id}.acceleration.speculative_prefill"
+                    ));
+                }
+                if remove_nested_field(model_object, "acceleration", "mtp") {
+                    removed_field_names.push(format!("models.{model_id}.acceleration.mtp"));
+                }
                 // A retired member leaves an empty retired container behind;
                 // strict parsing rejects unknown fields, so drop it too.
                 if model_object
@@ -94,13 +120,22 @@ pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -
                     .and_then(serde_json::Value::as_object)
                     .is_some_and(serde_json::Map::is_empty)
                 {
-                    removed_retired_fields |=
-                        remove_field_from_object(model_object, "acceleration");
+                    if remove_field_from_object(model_object, "acceleration") {
+                        removed_field_names.push(format!("models.{model_id}.acceleration"));
+                    }
                 }
             }
         }
     }
-    removed_retired_fields
+    if !removed_field_names.is_empty() {
+        // Retired fields are dropped in favor of failing the load, so an upgrade
+        // never bricks the daemon over settings whose features no longer exist.
+        tracing::warn!(
+            removed_fields = ?removed_field_names,
+            "ignoring configuration fields that belong to retired features; the sanitized configuration is persisted"
+        );
+    }
+    !removed_field_names.is_empty()
 }
 
 fn remove_nested_field(

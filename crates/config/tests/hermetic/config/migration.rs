@@ -205,6 +205,79 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
 }
 
 #[test]
+fn should_strip_fields_removed_in_release_0_2_66_from_v1_config() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema":"./astronomical-config.schema.json",
+          "schema_version":1,
+          "runtime":{
+            "model_directories":[],
+            "maximum_mlx_memory_gb":39,
+            "default_model":"organization/target",
+            "experimental_qwen_thinking_channel_seed_enabled":false
+          },
+          "models":{
+            "organization/target":{
+              "limits":{"maximum_context_tokens":200000},
+              "generation_defaults":{"temperature":0.7},
+              "acceleration":{
+                "mtp":{"enabled":true,"draft_depth":2}
+              }
+            }
+          }
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("fields removed in 0.2.66 should be stripped before strict parsing");
+    let resolved_model = astronomical_config
+        .resolved_model_config("organization/target", 262_144)
+        .expect("the surviving model policy should resolve");
+    let persisted_json: serde_json::Value = serde_json::from_slice(
+        &fs::read(
+            temporary_home_directory
+                .path()
+                .join(".astronomical/config.json"),
+        )
+        .expect("sanitized config should be readable"),
+    )
+    .expect("sanitized config should be JSON");
+
+    assert!(
+        persisted_json["runtime"]
+            .get("experimental_qwen_thinking_channel_seed_enabled")
+            .is_none()
+    );
+    assert!(
+        persisted_json["models"]["organization/target"]
+            .get("acceleration")
+            .is_none()
+    );
+    assert_eq!(persisted_json["runtime"]["maximum_mlx_memory_gb"], 39);
+    assert_eq!(
+        persisted_json["runtime"]["default_model"],
+        "organization/target"
+    );
+    assert_eq!(
+        persisted_json["models"]["organization/target"]["limits"]["maximum_context_tokens"],
+        200000
+    );
+    assert_eq!(
+        persisted_json["models"]["organization/target"]["generation_defaults"]["temperature"],
+        0.7
+    );
+    assert_eq!(
+        resolved_model
+            .chunking()
+            .fixed_prompt_processing_chunk_size_tokens(),
+        2_048
+    );
+}
+
+#[test]
 fn should_preserve_original_bytes_when_legacy_migration_cannot_preserve_behavior() {
     for legacy_config in [
         r#"{"model_directories":[],"max_output_tokens":4096}"#,
