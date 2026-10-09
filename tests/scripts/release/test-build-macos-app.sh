@@ -131,7 +131,7 @@ main() {
     sandbox_scripts_directory="${sandbox_repository}/scripts"
     sandbox_internal_scripts_directory="${sandbox_scripts_directory}/internal"
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
-    mkdir -p "$sandbox_internal_scripts_directory" "$fake_command_directory" \
+    mkdir -p "$sandbox_internal_scripts_directory" "${sandbox_scripts_directory}/ci" "$fake_command_directory" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/Updater.app" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
         "${sandbox_repository}/apps/astronomical-menu/.build/release/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" \
@@ -290,10 +290,10 @@ printf '%s\n' "$*" >> "${FAKE_CODESIGN_LOG:?}"
 exit 0
 CODESIGN
     chmod +x "${fake_command_directory}/codesign"
-    write_successful_command "${sandbox_scripts_directory}/bootstrap-native-dependencies.sh"
+    write_successful_command "${sandbox_scripts_directory}/ci/bootstrap-native-dependencies.sh"
     # The builder pre-warms the machine-wide native build store before cargo;
     # the sandbox must not touch the real store, so the prewarm is stubbed.
-    write_successful_command "${sandbox_scripts_directory}/prewarm-native-build.sh"
+    write_successful_command "${sandbox_scripts_directory}/ci/prewarm-native-build.sh"
     write_successful_command "${sandbox_internal_scripts_directory}/validate-macos-app.sh"
 
     cargo_lane_root="${SANDBOX_DIRECTORY}/cargo-lanes"
