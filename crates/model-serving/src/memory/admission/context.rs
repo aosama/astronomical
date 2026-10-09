@@ -109,6 +109,10 @@ pub fn seated_complete_expert_request_peak_active_memory_bytes(
 ///
 /// When complete experts are already in `current_active`, layer-weight activation
 /// and SSD stream-slot bytes are ignored. Those weights are not a second owner.
+/// In paged mode the admission projection separately reserves the largest expert
+/// page as `expert_page_reservation_bytes`, so that reservation is the single
+/// owner of streaming payload; charging a complete-layer scratch here as well
+/// double-counted the same bytes (issue #1108).
 #[must_use]
 pub fn request_context_temporary_workspace_bytes(
     complete_experts_are_resident: bool,
@@ -116,7 +120,6 @@ pub fn request_context_temporary_workspace_bytes(
     restore_overlap_workspace_bytes: usize,
     publication_workspace_bytes: usize,
     paged_prefill_activation_workspace_bytes: usize,
-    paged_complete_layer_scratch_bytes: usize,
 ) -> Option<usize> {
     if complete_experts_are_resident {
         seated_complete_expert_request_temporary_workspace_bytes(
@@ -127,8 +130,7 @@ pub fn request_context_temporary_workspace_bytes(
     } else {
         publication_workspace_bytes
             .checked_add(restore_overlap_workspace_bytes)?
-            .checked_add(paged_prefill_activation_workspace_bytes)?
-            .checked_add(paged_complete_layer_scratch_bytes)
+            .checked_add(paged_prefill_activation_workspace_bytes)
     }
 }
 
