@@ -76,7 +76,7 @@ if [ -z "${profile_names}" ]; then
 fi
 
 if [ -z "${repository_root}" ]; then
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 fi
 
 if [ ! -d "${repository_root}/crates/runtime-integration/native" ]; then
@@ -100,7 +100,7 @@ print_status "status=start profiles=${profile_names} started_at=$(date -u +%Y-%m
 print_status "status=provision-bindgen-headers start"
 provision_started_at="$(date +%s)"
 if ! sh "${repository_root}/scripts/provision-bindgen-headers.sh"; then
-    print_error "bindgen header provisioning failed; run scripts/bootstrap-native-dependencies.sh if the archive cache is empty"
+    print_error "bindgen header provisioning failed; run scripts/ci/bootstrap-native-dependencies.sh if the archive cache is empty"
     exit 1
 fi
 print_status "status=provision-bindgen-headers success elapsed_seconds=$(( $(date +%s) - provision_started_at ))"

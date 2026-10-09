@@ -208,7 +208,7 @@ resolve_patch_path() {
 # identity the build actually used.
 resolve_source_identity() {
     source_identity="$(
-        "${REPOSITORY_ROOT}/scripts/native-build-cache-fingerprint.sh" \
+        "${REPOSITORY_ROOT}/scripts/ci/native-build-cache-fingerprint.sh" \
             --source-only --profile core "$REPOSITORY_ROOT"
     )"
     validate_identity_text "$source_identity" "source identity fingerprint"
@@ -255,7 +255,7 @@ extract_and_patch_archive() {
 
     if ! sha256_matches "$archive_path" "$expected_archive_sha256"; then
         print_error "$dependency_description archive is missing or fails its pinned SHA-256: $archive_path"
-        print_error "run scripts/bootstrap-native-dependencies.sh to provision the verified cache"
+        print_error "run scripts/ci/bootstrap-native-dependencies.sh to provision the verified cache"
         exit 1
     fi
 
@@ -443,7 +443,7 @@ resolve_built_identity() {
     }
     export TARGET
     built_identity="$(
-        "${REPOSITORY_ROOT}/scripts/native-build-cache-fingerprint.sh" \
+        "${REPOSITORY_ROOT}/scripts/ci/native-build-cache-fingerprint.sh" \
             --profile "$NATIVE_BUILD_PROFILE" "$REPOSITORY_ROOT"
     )"
     validate_identity_text "$built_identity" "built identity fingerprint"
@@ -456,7 +456,7 @@ verify_headers_against_native_build() {
     built_entry_directory="${NATIVE_BUILD_STORE_DIRECTORY}/${NATIVE_STORE_SCHEMA_DIRECTORY_NAME}/entries/${built_identity}"
     if [ ! -f "${built_entry_directory}/complete" ]; then
         print_error "no completed native build for identity ${built_identity}: ${built_entry_directory}"
-        print_error "run scripts/prewarm-native-build.sh --profile $NATIVE_BUILD_PROFILE (or pass --profile for a profile that is already built)"
+        print_error "run scripts/ci/prewarm-native-build.sh --profile $NATIVE_BUILD_PROFILE (or pass --profile for a profile that is already built)"
         exit 1
     fi
     built_headers_directory="${built_entry_directory}/include/mlx"

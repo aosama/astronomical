@@ -78,7 +78,8 @@ pub fn resolve_native_build_identity(
     native_build_profile: &str,
     target_triple: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let fingerprint_script_path = repository_root.join("scripts/native-build-cache-fingerprint.sh");
+    let fingerprint_script_path =
+        repository_root.join("scripts/ci/native-build-cache-fingerprint.sh");
     let mut identity_command = Command::new(&fingerprint_script_path);
     identity_command
         .arg("--profile")

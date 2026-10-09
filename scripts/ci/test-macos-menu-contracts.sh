@@ -5,7 +5,7 @@ set -eu
 readonly TEST_TIMEOUT_SECONDS=120
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     started_at_seconds="$(date +%s)"
     printf '%s step=macos-menu-contract-tests status=start timeout_seconds=%s\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$TEST_TIMEOUT_SECONDS"

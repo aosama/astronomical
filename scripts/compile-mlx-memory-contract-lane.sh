@@ -14,7 +14,7 @@
 # A cold native-build store makes Cargo run the probe-profile CMake build
 # inside this step without live progress; the commit gate prewarms both
 # profiles ahead of it, and outside the gate
-# `scripts/prewarm-native-build.sh --profile core+memory-contract` streams
+# `scripts/ci/prewarm-native-build.sh --profile core+memory-contract` streams
 # that build live.
 
 set -eu
