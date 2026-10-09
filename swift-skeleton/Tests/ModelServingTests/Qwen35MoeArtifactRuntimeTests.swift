@@ -23,8 +23,10 @@ import JourneyCategories;
  * The suite is serialized so the MLX journeys never overlap (the
  * repository's one-model-at-a-time rule).
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35MoeArtifactRuntimeTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35MoeArtifactRuntimeTests {
 
     private static let ROMEO_AND_JULIET_PROMPT: String = "What is the play about?";
 
@@ -40,7 +42,7 @@ final class Qwen35MoeArtifactRuntimeTests {
      */
     @Test(.timeLimit(.minutes(2)))
     func should_serve_a_paged_generation_from_the_moe_artifact_runtime() throws {
-        let (modelDirectoryUrl, layout): (URL, TinyMoeArtifactFixture.SynthesizedLayout) =
+        let (modelDirectoryUrl, _): (URL, TinyMoeArtifactFixture.SynthesizedLayout) =
             try TinyMoeArtifactFixture.writeModelDirectory(includeTokenizerFiles: true);
         defer { try? FileManager.default.removeItem(at: modelDirectoryUrl); }
         let runtime: LoadedChatRuntime = try Qwen35ChatRuntime.buildArtifactRuntime(
@@ -172,4 +174,6 @@ final class Qwen35MoeArtifactRuntimeTests {
                 thinkingBudget: nil),
             structuredGeneration: nil);
     }
+}
+
 }

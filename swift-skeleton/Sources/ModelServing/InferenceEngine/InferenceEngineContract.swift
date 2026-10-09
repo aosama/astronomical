@@ -38,4 +38,40 @@ public protocol InferenceEngine: AnyObject {
 
     /// Records a validated live MLX memory ceiling on the engine's context.
     func applyMlxMemoryLimit(_ requestedMlxMemoryCeilingBytes: UInt64) throws;
+
+    /// Collects the persistent prompt-cache stats snapshot when the engine
+    /// has a cache attached; `nil` by default. Mirrors the Rust engine's
+    /// `collect_persistent_prompt_cache_stats`.
+    func collectPersistentPromptCacheStats() -> WorkerPersistentPromptCacheStats?;
+
+    /// Clears the persisted prompt-cache state for one model identifier, or
+    /// for the active model when the identifier is `nil`. The default
+    /// engine carries no persistent cache and reports the empty deletion.
+    func clearPersistentPromptCache(modelId: String?) throws
+        -> PersistentPromptCacheClearOutcome;
+
+    /// The persisted sequence-state bytes one context token occupies for
+    /// this engine, or `nil` when the engine has no context-workspace
+    /// charge. The memory governor multiplies this by the request's
+    /// context token need for its admission verdict.
+    func contextWorkspaceBytesPerToken() -> Int?;
+}
+
+/// Default persistent prompt-cache surface for engines without a cache.
+extension InferenceEngine {
+
+    public func collectPersistentPromptCacheStats() -> WorkerPersistentPromptCacheStats? {
+        return nil;
+    }
+
+    public func clearPersistentPromptCache(
+        modelId: String?
+    ) throws -> PersistentPromptCacheClearOutcome {
+        return PersistentPromptCacheClearOutcome(
+            modelId: modelId, blocksRemoved: 0, bytesFreed: 0);
+    }
+
+    public func contextWorkspaceBytesPerToken() -> Int? {
+        return nil;
+    }
 }

@@ -133,16 +133,21 @@ Run from `swift-skeleton/`:
     swift test
 
 `swift build` must stay warning-free; compiler warnings are defects. `swift
-test` streams every journey's name, verdict, and duration live. Swift Testing
-always executes concurrently — there is no runner flag that serializes it
-(`.serialized` serializes one suite subtree, and SwiftPM's `--no-parallel`
-applies only to XCTest) — so concurrency safety comes from the journeys
-themselves: hermetic worker journeys spawn children through a process type
-that owns every file descriptor end to end, and no journey shares mutable
-state with another. Real-model journeys are opt-in only — they never run
-without the gate variable below. Per-suite selection uses the runner's own
-filter, for example `swift test --filter WorkerCommandLoopTests`; no wrapper
-script owns test selection or timeouts — every journey carries its own
+test` streams every journey's name, verdict, and duration live, and runs
+fully parallel by default: every CPU-only hermetic journey overlaps freely.
+The outliers are the GPU-evaluating suites: all `.hermeticMlxJourney`
+suites in a target are declared inside that target's
+`HermeticMlxJourneyContainer` `@Suite(.serialized)` container, whose trait
+serializes the whole subtree so their Metal streams never overlap and their
+bit-exact numeric assertions stay deterministic (a per-suite `.serialized`
+alone cannot do this — it only serializes within one suite). Concurrency
+safety elsewhere comes from the journeys themselves: hermetic worker
+journeys spawn children through a process type that owns every file
+descriptor end to end, and no journey shares mutable state with another.
+Real-model journeys are opt-in only — they never run without the gate
+variable below. Per-suite selection uses the runner's own filter, for
+example `swift test --filter WorkerCommandLoopTests`; no wrapper script
+owns test selection or timeouts — every journey carries its own
 `@Test(.timeLimit(...))` cap.
 
 ## Journey categories (the test taxonomy)

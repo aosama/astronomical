@@ -142,7 +142,9 @@ enum Qwen35MoeInMemoryEngineFixture {
 
     /// The text_config half shared by both variants; the repo validator
     /// pins its model_type per architecture (qwen3_5_moe_text vs
-    /// qwen3_5_text), so the fixture carries it as a parameter.
+    /// qwen3_5_text), so the fixture carries it as a parameter. The layer
+    /// types agree with the full-attention interval the upstream engine
+    /// executes: layer 0 is linear gated-delta, layer 1 full attention.
     private static func sharedDenseSection(textModelType: String) -> String {
         return """
             "dtype": "bfloat16",
@@ -159,7 +161,7 @@ enum Qwen35MoeInMemoryEngineFixture {
                 "attention_bias": false,
                 "hidden_act": "silu",
                 "rms_norm_eps": 1e-6,
-                "layer_types": ["full_attention", "full_attention"],
+                "layer_types": ["linear_attention", "full_attention"],
                 "vocab_size": 512,
                 "full_attention_interval": 2,
                 "linear_num_value_heads": 4,

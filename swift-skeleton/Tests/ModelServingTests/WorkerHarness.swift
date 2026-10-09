@@ -20,7 +20,8 @@ final class WorkerHarness {
     private init(
         commandPipe: Pipe, eventPipe: Pipe,
         commandWriter: ProtocolWriter, eventReader: ProtocolReader,
-        loopFinishedSemaphore: DispatchSemaphore, loopFailureBox: LoopFailureBox
+        loopFinishedSemaphore: DispatchSemaphore, loopFailureBox: LoopFailureBox,
+        globalPromptCacheRootDirectory: String
     ) {
         self.commandPipe = commandPipe;
         self.eventPipe = eventPipe;
@@ -28,11 +29,15 @@ final class WorkerHarness {
         self.eventReader = eventReader;
         self.loopFinishedSemaphore = loopFinishedSemaphore;
         self.loopFailureBox = loopFailureBox;
+        self.globalPromptCacheRootDirectory = globalPromptCacheRootDirectory;
     }
+
+    private let globalPromptCacheRootDirectory: String;
 
     static func start(
         factory: (any ChatModelRuntimeFactory)?,
-        machineMlxMemoryCeilingBytes: Int = 1_000_000
+        machineMlxMemoryCeilingBytes: Int = 1_000_000,
+        globalPromptCacheRootDirectory: String = "/tmp/astronomical-engine-worker-journey-cache"
     ) throws -> WorkerHarness {
         let commandPipe: Pipe = Pipe();
         let eventPipe: Pipe = Pipe();
@@ -73,7 +78,8 @@ final class WorkerHarness {
         return WorkerHarness(
             commandPipe: commandPipe, eventPipe: eventPipe,
             commandWriter: commandWriter, eventReader: eventReader,
-            loopFinishedSemaphore: loopFinishedSemaphore, loopFailureBox: loopFailureBox);
+            loopFinishedSemaphore: loopFinishedSemaphore, loopFailureBox: loopFailureBox,
+            globalPromptCacheRootDirectory: globalPromptCacheRootDirectory);
     }
 
     /// Reads the bootstrapped lifecycle (idle, runtime policy) and returns
@@ -81,7 +87,7 @@ final class WorkerHarness {
     func expectBootstrappedLifecycle(configurationGeneration: String = "gen-1") throws -> UInt64 {
         try self.commandWriter.sendCommand(.initializeWorker(WorkerStartupConfiguration(
             configurationGeneration: configurationGeneration,
-            globalPromptCacheRootDirectory: "/tmp/astronomical-engine-worker-journey-cache",
+            globalPromptCacheRootDirectory: self.globalPromptCacheRootDirectory,
             globalPromptCacheMaximumSizeBytes: 1073741824,
             persistentPromptCacheEnabled: true,
             configuredMaximumMlxMemoryBytes: nil,

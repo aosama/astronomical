@@ -21,8 +21,10 @@ import JourneyCategories;
  * serialized so the MLX journeys never overlap (the repository's
  * one-model-at-a-time rule).
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35MoeEngineBackedWorkerTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35MoeEngineBackedWorkerTests {
 
     static let romeoAndJulietPrompt: String = "What is the play about?";
     static let OUTPUT_TOKEN_BUDGET: UInt16 = 3;
@@ -315,4 +317,6 @@ final class Qwen35MoeEngineBackedWorkerTests {
                 thinkingBudget: nil),
             structuredGeneration: nil);
     }
+}
+
 }
