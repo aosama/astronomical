@@ -36,7 +36,9 @@
 //! Arithmetic saturates while composing a plan. Saturation intentionally fails
 //! closed by reducing the leftover expert budget to zero instead of wrapping to a
 //! large value. Learning is high-water-only; one cheaper request cannot erase
-//! evidence required by a larger future request.
+//! evidence required by a larger future request. The one exception is a live
+//! active-memory ceiling change, which clears activation evidence because its
+//! observations embed the previous ceiling's expert-paging regime (issue #1108).
 
 use std::collections::BTreeMap;
 
@@ -115,14 +117,35 @@ impl MlxRamBudget {
         })
     }
 
+    /// Installs a new live active-memory ceiling, clearing learned activation
+    /// evidence when the value actually changes.
+    ///
+    /// Context-window evidence survives: persistent KV bytes per token do not
+    /// depend on the ceiling. Activation observations embed the previous
+    /// ceiling's expert-paging regime, so keeping them across a change would
+    /// permanently over-reserve admission even after the ceiling is restored
+    /// (issue #1108). A same-value write (a failed-raise restore path) is not a
+    /// regime change and keeps every measurement.
     pub fn update_mlx_active_memory_ceiling_bytes(
         &mut self,
         mlx_active_memory_ceiling_bytes: u64,
     ) -> Result<(), MlxRamBudgetError> {
-        // Keep learned model/workload evidence across live ceiling changes. The
-        // same bytes are re-composed against the new ceiling on the next plan.
         if mlx_active_memory_ceiling_bytes == 0 {
             return Err(MlxRamBudgetError::InvalidCeiling);
+        }
+        // Context-window evidence survives a ceiling change: persistent KV bytes
+        // per token do not depend on the ceiling. Activation evidence does not:
+        // its observations embed the previous ceiling's expert-paging regime, so
+        // a lowered ceiling's demote/stream churn inflates the observed
+        // transients into a permanently over-sized reserve that keeps rejecting
+        // requests even after the ceiling is restored (issue #1108). The budget
+        // re-learns activation from forwards measured under the new regime and
+        // falls back to the static floor until fresh evidence exists.
+        if mlx_active_memory_ceiling_bytes != self.mlx_active_memory_ceiling_bytes {
+            self.has_prefill_activation_measurement = false;
+            self.prefill_activation_high_water_by_token_bucket.clear();
+            self.has_decode_activation_measurement = false;
+            self.decode_activation_headroom_bytes = 0;
         }
         self.mlx_active_memory_ceiling_bytes = mlx_active_memory_ceiling_bytes;
         Ok(())

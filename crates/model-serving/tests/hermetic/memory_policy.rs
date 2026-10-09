@@ -410,7 +410,6 @@ fn should_ignore_layer_weight_workspace_when_complete_experts_are_already_seated
         323_399_680,
         3_407_872,
         4_831_838_208,
-        1_610_612_736,
     )
     .expect("seated workspace should fit usize");
     let paged_temporary_workspace_bytes = request_context_temporary_workspace_bytes(
@@ -419,13 +418,25 @@ fn should_ignore_layer_weight_workspace_when_complete_experts_are_already_seated
         323_399_680,
         3_407_872,
         4_831_838_208,
-        1_610_612_736,
     )
     .expect("paged workspace should fit usize");
 
     assert_eq!(seated_temporary_workspace_bytes, 3_407_872);
     assert_eq!(
         paged_temporary_workspace_bytes,
-        3_407_872 + 323_399_680 + 4_831_838_208 + 1_610_612_736
+        3_407_872 + 323_399_680 + 4_831_838_208
     );
+}
+
+#[test]
+fn should_not_charge_the_complete_layer_scratch_in_addition_to_the_expert_page_reservation() {
+    // The admission projection adds `expert_page_reservation_bytes` (the largest
+    // complete expert layer) as its own owner. The paged workspace must not add
+    // the same layer bytes again, so the composition carries activation only
+    // (issue #1108).
+    let paged_temporary_workspace_bytes =
+        request_context_temporary_workspace_bytes(false, 1_733_386_240, 0, 0, 6_172_635_886)
+            .expect("paged workspace should fit usize");
+
+    assert_eq!(paged_temporary_workspace_bytes, 6_172_635_886);
 }
