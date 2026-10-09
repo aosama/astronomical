@@ -109,6 +109,7 @@ jobs:
 
               const compliance = await validatePullRequestIssue({
                 pullRequestBody: pullRequest.body,
+                repositoryFullName: `${context.repo.owner}/${context.repo.repo}`,
                 loadIssue: async (issueNumber) => {
                   const { data: issue } = await github.rest.issues.get({
                     owner: context.repo.owner,
@@ -128,10 +129,14 @@ jobs:
                 conclusion: "success",
                 output: {
                   title: `Pull request links issue #${compliance.issueNumber}`,
-                  summary: `${compliance.relationship} [#${compliance.issueNumber}](${compliance.issueUrl})`,
+                  summary: compliance.linkedIssues
+                    .map((linked) => `${linked.relationship} [#${linked.issueNumber}](${linked.issueUrl})`)
+                    .join(", "),
                 },
               });
-              core.info(`[pr-issue-compliance] status=success issue=${compliance.issueNumber}`);
+              core.info(
+                `[pr-issue-compliance] status=success issues=${compliance.linkedIssues.map((linked) => linked.issueNumber).join(",")}`,
+              );
             } catch (error) {
               await github.rest.checks.create({
                 owner: context.repo.owner,
