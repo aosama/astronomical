@@ -41,4 +41,6 @@ Historical Rust generations without an Astronomical ownership marker remain Carg
 - Identify performance, memory, precision, licensing, or provenance effects.
 - Keep unrelated cleanup out of the change.
 
+The repository discovery guide (`repo-discovery-guide-for-agents.md`) is the maintained map of verification commands and non-obvious repository facts.
+
 Contributions are licensed under the repository Apache License 2.0 terms.
