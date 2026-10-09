@@ -4,46 +4,23 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.66</title>
-            <pubDate>Fri, 09 Oct 2026 19:00:23 -0400</pubDate>
-            <sparkle:version>1110</sparkle:version>
-            <sparkle:shortVersionString>0.2.66</sparkle:shortVersionString>
+            <title>0.2.67</title>
+            <pubDate>Fri, 09 Oct 2026 19:39:57 -0400</pubDate>
+            <sparkle:version>1117</sparkle:version>
+            <sparkle:shortVersionString>0.2.67</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.66
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.67
 
-## Model library
+## Fixed
 
-- Removed the Laguna XS 2.1 entries (4-bit, 5-bit, 6-bit) and the Laguna model family.
-- Removed the Qwen 3.8 MTP entries (27B oQ4e MTP 4-bit, 27B MTPLX Optimized Speed, 35B A3B Distill 4-bit); multi-token prediction machinery is fully retired from the engine.
-- Removed the DeepSeek V4 and Qwen 3.8 Flash model families.
-
-## Reliability
-
-- Changing the MLX memory ceiling while a model is resident now clears learned activation evidence, so stale evidence can no longer reject later requests; the largest expert layer is reserved exactly once during paged admission.
-- The dense engine streams validated model weights from disk.
-
-## Serving
-
-- Malformed or unknown model tool calls fail open to the harness instead of failing the request.
-- Enforced structured generation adopts the upstream grammar engine.
-- Qwen 3.5 reasoning honors a hard thinking budget.
-- Completion IDs carry a per-application namespace so tool-call IDs stay distinct across applications.
-- The status document reports serving activity and per-request progress; the Observatory console exposes local system telemetry and prompt-cache statistics.
-
-## Compatibility and preserved user state
-
-- Configuration files containing retired speculative-prefill fields are migrated automatically at load.
-- Installed models, prompt caches, and instance state are preserved; requests for removed model identities return a model-unavailable error listing near matches.
-
-## Distribution
-
-- Signed with a Developer ID identity under Hardened Runtime with secure timestamps, notarized by Apple, and distributed through the Sparkle-signed update feed.
+- Upgrading no longer prevents the server from starting when the configuration file contains settings for features that were removed in 0.2.66 (the retired Qwen thinking-channel seed and multi-token prediction acceleration). Such settings are now dropped with a warning and the sanitized configuration is saved.
+- The published configuration schema no longer references the removed acceleration section.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.66/Astronomical-0.2.66-macOS-arm64.dmg" length="18852438" type="application/octet-stream" sparkle:edSignature="t2V8ItUiP1O0sacA2RvK8Ky5gdMvpfqWltDHOf4hoaJYZlR8LiBgwaOikQybNfWtzvkMzeDwm5HzgSo7sv5zDw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.67/Astronomical-0.2.67-macOS-arm64.dmg" length="18857234" type="application/octet-stream" sparkle:edSignature="tsMp806mq9LHQmpz+Fqu99j9OoQM4q+n6UzpmRDlHuU8pbwaT6VkZVV6HdgTup5kFU4hryt03/S8y94S4a+kBQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: RNUnxQdPHEAgn0IRCX7XfEhQrJ911aYCW3iWPBIx208T9Zb17rhXcsibwSd0dt+97JzzHjEZpTEj1p22SIJ4CQ==
-length: 2879
+edSignature: Lm1t3bKEIIpLfT0F6PmkZNRGUAK0lU4FzEIfWM0JLBNl9AvzxKjbnLxmJtWdIQLrWyd64ZFZFuVMH/x9b1eDDg==
+length: 1665
 -->
