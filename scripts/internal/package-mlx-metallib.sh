@@ -22,7 +22,7 @@ resolve_packaged_mlx_metallib_source() {
             return 1
             ;;
     esac
-    fingerprint_script="${repository_root}/scripts/native-build-cache-fingerprint.sh"
+    fingerprint_script="${repository_root}/scripts/ci/native-build-cache-fingerprint.sh"
     [ -x "$fingerprint_script" ] || {
         print_error "native identity script is unavailable: ${fingerprint_script}"
         return 1

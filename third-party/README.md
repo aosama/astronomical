@@ -111,7 +111,7 @@ MLX-C patches (`mlx-c-0.7.0-*.patch`):
 1. A pin file in `pins/` records the version, upstream repository and commit,
    archive URL, archive file name, and SHA-256. Pins are immutable: a bump
    replaces the file, it does not edit around it.
-2. `scripts/bootstrap-native-dependencies.sh` downloads each archive by URL,
+2. `scripts/ci/bootstrap-native-dependencies.sh` downloads each archive by URL,
    verifies it against the pinned SHA-256, and provisions the platform cache
    directory. The Astronomical build itself never fetches source.
 3. At every CMake configure,
@@ -136,8 +136,8 @@ To bump a pinned dependency:
 
 1. Download the candidate release archive and compute its SHA-256.
 2. Replace the pin file under `pins/` with the new commit, URL, and digest.
-3. Run `scripts/bootstrap-native-dependencies.sh`, then
-   `scripts/prewarm-native-build.sh --profile core`. Every patch must apply
+3. Run `scripts/ci/bootstrap-native-dependencies.sh`, then
+   `scripts/ci/prewarm-native-build.sh --profile core`. Every patch must apply
    cleanly; a failure means the patch set must be reconciled with the new
    tree. Re-diff each patch against the new archive before deciding it is
    superseded — never judge by release notes alone. For the two JIT
@@ -179,7 +179,7 @@ CMakeLists, so the two can never drift). The extraction is keyed by the
 source-only native build identity, so a pin or patch edit invalidates it
 automatically, and a second run re-verifies the published tree against its
 recorded hash manifests without re-extracting. The script never downloads;
-run `scripts/bootstrap-native-dependencies.sh` first.
+run `scripts/ci/bootstrap-native-dependencies.sh` first.
 
 ```bash
 scripts/provision-bindgen-headers.sh
@@ -208,8 +208,8 @@ Prerequisites: macOS on Apple Silicon, Xcode command line tools, Rust
 toolchain, CMake 3.24 or newer, and `patch`.
 
 ```bash
-scripts/bootstrap-native-dependencies.sh
-scripts/prewarm-native-build.sh --profile core
+scripts/ci/bootstrap-native-dependencies.sh
+scripts/ci/prewarm-native-build.sh --profile core
 cargo build -p astronomical-inference-worker
 ```
 

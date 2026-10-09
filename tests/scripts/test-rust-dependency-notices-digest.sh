@@ -38,10 +38,10 @@ write_executable() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
-    notices_script="${repository_root}/scripts/generate-rust-dependency-notices.sh"
+    notices_script="${repository_root}/scripts/ci/generate-rust-dependency-notices.sh"
     DIGEST_PATH="${repository_root}/third-party/RUST_DEPENDENCY_NOTICES.digest"
     [ -f "$DIGEST_PATH" ] || {
-        print_error "missing ${DIGEST_PATH}; run scripts/generate-rust-dependency-notices.sh"
+        print_error "missing ${DIGEST_PATH}; run scripts/ci/generate-rust-dependency-notices.sh"
         exit 1
     }
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-notices-digest.XXXXXX")"

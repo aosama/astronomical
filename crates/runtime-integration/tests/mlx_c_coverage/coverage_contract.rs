@@ -32,7 +32,7 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|error| format!("repository root resolution failed: {error}"))?;
     let mut identity_command =
-        Command::new(repository_root.join("scripts/native-build-cache-fingerprint.sh"));
+        Command::new(repository_root.join("scripts/ci/native-build-cache-fingerprint.sh"));
     identity_command
         .arg("--source-only")
         .arg("--profile")

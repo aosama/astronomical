@@ -189,7 +189,7 @@ install_pinned_binary() {
 }
 
 usage() {
-    printf '%s\n' "Usage: scripts/install-verification-tools.sh [--prefix DIR]"
+    printf '%s\n' "Usage: scripts/ci/install-verification-tools.sh [--prefix DIR]"
 }
 
 main() {
@@ -218,7 +218,7 @@ main() {
 
     STARTED_AT_SECONDS="$(date +%s)"
     printf '[verification-tools] status=start\n'
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     required_cargo_about_version="$(read_dotted_version_pin \
         "${repository_root}/third-party/cargo-about-version" "cargo-about")"
     required_sccache_version="$(read_dotted_version_pin \

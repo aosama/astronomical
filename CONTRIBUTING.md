@@ -22,7 +22,7 @@ Run focused tests while developing. Before proposing a pull request, run:
 
     cargo fmt --all -- --check
     cargo test-hermetic-and-rest
-    scripts/test-macos-menu-contracts.sh
+    scripts/ci/test-macos-menu-contracts.sh
 
 Run direct MLX or model-artifact acceptance only when the change crosses those boundaries. State exactly which checks ran and which hardware-dependent checks could not run.
 

@@ -10,7 +10,7 @@
 # build with --verify-headers, which is the fast surface-diff step of the
 # dependency bump process documented in third-party/README.md.
 #
-# This script never downloads anything. Run scripts/bootstrap-native-dependencies.sh
+# This script never downloads anything. Run scripts/ci/bootstrap-native-dependencies.sh
 # first so the verified archives exist in the native dependency cache.
 #
 # The pipeline itself lives in scripts/internal/bindgen-headers-pipeline.sh;

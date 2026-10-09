@@ -124,7 +124,7 @@ fn emit_native_source_rerun_contracts(
         native_source_directory.join("CMakeLists.txt"),
         native_source_directory.join("apply_patch_if_needed.cmake"),
         native_source_directory.join("tests/mlx_memory_contract_probe.cpp"),
-        manifest_directory.join("../../scripts/native-build-cache-fingerprint.sh"),
+        manifest_directory.join("../../scripts/ci/native-build-cache-fingerprint.sh"),
         manifest_directory.join("../../third-party/native-dependency-manifest.cmake"),
         manifest_directory.join("../../third-party/pins"),
         manifest_directory.join("../../third-party/patches"),

@@ -14,7 +14,7 @@
 # ceiling to absorb cache-archive overhead.
 #
 # Usage:
-#   scripts/save-sccache-cache.sh <primary-cache-key>
+#   scripts/ci/save-sccache-cache.sh <primary-cache-key>
 #
 # Environment:
 #   GITHUB_REPOSITORY                 owner/name repository (required)
