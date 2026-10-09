@@ -18,28 +18,75 @@ public struct ModelFamilyFactory: ChatModelRuntimeFactory {
 
     private let persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy?;
 
+    private let effectiveMlxMemoryCeilingBytes: UInt64?;
+
     public init(
         performanceAttributionEnabled: Bool = false,
-        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil,
+        effectiveMlxMemoryCeilingBytes: UInt64? = nil
     ) {
         self.performanceAttributionEnabled = performanceAttributionEnabled;
         self.persistentPromptCachePolicy = persistentPromptCachePolicy;
+        self.effectiveMlxMemoryCeilingBytes = effectiveMlxMemoryCeilingBytes;
     }
 
     public func createChatRuntime(
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    public func createChatRuntime(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> LoadedChatRuntime {
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration,
+            effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes).load();
+    }
+
+    public func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
+        return try self.prepareChatRuntimeCandidateInternal(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration,
+            effectiveMlxMemoryCeilingBytes: self.effectiveMlxMemoryCeilingBytes);
+    }
+
+    public func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> ChatRuntimeCandidate {
+        return try self.prepareChatRuntimeCandidateInternal(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration,
+            effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes);
+    }
+
+    private func prepareChatRuntimeCandidateInternal(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64?
+    ) throws -> ChatRuntimeCandidate {
         let modelFamily: ModelFamily? = try FamilyDiscovery.classifyModelDirectory(
             modelDirectory: FilePath(string: modelDirectory),
             attributionEnabled: self.performanceAttributionEnabled);
         switch (modelFamily, modelConfiguration) {
         case (.qwen35, .autoregressive):
-            return try Qwen35ChatRuntime.buildArtifactRuntime(
+            return try Qwen35ChatRuntime.prepareArtifactRuntime(
                 modelDirectory: modelDirectory,
                 modelConfiguration: modelConfiguration,
                 performanceAttributionEnabled: self.performanceAttributionEnabled,
-                persistentPromptCachePolicy: self.persistentPromptCachePolicy);
+                persistentPromptCachePolicy: self.persistentPromptCachePolicy,
+                mlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes);
         case (.none, _):
             throw WorkerModelLoadFailure.unclassifiedModelDirectory;
         case let (.some(unusableFamily), _):

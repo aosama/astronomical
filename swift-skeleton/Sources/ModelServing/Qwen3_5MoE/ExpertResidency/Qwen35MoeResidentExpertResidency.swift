@@ -5,16 +5,19 @@ import IpcProtocol;
 /// The resident-expert ownership facts one MoE engine load derives from its
 /// validated configuration: resident execution keeps every routed expert of
 /// every decoder layer in wired memory, so the telemetry is the full config
-/// product rather than a measured or packaged constant. The payload size is
-/// the bf16 gate, up, and down matrices of one SwitchGLU expert times the
-/// resident set; router gates and shared experts are not routed payload.
+/// product rather than a measured or packaged constant. Payload bytes come
+/// from the artifact's validated stored tensor ranges, preserving mixed-bit
+/// OptiQ layouts; router gates and shared experts are not routed payload.
 struct Qwen35MoeResidentExpertResidency: Equatable {
 
     let totalLayerCount: UInt32;
     let residentExpertCount: UInt32;
     let residentExpertPayloadBytes: UInt64;
 
-    init(repositoryConfiguration: Qwen3_5Config) throws {
+    init(
+        repositoryConfiguration: Qwen3_5Config,
+        residentExpertPayloadBytes: UInt64? = nil
+    ) throws {
         let totalLayerCount: UInt32 = repositoryConfiguration.layerCount();
         let expertCount: UInt32 = repositoryConfiguration.expertCount();
         let (residentExpertCount, countOverflow) = totalLayerCount
@@ -23,11 +26,18 @@ struct Qwen35MoeResidentExpertResidency: Equatable {
             throw InferenceEngineError.modelLoad(
                 reason: "the resident expert residency overflows its expert count arithmetic");
         }
-        let residentExpertPayloadBytes: UInt64 = try Qwen35MoeExpertPayloadArithmetic.payloadBytes(
-            repositoryConfiguration: repositoryConfiguration, expertCount: residentExpertCount);
+        let resolvedResidentExpertPayloadBytes: UInt64;
+        if let residentExpertPayloadBytes: UInt64 = residentExpertPayloadBytes {
+            resolvedResidentExpertPayloadBytes = residentExpertPayloadBytes;
+        } else {
+            resolvedResidentExpertPayloadBytes = try Qwen35MoeExpertPayloadArithmetic
+                .payloadBytes(
+                    repositoryConfiguration: repositoryConfiguration,
+                    expertCount: residentExpertCount);
+        }
         self.totalLayerCount = totalLayerCount;
         self.residentExpertCount = residentExpertCount;
-        self.residentExpertPayloadBytes = residentExpertPayloadBytes;
+        self.residentExpertPayloadBytes = resolvedResidentExpertPayloadBytes;
     }
 
     /// The single expert-ownership answer the Memory subpackage classifies

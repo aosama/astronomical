@@ -18,22 +18,34 @@ struct Qwen35MoePagedWorkerRuntimeFactory: ChatModelRuntimeFactory {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
         if modelDirectory.hasSuffix(Qwen35MoeWorkerRuntimeFactory.MODEL_DIRECTORY_SUFFIX) == false {
             throw InferenceEngineError.modelLoad(
                 reason: "the paged MoE journey factory cannot load \(modelDirectory)");
         }
-        let residentTwinEngine: Qwen35MoeEngine = try Qwen35MoeInMemoryEngineFixture
-            .makePinnedEngine();
-        let pageSource: EngineSwitchGluPageSourceFixture = try EngineSwitchGluPageSourceFixture(
-            residentEngine: residentTwinEngine,
-            layerCount: Int(Qwen35MoeInMemoryEngineFixture.FIXTURE_LAYER_COUNT),
-            expertCount: Int(Qwen35MoeInMemoryEngineFixture.FIXTURE_EXPERT_COUNT));
-        let pagedEngine: Qwen35MoeEngine = try Qwen35MoeInMemoryEngineFixture
-            .makePinnedPagedEngine(
-                retainedExpertIdsPerLayer: Qwen35MoeInMemoryEngineFixture.retainedExpertIdsPerLayer(),
-                expertPageMaterializer: pageSource);
-        return LoadedChatRuntime(
-            processor: Qwen35MoeWorkerChatProcessor(),
-            engine: pagedEngine);
+        return ChatRuntimeCandidate {
+            let residentTwinEngine: Qwen35MoeEngine = try Qwen35MoeInMemoryEngineFixture
+                .makePinnedEngine();
+            let pageSource: EngineSwitchGluPageSourceFixture = try EngineSwitchGluPageSourceFixture(
+                residentEngine: residentTwinEngine,
+                layerCount: Int(Qwen35MoeInMemoryEngineFixture.FIXTURE_LAYER_COUNT),
+                expertCount: Int(Qwen35MoeInMemoryEngineFixture.FIXTURE_EXPERT_COUNT));
+            let pagedEngine: Qwen35MoeEngine = try Qwen35MoeInMemoryEngineFixture
+                .makePinnedPagedEngine(
+                    retainedExpertIdsPerLayer:
+                        Qwen35MoeInMemoryEngineFixture.retainedExpertIdsPerLayer(),
+                    expertPageMaterializer: pageSource);
+            return LoadedChatRuntime(
+                processor: Qwen35MoeWorkerChatProcessor(),
+                engine: pagedEngine);
+        };
     }
 }

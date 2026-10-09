@@ -26,7 +26,7 @@ private let OVERCHARGED_CONTEXT_BYTES_PER_TOKEN: Int = 1_000_000;
  * verb removes the persisted blocks with real counts. The suite is
  * serialized with the repository's one-model-at-a-time rule.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoePromptCacheWorkerSurfaceTests {
@@ -327,17 +327,29 @@ struct PromptCacheAttachedWorkerRuntimeFactory: ChatModelRuntimeFactory {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
-        let baseRuntime: LoadedChatRuntime = try Qwen35MoeWorkerRuntimeFactory()
-            .createChatRuntime(
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
+        let baseCandidate: ChatRuntimeCandidate = try Qwen35MoeWorkerRuntimeFactory()
+            .createChatRuntimeCandidate(
                 modelDirectory: modelDirectory, modelConfiguration: modelConfiguration);
-        guard let moeEngine: Qwen35MoeEngine = baseRuntime.engine as? Qwen35MoeEngine else {
+        return ChatRuntimeCandidate {
+            let baseRuntime: LoadedChatRuntime = try baseCandidate.load();
+            guard let moeEngine: Qwen35MoeEngine = baseRuntime.engine as? Qwen35MoeEngine else {
+                return baseRuntime;
+            }
+            try moeEngine.attachPersistentPromptCache(self.spawnPolicy.makeAttachment(
+                modelId: "qwen3.5-moe",
+                modelRevision: "journey",
+                configuredBlockTokenCount: WORKER_SURFACE_BLOCK_TOKEN_COUNT));
             return baseRuntime;
-        }
-        try moeEngine.attachPersistentPromptCache(self.spawnPolicy.makeAttachment(
-            modelId: "qwen3.5-moe",
-            modelRevision: "journey",
-            configuredBlockTokenCount: WORKER_SURFACE_BLOCK_TOKEN_COUNT));
-        return baseRuntime;
+        };
     }
 }
 
@@ -350,16 +362,28 @@ struct ContextOverchargedWorkerRuntimeFactory: ChatModelRuntimeFactory {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
-        let baseRuntime: LoadedChatRuntime = try PromptCacheAttachedWorkerRuntimeFactory(
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
+        let baseCandidate: ChatRuntimeCandidate = try PromptCacheAttachedWorkerRuntimeFactory(
             spawnPolicy: self.spawnPolicy)
-            .createChatRuntime(
+            .createChatRuntimeCandidate(
                 modelDirectory: modelDirectory, modelConfiguration: modelConfiguration);
-        guard let moeEngine: Qwen35MoeEngine = baseRuntime.engine as? Qwen35MoeEngine else {
-            return baseRuntime;
-        }
-        return LoadedChatRuntime(
-            processor: baseRuntime.processor,
-            engine: ContextOverchargedEngine(baseEngine: moeEngine));
+        return ChatRuntimeCandidate {
+            let baseRuntime: LoadedChatRuntime = try baseCandidate.load();
+            guard let moeEngine: Qwen35MoeEngine = baseRuntime.engine as? Qwen35MoeEngine else {
+                return baseRuntime;
+            }
+            return LoadedChatRuntime(
+                processor: baseRuntime.processor,
+                engine: ContextOverchargedEngine(baseEngine: moeEngine));
+        };
     }
 }
 

@@ -24,7 +24,7 @@ import JourneyCategories;
  * golden-master token streams. The suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class ArtifactRuntimeWorkerJourneyTests {
@@ -327,7 +327,16 @@ struct ArtifactRuntimeFactory: ChatModelRuntimeFactory {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
-        return try Qwen35ChatRuntime.buildArtifactRuntime(
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
+        return try Qwen35ChatRuntime.prepareArtifactRuntime(
             modelDirectory: modelDirectory,
             modelConfiguration: modelConfiguration);
     }

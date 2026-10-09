@@ -20,13 +20,25 @@ struct Qwen35MoeWorkerRuntimeFactory: ChatModelRuntimeFactory {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
         if modelDirectory.hasSuffix(Self.MODEL_DIRECTORY_SUFFIX) == false {
             throw InferenceEngineError.modelLoad(
                 reason: "the MoE journey factory cannot load \(modelDirectory)");
         }
-        let pinnedEngine: Qwen35MoeEngine = try Qwen35MoeInMemoryEngineFixture.makePinnedEngine();
-        return LoadedChatRuntime(
-            processor: Qwen35MoeWorkerChatProcessor(),
-            engine: pinnedEngine);
+        return ChatRuntimeCandidate {
+            let pinnedEngine: Qwen35MoeEngine = try Qwen35MoeInMemoryEngineFixture
+                .makePinnedEngine();
+            return LoadedChatRuntime(
+                processor: Qwen35MoeWorkerChatProcessor(),
+                engine: pinnedEngine);
+        };
     }
 }

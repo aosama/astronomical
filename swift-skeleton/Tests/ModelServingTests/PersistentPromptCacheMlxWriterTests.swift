@@ -10,7 +10,7 @@ import ModelServingTestSupport;
 
 @testable import ModelServing;
 
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     /// Hermetic journeys for the production MLX state-file writer: real
     /// safetensors bytes written from real MLX arrays through the same

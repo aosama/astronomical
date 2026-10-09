@@ -21,7 +21,7 @@ import JourneyCategories;
  * an enforced constraint into the prepared request while the unsupported
  * guided-regex kind fails closed with a bounded reason.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35GuidedConstraintTests {

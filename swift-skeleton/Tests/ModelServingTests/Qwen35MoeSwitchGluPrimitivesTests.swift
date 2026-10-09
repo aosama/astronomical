@@ -19,7 +19,7 @@ import Testing;
  * independent per-expert reference built from plain matrix multiplies —
  * never against golden-master constants.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoeSwitchGluPrimitivesTests {

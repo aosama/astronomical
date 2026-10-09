@@ -18,6 +18,9 @@ public enum ServingPerformanceAttribution {
         guard attributionEnabled else {
             return nil;
         }
+        let startTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970 * 1_000);
+        FileHandle.standardError.write(Data(
+            "attribution operation=\(operationName) event=start timestamp_ms=\(startTimestamp)\n".utf8));
         return ContinuousClock.now;
     }
 
@@ -30,12 +33,10 @@ public enum ServingPerformanceAttribution {
         guard attributionEnabled, let operationStart = operationStart else {
             return;
         }
-        let elapsed: Duration = ContinuousClock.now.duration(to: operationStart);
+        let elapsed: Duration = operationStart.duration(to: ContinuousClock.now);
         let elapsedMilliseconds: Int64 = elapsed.components.seconds * 1000
             + elapsed.components.attoseconds / 1_000_000_000_000_000;
-        // The attribution log stream is stderr until the measurement-catalog
-        // port lands; operators toggle it through configuration.
         FileHandle.standardError.write(Data(
-            "attribution operation=\(operationName) elapsed_ms=\(elapsedMilliseconds)\n".utf8));
+            "attribution operation=\(operationName) event=end elapsed_ms=\(elapsedMilliseconds)\n".utf8));
     }
 }

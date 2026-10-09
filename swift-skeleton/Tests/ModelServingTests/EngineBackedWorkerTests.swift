@@ -84,6 +84,23 @@ final class EngineBackedWorkerTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func should_release_the_current_engine_before_loading_a_replacement_candidate() throws {
+        let lifecycleProbe: JourneyEngineLifecycleProbe = JourneyEngineLifecycleProbe();
+        let runtimeFactory: DeferredJourneyChatRuntimeFactory = DeferredJourneyChatRuntimeFactory(
+            lifecycleProbe: lifecycleProbe,
+            script: JourneyEngineScript());
+        let harness: WorkerHarness = try WorkerHarness.start(factory: runtimeFactory);
+        defer { harness.finish(); }
+        _ = try harness.expectBootstrappedLifecycle();
+        try harness.swapJourneyModel();
+        #expect(lifecycleProbe.didOverlapReplacementLoad() == false);
+        try harness.swapJourneyModel();
+
+        #expect(lifecycleProbe.didOverlapReplacementLoad() == false,
+            "replacement MLX loading must begin only after the previous engine is released");
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func should_contain_a_failing_swap_and_keep_a_previously_loaded_model_ready() throws {
         let harness: WorkerHarness = try WorkerHarness.start(
             factory: JourneyChatRuntimeFactory(script: JourneyEngineScript()));

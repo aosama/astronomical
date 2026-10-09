@@ -21,7 +21,7 @@ import JourneyCategories;
  * token stream bit for bit. No downloads; the suite serializes with the
  * repository's one-model-at-a-time rule through the shared container.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoePromptCacheEngineTests {

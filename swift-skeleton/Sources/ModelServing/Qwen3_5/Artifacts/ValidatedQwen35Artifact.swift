@@ -86,6 +86,96 @@ public final class ValidatedQwen35Artifact {
         return self.totalPayloadBytesValue;
     }
 
+    /// Sums actual payload byte ranges for a validated set of canonical
+    /// tensor names; `nil` means a requested profile is missing or the
+    /// arithmetic overflowed.
+    public func payloadByteCount(canonicalTensorNames: Set<String>) -> UInt64? {
+        var totalPayloadBytes: UInt64 = 0;
+        for canonicalTensorName: String in canonicalTensorNames {
+            guard let tensorLocation: TensorLocation = self.tensorInventoryValue
+                .location(canonicalName: canonicalTensorName),
+                let safetensorsSource: ValidatedSafetensorsSource = self.safetensorsSources[
+                    tensorLocation.sourceId],
+                let tensorView: SafetensorsFraming.TensorView = safetensorsSource
+                    .storedTensorView(storedName: tensorLocation.storedName) else {
+                return nil;
+            }
+            let (tensorPayloadBytes, tensorLengthOverflowed) = tensorView.dataEndOffset()
+                .subtractingReportingOverflow(tensorView.dataStartOffset());
+            if tensorLengthOverflowed {
+                return nil;
+            }
+            let (summedPayloadBytes, totalOverflowed) = totalPayloadBytes
+                .addingReportingOverflow(tensorPayloadBytes);
+            if totalOverflowed {
+                return nil;
+            }
+            totalPayloadBytes = summedPayloadBytes;
+        }
+        return totalPayloadBytes;
+    }
+
+    /// Returns routed-expert payload bytes and the largest gate/up fusion
+    /// transient for a validated tensor-name set without reading payload
+    /// bytes. Header ranges preserve mixed-bit OptiQ storage exactly.
+    public func sparseExpertPayloadFootprint(
+        canonicalTensorNames: Set<String>
+    ) -> (totalPayloadBytes: UInt64, largestGateUpFusionTransientBytes: UInt64) {
+        var payloadBytesByLayer: Dictionary<UInt32, UInt64> = Dictionary();
+        var gateUpPayloadBytesByLayer: Dictionary<UInt32, UInt64> = Dictionary();
+        for canonicalTensorName: String in canonicalTensorNames {
+            guard Qwen3_5MoeTensorSpec.isSparseSelectedExpertTensorName(
+                tensorName: canonicalTensorName),
+                let tensorLocation: TensorLocation = self.tensorInventoryValue
+                    .location(canonicalName: canonicalTensorName) else {
+                return (UInt64.max, UInt64.max);
+            }
+            let layerIndex: UInt32? = ValidatedQwen35Artifact
+                .sparseExpertLayerIndex(tensorName: canonicalTensorName);
+            guard let layerIndex: UInt32 = layerIndex,
+                let shardSource: ValidatedSafetensorsSource = self.safetensorsSources[
+                    tensorLocation.sourceId],
+                let tensorView: SafetensorsFraming.TensorView = shardSource.storedTensorView(
+                    storedName: tensorLocation.storedName) else {
+                return (UInt64.max, UInt64.max);
+            }
+            let (tensorPayloadBytes, tensorLengthOverflowed) = tensorView.dataEndOffset()
+                .subtractingReportingOverflow(tensorView.dataStartOffset());
+            if tensorLengthOverflowed {
+                return (UInt64.max, UInt64.max);
+            }
+            let currentLayerBytes: UInt64 = payloadBytesByLayer[layerIndex] ?? 0;
+            let (layerPayloadBytes, layerOverflowed) = currentLayerBytes
+                .addingReportingOverflow(tensorPayloadBytes);
+            if layerOverflowed {
+                return (UInt64.max, UInt64.max);
+            }
+            payloadBytesByLayer[layerIndex] = layerPayloadBytes;
+            if ValidatedQwen35Artifact.isGateOrUpProjectionTensor(
+                tensorName: tensorLocation.canonicalName) {
+                let currentGateUpBytes: UInt64 = gateUpPayloadBytesByLayer[layerIndex] ?? 0;
+                let (gateUpPayloadBytes, gateUpOverflowed) = currentGateUpBytes
+                    .addingReportingOverflow(tensorPayloadBytes);
+                if gateUpOverflowed {
+                    return (UInt64.max, UInt64.max);
+                }
+                gateUpPayloadBytesByLayer[layerIndex] = gateUpPayloadBytes;
+            }
+        }
+        var totalExpertPayloadBytes: UInt64 = 0;
+        for layerPayloadBytes: UInt64 in payloadBytesByLayer.values {
+            let (summedPayloadBytes, totalOverflowed) = totalExpertPayloadBytes
+                .addingReportingOverflow(layerPayloadBytes);
+            if totalOverflowed {
+                return (UInt64.max, UInt64.max);
+            }
+            totalExpertPayloadBytes = summedPayloadBytes;
+        }
+        let largestGateUpFusionTransientBytes: UInt64 = gateUpPayloadBytesByLayer.values
+            .max() ?? 0;
+        return (totalExpertPayloadBytes, largestGateUpFusionTransientBytes);
+    }
+
     public func tokenizerBytes() -> Data? {
         return self.requiredFiles["tokenizer.json"]?.capturedBytes;
     }
@@ -140,5 +230,19 @@ public final class ValidatedQwen35Artifact {
             throw Qwen35ArtifactValidationError.artifact(.profileMissingRequiredFile(fileName: missingFileName));
         }
         return try source.intoValidatedWeightsFile();
+    }
+
+    private static func sparseExpertLayerIndex(tensorName: String) -> UInt32? {
+        let tensorNameComponents: Array<Substring> = tensorName.split(separator: ".");
+        guard let layerMarkerIndex: Int = tensorNameComponents.firstIndex(of: "layers"),
+            tensorNameComponents.indices.contains(layerMarkerIndex + 1) else {
+            return nil;
+        }
+        return UInt32(tensorNameComponents[layerMarkerIndex + 1]);
+    }
+
+    private static func isGateOrUpProjectionTensor(tensorName: String) -> Bool {
+        return tensorName.contains(".switch_mlp.gate_proj.")
+            || tensorName.contains(".switch_mlp.up_proj.");
     }
 }

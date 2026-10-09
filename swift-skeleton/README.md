@@ -133,19 +133,20 @@ Run from `swift-skeleton/`:
     swift test
 
 `swift build` must stay warning-free; compiler warnings are defects. `swift
-test` streams every journey's name, verdict, and duration live, and runs
-fully parallel by default: every CPU-only hermetic journey overlaps freely.
-The outliers are the GPU-evaluating suites: all `.hermeticMlxJourney`
-suites in a target are declared inside that target's
-`HermeticMlxJourneyContainer` `@Suite(.serialized)` container, whose trait
-serializes the whole subtree so their Metal streams never overlap and their
-bit-exact numeric assertions stay deterministic (a per-suite `.serialized`
-alone cannot do this — it only serializes within one suite). Concurrency
-safety elsewhere comes from the journeys themselves: hermetic worker
-journeys spawn children through a process type that owns every file
-descriptor end to end, and no journey shares mutable state with another.
-Real-model journeys are opt-in only — they never run without the gate
-variable below. Per-suite selection uses the runner's own filter, for
+test` streams every journey's name, verdict, and duration live. SwiftPM 6.4
+defaults to `--no-parallel`; callers can explicitly opt in with `--parallel`.
+Every MLX-evaluating suite is inside one `.serialized` container per test
+target: `MlxGpuJourneyContainer`, `RuntimeIntegrationMlxJourneyContainer`,
+or `InferenceWorkerMlxJourneyContainer`. The parent trait serializes the
+whole subtree, including sibling suites, even when `--parallel` is enabled.
+A per-suite `.serialized` alone only serializes within one suite and is not a
+GPU-memory safety boundary. CPU-only hermetic journeys outside these
+containers can still run in parallel. Concurrency safety elsewhere comes
+from the journeys themselves: hermetic worker journeys spawn children
+through a process type that owns every file descriptor end to end, and no
+journey shares mutable state with another. Real-model journeys are opt-in
+only — they never run without the gate variable below. Per-suite selection
+uses the runner's own filter, for
 example `swift test --filter WorkerCommandLoopTests`; no wrapper script
 owns test selection or timeouts — every journey carries its own
 `@Test(.timeLimit(...))` cap.
@@ -159,10 +160,14 @@ with the runner:
 | Tag | Meaning | Default `swift test` | Isolation |
 | --- | --- | --- | --- |
 | `.hermeticJourney` | synthesized fixtures, CPU only, no MLX evaluation | runs | parallel-safe |
-| `.hermeticMlxJourney` | synthesized tiny fixtures that evaluate MLX operations (kilobyte-scale models) | runs | `.serialized` suite |
-| `.realModelJourney` | installed artifact's real weights | **disabled** until `ASTRONOMICAL_QWEN35_ARTIFACT_DIRECTORY` resolves a directory | `.serialized` suite, one suite per run |
+| `.hermeticMlxJourney` | synthesized tiny fixtures that evaluate MLX operations (kilobyte-scale models) | runs | shared target GPU container, `.serialized` subtree |
+| `.realModelJourney` | installed artifact's real weights | **disabled** until the suite's artifact gate resolves a directory | shared target GPU container, `.serialized` subtree — one model load at a time |
 
-A real-model suite combines the three traits it needs:
+Every MLX-evaluating suite is declared inside its test target's shared GPU
+container. In `ModelServingTests`, hermetic MLX and real-model suites share
+`MlxGpuJourneyContainer`; therefore they cannot overlap each other even when
+multiple real-model gates are enabled and `swift test --parallel` is used.
+Each real-model member suite combines the traits it needs:
 
     @Suite(.serialized, .tags(.realModelJourney),
            .enabled(if: RealModelJourneyGate.qwen35ArtifactDirectory() != nil))
@@ -170,11 +175,9 @@ A real-model suite combines the three traits it needs:
 and resolves its directory through the same gate accessor, failing closed when
 it no longer resolves. This replaces the Rust tree's ignored-test +
 `scripts/run-bounded-cargo-test.sh` split with SwiftPM-native machinery: the
-`.serialized` trait keeps a suite's MLX journeys off each other's wired GPU
-memory structurally (a serialized suite serializes its whole subtree, so
-real-model suites that must never overlap share one serialized container
-suite), and the enablement condition keeps the default run hermetic by
-construction.
+shared serialized container protects sibling suites even when callers opt
+into parallel execution, and the enablement condition keeps the default run
+hermetic by construction.
 
 ## Rust-to-Swift mapping
 

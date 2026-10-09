@@ -21,7 +21,7 @@ import JourneyCategories;
  * serialized so the MLX journeys never overlap (the repository's
  * one-model-at-a-time rule).
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoeEngineBackedWorkerTests {

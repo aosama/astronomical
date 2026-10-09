@@ -3,6 +3,7 @@ import Foundation;
 import Testing;
 
 import MLX;
+import MLXNN;
 
 import IpcProtocol;
 import ModelServing;
@@ -23,7 +24,7 @@ import JourneyCategories;
  * runs on real streamed weights. The suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35ArtifactWeightLoadingTests {
@@ -33,6 +34,54 @@ extension HermeticMlxJourneyContainer {
     init() {
         signal(SIGPIPE, SIG_IGN);
         MLXMetallibLocator.overrideMetallibPathIfNecessary();
+    }
+
+    /**
+     * The last-position trimming head returns the wrapped head's final row
+     * (within ulp-level kernel-path variance between batched and single-row
+     * GEMMs, the same variance the parity journeys document), and
+     * multi-token prefill calls project exactly one position instead of the
+     * full sequence.
+     */
+    @Test(.timeLimit(.minutes(1)))
+    func should_trim_prefill_logits_to_the_sampled_last_position() throws {
+        let wrappedHead: Linear = Linear(inputDimensions: 8, outputDimensions: 16);
+        let trimmingHead: Qwen35LastPositionLogitsHead = Qwen35LastPositionLogitsHead(wrappedHead);
+        let prefillHiddenStates: MLXArray = MLXRandom.normal([1, 5, 8]);
+        let trimmedLogits: MLXArray = trimmingHead(prefillHiddenStates);
+        let referenceLogits: MLXArray = wrappedHead(prefillHiddenStates);
+        MLX.eval(trimmedLogits, referenceLogits);
+        #expect(trimmedLogits.shape == [1, 1, 16]);
+        #expect(abs(trimmedLogits[0, 0] - referenceLogits[0, 4]).max().item(Float.self) <= 0.01,
+            "the trimmed row must match the wrapped head's final row within ulp-level variance");
+        let decodeHiddenStates: MLXArray = MLXRandom.normal([1, 1, 8]);
+        #expect(trimmingHead(decodeHiddenStates).shape == [1, 1, 16]);
+    }
+
+    /**
+     * The verified bind installs the trimming head over the upstream
+     * lm_head module, so every artifact-backed engine serves the Rust
+     * forward contract without per-chunk vocabulary projections.
+     */
+    @Test(.timeLimit(.minutes(1)))
+    func should_install_the_trimming_head_over_the_bound_lm_head() throws {
+        let (modelDirectoryUrl, _): (URL, TinyDenseArtifactFixture.SynthesizedLayout) =
+            try TinyDenseArtifactFixture.writeModelDirectory();
+        defer { try? FileManager.default.removeItem(at: modelDirectoryUrl); }
+        let validatedArtifact: ValidatedQwen35Artifact = try Qwen35ArtifactValidator()
+            .validate(
+                modelDirectory: modelDirectoryUrl.path,
+                maxOutputTokens: TinyDenseArtifactFixture.MAX_OUTPUT_TOKENS);
+        let boundModel = try Qwen35ArtifactWeightLoading
+            .loadArtifactBoundModel(
+                validatedArtifact: validatedArtifact,
+                attributionEnabled: false);
+        var trimmedHeadCount: Int = 0;
+        for (_, childModule) in boundModel.namedModules() where childModule is Qwen35LastPositionLogitsHead {
+            trimmedHeadCount += 1;
+        }
+        #expect(trimmedHeadCount == 1,
+            "the bound model must carry exactly one trimmed lm_head");
     }
 
     /**

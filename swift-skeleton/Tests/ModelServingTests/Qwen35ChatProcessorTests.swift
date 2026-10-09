@@ -20,7 +20,7 @@ import JourneyCategories;
  * that land later. The final journey pairs the processor and the dense
  * engine through the real model directory builder inside the worker loop.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35ChatProcessorTests {
@@ -367,9 +367,16 @@ struct DirectoryChatRuntimeFactory: ChatModelRuntimeFactory {
     ) throws -> LoadedChatRuntime {
         return self.runtime;
     }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
+        return ChatRuntimeCandidate { return self.runtime; };
+    }
 }
 
-extension HermeticMlxJourneyContainer.Qwen35ChatProcessorTests {
+extension MlxGpuJourneyContainer.Qwen35ChatProcessorTests {
 
     /// Blocks the sync journey on the async tokenizer load for the decode
     /// round trip, mirroring the runtime's own factory boundary.

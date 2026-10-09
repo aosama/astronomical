@@ -78,6 +78,7 @@ public final class Qwen35MoeEngine: InferenceEngine {
                 operationName: "qwen35_moe_model_load", attributionEnabled: self.attributionEnabled);
         let loadedModel: Qwen35MoEModel = Qwen35MoEModel(upstreamConfiguration);
         try loadedModel.prepare();
+        Qwen35ArtifactWeightLoading.finalizeInEvaluationMode(loadedModel);
         ServingPerformanceAttribution.endedOperation(
             operationName: "qwen35_moe_model_load",
             operationStart: modelLoadStart,
@@ -93,15 +94,31 @@ public final class Qwen35MoeEngine: InferenceEngine {
     /// model: the production load half of the dense engine's
     /// `loadValidatedArtifact`, sharing the same validated-descriptor
     /// ownership, quantization coverage, and verified bind. The artifact is
-    /// consumed; a second load fails closed.
-    public func loadValidatedArtifact(_ validatedArtifact: ValidatedQwen35Artifact) throws {
+    /// consumed; a second load fails closed. When `bindRoutedExperts` is
+    /// false the routed expert tensors are not bound or quantized. Their
+    /// placeholder modules stay unevaluated until the paged runtime replaces
+    /// them and materializes only the resident model core.
+    public func loadValidatedArtifact(
+        _ validatedArtifact: ValidatedQwen35Artifact,
+        bindRoutedExperts: Bool = true,
+        residentExpertPayloadBytes: UInt64? = nil
+    ) throws {
         let modelLoadStart: ContinuousClock.Instant? =
             ServingPerformanceAttribution.startedOperation(
                 operationName: "qwen35_moe_model_load", attributionEnabled: self.attributionEnabled);
-        let loadedModel: Qwen35MoEModel = try Qwen35ArtifactWeightLoading
-            .loadArtifactBoundMoeModel(
+        let loadedModel: Qwen35MoEModel;
+        do {
+            loadedModel = try Qwen35ArtifactWeightLoading.loadArtifactBoundMoeModel(
                 validatedArtifact: validatedArtifact,
+                attributionEnabled: self.attributionEnabled,
+                bindRoutedExperts: bindRoutedExperts);
+        } catch {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_moe_model_load",
+                operationStart: modelLoadStart,
                 attributionEnabled: self.attributionEnabled);
+            throw error;
+        }
         ServingPerformanceAttribution.endedOperation(
             operationName: "qwen35_moe_model_load",
             operationStart: modelLoadStart,
@@ -110,7 +127,19 @@ public final class Qwen35MoeEngine: InferenceEngine {
         self.totalLayerCount = validatedArtifact.config().layerCount();
         self.moeRepositoryConfiguration = validatedArtifact.config();
         self.expertResidency = try Qwen35MoeResidentExpertResidency(
-            repositoryConfiguration: validatedArtifact.config());
+            repositoryConfiguration: validatedArtifact.config(),
+            residentExpertPayloadBytes: residentExpertPayloadBytes);
+    }
+
+    /// Materializes resident model parameters after paged installation has
+    /// replaced the upstream random expert modules.
+    public func materializePagedRuntimeCore() throws -> Void {
+        guard let moeModel: Qwen35MoEModel = self.moeModel as? Qwen35MoEModel else {
+            throw InferenceEngineError.modelLoad(
+                reason: "the paged MoE runtime has no bound upstream model");
+        }
+        Qwen35ArtifactWeightLoading.materializePagedMoeCore(
+            moeModel, attributionEnabled: self.attributionEnabled);
     }
 
     /// Decodes the artifact config and fails closed unless it names the MoE
@@ -243,6 +272,13 @@ public final class Qwen35MoeEngine: InferenceEngine {
         // The forced transition token is selected before ordinary sampling and
         // fed through the decoder exactly; the budget state observes the
         // commit and reports whether the committed text stays in reasoning.
+        // The span covers the deferred evaluation of the previous forward's
+        // graph plus the sampler: MLX computes lazily, so the previous
+        // decode step's GPU work lands here.
+        let samplingStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_moe_sample",
+                attributionEnabled: self.attributionEnabled);
         let selectedTokenId: Int;
         if let forcedTokenId = try self.nextForcedThinkingTransitionTokenId() {
             selectedTokenId = Int(forcedTokenId);
@@ -250,6 +286,10 @@ public final class Qwen35MoeEngine: InferenceEngine {
             selectedTokenId = try self.sampleTokenId(
                 sampler: activeSampler, lastLogits: lastLogits);
         }
+        ServingPerformanceAttribution.endedOperation(
+            operationName: "qwen35_moe_sample",
+            operationStart: samplingStart,
+            attributionEnabled: self.attributionEnabled);
         let isReasoningToken: Bool = try self.observeCommittedThinkingToken(selectedTokenId);
         let decodeForwardStart: ContinuousClock.Instant? =
             ServingPerformanceAttribution.startedOperation(
@@ -349,6 +389,25 @@ public final class Qwen35MoeEngine: InferenceEngine {
             cache: activeCache,
             state: nil);
         try self.throwIfPagedForwardFaulted();
+        // MLX builds graphs lazily: without a forced evaluation every chunk
+        // would only build a graph and the whole prompt would execute as one
+        // monolithic chain at the first sampled token. Evaluating the
+        // chunk's cache states here executes exactly this chunk's GPU work,
+        // mirroring the Rust worker's per-chunk submission, and the final
+        // chunk's logits join it so the first decode samples ready state.
+        let chunkEvalStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_moe_prefill_chunk_eval",
+                attributionEnabled: self.attributionEnabled);
+        MLX.eval(activeCache.flatMap({ (cache: KVCache) -> [MLXArray] in cache.state }));
+        if chunkEnd >= self.promptTokenIds.count {
+            MLX.eval(chunkOutput.logits);
+        }
+        try self.throwIfPagedForwardFaulted();
+        ServingPerformanceAttribution.endedOperation(
+            operationName: "qwen35_moe_prefill_chunk_eval",
+            operationStart: chunkEvalStart,
+            attributionEnabled: self.attributionEnabled);
         let chunkElapsedMillis: UInt64 = Qwen35MoeEngine.millisSince(chunkStart);
         self.prefillElapsedMillis = self.prefillElapsedMillis.addingReportingOverflow(
             chunkElapsedMillis).partialValue;
@@ -408,7 +467,7 @@ public final class Qwen35MoeEngine: InferenceEngine {
     }
 
     public func applyMlxMemoryLimit(_ requestedMlxMemoryCeilingBytes: UInt64) throws {
-        Memory.cacheLimit = Int(clamping: requestedMlxMemoryCeilingBytes);
+        MlxMemoryLimitPolicy.apply(effectiveCeilingBytes: requestedMlxMemoryCeilingBytes);
     }
 
     /** Samples one token from the last logit row, applying the guided

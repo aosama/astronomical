@@ -1,6 +1,7 @@
 import Foundation;
 
 import IpcProtocol;
+import MLX;
 import MLXHuggingFace;
 import MLXLMCommon;
 import Tokenizers;
@@ -17,40 +18,128 @@ public enum Qwen35ChatRuntime {
 
     /// Builds the production runtime: the directory is validated end to
     /// end, the architecture routes the validated artifact onto the dense
-    /// or the paged MoE engine, and the tokenizer bridges from the same
-    /// directory.
+    /// engine or the machine-adaptive resident/paged MoE engine, and the
+    /// tokenizer bridges from the same directory. MoE expert residency
+    /// comes from artifact payload and machine-ceiling evidence; callers
+    /// may force the safe paged mode.
     public static func buildArtifactRuntime(
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration,
-        prefillChunkTokenCount: Int = 512,
+        prefillChunkTokenCount: Int? = nil,
         performanceAttributionEnabled: Bool = false,
-        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil,
+        forceMoeExpertPaging: Bool = false,
+        mlxMemoryCeilingBytes: UInt64? = nil
     ) throws -> LoadedChatRuntime {
+        let runtimeCandidate: ChatRuntimeCandidate = try Qwen35ChatRuntime
+            .prepareArtifactRuntime(
+                modelDirectory: modelDirectory,
+                modelConfiguration: modelConfiguration,
+                prefillChunkTokenCount: prefillChunkTokenCount,
+                performanceAttributionEnabled: performanceAttributionEnabled,
+                persistentPromptCachePolicy: persistentPromptCachePolicy,
+                forceMoeExpertPaging: forceMoeExpertPaging,
+                mlxMemoryCeilingBytes: mlxMemoryCeilingBytes);
+        return try runtimeCandidate.load();
+    }
+
+    /// Validates the artifact and resolves its model kind without allocating
+    /// MLX weights. The candidate defers model construction and MLX work
+    /// until the worker has retired the previous model. A nil
+    /// `prefillChunkTokenCount` derives the engine chunk from the worker
+    /// chunking configuration, so the serving chunk policy owns execution.
+    public static func prepareArtifactRuntime(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        prefillChunkTokenCount: Int? = nil,
+        performanceAttributionEnabled: Bool = false,
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil,
+        forceMoeExpertPaging: Bool = false,
+        mlxMemoryCeilingBytes: UInt64? = nil
+    ) throws -> ChatRuntimeCandidate {
         guard let autoregressiveConfiguration = modelConfiguration.autoregressive() else {
             throw InferenceEngineError.modelLoad(
                 reason: "the dense Qwen3.5 runtime requires an autoregressive model policy");
+        }
+        let effectiveMlxMemoryCeilingBytes: UInt64 = mlxMemoryCeilingBytes
+            ?? Qwen35ChatRuntime.recommendedMlxMemoryCeilingBytes();
+        guard effectiveMlxMemoryCeilingBytes > 0,
+            effectiveMlxMemoryCeilingBytes <= UInt64(Int.max) else {
+            throw InferenceEngineError.modelLoad(
+                reason: "the effective MLX memory ceiling is unavailable or outside the platform range");
         }
         let validatedArtifact: ValidatedQwen35Artifact = try Qwen35ArtifactValidator()
             .validate(
                 modelDirectory: modelDirectory,
                 maxOutputTokens: autoregressiveConfiguration.maximumOutputTokens,
                 performanceAttributionEnabled: performanceAttributionEnabled);
+        return ChatRuntimeCandidate(validatedArtifact: validatedArtifact) {
+            return try Qwen35ChatRuntime.buildValidatedArtifactRuntime(
+                validatedArtifact: validatedArtifact,
+                modelDirectory: modelDirectory,
+                autoregressiveConfiguration: autoregressiveConfiguration,
+                prefillChunkTokenCount: prefillChunkTokenCount,
+                performanceAttributionEnabled: performanceAttributionEnabled,
+                persistentPromptCachePolicy: persistentPromptCachePolicy,
+                forceMoeExpertPaging: forceMoeExpertPaging,
+                effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes);
+        };
+    }
+
+    private static func buildValidatedArtifactRuntime(
+        validatedArtifact: ValidatedQwen35Artifact,
+        modelDirectory: String,
+        autoregressiveConfiguration: WorkerAutoregressiveModelConfiguration,
+        prefillChunkTokenCount: Int?,
+        performanceAttributionEnabled: Bool,
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy?,
+        forceMoeExpertPaging: Bool,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> LoadedChatRuntime {
+        // The worker chunking configuration owns the serving chunk; the
+        // engine's prefill loop must execute exactly the policy the
+        // supervisor configured, so an explicit override stays the only way
+        // to diverge from it.
+        let enginePrefillChunkTokenCount: Int;
+        if let prefillChunkTokenCount: Int = prefillChunkTokenCount {
+            enginePrefillChunkTokenCount = prefillChunkTokenCount;
+        } else {
+            let configuredChunkTokenCount: UInt32 = autoregressiveConfiguration.chunking
+                .fixedPromptProcessingChunkSizeTokens;
+            guard configuredChunkTokenCount > 0 else {
+                throw InferenceEngineError.modelLoad(
+                    reason: "the prompt-processing chunk size must be positive");
+            }
+            enginePrefillChunkTokenCount = Int(configuredChunkTokenCount);
+        }
+        let memoryPreparationStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_mlx_pre_load_quiescence",
+                attributionEnabled: performanceAttributionEnabled);
+        MlxMemoryLimitPolicy.prepareForModelLoad(
+            effectiveCeilingBytes: effectiveMlxMemoryCeilingBytes);
+        ServingPerformanceAttribution.endedOperation(
+            operationName: "qwen35_mlx_pre_load_quiescence",
+            operationStart: memoryPreparationStart,
+            attributionEnabled: performanceAttributionEnabled);
         switch validatedArtifact.config().feedForwardArchitecture() {
         case .dense:
             return try Qwen35ChatRuntime.buildDenseRuntime(
                 validatedArtifact: validatedArtifact,
                 modelDirectory: modelDirectory,
                 autoregressiveConfiguration: autoregressiveConfiguration,
-                prefillChunkTokenCount: prefillChunkTokenCount,
+                prefillChunkTokenCount: enginePrefillChunkTokenCount,
                 performanceAttributionEnabled: performanceAttributionEnabled);
         case .mixtureOfExperts:
-            return try Qwen35MoeChatRuntime.buildPagedRuntime(
+            return try Qwen35MoeChatRuntime.buildMoeRuntime(
                 validatedArtifact: validatedArtifact,
                 modelDirectory: modelDirectory,
                 autoregressiveConfiguration: autoregressiveConfiguration,
-                prefillChunkTokenCount: prefillChunkTokenCount,
+                prefillChunkTokenCount: enginePrefillChunkTokenCount,
                 performanceAttributionEnabled: performanceAttributionEnabled,
-                persistentPromptCachePolicy: persistentPromptCachePolicy);
+                persistentPromptCachePolicy: persistentPromptCachePolicy,
+                forceExpertPaging: forceMoeExpertPaging,
+                mlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes);
         }
     }
 
@@ -78,7 +167,8 @@ public enum Qwen35ChatRuntime {
             modelDirectory: modelDirectory,
             repositoryConfiguration: validatedArtifact.config(),
             autoregressiveConfiguration: autoregressiveConfiguration,
-            engine: engine);
+            engine: engine,
+            performanceAttributionEnabled: performanceAttributionEnabled);
     }
 
     public static func buildInMemoryRuntime(
@@ -129,17 +219,30 @@ public enum Qwen35ChatRuntime {
         modelDirectory: String,
         repositoryConfiguration: Qwen3_5Config,
         autoregressiveConfiguration: WorkerAutoregressiveModelConfiguration,
-        engine: any InferenceEngine
+        engine: any InferenceEngine,
+        performanceAttributionEnabled: Bool = false
     ) throws -> LoadedChatRuntime {
         let directoryUrl: URL = URL(fileURLWithPath: modelDirectory);
         let bridgedTokenizer: any MLXLMCommon.Tokenizer;
+        let tokenizerLoadStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_tokenizer_load",
+                attributionEnabled: performanceAttributionEnabled);
         do {
             bridgedTokenizer = #adaptHuggingFaceTokenizer(
                 try Qwen35ChatRuntime.blockingTokenizerLoad(directoryUrl: directoryUrl));
         } catch {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_artifact_tokenizer_load",
+                operationStart: tokenizerLoadStart,
+                attributionEnabled: performanceAttributionEnabled);
             throw InferenceEngineError.modelLoad(
                 reason: "the model tokenizer files could not be loaded: \(error)");
         }
+        ServingPerformanceAttribution.endedOperation(
+            operationName: "qwen35_artifact_tokenizer_load",
+            operationStart: tokenizerLoadStart,
+            attributionEnabled: performanceAttributionEnabled);
         let processor: Qwen35ChatProcessor = Qwen35ChatProcessor(
             tokenizer: bridgedTokenizer,
             modelId: autoregressiveConfiguration.modelId,
@@ -175,7 +278,20 @@ public enum Qwen35ChatRuntime {
         }
         loadSemaphore.wait();
         detachedTask.cancel();
-        let outcome: Result<any Tokenizers.Tokenizer, Error> = loadOutcome.result!;
+        guard let outcome: Result<any Tokenizers.Tokenizer, Error> = loadOutcome.result else {
+            throw InferenceEngineError.modelLoad(
+                reason: "the tokenizer loading task completed without a result");
+        }
         return try outcome.get();
     }
+
+    private static func recommendedMlxMemoryCeilingBytes() -> UInt64 {
+        let recommendedWorkingSetBytes: Int? = MLX.GPU.maxRecommendedWorkingSetBytes();
+        guard let recommendedWorkingSetBytes: Int = recommendedWorkingSetBytes,
+            recommendedWorkingSetBytes > 0 else {
+            return 0;
+        }
+        return UInt64(recommendedWorkingSetBytes);
+    }
+
 }

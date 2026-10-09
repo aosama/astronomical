@@ -10,7 +10,7 @@ import ModelServingTestSupport;
 
 @testable import ModelServing;
 
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     /// Hermetic journeys for the persistent prompt-cache state bridge: real
     /// MLX tensors flowing between populated in-memory decoder state and the

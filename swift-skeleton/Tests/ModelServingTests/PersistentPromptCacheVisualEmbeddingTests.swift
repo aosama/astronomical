@@ -15,13 +15,15 @@ import ModelServingTestSupport;
 /// the shared global quota, and corrupt-file untracking that accepts a
 /// clean replacement. Port of the Rust
 /// `persistent_prompt_cache_visual_embeddings` direct-MLX journeys.
-@Suite(.tags(.hermeticMlxJourney))
-final class PersistentPromptCacheVisualEmbeddingTests {
+extension MlxGpuJourneyContainer {
 
-    init() {
-        signal(SIGPIPE, SIG_IGN);
-        MLXMetallibLocator.overrideMetallibPathIfNecessary();
-    }
+    @Suite(.tags(.hermeticMlxJourney))
+    final class PersistentPromptCacheVisualEmbeddingTests {
+
+        init() {
+            signal(SIGPIPE, SIG_IGN);
+            MLXMetallibLocator.overrideMetallibPathIfNecessary();
+        }
 
     private static func visualEmbeddingModelContract()
         -> PersistentVisualEmbeddingModelContract {
@@ -153,5 +155,6 @@ final class PersistentPromptCacheVisualEmbeddingTests {
             modelContract: Self.visualEmbeddingModelContract());
         #expect(replacementEmbeddings?.shape == [2, 2_048]);
         #expect(replacementEmbeddings?.dtype == .bfloat16);
+    }
     }
 }

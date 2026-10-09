@@ -32,4 +32,53 @@ public protocol ChatModelRuntimeFactory: Sendable {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime;
+
+    /// Validates a replacement selection without requiring it to load MLX
+    /// weights before the worker retires the previous runtime.
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate;
+
+    /// Builds the runtime against the effective machine-adaptive MLX ceiling.
+    func createChatRuntime(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> LoadedChatRuntime;
+
+    /// Validates a replacement against the effective ceiling and defers MLX
+    /// weight loading until `ChatRuntimeCandidate.load()`.
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> ChatRuntimeCandidate;
+}
+
+extension ChatModelRuntimeFactory {
+
+    public func createChatRuntime(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> LoadedChatRuntime {
+        let runtimeCandidate: ChatRuntimeCandidate = try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration,
+            effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes);
+        return try runtimeCandidate.load();
+    }
+
+    /// Factories whose candidate does not consume memory-policy input can
+    /// keep their candidate creation path and still defer runtime loading.
+    public func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration,
+        effectiveMlxMemoryCeilingBytes: UInt64
+    ) throws -> ChatRuntimeCandidate {
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration);
+    }
 }

@@ -162,8 +162,9 @@ extension EngineBackedWorker {
             expertResidency: nil));
     }
 
-    /// Transactional model replacement: create first, drop the prior runtime
-    /// before load, and keep the prior model ready on any failure.
+    /// Validate the selection while the current model remains usable, then
+    /// release its weights and reclaim completed GPU/cache work before the
+    /// replacement model starts loading.
     private func serveModelSwap(
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration,
@@ -174,19 +175,29 @@ extension EngineBackedWorker {
                 loadedModelRemainsReady: self.loadedChatRuntime != nil,
                 modelLoadFailureReason: "model swapping is unavailable"));
         }
-        let replacementRuntime: LoadedChatRuntime;
+        let replacementCandidate: ChatRuntimeCandidate;
         do {
-            replacementRuntime = try chatRuntimeFactory.createChatRuntime(
+            replacementCandidate = try chatRuntimeFactory.createChatRuntimeCandidate(
                 modelDirectory: modelDirectory,
-                modelConfiguration: modelConfiguration);
+                modelConfiguration: modelConfiguration,
+                effectiveMlxMemoryCeilingBytes: self.effectiveMlxMemoryCeilingBytes);
         } catch {
             return try eventWriter.sendEvent(.modelSwapFailed(
                 loadedModelRemainsReady: self.loadedChatRuntime != nil,
                 modelLoadFailureReason: WorkerRuntimeError.boundedModelLoadFailureReason(error)));
         }
-        // Creation preserves the prior runtime on a rejected selection; once
-        // created, release it before load so model payloads never overlap.
+        // Selection and bounded artifact validation preserve the prior model
+        // on rejection. MLX loading starts only after its weight owner is
+        // released, so two model payloads never overlap during a swap.
         self.loadedChatRuntime = nil;
+        let replacementRuntime: LoadedChatRuntime;
+        do {
+            replacementRuntime = try replacementCandidate.load();
+        } catch {
+            return try eventWriter.sendEvent(.modelSwapFailed(
+                loadedModelRemainsReady: false,
+                modelLoadFailureReason: WorkerRuntimeError.boundedModelLoadFailureReason(error)));
+        }
         let engineLoadResult: EngineLoadResult;
         do {
             engineLoadResult = try replacementRuntime.engine.load();

@@ -14,71 +14,74 @@ import RuntimeIntegration
  * per-array from the source storage instead of materializing every view
  * at once.
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class SafetensorsWriterMemoryPolicyTests {
+extension RuntimeIntegrationMlxJourneyContainer {
 
-    init() {
-        signal(SIGPIPE, SIG_IGN)
-        MLXMetallibLocator.overrideMetallibPathIfNecessary()
-    }
+    @Suite(.serialized, .tags(.hermeticMlxJourney))
+    final class SafetensorsWriterMemoryPolicyTests {
 
-    @Test(.timeLimit(.minutes(1)))
-    func should_write_strided_views_under_a_tight_memory_ceiling() throws {
-        let workspaceUrl: URL = SafetensorsFixtureSupport.temporaryFileUrl("memory-policy-workspace.safetensors")
-        FileManager.default.createFile(atPath: workspaceUrl.path, contents: Data())
-        defer {
-            try? FileManager.default.removeItem(at: workspaceUrl)
+        init() {
+            signal(SIGPIPE, SIG_IGN)
+            MLXMetallibLocator.overrideMetallibPathIfNecessary()
         }
 
-        let memoryLimitGuard: RuntimeMemoryLimitGuard = try Self.writeStreamedViews(to: workspaceUrl)
-        defer {
+        @Test(.timeLimit(.minutes(1)))
+        func should_write_strided_views_under_a_tight_memory_ceiling() throws {
+            let workspaceUrl: URL = SafetensorsFixtureSupport.temporaryFileUrl("memory-policy-workspace.safetensors")
+            FileManager.default.createFile(atPath: workspaceUrl.path, contents: Data())
+            defer {
+                try? FileManager.default.removeItem(at: workspaceUrl)
+            }
+
+            let memoryLimitGuard: RuntimeMemoryLimitGuard = try Self.writeStreamedViews(to: workspaceUrl)
+            defer {
+                memoryLimitGuard.restore()
+            }
+
+            let workspaceHandle: FileHandle = try FileHandle(forReadingFrom: workspaceUrl)
+            defer {
+                workspaceHandle.closeFile()
+            }
+            let weightsFile: SafetensorsFile = try MlxRuntime.loadSafetensors(weightsFile: workspaceHandle)
+            #expect(try weightsFile.tensor("largest.weight").shape == [2048, 4094])
+            #expect(try weightsFile.tensor("medium.weight").shape == [1536, 4094])
+            #expect(try weightsFile.tensor("smallest.weight").shape == [1022, 4094])
+        }
+
+        /**
+         * Writes the three strided views while the memory policy is pinned by
+         * the returned guard; the guard is restored before returning so the
+         * read-back in the caller runs under the machine's normal limits.
+         */
+        private static func writeStreamedViews(to workspaceUrl: URL) throws -> RuntimeMemoryLimitGuard {
+            let backingStore: MLXArray = MLX.zeros([4096, 4096], dtype: .bfloat16)
+            MLX.eval([backingStore])
+
+            let largestView: MLXArray = MLX.asStrided(backingStore, [2048, 4094], strides: [4096, 1], offset: 4097)
+            let mediumView: MLXArray = MLX.asStrided(backingStore, [1536, 4094], strides: [4096, 1], offset: 2049 * 4096 + 1)
+            let smallestView: MLXArray = MLX.asStrided(backingStore, [1022, 4094], strides: [4096, 1], offset: 3073 * 4096 + 1)
+            #expect(largestView.nbytes > mediumView.nbytes)
+            #expect(mediumView.nbytes > smallestView.nbytes)
+
+            let baselineActiveMemoryBytes: Int = MLX.Memory.activeMemory
+            let memoryCeilingBytes: Int = baselineActiveMemoryBytes + largestView.nbytes + 2_000_000
+            // The ceiling must sit below the views' combined size, otherwise
+            // the journey would prove nothing about streaming.
+            #expect(largestView.nbytes + mediumView.nbytes > memoryCeilingBytes - baselineActiveMemoryBytes)
+
+            let memoryLimitGuard: RuntimeMemoryLimitGuard = RuntimeMemoryLimitGuard(activeMemoryLimitBytes: memoryCeilingBytes)
+            let writeOutcome: SafetensorsWriteOutcome = try MlxRuntime.saveSafetensors(
+                arrays: [
+                    "largest.weight": largestView,
+                    "medium.weight": mediumView,
+                    "smallest.weight": smallestView,
+                ],
+                metadata: ["format_version": "streaming-workspace-test"],
+                to: workspaceUrl)
+            #expect(writeOutcome.writtenByteCount > 0)
+
             memoryLimitGuard.restore()
+            return memoryLimitGuard
         }
-
-        let workspaceHandle: FileHandle = try FileHandle(forReadingFrom: workspaceUrl)
-        defer {
-            workspaceHandle.closeFile()
-        }
-        let weightsFile: SafetensorsFile = try MlxRuntime.loadSafetensors(weightsFile: workspaceHandle)
-        #expect(try weightsFile.tensor("largest.weight").shape == [2048, 4094])
-        #expect(try weightsFile.tensor("medium.weight").shape == [1536, 4094])
-        #expect(try weightsFile.tensor("smallest.weight").shape == [1022, 4094])
-    }
-
-    /**
-     * Writes the three strided views while the memory policy is pinned by
-     * the returned guard; the guard is restored before returning so the
-     * read-back in the caller runs under the machine's normal limits.
-     */
-    private static func writeStreamedViews(to workspaceUrl: URL) throws -> RuntimeMemoryLimitGuard {
-        let backingStore: MLXArray = MLX.zeros([4096, 4096], dtype: .bfloat16)
-        MLX.eval([backingStore])
-
-        let largestView: MLXArray = MLX.asStrided(backingStore, [2048, 4094], strides: [4096, 1], offset: 4097)
-        let mediumView: MLXArray = MLX.asStrided(backingStore, [1536, 4094], strides: [4096, 1], offset: 2049 * 4096 + 1)
-        let smallestView: MLXArray = MLX.asStrided(backingStore, [1022, 4094], strides: [4096, 1], offset: 3073 * 4096 + 1)
-        #expect(largestView.nbytes > mediumView.nbytes)
-        #expect(mediumView.nbytes > smallestView.nbytes)
-
-        let baselineActiveMemoryBytes: Int = MLX.Memory.activeMemory
-        let memoryCeilingBytes: Int = baselineActiveMemoryBytes + largestView.nbytes + 2_000_000
-        // The ceiling must sit below the views' combined size, otherwise
-        // the journey would prove nothing about streaming.
-        #expect(largestView.nbytes + mediumView.nbytes > memoryCeilingBytes - baselineActiveMemoryBytes)
-
-        let memoryLimitGuard: RuntimeMemoryLimitGuard = RuntimeMemoryLimitGuard(activeMemoryLimitBytes: memoryCeilingBytes)
-        let writeOutcome: SafetensorsWriteOutcome = try MlxRuntime.saveSafetensors(
-            arrays: [
-                "largest.weight": largestView,
-                "medium.weight": mediumView,
-                "smallest.weight": smallestView,
-            ],
-            metadata: ["format_version": "streaming-workspace-test"],
-            to: workspaceUrl)
-        #expect(writeOutcome.writtenByteCount > 0)
-
-        memoryLimitGuard.restore()
-        return memoryLimitGuard
     }
 }
 

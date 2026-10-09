@@ -31,6 +31,41 @@ public enum QuantizedExpertLayerPlanBuilder {
         config: Qwen3_5Config
     ) throws -> QuantizedExpertLayerPlan {
         var headerCache: [URL: ParsedShardHeader] = [:]
+        return try QuantizedExpertLayerPlanBuilder.buildLayerPlan(
+            modelDirectory: modelDirectory,
+            weightMap: weightMap,
+            layerPrefix: layerPrefix,
+            config: config,
+            headerCache: &headerCache)
+    }
+
+    /// Builds every decoder layer's plan over one shared shard-header cache,
+    /// so a multi-layer model parses each shard header exactly once instead
+    /// of once per layer.
+    public static func buildLayerPlans(
+        modelDirectory: URL,
+        weightMap: [String: String],
+        layerPrefixes: [String],
+        config: Qwen3_5Config
+    ) throws -> [QuantizedExpertLayerPlan] {
+        var headerCache: [URL: ParsedShardHeader] = [:]
+        return try layerPrefixes.map({ (layerPrefix: String) -> QuantizedExpertLayerPlan in
+            return try QuantizedExpertLayerPlanBuilder.buildLayerPlan(
+                modelDirectory: modelDirectory,
+                weightMap: weightMap,
+                layerPrefix: layerPrefix,
+                config: config,
+                headerCache: &headerCache)
+        })
+    }
+
+    private static func buildLayerPlan(
+        modelDirectory: URL,
+        weightMap: [String: String],
+        layerPrefix: String,
+        config: Qwen3_5Config,
+        headerCache: inout [URL: ParsedShardHeader]
+    ) throws -> QuantizedExpertLayerPlan {
         var tensorSources: [QuantizedTensorSource] = []
         var modeByProjectionName: [String: ExpertLayerQuantizationMode] = [:]
         for projectionName: String in QuantizedExpertLayerPlanBuilder.PROJECTION_NAMES {

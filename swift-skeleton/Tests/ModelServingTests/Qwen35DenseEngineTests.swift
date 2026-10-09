@@ -19,7 +19,7 @@ import JourneyCategories;
  * fail-closed load path. No downloads; the suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35DenseEngineTests {
