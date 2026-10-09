@@ -1,6 +1,6 @@
 ## Linked issue
 
-<!-- Use Fixes #N, Closes #N, or Resolves #N when merging should close the issue. Use Refs #N when the issue should remain open. -->
+<!-- Link one or more existing issues: Fixes #N, Closes #N, or Resolves #N when merging should close them, Refs #N when they stay open. Grouped forms like `Fixes #N and #M` are accepted, and every #N mentioned must carry a keyword. -->
 
 ## Problem
 
