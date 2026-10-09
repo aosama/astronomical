@@ -4,42 +4,46 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.65</title>
-            <pubDate>Mon, 05 Oct 2026 00:31:33 -0400</pubDate>
-            <sparkle:version>825</sparkle:version>
-            <sparkle:shortVersionString>0.2.65</sparkle:shortVersionString>
+            <title>0.2.66</title>
+            <pubDate>Fri, 09 Oct 2026 19:00:23 -0400</pubDate>
+            <sparkle:version>1110</sparkle:version>
+            <sparkle:shortVersionString>0.2.66</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Release Astronomical 0.2.65
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.66
 
-Astronomical 0.2.65 is a performance release for the Stable channel. Repeating a prompt no longer pays for it twice, multi-token-prediction generation got about a third faster, and this cycle's measured throughput runs set new records for the flagship sparse MoE model.
+## Model library
 
-## What's new
+- Removed the Laguna XS 2.1 entries (4-bit, 5-bit, 6-bit) and the Laguna model family.
+- Removed the Qwen 3.8 MTP entries (27B oQ4e MTP 4-bit, 27B MTPLX Optimized Speed, 35B A3B Distill 4-bit); multi-token prediction machinery is fully retired from the engine.
+- Removed the DeepSeek V4 and Qwen 3.8 Flash model families.
 
-- **Repeated prompts stop re-reading storage.** Expert pages already read for a prompt are now retained across requests instead of being evicted the moment a request finishes. Sending the same long prompt again — the common case when you iterate on a question — reads about a third of the bytes it used to and finishes prompt processing roughly five times faster in our SSD-streaming acceptance journeys, all within the same memory ceiling. Page-table memory now also grows only as fast as real usage demands, and no hidden copies of streamed pages linger in active memory after a write.
-- **Faster multi-token prediction.** The dense multi-token-prediction (MTP) path now compiles its verification windows into fused GPU kernels. Measured decode on the MTP-optimized dense model improved from about 14 to about 19 tokens per second — roughly a third faster — with prompt processing unchanged.
-- **Record throughput on the flagship sparse MoE.** Measured runs during this cycle reached about 2,480 prompt tokens per second, roughly 7 percent above the previous release's runs, while token generation holds steady at about 63 tokens per second. Every number is recorded in the repository's committed throughput history.
-- **Vision pipeline optimizations.** Linear-attention normalization scales fold into a single fused launch, and attention padding zeros are retained across vision blocks instead of being recomputed, cutting redundant GPU work from the vision path.
-- **Broader vision checkpoint compatibility.** Published PyTorch vision checkpoints with differing Conv3d patch-embedding layouts now load correctly.
-- **New dense MTP model in the library.** Qwen3.8-27B-MTPLX-Optimized-Speed is now offered for the dense multi-token-prediction journey.
-- **A new foundation for GPU integration.** MLX is pinned to its v0.32.3 release, the MLX-C binding moves to v0.7.0, and a new bindings crate owns the C-language MLX interface. This release's expert-page work already builds on it; the migration itself changes no user-visible behavior.
+## Reliability
 
-## Compatibility
+- Changing the MLX memory ceiling while a model is resident now clears learned activation evidence, so stale evidence can no longer reject later requests; the largest expert layer is reserved exactly once during paged admission.
+- The dense engine streams validated model weights from disk.
 
-This release requires the existing public model artifacts. No configuration or model files change on upgrade.
+## Serving
 
-## Your data is preserved
+- Malformed or unknown model tool calls fail open to the harness instead of failing the request.
+- Enforced structured generation adopts the upstream grammar engine.
+- Qwen 3.5 reasoning honors a hard thinking budget.
+- Completion IDs carry a per-application namespace so tool-call IDs stay distinct across applications.
+- The status document reports serving activity and per-request progress; the Observatory console exposes local system telemetry and prompt-cache statistics.
 
-Existing saved sessions, prompt caches, and SSD page caches remain valid and unchanged; no action is required on your part.
+## Compatibility and preserved user state
+
+- Configuration files containing retired speculative-prefill fields are migrated automatically at load.
+- Installed models, prompt caches, and instance state are preserved; requests for removed model identities return a model-unavailable error listing near matches.
 
 ## Distribution
 
-This build is code-signed, notarized, and distributed as a DMG from the standard public download link and via the Sparkle signed update feed.
+- Signed with a Developer ID identity under Hardened Runtime with secure timestamps, notarized by Apple, and distributed through the Sparkle-signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.65/Astronomical-0.2.65-macOS-arm64.dmg" length="20069548" type="application/octet-stream" sparkle:edSignature="966Cy+RlGXzjjhOpXtQf8jvwDLZ1EFgQ3Fsxxl0iLHGgnz4W2YW+9RxSy/MDRPvWErnQIF13F69LS3FKNw80CA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.66/Astronomical-0.2.66-macOS-arm64.dmg" length="18852438" type="application/octet-stream" sparkle:edSignature="t2V8ItUiP1O0sacA2RvK8Ky5gdMvpfqWltDHOf4hoaJYZlR8LiBgwaOikQybNfWtzvkMzeDwm5HzgSo7sv5zDw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: bSmNys50o1HX850HVu5rrmMQi0nmgXNuqflfg/EALmYKAtTmGBPySLly8SNxsRS5mNbl32vqDqdFF+MhhZA4Bw==
-length: 4033
+edSignature: RNUnxQdPHEAgn0IRCX7XfEhQrJ911aYCW3iWPBIx208T9Zb17rhXcsibwSd0dt+97JzzHjEZpTEj1p22SIJ4CQ==
+length: 2879
 -->
