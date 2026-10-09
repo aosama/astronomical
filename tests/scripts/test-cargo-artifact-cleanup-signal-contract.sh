@@ -43,7 +43,7 @@ main() {
         exec "$timeout_executable" --foreground -k 1s "${SUBJECT_TIMEOUT_SECONDS}s" "$0"
     fi
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     subject="${repository_root}/scripts/run-in-disposable-cargo-target.sh"
     # Commit verification has its own outer target, but this contract must
     # create and interrupt a separate owner to exercise cleanup re-entry.

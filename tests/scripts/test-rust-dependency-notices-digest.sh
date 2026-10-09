@@ -37,7 +37,7 @@ write_executable() {
 }
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     notices_script="${repository_root}/scripts/generate-rust-dependency-notices.sh"
     DIGEST_PATH="${repository_root}/third-party/RUST_DEPENDENCY_NOTICES.digest"
     [ -f "$DIGEST_PATH" ] || {

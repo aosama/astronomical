@@ -39,7 +39,7 @@ main() {
         exit 2
     fi
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     subject="${repository_root}/scripts/clean-retired-cargo-native-output.sh"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-native-cleanup.XXXXXX")"
     target_directory="${SANDBOX_DIRECTORY}/target"
