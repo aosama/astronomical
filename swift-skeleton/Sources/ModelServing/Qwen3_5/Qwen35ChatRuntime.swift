@@ -23,7 +23,8 @@ public enum Qwen35ChatRuntime {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration,
         prefillChunkTokenCount: Int = 512,
-        performanceAttributionEnabled: Bool = false
+        performanceAttributionEnabled: Bool = false,
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil
     ) throws -> LoadedChatRuntime {
         guard let autoregressiveConfiguration = modelConfiguration.autoregressive() else {
             throw InferenceEngineError.modelLoad(
@@ -48,7 +49,8 @@ public enum Qwen35ChatRuntime {
                 modelDirectory: modelDirectory,
                 autoregressiveConfiguration: autoregressiveConfiguration,
                 prefillChunkTokenCount: prefillChunkTokenCount,
-                performanceAttributionEnabled: performanceAttributionEnabled);
+                performanceAttributionEnabled: performanceAttributionEnabled,
+                persistentPromptCachePolicy: persistentPromptCachePolicy);
         }
     }
 

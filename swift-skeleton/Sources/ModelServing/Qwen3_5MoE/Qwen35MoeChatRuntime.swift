@@ -21,7 +21,8 @@ public enum Qwen35MoeChatRuntime {
         modelDirectory: String,
         autoregressiveConfiguration: WorkerAutoregressiveModelConfiguration,
         prefillChunkTokenCount: Int,
-        performanceAttributionEnabled: Bool
+        performanceAttributionEnabled: Bool,
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil
     ) throws -> LoadedChatRuntime {
         let engine: Qwen35MoeEngine = Qwen35MoeEngine(
             attributionEnabled: performanceAttributionEnabled,
@@ -39,6 +40,20 @@ public enum Qwen35MoeChatRuntime {
             validatedArtifact: validatedArtifact,
             modelDirectory: modelDirectory,
             performanceAttributionEnabled: performanceAttributionEnabled);
+        // The prompt cache attaches before the runtime publishes: a store
+        // that cannot open fails the model load fail-closed, exactly like
+        // the Rust worker startup's store-open failure.
+        if let persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy =
+            persistentPromptCachePolicy {
+            try engine.attachPersistentPromptCache(
+                persistentPromptCachePolicy.makeAttachment(
+                    modelId: validatedArtifact.modelId(),
+                    modelRevision: validatedArtifact.revision(),
+                    configuredBlockTokenCount: autoregressiveConfiguration.chunking
+                        .promptCacheBlockTokens.map({ (blockTokens: UInt32) -> Int in
+                            return Int(blockTokens);
+                        })));
+        }
         return try Qwen35ChatRuntime.pairTokenizerWithProcessor(
             modelDirectory: modelDirectory,
             repositoryConfiguration: validatedArtifact.config(),

@@ -20,8 +20,10 @@ import JourneyCategories;
  * that land later. The final journey pairs the processor and the dense
  * engine through the real model directory builder inside the worker loop.
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35ChatProcessorTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35ChatProcessorTests {
 
     init() {
         signal(SIGPIPE, SIG_IGN);
@@ -352,6 +354,7 @@ final class Qwen35ChatProcessorTests {
         """;
 }
 
+}
 /// Adapter factory handing the pre-built directory runtime to the worker
 /// harness; the directory itself was synthesized before the loop started.
 struct DirectoryChatRuntimeFactory: ChatModelRuntimeFactory {
@@ -366,7 +369,7 @@ struct DirectoryChatRuntimeFactory: ChatModelRuntimeFactory {
     }
 }
 
-extension Qwen35ChatProcessorTests {
+extension HermeticMlxJourneyContainer.Qwen35ChatProcessorTests {
 
     /// Blocks the sync journey on the async tokenizer load for the decode
     /// round trip, mirroring the runtime's own factory boundary.

@@ -1,7 +1,6 @@
 import Foundation;
 
 import CryptoKit;
-import ModelServing;
 
 /// Immutable storage and memory geometry for one model revision, port of
 /// the Rust `PersistentPromptCacheModelContract`. Resolution happens once

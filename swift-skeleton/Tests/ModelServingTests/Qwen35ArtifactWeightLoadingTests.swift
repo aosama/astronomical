@@ -23,8 +23,10 @@ import JourneyCategories;
  * runs on real streamed weights. The suite is serialized so the MLX
  * journeys never overlap (the repository's one-model-at-a-time rule).
  */
-@Suite(.serialized, .tags(.hermeticMlxJourney))
-final class Qwen35ArtifactWeightLoadingTests {
+extension HermeticMlxJourneyContainer {
+
+    @Suite(.tags(.hermeticMlxJourney))
+    final class Qwen35ArtifactWeightLoadingTests {
 
     private static let ROMEO_AND_JULIET_PROMPT: String = "What is the play about?";
 
@@ -319,4 +321,6 @@ final class Qwen35ArtifactWeightLoadingTests {
                 thinkingBudget: nil),
             structuredGeneration: nil);
     }
+}
+
 }

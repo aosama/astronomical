@@ -16,8 +16,14 @@ public struct ModelFamilyFactory: ChatModelRuntimeFactory {
 
     private let performanceAttributionEnabled: Bool;
 
-    public init(performanceAttributionEnabled: Bool = false) {
+    private let persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy?;
+
+    public init(
+        performanceAttributionEnabled: Bool = false,
+        persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy? = nil
+    ) {
         self.performanceAttributionEnabled = performanceAttributionEnabled;
+        self.persistentPromptCachePolicy = persistentPromptCachePolicy;
     }
 
     public func createChatRuntime(
@@ -32,7 +38,8 @@ public struct ModelFamilyFactory: ChatModelRuntimeFactory {
             return try Qwen35ChatRuntime.buildArtifactRuntime(
                 modelDirectory: modelDirectory,
                 modelConfiguration: modelConfiguration,
-                performanceAttributionEnabled: self.performanceAttributionEnabled);
+                performanceAttributionEnabled: self.performanceAttributionEnabled,
+                persistentPromptCachePolicy: self.persistentPromptCachePolicy);
         case (.none, _):
             throw WorkerModelLoadFailure.unclassifiedModelDirectory;
         case let (.some(unusableFamily), _):

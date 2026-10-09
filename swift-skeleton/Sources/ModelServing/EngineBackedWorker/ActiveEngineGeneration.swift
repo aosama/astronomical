@@ -30,6 +30,10 @@ struct ActiveEngineGeneration {
     var promptWorkReuse: WorkerPromptWorkReuse = WorkerPromptWorkReuse(
         targetEligibleTokenCount: 0, targetRestoredTokenCount: 0);
 
+    /// The prefix tokens the engine restored for this request, reported in
+    /// the completion's public usage contract.
+    let restoredPromptPrefixTokenCount: UInt32;
+
     var requestId: RequestId {
         return self.generationCommand.requestId;
     }
@@ -41,6 +45,7 @@ struct ActiveEngineGeneration {
     ) {
         self.generationCommand = generationCommand;
         self.activeGeneration = activeGeneration;
+        self.restoredPromptPrefixTokenCount = restoredPromptPrefixTokenCount;
         self.maximumOutputTokens = generationCommand.settings.maxOutputTokens;
         let promptTokenCount: UInt32 = UInt32(clamping: activeGeneration.promptTokenCount);
         self.requiredPromptProcessingTokenCount = promptTokenCount
