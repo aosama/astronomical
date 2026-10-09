@@ -170,6 +170,8 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - The PR issue compliance validator requires the `## Linked issue` section to contain exactly one reference line (`Fixes|Closes|Resolves|Refs #N`). Any prose inside that section fails validation; put narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
 - Expected CI duration for hermetic verification PRs is roughly 7-8 minutes; do not treat a pending job at the 2-3 minute mark as stuck.
 - `scripts/release/prepare-and-publish.sh` requires signing identity, team ID, and notary profile resolved inside the same shell invocation as the script call; resolving them in an earlier command does not persist.
+- Every version bump stales `third-party/RUST_DEPENDENCY_NOTICES.digest` because the workspace version appears in the generated notices text. Regenerate it in the bump branch itself with `scripts/ci/generate-rust-dependency-notices.sh`; CI fails the bump PR otherwise (hit live in the 0.2.66 release run).
+- Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
 
 ## FAQ
 
