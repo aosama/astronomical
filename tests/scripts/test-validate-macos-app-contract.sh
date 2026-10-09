@@ -187,7 +187,7 @@ main() {
         }
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     validator_script="${repository_root}/scripts/internal/validate-macos-app.sh"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-app-validator.XXXXXX")"
     fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"

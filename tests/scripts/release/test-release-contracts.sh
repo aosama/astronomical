@@ -19,6 +19,6 @@ for contract_test in \
     test-install-stable-app.sh
 do
     printf '%s\n' "[release-contracts] test=${contract_test} status=start"
-    "${repository_root}/scripts/release/tests/${contract_test}"
+    "${repository_root}/tests/scripts/release/${contract_test}"
     printf '%s\n' "[release-contracts] test=${contract_test} status=success"
 done

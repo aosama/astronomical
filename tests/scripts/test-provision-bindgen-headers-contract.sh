@@ -80,7 +80,7 @@ assert_run_fails() {
     fi
 }
 
-repository_root="$(cd "$(dirname "$0")/.." && pwd)"
+repository_root="$(cd "$(dirname "$0")/../.." && pwd)"
 PROVISION_SCRIPT_PATH="${repository_root}/scripts/provision-bindgen-headers.sh"
 
 require_command shellcheck

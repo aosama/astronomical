@@ -9,7 +9,7 @@ print_error() {
     printf '%s\n' "Error: $1" >&2
 }
 
-repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 
 for release_entry_point in \
     build-stable-app.sh \
