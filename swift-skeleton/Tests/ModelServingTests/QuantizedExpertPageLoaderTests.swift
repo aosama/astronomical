@@ -15,7 +15,7 @@ import RuntimeIntegration
 /// collisions, attaches positional-read metrics, and fails closed on an
 /// invalid manifest instead of pairing one projection's weight with
 /// another projection's metadata.
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class QuantizedExpertPageLoaderTests {

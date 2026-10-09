@@ -80,6 +80,27 @@ final class QuantizedExpertLayerPlanBuilderTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func should_build_multiple_layer_plans_with_one_shared_shard_inventory() throws {
+        let mixedExpertArtifact: MixedExpertArtifact = try Self.writeMixedNativeAndAffineLayers();
+        defer { mixedExpertArtifact.cleanUp(); }
+
+        let layerPlans: Array<QuantizedExpertLayerPlan> = try QuantizedExpertLayerPlanBuilder
+            .buildLayerPlans(
+                modelDirectory: mixedExpertArtifact.modelDirectoryUrl,
+                weightMap: mixedExpertArtifact.weightMap,
+                layerPrefixes: [Self.NATIVE_LAYER_PREFIX, Self.AFFINE_LAYER_PREFIX],
+                config: mixedExpertArtifact.config);
+
+        #expect(layerPlans.count == 2);
+        #expect(layerPlans[0].quantizationMode == .nativeBfloat16);
+        #expect(layerPlans[1].quantizationMode == .affine);
+        for projectionName: String in Self.PROJECTION_NAMES {
+            Self.assertNativeProjection(layerPlan: layerPlans[0], projectionName: projectionName);
+            Self.assertAffineProjection(layerPlan: layerPlans[1], projectionName: projectionName);
+        }
+    }
+
     @Test
     func should_plan_mixed_native_and_affine_projections_in_one_layer() throws {
         let mixedProjectionArtifact: MixedExpertArtifact = try Self.writeMixedProjectionsInOneLayer()

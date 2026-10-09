@@ -4,6 +4,7 @@ import Testing;
 
 import MLX;
 import MLXLMCommon;
+import MLXNN;
 
 import IpcProtocol;
 import ModelServing;
@@ -21,7 +22,7 @@ import JourneyCategories;
  * downloads; the suite is serialized so the MLX journeys never overlap (the
  * repository's one-model-at-a-time rule).
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoeEngineTests {
@@ -162,6 +163,20 @@ extension HermeticMlxJourneyContainer {
             reason: "the engine holds no active MoE request")) {
             _ = try engine.decodeNextToken(requestId: RequestId(rawRequestId: 1));
         }
+    }
+
+    /// The upstream loader contract (`ModelFactory.train(false)`) binds
+    /// inference weights into evaluation mode. `Module.training` defaults to
+    /// true, and the gated-delta forward dispatches its fused inference
+    /// kernel only outside training mode (`useKernel: !training`), so a
+    /// model left in the default mode silently serves the serial
+    /// gradient-oriented recurrence through every linear-attention layer —
+    /// the measured 11x prefill collapse behind issue #1091.
+    @Test(.timeLimit(.minutes(1)))
+    func should_load_the_moe_model_in_evaluation_mode_for_inference_kernel_dispatch() throws {
+        let engine: Qwen35MoeEngine = try Self.makePinnedEngine();
+        let loadedModule: Module = try #require(engine.moeModel);
+        #expect(loadedModule.training == false);
     }
 
     // MARK: - Fixtures

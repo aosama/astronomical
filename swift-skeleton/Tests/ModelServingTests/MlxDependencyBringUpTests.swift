@@ -17,7 +17,7 @@ import JourneyCategories;
  * links into the serving module. No model downloads and no long GPU
  * journeys — tiny arrays only.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class MlxDependencyBringUpTests {

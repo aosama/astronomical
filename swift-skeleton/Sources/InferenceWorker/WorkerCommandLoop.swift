@@ -52,12 +52,19 @@ public enum WorkerCommandLoop {
         } else {
             persistentPromptCachePolicy = nil;
         }
+        let effectiveMlxMemoryCeilingBytes: UInt64 = UInt64(
+            GpuWiredMemoryLimit.resolveEffectiveMlxMemoryCeilingBytes(
+                configuredMlxMemoryCeilingBytes:
+                    workerStartupConfiguration.configuredMaximumMlxMemoryBytes,
+                machineMlxMemoryCeilingBytes: sampledMachineMlxMemoryCeilingBytes));
+        MlxMemoryLimitPolicy.apply(effectiveCeilingBytes: effectiveMlxMemoryCeilingBytes);
         let chatRuntimeFactory: (any ChatModelRuntimeFactory)? =
             chatRuntimeFactoryProvider?(workerStartupConfiguration)
             ?? ModelFamilyFactory(
                 performanceAttributionEnabled:
                     workerStartupConfiguration.performanceAttributionEnabled,
-                persistentPromptCachePolicy: persistentPromptCachePolicy);
+                persistentPromptCachePolicy: persistentPromptCachePolicy,
+                effectiveMlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes);
         let engineBackedWorker: EngineBackedWorker = EngineBackedWorker(
             chatRuntimeFactory: chatRuntimeFactory,
             sampleMachineMlxMemoryCeilingBytes: {

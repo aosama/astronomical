@@ -10,7 +10,7 @@ import ModelServingTestSupport;
 
 @testable import ModelServing;
 
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     /// Hermetic round-trip journeys: blocks published through the MLX
     /// writer load back by token count into live decoder state through the

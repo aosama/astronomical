@@ -14,7 +14,7 @@ import RuntimeIntegration
 /// loader and asserts per-expert slice identity, projection parameter
 /// coverage (affine triplets versus native weight-only), read-volume
 /// accounting, and fail-closed behavior on invalid layer requests.
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoeDiskExpertPageMaterializerTests {

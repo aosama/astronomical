@@ -102,6 +102,7 @@ public final class Qwen35DenseEngine: InferenceEngine {
                 operationName: "qwen35_model_load", attributionEnabled: self.attributionEnabled);
         let loadedModel: Qwen35Model = Qwen35Model(upstreamConfiguration);
         try loadedModel.prepare();
+        Qwen35ArtifactWeightLoading.finalizeInEvaluationMode(loadedModel);
         ServingPerformanceAttribution.endedOperation(
             operationName: "qwen35_model_load",
             operationStart: modelLoadStart,
@@ -134,8 +135,18 @@ public final class Qwen35DenseEngine: InferenceEngine {
         let modelLoadStart: ContinuousClock.Instant? =
             ServingPerformanceAttribution.startedOperation(
                 operationName: "qwen35_model_load", attributionEnabled: self.attributionEnabled);
-        let loadedModel: Qwen35Model = try Qwen35ArtifactWeightLoading.loadArtifactBoundModel(
-            validatedArtifact: validatedArtifact, attributionEnabled: self.attributionEnabled);
+        let loadedModel: Qwen35Model;
+        do {
+            loadedModel = try Qwen35ArtifactWeightLoading.loadArtifactBoundModel(
+                validatedArtifact: validatedArtifact,
+                attributionEnabled: self.attributionEnabled);
+        } catch {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_model_load",
+                operationStart: modelLoadStart,
+                attributionEnabled: self.attributionEnabled);
+            throw error;
+        }
         ServingPerformanceAttribution.endedOperation(
             operationName: "qwen35_model_load",
             operationStart: modelLoadStart,
@@ -350,7 +361,7 @@ public final class Qwen35DenseEngine: InferenceEngine {
     }
 
     public func applyMlxMemoryLimit(_ requestedMlxMemoryCeilingBytes: UInt64) throws {
-        Memory.cacheLimit = Int(clamping: requestedMlxMemoryCeilingBytes);
+        MlxMemoryLimitPolicy.apply(effectiveCeilingBytes: requestedMlxMemoryCeilingBytes);
     }
 
     /** Samples one token from the last logit row, applying the guided

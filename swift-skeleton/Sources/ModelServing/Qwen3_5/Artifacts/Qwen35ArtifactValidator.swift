@@ -1,6 +1,5 @@
 import CryptoKit;
 import Foundation;
-import os;
 
 /// Switchable timing pair for the Qwen3.5 artifact-validation path (model
 /// loading from disk). Every load operation must be attributable to its
@@ -9,16 +8,22 @@ import os;
 /// attribution — the same contract as the daemon IPC log.
 enum Qwen35ArtifactPerformanceAttribution {
 
-    private static let performanceAttributionLog: Logger = Logger(subsystem: "dev.astronomical.model-loading", category: "performance");
-
     static func startedOperation(operationName: String, performanceAttributionEnabled: Bool) -> ContinuousClock.Instant? {
         if performanceAttributionEnabled == false {
             return nil;
         }
+        let startTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970 * 1_000);
+        FileHandle.standardError.write(Data(
+            "attribution operation=\(operationName) event=start timestamp_ms=\(startTimestamp)\n".utf8));
         return ContinuousClock.now;
     }
 
-    static func finishedOperation(operationName: String, operationStart: ContinuousClock.Instant?, operationOutcome: String, performanceAttributionEnabled: Bool) -> Void {
+    static func finishedOperation(
+        operationName: String,
+        operationStart: ContinuousClock.Instant?,
+        operationOutcome: String,
+        performanceAttributionEnabled: Bool
+    ) -> Void {
         if performanceAttributionEnabled == false {
             return;
         }
@@ -28,7 +33,10 @@ enum Qwen35ArtifactPerformanceAttribution {
         let elapsedDuration: ContinuousClock.Duration = ContinuousClock.now - unwrappedOperationStart;
         let elapsedMilliseconds: Double = Double(elapsedDuration.components.seconds) * 1000.0
             + Double(elapsedDuration.components.attoseconds) / 1_000_000_000_000_000.0;
-        performanceAttributionLog.info("operation=\(operationName, privacy: .public) outcome=\(operationOutcome, privacy: .public) elapsed_ms=\(elapsedMilliseconds, format: .fixed(precision: 3))");
+        let endTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970 * 1_000);
+        FileHandle.standardError.write(Data(
+            ("attribution operation=\(operationName) event=end outcome=\(operationOutcome) "
+                + "timestamp_ms=\(endTimestamp) elapsed_ms=\(String(format: "%.3f", elapsedMilliseconds))\n").utf8));
     }
 }
 
@@ -58,38 +66,27 @@ public struct Qwen35ArtifactValidator {
         performanceAttributionEnabled: Bool = false) throws -> ValidatedQwen35Artifact {
         let validationOperationStart: ContinuousClock.Instant? = Qwen35ArtifactPerformanceAttribution
             .startedOperation(operationName: "qwen35_artifact_validate", performanceAttributionEnabled: performanceAttributionEnabled);
+        var validationOutcome: String = "failed";
+        defer {
+            Qwen35ArtifactPerformanceAttribution.finishedOperation(
+                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
+                operationOutcome: validationOutcome, performanceAttributionEnabled: performanceAttributionEnabled);
+        }
         do {
             let validatedArtifact: ValidatedQwen35Artifact = try self.validateBounded(
                 modelDirectory: modelDirectory, maxOutputTokens: maxOutputTokens,
                 performanceAttributionEnabled: performanceAttributionEnabled);
-            Qwen35ArtifactPerformanceAttribution.finishedOperation(
-                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
-                operationOutcome: "ok", performanceAttributionEnabled: performanceAttributionEnabled);
+            validationOutcome = "ok";
             return validatedArtifact;
         } catch let validationError as Qwen35ArtifactValidationError {
-            Qwen35ArtifactPerformanceAttribution.finishedOperation(
-                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
-                operationOutcome: "failed", performanceAttributionEnabled: performanceAttributionEnabled);
             throw validationError;
         } catch let artifactProblem as ArtifactValidationError {
-            Qwen35ArtifactPerformanceAttribution.finishedOperation(
-                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
-                operationOutcome: "failed", performanceAttributionEnabled: performanceAttributionEnabled);
             throw Qwen35ArtifactValidationError.artifact(artifactProblem);
         } catch let configProblem as Qwen3_5ConfigError {
-            Qwen35ArtifactPerformanceAttribution.finishedOperation(
-                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
-                operationOutcome: "failed", performanceAttributionEnabled: performanceAttributionEnabled);
             throw Qwen35ArtifactValidationError.config(configProblem);
         } catch let metadataProblem as OptiQMetadataError {
-            Qwen35ArtifactPerformanceAttribution.finishedOperation(
-                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
-                operationOutcome: "failed", performanceAttributionEnabled: performanceAttributionEnabled);
             throw Qwen35ArtifactValidationError.optiQMetadata(metadataProblem);
         } catch let shardIndexProblem as Qwen3_5ArtifactError {
-            Qwen35ArtifactPerformanceAttribution.finishedOperation(
-                operationName: "qwen35_artifact_validate", operationStart: validationOperationStart,
-                operationOutcome: "failed", performanceAttributionEnabled: performanceAttributionEnabled);
             throw Qwen35ArtifactValidationError.shardIndex(shardIndexProblem);
         }
     }
@@ -175,6 +172,12 @@ public struct Qwen35ArtifactValidator {
 
         let shardParseOperationStart: ContinuousClock.Instant? = Qwen35ArtifactPerformanceAttribution
             .startedOperation(operationName: "qwen35_artifact_shard_parse", performanceAttributionEnabled: performanceAttributionEnabled);
+        var shardParseOutcome: String = "failed";
+        defer {
+            Qwen35ArtifactPerformanceAttribution.finishedOperation(
+                operationName: "qwen35_artifact_shard_parse", operationStart: shardParseOperationStart,
+                operationOutcome: shardParseOutcome, performanceAttributionEnabled: performanceAttributionEnabled);
+        }
         var safetensorsSources: Dictionary<TensorSourceId, ValidatedSafetensorsSource> = Dictionary();
         var totalPayloadBytes: UInt64 = 0;
         // Source ids are numbered in lexical file-name order, so ascending id
@@ -199,9 +202,7 @@ public struct Qwen35ArtifactValidator {
             totalPayloadBytes = summedPayloadBytes;
             safetensorsSources[shardFileEntry.value] = shardSource;
         }
-        Qwen35ArtifactPerformanceAttribution.finishedOperation(
-            operationName: "qwen35_artifact_shard_parse", operationStart: shardParseOperationStart,
-            operationOutcome: "ok", performanceAttributionEnabled: performanceAttributionEnabled);
+        shardParseOutcome = "ok";
 
         // Derive model_id from the leaf directory name.
         let modelId: String = RequiredFiles.huggingFaceSnapshotModelId(modelDirectory: modelDirectory)

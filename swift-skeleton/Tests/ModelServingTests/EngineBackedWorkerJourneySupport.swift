@@ -18,6 +18,53 @@ struct JourneyEngineScript: Sendable {
     var emitEndOfSequence: Bool = true;
 }
 
+final class JourneyEngineLifecycleProbe: @unchecked Sendable {
+
+    private let lock: NSLock = NSLock();
+    private var activeEngineCount: Int = 0;
+    private var sawLoadWithPriorEngineActive: Bool = false;
+    private var sawCandidatePreparationWithPriorEngineActive: Bool = false;
+
+    func engineLoaded() -> Void {
+        self.lock.lock();
+        self.activeEngineCount += 1;
+        self.lock.unlock();
+    }
+
+    func engineReleased() -> Void {
+        self.lock.lock();
+        self.activeEngineCount -= 1;
+        self.lock.unlock();
+    }
+
+    func recordReplacementLoad() -> Void {
+        self.lock.lock();
+        if self.activeEngineCount != 0 {
+            self.sawLoadWithPriorEngineActive = true;
+        }
+        self.activeEngineCount += 1;
+        self.lock.unlock();
+    }
+
+    func recordCandidatePreparation() -> Void {
+        self.lock.lock();
+        self.sawCandidatePreparationWithPriorEngineActive = self.activeEngineCount > 0;
+        self.lock.unlock();
+    }
+
+    func didPrepareCandidateWhilePriorEngineActive() -> Bool {
+        self.lock.lock();
+        defer { self.lock.unlock(); }
+        return self.sawCandidatePreparationWithPriorEngineActive;
+    }
+
+    func didOverlapReplacementLoad() -> Bool {
+        self.lock.lock();
+        defer { self.lock.unlock(); }
+        return self.sawLoadWithPriorEngineActive;
+    }
+}
+
 /// Deterministic chat processor: the prompt size is the fixture text's byte
 /// count, each generated token decodes to one fixture word, and token 9 is
 /// the end-of-sequence marker.
@@ -121,16 +168,25 @@ final class JourneyPreparedRequest: PreparedInferenceRequest {
 /// only when the budget allows it first.
 final class JourneyChatEngine: InferenceEngine {
 
+    private let lifecycleProbe: JourneyEngineLifecycleProbe;
+    private var didLoad: Bool = false;
+
     private let script: JourneyEngineScript;
     private var activeRequestActive: Bool = false;
     private var decodeStepCount: Int = 0;
     private var activePromptTokenCount: Int = 0;
 
-    init(script: JourneyEngineScript) {
+    init(
+        script: JourneyEngineScript,
+        lifecycleProbe: JourneyEngineLifecycleProbe = JourneyEngineLifecycleProbe()
+    ) {
         self.script = script;
+        self.lifecycleProbe = lifecycleProbe;
     }
 
     func load() throws -> EngineLoadResult {
+        self.lifecycleProbe.recordReplacementLoad();
+        self.didLoad = true;
         return EngineLoadResult(minimumMlxMemoryCeilingBytes: 1, expertMemoryMode: nil);
     }
 
@@ -227,6 +283,12 @@ final class JourneyChatEngine: InferenceEngine {
     func applyMlxMemoryLimit(_ requestedMlxMemoryCeilingBytes: UInt64) throws {
         return;
     }
+
+    deinit {
+        if self.didLoad {
+            self.lifecycleProbe.engineReleased();
+        }
+    }
 }
 
 /// Factory pairing the journey processor and engine; directories that do
@@ -244,13 +306,62 @@ struct JourneyChatRuntimeFactory: ChatModelRuntimeFactory {
         modelDirectory: String,
         modelConfiguration: WorkerModelConfiguration
     ) throws -> LoadedChatRuntime {
+        return try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration).load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
         if modelDirectory.hasSuffix("/qwen3.5") == false {
             throw InferenceEngineError.modelLoad(
                 reason: "journey factory cannot load \(modelDirectory)");
         }
-        return LoadedChatRuntime(
-            processor: JourneyChatProcessor(script: self.script),
-            engine: JourneyChatEngine(script: self.script));
+        return ChatRuntimeCandidate {
+            return LoadedChatRuntime(
+                processor: JourneyChatProcessor(script: self.script),
+                engine: JourneyChatEngine(script: self.script));
+        };
+    }
+}
+
+struct DeferredJourneyChatRuntimeFactory: ChatModelRuntimeFactory {
+
+    private let lifecycleProbe: JourneyEngineLifecycleProbe;
+    private let script: JourneyEngineScript;
+
+    init(lifecycleProbe: JourneyEngineLifecycleProbe, script: JourneyEngineScript) {
+        self.lifecycleProbe = lifecycleProbe;
+        self.script = script;
+    }
+
+    func createChatRuntime(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> LoadedChatRuntime {
+        let runtimeCandidate: ChatRuntimeCandidate = try self.createChatRuntimeCandidate(
+            modelDirectory: modelDirectory,
+            modelConfiguration: modelConfiguration);
+        return try runtimeCandidate.load();
+    }
+
+    func createChatRuntimeCandidate(
+        modelDirectory: String,
+        modelConfiguration: WorkerModelConfiguration
+    ) throws -> ChatRuntimeCandidate {
+        guard modelDirectory.hasSuffix("/qwen3.5") else {
+            throw InferenceEngineError.modelLoad(reason: "journey factory cannot load \(modelDirectory)");
+        }
+        self.lifecycleProbe.recordCandidatePreparation();
+        return ChatRuntimeCandidate {
+            return LoadedChatRuntime(
+                processor: JourneyChatProcessor(script: self.script),
+                engine: JourneyChatEngine(
+                    script: self.script,
+                    lifecycleProbe: self.lifecycleProbe));
+        };
     }
 }
 

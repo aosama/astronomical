@@ -49,10 +49,14 @@ public enum Qwen35ArtifactWeightLoading {
     ///
     /// The MoE subclass only overrides `sanitize`, so the shard streaming,
     /// quantization coverage, and verified bind are exactly the dense
-    /// loader's; the subclass constructor is the sole difference.
+    /// loader's; the subclass constructor is the sole difference. When
+    /// `bindRoutedExperts` is false the routed expert tensors are never
+    /// bound or evaluated — the paged runtime replaces those modules before
+    /// any evaluation, so their payload bytes are never read from storage.
     public static func loadArtifactBoundMoeModel(
         validatedArtifact: ValidatedQwen35Artifact,
-        attributionEnabled: Bool
+        attributionEnabled: Bool,
+        bindRoutedExperts: Bool = true
     ) throws -> Qwen35MoEModel {
         let upstreamConfiguration: Qwen35Configuration = try Qwen35ArtifactWeightLoading
             .decodeUpstreamConfiguration(
@@ -63,7 +67,8 @@ public enum Qwen35ArtifactWeightLoading {
             model: Qwen35MoEModel(upstreamConfiguration),
             repositoryConfiguration: validatedArtifact.config(),
             shardTensors: shardTensors,
-            attributionEnabled: attributionEnabled);
+            attributionEnabled: attributionEnabled,
+            bindRoutedExperts: bindRoutedExperts);
         guard let moeModel: Qwen35MoEModel = boundModel as? Qwen35MoEModel else {
             throw InferenceEngineError.modelLoad(
                 reason: "the MoE artifact did not bind onto the MoE module tree");
@@ -129,8 +134,20 @@ public enum Qwen35ArtifactWeightLoading {
 
         var mergedTensors: Dictionary<String, MLXArray> = Dictionary();
         for shardWeightsFile: ValidatedWeightsFile in shardWeightsFiles {
+            let shardParseStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+                .startedOperation(
+                    operationName: "qwen35_artifact_shard_array_parse",
+                    attributionEnabled: attributionEnabled);
+            defer {
+                ServingPerformanceAttribution.endedOperation(
+                    operationName: "qwen35_artifact_shard_array_parse",
+                    operationStart: shardParseStart,
+                    attributionEnabled: attributionEnabled);
+            }
             let shardTensors: Dictionary<String, MLXArray> = try Qwen35ArtifactWeightLoading
-                .readMappedShardTensors(shardWeightsFile: shardWeightsFile);
+                .readMappedShardTensors(
+                    shardWeightsFile: shardWeightsFile,
+                    attributionEnabled: attributionEnabled);
             // Shards merge in index order; a later shard overwrites a
             // duplicate name, matching the serial loader.
             mergedTensors.merge(shardTensors) { (_: MLXArray, nextTensor: MLXArray) -> MLXArray in
@@ -141,13 +158,30 @@ public enum Qwen35ArtifactWeightLoading {
     }
 
     /// Memory-maps one validated descriptor and parses its tensors.
+    ///
+    /// The arrays stay lazy: each tensor's load primitive retains the reader,
+    /// which retains the mapping, so the mapping lives exactly as long as
+    /// the arrays over it. Materialization happens once at the verified
+    /// bind's final evaluation — and a paged bind that drops expert tensors
+    /// never reads their payload bytes at all.
     private static func readMappedShardTensors(
-        shardWeightsFile: ValidatedWeightsFile
+        shardWeightsFile: ValidatedWeightsFile,
+        attributionEnabled: Bool
     ) throws -> Dictionary<String, MLXArray> {
+        let shardArrayLoadStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_shard_array_load",
+                attributionEnabled: attributionEnabled);
+        defer {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_artifact_shard_array_load",
+                operationStart: shardArrayLoadStart,
+                attributionEnabled: attributionEnabled);
+        }
         let shardByteCount: UInt64 = shardWeightsFile.sizeBytes;
-        guard shardByteCount > 0 else {
+        guard shardByteCount > 0, shardByteCount <= UInt64(Int.max) else {
             throw InferenceEngineError.modelLoad(
-                reason: "the validated shard \(shardWeightsFile.validatedRequiredFile.fileName) is empty");
+                reason: "the validated shard \(shardWeightsFile.validatedRequiredFile.fileName) has an unsupported size");
         }
         let fileDescriptor: Int32 = shardWeightsFile.intoFile().fileDescriptor;
         guard let mappedBytes: UnsafeMutableRawPointer = mmap(
@@ -169,18 +203,31 @@ public enum Qwen35ArtifactWeightLoading {
             throw InferenceEngineError.modelLoad(
                 reason: "the validated shard \(shardWeightsFile.validatedRequiredFile.fileName) could not be parsed");
         }
-        // Materialize every tensor while the mapping is alive so the arrays
-        // own their bytes before the descriptor mapping is released.
-        MLX.eval(Array(shardTensors.values));
         return shardTensors;
     }
 
-    /// Sanitizes, quantizes, binds, and prepares the upstream model.
+    /// Leaves a bound model in evaluation mode — the upstream loader
+    /// contract (`ModelFactory.train(false)`). `Module.training` defaults to
+    /// true, and the gated-delta forward dispatches its fused inference
+    /// kernel only outside training mode (`useKernel: !training`), so a
+    /// model left in the default mode silently serves the serial
+    /// gradient-oriented recurrence through every linear-attention layer.
+    static func finalizeInEvaluationMode(_ model: Qwen35Model) -> Void {
+        model.train(false);
+    }
+
+    /// Sanitizes, quantizes, binds, and prepares the upstream model. A
+    /// paged bind (`bindRoutedExperts: false`) omits the routed expert
+    /// tensors entirely: the upstream expert modules keep their
+    /// never-evaluated random initialization until the paged runtime
+    /// replaces them, and quantization setup skips those placeholder
+    /// modules. Core evaluation is deferred until after that replacement.
     private static func bindWeights(
         model: Qwen35Model,
         repositoryConfiguration: Qwen3_5Config,
         shardTensors: Dictionary<String, MLXArray>,
-        attributionEnabled: Bool
+        attributionEnabled: Bool,
+        bindRoutedExperts: Bool = true
     ) throws -> Qwen35Model {
         let bindStart: ContinuousClock.Instant? = ServingPerformanceAttribution.startedOperation(
             operationName: "qwen35_artifact_weight_bind", attributionEnabled: attributionEnabled);
@@ -190,22 +237,73 @@ public enum Qwen35ArtifactWeightLoading {
                 operationStart: bindStart, attributionEnabled: attributionEnabled);
         }
         let boundModel: Qwen35Model = model;
+        let sanitizeStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_weight_sanitize",
+                attributionEnabled: attributionEnabled);
+        defer {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_artifact_weight_sanitize",
+                operationStart: sanitizeStart,
+                attributionEnabled: attributionEnabled);
+        }
         let sanitizedTensors: Dictionary<String, MLXArray> = boundModel.sanitize(weights: shardTensors);
+        let bindableTensors: Dictionary<String, MLXArray> = bindRoutedExperts
+            ? sanitizedTensors
+            : sanitizedTensors.filter { (tensorName: String, _: MLXArray) -> Bool in
+                return Qwen3_5MoeTensorSpec.isSparseSelectedExpertTensorName(tensorName: tensorName) == false;
+            };
         try Qwen35ArtifactWeightLoading.validateQuantizationCoverage(
             repositoryConfiguration: repositoryConfiguration,
-            sanitizedTensors: sanitizedTensors);
+            sanitizedTensors: bindableTensors);
+        let quantizationSetupStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_quantization_setup",
+                attributionEnabled: attributionEnabled);
+        defer {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_artifact_quantization_setup",
+                operationStart: quantizationSetupStart,
+                attributionEnabled: attributionEnabled);
+        }
         MLXNN.quantize(model: boundModel) { (modulePath: String, _: Module) -> (groupSize: Int, bits: Int, mode: QuantizationMode)? in
+            if bindRoutedExperts == false
+                && Qwen3_5MoeTensorSpec.isSparseSelectedExpertTensorName(
+                    tensorName: modulePath + ".weight") {
+                return nil;
+            }
             return Qwen35ArtifactWeightLoading.quantizationTupleForModule(
                 repositoryConfiguration: repositoryConfiguration,
-                sanitizedTensors: sanitizedTensors,
+                sanitizedTensors: bindableTensors,
                 modulePath: modulePath);
         };
+        let parameterBindStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_parameter_bind",
+                attributionEnabled: attributionEnabled);
+        defer {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_artifact_parameter_bind",
+                operationStart: parameterBindStart,
+                attributionEnabled: attributionEnabled);
+        }
         do {
             try boundModel.update(
-                parameters: ModuleParameters.unflattened(sanitizedTensors), verify: [.all]);
+                parameters: ModuleParameters.unflattened(bindableTensors),
+                verify: bindRoutedExperts ? [.all] : [.noUnusedKeys, .shapeMismatch]);
         } catch {
             throw InferenceEngineError.modelLoad(
                 reason: "the validated tensors did not bind onto the module tree");
+        }
+        let prepareStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_model_prepare",
+                attributionEnabled: attributionEnabled);
+        defer {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: "qwen35_artifact_model_prepare",
+                operationStart: prepareStart,
+                attributionEnabled: attributionEnabled);
         }
         do {
             try boundModel.prepare();
@@ -213,10 +311,87 @@ public enum Qwen35ArtifactWeightLoading {
             throw InferenceEngineError.modelLoad(
                 reason: "the model's derived inference state could not be prepared");
         }
-        // Derived state and bound parameters leave the loader fully
-        // materialized; forward passes stay read-only.
-        MLX.eval(boundModel);
+        Qwen35ArtifactWeightLoading.finalizeInEvaluationMode(boundModel);
+        try Qwen35ArtifactWeightLoading.installLastPositionLogitsTrimming(model: boundModel);
+        if bindRoutedExperts {
+            // Resident gate/up fusion stays parked: the fused gathered
+            // projection is about 15% faster on a warmed block but regressed
+            // the full-model gate in every measured run (1,363 / 1,544 /
+            // 1,520 versus 2,006 tokens/second unfused), so production keeps
+            // the upstream expert path until the end-to-end cause is found.
+            // Qwen35ResidentFusionInstall.install(
+            //     model: boundModel, configuration: repositoryConfiguration,
+            //     attributionEnabled: attributionEnabled);
+        }
+        let materializeStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: bindRoutedExperts
+                    ? "qwen35_artifact_resident_materialization"
+                    : "qwen35_artifact_core_materialization",
+                attributionEnabled: attributionEnabled);
+        defer {
+            ServingPerformanceAttribution.endedOperation(
+                operationName: bindRoutedExperts
+                    ? "qwen35_artifact_resident_materialization"
+                    : "qwen35_artifact_core_materialization",
+                operationStart: materializeStart,
+                attributionEnabled: attributionEnabled);
+        }
+        if bindRoutedExperts {
+            // Derived state and bound parameters leave the loader fully
+            // materialized; forward passes stay read-only.
+            MLX.eval(boundModel);
+        }
         return boundModel;
+    }
+
+    /// Materializes only resident model parameters after paging replaces the
+    /// upstream MoE modules. Their random expert placeholders must never be
+    /// evaluated or they recreate the entire discarded expert payload.
+    public static func materializePagedMoeCore(
+        _ moeModel: Qwen35MoEModel,
+        attributionEnabled: Bool
+    ) -> Void {
+        let materializeStart: ContinuousClock.Instant? = ServingPerformanceAttribution
+            .startedOperation(
+                operationName: "qwen35_artifact_core_materialization",
+                attributionEnabled: attributionEnabled);
+        let residentParameters: Array<MLXArray> = moeModel.parameters()
+            .flattened()
+            .filter({ (parameterPath: String, _: MLXArray) -> Bool in
+                return Qwen3_5MoeTensorSpec.isSparseSelectedExpertTensorName(
+                    tensorName: parameterPath) == false;
+            })
+            .map({ (_: String, parameterArray: MLXArray) -> MLXArray in
+                return parameterArray;
+            });
+        MLX.eval(residentParameters);
+        ServingPerformanceAttribution.endedOperation(
+            operationName: "qwen35_artifact_core_materialization",
+            operationStart: materializeStart,
+            attributionEnabled: attributionEnabled);
+    }
+
+    /// Replaces the bound model's lm_head with the last-position-trimming
+    /// wrapper, matching the Rust forward graph's vocabulary-logits rule.
+    /// A tied-embedding model exposes no lm_head module and keeps its full
+    /// projection unchanged.
+    public static func installLastPositionLogitsTrimming(model: Qwen35Model) throws -> Void {
+        for (modulePath, childModule) in model.namedModules() {
+            guard modulePath.hasSuffix(".lm_head") else {
+                continue;
+            }
+            guard let linearHead: Linear = childModule as? Linear else {
+                throw InferenceEngineError.modelLoad(
+                    reason: "the lm_head at \(modulePath) is not a Linear projection");
+            }
+            try model.update(
+                modules: ModuleChildren.unflattened([(
+                    modulePath,
+                    Qwen35LastPositionLogitsHead(linearHead) as Module)]),
+                verify: []);
+            return;
+        }
     }
 
     /// Fails closed when a shard supplies scales for a module the config

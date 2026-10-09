@@ -17,7 +17,7 @@ import Testing;
  * identical forward (issue #629 hermetic seed), and records the route
  * observations the on-device route predictor consumes.
  */
-extension HermeticMlxJourneyContainer {
+extension MlxGpuJourneyContainer {
 
     @Suite(.tags(.hermeticMlxJourney))
     final class Qwen35MoePagedExpertDecoratorTests {
