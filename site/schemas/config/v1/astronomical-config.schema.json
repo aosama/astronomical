@@ -197,9 +197,6 @@
         },
         "chunking": {
           "$ref": "#/$defs/chunking"
-        },
-        "acceleration": {
-          "$ref": "#/$defs/acceleration"
         }
       }
     },
