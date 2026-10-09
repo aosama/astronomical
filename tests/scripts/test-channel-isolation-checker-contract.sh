@@ -52,7 +52,7 @@ main() {
         }
     done
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-channel-guard.XXXXXX")"
     mkdir -p \
         "${SANDBOX_DIRECTORY}/scripts" \

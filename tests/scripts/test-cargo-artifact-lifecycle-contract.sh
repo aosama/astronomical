@@ -78,7 +78,7 @@ main() {
     unset ASTRONOMICAL_CARGO_TARGET_LANE
     unset CARGO_TARGET_DIR
 
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-cargo-lifecycle.XXXXXX")"
     sandbox_repository="${SANDBOX_DIRECTORY}/repository"
     sandbox_scripts_directory="${sandbox_repository}/scripts"

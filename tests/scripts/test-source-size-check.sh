@@ -3,9 +3,9 @@
 set -eu
 
 readonly MAXIMUM_ELAPSED_SECONDS=120
-SCRIPT_DIRECTORY="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-SOURCE_SIZE_CHECKER="${SCRIPT_DIRECTORY}/check-source-size.sh"
-PRE_COMMIT_HOOK="${SCRIPT_DIRECTORY}/../.githooks/pre-commit"
+REPOSITORY_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
+SOURCE_SIZE_CHECKER="${REPOSITORY_ROOT}/scripts/check-source-size.sh"
+PRE_COMMIT_HOOK="${REPOSITORY_ROOT}/.githooks/pre-commit"
 TEMPORARY_DIRECTORY=""
 
 cleanup() {

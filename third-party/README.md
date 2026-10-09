@@ -197,7 +197,7 @@ to enumerate the exact C surface change. After the new pin's first native
 build, `--verify-headers` closes the loop by proving the extraction matches
 what the build actually staged.
 
-The contract suite in `scripts/test-provision-bindgen-headers-contract.sh`
+The contract suite in `tests/scripts/test-provision-bindgen-headers-contract.sh`
 covers extraction, patch application, idempotent reuse, self-healing,
 tampered-archive refusal, offline behavior, and verification against hermetic
 store fixtures.

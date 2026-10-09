@@ -42,7 +42,7 @@ jobs:
   # Keep the job name and its concurrency group in sync with branch
   # protection: "macOS hermetic verification" is a required status check and
   # "macos-hermetic-" is how that check is found. Also keep this job's cache
-  # owner set in scripts/test-ci-native-cache-coordination.sh in sync.
+  # owner set in tests/scripts/test-ci-native-cache-coordination.sh in sync.
   rust-core:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
@@ -192,7 +192,7 @@ jobs:
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: Verify CI native cache contracts
-        run: scripts/test-ci-native-cache-coordination.sh
+        run: tests/scripts/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
