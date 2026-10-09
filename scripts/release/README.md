@@ -3,7 +3,7 @@
 Everything in this directory is release-only. Ordinary development builds, commits, pushes, and pull requests must not invoke these scripts.
 
 - Build Development with `scripts/build-development-app.sh`.
-- Verify ordinary changes with `cargo fmt --all -- --check`, `cargo test-hermetic-and-rest`, and `swift test --no-parallel --package-path swift-skeleton`.
+- Verify ordinary changes with `cargo fmt --all -- --check` and `cargo test-hermetic-and-rest`.
 - Build a Stable candidate with `scripts/release/build-stable-app.sh`.
 - Run all Stable packaging and publication contracts explicitly with `scripts/release/tests/test-release-contracts.sh`.
 - Prepare or publish a signed release only through `scripts/release/prepare-and-publish.sh`.

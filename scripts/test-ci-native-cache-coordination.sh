@@ -414,10 +414,6 @@ main() {
     baseline_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" baseline)"
     printf '%s\n' '# Static update' >> "${change_scope_fixture_root}/README.md"
     static_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" static)"
-    mkdir -p "${change_scope_fixture_root}/swift-skeleton/Sources"
-    printf '%s\n' '// inert skeleton marker' > \
-        "${change_scope_fixture_root}/swift-skeleton/Sources/Marker.swift"
-    skeleton_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" swift-skeleton)"
     printf '%s\n' 'pub fn serve_updated() {}' > \
         "${change_scope_fixture_root}/crates/model-serving/src/lib.rs"
     rust_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" rust)"
@@ -466,8 +462,6 @@ main() {
 
     assert_change_scope "$change_scope_fixture_root" pull_request \
         "$baseline_scope_sha" "$static_scope_sha" false false false
-    assert_change_scope "$change_scope_fixture_root" pull_request \
-        "$static_scope_sha" "$skeleton_scope_sha" false false false
     assert_change_scope "$change_scope_fixture_root" pull_request \
         "$static_scope_sha" "$rust_scope_sha" true false true
     assert_change_scope "$change_scope_fixture_root" push \
