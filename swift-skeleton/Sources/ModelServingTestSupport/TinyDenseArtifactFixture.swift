@@ -84,22 +84,22 @@ public enum TinyDenseArtifactFixture {
             .appendingPathComponent(
                 "\(TinyDenseArtifactFixture.MODEL_DIRECTORY_LEAF_NAME)-\(UUID().uuidString)");
         try FileManager.default.createDirectory(at: modelDirectoryUrl, withIntermediateDirectories: true);
-        try Data(configBytes).write(to: modelDirectoryUrl.appendingPathComponent("config.json"));
+        try writeFixtureData(Data(configBytes), to: modelDirectoryUrl.appendingPathComponent("config.json"));
         if omitTokenizerFile == false {
             if includeTokenizerFiles {
                 try TinyTokenizerFixture.writeFiles(modelDirectoryUrl: modelDirectoryUrl);
             } else {
-                try Data(TinyDenseArtifactFixture.PLACEHOLDER_TOKENIZER_BYTES).write(
-                    to: modelDirectoryUrl.appendingPathComponent("tokenizer.json"));
+                try writeFixtureData(Data(TinyDenseArtifactFixture.PLACEHOLDER_TOKENIZER_BYTES), to:
+            modelDirectoryUrl.appendingPathComponent("tokenizer.json"));
             }
         }
-        try Data(indexBytes).write(
-            to: modelDirectoryUrl.appendingPathComponent("model.safetensors.index.json"));
+        try writeFixtureData(Data(indexBytes), to:
+            modelDirectoryUrl.appendingPathComponent("model.safetensors.index.json"));
         try framedShardBytes.fileBytes.write(
             to: modelDirectoryUrl.appendingPathComponent(TinyDenseArtifactFixture.SHARD_FILE_NAME));
         if let optiQMetadataBytes: Array<UInt8> = optiQMetadataBytes {
-            try Data(optiQMetadataBytes).write(
-                to: modelDirectoryUrl.appendingPathComponent("optiq_metadata.json"));
+            try writeFixtureData(Data(optiQMetadataBytes), to:
+            modelDirectoryUrl.appendingPathComponent("optiq_metadata.json"));
         }
         return (
             modelDirectoryUrl: modelDirectoryUrl,

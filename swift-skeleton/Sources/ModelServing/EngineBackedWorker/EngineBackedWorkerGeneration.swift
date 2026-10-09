@@ -370,7 +370,7 @@ extension EngineBackedWorker {
                 .promptTokenCount),
             generatedTokenCount: activeGeneration.generatedTokenCount,
             reasoningTokenCount: activeGeneration.reasoningTokenCount,
-            cachedTokenCount: 0,
+            cachedTokenCount: activeGeneration.restoredPromptPrefixTokenCount,
             persistentPromptCacheDiagnostics: nil,
             reason: completionReason));
     }

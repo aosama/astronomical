@@ -39,7 +39,15 @@ extension EngineBackedWorker {
         case .cancel:
             return;
         case .sampleMlxMemory:
-            return try self.emitMlxMemorySample(source: .idlePoll, eventWriter: eventWriter);
+            try self.emitMlxMemorySample(source: .idlePoll, eventWriter: eventWriter);
+            // The prompt-cache counters ride the same idle sample so the
+            // supervisor's status view advances without a dedicated verb.
+            if let persistentPromptCacheStats: WorkerPersistentPromptCacheStats = self
+                .loadedChatRuntime?.engine.collectPersistentPromptCacheStats() {
+                try eventWriter.sendEvent(.persistentPromptCacheStats(
+                    persistentPromptCacheStats));
+            }
+            return;
         case let .updateMlxMemoryLimit(requestedMlxMemoryCeilingBytes, configurationGeneration):
             return try self.serveUpdateMlxMemoryLimit(
                 requestedMlxMemoryCeilingBytes,
@@ -51,10 +59,20 @@ extension EngineBackedWorker {
                 modelConfiguration: modelConfiguration,
                 eventWriter: eventWriter);
         case let .clearPromptCache(modelId):
-            // No persistent cache exists until the SSD caching track; the
-            // acknowledgement reports the empty deletion.
-            return try eventWriter.sendEvent(.promptCacheCleared(
-                modelId: modelId, blocksRemoved: 0, bytesFreed: 0));
+            // Engines with an attached store clear their persisted state;
+            // the default engine reports the empty deletion.
+            do {
+                let clearOutcome: PersistentPromptCacheClearOutcome = try self
+                    .loadedChatRuntime?.engine.clearPersistentPromptCache(modelId: modelId)
+                    ?? PersistentPromptCacheClearOutcome(
+                        modelId: modelId, blocksRemoved: 0, bytesFreed: 0);
+                return try eventWriter.sendEvent(.promptCacheCleared(
+                    modelId: modelId, blocksRemoved: clearOutcome.blocksRemoved,
+                    bytesFreed: clearOutcome.bytesFreed));
+            } catch {
+                return try eventWriter.sendEvent(.promptCacheCleared(
+                    modelId: modelId, blocksRemoved: 0, bytesFreed: 0));
+            }
         }
     }
 
@@ -91,12 +109,43 @@ extension EngineBackedWorker {
         let engineSnapshot: WorkerMlxMemorySnapshot? = self.loadedChatRuntime.map {
             loadedChatRuntime in loadedChatRuntime.engine.collectMlxMemorySnapshot()
         } ?? nil;
+        // The governor's ownership decomposition rides the acknowledgement
+        // so the status view reflects the new budget immediately.
+        let memoryGovernor: WorkerMlxMemoryGovernor = WorkerMlxMemoryGovernor(
+            effectiveMlxMemoryCeilingBytes: requestedMlxMemoryCeilingBytes);
+        let utilizationSnapshot: WorkerMlxMemorySnapshot? = engineSnapshot.map({
+            (observedSnapshot: WorkerMlxMemorySnapshot) -> WorkerMlxMemorySnapshot in
+            let composedBudget: MlxRamBudgetSnapshot = memoryGovernor.composedBudget(
+                modelCorePayloadBytes: observedSnapshot.activeMemoryBytes,
+                contextWindowReserveBytes: 0,
+                completeLayerStreamSlotBytes: 0);
+            let ownershipBreakdown: WorkerMemoryCeilingUtilizationSnapshot =
+                WorkerMemoryCeilingUtilizationSnapshot(
+                    unusedHeadroomBytes: composedBudget.retainedExpertBudgetBytes,
+                    reservedModelCoreSlackBytes: 0,
+                    reservedContextGrowthBytes: 0,
+                    reservedActivationAndWorkspaceBytes: memoryGovernor
+                        .activationHeadroomBytes
+                        + memoryGovernor.otherFixedBytes,
+                    unseatedExpertEntitlementBytes: composedBudget.retainedExpertBudgetBytes,
+                    unexplainedHeadroomBytes: 0,
+                    ownerOverrunBytes: 0);
+            return WorkerMlxMemorySnapshot(
+                source: observedSnapshot.source,
+                activeMemoryBytes: observedSnapshot.activeMemoryBytes,
+                allocatorCacheMemoryBytes: observedSnapshot.allocatorCacheMemoryBytes,
+                peakMemoryBytes: observedSnapshot.peakMemoryBytes,
+                expertPayloadBytes: observedSnapshot.expertPayloadBytes,
+                modelCorePayloadBytes: observedSnapshot.modelCorePayloadBytes,
+                contextStatePayloadBytes: observedSnapshot.contextStatePayloadBytes,
+                memoryCeilingUtilization: ownershipBreakdown);
+        });
         return try eventWriter.sendEvent(.mlxMemoryLimitChanged(
             effectiveMlxMemoryCeilingBytes: requestedMlxMemoryCeilingBytes,
             minimumMlxMemoryCeilingBytes: self.minimumMlxMemoryCeilingBytes,
             expertMemoryMode: .resident,
             mlxMemorySnapshot: WorkerMemoryObservation.mlxMemorySnapshot(
-                source: .memoryLimitAdjusted, observedSnapshot: engineSnapshot),
+                source: .memoryLimitAdjusted, observedSnapshot: utilizationSnapshot),
             expertResidency: nil));
     }
 
@@ -218,6 +267,30 @@ extension EngineBackedWorker {
                 requestId: generationCommand.requestId,
                 reason: .invalidRequest(reason: WorkerRuntimeError
                     .boundedModelLoadFailureReason(error))));
+        }
+        // The governor validates the request's context admission before the
+        // engine starts: the context workspace charge must fit the wired
+        // budget after the model core and the named reserves.
+        let memoryGovernor: WorkerMlxMemoryGovernor = WorkerMlxMemoryGovernor(
+            effectiveMlxMemoryCeilingBytes: self.effectiveMlxMemoryCeilingBytes);
+        let modelCorePayloadBytes: UInt64 = UInt64(
+            loadedChatRuntime.engine.collectMlxMemorySnapshot()?.modelCorePayloadBytes ?? 0);
+        let contextTokenNeed: UInt64 = UInt64(clamping: preparedGeneration.promptTokenCount)
+            &+ UInt64(clamping: generationCommand.settings.maxOutputTokens);
+        let contextWindowReserveBytes: UInt64 = loadedChatRuntime.engine
+            .contextWorkspaceBytesPerToken()
+            .map({ (contextBytesPerToken: Int) -> UInt64 in
+                return contextBytesPerToken > 0
+                    ? contextTokenNeed &* UInt64(contextBytesPerToken) : 0;
+            }) ?? 0;
+        if case let .rejected(deficitBytes) = memoryGovernor.validateContextAdmission(
+            modelCorePayloadBytes: modelCorePayloadBytes,
+            contextWindowReserveBytes: contextWindowReserveBytes) {
+            return try eventWriter.sendEvent(.failed(
+                requestId: generationCommand.requestId,
+                reason: .invalidRequest(reason: "the request context exceeds the wired "
+                    + "memory budget by \(deficitBytes) bytes; lower the context need or "
+                    + "raise the memory ceiling")));
         }
         let engineGenerationStart: EngineGenerationStart;
         do {

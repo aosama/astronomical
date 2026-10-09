@@ -36,11 +36,28 @@ public enum WorkerCommandLoop {
             try GpuWiredMemoryLimit.sampleIogpuWiredLimitBytes();
         // Production builds the real family factory bound to the policy's
         // attribution switch; journeys inject their own provider.
+        let persistentPromptCachePolicy: Qwen35MoePromptCacheSpawnPolicy?;
+        if workerStartupConfiguration.persistentPromptCacheEnabled {
+            persistentPromptCachePolicy = Qwen35MoePromptCacheSpawnPolicy(
+                globalPromptCacheRootDirectory: URL(fileURLWithPath:
+                    workerStartupConfiguration.globalPromptCacheRootDirectory),
+                globalPromptCacheMaximumSizeBytes:
+                    workerStartupConfiguration.globalPromptCacheMaximumSizeBytes,
+                effectiveMlxMemoryCeilingBytes: UInt64(
+                    GpuWiredMemoryLimit.resolveEffectiveMlxMemoryCeilingBytes(
+                        configuredMlxMemoryCeilingBytes:
+                            workerStartupConfiguration.configuredMaximumMlxMemoryBytes,
+                        machineMlxMemoryCeilingBytes:
+                            sampledMachineMlxMemoryCeilingBytes)));
+        } else {
+            persistentPromptCachePolicy = nil;
+        }
         let chatRuntimeFactory: (any ChatModelRuntimeFactory)? =
             chatRuntimeFactoryProvider?(workerStartupConfiguration)
             ?? ModelFamilyFactory(
                 performanceAttributionEnabled:
-                    workerStartupConfiguration.performanceAttributionEnabled);
+                    workerStartupConfiguration.performanceAttributionEnabled,
+                persistentPromptCachePolicy: persistentPromptCachePolicy);
         let engineBackedWorker: EngineBackedWorker = EngineBackedWorker(
             chatRuntimeFactory: chatRuntimeFactory,
             sampleMachineMlxMemoryCeilingBytes: {

@@ -55,7 +55,7 @@ public enum TinyMoeArtifactFixture {
             .appendingPathComponent(
                 "\(TinyMoeArtifactFixture.MODEL_DIRECTORY_LEAF_NAME)-\(UUID().uuidString)");
         try FileManager.default.createDirectory(at: modelDirectoryUrl, withIntermediateDirectories: true);
-        try Data(configBytes).write(to: modelDirectoryUrl.appendingPathComponent("config.json"));
+        try writeFixtureData(Data(configBytes), to: modelDirectoryUrl.appendingPathComponent("config.json"));
         if includeTokenizerFiles {
             try TinyTokenizerFixture.writeFiles(modelDirectoryUrl: modelDirectoryUrl);
         } else {
