@@ -94,11 +94,8 @@ has_resolvable_change_range() {
 classify_code_changes() {
     code_changed=false
     while IFS= read -r changed_path; do
-        # swift-skeleton/* is the inert Rust-to-Swift migration skeleton:
-        # comment-only files that must stay non-participating until its
-        # documented activation checklist runs (see swift-skeleton/README.md).
         case "$changed_path" in
-            site/*|*.md|.github/assets/*|.github/workflows/pages.yml|swift-skeleton/*) ;;
+            site/*|*.md|.github/assets/*|.github/workflows/pages.yml) ;;
             *) code_changed=true; return ;;
         esac
     done < "$CHANGED_FILES_PATH"
