@@ -15,7 +15,6 @@ pub(crate) fn log_generation_context_workspace_reservation(
     direct_publication_workspace_bytes: usize,
     restore_overlap_workspace_bytes: usize,
     prefill_activation_workspace_bytes: usize,
-    complete_layer_scratch_bytes: usize,
     temporary_workspace_reservation_bytes: usize,
     additional_maximum_expert_page_reservation_bytes: usize,
 ) {
@@ -27,7 +26,6 @@ pub(crate) fn log_generation_context_workspace_reservation(
         direct_publication_workspace_bytes,
         restore_overlap_workspace_bytes,
         prefill_activation_workspace_bytes,
-        complete_layer_scratch_bytes,
         temporary_workspace_reservation_bytes,
         additional_maximum_expert_page_reservation_bytes,
         "composed generation-context workspace reservation"
