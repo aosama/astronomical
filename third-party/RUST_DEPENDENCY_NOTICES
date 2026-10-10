@@ -2373,6 +2373,7 @@ Apache License 2.0
 Used by:
 - futures-channel 0.3.34
 - futures-core 0.3.34
+- futures-executor 0.3.34
 - futures-io 0.3.34
 - futures-macro 0.3.34
 - futures-sink 0.3.34
@@ -3881,6 +3882,7 @@ Used by:
 - js-sys 0.3.104
 - lazy_static 1.5.0
 - linux-raw-sys 0.12.1
+- lock_api 0.4.14
 - log 0.4.33
 - memo-map 0.3.3
 - mime 0.3.17
@@ -3888,6 +3890,8 @@ Used by:
 - num-traits 0.2.19
 - once_cell 1.21.4
 - openssl-probe 0.2.1
+- parking_lot 0.12.5
+- parking_lot_core 0.9.12
 - percent-encoding 2.3.2
 - pkg-config 0.3.34
 - png 0.18.1
@@ -3901,6 +3905,7 @@ Used by:
 - rustix 1.1.4
 - rustls-native-certs 0.8.4
 - rustls 0.23.45
+- scopeguard 1.2.0
 - security-framework-sys 2.17.0
 - security-framework 3.7.0
 - signal-hook-registry 1.4.8
@@ -5752,6 +5757,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 MIT License
 
 Used by:
+- redox_syscall 0.5.18
+
+Copyright (c) 2017 Redox OS Developers
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+===============================================================================
+MIT License
+
+Used by:
 - bytes 1.12.1
 
 Copyright (c) 2018 Carl Lerche
@@ -5780,6 +5815,33 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+
+===============================================================================
+MIT License
+
+Used by:
+- serial_test 3.5.0
+- serial_test_derive 3.5.0
+
+Copyright (c) 2018 Tom Parker-Shemilt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ===============================================================================
 MIT License
