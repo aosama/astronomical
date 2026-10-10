@@ -45,12 +45,6 @@ pub enum ExpertPagingError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to clone resident expert source {source_file:?}: {source}")]
-    ResidentSourceClone {
-        source_file: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
 }
 
 /// Immutable layer geometry plus bounded-read and resident-promotion sources.
@@ -122,20 +116,19 @@ impl Qwen3_5ExpertPager {
             })
     }
 
-    pub(crate) fn clone_resident_expert_source_files(
-        &self,
-    ) -> Result<Vec<(PathBuf, File)>, ExpertPagingError> {
+    /// Lists the shard paths that resident expert materialization must open.
+    ///
+    /// Callers open their own descriptors instead of cloning these: a cloned
+    /// descriptor shares the open file description, so a cache-retention flag
+    /// set on it would leak into the pager's own reads. That leak is silent and
+    /// asymmetric — the pager would lose its second-level cache and re-fault
+    /// gigabytes while the materializer believed it had isolated the flag
+    /// (issue #1120). Listing paths keeps the ownership decision at the call
+    /// site, where the retention policy is already named.
+    pub(crate) fn resident_expert_source_file_paths(&self) -> Vec<PathBuf> {
         self.resident_expert_source_files
             .iter()
-            .map(|(source_file_path, source_file)| {
-                source_file
-                    .try_clone()
-                    .map(|cloned_source_file| (source_file_path.clone(), cloned_source_file))
-                    .map_err(|source| ExpertPagingError::ResidentSourceClone {
-                        source_file: source_file_path.clone(),
-                        source,
-                    })
-            })
+            .map(|(source_file_path, _source_file)| source_file_path.clone())
             .collect()
     }
 

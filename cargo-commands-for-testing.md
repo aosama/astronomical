@@ -1,0 +1,106 @@
+# Cargo Commands for Testing
+
+Concise catalog of the cargo commands that run this repository's Rust test
+surface. Cargo commands are the interface, and every entry explains what it
+runs and why it exists. Real-model journeys are invoked directly with
+`--test-threads=1`; each test owns its timeout and cancellation/cleanup path.
+
+## Hermetic and REST lanes (CPU only, safe to parallelize)
+
+- `cargo test-hermetic` — runs every package's `hermetic_tests` binary. The
+  fast, machine-independent verification lane; safe to run on any host.
+- `cargo test-rest-api` — runs the REST contract and supervisor
+  `rest_api_tests` binaries, exercising the public HTTP surface in-process.
+- `cargo test-hermetic-and-rest` — both lanes together. This is the
+  pre-commit verification gate alongside `cargo fmt --all -- --check`.
+
+## Real-model acceptance journeys (Apple-Silicon host, serial only)
+
+All commands below load large artifacts into wired GPU memory. They are
+`#[ignore]`d, use Rust's `#[serial]` test annotation, and must run with
+`--test-threads=1`. SSD-paging journeys have a 60-second timeout inside each
+test; do not wrap them in a longer external timeout or run them concurrently.
+
+### Memory-management acceptance (SSD paging journeys)
+
+- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance -- --ignored --nocapture --test-threads=1`
+  — the full memory-management journey suite: SSD-paged decode expert reuse,
+  expert eviction, complete-residency control, prefill memory progress,
+  reverse model swap, and the paging memory-shape experiment.
+- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
+  — the paged-MoE follow-up admission regression journey: a long first turn
+  teaches the RAM budget chunk-shaped activation evidence, and the follow-up
+  turn in the same conversation must be admitted, never rejected with
+  `generation context exceeds available GPU wired memory`.
+- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling -- --ignored --nocapture --exact --test-threads=1`
+  — the paging memory-shape experiment (default 32 GB cell): samples the
+  memory timeline during a 5,000-token Romeo-and-Juliet prefill plus 500
+  decode tokens, prints the full performance-attribution segment tables, and
+  preserves evidence under `target/acceptance-evidence/`. Environment cell
+  knobs: `PAGING_EXPERIMENT_MLX_MEMORY_GB` (ceiling), `PAGING_EXPERIMENT_SSD_STREAMING_CHUNK_TOKENS`,
+  `PAGING_EXPERIMENT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL`,
+  `PAGING_EXPERIMENT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL`, and
+  `ASTRONOMICAL_POSITIONAL_READ_PARALLELISM` (bounded-read pool size).
+
+### Memory-ceiling sweep cells (issue #1120 evidence lane)
+
+One command per ceiling cell; run each as its own process (MLX memory limits
+are process-global). Each cell has a 60-second test timeout with a 45-second
+serving budget, appends one `memory_ceiling_sweep` record with its `memory_cell`
+evidence to `tests/performance_throughput/throughput-history.jsonl`, and fails
+when the serving budget is exhausted so partial evidence remains available.
+Set `MEMORY_SWEEP_CELL_ORDER` to the cell's position in your sweep so records
+carry it; the recommended protocol brackets the sweep with the 32 GB cell
+first and last and interleaves the rest so page-cache warmth cannot masquerade
+as a ceiling effect.
+
+- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
+- The same command with `..._28gb_...`, `..._32gb_...`, `..._35gb_...`,
+  `..._38gb_...`, and `..._40gb_...` runs the remaining cells. Partial rates
+  and load/generation I/O evidence are recorded.
+
+### Serving throughput (production-faithful rates)
+
+- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture`
+  — resident-model text throughput: ~10,500-token Romeo-and-Juliet input,
+  1,000-token output, persistent prompt cache disabled, server-attributed
+  rates appended to the durable history log.
+- The same command with `should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput`
+  runs the vision variant.
+
+### Model-serving installed-artifact journeys
+
+- `cargo test -p astronomical-model-serving --features direct-mlx --test serving_acceptance_tests <journey_filter> -- --ignored --test-threads=1`
+  — the installed-artifact acceptance binaries (for example the Qwen-Image-2.1
+  journeys gated on `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY`).
+
+### Inference-worker serving acceptance (dense-model journeys)
+
+- `cargo test -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider -- --ignored --nocapture --exact --test-threads=1`
+  — the small dense Qwen3.5 variant of the follow-up admission regression: a
+  wider SSD-streaming chunk is configured while the dense model never pages,
+  so the resident mode's own operation scope must govern the activation
+  reserve and both conversation turns must complete.
+
+### Prompt-cache acceptance journeys (resident sparse MoE role)
+
+- `cargo test -p astronomical-model-serving --features direct-mlx --test prompt_cache_acceptance_tests -- --ignored --nocapture --test-threads=1`
+  — the whole prompt-cache acceptance surface (cache disabled, cache-miss
+  memory, restore peak, parity, block reporting, partial tail reuse, startup
+  cleanup attribution, and the three vision journeys). Every one of these
+  journeys runs the resident sparse MoE role (`resident_sparse_moe`) because
+  they measure cache behaviour, not expert paging; the whole binary takes about
+  three minutes. The one exception is the interaction matrix journey, which
+  fails closed unless a cell is selected.
+- `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL=<cell> cargo test -p astronomical-model-serving --features direct-mlx --test prompt_cache_acceptance_tests prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell -- --ignored --nocapture --exact --test-threads=1`
+  — runs one storage-transition cell; the cells are `fixed-live-reuse`,
+  `fixed-worker-restart`, and `fixed-deleted-while-live`. Run all three.
+- `ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS=4096 cargo test ... prompt_cache_acceptance::engine_prompt_cache::should_restore_exact_cache_parity_for_one_selected_large_prefill_size -- --ignored --nocapture --exact --test-threads=1`
+  — the same parity journey at the wider chunk; the cell accepts only 2048 or
+  4096 and defaults to 2048.
+
+## Building test binaries without running them
+
+- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance --no-run`
+  — compiles the memory acceptance binary and the production worker binary it
+  spawns; useful before iterating on one journey.

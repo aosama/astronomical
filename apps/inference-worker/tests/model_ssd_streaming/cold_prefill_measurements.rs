@@ -15,15 +15,16 @@ use astronomical_supervisor::{
     ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
 };
 use serde_json::json;
+use serial_test::serial;
 use tokio::time::{Instant, interval, sleep, timeout};
 
 use crate::performance_measurement::model_process_metrics::{
     find_worker_process_id, measure_worker_physical_footprint,
 };
 
-const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
+const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(60);
 const DOCUMENT_WORD_COUNT: usize = 5_000;
-const FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS: u32 = 8_192;
+const FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
 fn model_id() -> &'static str {
     crate::support::large_sparse_moe_model_id()
@@ -94,24 +95,26 @@ fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() 
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model and benchmarks a 5,000-word summarization request"]
+#[serial]
 async fn should_measure_model_ssd_streaming_summarization_throughput_and_peak_memory() {
     timeout(
         BENCHMARK_TIMEOUT,
         run_cold_prefill_measurement(five_thousand_word_case()),
     )
     .await
-    .expect("the model-artifact measurement must finish within 115 seconds");
+    .expect("the model-artifact measurement must finish within 60 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model and measures cold-cache 50,000-word prefill"]
+#[serial]
 async fn should_measure_model_ssd_streaming_cold_prefill_at_fifty_thousand_words() {
     timeout(
         BENCHMARK_TIMEOUT,
         run_cold_prefill_measurement(fifty_thousand_word_case()),
     )
     .await
-    .expect("the model-artifact cold-cache 50K measurement must finish within 115 seconds");
+    .expect("the model-artifact cold-cache 50K measurement must finish within 60 seconds");
 }
 
 async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCase) {

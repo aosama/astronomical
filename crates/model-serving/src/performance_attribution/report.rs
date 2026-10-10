@@ -462,10 +462,11 @@ fn finish_process_io_evidence(
         .as_ref()
         .map_err(ToString::to_string)
         .and_then(|process_io_start| {
-            super::macos_process_io::sample_current_process_io()
-                .map_err(|sampling_error| sampling_error.to_string())?
-                .delta_since(*process_io_start)
-                .map_err(|delta_error| delta_error.to_string())
+            process_io_delta_between_samples(
+                process_io_start,
+                super::macos_process_io::sample_current_process_io(),
+            )
+            .map_err(|sampling_error| sampling_error.to_string())
         });
     match process_io_delta {
         Ok(process_io_delta) => (
@@ -475,6 +476,21 @@ fn finish_process_io_evidence(
         ),
         Err(unavailability_reason) => (None, None, Some(unavailability_reason)),
     }
+}
+
+/// Computes the attributed process-I/O interval finalized when a report ends,
+/// including a report whose request outcome is cancellation.
+pub fn process_io_delta_between_samples(
+    process_io_start: &super::macos_process_io::MacosProcessIoSnapshot,
+    process_io_end: Result<
+        super::macos_process_io::MacosProcessIoSnapshot,
+        super::macos_process_io::MacosProcessIoError,
+    >,
+) -> Result<
+    super::macos_process_io::MacosProcessIoDelta,
+    super::macos_process_io::MacosProcessIoError,
+> {
+    process_io_end?.delta_since(*process_io_start)
 }
 
 #[cfg(feature = "direct-mlx")]

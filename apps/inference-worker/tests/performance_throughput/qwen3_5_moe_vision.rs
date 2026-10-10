@@ -25,8 +25,7 @@
 //! shared history log. The journey asserts nothing about the measured rates.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU
-//! memory, so it is `#[ignore]`d and not wired into CI. Invoke it through
-//! scripts/run-performance-throughput.sh (invocation only) or directly with
+//! memory, so it is `#[ignore]`d and not wired into CI. Invoke it directly with
 //! `cargo test --release -p astronomical-inference-worker --features
 //! astronomical-inference-worker/performance_throughput --test
 //! performance_throughput_tests -- --ignored --exact`.
@@ -35,6 +34,7 @@ use std::io::Cursor;
 
 use astronomical_ipc_protocol::ChatImageInput;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
+use serial_test::serial;
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
@@ -81,19 +81,18 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// historical record under the "vision" journey kind.
 #[test]
 #[ignore = "loads the resident 35B sparse-MoE model and measures its vision serving throughput over IPC"]
+#[serial]
 fn should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput() {
-    let journey = ThroughputJourney {
-        journey_kind: ThroughputJourneyKind::Vision,
-        warmup_input_prompt: WARMUP_INPUT_INSTRUCTION.to_owned() + "\n\n" + ROMEO_AND_JULIET_SOURCE,
-        warmup_images: vec![solid_color_png(WARMUP_IMAGE_SIDE_PIXELS)],
-        warmup_output_tokens: WARMUP_MAXIMUM_OUTPUT_TOKENS,
-        measured_input_prompt: MEASURED_INPUT_INSTRUCTION.to_owned()
-            + "\n\n"
-            + ROMEO_AND_JULIET_SOURCE,
-        measured_images: vec![solid_color_png(MEASURED_IMAGE_SIDE_PIXELS)],
-        measured_output_tokens: MEASURED_MAXIMUM_OUTPUT_TOKENS,
-        temperature_thousandths: TEMPERATURE_THOUSANDTHS,
-    };
+    let journey = ThroughputJourney::production_default(
+        ThroughputJourneyKind::Vision,
+        WARMUP_INPUT_INSTRUCTION.to_owned() + "\n\n" + ROMEO_AND_JULIET_SOURCE,
+        vec![solid_color_png(WARMUP_IMAGE_SIDE_PIXELS)],
+        WARMUP_MAXIMUM_OUTPUT_TOKENS,
+        MEASURED_INPUT_INSTRUCTION.to_owned() + "\n\n" + ROMEO_AND_JULIET_SOURCE,
+        vec![solid_color_png(MEASURED_IMAGE_SIDE_PIXELS)],
+        MEASURED_MAXIMUM_OUTPUT_TOKENS,
+        TEMPERATURE_THOUSANDTHS,
+    );
     throughput_support::run_journey_with_timeout(support::resident_sparse_moe_model_id(), journey);
 }
 

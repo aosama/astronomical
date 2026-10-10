@@ -76,10 +76,15 @@ impl Qwen3_5EngineState {
                 // learned observation into a reserve several times the
                 // ceiling and rejected every later request (issue #690); the
                 // planned chunk size is the same operation scope `plan()`
-                // already resolves (issue #644).
+                // already resolves (issue #644). The bound follows the
+                // residency mode that will actually run: each mode's forwards
+                // record activation evidence at that mode's own operation
+                // scope, so resolving one mode's promise at the other mode's
+                // scope inflated the reserve by the chunk ratio (measured
+                // 2026-10-10).
                 let planned_prefill_operation_token_count = u64::try_from(
                     self.prompt_processing_chunk_sizer
-                        .maximum_prompt_processing_chunk_size_tokens(),
+                        .prompt_processing_operation_bound_tokens(model.sparse_experts_are_paged()),
                 )
                 .unwrap_or(u64::MAX);
                 let prefill_activation_workspace_bytes =

@@ -30,7 +30,7 @@ const CHUNK_TOKEN_COUNTS: [usize; 2] = [2_048, 4_096];
 /// timed in isolation so a later kernel patch can attribute its gain to a
 /// specific stage instead of guessing from end-to-end wall time.
 #[test]
-#[ignore = "measures MoE gather stages on real GPU kernels; run via scripts/run-bounded-cargo-test.sh"]
+#[ignore = "measures MoE gather stages on real GPU kernels; run directly with one test thread"]
 fn should_measure_moe_gather_stage_costs_at_ornith_shapes() {
     let runtime = runtime_test_support::runtime();
 

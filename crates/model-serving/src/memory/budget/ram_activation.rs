@@ -5,23 +5,38 @@
 //! evidence — never from the prompt or total context length. Sizing it from
 //! the context length multiplied a chunk-shaped observation into a reserve
 //! several times the ceiling and rejected every later request (issue #690).
+//!
+//! Two rules keep this quantity honest, and both were learned from the same
+//! production incident:
+//!
+//! 1. Evidence is only ever transferred between scopes by a MAXIMUM over
+//!     observations already taken at or below the planned scope. Every
+//!     observation already embeds the attended-context factor of the forward
+//!     that produced it, so multiplying one by a token ratio counts that factor
+//!     twice.
+//! 2. The reserve is capped by what the loaded model can coexist with, not by
+//!     the ceiling. Model core bytes are irrevocable, so a reserve larger than
+//!     `ceiling - model_core` can never be granted and only converts a
+//!     reclaimable over-reservation into a permanent rejection.
+//!
+//! The asymmetry behind both rules: UNDER-reserving for a genuinely larger
+//! forward is recoverable (typed allocation failure, exact reclamation, retry),
+//! while an over-reserve has no recovery path and starves every later request
+//! until the model reloads and the learned evidence is forgotten.
 
 use crate::memory::MemoryPhase;
-use crate::memory::budget::ram::{
-    CONTEXT_TOKEN_BUCKET_WIDTH, MlxRamBudget, context_token_bucket,
-    scale_bytes_proportionally_to_token_count,
-};
+use crate::memory::budget::ram::{MlxRamBudget, context_token_bucket};
 use crate::memory::reclamation;
 
 impl MlxRamBudget {
     /// Activation headroom for one planned operation.
     ///
     /// Prefill resolves the learned evidence for the planned operation size
-    /// (highest at-or-below bucket, proportionally projected beyond the highest
-    /// measured bucket) so one large request's workspace does not size every
-    /// later promise (issue #623 follow-up). The static three-layer floor still
-    /// bounds every prefill promise. Decode evidence stays a scalar high-water:
-    /// one-token writes are activation-cheap and phase-independent.
+    /// (the highest measured observation at or below the operation's bucket)
+    /// so one large request's workspace does not size every later promise
+    /// (issue #623 follow-up). The static three-layer floor still bounds every
+    /// prefill promise. Decode evidence stays a scalar high-water: one-token
+    /// writes are activation-cheap and phase-independent.
     ///
     /// The token count is the **operation's own size** (one forward's token
     /// count), never the prompt or total context length. A chunked prefill's
@@ -30,13 +45,18 @@ impl MlxRamBudget {
     /// times the ceiling (issue #690).
     #[must_use]
     pub fn activation_headroom_bytes(&self, phase: MemoryPhase, operation_token_count: u64) -> u64 {
-        // A reserve above the ceiling can never be admitted, so a projection
-        // beyond it is meaningless paper. Cap learned evidence at the ceiling:
-        // measured observations keep their pinned dominance over the static
-        // floor, but no projection — measured or scaled — may manufacture a
-        // reserve the ceiling could never grant (issue #690).
+        // A reserve the loaded model can never coexist with is paper by
+        // construction: model core bytes cannot be evicted, so activation
+        // above ceiling minus model core projects every nonzero live memory
+        // above the ceiling and turns admission into a permanent rejection
+        // instead of the reclaim path. Measured observations keep their pinned
+        // dominance over the static floor within that coexistence bound
+        // (issue #690; measured with a ceiling-equal cap, 2026-10-10).
         self.phase_activation_headroom_bytes(phase, operation_token_count)
-            .min(self.mlx_active_memory_ceiling_bytes())
+            .min(
+                self.mlx_active_memory_ceiling_bytes()
+                    .saturating_sub(self.model_geometry.model_core_payload_bytes),
+            )
     }
 
     fn phase_activation_headroom_bytes(
@@ -85,44 +105,22 @@ impl MlxRamBudget {
 
     /// Learned prefill activation evidence resolved for the planned operation.
     ///
-    /// Within the measured span the highest at-or-bucket observation wins
-    /// (activation grows with the attended context, so a smaller observation
-    /// must not override a larger known lower bucket). Beyond the highest
-    /// measured token count the highest evidence scales proportionally by
-    /// token count, mirroring the context-window reserve's projection rule.
-    /// The token count is the planned operation's own size, never the prompt
-    /// or total context length (issue #690).
+    /// The promise is the highest measured observation at or below the planned
+    /// operation's token bucket. Beyond the measured span the static
+    /// three-layer floor governs until a forward at that scope completes:
+    /// scaling a smaller-scope observation by a token-count ratio
+    /// double-counts the attended-context factor every observation already
+    /// embeds, and the manufactured paper reserve reached the whole ceiling and
+    /// rejected every later request (measured 2026-10-10). Under-reservation
+    /// for a genuinely larger single forward is recoverable through the typed
+    /// allocation-failure rollback, exact reclamation, and retry; an inflated
+    /// reserve has no recovery path.
+    ///
+    /// The range is INCLUSIVE of the planned bucket on purpose. Activation
+    /// grows with attended context, so a smaller observation from a lower
+    /// bucket must never override a larger known one from a bucket at or below
+    /// the plan — that ordering is the issue #623 lesson.
     fn learned_prefill_activation_headroom_bytes(&self, operation_token_count: u64) -> u64 {
-        let Some(&highest_bucket_high_water_bytes) = self
-            .prefill_activation_high_water_by_token_bucket
-            .values()
-            .last()
-        else {
-            return 0;
-        };
-        let highest_measured_bucket = *self
-            .prefill_activation_high_water_by_token_bucket
-            .keys()
-            .next_back()
-            .expect("the map is nonempty above");
-        let highest_measured_token_count =
-            highest_measured_bucket.saturating_add(1) * CONTEXT_TOKEN_BUCKET_WIDTH;
-        if operation_token_count > highest_measured_token_count {
-            // Proportional projection beyond measured evidence; the ceiling
-            // division keeps the projection conservative.
-            let scaled_high_water_bytes = scale_bytes_proportionally_to_token_count(
-                highest_bucket_high_water_bytes,
-                highest_measured_token_count,
-                operation_token_count,
-            );
-            let at_or_below_high_water_bytes = self
-                .prefill_activation_high_water_by_token_bucket
-                .range(..=context_token_bucket(operation_token_count))
-                .map(|(_, measured_bytes)| *measured_bytes)
-                .max()
-                .unwrap_or(0);
-            return at_or_below_high_water_bytes.max(scaled_high_water_bytes);
-        }
         self.prefill_activation_high_water_by_token_bucket
             .range(..=context_token_bucket(operation_token_count))
             .map(|(_, measured_bytes)| *measured_bytes)

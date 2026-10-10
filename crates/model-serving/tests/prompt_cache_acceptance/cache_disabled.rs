@@ -20,7 +20,7 @@ async fn should_generate_without_prompt_cache_storage_contract_work_when_cache_i
 
 async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");

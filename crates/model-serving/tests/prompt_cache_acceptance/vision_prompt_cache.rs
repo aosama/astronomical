@@ -13,14 +13,14 @@ use astronomical_model_serving::{
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 use tokio::time::{Instant, sleep, timeout};
 
-const VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS: u32 = 8_192;
+const VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 const VISUAL_ACCEPTANCE_MINIMUM_PROMPT_TOKENS: usize = 8_256;
 const VISUAL_ACCEPTANCE_SAMPLING_SEED: u64 = 9_100;
 const VISUAL_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
 #[ignore = "loads Ornith and proves checkpoint-aware visual prefill with prompt-cache restore"]
-async fn should_preserve_visual_prefill_output_across_an_8192_token_cache_restore() {
+async fn should_preserve_visual_prefill_output_across_a_full_prefill_chunk_cache_restore() {
     timeout(
         VISUAL_ACCEPTANCE_TIMEOUT,
         run_visual_prompt_cache_acceptance(false),
@@ -75,12 +75,12 @@ async fn run_visual_prompt_cache_acceptance(force_prefill_retry: bool) {
         assert_eq!(
             cold_prefill_chunk_token_counts.first().copied(),
             Some(VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS / 2),
-            "the forced 8192-token rejection must retry from the restored checkpoint at half size"
+            "the forced full-chunk rejection must retry from the restored checkpoint at half size"
         );
     } else {
         assert!(
             cold_prefill_chunk_token_counts.contains(&VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS),
-            "the visual request must complete one 8192-token forward"
+            "the visual request must complete one full prefill chunk forward"
         );
     }
     wait_for_visual_prompt_cache_block(&qwen3_5_engine).await;
@@ -124,6 +124,7 @@ async fn run_appended_visual_prompt_cache_acceptance() {
         .expect("the loaded engine should own a prompt cache");
 
     let causal_prefix_request = representative_visual_request(&tokenizer, RequestId::new(9_201));
+    let causal_prefix_token_count = causal_prefix_request.input_token_ids().len();
     qwen3_5_engine
         .start_generation(causal_prefix_request)
         .await
@@ -137,9 +138,19 @@ async fn run_appended_visual_prompt_cache_acceptance() {
         .start_generation(restored_appended_request)
         .await
         .expect("the restored appended-image request should start");
+    // The appended request may reuse every complete published block of the
+    // causal prefix and nothing past the second image boundary. Comparing
+    // against the causal prefix length rather than one block keeps that intent
+    // true as the block size changes: a prompt that is an exact multiple of the
+    // block size keeps its last block for a forward pass
+    // (see persistent_cache::prefix_lookup).
+    let reusable_causal_prefix_token_count = causal_prefix_token_count
+        / VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS as usize
+        * VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS as usize;
     assert_eq!(
-        restored_generation_start.cached_token_count(),
-        VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS
+        restored_generation_start.cached_token_count() as usize,
+        reusable_causal_prefix_token_count,
+        "the restored appended-image request must reuse exactly the complete published blocks of the causal prefix"
     );
     let (restored_appended_token_id, _) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_202)).await;
@@ -153,7 +164,7 @@ async fn run_appended_visual_prompt_cache_acceptance() {
 async fn load_visual_acceptance_engine(
     prompt_cache_directory: &Path,
 ) -> (Qwen3_5Engine, Qwen3_5Tokenizer) {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate for visual cache acceptance");
@@ -171,7 +182,13 @@ async fn load_visual_acceptance_engine(
         Some(PersistentPromptCacheDiskStoreConfig::new(
             prompt_cache_directory.to_path_buf(),
             prompt_cache_directory.to_path_buf(),
-            10_000_000_000,
+            // The journey shares the configured global cache quota with every
+            // other prompt-cache journey. A literal quota smaller than the
+            // full-context chain is not a tighter journey: at 2,048-token
+            // blocks this model needs a 13,611,687,296-byte chain, so any
+            // smaller literal fails contract resolution at engine load before
+            // the journey writes a single block.
+            crate::common::configured_model_artifact_prompt_cache_maximum_size_bytes(),
         )),
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS,
@@ -240,7 +257,7 @@ fn representative_visual_request_with_optional_later_image(
             .prepare_chat(
                 &ChatGenerationCommand {
                     request_id,
-                    model: crate::common::large_sparse_moe_model_id().to_owned(),
+                    model: crate::common::resident_sparse_moe_model_id().to_owned(),
                     messages,
                     tools: Vec::new(),
                     tool_choice: ChatToolChoice::None,
@@ -312,7 +329,7 @@ async fn wait_for_visual_prompt_cache_block(qwen3_5_engine: &Qwen3_5Engine) {
         }
         assert!(
             wait_started_at.elapsed() < Duration::from_secs(10),
-            "the visual acceptance did not publish its 8192-token prompt-cache block"
+            "the visual acceptance did not publish its first prompt-cache block"
         );
         eprintln!(
             "[visual-prompt-cache-acceptance] status=waiting-for-cache published_blocks={persistent_prompt_cache_sequence_state_block_count}"

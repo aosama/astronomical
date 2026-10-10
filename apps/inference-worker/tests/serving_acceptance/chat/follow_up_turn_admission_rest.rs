@@ -9,8 +9,11 @@
 //! length. This journey replays that user journey through the public Chat
 //! Completions TCP surface and requires both turns to complete.
 
-use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
+use astronomical_model_serving::Qwen3_5ArtifactValidator;
 use serde_json::json;
+use serial_test::serial;
+use std::fs;
+use std::path::Path;
 
 use super::openai_rest::{
     E2E_TIMEOUT, launch_serving_rest_server_for_model, post_chat_completion,
@@ -33,17 +36,18 @@ fn long_romeo_and_juliet_prompt() -> String {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST surface and smallest configured Qwen3.5 model"]
+#[serial]
 async fn should_admit_the_follow_up_turn_after_a_long_successful_prefill() {
     tokio::time::timeout(E2E_TIMEOUT, async {
         let selected_model = small_dense_model::configured_deployment_litmus_model();
-        let validated_artifact = Qwen3_5ArtifactValidator::new()
+        // Validating up front turns a broken artifact into a named journey
+        // failure instead of an opaque admission rejection inside the worker.
+        Qwen3_5ArtifactValidator::new()
             .validate(
                 &selected_model.model_directory,
                 u32::from(MAXIMUM_OUTPUT_TOKEN_COUNT),
             )
             .expect("the smallest configured Qwen3.5 artifact should validate");
-        let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-            .expect("the smallest configured Qwen3.5 tokenizer should load");
         let isolated_worker_home = tempfile::tempdir()
             .expect("the follow-up-turn journey should create an isolated worker home");
         write_thinking_budget_acceptance_config(
@@ -135,7 +139,6 @@ async fn should_admit_the_follow_up_turn_after_a_long_successful_prefill() {
             !(follow_up_text.trim().is_empty() && follow_up_reasoning.trim().is_empty()),
             "the follow-up turn must produce completion output"
         );
-        let _ = tokenizer;
         eprintln!(
             "[follow-up-turn-admission] status=success follow_up_characters={}",
             follow_up_text.len() + follow_up_reasoning.len()
@@ -143,4 +146,133 @@ async fn should_admit_the_follow_up_turn_after_a_long_successful_prefill() {
     })
     .await
     .expect("the follow-up-turn admission journey must finish within 115 seconds");
+}
+
+/// The smaller-variant companion of the paged-MoE regression journey: a dense
+/// model never pages experts, so the admission operation bound must resolve to
+/// the resident chunk even when a wider SSD-streaming chunk is configured.
+/// The pre-fix code resolved the resident mode's promise at the larger paged
+/// scope and inflated the reserve by the chunk ratio (measured 2026-10-10 on
+/// the paged artifact). Dense models prove the mode-bound selection without
+/// the multi-gigabyte MoE fixture.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "launches the production REST surface and smallest configured Qwen3.5 model with a wider SSD-streaming chunk configured"]
+#[serial]
+async fn should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider() {
+    tokio::time::timeout(E2E_TIMEOUT, async {
+        let selected_model = small_dense_model::configured_deployment_litmus_model();
+        // Validating up front turns a broken artifact into a named journey
+        // failure instead of an opaque admission rejection inside the worker.
+        Qwen3_5ArtifactValidator::new()
+            .validate(
+                &selected_model.model_directory,
+                u32::from(MAXIMUM_OUTPUT_TOKEN_COUNT),
+            )
+            .expect("the smallest configured Qwen3.5 artifact should validate");
+        let isolated_worker_home = tempfile::tempdir()
+            .expect("the follow-up-turn journey should create an isolated worker home");
+        write_split_chunk_follow_up_admission_config(
+            isolated_worker_home.path(),
+            &selected_model.model_id,
+            &selected_model.model_directory,
+            MAXIMUM_OUTPUT_TOKEN_COUNT,
+        );
+        let performance_log_directory = tempfile::tempdir()
+            .expect("the follow-up-turn journey should create a performance-log directory");
+        let rest_server = launch_serving_rest_server_for_model(
+            &selected_model.model_id,
+            selected_model.model_directory,
+            Some(isolated_worker_home.path()),
+            Some(performance_log_directory.path()),
+        )
+        .await;
+
+        // Turn one: the multi-chunk prefill that teaches the budget its
+        // chunk-shaped activation evidence at the resident operation scope.
+        let first_turn_prompt = long_romeo_and_juliet_prompt();
+        let first_turn_response = post_chat_completion(
+            rest_server.server_address,
+            json!({
+                "model": selected_model.model_id,
+                "messages": [{"role": "user", "content": first_turn_prompt}],
+                "max_tokens": 512,
+                "stream": false,
+            })
+            .to_string(),
+        )
+        .await;
+        assert!(
+            first_turn_response.starts_with("HTTP/1.1 200 OK"),
+            "the first long turn must be admitted with a wider SSD-streaming chunk configured: {}",
+            first_turn_response
+        );
+
+        // Turn two: the same-conversation follow-up whose total context
+        // exceeds turn one's, the shape that the pre-fix admission inflated.
+        let follow_up_response = post_chat_completion(
+            rest_server.server_address,
+            json!({
+                "model": selected_model.model_id,
+                "messages": [
+                    {"role": "user", "content": first_turn_prompt},
+                    {"role": "assistant", "content": "Understood, I have the excerpt in mind."},
+                    {"role": "user", "content": "In one sentence: who wrote the excerpt and what is it about?"}
+                ],
+                "max_tokens": 512,
+                "stream": false,
+            })
+            .to_string(),
+        )
+        .await;
+        stop_serving_rest_server(rest_server).await;
+        assert!(
+            follow_up_response.starts_with("HTTP/1.1 200 OK"),
+            "the follow-up turn must be admitted when the resident mode's own operation \
+             scope governs the activation reserve: {}",
+            follow_up_response
+        );
+        assert!(
+            !follow_up_response.contains("generation context exceeds available GPU wired memory"),
+            "the poisoned-reserve rejection must never surface on the follow-up turn"
+        );
+    })
+    .await
+    .expect("the split-chunk follow-up-turn admission journey must finish within 115 seconds");
+}
+
+/// Writes the acceptance configuration with a wider SSD-streaming chunk so the
+/// resident mode's admission bound is provably decoupled from the paged scope.
+fn write_split_chunk_follow_up_admission_config(
+    isolated_worker_home: &Path,
+    model_id: &str,
+    model_directory: &Path,
+    maximum_output_tokens: u16,
+) {
+    let configuration_directory = isolated_worker_home.join(".astronomical-dev");
+    fs::create_dir(&configuration_directory)
+        .expect("the isolated Astronomical configuration directory should be created");
+    let configuration_document = json!({
+        "$schema": "./astronomical-config.schema.json",
+        "schema_version": 1,
+        "runtime": { "model_directories": [model_directory] },
+        "prompt_cache": { "enabled": false, "maximum_size_gb": 50 },
+        "chunking": {
+            "fixed_prompt_processing_chunk_size_tokens": 2_048,
+            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 4_096,
+        },
+        "models": {
+            (model_id): {
+                "generation_defaults": {
+                    "maximum_output_tokens": maximum_output_tokens,
+                },
+            },
+        },
+        "diagnostics": { "performance_attribution_enabled": true },
+    });
+    fs::write(
+        configuration_directory.join("config.json"),
+        serde_json::to_vec_pretty(&configuration_document)
+            .expect("the split-chunk acceptance configuration should serialize"),
+    )
+    .expect("the split-chunk acceptance configuration should be written");
 }

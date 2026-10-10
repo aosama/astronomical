@@ -200,7 +200,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_decode_generated_tokens_into_separate_reasoning_and_text_events() {
     let tokenizer = load_tokenizer();
-    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false, None)
+    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false)
         .expect("a request without tools should create bounded output state");
     let mut output_events = Vec::new();
 
@@ -259,7 +259,7 @@ fn should_decode_generated_tokens_into_separate_reasoning_and_text_events() {
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_flush_pending_byte_fallback_text_when_request_output_finishes() {
     let tokenizer = load_tokenizer();
-    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false, None)
+    let mut request_output = Qwen3_5RequestOutput::new(&tokenizer, &[], false)
         .expect("a request without tools should create bounded output state");
 
     // Byte-fallback token id 126 is the '~' character in the Qwen3.5 family.

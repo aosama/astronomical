@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::Qwen3_5ArtifactValidator;
 use astronomical_runtime_integration::MlxMemoryLimits;
+use serial_test::serial;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::support::performance_attribution::{
@@ -20,12 +21,13 @@ const PROMPT_TOKEN_COUNT: usize = 4_096;
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 const OUTPUT_TOKEN_COUNT: u16 = 1;
 const REQUEST_ID: RequestId = RequestId::new(96_204);
-const PRODUCT_PERFORMANCE_BUDGET: Duration = Duration::from_secs(60);
+const PRODUCT_PERFORMANCE_BUDGET: Duration = Duration::from_secs(30);
 
 #[tokio::test]
 #[ignore = "loads the large sparse MoE e2e fixture under 20 GB and proves two fixed 2048-token prefill chunks finish under 60 seconds without whole-forward replay"]
+#[serial]
 async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_replay() {
-    timeout(Duration::from_secs(120), async {
+    timeout(Duration::from_secs(60), async {
         crate::serving_acceptance::residency::support::initialize_automatic_residency_tracing();
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let model_directory =
@@ -119,7 +121,7 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
         eprintln!("[paged-prefill-no-replay 3/3] status=success");
     })
     .await
-    .expect("the paged-prefill no-replay acceptance must finish within 120 seconds");
+    .expect("the paged-prefill no-replay acceptance must finish within 60 seconds");
 }
 
 fn operation_occurrence_count(report: &serde_json::Value, operation_identifier: &str) -> u64 {

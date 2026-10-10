@@ -15,6 +15,7 @@ use std::{
 
 use futures_util::StreamExt;
 use serde_json::json;
+use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
@@ -32,7 +33,7 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 64;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const REQUEST_MUST_BECOME_ACTIVE_WITHIN: Duration = Duration::from_secs(20);
-const JOURNEY_DEADLINE: Duration = Duration::from_secs(115);
+const JOURNEY_DEADLINE: Duration = Duration::from_secs(60);
 // Floor against the 0.00 GB generate failure. Not an exact layer-count golden master.
 const MINIMUM_GENERATION_EXPERT_PAYLOAD_BYTES: u64 = 1_000_000_000;
 const ROMEO_AND_JULIET_SOURCE: &str =
@@ -40,17 +41,19 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept leftover complete-layer seating after a memory squeeze"]
+#[serial]
 async fn should_keep_leftover_complete_expert_layers_in_ram_during_squeezed_generation() {
     timeout(
         JOURNEY_DEADLINE,
         run_leftover_complete_layer_seating_rest_journey(LEFTOVER_SEATING_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the leftover complete-layer seating REST journey must finish within 115 seconds");
+    .expect("the leftover complete-layer seating SSD journey must finish within 60 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches Ornith-1.5-35B-A3B-OptiQ-4bit under a 20 GB ceiling and proves decode keeps leftover experts"]
+#[serial]
 async fn should_keep_decode_experts_for_ornith_4bit_under_a_20gb_ceiling() {
     timeout(
         JOURNEY_DEADLINE,
@@ -59,7 +62,7 @@ async fn should_keep_decode_experts_for_ornith_4bit_under_a_20gb_ceiling() {
         ),
     )
     .await
-    .expect("the Ornith 4-bit 20 GB decode-retention journey must finish within 115 seconds");
+    .expect("the Ornith 4-bit 20 GB SSD decode-retention journey must finish within 60 seconds");
 }
 
 async fn run_leftover_complete_layer_seating_rest_journey(maximum_mlx_memory_bytes: u64) {

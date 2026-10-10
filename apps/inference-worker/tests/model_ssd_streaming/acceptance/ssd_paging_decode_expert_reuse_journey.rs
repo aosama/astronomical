@@ -32,11 +32,13 @@ mod support;
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
+use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
-    JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
+    SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server,
+    stop_real_model_rest_server,
 };
 
 fn model_id() -> &'static str {
@@ -57,13 +59,14 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept expert-memory management behavior"]
+#[serial]
 async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memory_ceiling() {
     timeout(
-        JOURNEY_TIMEOUT,
+        SSD_JOURNEY_TIMEOUT,
         run_ssd_paging_decode_expert_reuse_journey(),
     )
     .await
-    .expect("the progressive expert-memory REST journey must finish within 115 seconds");
+    .expect("the progressive expert-memory SSD journey must finish within 60 seconds");
 }
 
 async fn run_ssd_paging_decode_expert_reuse_journey() {
@@ -472,7 +475,7 @@ struct ProgressiveExpertMemoryEvidence {
 async fn observe_ssd_paging_decode_expert_reuse(
     server_address: std::net::SocketAddr,
 ) -> ProgressiveExpertMemoryEvidence {
-    let deadline = Instant::now() + JOURNEY_TIMEOUT;
+    let deadline = Instant::now() + SSD_JOURNEY_TIMEOUT;
     let mut observed_prompt_processing = false;
     let mut retained_expert_payload_bytes = Vec::new();
     let mut generation_expert_payload_bytes = Vec::new();

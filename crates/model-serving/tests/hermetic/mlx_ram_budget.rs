@@ -314,7 +314,7 @@ fn should_resolve_the_prefill_activation_promise_from_the_planned_operation_buck
 }
 
 #[test]
-fn should_project_the_prefill_activation_promise_beyond_the_highest_measured_operation() {
+fn should_not_inflate_the_prefill_activation_promise_beyond_measured_evidence() {
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -325,14 +325,19 @@ fn should_project_the_prefill_activation_promise_beyond_the_highest_measured_ope
         exact_temporary_workspace_bytes: 0,
     });
 
-    // Beyond the highest measured operation token count (5,120 for bucket 4)
-    // the highest evidence scales proportionally: 700 MB × 8,192 / 5,120 =
-    // 1,120 MB. This is the honest linear prior for operations larger than
-    // anything measured; chunked prefill never reaches it because every chunk
-    // is bounded by the configured chunk size.
+    // An operation larger than anything measured must never multiply the
+    // measured observation by a token-count ratio. Every observation embeds
+    // the attended-context factor of the forward that produced it, so scaling
+    // it again by the operation size double-counted context growth and
+    // manufactured ceiling-sized paper reserves that rejected every later
+    // request (measured 2026-10-10: a ~9.9 GB chunk observation scaled 4x,
+    // capped at the whole ceiling, and every follow-up turn rejected until
+    // the model reloaded). The promise resolves from measured evidence at or
+    // below the planned operation scope and stays there; beyond the measured
+    // span the static floor governs until a forward at that scope completes.
     let plan_for_8192 = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
 
-    assert_eq!(plan_for_8192.activation_headroom_bytes, 1_120_000_000);
+    assert_eq!(plan_for_8192.activation_headroom_bytes, 700_000_000);
 }
 
 #[test]
@@ -452,12 +457,15 @@ fn should_keep_the_admission_workspace_activation_reserve_independent_of_the_pro
     );
 }
 
-// Issue #690: no projection — measured or scaled — may manufacture a reserve
-// the ceiling could never grant. Learned evidence keeps its pinned dominance
-// over the static floor, but the activation reserve is structurally capped at
-// the active-memory ceiling.
+// A reserve the loaded model can never coexist with is paper by construction:
+// model core bytes cannot be evicted, so activation above ceiling minus model
+// core would project every nonzero live memory above the ceiling and reject
+// every request instead of reaching the reclaim path (issue #690 family,
+// measured 2026-10-10: the previous ceiling-equal cap turned one poisoned
+// observation into permanent rejections because workspace == ceiling makes
+// any current active memory overflow the projection).
 #[test]
-fn should_cap_the_activation_reserve_at_the_active_memory_ceiling() {
+fn should_cap_the_activation_reserve_below_the_irrevocable_model_core() {
     let ceiling_bytes = 39_000_000_000_u64;
     let mut mlx_ram_budget = MlxRamBudget::new(ceiling_bytes, small_layer_geometry())
         .expect("positive ceiling should construct");
@@ -471,7 +479,10 @@ fn should_cap_the_activation_reserve_at_the_active_memory_ceiling() {
 
     let plan = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
 
-    assert_eq!(plan.activation_headroom_bytes, ceiling_bytes);
+    assert_eq!(
+        plan.activation_headroom_bytes,
+        ceiling_bytes - small_layer_geometry().model_core_payload_bytes
+    );
 }
 
 #[test]

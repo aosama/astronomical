@@ -18,6 +18,7 @@ use std::{
 
 use futures_util::StreamExt;
 use serde_json::json;
+use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
@@ -27,13 +28,14 @@ use crate::support::serving_rest::{
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept decode retention across a repeated cached request"]
+#[serial]
 async fn should_retain_seated_experts_during_a_repeated_cached_request_at_a_25gb_ceiling() {
     tokio::time::timeout(
         JOURNEY_DEADLINE,
         run_repeated_cached_decode_retention_journey(DECODE_RETENTION_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the repeated cached decode-retention journey must finish within 115 seconds");
+    .expect("the repeated cached decode-retention SSD journey must finish within 60 seconds");
 }
 
 /// Runs the identical request twice. The second request restores the cached
@@ -49,13 +51,14 @@ async fn run_repeated_cached_decode_retention_journey(maximum_mlx_memory_bytes: 
 /// and a ceiling that leaves little slack beyond model core plus context.
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept retention across large cached requests"]
+#[serial]
 async fn should_retain_seated_experts_across_large_cached_requests_at_a_25gb_ceiling() {
     tokio::time::timeout(
         JOURNEY_DEADLINE,
         run_large_cached_retention_journey(DECODE_RETENTION_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the large cached retention journey must finish within 115 seconds");
+    .expect("the large cached retention SSD journey must finish within 60 seconds");
 }
 
 async fn run_large_cached_retention_journey(maximum_mlx_memory_bytes: u64) {
@@ -176,19 +179,20 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 64;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const REQUEST_MUST_BECOME_ACTIVE_WITHIN: Duration = Duration::from_secs(20);
-const JOURNEY_DEADLINE: Duration = Duration::from_secs(115);
+const JOURNEY_DEADLINE: Duration = Duration::from_secs(60);
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches Ornith-1.5-35B-A3B-OptiQ-4bit under a 25 GB ceiling and proves live decode keeps its seated experts"]
+#[serial]
 async fn should_retain_seated_experts_during_live_decode_at_a_25gb_ceiling() {
     tokio::time::timeout(
         JOURNEY_DEADLINE,
         run_decode_retention_journey(DECODE_RETENTION_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the 25 GB decode-retention journey must finish within 115 seconds");
+    .expect("the 25 GB decode-retention SSD journey must finish within 60 seconds");
 }
 
 async fn run_decode_retention_journey(maximum_mlx_memory_bytes: u64) {

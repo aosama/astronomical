@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use astronomical_runtime_integration::weights_file_cache_retention;
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
 
 use crate::expert_paging::ExpertWeightPage;
@@ -43,13 +44,29 @@ impl Qwen3_5ResidentExpertWeights {
         let layer_plans = expert_pager.layer_plans();
         let complete_model_payload_bytes = expert_pager.complete_expert_payload_byte_count()?;
         let complete_model_expert_entry_count = expert_pager.complete_expert_entry_count();
-        // Duplicate retained descriptors instead of reopening paths. The pager's
-        // original descriptors remain valid for recovery, while each clone has
-        // an independent lifetime for this promotion attempt.
+        // Fresh descriptors with one-shot cache retention instead of cloning
+        // the pager's: cloning shares the open file description, so the
+        // no-insert flag would disable the pager's second-level cache, while
+        // fresh descriptors leave no ghost copy beside the wired weights
+        // (issue #1120). The pager's originals stay cached and valid for
+        // recovery.
         let mut resident_source_shards = HashMap::new();
-        for (source_file_path, source_file) in expert_pager.clone_resident_expert_source_files()? {
+        for source_file_path in expert_pager.resident_expert_source_file_paths() {
             let resident_source_shard = model.runtime.load_safetensors(
-                source_file,
+                weights_file_cache_retention::open_weights_file(
+                    &source_file_path,
+                    weights_file_cache_retention::WeightsFileCacheRetention::MaterializeOnce,
+                )
+                .map_err(|retention_error| match retention_error {
+                    weights_file_cache_retention::WeightsFileCacheRetentionError::OpenFailed {
+                        source_path,
+                        source,
+                        ..
+                    } => ExpertPagingError::ResidentSourceOpen {
+                        source_file: source_path,
+                        source,
+                    },
+                })?,
                 positional_file_read_metrics.as_ref().map(Arc::clone),
             )?;
             resident_source_shards.insert(source_file_path, resident_source_shard);

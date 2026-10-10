@@ -50,7 +50,6 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
         &chat_generation_command.tools,
         true,
         &[],
-        None,
     )
     .map_err(|source| ExactModelPromptError::operation("chat prompt rendering failed", source))?;
     let mut prepared_prompt_token_ids = tokenizer

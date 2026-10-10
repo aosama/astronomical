@@ -59,10 +59,49 @@ impl Qwen3_5PromptProcessingChunkSizer {
     /// for memory planning is the larger of the two configured sizes (issue
     /// #644: activation reserves are operation-scoped and need the operation
     /// bound, not the prompt length).
+    ///
+    /// This is the SAFE upper bound for a question that has no residency mode,
+    /// such as sizing a buffer that must hold either mode's chunk. It is the
+    /// WRONG input for resolving one mode's activation promise, because a
+    /// reserve sized for the larger chunk charges the smaller chunk's forwards
+    /// for work they never do; use
+    /// [`Self::prompt_processing_operation_bound_tokens`] there.
     #[must_use]
     pub fn maximum_prompt_processing_chunk_size_tokens(&self) -> usize {
         self.fixed_prompt_processing_chunk_size_tokens
             .max(self.ssd_streaming_prompt_processing_chunk_size_tokens)
+    }
+
+    /// The token bound that resolves one residency mode's activation promise.
+    ///
+    /// Each mode's forwards record activation evidence at that mode's own
+    /// operation scope, so the bound must match the mode that will actually
+    /// run. Resolving the resident mode's promise at the paged scope — the
+    /// larger of the two chunks — inflated the reserve by the chunk ratio and
+    /// rejected every later request (measured 2026-10-10).
+    ///
+    /// The mode argument is the decision admission already made for this
+    /// request, not a prediction: evidence recorded under one regime is not
+    /// transferable to the other, because paging itself changes the observed
+    /// activation transient.
+    #[must_use]
+    pub fn prompt_processing_operation_bound_tokens(
+        &self,
+        sparse_experts_are_paged: bool,
+    ) -> usize {
+        self.configured_prompt_processing_chunk_size_tokens(sparse_experts_are_paged)
+    }
+
+    #[must_use]
+    fn configured_prompt_processing_chunk_size_tokens(
+        &self,
+        sparse_experts_are_paged: bool,
+    ) -> usize {
+        if sparse_experts_are_paged {
+            self.ssd_streaming_prompt_processing_chunk_size_tokens
+        } else {
+            self.fixed_prompt_processing_chunk_size_tokens
+        }
     }
 
     #[must_use]
@@ -88,11 +127,8 @@ impl Qwen3_5PromptProcessingChunkSizer {
         sparse_experts_are_paged: bool,
         maximum_executable_chunk_size_tokens: usize,
     ) -> usize {
-        let configured_chunk_size_tokens = if sparse_experts_are_paged {
-            self.ssd_streaming_prompt_processing_chunk_size_tokens
-        } else {
-            self.fixed_prompt_processing_chunk_size_tokens
-        };
+        let configured_chunk_size_tokens =
+            self.configured_prompt_processing_chunk_size_tokens(sparse_experts_are_paged);
         let executable_chunk_size_tokens = configured_chunk_size_tokens
             .min(maximum_executable_chunk_size_tokens)
             .max(1);

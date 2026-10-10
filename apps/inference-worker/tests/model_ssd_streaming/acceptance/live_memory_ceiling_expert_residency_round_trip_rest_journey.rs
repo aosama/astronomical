@@ -16,11 +16,12 @@ use std::{
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
+use serial_test::serial;
 use tokio::time::{Duration, interval, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
-    JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
+    SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
     stop_real_model_rest_server,
 };
 use support::{
@@ -58,19 +59,21 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one production worker and changes its public MLX ceiling twice"]
+#[serial]
 async fn should_serve_one_conversation_across_streaming_resident_and_streaming_memory_limits() {
-    timeout(JOURNEY_TIMEOUT, run_residency_round_trip())
+    timeout(SSD_JOURNEY_TIMEOUT, run_residency_round_trip())
         .await
-        .expect("the live-ceiling expert-residency round trip must finish within 115 seconds");
+        .expect("the live-ceiling expert-residency SSD journey must finish within 60 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "raises the worker ceiling during a long cached streaming conversation and asserts residency reporting consistency (issue #337)"]
+#[serial]
 async fn should_settle_fully_resident_after_raising_the_memory_ceiling_mid_streaming_conversation()
 {
-    timeout(JOURNEY_TIMEOUT, run_mid_streaming_raise_settlement())
+    timeout(SSD_JOURNEY_TIMEOUT, run_mid_streaming_raise_settlement())
         .await
-        .expect("the mid-streaming ceiling raise settlement must finish within 115 seconds");
+        .expect("the mid-streaming SSD ceiling raise settlement must finish within 60 seconds");
 }
 
 async fn run_mid_streaming_raise_settlement() {
@@ -320,7 +323,7 @@ async fn run_residency_round_trip() {
     );
     eprintln!(
         "{LOG_MARKER} phase=server_start status=start initial_ceiling_gb=23 resident_ceiling_gb=38 final_ceiling_gb=26 timeout_seconds={}",
-        JOURNEY_TIMEOUT.as_secs()
+        SSD_JOURNEY_TIMEOUT.as_secs()
     );
     let real_model_rest_server = launch_real_model_rest_server(
         model_id(),

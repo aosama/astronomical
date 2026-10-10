@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use astronomical_runtime_integration::MlxRuntime;
+use astronomical_runtime_integration::weights_file_cache_retention;
 
 use crate::kernel_capability;
 use crate::kernel_capability::CustomMetalKernelFamily;
@@ -87,9 +88,20 @@ impl Qwen3_5Model {
                 let positional_file_read_metrics =
                     performance_attribution.positional_file_read_metrics();
                 for model_shard_file in model_shard_files {
+                    let shard_source_path = model_directory.join(model_shard_file.file_name());
+                    let shard_source_file = model_shard_file.into_file();
+                    // Dense shards materialize once (issue #1120): flagging
+                    // these exclusively owned descriptors keeps their reads
+                    // out of the file cache, while the expert pager's own
+                    // descriptors of the same shards stay cached.
+                    weights_file_cache_retention::apply_weights_file_cache_retention(
+                        &shard_source_file,
+                        &shard_source_path,
+                        weights_file_cache_retention::WeightsFileCacheRetention::MaterializeOnce,
+                    );
                     model_shards.push(
                         runtime.load_safetensors(
-                            model_shard_file.into_file(),
+                            shard_source_file,
                             positional_file_read_metrics
                                 .as_ref()
                                 .map(std::sync::Arc::clone),
