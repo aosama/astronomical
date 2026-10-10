@@ -11,15 +11,15 @@ mod expert_residency_transition;
 #[cfg(feature = "direct-mlx")]
 mod expert_retention_memory_pressure;
 #[cfg(feature = "direct-mlx")]
-mod expert_reuse;
+pub(crate) mod expert_reuse;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod feed_forward_weights;
+pub(crate) use crate::qwen3_5_core::model_math::{
+    feed_forward_weights, output_combination, routing,
+};
 #[cfg(feature = "direct-mlx")]
 mod forward;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;
-#[cfg(feature = "direct-mlx")]
-mod output_combination;
 mod paged_execution;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_resolution;
@@ -35,8 +35,6 @@ mod resident_execution;
 mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod route_observation;
-#[cfg(feature = "direct-mlx")]
-mod routing;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
 

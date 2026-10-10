@@ -80,8 +80,10 @@ fn complete_residency_transient_bytes(
 ) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
     #[cfg(feature = "direct-mlx")]
     {
-        crate::qwen3_5_streaming::maximum_resident_gate_up_fusion_transient_payload_bytes(layer_plans)
-            .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)
+        crate::qwen3_5_streaming::maximum_resident_gate_up_fusion_transient_payload_bytes(
+            layer_plans,
+        )
+        .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)
     }
     #[cfg(not(feature = "direct-mlx"))]
     {

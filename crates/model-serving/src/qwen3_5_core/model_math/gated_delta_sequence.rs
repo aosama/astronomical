@@ -214,15 +214,16 @@ pub(super) fn ops_gated_delta_sequence_loop(
         let token_decays = slice_rank_three_token(runtime, decays, token_index, value_head_count)?;
         let token_update_rates =
             slice_rank_three_token(runtime, update_rates, token_index, value_head_count)?;
-        let (token_output, next_recurrent_state) = super::gated_delta::qwen3_5_gated_delta_step(
-            runtime,
-            &token_queries,
-            &token_keys,
-            &token_values,
-            &token_decays,
-            &token_update_rates,
-            &current_recurrent_state,
-        )?;
+        let (token_output, next_recurrent_state) =
+            super::gated_delta_step::qwen3_5_gated_delta_step(
+                runtime,
+                &token_queries,
+                &token_keys,
+                &token_values,
+                &token_decays,
+                &token_update_rates,
+                &current_recurrent_state,
+            )?;
         token_outputs.push(token_output);
         current_recurrent_state = next_recurrent_state;
     }

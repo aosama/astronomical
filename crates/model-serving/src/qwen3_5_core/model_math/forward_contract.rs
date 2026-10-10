@@ -1,6 +1,7 @@
 use super::error;
-use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
+use super::error::Qwen3_5ExecutionError;
 use crate::DecoderCacheState;
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(crate) fn forward_state_arrays<'state>(
@@ -10,7 +11,7 @@ pub(crate) fn forward_state_arrays<'state>(
     collect_evaluation_arrays(Some(output), request_decoder_state, false)
 }
 
-pub(super) fn decoder_state_arrays(
+pub(crate) fn decoder_state_arrays(
     request_decoder_state: &RequestDecoderStateStack,
 ) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
     collect_evaluation_arrays(None, request_decoder_state, true)
@@ -81,7 +82,7 @@ fn collect_evaluation_arrays<'state>(
     Ok(evaluation_arrays)
 }
 
-pub(super) fn validate_generated_token_forward(
+pub(crate) fn validate_generated_token_forward(
     generated_token: &MlxArray,
     starting_position_tokens: u32,
     layer_model_state_count: usize,

@@ -18,6 +18,7 @@ pub(crate) mod artifacts;
 pub(crate) mod configuration;
 pub(crate) mod decoder;
 pub(crate) mod dense;
+pub(crate) mod model_math;
 pub(crate) mod quantizations;
 pub(crate) mod text;
 pub(crate) mod vision;

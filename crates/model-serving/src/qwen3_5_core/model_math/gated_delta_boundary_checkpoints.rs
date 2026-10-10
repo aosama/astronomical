@@ -334,15 +334,16 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
                 &[1, 1, 1],
             )
             .and_then(|sliced| runtime.squeeze_axis(&sliced, 1))?;
-        let (token_output, next_recurrent_state) = super::gated_delta::qwen3_5_gated_delta_step(
-            runtime,
-            &token_queries,
-            &token_keys,
-            &token_values,
-            &token_decays,
-            &token_update_rates,
-            &current_recurrent_state,
-        )?;
+        let (token_output, next_recurrent_state) =
+            super::gated_delta_step::qwen3_5_gated_delta_step(
+                runtime,
+                &token_queries,
+                &token_keys,
+                &token_values,
+                &token_decays,
+                &token_update_rates,
+                &current_recurrent_state,
+            )?;
         token_outputs.push(token_output);
         current_recurrent_state = next_recurrent_state;
         let completed_token_count = token_index + 1;

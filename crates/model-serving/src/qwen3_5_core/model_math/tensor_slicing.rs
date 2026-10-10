@@ -1,9 +1,9 @@
 use astronomical_runtime_integration::MlxRuntime;
 
-use super::Qwen3_5ExecutionError;
+use super::error::Qwen3_5ExecutionError;
 use astronomical_mlx_c_rust::MlxArray;
 
-pub(super) fn slice_last_dimension(
+pub(crate) fn slice_last_dimension(
     runtime: &MlxRuntime,
     input: &MlxArray,
     final_dimension_start_index: i32,

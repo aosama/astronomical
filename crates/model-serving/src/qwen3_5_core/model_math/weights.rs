@@ -2,17 +2,20 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::qwen3_5_streaming;
+use crate::qwen3_5_core::artifacts::{
+    ValidatedQwen3_5Artifact, qwen3_5_resident_language_tensor_profiles,
+};
+use crate::qwen3_5_core::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::weights_validation;
 use super::{
-    Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact,
     decoder_layer_weights::{
         Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
         Qwen3_5DecoderLayerWeights, Qwen3_5FullAttentionWeights, Qwen3_5LinearAttentionWeights,
     },
-    qwen3_5_resident_language_tensor_profiles,
+    error::Qwen3_5ExecutionError,
+    feed_forward_weights,
 };
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -90,7 +93,7 @@ impl Qwen3_5Weights {
     /// tensors first.
     pub fn bind_from_model_shards(
         qwen3_5_config: &Qwen3_5Config,
-        shard_index: &super::Qwen3_5ShardIndex,
+        shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
         model_shards: Vec<MlxSafetensors>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config);
@@ -263,7 +266,7 @@ fn take_decoder_layer_weights(
     )?;
     let mlp_weights = match qwen3_5_config.feed_forward_architecture() {
         Qwen3_5FeedForwardArchitecture::Dense => Qwen3_5DecoderFeedForwardWeights::Dense(
-            crate::qwen3_5::dense::mlp::bind_qwen3_5_dense_mlp_weights(
+            crate::qwen3_5_core::dense::mlp::bind_qwen3_5_dense_mlp_weights(
                 bound_tensors,
                 qwen3_5_config,
                 &decoder_layer_prefix,
@@ -271,7 +274,7 @@ fn take_decoder_layer_weights(
         ),
         Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(
-                qwen3_5_streaming::bind_qwen3_5_moe_feed_forward_weights(
+                feed_forward_weights::bind_qwen3_5_moe_feed_forward_weights(
                     bound_tensors,
                     qwen3_5_config,
                     &decoder_layer_prefix,

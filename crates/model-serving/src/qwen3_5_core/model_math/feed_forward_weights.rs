@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use astronomical_mlx_c_rust::MlxArray;
 
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5::model::weights;
-use crate::qwen3_5::{Qwen3_5Config, Qwen3_5ExecutionError};
+use super::decoder_layer_weights::Qwen3_5AffineWeights;
+use super::error::Qwen3_5ExecutionError;
+use super::weights;
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
 
 /// Router gate weights that can be affine-quantized or plain bfloat16.
 #[derive(Debug)]
