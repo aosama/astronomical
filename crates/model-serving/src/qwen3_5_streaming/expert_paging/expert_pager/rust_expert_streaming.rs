@@ -13,7 +13,7 @@ use crate::expert_paging::{
     QuantizedExpertPageManifest, build_quantized_expert_page_manifest_from_plan,
     load_quantized_expert_page,
 };
-use crate::qwen3_5_moe::expert_paging::paged_expert_weights;
+use crate::qwen3_5_streaming::expert_paging::paged_expert_weights;
 
 /// Request dimensions needed to attribute one source plan without retaining routes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

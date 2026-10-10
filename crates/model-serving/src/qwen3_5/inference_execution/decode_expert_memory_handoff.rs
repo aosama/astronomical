@@ -32,7 +32,7 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
+use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase, PerformanceOperation};
 
 use super::super::model::Qwen3_5Model;

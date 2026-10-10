@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::qwen3_5::dense::tensor_spec;
-use crate::qwen3_5_moe::artifacts::tensor_spec::{
+use crate::qwen3_5_streaming::artifacts::tensor_spec::{
     append_qwen3_5_moe_feed_forward_tensor_profiles, is_sparse_selected_expert_tensor_name,
 };
 use crate::{TensorDtype, TensorProfile};

@@ -3,7 +3,7 @@
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::expert_paging::expert_pager::{
+use crate::qwen3_5_streaming::expert_paging::expert_pager::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
 };
 use crate::{PerformanceAttribution, PerformanceOperation};

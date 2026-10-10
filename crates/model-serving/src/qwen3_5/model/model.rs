@@ -5,7 +5,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use std::cell::RefCell;
 
 use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
-use crate::qwen3_5_moe::{
+use crate::qwen3_5_streaming::{
     PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
     Qwen3_5ResidentExpertWeights, RetainedExpertCache,
 };
@@ -79,7 +79,7 @@ pub struct Qwen3_5Model {
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation:
-        RefCell<crate::qwen3_5_moe::model::route_observation::RouteObservationCollector>,
+        RefCell<crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector>,
 }
 
 impl Qwen3_5Model {

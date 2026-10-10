@@ -29,7 +29,7 @@ use super::slot_writes::{
 };
 use super::{ExpertSlotTable, RetainedExpertCache};
 use crate::expert_paging::ExpertWeightPage;
-use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
 impl RetainedExpertCache {
     /// Inserts streamed experts into the layer's slot table. The first insert

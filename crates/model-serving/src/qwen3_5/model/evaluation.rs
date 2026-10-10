@@ -1,7 +1,7 @@
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_moe::PagedRouteValidationOutcome;
+use crate::qwen3_5_streaming::PagedRouteValidationOutcome;
 
 use super::{Qwen3_5ExecutionError, Qwen3_5Model, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;

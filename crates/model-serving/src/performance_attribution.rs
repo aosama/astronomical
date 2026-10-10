@@ -16,7 +16,7 @@ mod report;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::qwen3_5_moe::expert_paging::route_observation::ObservedExpertRoute;
+use crate::qwen3_5_streaming::expert_paging::route_observation::ObservedExpertRoute;
 
 #[cfg(feature = "direct-mlx")]
 use std::sync::Arc;

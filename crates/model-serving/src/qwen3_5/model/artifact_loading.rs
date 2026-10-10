@@ -9,8 +9,8 @@ use astronomical_runtime_integration::weights_file_cache_retention;
 
 use crate::kernel_capability;
 use crate::kernel_capability::CustomMetalKernelFamily;
-use crate::qwen3_5_moe;
-use crate::qwen3_5_moe::Qwen3_5ExpertPager;
+use crate::qwen3_5_streaming;
+use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
 use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
 };
@@ -186,14 +186,14 @@ impl Qwen3_5Model {
                     )
                     .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
                     {
-                        Some(qwen3_5_moe::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
+                        Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
                     } else {
                         tracing::info!(
                             "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
                         );
                         None
                     };
-                let retained_experts = RefCell::new(crate::qwen3_5_moe::RetainedExpertCache::new(
+                let retained_experts = RefCell::new(crate::qwen3_5_streaming::RetainedExpertCache::new(
                     expert_pager.layer_count(),
                 ));
                 (
@@ -381,7 +381,7 @@ impl Qwen3_5Model {
             resident_expert_weights: None,
             retained_experts,
             route_observation: RefCell::new(
-                crate::qwen3_5_moe::model::route_observation::RouteObservationCollector::new(),
+                crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(),
             ),
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),
@@ -399,7 +399,7 @@ impl Qwen3_5Model {
             query_normalization_scale_weight,
             key_normalization_scale_weight,
             paged_forward_missing_route_collector:
-                crate::qwen3_5_moe::PagedForwardMissingRouteCollector::default(),
+                crate::qwen3_5_streaming::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
         })
     }

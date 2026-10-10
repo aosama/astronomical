@@ -22,7 +22,7 @@ use crate::qwen3_5::model::adaptive_ram_growth_logging::{
     log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
 };
 use crate::qwen3_5::model::memory_admission;
-use crate::qwen3_5_moe;
+use crate::qwen3_5_streaming;
 use crate::{
     AdaptiveRamGrowthContext, InferenceEngineError, MemoryPhase, PagedExpertReclamationStep,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation,
@@ -379,7 +379,7 @@ impl Qwen3_5EngineState {
                         }
                         PagedExpertReclamationStep::Reclaim { target_bytes } => {
                             let Some(memory_snapshot_after_reclamation) =
-                                qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure(
+                                qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
                                     model,
                                     target_bytes,
                                 )?

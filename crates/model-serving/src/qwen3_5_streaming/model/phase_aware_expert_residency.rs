@@ -1,7 +1,7 @@
 //! Converts Qwen geometry and composed RAM budgets into the pure residency target.
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError;
+use crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError;
 use crate::{
     ExpertLayerGeometry, ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution,
     PerformanceCounter, PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,

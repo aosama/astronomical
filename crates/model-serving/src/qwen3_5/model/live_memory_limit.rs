@@ -7,7 +7,7 @@
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
+use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
     PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes,

@@ -11,7 +11,7 @@ use super::persistent_prompt_cache_startup_logging;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model};
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
+use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {

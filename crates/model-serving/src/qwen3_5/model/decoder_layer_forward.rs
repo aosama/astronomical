@@ -12,7 +12,7 @@
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
-use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
+use crate::qwen3_5_streaming::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::decoder_layer_weights::{

@@ -6,8 +6,8 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::RetainedExpertCache;
-use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
-use crate::qwen3_5_moe::expert_paging::retained_expert_cache::RoutedExpertCoverage;
+use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::expert_paging::retained_expert_cache::RoutedExpertCoverage;
 
 impl RetainedExpertCache {
     /// Writes streamed experts into leftover slots only. Occupied slots stay.

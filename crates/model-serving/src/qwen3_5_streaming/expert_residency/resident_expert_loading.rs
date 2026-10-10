@@ -11,8 +11,8 @@ use crate::expert_paging::{
 };
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::ExpertPagingError;
-use crate::qwen3_5_moe::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::ExpertPagingError;
+use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 
 use super::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,

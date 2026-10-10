@@ -5,7 +5,7 @@
 //! is restored when the leftover ceiling admits it so a fitting model is not left
 //! streaming. Final telemetry then reports that restored ownership.
 
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
+use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
