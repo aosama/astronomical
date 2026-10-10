@@ -54,18 +54,21 @@ carry it; the recommended protocol brackets the sweep with the 32 GB cell
 first and last and interleaves the rest so page-cache warmth cannot masquerade
 as a ceiling effect.
 
-- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::memory_ceiling_sweep::should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
 - The same command with `..._28gb_...`, `..._32gb_...`, `..._35gb_...`,
   `..._38gb_...`, and `..._40gb_...` runs the remaining cells. Partial rates
   and load/generation I/O evidence are recorded.
 
 ### Serving throughput (production-faithful rates)
 
-- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture`
+- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture --exact --test-threads=1`
   — resident-model text throughput: ~10,500-token Romeo-and-Juliet input,
   1,000-token output, persistent prompt cache disabled, server-attributed
-  rates appended to the durable history log.
-- The same command with `should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput`
+  rates appended to the durable history log. The measured journey lives in a
+  nested module, so `--exact` needs the full
+  `performance_throughput::qwen3_5_moe::` module path.
+- The same command with the module path
+  `performance_throughput::qwen3_5_moe_vision::should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput`
   runs the vision variant.
 
 ### Model-serving installed-artifact journeys
