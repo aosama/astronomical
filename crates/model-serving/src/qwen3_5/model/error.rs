@@ -54,7 +54,7 @@ pub enum Qwen3_5ExecutionError {
         description: &'static str,
     },
     #[error("expert paging error: {0}")]
-    ExpertPaging(#[from] crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError),
+    ExpertPaging(#[from] crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError),
     #[error("persistent prompt-cache disk-store error: {0}")]
     PersistentPromptCache(#[from] crate::PersistentPromptCacheDiskStoreError),
     #[error("persistent prompt-cache state bridge error: {0}")]
@@ -71,7 +71,7 @@ impl Qwen3_5ExecutionError {
     #[must_use]
     pub fn active_memory_limit_exceeded_evidence(&self) -> Option<(usize, usize, usize)> {
         if let Self::ExpertPaging(
-            crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
+            crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
                 crate::MlxAllocationAdmissionError::Rejected {
                     active_memory_bytes,
                     pending_allocation_bytes,
@@ -111,7 +111,7 @@ impl Qwen3_5ExecutionError {
         match self {
             Self::Runtime(mlx_runtime_error)
             | Self::ExpertPaging(
-                crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::NativeRuntime(
+                crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError::NativeRuntime(
                     mlx_runtime_error,
                 ),
             ) => Some(mlx_runtime_error),
@@ -139,14 +139,14 @@ impl From<Qwen3_5ExecutionError> for InferenceEngineError {
                 reason: "generation cannot fit under the configured MLX memory ceiling".to_owned(),
             },
             Qwen3_5ExecutionError::ExpertPaging(
-                crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::NativeRuntime(
+                crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError::NativeRuntime(
                     MlxRuntimeError::ActiveMemoryLimitExceeded { .. },
                 ),
             ) => Self::InvalidRequest {
                 reason: "generation cannot fit under the configured MLX memory ceiling".to_owned(),
             },
             Qwen3_5ExecutionError::ExpertPaging(
-                crate::qwen3_5_moe::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
+                crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError::MemoryBudget(
                     memory_budget_error
                     @ crate::MlxAllocationAdmissionError::Rejected {
                         ..

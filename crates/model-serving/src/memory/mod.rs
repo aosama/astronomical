@@ -6,7 +6,7 @@
 //! family code ──measures──▶ memory decides ──decision──▶ family code enacts
 //! ```
 //!
-//! Family modules (`qwen3_5`, `qwen3_5_moe`, `k2_horizon_mova`) measure byte facts from
+//! Family modules (`qwen3_5`, `qwen3_5_streaming`, `k2_horizon_mova`) measure byte facts from
 //! MLX and the artifact, hand them to the modules below, and enact the typed
 //! decisions they receive. This package imports nothing from any family; the
 //! dependency edge physically cannot point back. A family that re-derives

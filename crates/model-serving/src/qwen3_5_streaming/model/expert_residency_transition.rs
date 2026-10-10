@@ -37,8 +37,8 @@
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::Qwen3_5ResidentExpertWeights;
-use crate::qwen3_5_moe::expert_residency;
+use crate::qwen3_5_streaming::Qwen3_5ResidentExpertWeights;
+use crate::qwen3_5_streaming::expert_residency;
 use crate::{
     CompleteResidencyDecision, CompleteResidencyRequirements, PerformanceAttribution,
     PerformanceOperation, required_complete_residency_activation_headroom_bytes,

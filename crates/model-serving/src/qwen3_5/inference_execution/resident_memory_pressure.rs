@@ -12,7 +12,7 @@ use crate::qwen3_5::model::memory_admission::{
     context_memory_admission_fits_without_expert_reclamation, invalid_request_error,
     validate_context_memory_admission,
 };
-use crate::qwen3_5_moe::Qwen3_5ExpertResidencyTransitionReason;
+use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection, InferenceEngineError,
     PerformanceAttribution, PerformanceOperation,

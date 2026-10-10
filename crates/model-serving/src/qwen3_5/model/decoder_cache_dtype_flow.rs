@@ -11,7 +11,7 @@ use astronomical_mlx_c_rust::MlxDtype;
 use crate::decoder_cache::DecoderCacheTensorDtype;
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan, SafetensorsDtype};
 use crate::qwen3_5::decoder::Qwen3_5DecoderLayerCacheDtypes;
-use crate::qwen3_5_moe::Qwen3_5ExpertPager;
+use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
 
 use super::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,

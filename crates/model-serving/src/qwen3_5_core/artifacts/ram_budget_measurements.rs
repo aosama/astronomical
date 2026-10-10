@@ -18,7 +18,7 @@ use crate::memory::{
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
 use crate::qwen3_5::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
-use crate::qwen3_5_moe::expert_paging::quantized_expert_layer_plan;
+use crate::qwen3_5_streaming::expert_paging::quantized_expert_layer_plan;
 
 /// Why disk-only RAM measurements could not be composed for this artifact.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -80,7 +80,7 @@ fn complete_residency_transient_bytes(
 ) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
     #[cfg(feature = "direct-mlx")]
     {
-        crate::qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes(layer_plans)
+        crate::qwen3_5_streaming::maximum_resident_gate_up_fusion_transient_payload_bytes(layer_plans)
             .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)
     }
     #[cfg(not(feature = "direct-mlx"))]

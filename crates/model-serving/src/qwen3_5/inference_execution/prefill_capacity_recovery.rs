@@ -18,7 +18,7 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::qwen3_5_moe::{
+use crate::qwen3_5_streaming::{
     Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
 };
 use crate::{

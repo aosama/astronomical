@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::qwen3_5_moe;
+use crate::qwen3_5_streaming;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::weights_validation;
@@ -271,7 +271,7 @@ fn take_decoder_layer_weights(
         ),
         Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(
-                qwen3_5_moe::bind_qwen3_5_moe_feed_forward_weights(
+                qwen3_5_streaming::bind_qwen3_5_moe_feed_forward_weights(
                     bound_tensors,
                     qwen3_5_config,
                     &decoder_layer_prefix,

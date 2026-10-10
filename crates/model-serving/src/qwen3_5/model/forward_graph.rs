@@ -1,6 +1,6 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::qwen3_5_moe::Qwen3_5MoEPagedPrefillExecutionMode;
+use crate::qwen3_5_streaming::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::model::Qwen3_5Model;

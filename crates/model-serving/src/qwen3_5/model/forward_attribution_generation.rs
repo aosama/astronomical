@@ -6,7 +6,7 @@
 //! files inside the source-size budget.
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_moe::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
+use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 
 use super::forward_contract;
 use super::model::Qwen3_5Model;

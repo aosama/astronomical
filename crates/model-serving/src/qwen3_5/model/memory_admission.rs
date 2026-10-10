@@ -4,7 +4,7 @@ use crate::{ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionD
 
 use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
-use crate::qwen3_5_moe;
+use crate::qwen3_5_streaming;
 
 /// Admits context against the current expert owner, then reclaims paged retention.
 ///
@@ -81,7 +81,7 @@ pub(crate) fn validate_context_memory_admission(
         }
     };
     if let Some(memory_snapshot_after_reclamation) =
-        qwen3_5_moe::reclaim_retained_experts_for_request_memory_pressure(
+        qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
             model,
             context_reclamation_target_bytes,
         )?

@@ -8,7 +8,7 @@ use astronomical_mlx_c_rust::MlxArray;
 
 use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_moe::expert_residency::{
+use crate::qwen3_5_streaming::expert_residency::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
 use crate::sparse_experts::{
