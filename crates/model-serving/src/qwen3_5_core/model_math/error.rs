@@ -61,7 +61,7 @@ pub enum Qwen3_5ExecutionError {
     PersistentPromptCache(#[from] crate::PersistentPromptCacheDiskStoreError),
     #[error("persistent prompt-cache state bridge error: {0}")]
     PersistentPromptCacheStateBridge(
-        #[from] crate::qwen3_5::decoder::PersistentPromptCacheStateBridgeError,
+        #[from] crate::qwen3_5_core::decoder::PersistentPromptCacheStateBridgeError,
     ),
     #[error("Qwen3.5 sampled decoding error: {0}")]
     SampledDecoding(#[from] crate::InferenceEngineError),
@@ -72,14 +72,12 @@ impl Qwen3_5ExecutionError {
     /// ordinary model execution or Rust bounded expert loading.
     #[must_use]
     pub fn active_memory_limit_exceeded_evidence(&self) -> Option<(usize, usize, usize)> {
-        if let Self::MemoryAdmissionRejected(
-            crate::MlxAllocationAdmissionError::Rejected {
-                active_memory_bytes,
-                pending_allocation_bytes,
-                active_memory_ceiling_bytes,
-                ..
-            },
-        ) = self
+        if let Self::MemoryAdmissionRejected(crate::MlxAllocationAdmissionError::Rejected {
+            active_memory_bytes,
+            pending_allocation_bytes,
+            active_memory_ceiling_bytes,
+            ..
+        }) = self
         {
             return Some((
                 usize::try_from(*active_memory_bytes).unwrap_or(usize::MAX),
@@ -115,7 +113,7 @@ impl Qwen3_5ExecutionError {
     }
 }
 
-pub(super) fn invalid_request_decoder_state(
+pub(crate) fn invalid_request_decoder_state(
     layer_index: usize,
     description: &'static str,
 ) -> Qwen3_5ExecutionError {

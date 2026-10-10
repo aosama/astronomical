@@ -193,9 +193,9 @@ impl Qwen3_5Model {
                         );
                         None
                     };
-                let retained_experts = RefCell::new(crate::qwen3_5_streaming::RetainedExpertCache::new(
-                    expert_pager.layer_count(),
-                ));
+                let retained_experts = RefCell::new(
+                    crate::qwen3_5_streaming::RetainedExpertCache::new(expert_pager.layer_count()),
+                );
                 (
                     Some(expert_pager),
                     Some(retained_experts),
@@ -381,7 +381,8 @@ impl Qwen3_5Model {
             resident_expert_weights: None,
             retained_experts,
             route_observation: RefCell::new(
-                crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(),
+                crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(
+                ),
             ),
             mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),

@@ -32,7 +32,7 @@ pub fn qwen3_5_moe_combine_experts(
     )
 }
 
-pub(super) fn combine_sparse_and_shared_experts(
+pub(crate) fn combine_sparse_and_shared_experts(
     runtime: &MlxRuntime,
     sparse_expert_output: &MlxArray,
     shared_expert_output: &MlxArray,
