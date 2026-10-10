@@ -47,6 +47,27 @@ pub enum ExpertPagingError {
     },
 }
 
+/// Translates streaming-side paging failures into the family execution error.
+///
+/// The paging error type stays owned by this module; the family error lives in
+/// the shared kernel and carries only crate-level memory-admission evidence,
+/// so the kernel never depends on streaming types (issue #1132). Memory-budget
+/// rejections surface as the kernel's admission variant; native runtime
+/// failures surface as the kernel's runtime variant.
+impl From<ExpertPagingError> for crate::qwen3_5::model::Qwen3_5ExecutionError {
+    fn from(expert_paging_error: ExpertPagingError) -> Self {
+        match expert_paging_error {
+            ExpertPagingError::MemoryBudget(memory_admission_error) => {
+                Self::MemoryAdmissionRejected(memory_admission_error)
+            }
+            ExpertPagingError::NativeRuntime(mlx_runtime_error) => Self::Runtime(mlx_runtime_error),
+            remaining_expert_paging_error => Self::ExpertSourceFailure {
+                description: remaining_expert_paging_error.to_string(),
+            },
+        }
+    }
+}
+
 /// Immutable layer geometry plus bounded-read and resident-promotion sources.
 #[derive(Debug)]
 pub struct Qwen3_5ExpertPager {
