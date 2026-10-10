@@ -15,7 +15,8 @@ use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
 };
 
-use super::model::Qwen3_5Model;
+use super::Qwen3_5Model;
+use super::Qwen3_5ModelBase;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
@@ -370,11 +371,25 @@ impl Qwen3_5Model {
             description: "MLX RAM budget requires a positive active-memory ceiling",
         })?;
         Ok(Self {
-            runtime,
-            config,
-            decoder_cache_layout,
-            weights,
-            vision_model,
+            base: Qwen3_5ModelBase {
+                runtime,
+                config,
+                decoder_cache_layout,
+                weights,
+                vision_model,
+                mlx_ram_budget: RefCell::new(mlx_ram_budget),
+                gated_delta_kernel,
+                gated_delta_checkpoint_kernel,
+                gdn_decode_prework_kernel,
+                sorted_expert_weighted_sum_kernel,
+                compiled_swiglu,
+                compiled_elementwise_graphs,
+                chunking,
+                inverse_linear_head_dimension_scale,
+                inverse_square_root_linear_head_dimension_scale,
+                query_normalization_scale_weight,
+                key_normalization_scale_weight,
+            },
             expert_pager,
             // Publication occurs only after core materialization and a fresh idle
             // memory sample in the engine loading path.
@@ -384,21 +399,8 @@ impl Qwen3_5Model {
                 crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(
                 ),
             ),
-            mlx_ram_budget: RefCell::new(mlx_ram_budget),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),
-
-            gated_delta_kernel,
-            gated_delta_checkpoint_kernel,
-            gdn_decode_prework_kernel,
-            sorted_expert_weighted_sum_kernel,
-            compiled_swiglu,
-            compiled_elementwise_graphs,
-            chunking,
-            inverse_linear_head_dimension_scale,
-            inverse_square_root_linear_head_dimension_scale,
-            query_normalization_scale_weight,
-            key_normalization_scale_weight,
             paged_forward_missing_route_collector:
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),

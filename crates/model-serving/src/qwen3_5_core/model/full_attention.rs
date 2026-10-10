@@ -39,11 +39,11 @@
 use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::Qwen3_5ExecutionError;
-use super::decoder_layer_weights::Qwen3_5FullAttentionWeights;
-use super::model::Qwen3_5Model;
-use super::tensor_slicing;
+use super::base::Qwen3_5ModelBase;
 use crate::decoder_cache::FullAttentionKeyValueState;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_core::model_math::tensor_slicing;
 
 const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 
@@ -241,7 +241,7 @@ fn full_attention_error(description: &'static str) -> MlxRuntimeError {
         description: description.to_owned(),
     }
 }
-impl Qwen3_5Model {
+impl Qwen3_5ModelBase {
     /// Runs one full-attention layer, threading the in-memory KV state through
     /// the single `FullAttentionKeyValueState` owner. The owner grows capacity
     /// in 256-token steps, appends the rotated keys and transposed values, and

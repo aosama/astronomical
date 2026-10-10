@@ -3,7 +3,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedPrefillExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::model::Qwen3_5Model;
+use super::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
@@ -64,7 +64,7 @@ impl Qwen3_5Model {
         Ok(target_forward_output)
     }
 
-    pub(super) fn build_forward_graph(
+    pub(crate) fn build_forward_graph(
         &self,
         token_indices: &MlxArray,
         token_count: i32,

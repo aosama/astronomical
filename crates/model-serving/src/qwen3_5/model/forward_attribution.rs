@@ -5,8 +5,8 @@ use astronomical_mlx_c_rust::MlxArray;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
 
+use super::Qwen3_5Model;
 use super::forward_contract;
-use super::model::Qwen3_5Model;
 use super::visual_embedding_injection;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
 use crate::qwen3_5::decoder::{
