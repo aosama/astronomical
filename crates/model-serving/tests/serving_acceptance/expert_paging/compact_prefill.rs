@@ -14,13 +14,15 @@ use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5Model, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
+use serial_test::serial;
 use tokio::time::{MissedTickBehavior, interval, sleep};
 
-const PREFILL_COMPARISON_TIMEOUT: Duration = Duration::from_secs(120);
+const PREFILL_COMPARISON_TIMEOUT: Duration = Duration::from_secs(60);
 const TOP_LOGIT_COUNT: usize = 8;
 pub(crate) const MAXIMUM_EXPECTED_AUTOMATIC_PREFILL_ABSOLUTE_LOGIT_DELTA: f32 = 0.0;
 #[tokio::test]
 #[ignore = "loads the full Ornith model twice to compare automatic compact multi-token prefill logits"]
+#[serial]
 async fn should_match_automatic_compact_multi_token_prefill_after_contiguous_index_copy() {
     require_prefill_comparison_completion(run_compact_multi_token_forward_comparison()).await;
 }
@@ -130,7 +132,7 @@ pub(crate) async fn require_prefill_comparison_completion(
                 return;
             }
             () = &mut timeout_deadline => {
-                panic!("the direct paged prefill comparison exceeded {} seconds", PREFILL_COMPARISON_TIMEOUT.as_secs());
+                panic!("the direct paged prefill comparison exceeded its 60-second timeout");
             }
             _ = progress_interval.tick() => {
                 let elapsed = started_at.elapsed();

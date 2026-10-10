@@ -25,6 +25,7 @@ astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
 libc.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [build-dependencies]
 fs4.workspace = true

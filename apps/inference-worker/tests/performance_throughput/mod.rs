@@ -5,10 +5,16 @@
 //! durable historical log. It asserts nothing about the measured rates.
 
 #[cfg(feature = "performance_throughput")]
+mod completion;
+
+#[cfg(feature = "performance_throughput")]
 mod historical_record;
 
 #[cfg(feature = "performance_throughput")]
 mod machine_specs;
+
+#[cfg(feature = "performance_throughput")]
+mod memory_ceiling_sweep;
 
 #[cfg(feature = "performance_throughput")]
 mod qwen3_5_moe;
@@ -18,3 +24,6 @@ mod qwen3_5_moe_vision;
 
 #[cfg(feature = "performance_throughput")]
 mod support;
+
+#[cfg(feature = "performance_throughput")]
+mod worker_environment;

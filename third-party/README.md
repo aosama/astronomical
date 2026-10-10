@@ -151,9 +151,8 @@ To bump a pinned dependency:
    surface itself with the bindgen header provisioning (see the next
    section); header-level differences found there explain almost every
    binding-level difference before any compile runs.
-5. Run the hermetic lanes, then the real-model acceptance journeys serially
-   through `scripts/run-bounded-cargo-test.sh` (GPU journeys are never
-   parallel).
+ 5. Run the hermetic lanes, then invoke each real-model acceptance Cargo
+   command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
    with the performance-throughput journeys and compare against the recorded
    band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
@@ -222,6 +221,5 @@ it first. Hermetic verification afterwards needs no network and no model
 weights:
 
 ```bash
-TEST_TIMEOUT_SECONDS=120 scripts/run-bounded-cargo-test.sh \
-  cargo test -p astronomical-runtime-integration --test hermetic_tests
+cargo test -p astronomical-runtime-integration --test hermetic_tests
 ```

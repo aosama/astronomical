@@ -37,7 +37,7 @@ async fn should_attribute_startup_invalidation_once_then_restore_the_rebuilt_cac
 
 async fn run_startup_cleanup_attribution_journey() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let (short_prompt_token_ids, prompt_token_ids) =
         romeo_and_juliet_prompt_token_ids(&model_directory);
     let persistent_prompt_cache_directory =
@@ -56,7 +56,10 @@ async fn run_startup_cleanup_attribution_journey() {
         load_persistent_prompt_cache_acceptance_engine(
             &model_directory,
             persistent_prompt_cache_directory.path(),
-            4_096,
+            // The test-chunk rule fixes the prefill chunk at 2,048 tokens so
+            // results stay comparable across every journey in this lane; this
+            // journey measures cache rebuild attribution, not chunk width.
+            2_048,
         )
         .await;
     let short_request_id = RequestId::new(41_001);

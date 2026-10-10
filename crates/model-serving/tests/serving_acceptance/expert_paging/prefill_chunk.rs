@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Model};
 use astronomical_runtime_integration::MlxRuntime;
+use serial_test::serial;
 use tokio::time::timeout;
 
 use super::compact_prefill;
@@ -9,17 +10,18 @@ use super::prompt;
 
 const ACCEPTANCE_PROMPT_TOKEN_COUNT: usize = 4_097;
 const ACCEPTANCE_OUTPUT_TOKEN_COUNT: u16 = 512;
-const ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
+const ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[tokio::test]
 #[ignore = "loads the configured model and requires exact final-prefill logits for 2048 and 4096 chunks"]
+#[serial]
 async fn should_preserve_exact_final_prefill_logits_between_fixed_prefill_sizes() {
     timeout(
         ACCEPTANCE_TIMEOUT,
         assert_exact_final_prefill_logit_parity(),
     )
     .await
-    .expect("the final-prefill logit parity contract must finish within 115 seconds");
+    .expect("the final-prefill logit parity contract must finish within 60 seconds");
 }
 
 async fn assert_exact_final_prefill_logit_parity() {

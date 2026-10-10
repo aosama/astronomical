@@ -27,11 +27,13 @@ use std::path::Path;
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
+use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
-    JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, stop_real_model_rest_server,
+    SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server,
+    stop_real_model_rest_server,
 };
 
 fn model_id() -> &'static str {
@@ -51,10 +53,11 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept MLX memory progress during prompt processing"]
+#[serial]
 async fn should_report_changing_bounded_mlx_memory_during_prefill() {
-    timeout(JOURNEY_TIMEOUT, run_mlx_memory_progress_rest_journey())
+    timeout(SSD_JOURNEY_TIMEOUT, run_mlx_memory_progress_rest_journey())
         .await
-        .expect("the MLX memory progress REST journey must finish within 115 seconds");
+        .expect("the MLX memory progress SSD journey must finish within 60 seconds");
 }
 
 async fn run_mlx_memory_progress_rest_journey() {
@@ -183,7 +186,7 @@ struct MlxMemoryProgressEvidence {
 async fn observe_mlx_memory_progress(
     server_address: std::net::SocketAddr,
 ) -> MlxMemoryProgressEvidence {
-    let deadline = Instant::now() + JOURNEY_TIMEOUT;
+    let deadline = Instant::now() + SSD_JOURNEY_TIMEOUT;
     let mut observed_active_request = false;
     let mut prefill_active_memory_bytes: Vec<u64> = Vec::new();
     let mut maximum_prefill_processed_tokens: Option<u64> = None;

@@ -27,7 +27,7 @@ pub use log::PerformanceAttributionLog;
 pub use measurement_catalog::PerformanceOperationMeasurement;
 pub use report::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
-    PerformanceAttributionOutcome, PerformanceAttributionReport,
+    PerformanceAttributionOutcome, PerformanceAttributionReport, process_io_delta_between_samples,
 };
 
 /// Pointer-sized disabled handle with a fixed-size enabled accumulator.

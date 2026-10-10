@@ -22,14 +22,52 @@ const HISTORY_ENV_VAR: &str = "ASTRONOMICAL_PERF_HISTORY";
 const GIT_COMMIT_ENV_VAR: &str = "ASTRONOMICAL_PERF_COMMIT";
 
 /// The journey family one throughput record came from. Every line of the
-/// shared history log carries this field so text and vision measurements
-/// delineate themselves without separate files; lines written before the
-/// field existed are text-journey measurements.
+/// shared history log carries this field so text, vision, and memory-cell
+/// measurements delineate themselves without separate files; lines written
+/// before the field existed are text-journey measurements.
 #[derive(Clone, Copy, Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ThroughputJourneyKind {
     Text,
     Vision,
+    MemoryCeilingSweep,
+}
+
+/// The memory-constraint cell one ceiling-sweep record ran under, plus the
+/// residency and byte-traffic evidence that distinguishes deliberate expert
+/// paging from kernel-paged swap collapse. The core pair is
+/// `positional_read_byte_count` (bytes our bounded pager streamed) beside
+/// `process_physical_disk_read_bytes` (bytes the operating system moved for
+/// the worker process): a resident-mode cell with near-zero positional reads
+/// and multi-gigabyte physical reads is thrashing through the kernel pager,
+/// not serving.
+#[derive(Clone, Debug, Serialize)]
+pub struct MemoryCellRecord {
+    pub configured_maximum_mlx_memory_bytes: u64,
+    pub machine_recommended_working_set_bytes: u64,
+    pub expert_residency_mode: String,
+    pub expert_residency_total_layer_count: u32,
+    pub expert_residency_resident_expert_count: u32,
+    pub resident_expert_payload_bytes: u64,
+    pub peak_mlx_memory_bytes: u64,
+    pub final_active_mlx_memory_bytes: u64,
+    pub positional_read_byte_count: u64,
+    pub process_physical_disk_read_bytes: Option<u64>,
+    pub process_physical_disk_written_bytes: Option<u64>,
+    pub prefill_chunk_count: u64,
+    pub maximum_decode_advance_seconds: f64,
+    pub sweep_cell_order: u32,
+    /// Physical disk bytes the worker process read while LOADING the model
+    /// (from the model-loading attribution report). Beside
+    /// `process_physical_disk_read_bytes` (generation-phase) it separates the
+    /// one-time artifact load from serving-time page-ins: a resident-mode cell
+    /// whose generation-phase reads climb into gigabytes is being paged by the
+    /// kernel, not by the expert pager.
+    pub model_loading_process_disk_read_bytes: Option<u64>,
+    /// True when the cell exceeded the 45-second serving budget and was
+    /// cancelled; the rates and token counts above are partial evidence, while
+    /// the byte counters cover everything observed before the boundary.
+    pub budget_exhausted: bool,
 }
 
 /// One throughput measurement captured from the measured completion of a
@@ -54,6 +92,10 @@ pub struct ThroughputRecord {
     pub cached_tokens: u32,
     pub prefill_time_seconds: f64,
     pub decode_time_seconds: f64,
+    /// Present only on memory-ceiling-sweep records; omitted on every other
+    /// journey so historical lines stay additive-compatible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_cell: Option<MemoryCellRecord>,
 }
 
 /// Formats a Unix-epoch millisecond value as a human-readable UTC timestamp such

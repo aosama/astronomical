@@ -439,24 +439,6 @@ pub(crate) const fn context_token_bucket(context_token_count: u64) -> u64 {
     context_token_count / CONTEXT_TOKEN_BUCKET_WIDTH
 }
 
-/// Scales one learned byte quantity proportionally between token counts with
-/// ceiling division, so projections beyond measured evidence stay conservative.
-#[must_use]
-pub(crate) fn scale_bytes_proportionally_to_token_count(
-    learned_bytes: u64,
-    learned_token_count: u64,
-    target_token_count: u64,
-) -> u64 {
-    if learned_token_count == 0 || target_token_count == 0 {
-        return 0;
-    }
-    let learned_bytes_u128 = u128::from(learned_bytes);
-    let scaled_bytes =
-        (learned_bytes_u128 * u128::from(target_token_count) + u128::from(learned_token_count) - 1)
-            / u128::from(learned_token_count);
-    u64::try_from(scaled_bytes).unwrap_or(u64::MAX)
-}
-
 /// Separates request workspace from expert ownership acquired during a forward.
 ///
 /// The MLX peak includes both categories. Charging newly retained experts to

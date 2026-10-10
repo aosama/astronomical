@@ -1,8 +1,10 @@
 mod allocator_cache_reclaim;
 mod allocator_cleanup;
+mod error_classification;
 mod metallib_path;
 mod native_build;
 mod native_build_parallelism;
 mod native_build_progress;
 mod native_build_store;
 mod native_build_wiring;
+mod weights_file_cache_retention;

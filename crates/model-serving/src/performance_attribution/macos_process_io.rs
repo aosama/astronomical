@@ -129,21 +129,47 @@ pub enum MacosProcessIoError {
 /// This function performs no file I/O itself. The disabled performance path
 /// never calls it; enabled attribution samples only at report boundaries.
 pub fn sample_current_process_io() -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
-    sample_current_process_io_for_platform()
+    sample_process_io_for_platform()
+}
+
+/// Samples cumulative physical disk input/output attributed to another
+/// same-user process, such as a supervised inference worker.
+///
+/// The kernel does not attribute every byte it moves on a process's behalf to
+/// that process's own counters; external sampling of the child complements the
+/// worker's self-sampling and makes the divergence itself measurable.
+pub fn sample_process_io_for_process_id(
+    process_id: u32,
+) -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
+    sample_process_io_for_process_id_on_platform(process_id)
 }
 
 #[cfg(target_os = "macos")]
-fn sample_current_process_io_for_platform() -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
+fn sample_process_io_for_platform() -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
+    // SAFETY: `getpid` only reads the caller's own process identity.
+    let self_process_id = u32::try_from(unsafe { libc::getpid() }).map_err(|_| {
+        MacosProcessIoError::SamplingFailed {
+            os_error_code: libc::EINVAL,
+        }
+    })?;
+    sample_process_io_for_process_id_on_platform(self_process_id)
+}
+
+#[cfg(target_os = "macos")]
+fn sample_process_io_for_process_id_on_platform(
+    process_id: u32,
+) -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
+    // A process id wider than the syscall's c_int cannot exist on the system,
+    // so it is reported as a sampling failure rather than truncated.
+    let process_id =
+        i32::try_from(process_id).map_err(|_| MacosProcessIoError::SamplingFailed {
+            os_error_code: libc::EINVAL,
+        })?;
     let mut resource_usage = MacosResourceUsageInfoV4::default();
     // SAFETY: `resource_usage` has the SDK's `rusage_info_v4` C layout and is
-    // uniquely writable for this synchronous call. `getpid` returns this process.
-    let status = unsafe {
-        proc_pid_rusage(
-            libc::getpid(),
-            RUSAGE_INFO_V4,
-            (&raw mut resource_usage).cast(),
-        )
-    };
+    // uniquely writable for this synchronous call.
+    let status =
+        unsafe { proc_pid_rusage(process_id, RUSAGE_INFO_V4, (&raw mut resource_usage).cast()) };
     if status != 0 {
         return Err(MacosProcessIoError::SamplingFailed {
             os_error_code: std::io::Error::last_os_error()
@@ -158,7 +184,14 @@ fn sample_current_process_io_for_platform() -> Result<MacosProcessIoSnapshot, Ma
 }
 
 #[cfg(not(target_os = "macos"))]
-fn sample_current_process_io_for_platform() -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
+fn sample_process_io_for_platform() -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
+    Err(MacosProcessIoError::UnsupportedPlatform)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn sample_process_io_for_process_id_on_platform(
+    _process_id: u32,
+) -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
     Err(MacosProcessIoError::UnsupportedPlatform)
 }
 
