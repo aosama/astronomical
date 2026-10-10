@@ -18,6 +18,12 @@ use crate::PositionalFileReadMetrics;
 // avoids thread setup for routed expert pages while retaining large-layer parallelism.
 const PARALLEL_READ_MINIMUM_BYTES: usize = 1 << 25;
 const MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT: usize = 4;
+// SSDs differ widely in queue depth, so the process cap is an adaptation
+// parameter, not a constant: `ASTRONOMICAL_POSITIONAL_READ_PARALLELISM`
+// overrides it within a bounded range; the default stays the MLX-matching 4.
+const POSITIONAL_READ_PARALLELISM_ENVIRONMENT_VARIABLE: &str =
+    "ASTRONOMICAL_POSITIONAL_READ_PARALLELISM";
+const POSITIONAL_READ_PARALLELISM_OVERRIDE_CEILING: usize = 32;
 static CONFIGURED_POSITIONAL_READ_PARALLELISM: OnceLock<usize> = OnceLock::new();
 static POSITIONAL_READ_CONCURRENCY_LIMITER: OnceLock<PositionalReadConcurrencyLimiter> =
     OnceLock::new();
@@ -132,10 +138,17 @@ fn measure_source_read(
 
 fn configured_read_parallelism() -> usize {
     *CONFIGURED_POSITIONAL_READ_PARALLELISM.get_or_init(|| {
-        thread::available_parallelism()
+        let default_parallelism = thread::available_parallelism()
             .map(usize::from)
             .unwrap_or(1)
-            .min(MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT)
+            .min(MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT);
+        std::env::var(POSITIONAL_READ_PARALLELISM_ENVIRONMENT_VARIABLE)
+            .ok()
+            .and_then(|parallelism_text| parallelism_text.parse::<usize>().ok())
+            .map(|override_parallelism| {
+                override_parallelism.clamp(1, POSITIONAL_READ_PARALLELISM_OVERRIDE_CEILING)
+            })
+            .unwrap_or(default_parallelism)
     })
 }
 

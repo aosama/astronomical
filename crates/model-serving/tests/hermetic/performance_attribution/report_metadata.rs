@@ -77,6 +77,57 @@ fn should_serialize_process_io_as_an_all_or_unavailable_pair() {
 }
 
 #[test]
+fn should_finish_cancelled_generation_process_io_from_the_final_sample() {
+    let initial_process_io =
+        astronomical_model_serving::MacosProcessIoSnapshot::from_cumulative_bytes(10_000, 4_000);
+    let final_process_io =
+        astronomical_model_serving::MacosProcessIoSnapshot::from_cumulative_bytes(90_000, 14_000);
+
+    let cancelled_generation_delta = astronomical_model_serving::process_io_delta_between_samples(
+        &initial_process_io,
+        Ok(final_process_io),
+    )
+    .expect("a cancelled generation still receives an end-boundary sample");
+
+    assert_eq!(
+        cancelled_generation_delta.physical_disk_read_bytes(),
+        80_000
+    );
+    assert_eq!(
+        cancelled_generation_delta.physical_disk_written_bytes(),
+        10_000
+    );
+}
+
+#[test]
+fn should_keep_the_cancelled_outcome_independent_from_process_io_availability() {
+    // A cancelled request must reach the same serialization path as a completed
+    // one, so its I/O fields obey the identical all-or-unavailable contract
+    // instead of being dropped by an early return.
+    let cancelled_report = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Cancelled,
+    );
+    let completed_report = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Success,
+    );
+
+    assert_eq!(cancelled_report["outcome"], "cancelled");
+    for field_name in [
+        "process_physical_disk_read_bytes",
+        "process_physical_disk_written_bytes",
+        "process_io_unavailability_reason",
+    ] {
+        assert_eq!(
+            cancelled_report[field_name].is_null(),
+            completed_report[field_name].is_null(),
+            "the cancelled report must present {field_name} exactly as a completed report does"
+        );
+    }
+}
+
+#[test]
 fn should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time() {
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_completed_operation(

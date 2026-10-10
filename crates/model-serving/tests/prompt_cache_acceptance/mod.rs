@@ -8,7 +8,7 @@
 //! cache acceptance journey:
 //!
 //! ```sh
-//! scripts/run-disposable-cargo-journey.sh accept-prompt-cache
+//! cargo test -p astronomical-model-serving --test prompt_cache_acceptance_tests --features direct-mlx -- --ignored --test-threads=1
 //! ```
 
 mod cache_disabled;

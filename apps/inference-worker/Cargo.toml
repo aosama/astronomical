@@ -49,6 +49,7 @@ futures-util.workspace = true
 image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serial_test.workspace = true
 sha2.workspace = true
 tempfile = "=3.27.0"
 tokenizers.workspace = true

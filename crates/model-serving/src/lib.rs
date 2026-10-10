@@ -211,12 +211,13 @@ pub use modernbert::{
 };
 pub use performance_attribution::macos_process_io::{
     MacosProcessIoDelta, MacosProcessIoError, MacosProcessIoSnapshot, sample_current_process_io,
+    sample_process_io_for_process_id,
 };
 pub use performance_attribution::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
     PerformanceAttributionReport, PerformanceCounter, PerformanceOperation,
-    PerformanceOperationMeasurement,
+    PerformanceOperationMeasurement, process_io_delta_between_samples,
 };
 pub use persistent_cache::{
     PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION, PersistentPromptCacheBlockCausalInput,

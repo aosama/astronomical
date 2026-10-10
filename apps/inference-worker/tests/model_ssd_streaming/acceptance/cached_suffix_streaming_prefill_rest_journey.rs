@@ -13,11 +13,12 @@ mod support;
 use std::fs;
 
 use serde_json::json;
+use serial_test::serial;
 use tokio::time::timeout;
 
 use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest::{
-    JOURNEY_TIMEOUT, launch_real_model_rest_server, stop_real_model_rest_server,
+    SSD_JOURNEY_TIMEOUT, launch_real_model_rest_server, stop_real_model_rest_server,
 };
 use observe::{
     assert_completed_request, completion_request, execute_observed_request, print_request_records,
@@ -41,7 +42,7 @@ const PREFILL_CHUNK_TOKEN_COUNT: u32 = 2_048;
 /// more than once unless they stay operation-local for every chunk.
 const APPEND_FOLLOW_UP_TOKEN_COUNT: usize = 5_000;
 /// Long enough that a 50 tok/s control-span stall cannot finish inside the
-/// 115-second journey bound, while a healthy high-RAM suffix still can.
+/// 60-second journey bound, while a healthy high-RAM suffix still can.
 const HIGH_RAM_APPEND_FOLLOW_UP_TOKEN_COUNT: usize = 16_000;
 /// Far above the 53 tok/s Pi stall, far below a fully resident warm suffix.
 const MINIMUM_HIGH_RAM_APPEND_PREFILL_TOKENS_PER_SECOND: f64 = 200.0;
@@ -64,35 +65,38 @@ const ROMEO_AND_JULIET_LONG_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one real worker and reproduces cached prefill/decode expert residency"]
+#[serial]
 async fn should_complete_cold_and_cached_append_requests_with_consistent_prefill_decode_residency()
 {
     timeout(
-        JOURNEY_TIMEOUT,
+        SSD_JOURNEY_TIMEOUT,
         run_interaction_journey(StreamingPrefillJourneyKind::HalfModelReread),
     )
     .await
-    .expect("the prefill/decode residency interaction must finish within 115 seconds");
+    .expect("the prefill/decode residency SSD journey must finish within 60 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one real worker and reproduces the high-RAM tool-prefixed cached-suffix stall"]
+#[serial]
 async fn should_keep_high_ram_tool_prefixed_cached_suffix_prefill_responsive() {
     timeout(
-        JOURNEY_TIMEOUT,
+        SSD_JOURNEY_TIMEOUT,
         run_interaction_journey(StreamingPrefillJourneyKind::HighRamResponsiveSuffix),
     )
     .await
-    .expect("the high-RAM cached suffix must finish within 115 seconds");
+    .expect("the high-RAM cached suffix SSD journey must finish within 60 seconds");
 }
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one real worker against the large sparse MoE e2e fixture under a tight ceiling that forces the prefill OOM-retry-reread stall"]
+#[serial]
 async fn should_recover_from_prefill_oom_without_stalling() {
     timeout(
-        JOURNEY_TIMEOUT,
+        SSD_JOURNEY_TIMEOUT,
         run_interaction_journey(StreamingPrefillJourneyKind::TightCeiling),
     )
     .await
-    .expect("the tight-ceiling large sparse MoE prefill must recover from OOM and finish within 115 seconds");
+    .expect("the tight-ceiling large sparse MoE prefill must finish within 60 seconds");
 }
 
 fn journey_kind_label(kind: StreamingPrefillJourneyKind) -> &'static str {
@@ -179,7 +183,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
             append_follow_up_token_count,
         )
     };
-    let timeout_duration = JOURNEY_TIMEOUT;
+    let timeout_duration = SSD_JOURNEY_TIMEOUT;
     eprintln!(
         "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} paging_graph_submission_layer_interval={PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL} persistent_prompt_cache_enabled=true",
         timeout_duration.as_secs(),

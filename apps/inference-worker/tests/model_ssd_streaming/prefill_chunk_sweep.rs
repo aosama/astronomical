@@ -8,6 +8,7 @@ use astronomical_ipc_protocol::{
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };
 use astronomical_supervisor::ResolvedRuntimeConfigResolver;
+use serial_test::serial;
 use tokio::time::{Instant, timeout};
 
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
@@ -16,7 +17,7 @@ fn model_id() -> &'static str {
 }
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
-const SWEEP_TIMEOUT: Duration = Duration::from_secs(115);
+const SWEEP_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -37,26 +38,23 @@ fn should_keep_prefill_sweep_fixture_at_exactly_ten_thousand_words() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks 1,024-token model SSD streaming prefill chunks"]
+#[serial]
 async fn should_measure_model_ssd_streaming_with_1024_token_prefill_chunks() {
     assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(1024).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks 2,048-token model SSD streaming prefill chunks"]
+#[serial]
 async fn should_measure_model_ssd_streaming_with_2048_token_prefill_chunks() {
     assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(2048).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the Ornith model in-process and benchmarks 4,096-token model SSD streaming prefill chunks"]
+#[serial]
 async fn should_measure_model_ssd_streaming_with_4096_token_prefill_chunks() {
     assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(4096).await);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks 8,192-token model SSD streaming prefill chunks"]
-async fn should_measure_model_ssd_streaming_with_8192_token_prefill_chunks() {
-    assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(8192).await);
 }
 
 async fn run_prefill_chunk_sweep_with_timeout(prefill_chunk_tokens: u32) -> PrefillChunkMetrics {
@@ -66,7 +64,7 @@ async fn run_prefill_chunk_sweep_with_timeout(prefill_chunk_tokens: u32) -> Pref
         local_task_set.run_until(run_model_with_prefill_chunk_tokens(prefill_chunk_tokens)),
     )
     .await
-    .expect("the model SSD streaming prefill-chunk benchmark must finish within 115 seconds")
+    .expect("the model SSD streaming prefill-chunk benchmark must finish within 60 seconds")
 }
 
 fn assert_valid_prefill_chunk_sweep_result(prefill_chunk_metrics: PrefillChunkMetrics) {

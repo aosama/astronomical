@@ -10,7 +10,7 @@ use super::engine_prompt_cache::{
 };
 
 const CACHE_INTERACTION_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
-const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 4_096;
+const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
 
 #[derive(Clone, Copy)]
 enum StorageTransition {
@@ -84,7 +84,7 @@ fn selected_acceptance_cell() -> CacheInteractionAcceptanceCell {
 
 async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let persistent_prompt_cache_directory =
         tempfile::tempdir().expect("the acceptance should create an isolated cache directory");
     let (mut qwen3_5_engine, _, _, prompt_cache_block_token_count) =

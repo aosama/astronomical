@@ -54,9 +54,8 @@ fn configured_dense_qwen3_5_vision_artifact() -> Option<(
     crate::support::configured_discovered_models()
         .into_iter()
         .find_map(|discovered_model| {
-            let maximum_output_tokens = crate::support::chat_capabilities(&discovered_model)
-                .ok()?
-                .max_output_tokens;
+            let maximum_output_tokens =
+                crate::support::chat_capabilities(&discovered_model)?.max_output_tokens;
             let validated_artifact = Qwen3_5ArtifactValidator::new()
                 .validate(&discovered_model.model_directory, maximum_output_tokens)
                 .ok()?;
