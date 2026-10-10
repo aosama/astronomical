@@ -53,7 +53,7 @@ enum EosTokenId {
     Array(Vec<u32>),
 }
 
-pub(in crate::qwen3_5) fn validate_exact_value(
+pub(crate) fn validate_exact_value(
     field_name: &'static str,
     actual_value: &str,
     expected_value: &'static str,

@@ -45,4 +45,4 @@ pub use visual_prompt_cache_identity::{
 pub(crate) use super::artifacts::ValidatedQwen3_5Artifact;
 pub(crate) use super::configuration::Qwen3_5ConfigError;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use super::model::Qwen3_5ExecutionError;
+pub(crate) use crate::qwen3_5::model::Qwen3_5ExecutionError;

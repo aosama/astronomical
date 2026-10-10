@@ -1,8 +1,8 @@
-use super::super::inference_execution::{
-    Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
-};
 use super::Qwen3_5ProcessedImage;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingSuffixPlan;
+use crate::qwen3_5::inference_execution::{
+    Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error,
+};
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentVisualEmbeddingKey,
@@ -11,7 +11,7 @@ use astronomical_ipc_protocol::RequestId;
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Qwen3_5EngineState {
-    pub(in crate::qwen3_5) fn resolve_visual_embeddings_for_processed_images(
+    pub(crate) fn resolve_visual_embeddings_for_processed_images(
         &mut self,
         request_id: RequestId,
         processed_visual_images: &[Qwen3_5ProcessedImage],

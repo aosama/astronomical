@@ -24,6 +24,7 @@ mod modernbert;
 mod performance_attribution;
 mod persistent_cache;
 mod qwen3_5;
+mod qwen3_5_core;
 mod qwen3_5_moe;
 mod qwen_image_21;
 mod safetensors;

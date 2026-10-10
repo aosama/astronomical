@@ -34,7 +34,7 @@ pub use request_output::{Qwen3_5RequestOutput, Qwen3_5RequestOutputError};
 pub use sampler::qwen3_5_apply_top_p_mask;
 pub use sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
 #[cfg(feature = "direct-mlx")]
-pub(in crate::qwen3_5) use thinking_budget::minimum_bounded_output_token_count;
+pub(crate) use thinking_budget::minimum_bounded_output_token_count;
 pub use thinking_budget::{Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState};
 pub use token_decoder::Qwen3_5TokenDecoder;
 pub use token_ids::{Qwen3_5TokenIds, discover_token_ids};
@@ -42,8 +42,8 @@ pub use tokenizer::Qwen3_5Tokenizer;
 pub use tokenizer_error::Qwen3_5TokenizerError;
 
 pub(crate) use super::artifacts::ValidatedQwen3_5Artifact;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use super::model::Qwen3_5Model;
 pub(crate) use super::vision::{
     Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5ProcessedImage,
 };
+#[cfg(feature = "direct-mlx")]
+pub(crate) use crate::qwen3_5::model::Qwen3_5Model;
