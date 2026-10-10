@@ -1,20 +1,22 @@
 use astronomical_mlx_c_rust::MlxArray;
 
-use super::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
-use super::error::Qwen3_5ExecutionError;
-use super::gated_delta_boundary_checkpoints;
-use super::gated_delta_sequence;
-use super::gated_delta_step::{evaluate_linear_attention_section, gated_delta_error};
-use super::gdn_decode_prework_kernel::{
-    is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework,
-};
-use super::model::Qwen3_5Model;
-use super::tensor_slicing;
+use super::base::Qwen3_5ModelBase;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints;
+use crate::qwen3_5_core::model_math::gated_delta_sequence;
+use crate::qwen3_5_core::model_math::gated_delta_step::{
+    evaluate_linear_attention_section, gated_delta_error,
+};
+use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
+    is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework,
+};
+use crate::qwen3_5_core::model_math::tensor_slicing;
 
-impl Qwen3_5Model {
+impl Qwen3_5ModelBase {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn forward_linear_attention(
         &self,

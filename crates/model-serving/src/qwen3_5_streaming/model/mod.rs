@@ -37,6 +37,8 @@ mod route_id_materialization;
 pub(crate) mod route_observation;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod streaming_model;
 
 #[cfg(feature = "direct-mlx")]
 pub use cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;

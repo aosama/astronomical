@@ -1,105 +1,69 @@
-//! Direct Qwen3.5 text execution for the pinned model artifact.
+//! The SSD-streaming Qwen3.5 engine's loaded model: the shared base plus every
+//! residency-forked field (expert pager, retained experts, residency plans,
+//! route observation) and the paged execution entry points.
 
-use astronomical_runtime_integration::MlxRuntime;
+use astronomical_mlx_c_rust::MlxArray;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_core::model_math::forward_contract;
+use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
 use crate::qwen3_5_streaming::{
     PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
     Qwen3_5ResidentExpertWeights, RetainedExpertCache,
 };
 use crate::{
-    DecoderCacheLayout, DecoderCacheState, ExpertResidencyPlan, MlxRamBudget,
-    PerformanceAttribution, RequestExpertResidency,
+    DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution, RequestExpertResidency,
 };
 
-use super::decoder_layer_weights::{Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights};
-use super::forward_contract;
-use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
-use super::{
-    Qwen3_5Config, Qwen3_5ExecutionError, Qwen3_5VisionModel, Qwen3_5Weights,
-    RequestDecoderStateStack,
-};
 use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
-use astronomical_mlx_c_rust::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
-};
 
-/// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
+/// The streaming engine's model: shared base plus residency-forked state.
 #[derive(Debug)]
-pub struct Qwen3_5Model {
-    pub(crate) runtime: MlxRuntime,
-    pub(crate) config: Qwen3_5Config,
-    pub(crate) decoder_cache_layout: DecoderCacheLayout,
-    pub(crate) weights: Qwen3_5Weights,
-    pub(crate) vision_model: Option<Qwen3_5VisionModel>,
+pub struct Qwen3_5StreamingModel {
+    pub(crate) base: Qwen3_5ModelBase,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
     pub(crate) retained_experts: Option<RefCell<RetainedExpertCache>>,
-    /// Single-source MLX RAM split for context, activations, streaming, and experts.
-    pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
     /// Pure target published at load and refreshed before mandatory expert reads.
     pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
     /// Prefill pin/stream contract for the active request. Generation clears it.
     pub(crate) request_expert_residency: RefCell<Option<RequestExpertResidency>>,
-
-    pub(crate) gated_delta_kernel: Option<MlxMetalKernel>,
-    pub(crate) gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
-    /// Fused decode prework kernel; None when demoted or environment-disabled.
-    pub(crate) gdn_decode_prework_kernel: Option<MlxMetalKernel>,
-    pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
-    pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
-    pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
-    pub(crate) chunking: Qwen3_5ModelChunkingConfiguration,
-    /// Model-owned BF16 scalar for the query normalization scale in every
-    /// linear-attention forward pass.
-    pub(crate) inverse_linear_head_dimension_scale: MlxArray,
-    /// Model-owned BF16 scalar for the key normalization scale in every
-    /// linear-attention forward pass.
-    pub(crate) inverse_square_root_linear_head_dimension_scale: MlxArray,
-    /// Model-owned BF16 per-channel weight folding the query normalization
-    /// scale into one `fast_rms_norm` launch on the prefill composed path
-    /// (issue #915 item 5); per-channel values equal the scalar scale exactly.
-    pub(crate) query_normalization_scale_weight: MlxArray,
-    /// Model-owned BF16 per-channel weight folding the key normalization
-    /// scale into one `fast_rms_norm` launch on the prefill composed path
-    /// (issue #915 item 5); per-channel values equal the scalar scale exactly.
-    pub(crate) key_normalization_scale_weight: MlxArray,
     /// Deferred GPU missing-route roots collected during one paged forward.
     pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
     /// Warm-table slot capacity for decode-time hot-expert warming; zero
     /// disables warming. The decode handoff derives it from the adaptive
     /// growth guard's headroom so warming only claims memory the guard can
     /// spare (issue #372).
-    pub(crate) hot_expert_warm_slot_count: std::cell::Cell<usize>,
+    pub(crate) hot_expert_warm_slot_count: Cell<usize>,
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
-    pub(crate) route_observation:
-        RefCell<crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector>,
+    pub(crate) route_observation: RefCell<RouteObservationCollector>,
 }
 
-impl Qwen3_5Model {
-    /// Returns the MLX runtime used by this model.
-    #[must_use]
-    pub fn runtime(&self) -> &MlxRuntime {
-        &self.runtime
-    }
+impl std::ops::Deref for Qwen3_5StreamingModel {
+    type Target = Qwen3_5ModelBase;
 
-    /// Returns the single-source MLX RAM budget owner.
-    #[must_use]
-    pub fn mlx_ram_budget(&self) -> std::cell::Ref<'_, MlxRamBudget> {
-        self.mlx_ram_budget.borrow()
+    fn deref(&self) -> &Qwen3_5ModelBase {
+        &self.base
     }
+}
 
-    /// Returns the mutable single-source MLX RAM budget owner.
-    pub fn mlx_ram_budget_mut(&self) -> std::cell::RefMut<'_, MlxRamBudget> {
-        self.mlx_ram_budget.borrow_mut()
+impl std::ops::DerefMut for Qwen3_5StreamingModel {
+    fn deref_mut(&mut self) -> &mut Qwen3_5ModelBase {
+        &mut self.base
     }
+}
 
+impl Qwen3_5StreamingModel {
     /// Returns one mode-neutral expert-memory snapshot.
     ///
     /// Resident mode reports complete-owner entries and payload while retaining
@@ -173,40 +137,6 @@ impl Qwen3_5Model {
         Ok(expert_pager.maximum_routed_expert_page_bytes(
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
         )?)
-    }
-
-    pub(crate) fn sorted_expert_weighted_sum_kernel(
-        &self,
-    ) -> Result<&MlxMetalKernel, Qwen3_5ExecutionError> {
-        self.sorted_expert_weighted_sum_kernel
-            .as_ref()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                description: "sparse Qwen3.5 execution requires a sorted expert output kernel",
-            })
-    }
-
-    /// Returns the validated text configuration bound to this loaded model.
-    #[must_use]
-    pub(crate) const fn config(&self) -> &Qwen3_5Config {
-        &self.config
-    }
-
-    /// Returns the validated decoder-cache layout bound to this model artifact.
-    #[must_use]
-    pub(crate) const fn decoder_cache_layout(&self) -> &DecoderCacheLayout {
-        &self.decoder_cache_layout
-    }
-
-    /// Returns the optional vision tower loaded beside the language model.
-    #[must_use]
-    pub fn vision_model(&self) -> Option<&Qwen3_5VisionModel> {
-        self.vision_model.as_ref()
-    }
-
-    /// Returns the resident target payload bytes wired after materialization.
-    #[must_use]
-    pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
-        self.weights.total_payload_bytes()
     }
 
     /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.
@@ -290,7 +220,7 @@ impl Qwen3_5Model {
         Ok(final_logits)
     }
 
-    pub(super) fn build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
+    pub(crate) fn build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
@@ -326,50 +256,6 @@ impl Qwen3_5Model {
             paged_prefill_execution_mode,
             performance_attribution,
         )
-    }
-
-    pub(crate) fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
-        self.weights.materialize(&self.runtime)?;
-        self.runtime.evaluate_arrays(&[
-            &self.inverse_linear_head_dimension_scale,
-            &self.inverse_square_root_linear_head_dimension_scale,
-            &self.query_normalization_scale_weight,
-            &self.key_normalization_scale_weight,
-        ])?;
-        Ok(())
-    }
-
-    pub(crate) fn embedding_lookup(
-        &self,
-        token_indices: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        match &self.weights.embedding_weights {
-            Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                Ok(self.runtime.take_axis(weight, token_indices, 0)?)
-            }
-            Qwen3_5AffineWeights::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_group_size,
-                quantization_bits,
-            } => {
-                let selected_weights = self.runtime.take_axis(packed_weight, token_indices, 0)?;
-                let selected_scales =
-                    self.runtime
-                        .take_axis(quantization_scales, token_indices, 0)?;
-                let selected_biases =
-                    self.runtime
-                        .take_axis(quantization_biases, token_indices, 0)?;
-                Ok(self.runtime.dequantize_affine(
-                    &selected_weights,
-                    &selected_scales,
-                    &selected_biases,
-                    *quantization_group_size,
-                    *quantization_bits,
-                )?)
-            }
-        }
     }
 
     // Decoder-layer inputs stay explicit instead of introducing another per-layer facade.
@@ -408,33 +294,5 @@ impl Qwen3_5Model {
             paged_prefill_execution_mode,
             performance_attribution,
         )
-    }
-
-    pub(crate) fn quantized_linear(
-        &self,
-        activations: &MlxArray,
-        affine_weights: &Qwen3_5AffineWeights,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        match affine_weights {
-            Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
-                Ok(self.runtime.matmul(activations, &transposed_weight)?)
-            }
-            Qwen3_5AffineWeights::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_group_size,
-                quantization_bits,
-            } => Ok(self.runtime.quantized_matmul_affine(
-                activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                true,
-                *quantization_group_size,
-                *quantization_bits,
-            )?),
-        }
     }
 }
