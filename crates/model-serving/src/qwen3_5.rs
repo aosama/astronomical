@@ -1,4 +1,5 @@
-//! Shared Qwen3.5 behavior and dense model support.
+//! The Qwen3.5 family module. During the issue #1132 migration this is a
+//! re-export shell; the engine facade lands here when the fork completes.
 
 // Issue #1132 migration step 1: the paging-free family kernel moved to
 // `qwen3_5_core`. These re-exports keep every existing `crate::qwen3_5::`
@@ -7,10 +8,14 @@ pub(crate) use crate::qwen3_5_core::{
     artifacts, configuration, decoder, dense, quantizations, text, vision,
 };
 
+// Issue #1132 migration step 4: the engine tree joined `qwen3_5_streaming`.
+// These module re-exports keep every existing `crate::qwen3_5::model` and
+// `crate::qwen3_5::inference_execution` path resolving until the engine fork
+// deletes the bridge.
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod inference_execution;
+pub(crate) use crate::qwen3_5_streaming::inference_execution;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod model;
+pub(crate) use crate::qwen3_5_streaming::model;
 
 pub use artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,

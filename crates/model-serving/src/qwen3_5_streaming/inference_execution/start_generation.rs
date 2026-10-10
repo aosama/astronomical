@@ -4,14 +4,14 @@ use crate::{
     Qwen3_5ThinkingBudgetState,
 };
 
-use super::super::RequestDecoderStateStack;
-use super::super::model::memory_admission;
-use super::super::text::sampler;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::persistent_prompt_cache_visual_identity::{
     Qwen3_5PersistentPromptCacheVisualIdentity, Qwen3_5PersistentPromptCacheVisualIdentityInput,
 };
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::text::sampler;
+use crate::qwen3_5_streaming::model::memory_admission;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 impl Qwen3_5EngineState {
@@ -89,7 +89,7 @@ impl Qwen3_5EngineState {
                     })?;
                     Some(sampler::random_state_for_seed(
                         model,
-                        super::super::resolve_sampling_seed(
+                        crate::qwen3_5_core::text::resolve_sampling_seed(
                             seed,
                             current_time_millis_since_unix_epoch,
                         ),
@@ -246,7 +246,7 @@ impl Qwen3_5EngineState {
             {
                 Some(precomputed_visual_embeddings)
             } else if has_processed_visual_images {
-                let visual_embedding_suffix_plan = super::super::plan_qwen3_5_visual_embedding_suffix(
+                let visual_embedding_suffix_plan = crate::qwen3_5_core::vision::plan_qwen3_5_visual_embedding_suffix(
                         &prompt_token_ids,
                         prefill_cursor,
                         &ordered_image_visual_embedding_row_counts,

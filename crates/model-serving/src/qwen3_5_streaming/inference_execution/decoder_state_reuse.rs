@@ -21,8 +21,8 @@ use crate::{
     PersistentPromptCacheDiskStore, PersistentPromptCachePrefixLookup,
 };
 
-use super::super::RequestDecoderStateStack;
 use super::Qwen3_5EngineState;
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 /// The cache-specific portion of a newly admitted request's starting state.
 ///
 /// `restored_token_count` drives the prefill cursor, while the u32 field is

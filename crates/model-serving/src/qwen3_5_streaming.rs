@@ -3,7 +3,12 @@ pub(crate) mod expert_paging;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_residency;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod inference_execution;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::build_source_manifests;

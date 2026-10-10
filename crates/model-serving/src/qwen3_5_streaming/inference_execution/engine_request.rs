@@ -15,11 +15,11 @@ use crate::{
     Qwen3_5ThinkingBudgetState,
 };
 
-use super::super::text::sampler;
 use super::qwen3_5_runtime_error;
 use crate::qwen3_5::{
     Qwen3_5Model, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
 };
+use crate::qwen3_5_core::text::sampler;
 use astronomical_mlx_c_rust::MlxArray;
 
 /// Retained request state needed to retry one rejected prompt-processing attempt.
@@ -30,7 +30,7 @@ pub(super) struct Qwen3_5PrefillRequestCheckpoint {
     consumed_visual_embedding_count: usize,
 }
 
-pub(in crate::qwen3_5) struct Qwen3_5EngineRequest {
+pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     pub(super) request_decoder_state: RequestDecoderStateStack,
     pub(super) generated_token_count: u16,
     pub(super) input_token_ids: Vec<u32>,
@@ -164,7 +164,7 @@ impl Qwen3_5EngineRequest {
         operation_output
     }
 
-    pub(in crate::qwen3_5) fn build_generated_token(
+    pub(in crate::qwen3_5_streaming) fn build_generated_token(
         &mut self,
         model: &Qwen3_5Model,
         logits: &MlxArray,

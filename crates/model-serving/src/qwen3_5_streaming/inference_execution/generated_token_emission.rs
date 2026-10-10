@@ -7,13 +7,13 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::qwen3_5::Qwen3_5Model;
 
-pub(in crate::qwen3_5) struct GeneratedTokenEmission {
-    pub(in crate::qwen3_5) generated_token: GeneratedToken,
-    pub(in crate::qwen3_5) is_terminal: bool,
+pub(in crate::qwen3_5_streaming) struct GeneratedTokenEmission {
+    pub(in crate::qwen3_5_streaming) generated_token: GeneratedToken,
+    pub(in crate::qwen3_5_streaming) is_terminal: bool,
 }
 
 impl Qwen3_5EngineState {
-    pub(in crate::qwen3_5) fn generated_token_will_be_terminal(
+    pub(in crate::qwen3_5_streaming) fn generated_token_will_be_terminal(
         &self,
         active_request: &Qwen3_5EngineRequest,
         generated_token_id: u32,
@@ -23,7 +23,7 @@ impl Qwen3_5EngineState {
                 >= active_request.maximum_output_tokens
     }
 
-    pub(in crate::qwen3_5) fn build_generated_token_emission(
+    pub(in crate::qwen3_5_streaming) fn build_generated_token_emission(
         &self,
         model: &Qwen3_5Model,
         active_request: &mut Qwen3_5EngineRequest,
