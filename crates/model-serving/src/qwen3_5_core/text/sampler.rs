@@ -3,13 +3,13 @@ use astronomical_mlx_c_rust::MlxArray;
 use crate::InferenceEngineError;
 use crate::gpu_token_sampling;
 
-use super::super::inference_execution;
-use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
+use crate::qwen3_5::inference_execution;
+use crate::qwen3_5::inference_execution::qwen3_5_runtime_error;
 
 pub use crate::gpu_token_sampling::apply_top_p_mask as qwen3_5_apply_top_p_mask;
 
-pub(in crate::qwen3_5) fn random_state_for_seed(
+pub(crate) fn random_state_for_seed(
     model: &Qwen3_5Model,
     seed: u64,
 ) -> Result<MlxArray, InferenceEngineError> {
@@ -19,7 +19,7 @@ pub(in crate::qwen3_5) fn random_state_for_seed(
         .map_err(qwen3_5_runtime_error)
 }
 
-pub(in crate::qwen3_5) fn validate_sampled_strategy(
+pub(crate) fn validate_sampled_strategy(
     temperature_thousandths: u16,
     top_k: u16,
     top_p_thousandths: u16,
@@ -33,7 +33,7 @@ pub(in crate::qwen3_5) fn validate_sampled_strategy(
 }
 
 /// Builds one lazy Qwen3.5 sample using the shared GPU top-k + top-p pipeline.
-pub(in crate::qwen3_5) fn build_qwen3_5_sampled_token(
+pub(crate) fn build_qwen3_5_sampled_token(
     model: &Qwen3_5Model,
     final_logits: &MlxArray,
     temperature_thousandths: u16,

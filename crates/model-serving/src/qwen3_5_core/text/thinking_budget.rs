@@ -194,7 +194,7 @@ pub enum Qwen3_5ThinkingBudgetError {
 }
 
 /// Reserves the reasoning allowance, complete transition, and one visible token.
-pub(in crate::qwen3_5) fn minimum_bounded_output_token_count(
+pub(crate) fn minimum_bounded_output_token_count(
     thinking_budget: u16,
     forced_transition_token_count: usize,
 ) -> Option<usize> {

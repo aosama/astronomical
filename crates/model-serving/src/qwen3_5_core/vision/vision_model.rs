@@ -36,7 +36,7 @@ pub struct Qwen3_5VisionModel {
 
 impl Qwen3_5VisionModel {
     #[must_use]
-    pub(in crate::qwen3_5) fn resident_payload_bytes(&self) -> u64 {
+    pub(crate) fn resident_payload_bytes(&self) -> u64 {
         if self.weights_have_been_used.get() {
             self.weights.total_payload_bytes()
         } else {

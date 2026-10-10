@@ -1,16 +1,16 @@
 //! Shared Qwen3.5 behavior and dense model support.
 
-pub(crate) mod artifacts;
-mod configuration;
-mod decoder;
-pub(crate) mod dense;
+// Issue #1132 migration step 1: the paging-free family kernel moved to
+// `qwen3_5_core`. These re-exports keep every existing `crate::qwen3_5::`
+// path resolving until the engine fork deletes this bridge.
+pub(crate) use crate::qwen3_5_core::{
+    artifacts, configuration, decoder, dense, quantizations, text, vision,
+};
+
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod inference_execution;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod model;
-pub(crate) mod quantizations;
-mod text;
-mod vision;
 
 pub use artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,

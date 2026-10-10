@@ -207,7 +207,7 @@ pub struct Qwen3_5InferenceExecution {
     pub(super) adaptive_ram_growth_guard: AdaptiveRamGrowthGuard,
     pub(super) adaptive_ram_growth_guard_enabled: bool,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-    pub(in super::super) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
+    pub(crate) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
     pub(super) context_memory_reservation_bytes_per_token: usize,
     end_of_sequence_token_ids: Vec<u32>,
     /// Token ID that closes the thinking block. Used to enforce thinking_budget.
@@ -227,18 +227,18 @@ pub struct Qwen3_5InferenceExecution {
     /// boundary for request context. The configured `maximum_position_count`
     /// above is advisory and advertised unchanged.
     hard_maximum_position_count: usize,
-    pub(super) model: Option<Qwen3_5Model>,
+    pub(crate) model: Option<Qwen3_5Model>,
     pub(crate) persistent_prompt_cache_model_contract: Option<PersistentPromptCacheModelContract>,
     pub(crate) persistent_visual_embedding_model_contract:
         Option<PersistentVisualEmbeddingModelContract>,
-    pub(in super::super) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
+    pub(crate) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
     prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
     chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,
 }
 
-pub(in crate::qwen3_5) type Qwen3_5EngineState = Qwen3_5InferenceExecution;
+pub(crate) type Qwen3_5EngineState = Qwen3_5InferenceExecution;
 
 impl MlxInferenceExecution for Qwen3_5InferenceExecution {
     type Request = Qwen3_5InferenceRequest;
@@ -364,7 +364,7 @@ pub(crate) fn qwen3_5_runtime_error(runtime_error: impl std::fmt::Display) -> In
     fatal_engine_error(runtime_error.to_string())
 }
 
-pub(super) fn fatal_engine_error(reason: impl Into<String>) -> InferenceEngineError {
+pub(crate) fn fatal_engine_error(reason: impl Into<String>) -> InferenceEngineError {
     InferenceEngineError::Fatal {
         reason: reason.into(),
     }
