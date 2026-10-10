@@ -26,13 +26,13 @@ use crate::{
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
-use super::super::model::memory_admission;
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
     Qwen3_5EngineState, Qwen3_5PromptProcessingChunkSizer, fatal_engine_error,
     qwen3_5_runtime_error,
 };
+use crate::qwen3_5_streaming::model::memory_admission;
 impl Qwen3_5EngineState {
     pub(super) fn advance_prompt_prefill_if_pending(
         &mut self,

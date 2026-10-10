@@ -35,8 +35,8 @@ use astronomical_ipc_protocol::RequestId;
 use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase, PerformanceOperation};
 
-use super::super::model::Qwen3_5Model;
 use super::Qwen3_5EngineState;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5EngineState {
     /// Reconciles retained ownership with the leftover ceiling after prefill.
@@ -188,7 +188,7 @@ impl Qwen3_5EngineState {
 /// warm tables churning at a few experts per layer while entitlement sat
 /// unclaimed. Resizing as evidence accumulates lets warming grow into the
 /// entitlement the guard's decode evidence supports.
-pub(in crate::qwen3_5) fn decode_warm_slot_count(
+pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
     adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     model: &Qwen3_5Model,
     expert_statistics: crate::ExpertWeightMemoryCacheStatistics,

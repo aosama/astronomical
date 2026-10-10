@@ -2,9 +2,9 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
 
-use super::super::model::memory_admission;
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory;
+use crate::qwen3_5_streaming::model::memory_admission;
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(

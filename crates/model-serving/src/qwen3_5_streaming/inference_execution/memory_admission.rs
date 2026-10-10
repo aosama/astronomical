@@ -36,7 +36,7 @@ use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 /// further would only hide a projection that cannot recede.
 const MAXIMUM_PAGED_EXPERT_RECLAMATION_PASSES: u32 = 8;
 
-pub(in crate::qwen3_5) enum AdaptiveRamGrowthMemoryAdmissionError {
+pub(in crate::qwen3_5_streaming) enum AdaptiveRamGrowthMemoryAdmissionError {
     /// The request is valid, but this fixed operation cannot fit after all legal reclamation.
     InsufficientCapacity { reason: String },
     /// A runtime or internal engine failure that must retain its original typed cause.
@@ -66,21 +66,21 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
 ///
 /// `usize::MAX` / `u64::MAX` sentinels mark a disabled adaptive guard; callers
 /// may still sample telemetry but perform no learning from them.
-pub(in crate::qwen3_5) struct AdaptiveRamGrowthAdmissionBaseline {
-    pub(in crate::qwen3_5) active_memory_bytes: usize,
-    pub(in crate::qwen3_5) retained_expert_payload_bytes: u64,
+pub(in crate::qwen3_5_streaming) struct AdaptiveRamGrowthAdmissionBaseline {
+    pub(in crate::qwen3_5_streaming) active_memory_bytes: usize,
+    pub(in crate::qwen3_5_streaming) retained_expert_payload_bytes: u64,
     /// Cumulative logical expert-streaming payload bytes at admission commit.
     /// The delta to this request's value after the forward is that forward's
     /// mandatory expert-page stream (issue #691).
-    pub(in crate::qwen3_5) streamed_expert_page_bytes: u64,
+    pub(in crate::qwen3_5_streaming) streamed_expert_page_bytes: u64,
     /// Evidence level that composed the admitted projection, exported so
     /// performance attribution can attribute reserve inflation to its source.
-    pub(in crate::qwen3_5) transient_reserve_source:
+    pub(in crate::qwen3_5_streaming) transient_reserve_source:
         Option<crate::AdaptiveRamGrowthTransientReserveSource>,
 }
 
 impl AdaptiveRamGrowthAdmissionBaseline {
-    pub(in crate::qwen3_5) const fn disabled_guard_sentinel() -> Self {
+    pub(in crate::qwen3_5_streaming) const fn disabled_guard_sentinel() -> Self {
         Self {
             active_memory_bytes: usize::MAX,
             retained_expert_payload_bytes: u64::MAX,
@@ -92,7 +92,7 @@ impl AdaptiveRamGrowthAdmissionBaseline {
 
 impl Qwen3_5EngineState {
     /// Attributes adaptive admission, including any retained-expert reclamation.
-    pub(in crate::qwen3_5) fn measure_adaptive_ram_growth_memory_admission(
+    pub(in crate::qwen3_5_streaming) fn measure_adaptive_ram_growth_memory_admission(
         &mut self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         performance_attribution: &mut PerformanceAttribution,

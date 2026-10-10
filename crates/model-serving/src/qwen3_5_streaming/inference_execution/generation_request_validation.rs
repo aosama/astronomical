@@ -6,9 +6,9 @@
 
 use crate::{InferenceEngineError, Qwen3_5InferenceRequest};
 
-use super::super::model::memory_admission;
-use super::super::text;
 use super::Qwen3_5EngineState;
+use crate::qwen3_5_core::text;
+use crate::qwen3_5_streaming::model::memory_admission;
 
 impl Qwen3_5EngineState {
     pub(super) fn validate_generation_request_and_resolve_total_context(

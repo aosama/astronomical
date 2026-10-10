@@ -9,7 +9,7 @@ use crate::{
     plan_qwen3_5_visual_prompt_cache_block_inputs,
 };
 
-use super::super::model::memory_admission;
+use crate::qwen3_5_streaming::model::memory_admission;
 
 pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentity {
     pub(super) ordered_image_visual_embedding_row_counts: Vec<usize>,

@@ -37,12 +37,12 @@ use super::qwen3_5_runtime_error;
 /// can never publish a claim that disagrees with its own measurement (issue
 /// #337).
 #[derive(Debug)]
-pub(in crate::qwen3_5) struct CompletedForwardMemoryObservation {
-    pub(in crate::qwen3_5) mlx_memory_snapshot: MlxMemorySnapshot,
+pub(in crate::qwen3_5_streaming) struct CompletedForwardMemoryObservation {
+    pub(in crate::qwen3_5_streaming) mlx_memory_snapshot: MlxMemorySnapshot,
 }
 
 /// Captures the raw MLX snapshot at one instant.
-pub(in crate::qwen3_5) fn capture_completed_forward_memory_observation(
+pub(in crate::qwen3_5_streaming) fn capture_completed_forward_memory_observation(
     model: &Qwen3_5Model,
 ) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
     let mlx_memory_snapshot = model
@@ -59,7 +59,7 @@ pub(in crate::qwen3_5) fn capture_completed_forward_memory_observation(
 /// The returned snapshot is also used for user-visible memory telemetry. Returning
 /// the exact sample used for learning prevents status from presenting a different
 /// instant than the one that changed expert-retention policy.
-pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
+pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
     adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     should_retain_adaptive_ram_growth_observation: bool,
@@ -138,7 +138,7 @@ pub(in crate::qwen3_5) fn collect_completed_forward_memory_snapshot(
 }
 
 /// Records adaptive learning for a completed operation that needs no snapshot result.
-pub(in crate::qwen3_5) fn record_completed_adaptive_ram_growth(
+pub(in crate::qwen3_5_streaming) fn record_completed_adaptive_ram_growth(
     adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     should_retain_adaptive_ram_growth_observation: bool,
