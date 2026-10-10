@@ -10,6 +10,7 @@ use astronomical_model_serving::{
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 use serde_json::Value;
+use serial_test::serial;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::support::performance_attribution::{
@@ -28,8 +29,9 @@ fn model_id() -> &'static str {
 
 #[tokio::test]
 #[ignore = "loads a sparse model under its paging ceiling and serves Romeo twice"]
+#[serial]
 async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling() {
-    timeout(Duration::from_secs(115), async {
+    timeout(Duration::from_secs(60), async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let model_directory =
             crate::common::configured_installed_model_directory_by_id(model_id());
@@ -172,7 +174,7 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
         eprintln!("[paged-decode 4/4] status=success");
     })
     .await
-    .expect("paged Romeo decode must finish within 115 seconds");
+    .expect("paged Romeo decode must finish within 60 seconds");
 }
 
 struct MemoryPolicyEvidence {

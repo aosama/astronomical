@@ -33,14 +33,42 @@ const READY_ATTEMPT_LIMIT: u8 = 70;
 /// Leaves five seconds inside the repository-wide 120-second command maximum for cleanup.
 #[allow(dead_code)]
 pub(crate) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
+/// SSD memory journeys stop early so slow behavior can be isolated below the journey layer.
+#[allow(dead_code)]
+pub(crate) const SSD_JOURNEY_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[allow(dead_code)]
 pub(crate) struct RealModelRestServer {
     /// Owns and ultimately reaps the production worker subprocess.
-    worker_handle: WorkerHandle,
+    worker_handle: Option<WorkerHandle>,
     pub(crate) server_address: SocketAddr,
-    shutdown_sender: oneshot::Sender<()>,
-    server_task: JoinHandle<Result<(), std::io::Error>>,
+    shutdown_sender: Option<oneshot::Sender<()>>,
+    server_task: Option<JoinHandle<Result<(), std::io::Error>>>,
+}
+
+impl Drop for RealModelRestServer {
+    fn drop(&mut self) {
+        if let Some(shutdown_sender) = self.shutdown_sender.take() {
+            let _shutdown_send_result = shutdown_sender.send(());
+        }
+        if let Some(server_task) = self.server_task.take() {
+            server_task.abort();
+        }
+        if let Some(worker_handle) = self.worker_handle.take() {
+            match tokio::runtime::Handle::try_current() {
+                Ok(runtime_handle) => {
+                    runtime_handle.spawn(async move {
+                        if let Err(shutdown_error) = worker_handle.shutdown().await {
+                            eprintln!(
+                                "[real-model-rest-cleanup] worker shutdown failed after journey cancellation: {shutdown_error}"
+                            );
+                        }
+                    });
+                }
+                Err(_) => drop(worker_handle),
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -147,26 +175,34 @@ pub(crate) async fn launch_real_model_rest_server_for_models(
     let server_task = tokio::spawn(async move { server.await });
     wait_until_ready(server_address).await;
     RealModelRestServer {
-        worker_handle,
+        worker_handle: Some(worker_handle),
         server_address,
-        shutdown_sender,
-        server_task,
+        shutdown_sender: Some(shutdown_sender),
+        server_task: Some(server_task),
     }
 }
 
 #[allow(dead_code)]
-pub(crate) async fn stop_real_model_rest_server(real_model_rest_server: RealModelRestServer) {
+pub(crate) async fn stop_real_model_rest_server(mut real_model_rest_server: RealModelRestServer) {
     // Stop accepting HTTP first, await graceful server completion, then ask the
     // worker handle to terminate and reap the subprocess. This order prevents a
     // late request from racing worker shutdown and leaving a child process alive.
-    let _ = real_model_rest_server.shutdown_sender.send(());
+    let shutdown_sender = real_model_rest_server
+        .shutdown_sender
+        .take()
+        .expect("the real-model server should still own its shutdown signal");
+    let _ = shutdown_sender.send(());
     real_model_rest_server
         .server_task
+        .take()
+        .expect("the real-model server should still own its task")
         .await
         .expect("the real-model REST server task should not panic")
         .expect("the real-model REST server should stop cleanly");
     real_model_rest_server
         .worker_handle
+        .take()
+        .expect("the real-model server should still own its worker")
         .shutdown()
         .await
         .expect("the real-model worker should terminate and be reaped");

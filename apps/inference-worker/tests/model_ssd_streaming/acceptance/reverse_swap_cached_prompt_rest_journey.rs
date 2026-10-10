@@ -10,11 +10,12 @@ use std::{fs, path::Path};
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
+use serial_test::serial;
 use tokio::time::{Duration, Instant, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
-    JOURNEY_TIMEOUT, launch_real_model_rest_server_for_models, stop_real_model_rest_server,
+    SSD_JOURNEY_TIMEOUT, launch_real_model_rest_server_for_models, stop_real_model_rest_server,
 };
 
 const CONFIGURED_MLX_MEMORY_CEILING_BYTES: u64 = 30_000_000_000;
@@ -29,10 +30,11 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches two production model artifacts and proves cached reverse-swap latency and physical residency"]
+#[serial]
 async fn should_complete_cached_reverse_swap_without_hidden_model_page_ins() {
-    timeout(JOURNEY_TIMEOUT, run_cached_reverse_swap_journey())
+    timeout(SSD_JOURNEY_TIMEOUT, run_cached_reverse_swap_journey())
         .await
-        .expect("the cached reverse-swap REST journey must finish within 115 seconds");
+        .expect("the cached reverse-swap SSD journey must finish within 60 seconds");
 }
 
 async fn run_cached_reverse_swap_journey() {

@@ -88,15 +88,8 @@ main() {
 
     cp "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
         "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
-    cp "${repository_root}/scripts/run-disposable-cargo-journey.sh" \
-        "${sandbox_scripts_directory}/run-disposable-cargo-journey.sh"
-    cp "${repository_root}/scripts/run-bounded-cargo-test.sh" \
-        "${sandbox_scripts_directory}/run-bounded-cargo-test.sh"
-    chmod +x "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh" \
-        "${sandbox_scripts_directory}/run-disposable-cargo-journey.sh" \
-        "${sandbox_scripts_directory}/run-bounded-cargo-test.sh"
+    chmod +x "${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
     lifecycle_subject="${sandbox_scripts_directory}/run-in-disposable-cargo-target.sh"
-    journey_subject="${sandbox_scripts_directory}/run-disposable-cargo-journey.sh"
 
     cat > "${sandbox_scripts_directory}/cargo-lifecycle-fixture.sh" <<'FIXTURE'
 #!/usr/bin/env sh
@@ -425,27 +418,13 @@ CARGO
     assert_lane_root_is_empty "$lane_root"
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=direct-mlx-journey-is-disposable status=success'
 
-    printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-acceptance-journey-is-disposable status=start'
-    named_journey_target_record="${SANDBOX_DIRECTORY}/named-journey-target"
-    ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
-        ASTRONOMICAL_TEST_CARGO_TARGET_RECORD="$named_journey_target_record" \
-        PATH="${fake_command_directory}:${PATH}" \
-        run_subject "$timeout_executable" "$journey_subject" test-model-ssd-streaming-support
-    assert_path_is_absent "$(cat "$named_journey_target_record")"
-    assert_lane_root_is_empty "$lane_root"
-    printf '%s\n' '[cargo-artifact-lifecycle-test] case=named-acceptance-journey-is-disposable status=success'
-
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=start'
-    journey_list_path="${SANDBOX_DIRECTORY}/journey-list"
-    "$journey_subject" --list > "$journey_list_path"
-    ASTRONOMICAL_TEST_REPOSITORY_ROOT="$repository_root" \
-        ASTRONOMICAL_TEST_JOURNEY_LIST="$journey_list_path" python3 <<'PYTHON'
+    ASTRONOMICAL_TEST_REPOSITORY_ROOT="$repository_root" python3 <<'PYTHON'
 import os
 import pathlib
 import tomllib
 
 repository_root = pathlib.Path(os.environ["ASTRONOMICAL_TEST_REPOSITORY_ROOT"])
-journey_list_path = pathlib.Path(os.environ["ASTRONOMICAL_TEST_JOURNEY_LIST"])
 workspace_manifest = tomllib.loads((repository_root / "Cargo.toml").read_text())
 profiles = workspace_manifest["profile"]
 assert profiles["dev"]["debug"] == "line-tables-only"
@@ -460,57 +439,15 @@ aliases = cargo_configuration["alias"]
 assert set(aliases) == {"test-hermetic", "test-rest-api", "test-hermetic-and-rest"}
 assert all(isinstance(alias_command, list) for alias_command in aliases.values())
 
-bounded_test_runner = (repository_root / "scripts/run-bounded-cargo-test.sh").read_text()
-assert "readonly COMPILE_TIMEOUT_SECONDS=600" in bounded_test_runner
-assert "readonly DEFAULT_TEST_TIMEOUT_SECONDS=120" in bounded_test_runner
-journey_dispatcher = (repository_root / "scripts/run-disposable-cargo-journey.sh").read_text()
-assert "run-bounded-cargo-test.sh" in journey_dispatcher
-ignored_suite_runner = (repository_root / "scripts/run-ignored-serving-acceptance.sh").read_text()
-assert "run-bounded-cargo-test.sh" in ignored_suite_runner
-assert "--ignored --list" in ignored_suite_runner
+assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()
+assert not (repository_root / "scripts/run-ignored-serving-acceptance.sh").exists()
+assert not (repository_root / "scripts/run-performance-throughput.sh").exists()
+assert not (repository_root / "scripts/run-disposable-cargo-journey.sh").exists()
 assert "--foreground" in (repository_root / "scripts/test-direct-mlx.sh").read_text()
 assert "--foreground" in (
     repository_root / "scripts/accept-prompt-cache-interactions.sh"
 ).read_text()
 
-expected_journeys = {
-    "accept-model-ssd-streaming",
-    "accept-serving",
-    "accept-cache-disabled-generation",
-    "accept-cached-reverse-model-swap",
-    "accept-tool-call-reuse",
-    "accept-thinking-seed",
-    "accept-hard-thinking-budget",
-    "accept-follow-up-turn-admission",
-    "accept-client-thinking-budget",
-    "accept-structured-output",
-    "accept-embeddings",
-    "accept-modernbert-reference-similarity",
-    "accept-kernel-fallback-qwen",
-    "accept-kernel-fallback-k2",
-    "accept-prompt-cache",
-    "test-model-ssd-streaming-support",
-    "test-persistent-prompt-cache-performance-support",
-    "measure-model-ssd-streaming-summary",
-    "measure-persistent-prompt-cache-warmup",
-    "measure-persistent-prompt-cache-warmup-50k",
-    "measure-persistent-prompt-cache-warmup-100k",
-    "measure-model-ssd-streaming-cold-prefill-50k",
-    "measure-model-ssd-streaming-prefill-1024",
-    "measure-model-ssd-streaming-prefill-2048",
-    "measure-model-ssd-streaming-prefill-4096",
-    "measure-model-ssd-streaming-prefill-8192",
-    "measure-model-ssd-streaming-read-concurrency",
-    "measure-model-ssd-streaming-complete-expert-residency",
-    "measure-model-ssd-streaming-leftover-complete-layer-seating",
-    "measure-model-ssd-streaming-live-memory-ceiling-round-trip",
-    "measure-model-ssd-streaming-decode-expert-retention",
-    "measure-model-ssd-streaming-cached-suffix-streaming-prefill",
-    "measure-model-ssd-streaming-high-ram-cached-suffix-prefill",
-    "measure-model-ssd-streaming-large-sparse-moe-tight-ceiling-prefill",
-    "measure-model-ssd-streaming-prefill-memory-progress",
-}
-assert set(journey_list_path.read_text().splitlines()) == expected_journeys
 PYTHON
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=success'
 

@@ -34,6 +34,8 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+libc.workspace = true
+serial_test.workspace = true
 tempfile = "=3.27.0"
 tracing-subscriber.workspace = true
 

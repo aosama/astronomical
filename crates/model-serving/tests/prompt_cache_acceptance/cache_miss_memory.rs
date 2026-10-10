@@ -22,7 +22,7 @@ const MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 async fn should_not_reclaim_more_expert_payload_for_a_cache_miss_than_without_cache() {
     require_cache_miss_memory_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+        let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
             .expect("the model artifact should validate before preparing the source prompt");

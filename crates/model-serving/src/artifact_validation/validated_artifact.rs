@@ -112,6 +112,11 @@ impl ValidatedRequiredFile {
 }
 
 impl ValidatedWeightsFile {
+    /// Returns the validated file's name for cache-retention error context.
+    pub fn file_name(&self) -> &str {
+        &self.validated_required_file.file_name
+    }
+
     /// Transfers the validated read-only descriptor to its runtime owner.
     pub fn into_file(self) -> File {
         self.validated_required_file.file

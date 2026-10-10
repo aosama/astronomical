@@ -16,6 +16,7 @@ use std::{
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
+use serial_test::serial;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
@@ -35,19 +36,20 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 512;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 256;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 const REQUEST_MUST_BECOME_ACTIVE_WITHIN: Duration = Duration::from_secs(20);
-const JOURNEY_DEADLINE: Duration = Duration::from_secs(120);
+const JOURNEY_DEADLINE: Duration = Duration::from_secs(60);
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and real worker to accept complete expert residency without request-time SSD streaming"]
+#[serial]
 async fn should_keep_all_experts_resident_and_avoid_ssd_reads_when_the_model_fits_memory() {
     timeout(
         JOURNEY_DEADLINE,
         run_complete_expert_residency_rest_journey(),
     )
     .await
-    .expect("the complete expert-residency REST journey must finish within 120 seconds");
+    .expect("the complete expert-residency SSD journey must finish within 60 seconds");
 }
 
 async fn run_complete_expert_residency_rest_journey() {

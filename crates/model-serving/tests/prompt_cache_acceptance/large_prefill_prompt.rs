@@ -49,3 +49,27 @@ pub(super) fn representative_long_generation_prompt_token_ids(
     }
     panic!("the Romeo and Juliet acceptance prompt did not reach 16,384 input tokens")
 }
+
+/// Builds the long Romeo-and-Juliet prompt truncated to exactly
+/// `target_prompt_token_count` prepared tokens, so journeys running
+/// 2,048-token prefill chunks can size their cold prefill to their own time
+/// budget. Callers pass a multiple of their cache block size so the truncated
+/// prompt ends on a block boundary; cold and restored phases receive the same
+/// token ids, so truncation cannot bias the parity comparison.
+pub(super) fn representative_long_generation_prompt_token_ids_capped_at(
+    prompt_tokenizer: &Qwen3_5Tokenizer,
+    model_id: &str,
+    target_prompt_token_count: usize,
+) -> Vec<u32> {
+    let prepared_prompt_token_ids =
+        representative_long_generation_prompt_token_ids(prompt_tokenizer, model_id);
+    assert!(
+        prepared_prompt_token_ids.len() >= target_prompt_token_count,
+        "the representative acceptance prompt has {} tokens, below the capped target {target_prompt_token_count}",
+        prepared_prompt_token_ids.len(),
+    );
+    prepared_prompt_token_ids
+        .into_iter()
+        .take(target_prompt_token_count)
+        .collect()
+}

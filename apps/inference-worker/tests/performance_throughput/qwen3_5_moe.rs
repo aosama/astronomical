@@ -25,8 +25,7 @@
 //! a threshold check.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU memory,
-//! so it is `#[ignore]`d and not wired into CI. Invoke it through
-//! scripts/run-performance-throughput.sh (invocation only) or directly with
+//! so it is `#[ignore]`d and not wired into CI. Invoke it directly with
 //! `cargo test --release -p astronomical-inference-worker --features
 //! astronomical-inference-worker/performance_throughput --test
 //! performance_throughput_tests -- --ignored --exact`.
@@ -34,6 +33,7 @@
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
 use crate::support;
+use serial_test::serial;
 
 /// The short warmup: a ~1,000-token Romeo and Juliet opening, continued for a
 /// short passage, that spins up first-use JIT kernels before the measured run.
@@ -68,20 +68,17 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// server-attributed rates are persisted to the durable historical record.
 #[test]
 #[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput over IPC"]
+#[serial]
 fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() {
-    let journey = ThroughputJourney {
-        journey_kind: ThroughputJourneyKind::Text,
-        warmup_input_prompt: format!(
-            "{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"
-        ),
-        warmup_images: Vec::new(),
-        warmup_output_tokens: WARMUP_MAXIMUM_OUTPUT_TOKENS,
-        measured_input_prompt: format!(
-            "{MEASURED_INPUT_INSTRUCTION}\n\n{MEASURED_ROMEO_AND_JULIET_SOURCE}"
-        ),
-        measured_images: Vec::new(),
-        measured_output_tokens: MEASURED_MAXIMUM_OUTPUT_TOKENS,
-        temperature_thousandths: TEMPERATURE_THOUSANDTHS,
-    };
+    let journey = ThroughputJourney::production_default(
+        ThroughputJourneyKind::Text,
+        format!("{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"),
+        Vec::new(),
+        WARMUP_MAXIMUM_OUTPUT_TOKENS,
+        format!("{MEASURED_INPUT_INSTRUCTION}\n\n{MEASURED_ROMEO_AND_JULIET_SOURCE}"),
+        Vec::new(),
+        MEASURED_MAXIMUM_OUTPUT_TOKENS,
+        TEMPERATURE_THOUSANDTHS,
+    );
     throughput_support::run_journey_with_timeout(support::resident_sparse_moe_model_id(), journey);
 }

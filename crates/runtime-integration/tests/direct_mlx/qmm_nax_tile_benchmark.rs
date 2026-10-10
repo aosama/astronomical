@@ -28,7 +28,7 @@ const TILE_CANDIDATES: [(usize, usize, usize, usize, usize); 5] = [
 ];
 
 #[test]
-#[ignore = "measures NAX qmm tile variants on real GPU kernels; run via scripts/run-bounded-cargo-test.sh"]
+#[ignore = "measures NAX qmm tile variants on real GPU kernels; run directly with one test thread"]
 fn should_measure_nax_qmm_tile_variants_for_transposed_prefill_shapes() {
     let runtime = runtime_test_support::runtime();
 
@@ -77,7 +77,7 @@ fn should_measure_nax_qmm_tile_variants_for_transposed_prefill_shapes() {
         }
     }
 
-    // SAFETY: scripts/run-bounded-cargo-test.sh pins --test-threads=1 for this
+    // SAFETY: this GPU test must be run with --test-threads=1
     // binary, so no other test thread can observe the environment mid-sweep.
     unsafe { std::env::remove_var("ASTRONOMICAL_QMM_NAX_TILE") };
 }
@@ -192,7 +192,7 @@ fn measure_tile(
 
 fn apply_tile_override(tile_candidate: (usize, usize, usize, usize, usize)) {
     let (bm, bn, bk, wm, wn) = tile_candidate;
-    // SAFETY: scripts/run-bounded-cargo-test.sh pins --test-threads=1 for this
+    // SAFETY: this GPU test must be run with --test-threads=1
     // binary, so no other test thread can observe the environment mid-sweep.
     unsafe {
         std::env::set_var(

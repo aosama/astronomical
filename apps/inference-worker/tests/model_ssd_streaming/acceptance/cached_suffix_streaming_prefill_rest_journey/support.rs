@@ -1,7 +1,7 @@
 //! Status evidence and isolated configuration for the residency interaction journey.
 
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -34,31 +34,7 @@ pub(super) fn production_shaped_tools(tool_count: usize) -> Vec<Value> {
         .collect()
 }
 
-pub(super) fn artifact_directory_regular_file_bytes(model_directory: &Path) -> u64 {
-    let mut artifact_payload_bytes = 0_u64;
-    let mut pending_directories = vec![model_directory.to_path_buf()];
-    while let Some(current_directory) = pending_directories.pop() {
-        let directory_entries = fs::read_dir(&current_directory).unwrap_or_else(|read_error| {
-            panic!("the discovered model directory should be readable: {read_error}")
-        });
-        for directory_entry in directory_entries {
-            let directory_entry = directory_entry.unwrap_or_else(|read_error| {
-                panic!("a model directory entry should be readable: {read_error}")
-            });
-            let entry_path = directory_entry.path();
-            let entry_metadata = directory_entry.metadata().unwrap_or_else(|read_error| {
-                panic!("model file metadata should be readable: {read_error}")
-            });
-            if entry_metadata.is_dir() {
-                pending_directories.push(entry_path);
-            } else if entry_metadata.is_file() {
-                artifact_payload_bytes =
-                    artifact_payload_bytes.saturating_add(entry_metadata.len());
-            }
-        }
-    }
-    artifact_payload_bytes
-}
+pub(super) use crate::support::artifact_bytes::artifact_directory_regular_file_bytes;
 
 pub(super) fn write_interaction_config(
     isolated_worker_home: &Path,
@@ -125,14 +101,7 @@ pub(super) fn persist_acceptance_evidence(isolated_worker_home: &Path) -> PathBu
 }
 
 pub(super) fn acceptance_evidence_root() -> PathBuf {
-    if let Ok(configured_evidence_directory) =
-        env::var("ASTRONOMICAL_ACCEPTANCE_EVIDENCE_DIRECTORY")
-    {
-        return PathBuf::from(configured_evidence_directory);
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("target/acceptance-evidence/cached-suffix-streaming-prefill")
+    crate::support::acceptance_evidence::acceptance_evidence_root("cached-suffix-streaming-prefill")
 }
 
 fn acceptance_evidence_directory() -> PathBuf {

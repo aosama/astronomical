@@ -79,14 +79,35 @@ fn should_reject_invalid_resident_and_ssd_streaming_chunk_sizes() {
 #[test]
 fn should_default_paged_chunks_larger_than_resident_chunks() {
     let chunk_sizer =
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 8_192)
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 4_096)
             .expect("an explicit larger paged chunk should construct");
     assert_eq!(
         chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 20_000, true),
-        8_192
+        4_096
     );
     assert_eq!(
         chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 20_000, false),
+        2_048
+    );
+}
+
+#[test]
+fn should_resolve_the_admission_operation_bound_from_the_active_expert_mode() {
+    // Each residency mode's forwards record activation evidence at that
+    // mode's own operation scope, so the admission bound must match the mode
+    // that will actually run. Resolving the resident mode's promise at the
+    // paged scope inflated the reserve by the chunk ratio and rejected every
+    // later request (measured 2026-10-10).
+    let chunk_sizer =
+        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 4_096)
+            .expect("an explicit larger paged chunk should construct");
+
+    assert_eq!(
+        chunk_sizer.prompt_processing_operation_bound_tokens(true),
+        4_096
+    );
+    assert_eq!(
+        chunk_sizer.prompt_processing_operation_bound_tokens(false),
         2_048
     );
 }
