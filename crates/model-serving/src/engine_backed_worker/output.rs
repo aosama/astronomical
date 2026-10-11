@@ -23,7 +23,10 @@ where
 {
     pub(crate) async fn emit_model_outputs<WriteTransport>(
         &self,
-        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &mut ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         model_outputs: Vec<ChatGenerationOutput>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -106,7 +109,10 @@ where
 
     pub(crate) async fn emit_generation_finalization<WriteTransport>(
         &self,
-        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &mut ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         generation_finalization: GenerationFinalization,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -146,7 +152,10 @@ where
 
     pub(crate) async fn send_generation_progress<WriteTransport>(
         &self,
-        active_generation: &ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
@@ -182,10 +191,16 @@ where
 
     pub(crate) async fn finish_generation<WriteTransport>(
         &mut self,
-        mut active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        mut active_generation: ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         completion_reason: ChatGenerationCompletionReason,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<
+        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
+        WorkerRuntimeError,
+    >
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -242,7 +257,10 @@ where
 
     pub(crate) async fn fail_malformed_generation<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &mut ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -287,7 +305,10 @@ where
 
     pub(crate) async fn send_completion<WriteTransport>(
         &self,
-        active_generation: &ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         completion_reason: ChatGenerationCompletionReason,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>

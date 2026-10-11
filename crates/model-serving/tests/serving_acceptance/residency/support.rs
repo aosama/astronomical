@@ -7,7 +7,8 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 
 pub(super) const RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT: usize = 256;
@@ -22,6 +23,67 @@ pub(crate) fn initialize_automatic_residency_tracing() {
             "[automatic-residency] status=progress tracing=already_initialized reason={test_tracing_initialization_error}"
         );
     }
+}
+
+pub(super) fn construct_resident_engine(
+    model_directory: std::path::PathBuf,
+    active_memory_limit_bytes: usize,
+    allocator_cache_memory_limit_bytes: usize,
+    request_id: RequestId,
+    required_prompt_token_count: usize,
+) -> (Qwen3_5ResidentEngine, Vec<u32>, u32, usize) {
+    assert!(
+        model_directory.is_dir(),
+        "the configured sparse checkpoint must be available"
+    );
+    eprintln!("[automatic-residency 0/5] status=progress phase=artifact_validation");
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the configured sparse artifact should validate");
+    let model_id = validated_artifact.model_id().to_owned();
+    let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
+        .expect("the tokenizer should expose validated control tokens");
+    let think_end_token_id = tokenizer.think_end_token_id();
+    let image_pad_token_id = tokenizer.image_pad_token_id();
+    let prompt_token_ids = crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
+        &model_directory,
+        &model_id,
+        request_id,
+        required_prompt_token_count,
+        2,
+    );
+    let total_context_token_count = prompt_token_ids
+        .len()
+        .checked_add(2)
+        .expect("the request context token count should fit usize");
+    let context_memory_reservation_bytes = validated_artifact
+        .config()
+        .context_memory_reservation_bytes(total_context_token_count)
+        .expect("the request context memory reservation should fit usize");
+    let qwen3_5_engine =
+        Qwen3_5ResidentEngine::new_with_runtime_chunking_and_performance_attribution(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            None,
+            Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+                2_048,
+            )
+            .expect("the test prefill_chunk_tokens should be valid"),
+            think_end_token_id,
+            model_directory,
+            crate::common::standard_worker_chunking_configuration(),
+            false,
+            astronomical_model_serving::PerformanceAttribution::disabled(),
+            astronomical_model_serving::PerformanceAttributionLog::disabled(),
+        )
+        .expect("the resident expert engine settings should be valid");
+    (
+        qwen3_5_engine,
+        prompt_token_ids,
+        image_pad_token_id,
+        context_memory_reservation_bytes,
+    )
 }
 
 pub(super) fn construct_automatic_residency_engine(
@@ -82,13 +144,16 @@ pub(super) fn construct_automatic_residency_engine(
     )
 }
 
-pub(super) async fn serve_romeo_and_juliet_request(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+pub(super) async fn serve_romeo_and_juliet_request<Engine>(
+    qwen3_5_engine: &mut Engine,
     request_id: RequestId,
     prompt_token_ids: Vec<u32>,
     image_pad_token_id: u32,
     progress_log_prefix: &str,
-) -> GenerationFinalization {
+) -> GenerationFinalization
+where
+    Engine: InferenceEngine<Request = Qwen3_5InferenceRequest>,
+{
     eprintln!(
         "[{progress_log_prefix} 2/5] status=progress phase=romeo_and_juliet_generation prompt_tokens={}",
         prompt_token_ids.len()
@@ -103,11 +168,14 @@ pub(super) async fn serve_romeo_and_juliet_request(
     complete_started_romeo_and_juliet_request(qwen3_5_engine, request_id, progress_log_prefix).await
 }
 
-pub(super) async fn complete_started_romeo_and_juliet_request(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+pub(super) async fn complete_started_romeo_and_juliet_request<Engine>(
+    qwen3_5_engine: &mut Engine,
     request_id: RequestId,
     progress_log_prefix: &str,
-) -> GenerationFinalization {
+) -> GenerationFinalization
+where
+    Engine: InferenceEngine<Request = Qwen3_5InferenceRequest>,
+{
     loop {
         match qwen3_5_engine
             .decode_next_token(request_id)

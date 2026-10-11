@@ -4,7 +4,10 @@ use astronomical_config::{
     ModelFamily, PromptCacheConfig, classify_model_directory, verify_flux2_klein_model_directory,
     verify_qwen_image_21_model_directory,
 };
-use astronomical_ipc_protocol::{WorkerImageGenerationModelFamily, WorkerModelConfiguration};
+use astronomical_ipc_protocol::{
+    WorkerAutoregressiveModelConfiguration, WorkerImageGenerationModelFamily,
+    WorkerModelConfiguration,
+};
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
     K2HorizonMoVAServingSettings, ModelFactory, ModelFactoryRuntime,
@@ -13,7 +16,7 @@ use astronomical_model_serving::{
     initialize_k2_horizon_mova_model_with_serving_settings,
 };
 
-use crate::qwen3_5_model_startup;
+use crate::qwen3_5_model_startup::{self, Qwen3_5EngineSelection};
 
 /// Creates the concrete family processor and engine for a selected model directory.
 #[doc(hidden)]
@@ -53,6 +56,46 @@ impl ModelFamilyFactory {
             performance_attribution_log_path,
             persistent_prompt_cache_enabled,
         }
+    }
+
+    async fn create_qwen3_5_runtime(
+        &self,
+        model_directory_path: PathBuf,
+        model_configuration: WorkerAutoregressiveModelConfiguration,
+        engine_selection: Qwen3_5EngineSelection,
+    ) -> Result<
+        (
+            astronomical_model_serving::Qwen3_5GenerationProcessor,
+            ModelFamilyInferenceEngine,
+        ),
+        String,
+    > {
+        let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
+        let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
+        let prompt_cache_config = self.prompt_cache_config.clone();
+        let performance_attribution_enabled = self.performance_attribution_enabled;
+        let performance_attribution_log_path = self.performance_attribution_log_path.clone();
+        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
+        tokio::task::spawn_blocking(move || {
+            let chunking = model_configuration.chunking.clone();
+            qwen3_5_model_startup::initialize_qwen3_5_model(
+                model_directory_path,
+                effective_mlx_memory_ceiling_bytes,
+                allocator_cache_memory_limit_bytes,
+                prompt_cache_config,
+                model_configuration.model_id,
+                model_configuration.maximum_context_tokens,
+                model_configuration.maximum_output_tokens,
+                persistent_prompt_cache_enabled,
+                performance_attribution_enabled,
+                performance_attribution_log_path,
+                chunking,
+                engine_selection,
+            )
+            .map_err(|startup_error| startup_error.public_model_load_failure_reason())
+        })
+        .await
+        .map_err(|_| "Qwen3.5 initialization task failed".to_owned())?
     }
 }
 
@@ -96,33 +139,16 @@ impl
                 Some(ModelFamily::Qwen3_5),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
-                let (generation_processor, qwen3_5_engine) =
-                    tokio::task::spawn_blocking(move || {
-                        let chunking = model_configuration.chunking.clone();
-                        let (generation_processor, qwen3_5_engine) =
-                            qwen3_5_model_startup::initialize_qwen3_5_model(
-                                model_directory_path,
-                                effective_mlx_memory_ceiling_bytes,
-                                allocator_cache_memory_limit_bytes,
-                                prompt_cache_config,
-                                model_configuration.model_id,
-                                model_configuration.maximum_context_tokens,
-                                model_configuration.maximum_output_tokens,
-                                persistent_prompt_cache_enabled,
-                                performance_attribution_enabled,
-                                performance_attribution_log_path,
-                                chunking,
-                            )
-                            .map_err(|startup_error| {
-                                startup_error.public_model_load_failure_reason()
-                            })?;
-                        Ok::<_, String>((generation_processor, qwen3_5_engine))
-                    })
-                    .await
-                    .map_err(|_| "Qwen3.5 initialization task failed".to_owned())??;
+                let (generation_processor, qwen3_5_engine) = self
+                    .create_qwen3_5_runtime(
+                        model_directory_path,
+                        model_configuration,
+                        Qwen3_5EngineSelection::Resident,
+                    )
+                    .await?;
                 Ok(ModelFactoryRuntime::autoregressive(
                     ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
-                    ModelFamilyInferenceEngine::Qwen3_5(qwen3_5_engine),
+                    qwen3_5_engine,
                 ))
             }
             (
@@ -304,6 +330,40 @@ impl
             ),
             (None, _) => Err("selected model has an unsupported model family".to_owned()),
         }
+    }
+
+    fn supports_streaming_retry(&self) -> bool {
+        true
+    }
+
+    async fn create_streaming_retry(
+        &self,
+        model_directory: &str,
+        model_configuration: WorkerModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let WorkerModelConfiguration::Autoregressive(model_configuration) = model_configuration
+        else {
+            return Err("streaming retry requires an autoregressive model".to_owned());
+        };
+        let (generation_processor, inference_engine) = self
+            .create_qwen3_5_runtime(
+                PathBuf::from(model_directory),
+                model_configuration,
+                Qwen3_5EngineSelection::Streaming,
+            )
+            .await?;
+        Ok(ModelFactoryRuntime::autoregressive(
+            ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+            inference_engine,
+        ))
     }
 
     fn update_mlx_memory_limits(

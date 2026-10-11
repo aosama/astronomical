@@ -90,6 +90,16 @@ pub trait InferenceEngine {
 pub trait PreparedInferenceRequest {
     /// Returns the token count used for protocol progress reporting.
     fn prompt_token_count(&self) -> usize;
+
+    /// Clones only requests whose family can safely replay them through streaming.
+    ///
+    /// Engines that do not support an invisible retry leave the default unchanged.
+    fn clone_for_streaming_retry(&self) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        None
+    }
 }
 
 /// Synchronous architecture-specific implementation executed only on the MLX owner thread.

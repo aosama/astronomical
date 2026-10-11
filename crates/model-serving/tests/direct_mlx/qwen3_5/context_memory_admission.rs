@@ -28,7 +28,10 @@ fn should_require_reclamation_only_when_additional_growth_is_added_to_fitting_ta
 
     let target_only_projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, false),
+            AdaptiveRamGrowthContext::decode(
+                1,
+                astronomical_model_serving::AdaptiveRamGrowthExecutionProfile::Resident,
+            ),
             700,
             target_persistent_state_growth_bytes,
             0,
@@ -40,7 +43,10 @@ fn should_require_reclamation_only_when_additional_growth_is_added_to_fitting_ta
             .expect("the combined growth should not overflow");
     let combined_projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, false),
+            AdaptiveRamGrowthContext::decode(
+                1,
+                astronomical_model_serving::AdaptiveRamGrowthExecutionProfile::Resident,
+            ),
             700,
             combined_growth_bytes,
             0,

@@ -12,7 +12,7 @@ use std::path::Path;
 
 use astronomical_model_serving::{
     ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, Qwen3_5Config,
-    build_quantized_expert_layer_plan,
+    build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
 };
 use serde_json::json;
 
@@ -94,6 +94,41 @@ fn should_plan_mixed_native_and_affine_expert_layers_in_one_artifact() {
         assert_native_projection(&native_layer_plan, projection_name);
         assert_affine_projection(&affine_layer_plan, projection_name);
     }
+}
+
+#[test]
+fn should_build_layer_plans_for_mixed_storage_across_multiple_layers() {
+    let mixed_expert_artifact = write_mixed_native_and_affine_layers();
+
+    let layer_plans = build_quantized_expert_layer_plans(
+        mixed_expert_artifact.model_directory.path(),
+        &mixed_expert_artifact.weight_map,
+        &HashMap::new(),
+        &mixed_expert_artifact.config,
+        2,
+    )
+    .expect("all sparse decoder layers should be planned from shared artifact metadata");
+
+    assert_eq!(layer_plans.len(), 2);
+    assert_eq!(
+        layer_plans[0].quantization_mode,
+        QuantizationMode::NativeBfloat16
+    );
+    assert_eq!(layer_plans[1].quantization_mode, QuantizationMode::Affine);
+    assert!(
+        layer_plans
+            .iter()
+            .all(|layer_plan| layer_plan.expert_capacity == EXPERT_CAPACITY)
+    );
+    assert_eq!(
+        layer_plans
+            .iter()
+            .map(|layer_plan| layer_plan.complete_expert_payload_byte_count())
+            .collect::<Result<Vec<_>, _>>()
+            .expect("every layer payload should have valid geometry")
+            .len(),
+        layer_plans.len()
+    );
 }
 
 #[test]

@@ -6,7 +6,7 @@
 //! family code ──measures──▶ memory decides ──decision──▶ family code enacts
 //! ```
 //!
-//! Family modules (`qwen3_5`, `qwen3_5_moe`, `k2_horizon_mova`) measure byte facts from
+//! Family modules (`qwen3_5`, `qwen3_5_streaming`, `k2_horizon_mova`) measure byte facts from
 //! MLX and the artifact, hand them to the modules below, and enact the typed
 //! decisions they receive. This package imports nothing from any family; the
 //! dependency edge physically cannot point back. A family that re-derives
@@ -77,11 +77,12 @@ pub(crate) use admission::{
     log_context_admission_projection, log_generation_context_workspace_reservation,
 };
 pub use budget::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    RamBudgetGeometryError, measured_non_expert_forward_growth_bytes,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+    AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
+    AdaptiveRamGrowthTransientReserveSource, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
+    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
+    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, RamBudgetGeometryError,
+    measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };

@@ -130,10 +130,11 @@ pub enum PerformanceOperation {
     RouteObservationFinalization,
     PreviousTokenPrefetch,
     CompiledElementwiseGraphConstruction,
+    ExpertLayerPlanConstruction,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::CompiledElementwiseGraphConstruction as usize + 1;
+    pub(super) const COUNT: usize = Self::ExpertLayerPlanConstruction as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -257,6 +258,7 @@ impl PerformanceOperation {
         Self::RouteObservationFinalization,
         Self::PreviousTokenPrefetch,
         Self::CompiledElementwiseGraphConstruction,
+        Self::ExpertLayerPlanConstruction,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -461,6 +463,7 @@ impl PerformanceOperation {
             Self::CustomKernelCapabilityProbe => "custom_kernel_capability_probe",
             Self::RouteObservationFinalization => "route_observation_finalization",
             Self::CompiledElementwiseGraphConstruction => "compiled_elementwise_graph_construction",
+            Self::ExpertLayerPlanConstruction => "expert_layer_plan_construction",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
         }
     }

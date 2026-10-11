@@ -31,17 +31,28 @@ use crate::memory::budget::adaptive_growth_projection::{
     scale_transient_to_token_count,
 };
 
+/// Separates complete-residency forwards from forwards that use expert paging.
+///
+/// Hybrid and Paged ownership share the paged profile because both execute
+/// pager-backed operations whose transient memory evidence is not interchangeable
+/// with complete-residency forwards.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum AdaptiveRamGrowthExecutionProfile {
+    Resident,
+    Paged,
+}
+
 /// Exact recurrent execution shape whose temporary allocation evidence may recur.
 ///
 /// Observations are deliberately not transferable between chunk sizes, prompt
-/// positions, visual requests, or sparse-expert residency modes.
+/// positions, visual requests, or execution profiles.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AdaptiveRamGrowthContext {
     memory_phase: MemoryPhase,
     forward_token_count: usize,
     prompt_position_context_bucket: u64,
     has_visual_embeddings: bool,
-    sparse_experts_are_paged: bool,
+    execution_profile: AdaptiveRamGrowthExecutionProfile,
 }
 
 impl AdaptiveRamGrowthContext {
@@ -51,26 +62,29 @@ impl AdaptiveRamGrowthContext {
         forward_token_count: usize,
         prompt_position_context_bucket: u64,
         has_visual_embeddings: bool,
-        sparse_experts_are_paged: bool,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
     ) -> Self {
         Self {
             memory_phase: MemoryPhase::Prefill,
             forward_token_count,
             prompt_position_context_bucket,
             has_visual_embeddings,
-            sparse_experts_are_paged,
+            execution_profile,
         }
     }
 
     /// Builds a decode context. Decode has no prompt-chunk position bucket.
     #[must_use]
-    pub const fn decode(forward_token_count: usize, sparse_experts_are_paged: bool) -> Self {
+    pub const fn decode(
+        forward_token_count: usize,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
+    ) -> Self {
         Self {
             memory_phase: MemoryPhase::Decode,
             forward_token_count,
             prompt_position_context_bucket: 0,
             has_visual_embeddings: false,
-            sparse_experts_are_paged,
+            execution_profile,
         }
     }
 
@@ -85,16 +99,19 @@ impl AdaptiveRamGrowthContext {
         self.forward_token_count
     }
 
-    /// Replaces only the observed sparse-expert residency dimension after a forward.
+    /// Replaces only the execution profile after a forward.
     #[must_use]
-    pub const fn with_sparse_experts_are_paged(mut self, sparse_experts_are_paged: bool) -> Self {
-        self.sparse_experts_are_paged = sparse_experts_are_paged;
+    pub const fn with_execution_profile(
+        mut self,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
+    ) -> Self {
+        self.execution_profile = execution_profile;
         self
     }
 
     #[must_use]
-    pub const fn sparse_experts_are_paged(self) -> bool {
-        self.sparse_experts_are_paged
+    pub const fn execution_profile(self) -> AdaptiveRamGrowthExecutionProfile {
+        self.execution_profile
     }
 }
 

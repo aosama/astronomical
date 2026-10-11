@@ -18,6 +18,7 @@ where
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             worker_runtime_feature_configuration: None,
+            selected_model: None,
         }
     }
 }
@@ -46,6 +47,7 @@ where
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             worker_runtime_feature_configuration: None,
+            selected_model: None,
         }
     }
 
@@ -69,6 +71,7 @@ where
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
             worker_runtime_feature_configuration: None,
+            selected_model: None,
         }
     }
 
