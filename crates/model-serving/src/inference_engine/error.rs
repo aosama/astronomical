@@ -14,6 +14,16 @@ pub enum InferenceEngineError {
         reason: String,
     },
 
+    /// Internal signal requesting one family-owned engine fork before visible output.
+    ///
+    /// The worker consumes this signal only when the request remains replayable.
+    /// It must never be sent to the client as this variant.
+    #[error("resident execution requires a streaming retry: {reason}")]
+    ResidentForkRequired {
+        /// Bounded capacity reason retained for a real failure if streaming also rejects.
+        reason: String,
+    },
+
     /// The requested live MLX ceiling is below the loaded model's safe idle minimum.
     #[error(
         "requested MLX memory ceiling {requested_mlx_memory_ceiling_bytes} bytes is below the safe minimum {minimum_mlx_memory_ceiling_bytes} bytes: {reason}"

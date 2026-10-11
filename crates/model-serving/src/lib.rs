@@ -24,7 +24,10 @@ mod modernbert;
 mod performance_attribution;
 mod persistent_cache;
 mod qwen3_5;
-mod qwen3_5_moe;
+mod qwen3_5_core;
+#[cfg(feature = "direct-mlx")]
+mod qwen3_5_resident;
+mod qwen3_5_streaming;
 mod qwen_image_21;
 mod safetensors;
 mod sampling_seed;
@@ -156,23 +159,24 @@ pub use kernel_capability::{
     KernelUnsupportedReason, WorkerKernelCapabilities, validate_probe_outputs,
 };
 pub use memory::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
-    AllocationAdmissionDecision, AllocationAdmissionObservation,
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, CompleteResidencyDecision,
-    CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements, ContextAdmissionRequirements,
-    CurrentExpertLayerResidency, DecodeExpertCache, ExpertLayerGeometry,
-    ExpertLayerResidencyTarget, ExpertMemoryAdmissionError, ExpertReclamationPlan,
-    ExpertResidencyPlan, ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryPolicy,
-    ForwardRecoveryRequirements, MeasuredExpertLayerPayload, MemoryAdmissionDecision,
-    MemoryBoundary, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-    MemoryCeilingUtilization, MemoryPhase, MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment,
-    MlxMemoryTelemetry, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
-    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, PagedExpertReclamationStep,
-    PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity, PreviousTokenPrefetchPlan,
-    RamBudgetGeometryError, RequestExpertLayerRole, RequestExpertResidency, ResidentExpertWeight,
-    RetainedExpertPageClass, RotatingAdmissionError, classify_expert_memory_mode,
-    combined_persistent_growth_bytes, complete_layer_indexes_required_before_decode,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+    AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
+    AdaptiveRamGrowthTransientReserveSource, AllocationAdmissionDecision,
+    AllocationAdmissionObservation, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
+    CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
+    ContextAdmissionRequirements, CurrentExpertLayerResidency, DecodeExpertCache,
+    ExpertLayerGeometry, ExpertLayerResidencyTarget, ExpertMemoryAdmissionError,
+    ExpertReclamationPlan, ExpertResidencyPlan, ExpertResidencyPlanError, ForwardRecoveryDecision,
+    ForwardRecoveryPolicy, ForwardRecoveryRequirements, MeasuredExpertLayerPayload,
+    MemoryAdmissionDecision, MemoryBoundary, MemoryCeilingChangeDecision,
+    MemoryCeilingChangeRequirements, MemoryCeilingUtilization, MemoryPhase,
+    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, MlxRamBudget,
+    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
+    PagedExpertReclamationStep, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
+    PreviousTokenPrefetchPlan, RamBudgetGeometryError, RequestExpertLayerRole,
+    RequestExpertResidency, ResidentExpertWeight, RetainedExpertPageClass, RotatingAdmissionError,
+    classify_expert_memory_mode, combined_persistent_growth_bytes,
+    complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, hot_expert_warm_slot_count,
@@ -319,11 +323,25 @@ pub use qwen3_5::{
     qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
     qwen3_5_inject_visual_embeddings, safe_minimum_mlx_memory_ceiling_bytes,
 };
+pub use qwen3_5_core::artifacts::{
+    build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
+};
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
-pub use qwen3_5_moe::maximum_resident_gate_up_fusion_transient_payload_bytes;
+pub use qwen3_5_resident::maximum_resident_gate_up_fusion_transient_payload_bytes;
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_moe::{
+pub use qwen3_5_resident::{
+    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
+    Qwen3_5ResidentPromptProcessingChunkSizerError,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::{
+    ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_streaming::Qwen3_5StreamingEngine;
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_streaming::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoECachedPlusStreamedPageRoute,
     Qwen3_5MoEPagedPrefillExecutionMode, build_source_manifests, contiguous_selected_runs,
     qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
@@ -331,17 +349,12 @@ pub use qwen3_5_moe::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
-pub use qwen3_5_moe::{
+pub use qwen3_5_streaming::{
     LayerRoutedExpertIds, ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
     sorted_unique_layer_routed_expert_ids,
 };
-pub use qwen3_5_moe::{
+pub use qwen3_5_streaming::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-    build_quantized_expert_layer_plan,
-};
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_moe::{
-    ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]

@@ -1,0 +1,274 @@
+//! The SSD-streaming Qwen3.5 engine's loaded model: the shared base plus every
+//! residency-forked field (expert pager, retained experts, residency plans,
+//! route observation) and the paged execution entry points.
+
+use astronomical_mlx_c_rust::MlxArray;
+
+use std::cell::{Cell, RefCell};
+
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_core::model_math::forward_contract;
+use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
+use crate::qwen3_5_streaming::{
+    PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
+    RetainedExpertCache,
+};
+use crate::{
+    DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution, RequestExpertResidency,
+};
+
+use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+
+/// The streaming engine's model: shared base plus residency-forked state.
+#[derive(Debug)]
+pub struct Qwen3_5StreamingModel {
+    pub(crate) base: Qwen3_5ModelBase,
+    /// Sparse models own a pager; dense models have no sparse-expert weights.
+    pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
+    /// Individual routed experts retained within the paged-mode RAM ceiling.
+    pub(crate) retained_experts: Option<RefCell<RetainedExpertCache>>,
+    /// Pure target published at load and refreshed before mandatory expert reads.
+    pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
+    /// Prefill pin/stream contract for the active request. Generation clears it.
+    pub(crate) request_expert_residency: RefCell<Option<RequestExpertResidency>>,
+    /// Deferred GPU missing-route roots collected during one paged forward.
+    pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
+    /// Warm-table slot capacity for decode-time hot-expert warming; zero
+    /// disables warming. The decode handoff derives it from the adaptive
+    /// growth guard's headroom so warming only claims memory the guard can
+    /// spare (issue #372).
+    pub(crate) hot_expert_warm_slot_count: Cell<usize>,
+    /// Decode route capture for the expert-predictor program: lazy pending
+    /// route arrays plus the bounded observation history (issue #536).
+    pub(crate) route_observation: RefCell<RouteObservationCollector>,
+}
+
+impl std::ops::Deref for Qwen3_5StreamingModel {
+    type Target = Qwen3_5ModelBase;
+
+    fn deref(&self) -> &Qwen3_5ModelBase {
+        &self.base
+    }
+}
+
+impl std::ops::DerefMut for Qwen3_5StreamingModel {
+    fn deref_mut(&mut self) -> &mut Qwen3_5ModelBase {
+        &mut self.base
+    }
+}
+
+impl Qwen3_5StreamingModel {
+    /// Returns the retained pager cache's expert-memory snapshot.
+    #[must_use]
+    pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
+        if self.expert_pager.is_none() {
+            return ExpertWeightMemoryCacheStatistics::default();
+        }
+        self.retained_experts.as_ref().map_or_else(
+            ExpertWeightMemoryCacheStatistics::default,
+            |retained_experts| retained_experts.borrow().statistics(),
+        )
+    }
+
+    /// Updates the expert pager's memory budget with the observed transient
+    /// high-water mark from completed forward-pass evidence. The retention
+    /// ceiling uses this reservation to ensure enough headroom for computation
+    /// buffers (attention KV growth, intermediate tensors) between expert-page
+    /// loads.
+    pub(crate) fn update_expert_pager_transient_high_water_bytes(
+        &self,
+        observed_transient_high_water_bytes: u64,
+    ) {
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            expert_pager
+                .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
+        }
+    }
+
+    /// Sets the warm-table slot capacity for decode-time hot-expert warming.
+    pub(crate) fn set_hot_expert_warm_slot_count(&self, warm_slot_count: usize) {
+        self.hot_expert_warm_slot_count.set(warm_slot_count);
+    }
+
+    /// Returns the warm-table slot capacity (zero disables warming).
+    pub(crate) fn hot_expert_warm_slot_count(&self) -> usize {
+        self.hot_expert_warm_slot_count.get()
+    }
+
+    /// Returns phase-correct sparse loading workspace for forward admission.
+    pub(crate) fn expert_page_reservation_bytes_for_forward(
+        &self,
+        forward_token_count: usize,
+    ) -> Result<u64, Qwen3_5ExecutionError> {
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
+            return Ok(0);
+        };
+        if forward_token_count > 1 {
+            return Ok(expert_pager.maximum_expert_page_bytes());
+        }
+        Ok(expert_pager.maximum_routed_expert_page_bytes(
+            usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
+        )?)
+    }
+
+    /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.
+    ///
+    /// `chunk_token_ids` are the token IDs for this prefill chunk.
+    /// `visual_embeddings` carries the full visual embedding tensor for all images in the request.
+    /// `starting_visual_embedding_index` tracks how many visual embeddings earlier chunks consumed.
+    /// Returns the count of visual embeddings consumed by this chunk.
+    pub fn prefill_chunk_with_visual_embeddings(
+        &self,
+        chunk_token_ids: &[u32],
+        starting_position_tokens: u32,
+        visual_embeddings: &MlxArray,
+        starting_visual_embedding_index: usize,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        image_pad_token_id: u32,
+    ) -> Result<usize, Qwen3_5ExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        self.prefill_chunk_with_visual_embeddings_and_performance_attribution(
+            chunk_token_ids,
+            starting_position_tokens,
+            visual_embeddings,
+            starting_visual_embedding_index,
+            request_decoder_state,
+            image_pad_token_id,
+            &mut disabled_performance_attribution,
+        )
+    }
+
+    /// Executes one intermediate prompt chunk and materializes only reusable decoder state.
+    pub fn prefill_chunk(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        self.prefill_chunk_with_performance_attribution(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            &mut disabled_performance_attribution,
+        )
+    }
+
+    /// Executes one prompt or decode chunk and materializes final logits plus all layer state.
+    pub fn forward_chunk(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        self.forward_chunk_with_performance_attribution(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            &mut disabled_performance_attribution,
+        )
+    }
+
+    /// Executes one prompt chunk with a test-only paged MoE execution selector.
+    #[doc(hidden)]
+    pub fn forward_chunk_with_paged_prefill_execution_mode_for_tests(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let mut disabled_performance_attribution = PerformanceAttribution::disabled();
+        let final_logits = self
+            .build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
+                token_ids,
+                starting_position_tokens,
+                request_decoder_state,
+                paged_prefill_execution_mode,
+                &mut disabled_performance_attribution,
+            )?;
+        self.evaluate_forward_state(&final_logits, request_decoder_state)?;
+        Ok(final_logits)
+    }
+
+    pub(crate) fn build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let token_count = forward_contract::validate_forward_input(
+            token_ids,
+            starting_position_tokens,
+            None,
+            request_decoder_state.layer_count(),
+            self.config.layer_count() as usize,
+            self.config.vocabulary_size(),
+            self.config.maximum_position_count(),
+        )?;
+        let signed_token_ids = token_ids
+            .iter()
+            .map(|token_id| {
+                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "token ID exceeds the MLX int32 range",
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let token_indices = self
+            .runtime
+            .array_from_i32(&signed_token_ids, &[1, token_count])?;
+        self.build_forward_graph(
+            &token_indices,
+            token_count,
+            starting_position_tokens,
+            request_decoder_state,
+            paged_prefill_execution_mode,
+            performance_attribution,
+        )
+    }
+
+    // Decoder-layer inputs stay explicit instead of introducing another per-layer facade.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn forward_decoder_layer(
+        &self,
+        hidden_states: &MlxArray,
+        token_count: i32,
+        rope_offset_tokens: i32,
+        layer_index: usize,
+        decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
+        layer_model_state: &mut DecoderCacheState,
+        token_position_offsets: Option<&MlxArray>,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
+        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let attention_output = self.forward_decoder_layer_attention(
+            hidden_states,
+            token_count,
+            rope_offset_tokens,
+            layer_index,
+            decoder_layer_weights,
+            layer_model_state,
+            token_position_offsets,
+            boundary_checkpoint_collector,
+            performance_attribution,
+        )?;
+        self.forward_decoder_layer_feed_forward(
+            &attention_output,
+            token_count,
+            layer_index,
+            decoder_layer_weights,
+            paged_prefill_execution_mode,
+            performance_attribution,
+        )
+    }
+}

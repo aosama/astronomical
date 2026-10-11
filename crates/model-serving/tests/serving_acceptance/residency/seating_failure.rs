@@ -1,5 +1,4 @@
-//! User journey: raising RAM cannot seat every expert. Stay truthful (not Resident)
-//! and still answer Romeo.
+//! User journey: raising RAM keeps the load-selected streaming engine and still answers Romeo.
 
 use std::time::Duration;
 
@@ -17,7 +16,7 @@ use super::support::{
 
 #[tokio::test]
 #[ignore = "breaks complete-residency sources then proves raising RAM cannot seat experts and Romeo still works"]
-async fn should_keep_serving_when_complete_residency_cannot_be_seated() {
+async fn should_keep_serving_on_streaming_after_the_memory_ceiling_rises() {
     timeout(Duration::from_secs(120), async {
         initialize_automatic_residency_tracing();
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -77,16 +76,11 @@ async fn should_keep_serving_when_complete_residency_cannot_be_seated() {
             Some(ExpertMemoryMode::Resident),
             "the paging ceiling must not seat complete experts"
         );
-        qwen3_5_engine
-            .remove_resident_expert_source_files_for_tests()
-            .await
-            .expect("the journey should be able to break complete-residency sources");
-
-        eprintln!("[seating-failure] status=progress phase=failed_ceiling_raise");
+        eprintln!("[seating-failure] status=progress phase=raise_ceiling_without_engine_swap");
         qwen3_5_engine
             .update_mlx_memory_limit(machine_mlx_memory_ceiling_bytes)
             .await
-            .expect_err("raising RAM must not silently seat experts when promotion sources are gone");
+            .expect("raising the ceiling should not change the load-selected streaming engine");
         assert_ne!(
             qwen3_5_engine
                 .expert_memory_mode_for_tests()

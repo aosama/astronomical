@@ -1,0 +1,277 @@
+//! Prefill-to-decode expert-residency preparation for one user request.
+//!
+//! # What the user is waiting for
+//!
+//! After the model finishes reading the prompt, it starts writing tokens. Token
+//! writing is much cheaper in activation memory than prompt reading. The RAM the
+//! user already granted can therefore preserve more expert weights so generation
+//! does not stream every routed weight from the solid-state drive.
+//!
+//! # Words used in this file
+//!
+//! - Stable complete layer: all experts for one decoder layer remain retained.
+//! - Elastic routed page: exact experts already required by a decode route remain retained.
+//! - Operation-local page: experts are released after the mandatory forward.
+//! - Temporary request-pressure cap: a smaller retained-page ceiling installed
+//!   so the remaining prompt can finish. It is not the user's normal RAM grant.
+//!
+//! # Why this barrier exists
+//!
+//! Prefill may demote the complete owner and freeze retained pages so the last
+//! prompt chunks still fit. If that freeze is left in place, decode sees a tiny
+//! leftover budget, rejects useful retained pages, and streams from disk even though
+//! tens of gigabytes are free. This file is the one place that:
+//!
+//! 1. Releases the temporary cap after the last prefill cleanup barrier.
+//! 2. Restores complete RAM ownership when the leftover ceiling admits it.
+//! 3. Reconciles a pure decode topology target against already-owned pages.
+//! 4. Seats complete layers `memory/` named that decode would never load itself.
+//!
+//! Reconciliation is best-effort. A failed plan must not fail the user's
+//! request; decode can still stream missing routes.
+
+use astronomical_ipc_protocol::RequestId;
+
+use crate::{AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase, PerformanceOperation};
+
+use super::Qwen3_5EngineState;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
+
+impl Qwen3_5EngineState {
+    /// Reconciles retained ownership with the leftover ceiling after prefill.
+    ///
+    /// Call this exactly once, after the last prefill chunk has synchronized and
+    /// cleaned allocator storage, and before the first decode forward. The
+    /// request flag `generation_residency_preparation_attempted` is the one-shot guard.
+    pub(super) fn prepare_decode_expert_residency_after_prefill(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    ) -> Result<(), InferenceEngineError> {
+        let Some(model) = self.model.as_mut() else {
+            return Err(super::fatal_engine_error(
+                "Qwen3.5 engine lost its loaded model",
+            ));
+        };
+        // Prefill pressure protects the remaining prompt by installing a
+        // temporary retained-page ceiling. That cap must die here. Decode uses
+        // a smaller activation footprint, so the leftover composed budget is
+        // the user's real grant again. Leaving the cap in place was the bug
+        // that kept generation at about one gigabyte of experts.
+        let resumed_after_prefill_memory_pressure =
+            model.resume_expert_retention_after_request_memory_pressure();
+        if resumed_after_prefill_memory_pressure {
+            tracing::info!(
+                request_id = request_id.value(),
+                "released prefill request-pressure expert retention ceiling before decode"
+            );
+        }
+        let context_token_count =
+            u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+        let residency_preparation_result =
+            active_request.performance_attribution.measure_operation(
+                PerformanceOperation::GenerationPreparation,
+                |performance_attribution| {
+                    model.refresh_phase_aware_expert_residency_plan(
+                        MemoryPhase::GenerationPreparation,
+                        context_token_count,
+                        1,
+                        performance_attribution,
+                    )
+                },
+            );
+        if let Err(residency_preparation_error) = residency_preparation_result {
+            // Residency planning is an accelerator, not a correctness gate. A
+            // missing plan makes every uncovered route operation-local, which is
+            // slower but preserves exact model execution and the user's request.
+            model.clear_phase_aware_expert_residency_plan();
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %residency_preparation_error,
+                "continued decode with operation-local expert streaming after optional residency planning failed"
+            );
+        }
+        let complete_layer_indexes_to_seat =
+            model.planned_complete_layer_indexes_to_seat_before_decode();
+        if !complete_layer_indexes_to_seat.is_empty() {
+            match model.seat_complete_layers_before_decode(
+                &complete_layer_indexes_to_seat,
+                &mut active_request.performance_attribution,
+            ) {
+                Ok(seated_payload_bytes) => {
+                    tracing::info!(
+                        request_id = request_id.value(),
+                        planned_complete_layer_count = complete_layer_indexes_to_seat.len(),
+                        seated_payload_bytes,
+                        "seated planned complete layers before decode"
+                    );
+                }
+                Err(seating_error) => {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        error = %seating_error,
+                        "continued decode after planned complete-layer seating failed"
+                    );
+                }
+            }
+        }
+        // Seating adopts lazy pages. Evaluate them now so the first decode
+        // admission snapshot includes the seated weights. Leaving them lazy made
+        // the first generate token look like a huge activation spike and leftover
+        // publication evicted the same pages.
+        if let Err(materialize_error) = model.materialize_seated_complete_layers() {
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %materialize_error,
+                "continued decode after seated complete-layer materialization failed"
+            );
+        }
+        // Cache bookkeeping after seating and materialization. Decode admission
+        // takes its own MLX snapshot next.
+        let expert_statistics = model.expert_weight_memory_cache_statistics();
+        let total_layer_count = model
+            .expert_pager
+            .as_ref()
+            .map_or(0, |expert_pager| expert_pager.layer_count());
+        tracing::info!(
+            request_id = request_id.value(),
+            context_token_count,
+            total_layer_count,
+            resident_expert_count = expert_statistics.entry_count,
+            resident_expert_payload_bytes = expert_statistics.resident_payload_byte_count,
+            "generation preparation seated leftover complete layers before decode"
+        );
+        let hot_expert_warm_slot_count = if self.adaptive_ram_growth_guard_enabled {
+            decode_warm_slot_count(&self.adaptive_ram_growth_guard, model, expert_statistics)
+        } else {
+            0
+        };
+        model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
+        tracing::info!(
+            request_id = request_id.value(),
+            hot_expert_warm_slot_count,
+            "decode hot-expert warm capacity decided at handoff"
+        );
+        Ok(())
+    }
+}
+
+/// Sizes the hot-expert warm tables from the adaptive growth guard's
+/// current headroom (issue #372, resized per decode step for issue #512).
+///
+/// The memory left after current active ownership, the phase's learned
+/// transients, and one routed page, divided across the sparse layers that
+/// warming may cover. Rich machines warm at the full policy capacity;
+/// memory-tight machines warm narrower or not at all, because on them the
+/// warm tables would compete with the paging machinery for the same bytes
+/// and the eviction/re-stream cycle is net-negative.
+///
+/// Issue #512: this runs at the decode handoff AND on every decode step.
+/// Sizing only at the handoff froze the warm tables at the first request's
+/// conservative fallback reserve, because no decode-phase transient
+/// evidence exists before the first decode token; decode forwards then
+/// proved their transients are small, but the frozen slot count kept the
+/// warm tables churning at a few experts per layer while entitlement sat
+/// unclaimed. Resizing as evidence accumulates lets warming grow into the
+/// entitlement the guard's decode evidence supports.
+pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
+    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
+    model: &Qwen3_5Model,
+    expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
+) -> usize {
+    model
+        .runtime()
+        .memory_snapshot()
+        .map(|memory_snapshot| {
+            let routed_expert_page_reservation_bytes = model
+                .expert_page_reservation_bytes_for_forward(1)
+                .unwrap_or(u64::MAX);
+            let warm_retention_ceiling_bytes = adaptive_ram_growth_guard
+                .hot_expert_retention_ceiling_bytes(
+                    // GenerationPreparation budgets like decode (see
+                    // memory/budget/phase.rs), and the forwards this
+                    // warming reserves for are decode forwards, so the
+                    // decode phase's own learned workspace is the right
+                    // reserve basis here too.
+                    crate::MemoryPhase::Decode,
+                    memory_snapshot.active_memory_bytes(),
+                    expert_statistics.resident_payload_byte_count,
+                    usize::try_from(routed_expert_page_reservation_bytes).unwrap_or(usize::MAX),
+                );
+            // The plan-composed ceiling already subtracted the
+            // composer's activation workspace and context reserve;
+            // the warm budget is what remains under the tighter of
+            // the two ceilings.
+            let plan_retained_ceiling_bytes = model.retained_expert_normal_ceiling_bytes();
+            let warm_budget_bytes = warm_retention_ceiling_bytes
+                .min(plan_retained_ceiling_bytes)
+                .saturating_sub(expert_statistics.resident_payload_byte_count);
+            let (expert_capacity, per_expert_payload_bytes, sparse_layer_count) = model
+                .expert_pager
+                .as_ref()
+                .and_then(|expert_pager| expert_pager.layer_plans().first())
+                .and_then(|layer_plan| {
+                    let expert_capacity = layer_plan.expert_capacity;
+                    let per_expert_payload_bytes = layer_plan
+                        .complete_expert_payload_byte_count()
+                        .ok()
+                        .and_then(|complete_layer_payload_bytes| {
+                            u64::try_from(expert_capacity)
+                                .ok()
+                                .filter(|capacity| *capacity > 0)
+                                .map(|capacity| complete_layer_payload_bytes / capacity)
+                        })?;
+                    Some((expert_capacity, per_expert_payload_bytes))
+                })
+                .map_or((0, 0, 0), |(expert_capacity, per_expert_payload_bytes)| {
+                    (
+                        expert_capacity,
+                        per_expert_payload_bytes,
+                        model
+                            .expert_pager
+                            .as_ref()
+                            .map_or(0, |expert_pager| expert_pager.layer_count()),
+                    )
+                });
+            if expert_capacity == 0 || per_expert_payload_bytes == 0 {
+                return 0;
+            }
+            let warm_capacity = crate::hot_expert_warm_slot_count(expert_capacity);
+            // The real expert capacity decides the elastic/complete
+            let complete_layer_count =
+                model
+                    .retained_experts
+                    .as_ref()
+                    .map_or(0, |retained_experts| {
+                        retained_experts
+                            .borrow()
+                            .topology_snapshot(expert_capacity)
+                            .into_iter()
+                            .filter(|residency| {
+                                residency.class
+                                    == crate::RetainedExpertPageClass::StableCompleteLayer
+                            })
+                            .count()
+                    });
+            let unseated_sparse_layer_count =
+                sparse_layer_count.saturating_sub(complete_layer_count);
+            // The warm capacity scales down to what the guard's headroom
+            // affords across the unseated layers; zero disables warming.
+            let budget_affordable_capacity =
+                if unseated_sparse_layer_count == 0 || per_expert_payload_bytes == 0 {
+                    0
+                } else {
+                    let per_layer_warm_bytes = u128::try_from(per_expert_payload_bytes)
+                        .unwrap_or(u128::MAX)
+                        .saturating_mul(
+                            u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX),
+                        );
+                    let affordable_slots = u128::from(warm_budget_bytes)
+                        .checked_div(per_layer_warm_bytes)
+                        .unwrap_or(0);
+                    usize::try_from(affordable_slots).unwrap_or(usize::MAX)
+                };
+            warm_capacity.min(budget_affordable_capacity)
+        })
+        .unwrap_or(0)
+}

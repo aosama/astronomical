@@ -3,13 +3,20 @@ use std::path::PathBuf;
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 use astronomical_model_serving::{
-    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
-    PerformanceOperation, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5GenerationProcessor, Qwen3_5PromptProcessingChunkSizer,
+    ModelFamilyInferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceAttributionOutcome, PerformanceOperation, PersistentPromptCacheDiskStoreConfig,
+    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
 };
 
 use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
+
+#[derive(Clone, Copy)]
+pub(crate) enum Qwen3_5EngineSelection {
+    Resident,
+    Streaming,
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn initialize_qwen3_5_model(
@@ -24,7 +31,8 @@ pub(crate) fn initialize_qwen3_5_model(
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
-) -> Result<(Qwen3_5GenerationProcessor, Qwen3_5Engine), Qwen3_5ModelStartupError> {
+    engine_selection: Qwen3_5EngineSelection,
+) -> Result<(Qwen3_5GenerationProcessor, ModelFamilyInferenceEngine), Qwen3_5ModelStartupError> {
     let mut model_loading_performance_attribution = if performance_attribution_enabled {
         PerformanceAttribution::enabled()
     } else {
@@ -121,47 +129,90 @@ pub(crate) fn initialize_qwen3_5_model(
             per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         )
     });
-    let prompt_processing_chunk_sizer_result =
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
-            chunking.fixed_prompt_processing_chunk_size_tokens,
-            chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
-        );
-    let prompt_processing_chunk_sizer = match prompt_processing_chunk_sizer_result {
-        Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
-        Err(prompt_processing_chunk_sizer_error) => {
-            record_failed_model_loading_performance_attribution(
+    let qwen3_5_engine = match engine_selection {
+        Qwen3_5EngineSelection::Resident => {
+            let prompt_processing_chunk_sizer =
+                match Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+                    chunking.fixed_prompt_processing_chunk_size_tokens,
+                    chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+                ) {
+                    Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
+                    Err(prompt_processing_chunk_sizer_error) => {
+                        record_failed_model_loading_performance_attribution(
+                            model_loading_performance_attribution,
+                            &mut performance_attribution_log,
+                            Some(artifact_model_id),
+                            Some(artifact_model_revision),
+                            Some(artifact_payload_bytes),
+                            Some(artifact_shard_count),
+                            "prompt-processing chunk configuration failed",
+                        );
+                        return Err(
+                            Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
+                                prompt_processing_chunk_sizer_error,
+                            ),
+                        );
+                    }
+                };
+            Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
+                validated_artifact,
+                active_memory_limit_bytes,
+                allocator_cache_memory_limit_bytes,
+                persistent_prompt_cache_disk_store_config,
+                prompt_processing_chunk_sizer,
+                think_end_token_id,
+                model_directory_path.clone(),
+                maximum_context_tokens,
+                chunking,
+                true,
                 model_loading_performance_attribution,
-                &mut performance_attribution_log,
-                Some(artifact_model_id),
-                Some(artifact_model_revision),
-                Some(artifact_payload_bytes),
-                Some(artifact_shard_count),
-                "prompt-processing chunk configuration failed",
-            );
-            return Err(Qwen3_5ModelStartupError::PromptProcessingChunkSizing(
-                prompt_processing_chunk_sizer_error,
-            ));
+                performance_attribution_log,
+            )
+            .map(ModelFamilyInferenceEngine::Qwen3_5)
         }
-    };
-    let qwen3_5_engine =
-        Qwen3_5Engine::new_with_effective_context_runtime_chunking_and_performance_attribution(
-            validated_artifact,
-            active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
-            prompt_processing_chunk_sizer,
-            think_end_token_id,
-            model_directory_path.clone(),
-            maximum_context_tokens,
-            chunking,
-            true,
-            model_loading_performance_attribution,
-            performance_attribution_log,
-        )
-        .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
-            model_directory: model_directory_path,
-            source,
-        })?;
+        Qwen3_5EngineSelection::Streaming => {
+            let prompt_processing_chunk_sizer =
+                match Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+                    chunking.fixed_prompt_processing_chunk_size_tokens,
+                    chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+                ) {
+                    Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
+                    Err(prompt_processing_chunk_sizer_error) => {
+                        record_failed_model_loading_performance_attribution(
+                            model_loading_performance_attribution,
+                            &mut performance_attribution_log,
+                            Some(artifact_model_id),
+                            Some(artifact_model_revision),
+                            Some(artifact_payload_bytes),
+                            Some(artifact_shard_count),
+                            "prompt-processing chunk configuration failed",
+                        );
+                        return Err(Qwen3_5ModelStartupError::PromptProcessingChunkSizing(
+                            prompt_processing_chunk_sizer_error,
+                        ));
+                    }
+                };
+            Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
+                validated_artifact,
+                active_memory_limit_bytes,
+                allocator_cache_memory_limit_bytes,
+                persistent_prompt_cache_disk_store_config,
+                prompt_processing_chunk_sizer,
+                think_end_token_id,
+                model_directory_path.clone(),
+                maximum_context_tokens,
+                chunking,
+                true,
+                model_loading_performance_attribution,
+                performance_attribution_log,
+            )
+            .map(ModelFamilyInferenceEngine::Qwen3_5Streaming)
+        }
+    }
+    .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
+        model_directory: model_directory_path,
+        source,
+    })?;
     Ok((generation_processor, qwen3_5_engine))
 }
 

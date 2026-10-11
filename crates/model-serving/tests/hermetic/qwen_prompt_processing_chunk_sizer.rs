@@ -1,6 +1,8 @@
 //! Behavior coverage for deterministic Qwen prompt chunking.
 
-use astronomical_model_serving::Qwen3_5PromptProcessingChunkSizer;
+use astronomical_model_serving::{
+    AdaptiveRamGrowthExecutionProfile, Qwen3_5PromptProcessingChunkSizer,
+};
 
 #[test]
 fn should_process_fixed_chunks_and_an_exact_terminal_remainder() {
@@ -24,11 +26,19 @@ fn should_use_the_ssd_streaming_fixed_size_only_while_experts_are_paged() {
         .expect("the resident and SSD-streaming fixed sizes should construct");
 
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 5_000, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            5_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         256
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 5_000, false),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            5_000,
+            AdaptiveRamGrowthExecutionProfile::Resident,
+        ),
         2_048
     );
 }
@@ -41,7 +51,10 @@ fn should_bound_the_next_chunk_by_proven_executable_capacity() {
 
     assert_eq!(
         chunk_sizer.next_prompt_processing_chunk_end_with_maximum_executable_capacity(
-            0, 5_000, false, 512,
+            0,
+            5_000,
+            AdaptiveRamGrowthExecutionProfile::Resident,
+            512,
         ),
         512
     );
@@ -65,13 +78,19 @@ fn should_reject_invalid_resident_and_ssd_streaming_chunk_sizes() {
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 4_096)
             .expect("a larger paged chunk should construct");
     assert_eq!(
-        larger_paged_chunk_sizer
-            .next_prompt_processing_chunk_end_for_expert_residency(0, 9_000, true,),
+        larger_paged_chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            9_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         4_096
     );
     assert_eq!(
-        larger_paged_chunk_sizer
-            .next_prompt_processing_chunk_end_for_expert_residency(0, 9_000, false,),
+        larger_paged_chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            9_000,
+            AdaptiveRamGrowthExecutionProfile::Resident,
+        ),
         2_048
     );
 }
@@ -82,11 +101,19 @@ fn should_default_paged_chunks_larger_than_resident_chunks() {
         Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(2_048, 4_096)
             .expect("an explicit larger paged chunk should construct");
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 20_000, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            20_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         4_096
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 20_000, false),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            20_000,
+            AdaptiveRamGrowthExecutionProfile::Resident,
+        ),
         2_048
     );
 }
@@ -103,11 +130,13 @@ fn should_resolve_the_admission_operation_bound_from_the_active_expert_mode() {
             .expect("an explicit larger paged chunk should construct");
 
     assert_eq!(
-        chunk_sizer.prompt_processing_operation_bound_tokens(true),
+        chunk_sizer
+            .prompt_processing_operation_bound_tokens(AdaptiveRamGrowthExecutionProfile::Paged),
         4_096
     );
     assert_eq!(
-        chunk_sizer.prompt_processing_operation_bound_tokens(false),
+        chunk_sizer
+            .prompt_processing_operation_bound_tokens(AdaptiveRamGrowthExecutionProfile::Resident),
         2_048
     );
 }
@@ -119,15 +148,27 @@ fn should_fold_a_short_paged_remainder_instead_of_paying_a_second_leftover_strea
             .expect("the resident and SSD-streaming fixed sizes should construct");
 
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 4_401, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            4_401,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         2_048
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(2_048, 4_401, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            2_048,
+            4_401,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         4_401
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(2_048, 4_401, false),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            2_048,
+            4_401,
+            AdaptiveRamGrowthExecutionProfile::Resident,
+        ),
         4_096
     );
 }
@@ -139,19 +180,35 @@ fn should_keep_full_paged_chunks_when_the_remainder_fills_another_configured_chu
             .expect("the resident and SSD-streaming fixed sizes should construct");
 
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(0, 10_000, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            0,
+            10_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         2_048
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(2_048, 10_000, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            2_048,
+            10_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         4_096
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(4_096, 10_000, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            4_096,
+            10_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         6_144
     );
     assert_eq!(
-        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(6_144, 10_000, true),
+        chunk_sizer.next_prompt_processing_chunk_end_for_expert_residency(
+            6_144,
+            10_000,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         10_000
     );
 }

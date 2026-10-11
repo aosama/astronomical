@@ -14,4 +14,11 @@ impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
             Self::K2HorizonMoVA(inference_request) => inference_request.prompt_token_count(),
         }
     }
+
+    fn clone_for_streaming_retry(&self) -> Option<Self> {
+        match self {
+            Self::Qwen3_5(inference_request) => Some(Self::Qwen3_5(inference_request.clone())),
+            Self::K2HorizonMoVA(_) => None,
+        }
+    }
 }

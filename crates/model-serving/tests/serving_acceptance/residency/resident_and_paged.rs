@@ -9,14 +9,17 @@ use astronomical_model_serving::{
     CompleteResidencyHeadroomBoundary, InferenceEngine,
     mlx_ram_budget_model_geometry_from_validated_artifact,
 };
+use serial_test::serial;
 use tokio::time::timeout;
 
 use super::support::{
     RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT, construct_automatic_residency_engine,
-    initialize_automatic_residency_tracing, serve_romeo_and_juliet_request,
+    construct_resident_engine, initialize_automatic_residency_tracing,
+    serve_romeo_and_juliet_request,
 };
 
 #[tokio::test]
+#[serial]
 #[ignore = "loads the resident sparse MoE under the machine ceiling when that ceiling covers weights plus headroom"]
 async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_sufficient() {
     timeout(Duration::from_secs(120), async {
@@ -59,7 +62,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
             prompt_token_ids,
             image_pad_token_id,
             _context_memory_reservation_bytes,
-        ) = construct_automatic_residency_engine(
+        ) = construct_resident_engine(
             model_directory,
             mlx_memory_limits.active_memory_limit_bytes(),
             mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -125,6 +128,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
 }
 
 #[tokio::test]
+#[serial]
 #[ignore = "lowers then raises the live MLX ceiling on one resident sparse MoE and checks residency follows"]
 async fn should_transition_the_complete_sparse_model_across_live_memory_limits() {
     timeout(Duration::from_secs(120), async {
