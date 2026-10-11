@@ -47,11 +47,13 @@ test; do not wrap them in a longer external timeout or run them concurrently.
   — the full memory-management journey suite: SSD-paged decode expert reuse,
   expert eviction, complete-residency control, prefill memory progress,
   reverse model swap, and the paging memory-shape experiment.
-- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance model_ssd_streaming::follow_up_admission_paged_moe_rest_journey::should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
   — the paged-MoE follow-up admission regression journey: a long first turn
   teaches the RAM budget chunk-shaped activation evidence, and the follow-up
   turn in the same conversation must be admitted, never rejected with
-  `generation context exceeds available GPU wired memory`.
+  `generation context exceeds available GPU wired memory`. Resident and SSD
+  streaming prefill both use the fixed 2,048-token test span; the journey has a
+  60-second timeout and a 36 GB maximum configured memory ceiling.
 - `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling -- --ignored --nocapture --exact --test-threads=1`
   — the paging memory-shape experiment (default 32 GB cell): samples the
   memory timeline during a 5,000-token Romeo-and-Juliet prefill plus 500
@@ -103,11 +105,12 @@ as a ceiling effect.
 
 ### Inference-worker serving acceptance (dense-model journeys)
 
-- `cargo test -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::chat::follow_up_turn_admission_rest::should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider -- --ignored --nocapture --exact --test-threads=1`
   — the small dense Qwen3.5 variant of the follow-up admission regression: a
   wider SSD-streaming chunk is configured while the dense model never pages,
   so the resident mode's own operation scope must govern the activation
-  reserve and both conversation turns must complete.
+  reserve and both conversation turns must complete. The journey caps
+  configured model memory at 36 GB.
 
 ### Qwen3.5 artifact-derived engine selection and retry journeys
 
