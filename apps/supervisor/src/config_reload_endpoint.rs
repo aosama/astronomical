@@ -167,8 +167,6 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
         if effective_mlx_memory_ceiling_bytes == 0
             || effective_mlx_memory_ceiling_bytes
                 > worker_health_snapshot.machine_mlx_memory_ceiling_bytes
-            || effective_mlx_memory_ceiling_bytes
-                < worker_health_snapshot.minimum_mlx_memory_ceiling_bytes
         {
             return (
                 StatusCode::BAD_REQUEST,
@@ -220,6 +218,65 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
                         .pending_memory_config_generation
                         .lock()
                         .await = None;
+                }
+            }
+            Ok(MlxMemoryLimitUpdateOutcome::RestartRequired) => {
+                // A reload candidate that lowers the ceiling below resident
+                // capacity needs the same stop-first worker restart as the
+                // dedicated memory endpoint. The candidate configuration is
+                // already persisted, so its startup settings carry the lower
+                // ceiling for the replacement worker.
+                let demotion_result =
+                    match worker_handle.reserve_generation_admission_for_demotion() {
+                        Ok(demotion_admission) => {
+                            let demotion_result = worker_handle
+                                .restart_worker_for_memory_demotion(
+                                    candidate_resolved.worker_executable_path.clone(),
+                                    Arc::clone(&candidate_resolved.model_policy_catalog),
+                                    candidate_resolved.worker_startup_configuration(),
+                                )
+                                .await;
+                            drop(demotion_admission);
+                            demotion_result
+                        }
+                        Err(demotion_admission_error) => Err(demotion_admission_error),
+                    };
+                match demotion_result {
+                    Ok(_) => {
+                        worker_handle.record_memory_configuration_generation(
+                            memory_effective_generation.clone(),
+                            MlxMemoryLimitUpdateOutcome::Applied,
+                        );
+                        *application_state
+                            .pending_memory_config_generation
+                            .lock()
+                            .await = None;
+                    }
+                    Err(demotion_error) => {
+                        *application_state
+                            .pending_memory_config_generation
+                            .lock()
+                            .await = None;
+                        worker_handle.record_memory_configuration_generation(
+                            memory_effective_generation.clone(),
+                            MlxMemoryLimitUpdateOutcome::Rejected,
+                        );
+                        tracing::error!(error = %demotion_error, "MLX memory demotion restart failed during reload");
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(
+                                ConfigReloadResponse::failed(
+                                    "The reloaded memory setting needs a worker restart, but the restart failed; inspect local diagnostics and retry".to_owned(),
+                                    discovered_model_count,
+                                )
+                                .with_generations(
+                                    &candidate_generation,
+                                    effective_worker_generation(&application_state),
+                                ),
+                            ),
+                        )
+                            .into_response();
+                    }
                 }
             }
             Ok(MlxMemoryLimitUpdateOutcome::Rejected) => {

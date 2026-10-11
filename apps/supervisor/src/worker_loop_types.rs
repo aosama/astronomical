@@ -56,6 +56,14 @@ pub(crate) enum WorkerLoopCommand {
         configuration_generation: String,
         update_sender: oneshot::Sender<Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>>,
     },
+    RestartWorkerForMemoryDemotion {
+        worker_executable_path: PathBuf,
+        model_policy_catalog: Arc<std::collections::HashMap<String, RuntimeModelPolicy>>,
+        worker_startup_configuration: WorkerStartupConfiguration,
+        expected_configuration_generation: String,
+        demotion_sender:
+            oneshot::Sender<Result<WorkerRuntimeFeatureConfiguration, WorkerControlError>>,
+    },
     UpdateModelPolicyCatalog {
         model_policy_catalog: Arc<std::collections::HashMap<String, RuntimeModelPolicy>>,
         update_sender: oneshot::Sender<Result<(), WorkerControlError>>,

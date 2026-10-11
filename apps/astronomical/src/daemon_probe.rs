@@ -35,7 +35,8 @@ pub struct DaemonStatusSnapshot {
 
 /// Socket candidates plus the per-stage bound both verbs share.
 pub struct DaemonProbe {
-    /// Instance sockets to try, most preferred first.
+    /// Instance sockets to try: the binary's own channel only (strict channel
+    /// isolation; no cross-channel fallback).
     pub candidate_socket_paths: Vec<PathBuf>,
     /// Bound for each protocol stage of the journey.
     pub request_timeout: Duration,

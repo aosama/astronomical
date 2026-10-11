@@ -228,7 +228,33 @@ test("computes whole decimal gigabyte bounds from exact status bytes", () => {
         "wholeDecimalGigabyteBounds({ minimum_mlx_memory_ceiling_bytes: 32000000001, machine_mlx_memory_ceiling_bytes: 40999999999 })",
         scriptContext
     );
-    assert.deepEqual(JSON.parse(JSON.stringify(bounds)), { minimumGigabytes: 33, maximumGigabytes: 40 });
+    assert.deepEqual(JSON.parse(JSON.stringify(bounds)), { minimumGigabytes: 1, maximumGigabytes: 40 });
+});
+
+test("reports the loaded-model floor as status information, not a bound", () => {
+    const scriptContext = createConsoleContext();
+    const inputElement = { min: "", max: "", disabled: false, value: "" };
+    const statusElement = { textContent: "" };
+    scriptContext.maximumMlxMemoryEditIsActive = false;
+    scriptContext.document.getElementById = (elementId) => ({
+        "maximum-mlx-memory-gb": inputElement,
+        "maximum-mlx-memory-status": statusElement
+    })[elementId];
+
+    scriptContext.renderMemoryLimitControl({
+        minimum_mlx_memory_ceiling_bytes: 19508792966,
+        machine_mlx_memory_ceiling_bytes: 48962207744,
+        mlx_memory_ceiling_bytes: 20000000000,
+        configured_maximum_mlx_memory_gb: 20
+    });
+
+    assert.equal(inputElement.min, "1");
+    assert.equal(inputElement.max, "48");
+    assert.equal(inputElement.value, "20");
+    assert.equal(
+        statusElement.textContent,
+        "Effective 20.00 GB of 48.96 GB · Loaded model floor 19.51 GB"
+    );
 });
 
 test("rejects a serialized chat request after base64 expansion exceeds the HTTP body limit", () => {

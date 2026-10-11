@@ -148,6 +148,16 @@ where
                     .await?;
                 Ok(())
             }
+            Err(InferenceEngineError::ResidentStreamingReplacementRequired { reason }) => {
+                self.emit_mlx_memory_limit_restart_required(
+                    requested_mlx_memory_ceiling_bytes,
+                    effective_requested_mlx_memory_ceiling_bytes,
+                    configuration_generation,
+                    &reason,
+                    event_writer,
+                )
+                .await
+            }
             Err(InferenceEngineError::MlxMemoryLimitRejected {
                 minimum_mlx_memory_ceiling_bytes,
                 reason,
@@ -180,6 +190,42 @@ where
             worker_runtime_feature_configuration.configuration_generation =
                 configuration_generation;
         }
+    }
+
+    /// Reports that this process cannot adopt the requested ceiling and the
+    /// supervisor must restart the worker under the persisted lower limit.
+    ///
+    /// Constructing the streaming replacement here would briefly require the
+    /// resident and streaming model runtimes in one process, so MLX memory
+    /// could not be released deterministically. The loaded runtime, ceilings,
+    /// and configuration generation stay untouched so the worker remains an
+    /// honestly consistent server if the supervisor never performs the restart.
+    async fn emit_mlx_memory_limit_restart_required<WriteTransport>(
+        &self,
+        requested_mlx_memory_ceiling_bytes: u64,
+        effective_mlx_memory_ceiling_bytes: u64,
+        configuration_generation: String,
+        replacement_reason: &str,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        tracing::info!(
+            requested_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes,
+            reason = %replacement_reason,
+            "resident engine cannot adopt the requested MLX ceiling in place; supervisor restart required"
+        );
+        event_writer
+            .send_event(&WorkerEvent::MlxMemoryLimitRestartRequired {
+                requested_mlx_memory_ceiling_bytes,
+                effective_mlx_memory_ceiling_bytes,
+                minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
+                configuration_generation,
+                reason: replacement_reason.chars().take(256).collect(),
+            })
+            .await?;
+        Ok(())
     }
 
     async fn emit_mlx_memory_limit_rejection<WriteTransport>(

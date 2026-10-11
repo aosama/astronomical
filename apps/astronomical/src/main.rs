@@ -145,8 +145,8 @@ fn build_current_thread_runtime() -> Result<tokio::runtime::Runtime, std::io::Er
         .build()
 }
 
-/// IPC sockets of every instance the running executable could serve, most
-/// preferred first: its own instance, then the others.
+/// IPC socket of the instance the running executable serves: its own channel
+/// only, per the strict dev/stable isolation decision.
 fn candidate_ipc_socket_paths() -> Vec<std::path::PathBuf> {
     let current_executable_path = env::current_exe()
         .inspect_err(|exe_error| eprintln!("astronomical: {exe_error}"))

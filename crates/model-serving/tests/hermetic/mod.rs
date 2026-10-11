@@ -11,6 +11,7 @@ mod e2e_test_model_names;
 mod engine_backed_worker;
 mod expert_memory_admission;
 mod expert_residency_policy;
+mod geometry_memory_floor;
 mod kernel_capability;
 mod macos_process_io;
 mod memory_policy;

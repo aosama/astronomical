@@ -13,9 +13,9 @@ pub(crate) use publisher::{
     publish_active_request_progress, publish_activity, publish_expert_memory_mode,
     publish_expert_residency, publish_health, publish_latest_mlx_memory_snapshot,
     publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
-    publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
-    publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
-    record_prompt_work_reuse, record_serving_session,
+    publish_mlx_memory_limit_restart_required, publish_pending_mlx_memory_ceiling,
+    publish_pending_prompt_cache_clear, publish_persistent_prompt_cache_stats,
+    publish_worker_expert_residency, record_prompt_work_reuse, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the supervisor readiness endpoint.
@@ -250,6 +250,9 @@ pub struct WorkerHealthSnapshot {
     pub pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
     /// Bounded last live-memory control failure. Cleared by a later success.
     pub mlx_memory_limit_error: Option<String>,
+    /// Ceiling whose live application reported that only a worker restart can
+    /// reach it. Queued reconciliation owns the demotion until it converges.
+    pub restart_required_mlx_memory_ceiling_bytes: Option<u64>,
     pub mlx_memory_ceiling_bytes: u64,
     pub serving_session: ServingSessionSnapshot,
 }
@@ -278,6 +281,7 @@ impl WorkerHealthSnapshot {
             pending_configuration_generation: None,
             pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
+            restart_required_mlx_memory_ceiling_bytes: None,
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
         }
@@ -300,6 +304,8 @@ impl WorkerHealthSnapshot {
             minimum_mlx_memory_ceiling_bytes;
         replacement_health_snapshot.pending_prompt_cache_clear =
             previous_health_snapshot.pending_prompt_cache_clear.clone();
+        replacement_health_snapshot.restart_required_mlx_memory_ceiling_bytes =
+            previous_health_snapshot.restart_required_mlx_memory_ceiling_bytes;
         replacement_health_snapshot.serving_session =
             previous_health_snapshot.serving_session.clone();
         replacement_health_snapshot.worker_runtime_feature_configuration = previous_health_snapshot
@@ -341,6 +347,7 @@ impl WorkerHealthSnapshot {
             pending_configuration_generation: None,
             pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
+            restart_required_mlx_memory_ceiling_bytes: None,
             mlx_memory_ceiling_bytes,
             serving_session: ServingSessionSnapshot::empty(),
         }
@@ -366,6 +373,7 @@ impl WorkerHealthSnapshot {
             pending_configuration_generation: None,
             pending_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
+            restart_required_mlx_memory_ceiling_bytes: None,
             mlx_memory_ceiling_bytes: 0,
             serving_session: ServingSessionSnapshot::empty(),
         }

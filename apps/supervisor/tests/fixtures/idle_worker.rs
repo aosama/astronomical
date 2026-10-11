@@ -4,7 +4,7 @@
 //! the real framed standard-input/standard-output transport, so tests exercise
 //! supervisor queueing and event handling without loading MLX or local artifacts.
 
-use std::{error::Error, process::ExitCode};
+use std::{error::Error, process::ExitCode, time::Duration};
 
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode,
@@ -24,6 +24,7 @@ const DELAYED_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-policy-ack-model
 const DELAYED_IMAGE_POLICY_ACK_MODEL_ID: &str = "astronomical/delayed-image-policy-ack-model";
 const DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION: &str =
     "delayed-startup-runtime-configuration";
+const OPTIONAL_STARTUP_CONFIGURATION_TIMEOUT: Duration = Duration::from_millis(100);
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -41,17 +42,70 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());
     let mut loaded_model_id: Option<String> = None;
     let mut acknowledged_runtime_configuration: Option<WorkerRuntimeFeatureConfiguration> = None;
+    // Production writes InitializeWorker immediately after spawning the worker,
+    // before any acknowledgement can be read. The idle ceiling therefore comes
+    // from the startup configuration exactly as the real worker computes it.
+    let mut configured_effective_mlx_memory_ceiling_bytes = 40_000_000_000;
+    let startup_command = match tokio::time::timeout(
+        OPTIONAL_STARTUP_CONFIGURATION_TIMEOUT,
+        command_reader.next_command(),
+    )
+    .await
+    {
+        Ok(startup_command) => startup_command?,
+        Err(_) => None,
+    };
+    match startup_command {
+        Some(WorkerCommand::InitializeWorker(worker_startup_configuration)) => {
+            if let Some(configured_maximum_mlx_memory_bytes) =
+                worker_startup_configuration.configured_maximum_mlx_memory_bytes
+            {
+                configured_effective_mlx_memory_ceiling_bytes = configured_maximum_mlx_memory_bytes;
+            }
+            let runtime_configuration = WorkerRuntimeFeatureConfiguration {
+                configuration_generation: worker_startup_configuration.configuration_generation,
+                persistent_prompt_cache_enabled: worker_startup_configuration
+                    .persistent_prompt_cache_enabled,
+                prompt_cache_maximum_size_bytes: worker_startup_configuration
+                    .global_prompt_cache_maximum_size_bytes,
+                loaded_model: None,
+            };
+            acknowledged_runtime_configuration = Some(runtime_configuration);
+        }
+        Some(unexpected_startup_command) => {
+            return Err(std::io::Error::other(format!(
+                "unexpected worker command before initial readiness: {unexpected_startup_command:?}"
+            ))
+            .into());
+        }
+        None => {}
+    }
     event_writer
         .send_event(&WorkerEvent::Idle {
             machine_mlx_memory_ceiling_bytes: 40_000_000_000,
-            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
+            effective_mlx_memory_ceiling_bytes: configured_effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
         })
         .await?;
+    if let Some(runtime_configuration) = acknowledged_runtime_configuration.as_ref() {
+        if runtime_configuration.configuration_generation
+            == DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION
+        {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+        event_writer
+            .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                worker_runtime_feature_configuration: runtime_configuration.clone(),
+            })
+            .await?;
+    }
 
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
             WorkerCommand::InitializeWorker(worker_startup_configuration) => {
+                // The launch-time InitializeWorker was consumed above; this
+                // branch stays for fixtures re-initialized mid-run, where the
+                // post-Idle event order (acknowledgement, not Idle) applies.
                 if worker_startup_configuration.configuration_generation
                     == DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION
                 {
