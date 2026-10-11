@@ -4,7 +4,10 @@
 
 set -eu
 
-readonly NOTARIZATION_TIMEOUT_SECONDS=1200
+# Apple notarization normally completes within about two minutes, so the
+# notarytool --wait window defaults to a generous but bounded 180 seconds.
+# Override the cap per-run by exporting NOTARIZATION_TIMEOUT_SECONDS.
+readonly NOTARIZATION_TIMEOUT_SECONDS="${NOTARIZATION_TIMEOUT_SECONDS:-180}"
 DMG_PATH=""
 SIGNING_IDENTITY=""
 NOTARY_PROFILE=""
