@@ -243,7 +243,7 @@ pub(super) fn factory_runtime_matches_configuration<
     )
 }
 
-fn model_swapped_from_ready_event(
+pub(super) fn model_swapped_from_ready_event(
     ready_event: WorkerEvent,
     expert_memory_mode: Option<astronomical_ipc_protocol::ExpertMemoryMode>,
     minimum_mlx_memory_ceiling_bytes: u64,

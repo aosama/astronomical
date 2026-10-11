@@ -341,6 +341,42 @@ impl WorkerHandle {
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
     }
 
+    /// Replaces the worker with a fresh process under the lower persisted
+    /// ceiling, restoring the previously selected model before returning.
+    ///
+    /// This is the stop-first memory-demotion boundary: the old worker exits
+    /// and is reaped before the replacement launches, so MLX allocations are
+    /// gone before the streaming model loads. Callers must hold generation
+    /// admission idle across the whole call.
+    pub async fn restart_worker_for_memory_demotion(
+        &self,
+        worker_executable_path: PathBuf,
+        model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+        worker_startup_configuration: WorkerStartupConfiguration,
+    ) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
+        let expected_configuration_generation = worker_startup_configuration
+            .configuration_generation
+            .clone();
+        let command_sender = self
+            .command_sender
+            .as_ref()
+            .ok_or(WorkerControlError::MissingActiveWorker)?;
+        let (demotion_sender, demotion_receiver) = oneshot::channel();
+        command_sender
+            .send(WorkerLoopCommand::RestartWorkerForMemoryDemotion {
+                worker_executable_path,
+                model_policy_catalog,
+                worker_startup_configuration,
+                expected_configuration_generation,
+                demotion_sender,
+            })
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?;
+        demotion_receiver
+            .await
+            .map_err(|_| WorkerControlError::MissingActiveWorker)?
+    }
+
     /// Replaces discovery-derived model policies without restarting the idle worker process.
     pub async fn update_model_policy_catalog(
         &self,
@@ -392,6 +428,34 @@ impl WorkerHandle {
         }
     }
 
+    /// Reserves every generation admission permit while a stop-first memory
+    /// demotion owns the worker lifecycle.
+    ///
+    /// Taking all queue permits plus the active permit makes a concurrently
+    /// admitted request fail with `CapacityUnavailable` instead of racing the
+    /// restart between worker shutdown and restored-model readiness.
+    pub(super) fn reserve_generation_admission_for_demotion(
+        &self,
+    ) -> Result<DemotionAdmissionReservation, WorkerControlError> {
+        if !self.is_generation_idle_for_control_action() {
+            return Err(WorkerControlError::GenerationBusy);
+        }
+        let reserved_queue_permits = (0..GENERATION_QUEUE_DEPTH)
+            .map(|_| {
+                Arc::clone(&self.generation_queue_permits)
+                    .try_acquire_owned()
+                    .map_err(|_| WorkerControlError::GenerationBusy)
+            })
+            .collect::<Result<Vec<_>, WorkerControlError>>()?;
+        let reserved_active_permit = Arc::clone(&self.active_generation_permits)
+            .try_acquire_owned()
+            .map_err(|_| WorkerControlError::GenerationBusy)?;
+        Ok(DemotionAdmissionReservation {
+            reserved_queue_permits,
+            reserved_active_permit,
+        })
+    }
+
     /// Applies a cache clear immediately or queues the newest scope until idle.
     pub async fn clear_prompt_cache(
         &self,
@@ -413,4 +477,18 @@ impl WorkerHandle {
             .await
             .map_err(|_| WorkerControlError::MissingActiveWorker)?
     }
+}
+
+/// Admission permits held across one stop-first memory-demotion restart.
+///
+/// Holding the permits (rather than a checked-then-acted window) is what makes
+/// "no generation is admitted between the completed active request and the
+/// restart transition" structural instead of timing-dependent. Dropping the
+/// value releases admission for the restored worker; the fields exist only to
+/// keep those permits alive.
+pub(super) struct DemotionAdmissionReservation {
+    #[allow(dead_code)]
+    reserved_queue_permits: Vec<tokio::sync::OwnedSemaphorePermit>,
+    #[allow(dead_code)]
+    reserved_active_permit: tokio::sync::OwnedSemaphorePermit,
 }

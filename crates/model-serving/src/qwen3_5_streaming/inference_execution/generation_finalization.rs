@@ -74,6 +74,7 @@ impl Qwen3_5EngineState {
             match generation_error {
                 InferenceEngineError::InvalidRequest { .. }
                 | InferenceEngineError::ResidentForkRequired { .. }
+                | InferenceEngineError::ResidentStreamingReplacementRequired { .. }
                 | InferenceEngineError::MlxMemoryLimitRejected { .. }
                 | InferenceEngineError::EngineBusy => (
                     PerformanceAttributionOutcome::Rejected,
