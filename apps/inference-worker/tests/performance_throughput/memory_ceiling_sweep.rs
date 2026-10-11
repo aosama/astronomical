@@ -28,9 +28,9 @@ use astronomical_ipc_protocol::ChatImageInput;
 use serial_test::serial;
 
 use crate::performance_throughput::historical_record::{
-    MemoryCellRecord, ThroughputJourneyKind, ThroughputRecord, append_throughput_history,
-    current_unix_epoch_millis, format_utc_timestamp, history_log_path, recorded_git_commit,
-    throughput_record_json,
+    MemoryCellBudgetExhaustedStage, MemoryCellRecord, ThroughputJourneyKind, ThroughputRecord,
+    append_throughput_history, current_unix_epoch_millis, format_utc_timestamp, history_log_path,
+    recorded_git_commit, throughput_record_json,
 };
 use crate::performance_throughput::machine_specs::MachineSpecs;
 use crate::performance_throughput::support::{
@@ -104,14 +104,17 @@ memory_ceiling_cell!(
 );
 async fn run_memory_ceiling_cell(ceiling_gb: u64) {
     let configured_maximum_mlx_memory_bytes = ceiling_gb * 1_000_000_000;
+    let run_outcome = throughput_support::measure_throughput(
+        support::large_sparse_moe_model_id(),
+        &cell_journey(configured_maximum_mlx_memory_bytes),
+    )
+    .await;
+    let history_path = history_log_path();
     append_memory_cell_record(
-        throughput_support::measure_throughput(
-            support::large_sparse_moe_model_id(),
-            &cell_journey(configured_maximum_mlx_memory_bytes),
-        )
-        .await,
+        run_outcome,
         configured_maximum_mlx_memory_bytes,
         ceiling_gb,
+        &history_path,
     )
     .await;
 }
@@ -120,6 +123,7 @@ async fn append_memory_cell_record(
     run_outcome: JourneyRunOutcome,
     configured_maximum_mlx_memory_bytes: u64,
     ceiling_gb: u64,
+    history_path: &std::path::Path,
 ) {
     let budget_exhausted = run_outcome.measured_budget_exhausted;
     let mut measurement = run_outcome.measurement.clone();
@@ -193,7 +197,6 @@ async fn append_memory_cell_record(
         serde_json::to_string(&throughput_record_json(&record))
             .unwrap_or_else(|_| "record serialization failed".to_owned())
     );
-    let history_path = history_log_path();
     match append_throughput_history(&record, &history_path) {
         Ok(()) => eprintln!(
             "[memory-ceiling-sweep] appended durable record to {}",
@@ -345,6 +348,7 @@ fn compose_memory_cell(
                 .and_then(serde_json::Value::as_u64)
         }),
         budget_exhausted,
+        budget_exhausted_stage: run_outcome.budget_exhausted_stage,
     }
 }
 
