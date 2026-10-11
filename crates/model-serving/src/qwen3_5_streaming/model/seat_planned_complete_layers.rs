@@ -1,9 +1,7 @@
-//! Enacts `memory/`'s decode-handoff seating decision.
+//! Enacts `memory/`'s pager-backed decode-handoff seating decision.
 //!
-//! The planner may name complete layers after an atomic demote. Decode never
-//! streams complete layers, so this pass loads those indexes into retained RAM
-//! before the first generate token. SSD reads stay in the pager; this file only
-//! walks the decided indexes.
+//! Selected complete layers are retained in the expert page cache before the
+//! first decode token; remaining routes continue to use the pager.
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;

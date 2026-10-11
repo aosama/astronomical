@@ -73,6 +73,10 @@ pub(crate) fn perf_worker_environment(
     let mut configuration_document = serde_json::json!({
         "model_directories": [discovery_root],
         "persistent_prompt_cache_enabled": false,
+        "chunking": {
+            "fixed_prompt_processing_chunk_size_tokens": 2_048,
+            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2_048,
+        },
     });
     if diagnostics_enabled() || attribution_enabled {
         // Attribution adds host synchronization to every forward and info

@@ -151,8 +151,11 @@ impl Qwen3_5EngineState {
                     active_memory_bytes,
                     attempted_allocation_bytes,
                     allowed_active_memory_bytes,
-                    prefill_request_checkpoint: _,
+                    prefill_request_checkpoint,
                 }) => {
+                    active_request
+                        .restore_prefill_request_checkpoint(prefill_request_checkpoint)
+                        .map_err(qwen3_5_runtime_error)?;
                     has_observed_prefill_capacity_constraint = true;
                     if let Some(smaller_executable_chunk_size_tokens) =
                         Qwen3_5ResidentPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
@@ -174,8 +177,11 @@ impl Qwen3_5EngineState {
                 }
                 Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
                     reason,
-                    prefill_request_checkpoint: _,
+                    prefill_request_checkpoint,
                 }) => {
+                    active_request
+                        .restore_prefill_request_checkpoint(prefill_request_checkpoint)
+                        .map_err(qwen3_5_runtime_error)?;
                     has_observed_prefill_capacity_constraint = true;
                     if let Some(smaller_executable_chunk_size_tokens) =
                         Qwen3_5ResidentPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(

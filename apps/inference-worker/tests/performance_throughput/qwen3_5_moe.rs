@@ -12,17 +12,18 @@
 //! - Send at least 10,000 input tokens. The input is the continuation
 //!   instruction plus the ~10,000-token Romeo and Juliet source fixture, which
 //!   together tokenize to ~10,500 tokens.
-//! - Acquire ~1,000 output tokens (±10% is acceptable). Each measured
-//!   completion is capped at 1,000 output tokens.
+//! - Acquire 500 output tokens (±10% is acceptable). Each measured
+//!   completion is capped at 500 output tokens.
 //! - The SSD (persistent prompt) cache is disabled in the worker's resolved
 //!   configuration, so every completion prefills the full prompt from scratch.
+//! - Both resident and streaming prefill chunk sizes are fixed at 2,048 tokens,
+//!   and the configured MLX memory ceiling is capped at 36 GB.
 //!
-//! Method: a short warmup completion (~1,000 input tokens, ~100 output tokens)
+//! Method: a short warmup completion (~500 input tokens, ~50 output tokens)
 //! is discarded so first-use JIT kernel compilation never inflates the measured
 //! prefill, then the single measured completion over the full prompt reports the
 //! server-attributed rates persisted to the durable historical record. The
-//! journey asserts nothing about the measured rates — it is a measurement, not
-//! a threshold check.
+//! journey verifies the measured input/output token counts and zero cache reuse.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU memory,
 //! so it is `#[ignore]`d and not wired into CI. Invoke it directly with
@@ -35,44 +36,47 @@ use crate::performance_throughput::support::{self as throughput_support, Through
 use crate::support;
 use serial_test::serial;
 
-/// The short warmup: a ~1,000-token Romeo and Juliet opening, continued for a
+/// The short warmup: a ~500-token Romeo and Juliet opening, continued for a
 /// short passage, that spins up first-use JIT kernels before the measured run.
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 
-/// The ~1,000-token Romeo and Juliet opening used as the warmup input.
+/// The Romeo and Juliet source used for the bounded warmup prompt.
 const WARMUP_ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
 
-/// The warmup output cap: ~100 output tokens.
-const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 100;
+/// The warmup output cap.
+const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;
 
 /// The continuation instruction prepended to the full Romeo and Juliet source.
 const MEASURED_INPUT_INSTRUCTION: &str =
-    "Continue the supplied Romeo and Juliet story above for approximately 1000 words.";
+    "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 
 /// The ~10,000-token Romeo and Juliet source; with the instruction the full
 /// input is ~10,500 tokens, clearing the >=10,000-token input requirement.
 const MEASURED_ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
 
-/// The measured output cap: ~1,000 output tokens (±10% acceptable).
-const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 1_000;
+/// The measured output cap: 500 output tokens (±10% acceptable).
+const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
 
 /// The sampling temperature in thousandths (1_000 = 1.0, unclamped).
 const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 
 /// Measures the resident sparse-MoE model's serving prompt-processing and
-/// decode throughput: after a short ~1,000-token warmup, a >=10,000-token Romeo
-/// and Juliet input drives ~1,000 output tokens of generation with the SSD
+/// decode throughput: after a short ~500-token warmup, a >=10,000-token Romeo
+/// and Juliet input drives 500 output tokens of generation with the SSD
 /// (persistent prompt) cache disabled, and the measured completion's
 /// server-attributed rates are persisted to the durable historical record.
 #[test]
 #[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput over IPC"]
 #[serial]
 fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() {
-    let journey = ThroughputJourney::production_default(
+    let mut journey = ThroughputJourney::production_default(
         ThroughputJourneyKind::Text,
-        format!("{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"),
+        throughput_support::romeo_and_juliet_warmup_prompt(
+            WARMUP_INPUT_INSTRUCTION,
+            WARMUP_ROMEO_AND_JULIET_SOURCE,
+        ),
         Vec::new(),
         WARMUP_MAXIMUM_OUTPUT_TOKENS,
         format!("{MEASURED_INPUT_INSTRUCTION}\n\n{MEASURED_ROMEO_AND_JULIET_SOURCE}"),
@@ -80,5 +84,10 @@ fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() 
         MEASURED_MAXIMUM_OUTPUT_TOKENS,
         TEMPERATURE_THOUSANDTHS,
     );
-    throughput_support::run_journey_with_timeout(support::resident_sparse_moe_model_id(), journey);
+    journey.maximum_mlx_memory_bytes = Some(throughput_support::MAXIMUM_MODEL_MEMORY_BYTES);
+    let measured_throughput = throughput_support::run_journey_with_timeout(
+        support::resident_sparse_moe_model_id(),
+        journey,
+    );
+    throughput_support::assert_measurement_shape(&measured_throughput);
 }

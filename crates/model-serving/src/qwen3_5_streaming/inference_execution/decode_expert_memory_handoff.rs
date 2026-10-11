@@ -1,34 +1,10 @@
-//! Prefill-to-decode expert-residency preparation for one user request.
+//! Prepares pager-backed expert retention for decode after prompt prefill.
 //!
-//! # What the user is waiting for
-//!
-//! After the model finishes reading the prompt, it starts writing tokens. Token
-//! writing is much cheaper in activation memory than prompt reading. The RAM the
-//! user already granted can therefore preserve more expert weights so generation
-//! does not stream every routed weight from the solid-state drive.
-//!
-//! # Words used in this file
-//!
-//! - Stable complete layer: all experts for one decoder layer remain retained.
-//! - Elastic routed page: exact experts already required by a decode route remain retained.
-//! - Operation-local page: experts are released after the mandatory forward.
-//! - Temporary request-pressure cap: a smaller retained-page ceiling installed
-//!   so the remaining prompt can finish. It is not the user's normal RAM grant.
-//!
-//! # Why this barrier exists
-//!
-//! Prefill may demote the complete owner and freeze retained pages so the last
-//! prompt chunks still fit. If that freeze is left in place, decode sees a tiny
-//! leftover budget, rejects useful retained pages, and streams from disk even though
-//! tens of gigabytes are free. This file is the one place that:
-//!
-//! 1. Releases the temporary cap after the last prefill cleanup barrier.
-//! 2. Restores complete RAM ownership when the leftover ceiling admits it.
-//! 3. Reconciles a pure decode topology target against already-owned pages.
-//! 4. Seats complete layers `memory/` named that decode would never load itself.
-//!
-//! Reconciliation is best-effort. A failed plan must not fail the user's
-//! request; decode can still stream missing routes.
+//! Prefill can temporarily cap retained pages to protect prompt-processing
+//! headroom. Leaving that request-scoped cap in place would prevent decode from
+//! using its available memory to retain routed experts. Reconciliation is
+//! best-effort because missing routes remain correct through operation-local
+//! streaming.
 
 use astronomical_ipc_protocol::RequestId;
 
