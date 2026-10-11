@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 /// and `DirEntry::metadata` performs an `lstat` that never traverses them, so
 /// the scan resolves every entry path with following semantics and keeps a
 /// canonical-directory set as the cycle guard for symlinked subdirectories.
+#[allow(dead_code)]
 pub(crate) fn artifact_directory_regular_file_bytes(model_directory: &Path) -> u64 {
     let mut artifact_payload_bytes = 0_u64;
     let mut visited_directory_paths = HashSet::new();

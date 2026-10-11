@@ -2,6 +2,12 @@
 
 Throughput comparisons in this repository use a single measurement run per side; repeated or interleaved passes are not required.
 
+## Artifact-derived engine selection (issue #1132)
+
+- Choose the resident or SSD-streaming engine from validated, disk-only artifact geometry and the complete-residency activation headroom before constructing either engine payload. This prevents a startup overlap in which both resident weights and a streaming model are temporarily owned.
+- Reuse the shared complete-residency admission calculation for that choice. If artifact geometry cannot be derived, fail model startup with the typed cause instead of silently selecting resident execution.
+- Throughput runs emit warmup and measured generation reports into the same log. Select evidence by the measured request ID; choosing the first generation report records warmup counters as the measured cell.
+
 ## Memory reserve attribution (issue #644)
 
 - Activation workspace and context state grow on different curves, and a memory reserve that conflates their scopes produces promises several times the ceiling. Measured on a 50K-token chunked prefill of the 35B sparse MoE: active MLX memory stayed flat at ~27.5 GB across all 24 chunks (activation is a function of the 2,048-token chunk, because Metal kernels tile attention), while the plan projected a per-chunk ~1 GB observation proportionally to the full prompt length into a 40-43 GB reserve — nearly twice the 39 GB ceiling — purely from feeding the prompt token count into an operation-scoped lookup.

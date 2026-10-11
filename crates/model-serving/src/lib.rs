@@ -307,25 +307,23 @@ pub use qwen_image_21::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5::{
-    Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
+    Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult,
     Qwen3_5ModelChunkingConfiguration, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5PrefillExecutionContext,
-    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer,
-    Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5TargetForwardOutput,
-    Qwen3_5VisionModel, Qwen3_5VisionPaddingZeroCache, Qwen3_5VisionWeights, Qwen3_5Weights,
-    RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
-    RequestDecoderStateStackCheckpoint, is_gdn_decode_prework_eligible,
-    persistent_prompt_cache_publication_advances_parent_chain, qwen3_5_apply_top_p_mask,
-    qwen3_5_full_attention_step, qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5VisionModel,
+    Qwen3_5VisionPaddingZeroCache, Qwen3_5VisionWeights, Qwen3_5Weights, RequestDecoderStateStack,
+    RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
+    is_gdn_decode_prework_eligible, qwen3_5_apply_top_p_mask, qwen3_5_full_attention_step,
+    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
     qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
     qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
-    qwen3_5_inject_visual_embeddings, safe_minimum_mlx_memory_ceiling_bytes,
+    qwen3_5_inject_visual_embeddings,
 };
 pub use qwen3_5_core::artifacts::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
 };
+pub use qwen3_5_core::route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use qwen3_5_resident::maximum_resident_gate_up_fusion_transient_payload_bytes;
@@ -348,11 +346,17 @@ pub use qwen3_5_streaming::{
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 pub use qwen3_5_streaming::{
-    LayerRoutedExpertIds, ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
-    sorted_unique_layer_routed_expert_ids,
+    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_streaming::{
+    Qwen3_5StreamingEngine, Qwen3_5StreamingModel, Qwen3_5StreamingPrefillExecutionContext,
+    Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
+    Qwen3_5StreamingTargetForwardOutput, persistent_prompt_cache_publication_advances_parent_chain,
+    safe_minimum_mlx_memory_ceiling_bytes,
 };
 pub use qwen3_5_streaming::{
-    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+    RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
 pub use sparse_experts::should_use_sorted_expert_reduction;
 #[cfg(feature = "direct-mlx")]

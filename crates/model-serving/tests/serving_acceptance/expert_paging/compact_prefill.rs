@@ -11,7 +11,8 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5Model, Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5StreamingModel,
+    Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -206,7 +207,7 @@ pub(crate) async fn run_prefill_snapshot(
         test_started_at.elapsed().as_secs_f64()
     );
     let model_load_started_at = Instant::now();
-    let qwen3_5_model = Qwen3_5Model::load(
+    let qwen3_5_model = Qwen3_5StreamingModel::load(
         runtime,
         validated_artifact,
         &model_directory,

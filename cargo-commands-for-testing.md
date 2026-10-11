@@ -19,8 +19,11 @@ runs and why it exists. Real-model journeys are invoked directly with
   it uses no model runtime or installed model files.
 - `cargo test -p astronomical-model-serving --test hermetic_tests qwen3_5_import_direction -- --test-threads=1`
   — enforces the Qwen3.5 module dependency direction: both engines depend on
-  shared core, never on each other, and core avoids temporary legacy-shell
-  imports.
+  shared core, never on each other, and attribution plus the family facade do
+  not depend on engine internals.
+- `cargo test -p astronomical-model-serving --test hermetic_tests hermetic::performance_attribution::measurement::should_record_an_external_operation_interval_only_when_attribution_is_enabled -- --exact --test-threads=1`
+  — verifies that an operation measured outside the request-owning thread is
+  recorded against the request report's monotonic start time.
 - `cargo test -p astronomical-model-serving --features direct-mlx --test hermetic_tests prompt_processing_chunk_sizer -- --test-threads=1`
   — verifies that resident and streaming execution use separate chunk-sizer
   policies: resident uses fixed chunks, while streaming owns SSD chunk sizing
@@ -72,21 +75,25 @@ first and last and interleaves the rest so page-cache warmth cannot masquerade
 as a ceiling effect.
 
 - `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::memory_ceiling_sweep::should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
-- The same command with `..._28gb_...`, `..._32gb_...`, `..._35gb_...`,
-  `..._38gb_...`, and `..._40gb_...` runs the remaining cells. Partial rates
-  and load/generation I/O evidence are recorded.
+- The same command with `..._28gb_...`, `..._32gb_...`, and `..._35gb_...`
+  runs the remaining cells. Each journey uses a 2,048-token prefill chunk,
+  a 500-token output target, a 500-input/50-output warmup, and stays within
+  the 36 GB test ceiling. Partial rates and load/generation I/O evidence are
+  recorded.
 
 ### Serving throughput (production-faithful rates)
 
 - `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture --exact --test-threads=1`
-  — resident-model text throughput: ~10,500-token Romeo-and-Juliet input,
-  1,000-token output, persistent prompt cache disabled, server-attributed
-  rates appended to the durable history log. The measured journey lives in a
-  nested module, so `--exact` needs the full
+  — resident-model text throughput: 9,000–11,000 Romeo-and-Juliet input
+  tokens, 450–550 output tokens, 500-input/50-output warmup, persistent prompt
+  cache disabled, 2,048-token prefill chunks, and a 36 GB maximum configured
+  active-memory ceiling. Server-attributed rates are appended to the durable
+  history log. The measured journey lives in a nested module, so `--exact` needs the full
   `performance_throughput::qwen3_5_moe::` module path.
 - The same command with the module path
   `performance_throughput::qwen3_5_moe_vision::should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput`
-  runs the vision variant.
+  runs the vision variant under the same input/output, cache, chunk, memory,
+  and warmup constraints.
 
 ### Model-serving installed-artifact journeys
 
@@ -101,6 +108,24 @@ as a ceiling effect.
   wider SSD-streaming chunk is configured while the dense model never pages,
   so the resident mode's own operation scope must govern the activation
   reserve and both conversation turns must complete.
+
+### Qwen3.5 artifact-derived engine selection and retry journeys
+
+Each command below launches the production worker and makes a real public REST
+request using a configured sparse artifact. The resident journey is bounded to
+115 seconds; each streaming/retry SSD journey is bounded to 60 seconds. All
+three tests are `#[serial]`, run with one test thread, and enforce a 36 GB
+maximum configured active-memory ceiling.
+
+- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_select_resident_engine_when_artifact_geometry_and_prompt_fit -- --ignored --nocapture --exact --test-threads=1`
+  — verifies a request selects resident execution when validated artifact
+  geometry plus prompt context fit the configured ceiling.
+- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_select_streaming_engine_when_complete_residency_headroom_does_not_fit -- --ignored --nocapture --exact --test-threads=1`
+  — verifies a request selects paging when the artifact's complete-residency
+  headroom does not fit.
+- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_restore_cached_prefix_after_an_invisible_resident_to_streaming_retry -- --ignored --nocapture --exact --test-threads=1`
+  — verifies one invisible resident-to-streaming retry retains persistent
+  prefix reuse and emits a nonzero retry-attribution interval.
 
 ### Prompt-cache acceptance journeys (resident sparse MoE role)
 

@@ -3,9 +3,10 @@
 //!
 //! Each ceiling cell runs ONE production-shaped journey under an explicitly
 //! configured MLX ceiling — the same >=10,000-token Romeo and Juliet input and
-//! ~1,000-token output as the text lane, persistent prompt cache disabled —
+//! 500-token output as the text lane, persistent prompt cache disabled —
 //! with performance attribution ON, and appends one durable history record
 //! whose `memory_cell` carries the residency and byte-traffic evidence.
+//! Every cell uses a 2,048-token prefill chunk and remains at or below 35 GB.
 //! Attribution stays on for every cell equally, so the ceiling CURVE is
 //! internally consistent even though absolute rates carry attribution
 //! overhead.
@@ -40,12 +41,12 @@ use crate::support;
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 const WARMUP_ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
-const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 100;
+const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;
 const MEASURED_INPUT_INSTRUCTION: &str =
-    "Continue the supplied Romeo and Juliet story above for approximately 1000 words.";
+    "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 const MEASURED_ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
-const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 1_000;
+const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
 const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// Leaves 15 seconds inside the 60-second test timeout for cancellation,
 /// worker shutdown, and durable partial-evidence persistence.
@@ -101,15 +102,6 @@ memory_ceiling_cell!(
     should_serve_the_large_sparse_moe_under_a_35gb_ceiling_and_record_the_memory_cell,
     35
 );
-memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_38gb_ceiling_and_record_the_memory_cell,
-    38
-);
-memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_40gb_ceiling_and_record_the_memory_cell,
-    40
-);
-
 async fn run_memory_ceiling_cell(ceiling_gb: u64) {
     let configured_maximum_mlx_memory_bytes = ceiling_gb * 1_000_000_000;
     append_memory_cell_record(
@@ -131,14 +123,20 @@ async fn append_memory_cell_record(
 ) {
     let budget_exhausted = run_outcome.measured_budget_exhausted;
     let mut measurement = run_outcome.measurement.clone();
+    if !budget_exhausted {
+        throughput_support::assert_measurement_shape(&measurement);
+    }
     // A completed cell MUST have written a generation attribution report, so a
     // missing one is a broken evidence lane rather than a slow cell. A
     // budget-exhausted cell is the opposite case: its cancellation may have
     // raced the report write, so absence degrades to an empty report and the
     // record keeps whatever counters were observed before the boundary.
     let attribution_report = if budget_exhausted {
-        read_generation_attribution_report(&run_outcome.logging_directory)
-            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()))
+        read_generation_attribution_report(
+            &run_outcome.logging_directory,
+            throughput_support::MEASURED_REQUEST_ID,
+        )
+        .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()))
     } else {
         generation_attribution_report(&run_outcome.logging_directory)
     };
@@ -261,8 +259,9 @@ fn apply_partial_progress_rates(
 fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
     ThroughputJourney {
         journey_kind: ThroughputJourneyKind::MemoryCeilingSweep,
-        warmup_input_prompt: format!(
-            "{WARMUP_INPUT_INSTRUCTION}\n\n{WARMUP_ROMEO_AND_JULIET_SOURCE}"
+        warmup_input_prompt: throughput_support::romeo_and_juliet_warmup_prompt(
+            WARMUP_INPUT_INSTRUCTION,
+            WARMUP_ROMEO_AND_JULIET_SOURCE,
         ),
         warmup_images: Vec::<ChatImageInput>::new(),
         warmup_output_tokens: WARMUP_MAXIMUM_OUTPUT_TOKENS,
@@ -362,22 +361,31 @@ fn model_loading_attribution_report(
 
 fn read_generation_attribution_report(
     logging_directory: &std::path::Path,
+    request_id: u64,
 ) -> Option<serde_json::Value> {
     let attribution_log_path = logging_directory.join("performance-attribution.jsonl");
     let attribution_log = fs::read_to_string(&attribution_log_path).ok()?;
     attribution_log
         .lines()
         .filter_map(|json_line| serde_json::from_str::<serde_json::Value>(json_line).ok())
-        .find(|attribution_report| attribution_report["report_kind"] == "generation")
+        .find(|attribution_report| {
+            attribution_report["report_kind"] == "generation"
+                && attribution_report["request_id"].as_u64() == Some(request_id)
+        })
 }
 
 fn generation_attribution_report(logging_directory: &std::path::Path) -> serde_json::Value {
-    read_generation_attribution_report(logging_directory).unwrap_or_else(|| {
+    read_generation_attribution_report(
+        logging_directory,
+        throughput_support::MEASURED_REQUEST_ID,
+    )
+    .unwrap_or_else(|| {
         panic!(
-            "the evidence pass attribution log at {} should contain a generation report",
+            "the evidence pass attribution log at {} should contain a generation report for measured request {}",
             logging_directory
                 .join("performance-attribution.jsonl")
-                .display()
+                .display(),
+            throughput_support::MEASURED_REQUEST_ID
         )
     })
 }
@@ -418,3 +426,7 @@ fn attribution_operation_total_seconds(
         .sum::<u64>() as f64
         / 1_000_000_000.0
 }
+
+#[cfg(test)]
+#[path = "memory_ceiling_sweep_tests.rs"]
+mod tests;

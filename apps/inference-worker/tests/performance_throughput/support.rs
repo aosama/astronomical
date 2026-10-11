@@ -44,6 +44,45 @@ use crate::performance_throughput::worker_environment::{
     diagnostics_enabled, perf_worker_environment,
 };
 
+pub(crate) const MAXIMUM_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
+const MINIMUM_ACCEPTABLE_INPUT_TOKENS: u32 = 9_000;
+const MAXIMUM_ACCEPTABLE_INPUT_TOKENS: u32 = 11_000;
+const MINIMUM_ACCEPTABLE_OUTPUT_TOKENS: u16 = 450;
+const MAXIMUM_ACCEPTABLE_OUTPUT_TOKENS: u16 = 550;
+const WARMUP_SOURCE_WORD_COUNT: usize = 350;
+pub(crate) const MEASURED_REQUEST_ID: u64 = 2;
+
+pub(crate) fn romeo_and_juliet_warmup_prompt(
+    warmup_instruction: &str,
+    romeo_and_juliet_source: &str,
+) -> String {
+    let warmup_source = romeo_and_juliet_source
+        .split_whitespace()
+        .take(WARMUP_SOURCE_WORD_COUNT)
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("{warmup_instruction}\n\n{warmup_source}")
+}
+
+pub(crate) fn assert_measurement_shape(measured_throughput: &ThroughputMeasurement) {
+    assert!(
+        (MINIMUM_ACCEPTABLE_INPUT_TOKENS..=MAXIMUM_ACCEPTABLE_INPUT_TOKENS)
+            .contains(&measured_throughput.total_input_tokens),
+        "the measured Romeo and Juliet prompt should contain 9,000 to 11,000 input tokens, got {}",
+        measured_throughput.total_input_tokens,
+    );
+    assert!(
+        (MINIMUM_ACCEPTABLE_OUTPUT_TOKENS..=MAXIMUM_ACCEPTABLE_OUTPUT_TOKENS)
+            .contains(&measured_throughput.total_output_tokens),
+        "the measured completion should generate 450 to 550 output tokens, got {}",
+        measured_throughput.total_output_tokens,
+    );
+    assert_eq!(
+        measured_throughput.cached_tokens, 0,
+        "the measured completion must not reuse the persistent prompt cache",
+    );
+}
+
 pub(crate) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const READY_ATTEMPT_LIMIT: u8 = 70;
@@ -122,33 +161,40 @@ pub(crate) struct JourneyRunOutcome {
 /// Runs one journey on a dedicated multi-thread runtime and enforces the
 /// journey's built-in timeout so a wedged worker can never hang the test
 /// process.
-pub(crate) fn run_journey_with_timeout(model_id: &'static str, journey: ThroughputJourney) {
+pub(crate) fn run_journey_with_timeout(
+    model_id: &'static str,
+    journey: ThroughputJourney,
+) -> ThroughputMeasurement {
     let journey_timeout = journey.journey_timeout;
-    let (sender, receiver) = std::sync::mpsc::channel::<()>();
+    let (sender, receiver) = std::sync::mpsc::channel::<ThroughputMeasurement>();
     let worker = std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("the throughput worker runtime should build");
-        runtime.block_on(run_throughput_journey(model_id, &journey));
-        sender.send(()).ok();
+        let measured_throughput = runtime.block_on(run_throughput_journey(model_id, &journey));
+        sender.send(measured_throughput).ok();
     });
-    match receiver.recv_timeout(journey_timeout) {
-        Ok(()) => {}
+    let measured_throughput = match receiver.recv_timeout(journey_timeout) {
+        Ok(measured_throughput) => measured_throughput,
         Err(RecvTimeoutError::Timeout) => panic!(
             "the throughput journey for {model_id} exceeded the {journey_timeout:?} deadline"
         ),
         Err(RecvTimeoutError::Disconnected) => {
             panic!("the throughput worker thread terminated before completing")
         }
-    }
+    };
     worker
         .join()
         .expect("the throughput worker thread should join cleanly");
+    measured_throughput
 }
 
 /// Runs one full throughput journey and persists a durable historical record.
-pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJourney) {
+pub(crate) async fn run_throughput_journey(
+    model_id: &str,
+    journey: &ThroughputJourney,
+) -> ThroughputMeasurement {
     let machine_specs = MachineSpecs::capture().await;
     let outcome = measure_throughput(model_id, journey).await;
     let measurement = outcome.measurement;
@@ -176,7 +222,7 @@ pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJ
         eprintln!(
             "[performance-throughput] diagnostics run: durable history append skipped because attribution distorts throughput"
         );
-        return;
+        return measurement;
     }
     let history_path = history_log_path();
     match append_throughput_history(&record, &history_path) {
@@ -188,6 +234,7 @@ pub(crate) async fn run_throughput_journey(model_id: &str, journey: &ThroughputJ
             "[performance-throughput] durable history append failed (measurement still reported): {error}"
         ),
     }
+    measurement
 }
 
 pub(crate) async fn measure_throughput(
@@ -325,7 +372,7 @@ pub(crate) async fn measure_throughput(
             remaining_budget(),
             drive_completion(
                 &worker_handle,
-                RequestId::new(2),
+                RequestId::new(MEASURED_REQUEST_ID),
                 model_id,
                 &journey.measured_input_prompt,
                 journey.measured_images.clone(),

@@ -4,7 +4,10 @@ use std::{fs, path::PathBuf};
 
 #[cfg(feature = "memory-management-acceptance")]
 pub(crate) mod acceptance_evidence;
-#[cfg(feature = "memory-management-acceptance")]
+#[cfg(any(
+    feature = "serving-acceptance",
+    feature = "memory-management-acceptance",
+))]
 pub(crate) mod artifact_bytes;
 pub(crate) mod exact_model_prompt;
 #[cfg(any(

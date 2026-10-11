@@ -10,9 +10,7 @@
 //!
 //! Dependency direction: `qwen3_5_resident` and `qwen3_5_streaming` may import
 //! from here; neither may import from the other. This module never imports
-//! from the engine modules. Until the engine fork lands (migration steps 2
-//! and 3 of issue #1132), the legacy `qwen3_5` module re-exports these trees
-//! so every existing `crate::qwen3_5::` path keeps resolving.
+//! from the engine modules.
 
 pub(crate) mod artifacts;
 pub(crate) mod configuration;
@@ -21,5 +19,6 @@ pub(crate) mod dense;
 pub(crate) mod model;
 pub(crate) mod model_math;
 pub(crate) mod quantizations;
+pub(crate) mod route_observation;
 pub(crate) mod text;
 pub(crate) mod vision;

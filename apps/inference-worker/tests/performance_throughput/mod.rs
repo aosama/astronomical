@@ -2,7 +2,7 @@
 //!
 //! The surface measures serving throughput over the worker IPC boundary, records
 //! the numbers against this machine's specifications, and appends them to a
-//! durable historical log. It asserts nothing about the measured rates.
+//! durable historical log. It asserts the measured token counts and cache state.
 
 #[cfg(feature = "performance_throughput")]
 mod completion;

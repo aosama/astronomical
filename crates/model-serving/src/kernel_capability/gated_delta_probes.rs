@@ -11,11 +11,15 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
 use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
-    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
 use crate::qwen3_5_core::model_math::gated_delta_sequence::{
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
+    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
+    qwen3_5_gated_delta_sequence_ops_fallback,
+};
+use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
+    qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
 };
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
@@ -170,11 +174,10 @@ impl CustomMetalKernelProbe for GatedDeltaSequenceProbe<'_> {
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
-        let kernel = crate::qwen3_5::qwen3_5_gated_delta_kernel().map_err(|error| {
-            KernelCapabilityError::Compilation {
+        let kernel =
+            qwen3_5_gated_delta_kernel().map_err(|error| KernelCapabilityError::Compilation {
                 description: error.to_string(),
-            }
-        })?;
+            })?;
         let probe_inputs = probe_sequence_arrays(self.runtime).map_err(execution_error)?;
         let (probe_outputs, probe_next_state) = qwen3_5_gated_delta_sequence(
             self.runtime,
@@ -232,7 +235,7 @@ impl CustomMetalKernelProbe for GatedDeltaBoundaryCheckpointProbe<'_> {
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
-        let kernel = crate::qwen3_5::qwen3_5_gated_delta_checkpoint_kernel().map_err(|error| {
+        let kernel = qwen3_5_gated_delta_checkpoint_kernel().map_err(|error| {
             KernelCapabilityError::Compilation {
                 description: error.to_string(),
             }
@@ -484,12 +487,13 @@ impl CustomMetalKernelProbe for GdnDecodePreworkProbe<'_> {
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
         let kernel =
-            crate::qwen3_5::qwen3_5_gdn_decode_prework_kernel(PREWORK_PROBE_RMS_NORM_EPSILON)
-                .map_err(|error| KernelCapabilityError::Compilation {
+            qwen3_5_gdn_decode_prework_kernel(PREWORK_PROBE_RMS_NORM_EPSILON).map_err(|error| {
+                KernelCapabilityError::Compilation {
                     description: error.to_string(),
-                })?;
+                }
+            })?;
         let probe_arrays = prework_probe_arrays(self.runtime).map_err(execution_error)?;
-        let prework = crate::qwen3_5::qwen3_5_gdn_decode_prework(
+        let prework = qwen3_5_gdn_decode_prework(
             self.runtime,
             &kernel,
             PREWORK_PROBE_KEY_HEAD_COUNT,

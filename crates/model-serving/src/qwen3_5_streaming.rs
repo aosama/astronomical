@@ -13,11 +13,18 @@ pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_paging::RetainedExpertCache;
 pub use expert_paging::route_observation::{
-    LayerRoutedExpertIds, ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
-    sorted_unique_layer_routed_expert_ids,
+    RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
+#[cfg(feature = "direct-mlx")]
+pub use inference_execution::{
+    Qwen3_5PrefillExecutionContext as Qwen3_5StreamingPrefillExecutionContext,
+    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer,
+    Qwen3_5StreamingPromptProcessingChunkSizerError,
+    persistent_prompt_cache_publication_advances_parent_chain,
+    safe_minimum_mlx_memory_ceiling_bytes,
+};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
@@ -30,6 +37,11 @@ pub use model::{
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
+};
+#[cfg(feature = "direct-mlx")]
+pub use model::{
+    Qwen3_5Model as Qwen3_5StreamingModel,
+    Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,
 };
 
 /// Model identity constants retained for sparse-artifact test fixtures.

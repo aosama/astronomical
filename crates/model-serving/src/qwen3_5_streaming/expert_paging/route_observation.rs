@@ -14,16 +14,7 @@
 
 use std::collections::VecDeque;
 
-/// Sorted unique routed expert identifiers one sparse decoder layer selected
-/// for one token. Quantized expert populations fit far below `u16::MAX`, so
-/// the compact element keeps one token's complete route small enough for a
-/// multi-thousand-observation resident history.
-pub type LayerRoutedExpertIds = Vec<u16>;
-
-/// One decode token's routed expert selection across all decoder layers in
-/// layer order. `None` marks a layer that routed nothing (dense feed-forward
-/// or an unobserved layer), which is itself part of the training label.
-pub type ObservedExpertRoute = Vec<Option<LayerRoutedExpertIds>>;
+use crate::qwen3_5_core::route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
 
 /// One labeled training example for the expert-route predictor.
 #[derive(Clone, Debug, PartialEq, Eq)]

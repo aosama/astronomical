@@ -128,12 +128,13 @@ impl
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
         let classification_directory_path = model_directory_path.clone();
-        let model_family = tokio::task::spawn_blocking(move || {
+        let classification_task_result = tokio::task::spawn_blocking(move || {
             classify_model_directory(&classification_directory_path)
                 .map_err(|_| "selected model family could not be classified".to_owned())
         })
         .await
-        .map_err(|_| "model-family classification task failed".to_owned())??;
+        .map_err(|_| "model-family classification task failed".to_owned())?;
+        let model_family = classification_task_result?;
         match (model_family, model_configuration) {
             (
                 Some(ModelFamily::Qwen3_5),
@@ -143,7 +144,7 @@ impl
                     .create_qwen3_5_runtime(
                         model_directory_path,
                         model_configuration,
-                        Qwen3_5EngineSelection::Resident,
+                        Qwen3_5EngineSelection::Automatic,
                     )
                     .await?;
                 Ok(ModelFactoryRuntime::autoregressive(
@@ -156,7 +157,7 @@ impl
                 WorkerModelConfiguration::Flux2Klein(model_configuration),
             ) => {
                 let verification_directory_path = model_directory_path.clone();
-                let verified_evidence = tokio::task::spawn_blocking(move || {
+                let verification_task_result = tokio::task::spawn_blocking(move || {
                     verify_flux2_klein_model_directory(&verification_directory_path)
                         // Discovery retains typed diagnostics, while this worker boundary must not
                         // reveal which mutable local artifact detail changed after selection.
@@ -166,7 +167,8 @@ impl
                         })
                 })
                 .await
-                .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())??;
+                .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())?;
+                let verified_evidence = verification_task_result?;
                 if model_configuration.model_family != WorkerImageGenerationModelFamily::Flux2Klein
                     || model_configuration.model_id != verified_evidence.canonical_model_id
                     || model_configuration.artifact_revision != verified_evidence.revision
@@ -199,7 +201,7 @@ impl
                 WorkerModelConfiguration::QwenImage21(model_configuration),
             ) => {
                 let verification_directory_path = model_directory_path.clone();
-                let verified_evidence = tokio::task::spawn_blocking(move || {
+                let verification_task_result = tokio::task::spawn_blocking(move || {
                     verify_qwen_image_21_model_directory(&verification_directory_path)
                         // Discovery retains typed diagnostics, while this worker boundary must not
                         // reveal which mutable local artifact detail changed after selection.
@@ -209,7 +211,8 @@ impl
                         })
                 })
                 .await
-                .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())??;
+                .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())?;
+                let verified_evidence = verification_task_result?;
                 if model_configuration.model_family != WorkerImageGenerationModelFamily::QwenImage21
                     || model_configuration.model_id != verified_evidence.canonical_model_id
                     || model_configuration.artifact_revision != verified_evidence.revision
@@ -241,7 +244,7 @@ impl
                 Some(ModelFamily::K2HorizonMoVA),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
-                let (generation_processor, k2_engine) = tokio::task::spawn_blocking(move || {
+                let initialization_task_result = tokio::task::spawn_blocking(move || {
                     let (generation_processor, k2_engine) =
                         initialize_k2_horizon_mova_model_with_serving_settings(
                             &model_directory_path,
@@ -283,7 +286,8 @@ impl
                     Ok::<_, String>((generation_processor, k2_engine))
                 })
                 .await
-                .map_err(|_| "K2 Horizon MoVA initialization task failed".to_owned())??;
+                .map_err(|_| "K2 Horizon MoVA initialization task failed".to_owned())?;
+                let (generation_processor, k2_engine) = initialization_task_result?;
                 Ok(ModelFactoryRuntime::autoregressive(
                     ModelFamilyGenerationProcessor::K2HorizonMoVA(generation_processor),
                     ModelFamilyInferenceEngine::K2HorizonMoVA(k2_engine),
@@ -357,7 +361,7 @@ impl
             .create_qwen3_5_runtime(
                 PathBuf::from(model_directory),
                 model_configuration,
-                Qwen3_5EngineSelection::Streaming,
+                Qwen3_5EngineSelection::StreamingRetry,
             )
             .await?;
         Ok(ModelFactoryRuntime::autoregressive(

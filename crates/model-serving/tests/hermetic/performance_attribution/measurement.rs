@@ -69,6 +69,46 @@ fn should_aggregate_repeated_operation_measurements() {
     assert_eq!(operation_measurement.last_ended_offset_nanoseconds(), 100);
 }
 
+#[tokio::test]
+async fn should_record_an_external_operation_interval_only_when_attribution_is_enabled() {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let operation_started_at = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        let operation_ended_at = operation_started_at + std::time::Duration::from_millis(7);
+        let mut enabled_attribution = PerformanceAttribution::enabled();
+
+        enabled_attribution.record_operation_interval(
+            PerformanceOperation::ResidentToStreamingRetry,
+            operation_started_at,
+            operation_ended_at,
+        );
+
+        let operation_measurement = enabled_attribution
+            .operation_measurement(PerformanceOperation::ResidentToStreamingRetry)
+            .expect("the external retry interval should be attributed");
+        assert_eq!(operation_measurement.occurrence_count(), 1);
+        assert_eq!(operation_measurement.total_elapsed_nanoseconds(), 7_000_000);
+        assert!(operation_measurement.first_started_offset_nanoseconds() > 0);
+        assert!(
+            operation_measurement.last_ended_offset_nanoseconds()
+                > operation_measurement.first_started_offset_nanoseconds()
+        );
+
+        let mut disabled_attribution = PerformanceAttribution::disabled();
+        disabled_attribution.record_operation_interval(
+            PerformanceOperation::ResidentToStreamingRetry,
+            operation_started_at,
+            operation_ended_at,
+        );
+        assert!(
+            disabled_attribution
+                .operation_measurement(PerformanceOperation::ResidentToStreamingRetry)
+                .is_none()
+        );
+    })
+    .await
+    .expect("external operation attribution should finish within five seconds");
+}
+
 #[test]
 fn should_saturate_repeated_operation_elapsed_time() {
     let mut performance_attribution = PerformanceAttribution::enabled();

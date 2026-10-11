@@ -11,6 +11,8 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
         let qwen3_5_resident = source_root.join("qwen3_5_resident");
         let qwen3_5_streaming = source_root.join("qwen3_5_streaming");
         let qwen3_5_family_facade = source_root.join("qwen3_5.rs");
+        let performance_attribution = source_root.join("performance_attribution.rs");
+        let streaming_module_root = source_root.join("qwen3_5_streaming.rs");
         let crate_root = source_root.join("lib.rs");
 
         assert_tree_excludes_source_fragments(
@@ -48,11 +50,41 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
             &qwen3_5_streaming.join("inference_execution/prompt_processing_chunk_sizer.rs"),
             &["AdaptiveRamGrowthExecutionProfile", "Resident"],
         );
-        assert_source_excludes_source_fragments(&qwen3_5_family_facade, &["Qwen3_5Engine"]);
+        assert_source_excludes_source_fragments(
+            &qwen3_5_family_facade,
+            &[
+                "Qwen3_5Engine",
+                "Qwen3_5StreamingEngine",
+                "Qwen3_5StreamingModel",
+                "Qwen3_5StreamingTargetForwardOutput",
+            ],
+        );
+        assert_source_excludes_source_fragments(
+            &performance_attribution,
+            &["crate::qwen3_5_streaming"],
+        );
+        assert_source_excludes_source_fragments(
+            &streaming_module_root,
+            &["LayerRoutedExpertIds", "ObservedExpertRoute"],
+        );
+        assert_source_includes_source_fragment(
+            &performance_attribution,
+            "crate::qwen3_5_core::route_observation::ObservedExpertRoute",
+        );
         assert_source_excludes_source_fragments(&crate_root, &["Qwen3_5Engine"]);
     })
     .await
     .expect("Qwen3.5 import-direction inspection should finish within five seconds");
+}
+
+fn assert_source_includes_source_fragment(source_path: &Path, expected_fragment: &str) {
+    let source_text =
+        std::fs::read_to_string(source_path).expect("Qwen3.5 Rust source should be readable");
+    assert!(
+        source_text.contains(expected_fragment),
+        "{} does not contain expected source fragment {expected_fragment}",
+        source_path.display(),
+    );
 }
 
 fn assert_tree_excludes_source_fragments(source_directory: &Path, forbidden_fragments: &[&str]) {

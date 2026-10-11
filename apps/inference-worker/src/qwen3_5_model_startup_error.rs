@@ -2,8 +2,8 @@ use std::io;
 use std::path::PathBuf;
 
 use astronomical_model_serving::{
-    InferenceEngineError, Qwen3_5ArtifactValidationError,
-    Qwen3_5ResidentPromptProcessingChunkSizerError,
+    ExpertMemoryAdmissionError, InferenceEngineError, Qwen3_5ArtifactValidationError,
+    Qwen3_5RamBudgetGeometryError, Qwen3_5ResidentPromptProcessingChunkSizerError,
     Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5TokenizerError,
 };
 use thiserror::Error;
@@ -18,6 +18,18 @@ pub enum Qwen3_5ModelStartupError {
         model_directory: PathBuf,
         #[source]
         source: Qwen3_5ArtifactValidationError,
+    },
+    #[error("failed to derive Qwen3.5 artifact RAM geometry at {model_directory:?}")]
+    ArtifactRamGeometry {
+        model_directory: PathBuf,
+        #[source]
+        source: Qwen3_5RamBudgetGeometryError,
+    },
+    #[error("failed to decide Qwen3.5 complete residency at {model_directory:?}")]
+    CompleteResidencyDecision {
+        model_directory: PathBuf,
+        #[source]
+        source: ExpertMemoryAdmissionError,
     },
     #[error("failed to initialize Qwen3.5 processor at {model_directory:?}")]
     ProcessorInitialization {
@@ -49,6 +61,12 @@ impl Qwen3_5ModelStartupError {
     pub fn public_model_load_failure_reason(&self) -> String {
         let unbounded_public_model_load_failure_reason = match self {
             Self::ArtifactValidation { source, .. } => source.public_failure_reason(),
+            Self::ArtifactRamGeometry { .. } => {
+                "Qwen3.5 artifact RAM geometry could not be derived".to_owned()
+            }
+            Self::CompleteResidencyDecision { .. } => {
+                "Qwen3.5 complete-residency admission failed".to_owned()
+            }
             Self::ProcessorInitialization { .. } => {
                 "Qwen3.5 processor initialization failed".to_owned()
             }
