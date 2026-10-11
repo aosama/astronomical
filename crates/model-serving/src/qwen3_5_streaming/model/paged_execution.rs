@@ -3,7 +3,8 @@
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::sparse_experts::{
     ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
 };
@@ -193,12 +194,12 @@ impl Qwen3_5Model {
     fn streamed_expert_linear(
         &self,
         activations: &MlxArray,
-        affine_weights: &crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights,
+        affine_weights: &crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+        use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
         // Streamed pages and resident layers intentionally converge here on the
         // same canonical operation. Paging decides which arrays are alive; this
         // adapter only describes their matrix layout and assignment ordering.

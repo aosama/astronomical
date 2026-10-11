@@ -2,10 +2,11 @@
 
 use astronomical_mlx_c_rust::MlxArray;
 
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
 };
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5MoEPagedPrefillExecutionMode;

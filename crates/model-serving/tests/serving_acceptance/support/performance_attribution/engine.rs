@@ -2,7 +2,7 @@ use std::{path::Path, time::Instant};
 
 use astronomical_model_serving::{
     InferenceEngine, PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer,
 };
 use tokio::time::{MissedTickBehavior, interval};
 
@@ -13,12 +13,11 @@ pub(crate) fn create_attributed_engine(
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
     fixed_prompt_processing_chunk_size_tokens: u32,
-) -> (Qwen3_5Engine, Vec<u32>) {
+) -> (Qwen3_5StreamingEngine, Vec<u32>) {
     create_attributed_engine_with_ssd_streaming_prefill(
         model_directory,
         performance_attribution_log_path,
         mlx_memory_limits,
-        fixed_prompt_processing_chunk_size_tokens,
         fixed_prompt_processing_chunk_size_tokens,
     )
 }
@@ -27,9 +26,8 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &astronomical_runtime_integration::MlxMemoryLimits,
-    fixed_prompt_processing_chunk_size_tokens: u32,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
-) -> (Qwen3_5Engine, Vec<u32>) {
+) -> (Qwen3_5StreamingEngine, Vec<u32>) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the configured Ornith artifact should validate before benchmark loading");
@@ -40,29 +38,29 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
     let performance_attribution_log =
         PerformanceAttributionLog::open(performance_attribution_log_path, true)
             .expect("the benchmark should open its JSON Lines log");
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
-        validated_artifact,
-        mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
-        None,
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
-            fixed_prompt_processing_chunk_size_tokens,
-            fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+    let qwen3_5_engine =
+        Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
+            validated_artifact,
+            mlx_memory_limits.active_memory_limit_bytes(),
+            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+            None,
+            Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
+                fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            )
+            .expect("the benchmark streaming prefill chunk size should be valid"),
+            IMAGE_PAD_TOKEN_ID,
+            model_directory.to_path_buf(),
+            crate::common::standard_worker_chunking_configuration(),
+            true,
+            PerformanceAttribution::enabled(),
+            performance_attribution_log,
         )
-        .expect("the benchmark prefill chunk size should be valid"),
-        IMAGE_PAD_TOKEN_ID,
-        model_directory.to_path_buf(),
-        crate::common::standard_worker_chunking_configuration(),
-        true,
-        PerformanceAttribution::enabled(),
-        performance_attribution_log,
-    )
-    .expect("the benchmark engine settings should be valid");
+        .expect("the benchmark engine settings should be valid");
     (qwen3_5_engine, end_of_sequence_token_ids)
 }
 
 pub(crate) async fn load_engine_with_progress(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
     phase_name: &str,
 ) {
     let phase_started_at = Instant::now();

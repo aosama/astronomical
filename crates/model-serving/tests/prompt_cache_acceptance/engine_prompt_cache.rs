@@ -3,8 +3,8 @@ use std::{future::Future, path::Path, time::Duration};
 use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheModelContract, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    PersistentPromptCacheModelContract, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
+    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
     qwen3_5_decoder_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
@@ -249,22 +249,22 @@ pub(super) async fn load_persistent_prompt_cache_acceptance_engine(
     model_directory: &Path,
     persistent_prompt_cache_directory: &Path,
     fixed_prefill_chunk_tokens: u32,
-) -> (Qwen3_5Engine, String, String, usize) {
+) -> (Qwen3_5ResidentEngine, String, String, usize) {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
     let prefill_chunk_sizer =
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             fixed_prefill_chunk_tokens,
         )
-        .expect("the selected fixed prefill size should be valid");
+        .expect("the selected resident prefill size should be valid");
     let mlx_memory_limits =
         crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.prompt_cache_block_tokens = Some(fixed_prefill_chunk_tokens);
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
@@ -335,7 +335,7 @@ async fn persistent_prompt_cache_eligible_prompt_token_count_for_block_multiplie
     .len()
 }
 
-async fn prompt_cache_block_token_count(qwen3_5_engine: &Qwen3_5Engine) -> usize {
+async fn prompt_cache_block_token_count(qwen3_5_engine: &Qwen3_5ResidentEngine) -> usize {
     // Stats are emitted from the engine-owned, load-derived cache contract and
     // therefore share the exact geometry used by lookup and publication.
     let cache_stats = qwen3_5_engine
@@ -354,7 +354,7 @@ async fn prompt_cache_block_token_count(qwen3_5_engine: &Qwen3_5Engine) -> usize
         .expect("the prompt-cache block token count should fit usize")
 }
 pub(super) async fn wait_for_persistent_prompt_cache_blocks(
-    qwen3_5_engine: &Qwen3_5Engine,
+    qwen3_5_engine: &Qwen3_5ResidentEngine,
     expected_sequence_state_block_count: usize,
 ) {
     let publication_started_at = Instant::now();
@@ -393,7 +393,7 @@ pub(super) async fn wait_for_persistent_prompt_cache_blocks(
 }
 
 pub(super) async fn generate_token_ids(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+    qwen3_5_engine: &mut Qwen3_5ResidentEngine,
     request_id: RequestId,
     generated_token_count: usize,
 ) -> (Vec<u32>, Vec<u32>) {

@@ -18,8 +18,8 @@
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
-use crate::qwen3_5::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,

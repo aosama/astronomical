@@ -9,8 +9,9 @@ use crate::{
 
 use super::persistent_prompt_cache_startup_logging;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
-use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
-use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model};
+use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+use crate::qwen3_5_core::vision::Qwen3_5ImageProcessor;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {

@@ -5,8 +5,9 @@ use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 use astronomical_model_serving::{
     ModelFamilyInferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5ResidentEngine,
+    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
+    Qwen3_5StreamingPromptProcessingChunkSizer,
 };
 
 use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
@@ -132,9 +133,8 @@ pub(crate) fn initialize_qwen3_5_model(
     let qwen3_5_engine = match engine_selection {
         Qwen3_5EngineSelection::Resident => {
             let prompt_processing_chunk_sizer =
-                match Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
+                match Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
                     chunking.fixed_prompt_processing_chunk_size_tokens,
-                    chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
                 ) {
                     Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
                     Err(prompt_processing_chunk_sizer_error) => {
@@ -147,11 +147,9 @@ pub(crate) fn initialize_qwen3_5_model(
                             Some(artifact_shard_count),
                             "prompt-processing chunk configuration failed",
                         );
-                        return Err(
-                            Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
-                                prompt_processing_chunk_sizer_error,
-                            ),
-                        );
+                        return Err(Qwen3_5ModelStartupError::ResidentPromptProcessingChunkSizing(
+                            prompt_processing_chunk_sizer_error,
+                        ));
                     }
                 };
             Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
@@ -172,8 +170,7 @@ pub(crate) fn initialize_qwen3_5_model(
         }
         Qwen3_5EngineSelection::Streaming => {
             let prompt_processing_chunk_sizer =
-                match Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens_with_ssd_streaming(
-                    chunking.fixed_prompt_processing_chunk_size_tokens,
+                match Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
                     chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
                 ) {
                     Ok(prompt_processing_chunk_sizer) => prompt_processing_chunk_sizer,
@@ -187,7 +184,7 @@ pub(crate) fn initialize_qwen3_5_model(
                             Some(artifact_shard_count),
                             "prompt-processing chunk configuration failed",
                         );
-                        return Err(Qwen3_5ModelStartupError::PromptProcessingChunkSizing(
+                        return Err(Qwen3_5ModelStartupError::StreamingPromptProcessingChunkSizing(
                             prompt_processing_chunk_sizer_error,
                         ));
                     }

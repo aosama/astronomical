@@ -3,8 +3,8 @@ use std::{fs, path::Path, time::Instant};
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5StreamingEngine,
+    Qwen3_5StreamingPromptProcessingChunkSizer,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serde_json::Value;
@@ -183,16 +183,16 @@ fn create_engine(
     mlx_memory_limits: &MlxMemoryLimits,
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: PerformanceAttributionLog,
-) -> Qwen3_5Engine {
+) -> Qwen3_5StreamingEngine {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, VALIDATION_MAXIMUM_OUTPUT_TOKENS)
         .expect("the selected Qwen3.5-MoE artifact should validate before loading");
-    Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
+    Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
             FIXED_PREFILL_CHUNCK_TOKENS,
         )
         .expect("the fixed prefill chunk size should be valid"),
@@ -206,7 +206,7 @@ fn create_engine(
     .expect("the selected Qwen3.5-MoE engine settings should be valid")
 }
 
-async fn load_engine_with_progress(qwen3_5_engine: &mut Qwen3_5Engine, model_id: &str) {
+async fn load_engine_with_progress(qwen3_5_engine: &mut Qwen3_5StreamingEngine, model_id: &str) {
     let model_load_started_at = Instant::now();
     let mut progress_interval = interval(LONG_OPERATION_PROGRESS_INTERVAL);
     progress_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -231,7 +231,10 @@ async fn load_engine_with_progress(qwen3_5_engine: &mut Qwen3_5Engine, model_id:
     }
 }
 
-async fn run_bounded_generation(qwen3_5_engine: &mut Qwen3_5Engine, request_id: RequestId) {
+async fn run_bounded_generation(
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    request_id: RequestId,
+) {
     qwen3_5_engine
         .start_generation(
             Qwen3_5InferenceRequest::new(

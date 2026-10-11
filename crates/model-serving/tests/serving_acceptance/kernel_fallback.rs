@@ -21,8 +21,8 @@ use astronomical_model_serving::{
     CustomKernelVerdict, CustomMetalKernelFamily, GeneratedToken, InferenceEngine,
     K2HorizonMoVAInferenceRequest, K2HorizonMoVAPromptRenderer, K2HorizonMoVARequestOutput,
     K2HorizonMoVATokenizer, KernelUnsupportedReason, MlxInferenceExecution, PerformanceAttribution,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer, WorkerKernelCapabilities,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5StreamingEngine,
+    Qwen3_5StreamingPromptProcessingChunkSizer, WorkerKernelCapabilities,
     initialize_k2_horizon_mova_execution, install_forced_worker_verdicts_for_tests,
     worker_process_kernel_capabilities,
 };
@@ -82,13 +82,13 @@ async fn run_forced_fallback_romeo_continuation() {
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");
     let model_vocabulary_size = validated_artifact.config().vocabulary_size();
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
-            .expect("the test prefill_chunk_tokens should be valid"),
+        Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(16)
+            .expect("the test streaming prefill chunk size should be valid"),
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),

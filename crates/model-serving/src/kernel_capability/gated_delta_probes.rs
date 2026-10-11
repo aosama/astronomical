@@ -10,10 +10,12 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
-use crate::qwen3_5::{
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
+use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
+};
+use crate::qwen3_5_core::model_math::gated_delta_sequence::{
+    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
 };
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
