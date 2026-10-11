@@ -32,6 +32,8 @@ pub enum WorkerStartupError {
     GpuWiredMemoryLimitSampleFailed,
     #[error("failed to read MLX recommended GPU working set: {0}")]
     ReadMlxRecommendedGpuWorkingSet(#[source] MlxRuntimeError),
+    #[error("MLX recommended GPU working set cannot produce a positive serving memory ceiling")]
+    RecommendedGpuWorkingSetTooSmall,
 }
 
 /// Bounds family-owned model failure detail before it crosses the worker boundary.

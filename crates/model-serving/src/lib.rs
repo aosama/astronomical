@@ -23,7 +23,6 @@ mod model_generation_processor;
 mod modernbert;
 mod performance_attribution;
 mod persistent_cache;
-mod qwen3_5;
 mod qwen3_5_core;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_resident;
@@ -178,14 +177,15 @@ pub use memory::{
     classify_expert_memory_mode, combined_persistent_growth_bytes,
     complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
-    expert_reclamation_bytes_to_fit_fixed_forward,
+    effective_mlx_serving_memory_ceiling_bytes, expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, hot_expert_warm_slot_count,
     measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     next_paged_expert_reclamation_step, persistent_context_restore_workspace_bytes,
     plan_expert_residency, plan_previous_token_prefetch,
     projected_active_memory_after_complete_expert_replacement,
-    publish_request_stable_residency_plan, request_context_temporary_workspace_bytes,
+    publish_request_stable_residency_plan, recommended_gpu_serving_memory_ceiling_bytes,
+    request_context_temporary_workspace_bytes,
     required_complete_residency_activation_headroom_bytes,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_expert_payload_capacity_bytes, retained_resident_ceiling_after_budget_refresh,
@@ -244,28 +244,37 @@ pub use persistent_cache::{
     PersistentPromptCacheStartupCleanupEvidence, build_persistent_prompt_cache_stats_event,
     clear_persistent_prompt_cache_directory,
 };
-pub use qwen3_5::{
-    ModelWeightStorage, OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
-    Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config,
-    Qwen3_5ConfigError, Qwen3_5DecoderLayerCacheDtypes, Qwen3_5FeedForwardArchitecture,
-    Qwen3_5GenerationProcessor, Qwen3_5ImageDimensions, Qwen3_5ImageGrid,
-    Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5InferenceRequest,
-    Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserError, Qwen3_5ProcessedImage,
-    Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RamBudgetGeometryError,
-    Qwen3_5RenderedPrompt, Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig,
-    Qwen3_5SamplingStrategy, Qwen3_5ShardIndex, Qwen3_5ThinkingBudgetError,
-    Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder, Qwen3_5TokenIds, Qwen3_5Tokenizer,
-    Qwen3_5TokenizerError, Qwen3_5ToolCall, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
+pub use qwen3_5_core::artifacts::{
+    Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
+    Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
+    mlx_ram_budget_model_geometry_from_validated_artifact, qwen3_5_language_tensor_profiles,
+    qwen3_5_resident_language_tensor_profiles,
+};
+pub use qwen3_5_core::configuration::{
+    ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
+};
+pub use qwen3_5_core::decoder::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
+pub use qwen3_5_core::quantizations::optiq::{
+    OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
+};
+pub use qwen3_5_core::text::{
+    Qwen3_5GenerationProcessor, Qwen3_5InferenceRequest, Qwen3_5OutputEvent, Qwen3_5OutputParser,
+    Qwen3_5OutputParserError, Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt,
+    Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy,
+    Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder, Qwen3_5TokenIds,
+    Qwen3_5Tokenizer, Qwen3_5TokenizerError, Qwen3_5ToolCall, discover_sampler_config,
+    discover_token_ids, qwen3_5_request_enables_thinking, resolve_sampling_seed,
+    translate_qwen3_5_preparation_error, translate_request_output_error,
+    validate_context_token_count,
+};
+pub use qwen3_5_core::vision::{
+    Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
+    Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
     Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
     Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
-    ValidatedQwen3_5Artifact, discover_sampler_config, discover_token_ids,
-    mlx_ram_budget_model_geometry_from_validated_artifact, plan_qwen3_5_visual_embedding_suffix,
-    plan_qwen3_5_visual_prompt_cache_block_inputs, qwen3_5_decoder_cache_layout,
-    qwen3_5_language_tensor_profiles, qwen3_5_request_enables_thinking,
-    qwen3_5_resident_language_tensor_profiles, qwen3_5_vision_tensor_profiles,
-    resolve_sampling_seed, translate_qwen3_5_preparation_error, translate_request_output_error,
-    validate_context_token_count,
+    plan_qwen3_5_visual_embedding_suffix, plan_qwen3_5_visual_prompt_cache_block_inputs,
+    qwen3_5_vision_tensor_profiles,
 };
 
 // Qwen-Image-2.1: the family's pure contracts, artifact validation, and geometry constants. The
@@ -305,25 +314,48 @@ pub use qwen_image_21::{
     QwenImage21MlxComponents, QwenImage21Pipeline, QwenImage21TextEncoder, QwenImage21Transformer,
     QwenImage21TransformerRequest, QwenImage21VaeDecoder,
 };
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5::{
-    Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult,
-    Qwen3_5ModelChunkingConfiguration, Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, Qwen3_5VisionModel,
-    Qwen3_5VisionPaddingZeroCache, Qwen3_5VisionWeights, Qwen3_5Weights, RequestDecoderStateStack,
-    RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
-    is_gdn_decode_prework_eligible, qwen3_5_apply_top_p_mask, qwen3_5_full_attention_step,
-    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
-    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
-    qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
-    qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
-    qwen3_5_inject_visual_embeddings,
-};
 pub use qwen3_5_core::artifacts::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
 };
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::decoder::{
+    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
+    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
+    RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
+    Qwen3_5GatedDeltaBoundaryCheckpointResult, qwen3_5_gated_delta_checkpoint_kernel,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::gated_delta_sequence::{
+    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
+    qwen3_5_gated_delta_sequence_ops_fallback,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::gated_delta_step::qwen3_5_gated_delta_step;
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::gdn_decode_prework_kernel::{
+    is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
+};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model_math::weights::Qwen3_5Weights;
 pub use qwen3_5_core::route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::text::qwen3_5_apply_top_p_mask;
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::vision::{
+    Qwen3_5VisionModel, Qwen3_5VisionPaddingZeroCache, Qwen3_5VisionWeights,
+    qwen3_5_inject_visual_embeddings,
+};
 #[cfg(feature = "direct-mlx")]
 #[doc(hidden)]
 pub use qwen3_5_resident::maximum_resident_gate_up_fusion_transient_payload_bytes;

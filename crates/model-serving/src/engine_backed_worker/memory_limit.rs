@@ -9,6 +9,7 @@ use super::support;
 use super::support::{ModelFactory, WorkerRuntimeError};
 use crate::{
     ImageGenerationEngine, InferenceEngine, InferenceEngineError, ModelGenerationProcessor,
+    effective_mlx_serving_memory_ceiling_bytes,
 };
 
 use super::{EngineBackedWorker, LoadedRuntime};
@@ -42,6 +43,20 @@ where
                 )
                 .await;
         }
+        let effective_requested_mlx_memory_ceiling_bytes =
+            effective_mlx_serving_memory_ceiling_bytes(
+                Some(requested_mlx_memory_ceiling_bytes),
+                self.machine_mlx_memory_ceiling_bytes,
+                self.serving_mlx_memory_ceiling_bytes,
+            );
+        if effective_requested_mlx_memory_ceiling_bytes < requested_mlx_memory_ceiling_bytes {
+            tracing::warn!(
+                configured_maximum_mlx_memory_bytes = requested_mlx_memory_ceiling_bytes,
+                serving_mlx_memory_ceiling_bytes = self.serving_mlx_memory_ceiling_bytes,
+                effective_mlx_memory_ceiling_bytes = effective_requested_mlx_memory_ceiling_bytes,
+                "configured MLX memory ceiling exceeds the serving envelope and was clamped"
+            );
+        }
         let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
             let Some(model_factory) = self.model_factory.as_mut() else {
                 return self
@@ -53,14 +68,15 @@ where
                     .await;
             };
             model_factory.update_mlx_memory_limits(
-                requested_mlx_memory_ceiling_bytes,
-                requested_mlx_memory_ceiling_bytes,
+                effective_requested_mlx_memory_ceiling_bytes,
+                effective_requested_mlx_memory_ceiling_bytes,
             );
-            self.effective_mlx_memory_ceiling_bytes = requested_mlx_memory_ceiling_bytes;
+            self.effective_mlx_memory_ceiling_bytes = effective_requested_mlx_memory_ceiling_bytes;
             self.record_configuration_generation(configuration_generation);
             event_writer
                 .send_event(&WorkerEvent::MlxMemoryLimitChanged {
-                    effective_mlx_memory_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
+                    effective_mlx_memory_ceiling_bytes:
+                        effective_requested_mlx_memory_ceiling_bytes,
                     minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
                     expert_memory_mode: ExpertMemoryMode::Resident,
                     mlx_memory_snapshot: None,
@@ -73,11 +89,11 @@ where
             LoadedRuntime::Autoregressive(loaded_model) => {
                 loaded_model
                     .engine
-                    .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+                    .update_mlx_memory_limit(effective_requested_mlx_memory_ceiling_bytes)
                     .await
             }
             LoadedRuntime::Image(image_engine) => image_engine
-                .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+                .update_mlx_memory_limit(effective_requested_mlx_memory_ceiling_bytes)
                 .map_err(|failure_reason| match failure_reason {
                     astronomical_ipc_protocol::ImageGenerationFailureReason::EngineBusy => {
                         InferenceEngineError::EngineBusy
