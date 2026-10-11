@@ -25,7 +25,14 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
         );
         assert_tree_excludes_source_fragments(
             &qwen3_5_resident,
-            &["crate::qwen3_5::", "crate::qwen3_5_streaming::"],
+            &[
+                "crate::qwen3_5::",
+                "crate::qwen3_5_streaming::",
+                "Qwen3_5ExpertPager",
+                "Qwen3_5PagedExpertWeights",
+                "expert_paging",
+                "expert_pager",
+            ],
         );
         assert_tree_excludes_source_fragments(
             &qwen3_5_streaming,
@@ -50,14 +57,13 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
             &qwen3_5_streaming.join("inference_execution/prompt_processing_chunk_sizer.rs"),
             &["AdaptiveRamGrowthExecutionProfile", "Resident"],
         );
+        assert!(
+            !qwen3_5_family_facade.exists(),
+            "the transitional Qwen3.5 family re-export module should be removed",
+        );
         assert_source_excludes_source_fragments(
-            &qwen3_5_family_facade,
-            &[
-                "Qwen3_5Engine",
-                "Qwen3_5StreamingEngine",
-                "Qwen3_5StreamingModel",
-                "Qwen3_5StreamingTargetForwardOutput",
-            ],
+            &crate_root,
+            &["mod qwen3_5;", "pub use qwen3_5::"],
         );
         assert_source_excludes_source_fragments(
             &performance_attribution,

@@ -98,7 +98,6 @@ impl Qwen3_5ResidentModel {
             ceiling_change_decision,
             MemoryCeilingChangeDecision::Lower { .. }
         );
-        let _previous_expert_paging_memory_ceiling_bytes: Option<u64> = None;
         if is_lowering_mlx_memory_ceiling {
             // Native eviction comes first because the old MLX ceiling still
             // permits the bookkeeping and synchronization needed to release
@@ -136,70 +135,5 @@ impl Qwen3_5ResidentModel {
             minimum_mlx_memory_ceiling_bytes,
             requested_mlx_memory_limits,
         ))
-    }
-
-    fn prepare_expert_residency_for_lower_mlx_memory_limit(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
-        ceiling_change_decision: MemoryCeilingChangeDecision,
-    ) -> Result<(), InferenceEngineError> {
-        let _ceiling_change_decision = ceiling_change_decision;
-        self.mlx_ram_budget
-            .borrow_mut()
-            .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
-            .map_err(|mlx_ram_budget_error| {
-                super::super::inference_execution::fatal_engine_error(
-                    mlx_ram_budget_error.to_string(),
-                )
-            })?;
-        Ok(())
-    }
-
-    fn update_expert_residency_for_live_mlx_memory_limit(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<(), InferenceEngineError> {
-        self.mlx_ram_budget
-            .borrow_mut()
-            .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
-            .map_err(|mlx_ram_budget_error| {
-                super::super::inference_execution::fatal_engine_error(
-                    mlx_ram_budget_error.to_string(),
-                )
-            })?;
-        Ok(())
-    }
-
-    fn restore_expert_paging_memory_ceiling(
-        &mut self,
-        previous_memory_ceiling_bytes: Option<u64>,
-    ) -> Result<(), InferenceEngineError> {
-        if let Some(previous_memory_ceiling_bytes) = previous_memory_ceiling_bytes {
-            self.update_expert_residency_for_live_mlx_memory_limit(previous_memory_ceiling_bytes)?;
-        }
-        Ok(())
-    }
-
-    fn restore_failed_raised_memory_limit(
-        &mut self,
-        previous_mlx_memory_limits: MlxMemoryLimits,
-        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
-        transition_error: InferenceEngineError,
-    ) -> InferenceEngineError {
-        let policy_restore_result =
-            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes);
-        let runtime_restore_result = self
-            .runtime
-            .update_memory_limits(previous_mlx_memory_limits);
-        match (policy_restore_result, runtime_restore_result) {
-            (Ok(()), Ok(())) => transition_error,
-            (policy_restore_result, runtime_restore_result) => {
-                super::super::inference_execution::fatal_engine_error(format!(
-                    "raised MLX memory transition failed and rollback was incomplete: transition_error={transition_error}; policy_restore_error={:?}; runtime_restore_error={:?}",
-                    policy_restore_result.err(),
-                    runtime_restore_result.err(),
-                ))
-            }
-        }
     }
 }

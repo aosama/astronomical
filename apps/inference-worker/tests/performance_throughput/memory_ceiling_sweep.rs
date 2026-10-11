@@ -6,7 +6,9 @@
 //! 500-token output as the text lane, persistent prompt cache disabled —
 //! with performance attribution ON, and appends one durable history record
 //! whose `memory_cell` carries the residency and byte-traffic evidence.
-//! Every cell uses a 2,048-token prefill chunk and remains at or below 35 GB.
+//! Every cell uses a 2,048-token prefill chunk. The 38 GB and 40 GB requested
+//! ceilings must be clamped to an effective limit no greater than 36 GB before
+//! the worker is allowed to load the model.
 //! Attribution stays on for every cell equally, so the ceiling CURVE is
 //! internally consistent even though absolute rates carry attribution
 //! overhead.
@@ -102,6 +104,15 @@ memory_ceiling_cell!(
     should_serve_the_large_sparse_moe_under_a_35gb_ceiling_and_record_the_memory_cell,
     35
 );
+memory_ceiling_cell!(
+    should_serve_the_large_sparse_moe_under_a_38gb_ceiling_and_record_the_memory_cell,
+    38
+);
+memory_ceiling_cell!(
+    should_serve_the_large_sparse_moe_under_a_40gb_ceiling_and_record_the_memory_cell,
+    40
+);
+
 async fn run_memory_ceiling_cell(ceiling_gb: u64) {
     let configured_maximum_mlx_memory_bytes = ceiling_gb * 1_000_000_000;
     let run_outcome = throughput_support::measure_throughput(
@@ -205,6 +216,16 @@ async fn append_memory_cell_record(
         Err(error) => panic!(
             "the {ceiling_gb} GB memory-cell record must persist to the durable history: {error}"
         ),
+    }
+    if !budget_exhausted && configured_maximum_mlx_memory_bytes >= 38_000_000_000 {
+        assert_eq!(
+            record
+                .memory_cell
+                .as_ref()
+                .map(|memory_cell| memory_cell.expert_residency_mode.as_str()),
+            Some("hybrid"),
+            "completed 38 GB and 40 GB cells should report hybrid expert residency",
+        );
     }
     if budget_exhausted {
         // The durable append above is the deliverable of a budget-exhausted

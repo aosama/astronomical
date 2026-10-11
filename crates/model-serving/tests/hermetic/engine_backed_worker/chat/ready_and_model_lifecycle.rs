@@ -64,21 +64,22 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 }
 
 #[tokio::test]
-async fn should_reuse_the_live_memory_limit_and_configuration_generation_for_the_next_model() {
+async fn should_apply_a_clamped_live_ceiling_and_generation_to_the_next_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
     let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
         LazyScriptedModelFactory {
             model_factory_call_count,
-            mlx_memory_limits: (38_000_000_000, 38_000_000_000),
+            mlx_memory_limits: (32_000_000_000, 32_000_000_000),
             model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
             model_configurations: Arc::new(Mutex::new(Vec::new())),
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Paged),
             created_engine_idle_mlx_memory_telemetry: None,
         },
         40_000_000_000,
-        38_000_000_000,
+        32_000_000_000,
     )
+    .with_serving_mlx_memory_ceiling(35_000_000_000)
     .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
         configuration_generation: "generation-before-memory-update".to_owned(),
         persistent_prompt_cache_enabled: false,
@@ -117,7 +118,7 @@ async fn should_reuse_the_live_memory_limit_and_configuration_generation_for_the
     assert!(matches!(
         next_event(&mut supervisor_reader).await,
         WorkerEvent::MlxMemoryLimitChanged {
-            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
+            effective_mlx_memory_ceiling_bytes: 35_000_000_000,
             expert_residency: Some(WorkerExpertResidencySnapshot {
                 total_layer_count: 2,
                 resident_expert_count: 2,
@@ -150,9 +151,88 @@ async fn should_reuse_the_live_memory_limit_and_configuration_generation_for_the
             .lock()
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner()),
         vec![
-            (38_000_000_000, 38_000_000_000),
-            (40_000_000_000, 38_000_000_000),
+            (32_000_000_000, 32_000_000_000),
+            (35_000_000_000, 32_000_000_000),
         ]
+    );
+    close_worker_transport(supervisor_writer, worker_task).await;
+}
+
+#[tokio::test]
+async fn should_clamp_live_memory_updates_before_the_next_model_load() {
+    let model_factory_call_count = Arc::new(AtomicUsize::new(0));
+    let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
+    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+        LazyScriptedModelFactory {
+            model_factory_call_count: Arc::clone(&model_factory_call_count),
+            mlx_memory_limits: (35_000_000_000, 35_000_000_000),
+            model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
+            model_configurations: Arc::new(Mutex::new(Vec::new())),
+            expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
+            created_engine_idle_mlx_memory_telemetry: None,
+        },
+        40_000_000_000,
+        35_000_000_000,
+    )
+    .with_serving_mlx_memory_ceiling(35_000_000_000)
+    .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
+        configuration_generation: "generation-before-live-clamp".to_owned(),
+        persistent_prompt_cache_enabled: false,
+        prompt_cache_maximum_size_bytes: 0,
+        loaded_model: None,
+    });
+    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let worker_task = tokio::spawn(async move {
+        engine_worker
+            .run(worker_reader_transport, worker_writer_transport)
+            .await
+    });
+
+    let _idle_event = next_event(&mut supervisor_reader).await;
+    let _idle_runtime_configuration = next_event(&mut supervisor_reader).await;
+    supervisor_writer
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 40_000_000_000,
+            configuration_generation: "generation-after-live-clamp".to_owned(),
+        })
+        .await
+        .expect("the live memory limit should reach the idle worker");
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::MlxMemoryLimitChanged {
+            effective_mlx_memory_ceiling_bytes: 35_000_000_000,
+            ..
+        }
+    ));
+
+    supervisor_writer
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: "/models/clamped-model".to_owned(),
+            model_configuration: worker_model_configuration("clamped-model"),
+        })
+        .await
+        .expect("the model should load after the clamped setting");
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::ModelSwapped { .. }
+    ));
+    assert!(matches!(
+        next_event(&mut supervisor_reader).await,
+        WorkerEvent::RuntimeFeatureConfigurationApplied {
+            worker_runtime_feature_configuration,
+        } if worker_runtime_feature_configuration.configuration_generation
+            == "generation-after-live-clamp"
+    ));
+    assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *model_creation_memory_limits
+            .lock()
+            .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner()),
+        vec![(35_000_000_000, 35_000_000_000)]
     );
     close_worker_transport(supervisor_writer, worker_task).await;
 }
