@@ -7,38 +7,15 @@ use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-    safe_minimum_mlx_memory_ceiling_bytes,
+    geometry_safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 use super::Qwen3_5Model;
 
 impl Qwen3_5Model {
     pub(crate) fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
-        let current_mlx_memory_snapshot = self
-            .runtime
-            .memory_snapshot()
-            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-        let current_idle_active_mlx_memory_bytes =
-            u64::try_from(current_mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
-                    "current MLX active memory exceeds the u64 range",
-                )
-            })?;
-        let expert_weight_memory_cache_statistics = self.expert_weight_memory_cache_statistics();
-        // Retained sparse pages are reclaimable; dense weights are not.
-        let evictable_retained_expert_payload_bytes = if self.expert_pager.is_some() {
-            expert_weight_memory_cache_statistics.resident_payload_byte_count
-        } else {
-            0
-        };
-        let maximum_expert_page_reserve_bytes = self
-            .expert_pager
-            .as_ref()
-            .map_or(0, |expert_pager| expert_pager.maximum_expert_page_bytes());
-        Ok(safe_minimum_mlx_memory_ceiling_bytes(
-            current_idle_active_mlx_memory_bytes,
-            evictable_retained_expert_payload_bytes,
-            maximum_expert_page_reserve_bytes,
+        Ok(geometry_safe_minimum_mlx_memory_ceiling_bytes(
+            &self.mlx_ram_budget().model_geometry(),
         ))
     }
 

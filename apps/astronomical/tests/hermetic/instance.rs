@@ -64,20 +64,16 @@ fn should_keep_falling_back_to_the_given_path_when_it_cannot_be_canonicalized() 
 }
 
 #[test]
-fn should_try_the_binarys_own_instance_before_the_other_channel() {
+fn should_talk_only_to_the_binarys_own_instance() {
+    // Strict channel isolation: the other channel — notably the Stable daily
+    // driver — must never receive this binary's traffic.
     assert_eq!(
         astronomical_cli::candidate_instances(AstronomicalRuntimeInstance::Stable),
-        [
-            AstronomicalRuntimeInstance::Stable,
-            AstronomicalRuntimeInstance::Development
-        ]
+        [AstronomicalRuntimeInstance::Stable]
     );
     assert_eq!(
         astronomical_cli::candidate_instances(AstronomicalRuntimeInstance::Development),
-        [
-            AstronomicalRuntimeInstance::Development,
-            AstronomicalRuntimeInstance::Stable
-        ]
+        [AstronomicalRuntimeInstance::Development]
     );
 }
 

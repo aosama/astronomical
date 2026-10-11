@@ -254,6 +254,43 @@ pub(crate) async fn put_json_endpoint(
     })
 }
 
+#[allow(dead_code)]
+pub(crate) async fn put_json_endpoint_expecting_status(
+    server_address: SocketAddr,
+    endpoint_path: &str,
+    request_body: &serde_json::Value,
+    expected_status_code: u16,
+) -> serde_json::Value {
+    let serialized_request_body =
+        serde_json::to_string(request_body).expect("the real-model REST PUT body should serialize");
+    let request_text = format!(
+        "PUT {endpoint_path} HTTP/1.1\r\nHost: {server_address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{serialized_request_body}",
+        serialized_request_body.len(),
+    );
+    let response_text = super::http::send_http_request(server_address, request_text).await;
+    let (response_headers, response_body) = response_text
+        .split_once("\r\n\r\n")
+        .expect("the real-model REST PUT response should contain HTTP headers");
+    let status_line = response_headers
+        .lines()
+        .next()
+        .unwrap_or("missing status line");
+    let received_status_code = status_line
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("missing status code");
+    assert_eq!(
+        received_status_code,
+        expected_status_code.to_string(),
+        "unexpected real-model REST PUT status; status={status_line}; body={response_body}"
+    );
+    serde_json::from_str(response_body).unwrap_or_else(|response_parse_error| {
+        panic!(
+            "the real-model REST PUT body should be valid JSON: {response_parse_error}; status={status_line}; body={response_body}"
+        )
+    })
+}
+
 async fn wait_until_ready(server_address: SocketAddr) {
     // Poll the public readiness endpoint with visible progress. Model loading can
     // legitimately take tens of seconds, and repository commands must never look

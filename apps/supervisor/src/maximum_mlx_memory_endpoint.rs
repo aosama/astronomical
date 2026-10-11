@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::application::ApplicationState;
 use crate::{ChatGenerationExecutor, MlxMemoryLimitUpdateOutcome, WorkerHealthSnapshot};
@@ -72,8 +73,6 @@ pub(crate) async fn update_maximum_mlx_memory(
     if worker_health_snapshot.machine_mlx_memory_ceiling_bytes == 0
         || requested_mlx_memory_ceiling_bytes
             > worker_health_snapshot.machine_mlx_memory_ceiling_bytes
-        || requested_mlx_memory_ceiling_bytes
-            < worker_health_snapshot.minimum_mlx_memory_ceiling_bytes
     {
         return invalid_request_response(
             maximum_mlx_memory_request.maximum_mlx_memory_gb,
@@ -247,6 +246,81 @@ pub(crate) async fn update_maximum_mlx_memory(
                 )),
             )
                 .into_response()
+        }
+        Ok(MlxMemoryLimitUpdateOutcome::RestartRequired) => {
+            // The loaded resident engine cannot reach the requested ceiling in
+            // place. The setting is valid and persisted; the supervisor now
+            // owns a stop-first worker restart that restores the same model
+            // under the lower ceiling before this request answers.
+            let demotion_result = match worker_handle.reserve_generation_admission_for_demotion() {
+                Ok(demotion_admission) => {
+                    let mut candidate_startup_configuration =
+                        candidate_resolved_config.worker_startup_configuration();
+                    candidate_startup_configuration.configured_maximum_mlx_memory_bytes =
+                        candidate_resolved_config.maximum_mlx_memory_bytes;
+                    let demotion_result = worker_handle
+                        .restart_worker_for_memory_demotion(
+                            candidate_resolved_config.worker_executable_path.clone(),
+                            Arc::clone(&candidate_resolved_config.model_policy_catalog),
+                            candidate_startup_configuration,
+                        )
+                        .await;
+                    drop(demotion_admission);
+                    demotion_result
+                }
+                Err(demotion_admission_error) => Err(demotion_admission_error),
+            };
+            match demotion_result {
+                Ok(_restored_runtime_configuration) => {
+                    worker_handle.record_memory_configuration_generation(
+                        candidate_resolved_config.configuration_generation.clone(),
+                        MlxMemoryLimitUpdateOutcome::Applied,
+                    );
+                    crate::maximum_mlx_memory_transaction::commit_applied_config_snapshots(
+                        &application_state,
+                        runtime_config_resolver,
+                        &candidate_resolved_config,
+                        &candidate_config_bytes,
+                    );
+                    *pending_memory_config_generation = None;
+                    let updated_worker_health_snapshot = worker_handle.worker_health_snapshot();
+                    (
+                        StatusCode::OK,
+                        Json(response_document(
+                            maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                            &updated_worker_health_snapshot,
+                            "MLX memory setting persisted and applied after a worker restart"
+                                .to_owned(),
+                        )),
+                    )
+                        .into_response()
+                }
+                Err(demotion_error) => {
+                    // The user's lower-ceiling preference stays persisted. Live
+                    // state stays truthful (unavailable or old worker); the
+                    // configured snapshot keeps the requested intent so a later
+                    // restart converges instead of silently reverting it.
+                    *pending_memory_config_generation = None;
+                    worker_handle.record_memory_configuration_generation(
+                        candidate_resolved_config.configuration_generation.clone(),
+                        MlxMemoryLimitUpdateOutcome::Rejected,
+                    );
+                    crate::maximum_mlx_memory_transaction::retain_rejected_persisted_config(
+                        &application_state,
+                        runtime_config_resolver,
+                    );
+                    tracing::error!(error = %demotion_error, "memory-demotion worker restart failed");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(response_document(
+                            maximum_mlx_memory_request.maximum_mlx_memory_gb,
+                            &worker_handle.worker_health_snapshot(),
+                            "the requested memory setting needs a worker restart, but the restart failed; inspect local diagnostics and retry".to_owned(),
+                        )),
+                    )
+                        .into_response()
+                }
+            }
         }
         Ok(MlxMemoryLimitUpdateOutcome::Rejected) => {
             *pending_memory_config_generation = None;

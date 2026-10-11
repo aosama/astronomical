@@ -37,24 +37,16 @@ pub fn runtime_instance_from_executable_path(
     }
 }
 
-/// Loopback instances to try for this binary, most preferred first.
+/// Loopback instance this binary serves: its own channel, only.
 ///
-/// A user installs one app, so the binary's own channel normally wins. The
-/// other channel is kept as a fallback because an unpackaged developer build
-/// belongs to Development while the only running app may be Stable; refusing in
-/// that case reads as "Start Astronomical first." even though one is running.
+/// Strict channel isolation is a user decision (2026-10-11): a Development
+/// CLI must never route traffic to the Stable daily driver, and a Stable CLI
+/// must never reach a Development daemon. When the own-channel daemon is down
+/// the verbs refuse with "Start Astronomical first." rather than silently
+/// attaching to the other channel.
 #[must_use]
 pub fn candidate_instances(
     preferred_instance: AstronomicalRuntimeInstance,
-) -> [AstronomicalRuntimeInstance; 2] {
-    match preferred_instance {
-        AstronomicalRuntimeInstance::Stable => [
-            AstronomicalRuntimeInstance::Stable,
-            AstronomicalRuntimeInstance::Development,
-        ],
-        AstronomicalRuntimeInstance::Development => [
-            AstronomicalRuntimeInstance::Development,
-            AstronomicalRuntimeInstance::Stable,
-        ],
-    }
+) -> [AstronomicalRuntimeInstance; 1] {
+    [preferred_instance]
 }

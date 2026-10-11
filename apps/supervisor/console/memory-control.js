@@ -3,10 +3,9 @@ const DECIMAL_GIGABYTE_BYTES = 1e9;
 let maximumMlxMemoryEditIsActive = false;
 
 function wholeDecimalGigabyteBounds(statusDocument) {
-    const minimumBytes = statusDocument.minimum_mlx_memory_ceiling_bytes || 0;
     const machineBytes = statusDocument.machine_mlx_memory_ceiling_bytes || 0;
     return {
-        minimumGigabytes: Math.ceil(minimumBytes / DECIMAL_GIGABYTE_BYTES),
+        minimumGigabytes: 1,
         maximumGigabytes: Math.floor(machineBytes / DECIMAL_GIGABYTE_BYTES)
     };
 }
@@ -26,6 +25,10 @@ function renderMemoryLimitControl(statusDocument) {
     const effectiveGigabytes = formatGigabytes(statusDocument.mlx_memory_ceiling_bytes || 0);
     const machineGigabytes = formatGigabytes(statusDocument.machine_mlx_memory_ceiling_bytes || 0);
     let message = "Effective " + effectiveGigabytes + " of " + machineGigabytes;
+    const minimumGigabytes = formatGigabytes(statusDocument.minimum_mlx_memory_ceiling_bytes || 0);
+    if (statusDocument.minimum_mlx_memory_ceiling_bytes > 1) {
+        message += " · Loaded model floor " + minimumGigabytes;
+    }
     if (statusDocument.pending_mlx_memory_ceiling_bytes) {
         message += " · Pending " + formatGigabytes(statusDocument.pending_mlx_memory_ceiling_bytes);
     }

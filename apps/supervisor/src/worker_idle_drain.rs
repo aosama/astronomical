@@ -14,8 +14,8 @@ use tokio::time::Instant;
 
 use crate::worker_cache_clear;
 use crate::worker_memory_limit::{
-    PendingMlxMemoryLimitUpdate, apply_pending_mlx_memory_limit_if_idle,
-    contain_mlx_memory_limit_failure,
+    MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate,
+    apply_pending_mlx_memory_limit_if_idle, contain_mlx_memory_limit_failure,
 };
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, WorkerHealthSnapshot, WorkerProcess,
@@ -37,7 +37,7 @@ pub(super) async fn drain_pending_idle_work(
     model_load_timeout: Duration,
 ) {
     if active_generation.is_none()
-        && let Err(memory_limit_error) = apply_pending_mlx_memory_limit_if_idle(
+        && let drained_memory_limit_outcome = apply_pending_mlx_memory_limit_if_idle(
             pending_mlx_memory_limit_update,
             worker_process,
             model_load_timeout,
@@ -50,14 +50,28 @@ pub(super) async fn drain_pending_idle_work(
         )
         .await
     {
-        contain_mlx_memory_limit_failure(
-            worker_process,
-            health_snapshot,
-            active_generation,
-            is_ready,
-            memory_limit_error,
-        )
-        .await;
+        match drained_memory_limit_outcome {
+            Err(memory_limit_error) => {
+                contain_mlx_memory_limit_failure(
+                    worker_process,
+                    health_snapshot,
+                    active_generation,
+                    is_ready,
+                    memory_limit_error,
+                )
+                .await;
+            }
+            Ok(Some(MlxMemoryLimitUpdateOutcome::RestartRequired)) => {
+                // A queued ceiling the resident engine cannot adopt in place.
+                // Health now carries the restart-required marker, and the
+                // queued reconciliation owns the stop-first demotion; without
+                // this trace the outcome used to disappear silently.
+                tracing::info!(
+                    "queued MLX memory update requires a streaming demotion restart; deferring to queued reconciliation"
+                );
+            }
+            Ok(_) => {}
+        }
     }
     worker_cache_clear::apply_pending_prompt_cache_clear_if_idle(
         pending_prompt_cache_clear,

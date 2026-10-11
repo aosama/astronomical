@@ -36,6 +36,7 @@ use crate::{
         wait_for_image_execution_deadline,
     },
     worker_loop_types::{ActiveWorkerRequest, WorkerLoopCommand},
+    worker_memory_demotion::MemoryDemotionRestart,
     worker_replacement::WorkerReplacement,
 };
 
@@ -360,6 +361,48 @@ pub(crate) async fn run_worker(
                         )
                         .await;
                         let _send_outcome = update_sender.send(update_outcome);
+                    }
+                    WorkerLoopCommand::RestartWorkerForMemoryDemotion {
+                        worker_executable_path,
+                        model_policy_catalog: replacement_model_policy_catalog,
+                        worker_startup_configuration,
+                        expected_configuration_generation,
+                        demotion_sender,
+                    } => {
+                        // Stop-first replacement is invalid while a generation
+                        // is active; the memory endpoint holds admission and
+                        // waits for idle before sending this command.
+                        if active_generation.is_some() {
+                            let _send_outcome = demotion_sender.send(Err(
+                                WorkerControlError::GenerationBusy,
+                            ));
+                            continue;
+                        }
+                        if !is_ready {
+                            let _send_outcome = demotion_sender.send(Err(
+                                WorkerControlError::MissingActiveWorker,
+                            ));
+                            continue;
+                        }
+                        let demotion_result = MemoryDemotionRestart::new(
+                            worker_executable_path,
+                            replacement_model_policy_catalog,
+                            worker_startup_configuration,
+                            expected_configuration_generation,
+                            model_load_timeout,
+                        )
+                        .execute(
+                            &mut worker_process,
+                            &mut model_policy_catalog,
+                            &health_snapshot,
+                            &mut is_ready,
+                            &mut model_load_deadline,
+                            &mut active_generation,
+                            &mut performance_log,
+                            &mut completion_log,
+                        )
+                        .await;
+                        let _send_outcome = demotion_sender.send(demotion_result);
                     }
                     WorkerLoopCommand::UpdateModelPolicyCatalog {
                         model_policy_catalog: replacement_model_policy_catalog,

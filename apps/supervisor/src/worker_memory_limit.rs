@@ -20,6 +20,9 @@ use tokio::sync::oneshot;
 pub enum MlxMemoryLimitUpdateOutcome {
     Applied,
     Queued,
+    /// The loaded engine cannot adopt the requested ceiling in place; the
+    /// caller must stop this worker and restart it under the lower ceiling.
+    RestartRequired,
     Rejected,
 }
 
@@ -57,6 +60,9 @@ pub(super) async fn apply_mlx_memory_limit(
                 }
                 WorkerEvent::MlxMemoryLimitRejected { .. } => {
                     Some(MlxMemoryLimitUpdateOutcome::Rejected)
+                }
+                WorkerEvent::MlxMemoryLimitRestartRequired { .. } => {
+                    Some(MlxMemoryLimitUpdateOutcome::RestartRequired)
                 }
                 _ => None,
             };
@@ -188,8 +194,11 @@ pub(super) async fn take_generation_start_after_pending_memory_limit(
     .await
     {
         Ok(None)
-        | Ok(Some(MlxMemoryLimitUpdateOutcome::Applied))
-        | Ok(Some(MlxMemoryLimitUpdateOutcome::Queued)) => Some(start_sender),
+        | Ok(Some(
+            MlxMemoryLimitUpdateOutcome::Applied
+            | MlxMemoryLimitUpdateOutcome::Queued
+            | MlxMemoryLimitUpdateOutcome::RestartRequired,
+        )) => Some(start_sender),
         Ok(Some(MlxMemoryLimitUpdateOutcome::Rejected)) => {
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
             None

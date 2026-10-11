@@ -140,6 +140,7 @@ pub(crate) fn publish_mlx_memory_limit_changed(
             worker_configuration.configuration_generation = configuration_generation;
         }
         worker_health_snapshot.mlx_memory_limit_error = None;
+        worker_health_snapshot.restart_required_mlx_memory_ceiling_bytes = None;
         worker_health_snapshot.expert_memory_mode = worker_health_snapshot
             .ready_model_id
             .as_ref()
@@ -148,6 +149,20 @@ pub(crate) fn publish_mlx_memory_limit_changed(
         if let Some(expert_residency) = expert_residency {
             worker_health_snapshot.expert_residency = Some(expert_residency.into());
         }
+    }
+}
+
+pub(crate) fn publish_mlx_memory_limit_restart_required(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    requested_mlx_memory_ceiling_bytes: u64,
+    reason: &str,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.mlx_memory_limit_error = Some(format!(
+            "restart required to reach the requested {requested_mlx_memory_ceiling_bytes}-byte ceiling: {reason}"
+        ));
+        worker_health_snapshot.restart_required_mlx_memory_ceiling_bytes =
+            Some(requested_mlx_memory_ceiling_bytes);
     }
 }
 
@@ -161,6 +176,7 @@ pub(crate) fn publish_mlx_memory_limit_rejection(
         worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
         worker_health_snapshot.pending_configuration_generation = None;
         worker_health_snapshot.mlx_memory_limit_error = Some(reason);
+        worker_health_snapshot.restart_required_mlx_memory_ceiling_bytes = None;
     }
 }
 

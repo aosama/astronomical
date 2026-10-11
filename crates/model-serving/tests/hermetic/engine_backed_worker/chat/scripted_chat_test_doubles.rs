@@ -224,6 +224,7 @@ pub(crate) struct ScriptedChatEngine {
     prompt_cache_clear_event: Option<WorkerEvent>,
     pub(super) maximum_allocator_cache_memory_limit_bytes: u64,
     idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+    scripted_replacement_required_reason: Option<String>,
 }
 
 impl ScriptedChatEngine {
@@ -273,6 +274,7 @@ impl ScriptedChatEngine {
             prompt_cache_clear_event: None,
             maximum_allocator_cache_memory_limit_bytes: u64::MAX,
             idle_mlx_memory_telemetry: None,
+            scripted_replacement_required_reason: None,
         }
     }
 
@@ -281,6 +283,18 @@ impl ScriptedChatEngine {
         idle_mlx_memory_telemetry: MlxMemoryTelemetry,
     ) -> Self {
         self.idle_mlx_memory_telemetry = Some(idle_mlx_memory_telemetry);
+        self
+    }
+
+    /// Scripts the live-limit update to report a ceiling this engine cannot
+    /// adopt in place whenever the request sits below its loaded memory
+    /// (modeled by the allocator-cache limit field).
+    pub(super) fn with_scripted_replacement_required_reason(
+        mut self,
+        scripted_replacement_required_reason: &str,
+    ) -> Self {
+        self.scripted_replacement_required_reason =
+            Some(scripted_replacement_required_reason.to_owned());
         self
     }
 
@@ -425,6 +439,13 @@ impl InferenceEngine for ScriptedChatEngine {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
+        if let Some(rejection_reason) = &self.scripted_replacement_required_reason
+            && requested_mlx_memory_ceiling_bytes < self.maximum_allocator_cache_memory_limit_bytes
+        {
+            return Err(InferenceEngineError::ResidentStreamingReplacementRequired {
+                reason: rejection_reason.clone(),
+            });
+        }
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
             self.maximum_allocator_cache_memory_limit_bytes
