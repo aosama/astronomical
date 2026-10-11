@@ -58,6 +58,25 @@ pub trait ModelFactory<
         >,
     > + Send;
 
+    /// Whether this factory can replace a resident autoregressive runtime with streaming.
+    fn supports_streaming_retry(&self) -> bool {
+        false
+    }
+
+    /// Creates the streaming runtime used by one private resident-fork retry.
+    fn create_streaming_retry(
+        &self,
+        _model_directory: &str,
+        _model_configuration: WorkerModelConfiguration,
+    ) -> impl std::future::Future<
+        Output = Result<
+            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+            String,
+        >,
+    > + Send {
+        async { Err("streaming retry is unavailable for this model factory".to_owned()) }
+    }
+
     /// Updates the complete process-global limit pair used by a future lazy model load.
     fn update_mlx_memory_limits(
         &mut self,
@@ -93,9 +112,15 @@ impl<Processor, Engine, ImageEngine, EmbeddingsEngine>
     }
 }
 
-pub(crate) enum ActiveWorkerRequest<RequestOutput> {
-    Autoregressive(Box<ActiveEngineGeneration<RequestOutput>>),
+pub(crate) enum ActiveWorkerRequest<RequestOutput, RetryRequest> {
+    Autoregressive(Box<ActiveEngineGeneration<RequestOutput, RetryRequest>>),
     Image(ActiveImageGeneration),
+}
+
+#[derive(Clone)]
+pub(crate) struct SelectedModel {
+    pub(crate) model_directory: String,
+    pub(crate) model_configuration: WorkerModelConfiguration,
 }
 
 pub(crate) struct ActiveImageGeneration {
@@ -161,8 +186,10 @@ pub enum WorkerRuntimeError {
     PersistentPromptCacheClearFailed { reason: String },
 }
 
-pub(crate) struct ActiveEngineGeneration<RequestOutput> {
+pub(crate) struct ActiveEngineGeneration<RequestOutput, RetryRequest> {
     pub(crate) request_output: RequestOutput,
+    pub(crate) streaming_retry_request: Option<RetryRequest>,
+    pub(crate) streaming_retry_attempted: bool,
     pub(crate) generated_token_count: u16,
     pub(crate) reasoning_token_count: u16,
     pub(crate) max_output_tokens: u16,
@@ -183,16 +210,20 @@ pub(crate) struct ActiveEngineGeneration<RequestOutput> {
         Option<WorkerPersistentPromptCacheRequestDiagnostics>,
 }
 
-impl<RequestOutput> ActiveEngineGeneration<RequestOutput> {
+impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryRequest> {
     pub(crate) fn new(
         generation_command: &ChatGenerationCommand,
         prompt_token_count: u32,
         cached_token_count: u32,
         required_prompt_processing_token_count: u32,
         request_output: RequestOutput,
+        streaming_retry_request: Option<RetryRequest>,
+        streaming_retry_attempted: bool,
     ) -> Self {
         Self {
             request_output,
+            streaming_retry_request,
+            streaming_retry_attempted,
             generated_token_count: 0,
             reasoning_token_count: 0,
             max_output_tokens: generation_command.settings.max_output_tokens,
@@ -211,6 +242,13 @@ impl<RequestOutput> ActiveEngineGeneration<RequestOutput> {
             last_reported_expert_memory_mode: None,
             persistent_prompt_cache_diagnostics: None,
         }
+    }
+
+    pub(crate) fn can_retry_streaming(&self) -> bool {
+        !self.streaming_retry_attempted
+            && self.generated_token_count == 0
+            && self.next_sequence_number == 0
+            && self.streaming_retry_request.is_some()
     }
 }
 

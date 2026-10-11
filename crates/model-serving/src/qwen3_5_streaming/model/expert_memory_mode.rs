@@ -1,18 +1,17 @@
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
+use super::streaming_model::Qwen3_5StreamingModel;
 use crate::ExpertResidencyTelemetry;
 use crate::MlxActiveMemoryBreakdown;
-use crate::qwen3_5::model::Qwen3_5Model;
 
-impl Qwen3_5Model {
+impl Qwen3_5StreamingModel {
     /// Builds the residency claim from the reconciled breakdown of the same MLX
-    /// measurement. In paged mode the retained cache counts adopted lazy pages —
+    /// measurement. The retained cache counts adopted lazy pages —
     /// layers seated for ownership before their arrays are materialized by the
     /// layer-interval eval — so its bookkeeping payload exceeds the physically
     /// resident bytes during the seat-to-first-eval window. The only truthful
     /// resident-payload figure is therefore the measured attribution from the
-    /// snapshot this breakdown reconciles (issue #337). Complete residency is
-    /// fully materialized by definition, so it keeps reporting owner figures.
+    /// snapshot this breakdown reconciles (issue #337).
     #[must_use]
     pub(crate) fn expert_residency_telemetry_for_breakdown(
         &self,
@@ -22,25 +21,6 @@ impl Qwen3_5Model {
             .expert_pager
             .as_ref()
             .map_or(0, |expert_pager| expert_pager.layer_count());
-        if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
-            let resident_expert_count = self
-                .expert_pager
-                .as_ref()
-                .map_or(resident_expert_weights.layer_count(), |expert_pager| {
-                    expert_pager.complete_expert_entry_count()
-                });
-            let resident_expert_payload_bytes =
-                self.expert_pager.as_ref().map_or(0, |expert_pager| {
-                    expert_pager
-                        .complete_expert_payload_byte_count()
-                        .unwrap_or(0)
-                });
-            return ExpertResidencyTelemetry {
-                total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
-                resident_expert_count: u32::try_from(resident_expert_count).unwrap_or(u32::MAX),
-                resident_expert_payload_bytes,
-            };
-        }
         let expert_statistics = self.expert_weight_memory_cache_statistics();
         ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
@@ -62,15 +42,9 @@ impl Qwen3_5Model {
                         .resident_payload_byte_count
                 });
         crate::classify_expert_memory_mode(
-            self.resident_expert_weights.is_some(),
+            false,
             self.expert_pager.is_some(),
             retained_paged_expert_payload_bytes,
         )
-    }
-
-    /// Returns whether sparse-expert pages remain necessary for the next forward.
-    #[must_use]
-    pub(crate) fn sparse_experts_are_paged(&self) -> bool {
-        self.expert_memory_mode() != ExpertMemoryMode::Resident
     }
 }

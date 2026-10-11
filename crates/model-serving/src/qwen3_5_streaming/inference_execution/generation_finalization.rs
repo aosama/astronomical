@@ -1,11 +1,9 @@
 //! One terminal cleanup path for success, rejection, cancellation, and failure.
 //!
 //! Request-owned lazy arrays are dropped before expert-retention policy resumes
-//! and before allocator cleanup. After that workspace is gone, complete residency
-//! is restored when the leftover ceiling admits it so a fitting model is not left
-//! streaming. Final telemetry then reports that restored ownership.
+//! and before allocator cleanup. Final telemetry then reports the retained
+//! pager ownership after cleanup.
 
-use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
@@ -46,8 +44,7 @@ impl Qwen3_5EngineState {
                 active_memory_breakdown,
             )
             // The claim is derived from the breakdown reconciling this exact
-            // snapshot, so the published pair cannot straddle a promotion or
-            // demote (issue #337).
+            // snapshot so the published pair describes one memory instant.
             .with_expert_residency_telemetry(
                 model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
             )
@@ -76,6 +73,7 @@ impl Qwen3_5EngineState {
         let (performance_attribution_outcome, performance_attribution_failure_description) =
             match generation_error {
                 InferenceEngineError::InvalidRequest { .. }
+                | InferenceEngineError::ResidentForkRequired { .. }
                 | InferenceEngineError::MlxMemoryLimitRejected { .. }
                 | InferenceEngineError::EngineBusy => (
                     PerformanceAttributionOutcome::Rejected,
@@ -143,12 +141,6 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
-        // Fatal cleanup must not allocate a complete resident copy. Success,
-        // rejection, and cancellation can restore RAM ownership now that the
-        // request workspace is gone.
-        if outcome != PerformanceAttributionOutcome::Failed {
-            self.restore_complete_residency_after_released_request(&mut performance_attribution);
-        }
         let generation_finalization =
             self.collect_generation_finalization(&mut performance_attribution);
         self.record_generation_performance_attribution(
@@ -160,24 +152,6 @@ impl Qwen3_5EngineState {
             failure_description,
         );
         generation_finalization
-    }
-
-    fn restore_complete_residency_after_released_request(
-        &mut self,
-        performance_attribution: &mut PerformanceAttribution,
-    ) {
-        let Some(model) = self.model.as_mut() else {
-            return;
-        };
-        if let Err(residency_restore_error) = model.try_promote_experts_to_resident(
-            Qwen3_5ExpertResidencyTransitionReason::RequestCompletion,
-            performance_attribution,
-        ) {
-            tracing::warn!(
-                error = %residency_restore_error,
-                "complete expert residency restore after request completion failed; paging remains"
-            );
-        }
     }
 
     fn collect_generation_finalization(

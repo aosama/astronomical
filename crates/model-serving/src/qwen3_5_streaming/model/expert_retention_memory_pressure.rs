@@ -2,11 +2,9 @@
 //!
 //! # Why a temporary cap exists
 //!
-//! A long prompt plus an image can need more activation RAM than the leftover
-//! ceiling after complete experts are resident. The engine then demotes the
-//! complete owner and asks this file to shrink retained pages. The shrink is
-//! not "throw experts away forever". It is "freeze the retained-page ceiling
-//! at a smaller number until the remaining prompt chunks finish".
+//! A long prompt plus an image can need more activation RAM than the retained
+//! expert cache leaves available. The engine freezes the retained-page ceiling
+//! at a smaller number until the remaining prompt chunks finish.
 //!
 //! That freeze lives in `RetainedExpertPageCache` as
 //! `request_pressure_maximum_resident_payload_bytes`. The long-lived normal
@@ -20,11 +18,10 @@
 //! place hides the generation-phase retained budget and rejects useful existing
 //! ownership. `resume_expert_retention_after...` only lifts the cap. The caller
 //! reconciles existing topology without reading storage; later mandatory
-//! forwards may install newly read complete or routed pages.
+//! forwards may install newly read full-layer or routed pages.
 //!
 //! Callers that lift the cap today:
 //! - decode handoff, after the last prefill barrier
-//! - request finalization, after request-owned arrays are dropped
 //! - failed reclaim cleanup, so a failed recovery cannot strand the model
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
@@ -40,9 +37,8 @@ impl Qwen3_5Model {
     /// at the post-evaluation flush so the hot-expert cache can only grow into
     /// the adaptive growth guard's unclaimed headroom, never into the margin
     /// the next forward's admission must hold for transients and KV growth.
-    /// Already-seated complete layers floor this cap: leftover publication must
-    /// not evict pages this request already paid to read. Returns whether owned
-    /// arrays were released.
+    /// Already-seated full layers floor this cap: leftover publication must
+    /// not evict pages this request already paid to read.
     pub(crate) fn limit_retained_experts_to(&self, maximum_resident_payload_bytes: u64) -> bool {
         let maximum_resident_payload_bytes =
             crate::retained_complete_layer_ceiling_after_prefill_budget_refresh(
@@ -132,13 +128,9 @@ impl Qwen3_5Model {
 
     /// Removes the temporary request-pressure ceiling.
     ///
-    /// This does not load pages and does not restore the complete owner. It
-    /// only makes the long-lived normal budget visible again. Returns `true`
-    /// when a freeze was actually present.
+    /// This does not load pages. It only makes the normal budget visible again.
+    /// Returns `true` when a freeze was actually present.
     pub(crate) fn resume_expert_retention_after_request_memory_pressure(&self) -> bool {
-        if self.resident_expert_weights.is_some() {
-            return false;
-        }
         self.retained_experts
             .as_ref()
             .is_some_and(|retained_experts| {

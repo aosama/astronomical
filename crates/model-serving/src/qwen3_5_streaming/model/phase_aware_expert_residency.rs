@@ -1,6 +1,6 @@
 //! Converts Qwen geometry and composed RAM budgets into the pure residency target.
 
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError;
 use crate::{
     ExpertLayerGeometry, ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution,
@@ -9,7 +9,9 @@ use crate::{
     retained_resident_ceiling_after_budget_refresh, should_enact_planned_expert_release,
 };
 
-impl Qwen3_5Model {
+use super::streaming_model::Qwen3_5StreamingModel;
+
+impl Qwen3_5StreamingModel {
     /// Clears demand evidence after one topology plan consumes it.
     pub(crate) fn clear_expert_demand_for_residency(&self) {
         if let Some(retained_experts) = self.retained_experts.as_ref() {
@@ -23,7 +25,7 @@ impl Qwen3_5Model {
         *self.request_expert_residency.borrow_mut() = None;
     }
 
-    /// Drops enough pinned complete layers that a Prefill capacity failure cannot re-promote them.
+    /// Shrinks the request's retained-layer target after capacity reclamation.
     pub(crate) fn shrink_request_expert_residency_after_reclamation(
         &self,
         released_complete_payload_bytes: u64,
@@ -74,29 +76,6 @@ impl Qwen3_5Model {
             *self.active_expert_residency_plan.borrow_mut() = None;
             return Ok(());
         };
-        if self.resident_expert_weights.is_some() {
-            if phase == MemoryPhase::GenerationPreparation {
-                let resident_statistics = self.expert_weight_memory_cache_statistics();
-                performance_attribution.record_counter(
-                    PerformanceCounter::ExpertResidencyPlanCompleteLayerCount,
-                    u64::try_from(resident_statistics.complete_layer_count).unwrap_or(u64::MAX),
-                );
-                performance_attribution.record_counter(
-                    PerformanceCounter::ExpertResidencyPreexistingCompletePayloadBytes,
-                    resident_statistics.complete_layer_payload_byte_count,
-                );
-                performance_attribution.record_counter(
-                    PerformanceCounter::ExpertResidencyPreservedCompletePayloadBytes,
-                    resident_statistics.complete_layer_payload_byte_count,
-                );
-                performance_attribution.record_counter(
-                    PerformanceCounter::ExpertTopologyPreservedPayloadBytes,
-                    resident_statistics.complete_layer_payload_byte_count,
-                );
-            }
-            *self.active_expert_residency_plan.borrow_mut() = None;
-            return Ok(());
-        }
         let budget_phase = match phase {
             MemoryPhase::Prefill => MemoryPhase::Prefill,
             MemoryPhase::GenerationPreparation | MemoryPhase::Decode => MemoryPhase::Decode,
@@ -316,30 +295,6 @@ impl Qwen3_5Model {
         );
         *self.active_expert_residency_plan.borrow_mut() = Some(residency_plan);
         Ok(())
-    }
-
-    /// Republishes the Prefill residency plan after an admission or recovery
-    /// demoted the complete resident expert owner into paged streaming.
-    ///
-    /// A plan published before that transition described the resident owner, so
-    /// it names no complete-layer target and the retried forward streams every
-    /// expert layer with no target and retains none. Decode seating then reads
-    /// the identical payload from storage a second time in the same request
-    /// (issue #339). Recovery reclaims retained pages before this call, so the
-    /// republished plan is built from the topology the retry will actually
-    /// stream from.
-    pub(crate) fn republish_prefill_residency_plan_after_demotion(
-        &self,
-        context_token_count: u64,
-        operation_token_count: u64,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        self.refresh_phase_aware_expert_residency_plan(
-            MemoryPhase::Prefill,
-            context_token_count,
-            operation_token_count,
-            performance_attribution,
-        )
     }
 
     /// Returns the current execution-required read-through action for one layer.

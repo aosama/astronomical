@@ -184,7 +184,7 @@ impl Qwen3_5EngineState {
         )
         .unwrap_or(usize::MAX);
         let target_expert_payload_bytes_reclaimed_before_restore = self
-            .validate_context_memory_admission_with_resident_expert_demotion(
+            .validate_context_memory_admission(
                 total_context_tokens,
                 persistent_prompt_cache_restore_temporary_workspace_bytes,
                 0,
@@ -341,7 +341,7 @@ impl Qwen3_5EngineState {
                 )
             })?;
         let target_expert_payload_bytes_reclaimed_after_restore = self
-            .validate_context_memory_admission_with_resident_expert_demotion(
+            .validate_context_memory_admission(
                 remaining_context_token_count,
                 0,
                 0,

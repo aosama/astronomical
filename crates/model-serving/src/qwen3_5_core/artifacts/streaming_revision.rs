@@ -11,25 +11,23 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
+use super::artifact::derive_revision_from_config_bytes;
+use super::artifact_helpers::{
+    captured_required_file_bytes, read_required_file_bytes, required_file,
+};
+use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
+use super::tensor_spec;
+use super::validated_artifact::ValidatedQwen3_5Artifact;
+use super::vision_validation::{self};
+use super::{
+    OptiQMetadata, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config,
+    Qwen3_5ShardIndex, Qwen3_5VisionConfig,
+};
 use crate::artifact_validation::{
     ArtifactValidationError, RequiredFileProfile, ValidatedSafetensorsSource,
     hugging_face_snapshot_model_id, validate_required_file, validate_required_files,
 };
-use crate::qwen3_5::artifacts::artifact::derive_revision_from_config_bytes;
-use crate::qwen3_5::artifacts::artifact_helpers::{
-    captured_required_file_bytes, read_required_file_bytes, required_file,
-};
-use crate::qwen3_5::artifacts::artifact_inventory::{
-    build_index_tensor_inventory, source_id_by_file_name,
-};
-use crate::qwen3_5::artifacts::tensor_spec;
-use crate::qwen3_5::artifacts::validated_artifact::ValidatedQwen3_5Artifact;
-use crate::qwen3_5::artifacts::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
-use crate::qwen3_5::artifacts::vision_validation;
-use crate::qwen3_5::artifacts::{
-    OptiQMetadata, Qwen3_5Config, Qwen3_5ShardIndex, Qwen3_5VisionConfig,
-};
-use crate::qwen3_5::artifacts::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
+use crate::qwen3_5_core::vision::qwen3_5_vision_tensor_profiles;
 
 /// On-disk format version of a converted per-expert streaming revision.
 const STREAMING_REVISION_FORMAT_VERSION: u32 = 3;

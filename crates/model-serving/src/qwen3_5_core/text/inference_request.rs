@@ -28,6 +28,10 @@ impl PreparedInferenceRequest for Qwen3_5InferenceRequest {
     fn prompt_token_count(&self) -> usize {
         self.input_token_ids.len()
     }
+
+    fn clone_for_streaming_retry(&self) -> Option<Self> {
+        Some(self.clone())
+    }
 }
 
 impl Qwen3_5InferenceRequest {

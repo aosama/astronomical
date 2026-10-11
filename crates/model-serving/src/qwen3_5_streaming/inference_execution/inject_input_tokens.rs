@@ -1,6 +1,9 @@
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{AdaptiveRamGrowthContext, InferenceEngineError, PerformanceOperation};
+use crate::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, InferenceEngineError,
+    PerformanceOperation,
+};
 
 use super::Qwen3_5EngineState;
 use super::completed_forward_memory;
@@ -85,7 +88,7 @@ impl Qwen3_5EngineState {
         // Re-run binary residency admission before mutating decoder state so a
         // rejection leaves the continuation frontier unchanged.
         let target_expert_payload_bytes_reclaimed_during_injection = self
-            .validate_context_memory_admission_with_resident_expert_demotion(
+            .validate_context_memory_admission(
                 projected_context_tokens,
                 0,
                 0,
@@ -105,15 +108,11 @@ impl Qwen3_5EngineState {
         active_request.pending_generated_token = None;
         let final_input_token_position = input_token_ids.len() - 1;
         if final_input_token_position > 0 {
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
             let injected_prefill_execution_context =
                 super::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
                     false,
-                    model.sparse_experts_are_paged(),
+                    AdaptiveRamGrowthExecutionProfile::Paged,
                     self.persistent_prompt_cache.is_some()
                         && active_request.can_use_persistent_prompt_cache,
                 );
@@ -121,7 +120,7 @@ impl Qwen3_5EngineState {
                 feedback_prefix_token_ids.len(),
                 injected_prefill_execution_context.context_identifier_flags(),
                 false,
-                model.sparse_experts_are_paged(),
+                AdaptiveRamGrowthExecutionProfile::Paged,
             );
             let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
                 adaptive_ram_growth_context,
@@ -151,7 +150,7 @@ impl Qwen3_5EngineState {
             completed_forward_memory::record_completed_adaptive_ram_growth(
                 &mut self.adaptive_ram_growth_guard,
                 adaptive_ram_growth_context
-                    .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                    .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
                 false,
                 model,
                 active_memory_bytes_before_growth,
@@ -162,13 +161,8 @@ impl Qwen3_5EngineState {
             )?;
         }
         let final_input_token_id = input_token_ids[final_input_token_position];
-        let sparse_experts_are_paged = self
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-            .sparse_experts_are_paged();
         let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, sparse_experts_are_paged);
+            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged);
         let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,
@@ -209,7 +203,7 @@ impl Qwen3_5EngineState {
         completed_forward_memory::record_completed_adaptive_ram_growth(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context
-                .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
             true,
             model,
             active_memory_bytes_before_growth,

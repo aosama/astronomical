@@ -60,36 +60,26 @@ impl Qwen3_5Model {
         // Paged decode must resolve deferred missing-route bitmaps before the
         // generated token becomes request-visible. Use a synchronous completion
         // root with exact replay instead of decode-ahead async evaluation alone.
-        if self.sparse_experts_are_paged() {
-            let maximum_paged_route_replay_attempts = 1;
-            for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
-                let next_logits = self.build_forward_graph(
-                    &token_indices,
-                    1,
-                    starting_position_tokens,
-                    request_decoder_state,
-                    Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-                    performance_attribution,
-                )?;
-                match self.evaluate_forward_state_with_performance_attribution(
-                    &next_logits,
-                    request_decoder_state,
-                    performance_attribution,
-                )? {
-                    PagedRouteValidationOutcome::CompleteHit => return Ok(next_logits),
-                }
+        let maximum_paged_route_replay_attempts = 1;
+        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+            let next_logits = self.build_forward_graph(
+                &token_indices,
+                1,
+                starting_position_tokens,
+                request_decoder_state,
+                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                performance_attribution,
+            )?;
+            match self.evaluate_forward_state_with_performance_attribution(
+                &next_logits,
+                request_decoder_state,
+                performance_attribution,
+            )? {
+                PagedRouteValidationOutcome::CompleteHit => return Ok(next_logits),
             }
-            return Err(Qwen3_5ExecutionError::InvalidInput {
-                description: "paged route replay exceeded the sparse-layer safety bound",
-            });
         }
-        self.build_forward_graph(
-            &token_indices,
-            1,
-            starting_position_tokens,
-            request_decoder_state,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
-            performance_attribution,
-        )
+        Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "paged route replay exceeded the sparse-layer safety bound",
+        })
     }
 }

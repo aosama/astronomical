@@ -5,11 +5,12 @@
 //! estimates rather than measured production frequencies.
 
 use astronomical_model_serving::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthTransientReserveSource, MemoryPhase,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+    AdaptiveRamGrowthGuardError, AdaptiveRamGrowthTransientReserveSource, MemoryPhase,
 };
 
-const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext = AdaptiveRamGrowthContext::decode(1, false);
+const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
+    AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
 
 #[test]
 fn should_reject_a_zero_active_memory_limit() {
@@ -38,8 +39,10 @@ fn should_allow_unobserved_growth_when_exact_persistent_bytes_fit_the_limit() {
 fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
-    let observed_prefill_context = AdaptiveRamGrowthContext::prefill(128, 0, false, true);
-    let different_prefill_context = AdaptiveRamGrowthContext::prefill(256, 0, false, true);
+    let observed_prefill_context =
+        AdaptiveRamGrowthContext::prefill(128, 0, false, AdaptiveRamGrowthExecutionProfile::Paged);
+    let different_prefill_context =
+        AdaptiveRamGrowthContext::prefill(256, 0, false, AdaptiveRamGrowthExecutionProfile::Paged);
 
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         observed_prefill_context,
@@ -80,8 +83,10 @@ fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
 fn should_keep_exact_context_evidence_separate_from_phase_admission_maximum() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
-    let smaller_context = AdaptiveRamGrowthContext::prefill(128, 0, false, true);
-    let larger_context = AdaptiveRamGrowthContext::prefill(256, 0, false, true);
+    let smaller_context =
+        AdaptiveRamGrowthContext::prefill(128, 0, false, AdaptiveRamGrowthExecutionProfile::Paged);
+    let larger_context =
+        AdaptiveRamGrowthContext::prefill(256, 0, false, AdaptiveRamGrowthExecutionProfile::Paged);
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         smaller_context,
         true,
@@ -113,7 +118,8 @@ fn should_keep_exact_context_evidence_separate_from_phase_admission_maximum() {
 fn should_accept_stable_memory_at_c_and_reject_one_byte_above_c() {
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
-    let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(1, false);
+    let adaptive_ram_growth_context =
+        AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
 
     let fitting_projection = adaptive_ram_growth_guard
         .project_growth_for_context(adaptive_ram_growth_context, 700, 300, 0, 0)
@@ -136,8 +142,10 @@ fn should_accept_stable_memory_at_c_and_reject_one_byte_above_c() {
 fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
-    let fitting_peak_context = AdaptiveRamGrowthContext::decode(1, false);
-    let exceeding_peak_context = AdaptiveRamGrowthContext::decode(2, false);
+    let fitting_peak_context =
+        AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
+    let exceeding_peak_context =
+        AdaptiveRamGrowthContext::decode(2, AdaptiveRamGrowthExecutionProfile::Resident);
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         fitting_peak_context,
         true,
@@ -176,39 +184,11 @@ fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
 }
 
 #[test]
-fn should_reserve_transient_headroom_for_unseen_prefill_contexts() {
-    let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
-        .expect("a positive active-memory limit should create a guard");
-    let observed_prefill_context = AdaptiveRamGrowthContext::prefill(128, 7, true, true);
-    adaptive_ram_growth_guard.record_completed_growth_for_context(
-        observed_prefill_context,
-        true,
-        0,
-        0,
-        200,
-        0,
-    );
-
-    for independent_prefill_context in [
-        AdaptiveRamGrowthContext::prefill(128, 8, true, true),
-        AdaptiveRamGrowthContext::prefill(128, 7, false, true),
-        AdaptiveRamGrowthContext::prefill(128, 7, true, false),
-    ] {
-        assert_eq!(
-            adaptive_ram_growth_guard
-                .project_growth_for_context(independent_prefill_context, 500, 100, 0, 0)
-                .expect("an independent context should project")
-                .observed_transient_high_water_bytes(),
-            200
-        );
-    }
-}
-
-#[test]
 fn should_not_retain_a_final_partial_prefill_tail_as_reusable_evidence() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
-    let partial_tail_context = AdaptiveRamGrowthContext::prefill(37, 0, false, true);
+    let partial_tail_context =
+        AdaptiveRamGrowthContext::prefill(37, 0, false, AdaptiveRamGrowthExecutionProfile::Paged);
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         partial_tail_context,
         false,
@@ -420,7 +400,12 @@ fn should_reject_a_recovery_projection_overflow() {
 fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
-    let large_paged_prefill_context = AdaptiveRamGrowthContext::prefill(8_192, 0, false, true);
+    let large_paged_prefill_context = AdaptiveRamGrowthContext::prefill(
+        8_192,
+        0,
+        false,
+        AdaptiveRamGrowthExecutionProfile::Paged,
+    );
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         large_paged_prefill_context,
         true,
@@ -430,7 +415,12 @@ fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
         0,
     );
 
-    let small_resident_prefill_context = AdaptiveRamGrowthContext::prefill(2_048, 0, false, false);
+    let small_resident_prefill_context = AdaptiveRamGrowthContext::prefill(
+        2_048,
+        0,
+        false,
+        AdaptiveRamGrowthExecutionProfile::Resident,
+    );
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(small_resident_prefill_context, 900_000, 10_000, 0, 0)
         .expect("the smaller shape should project without overflow");
@@ -448,7 +438,12 @@ fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
 fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
-    let large_paged_prefill_context = AdaptiveRamGrowthContext::prefill(8_192, 0, false, true);
+    let large_paged_prefill_context = AdaptiveRamGrowthContext::prefill(
+        8_192,
+        0,
+        false,
+        AdaptiveRamGrowthExecutionProfile::Paged,
+    );
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         large_paged_prefill_context,
         true,
@@ -457,7 +452,12 @@ fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
         8_000,
         0,
     );
-    let exact_resident_prefill_context = AdaptiveRamGrowthContext::prefill(2_048, 3, false, false);
+    let exact_resident_prefill_context = AdaptiveRamGrowthContext::prefill(
+        2_048,
+        3,
+        false,
+        AdaptiveRamGrowthExecutionProfile::Resident,
+    );
     adaptive_ram_growth_guard.record_completed_growth_for_context(
         exact_resident_prefill_context,
         true,
@@ -483,7 +483,12 @@ fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
-        AdaptiveRamGrowthContext::prefill(8_192, 0, false, true),
+        AdaptiveRamGrowthContext::prefill(
+            8_192,
+            0,
+            false,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
         true,
         0,
         0,
@@ -491,7 +496,12 @@ fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
         0,
     );
     adaptive_ram_growth_guard.record_completed_growth_for_context(
-        AdaptiveRamGrowthContext::prefill(1_024, 9, false, false),
+        AdaptiveRamGrowthContext::prefill(
+            1_024,
+            9,
+            false,
+            AdaptiveRamGrowthExecutionProfile::Resident,
+        ),
         true,
         0,
         0,
@@ -503,7 +513,12 @@ fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
     // scaled observation is the conservative proportional estimate.
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::prefill(2_048, 0, false, false),
+            AdaptiveRamGrowthContext::prefill(
+                2_048,
+                0,
+                false,
+                AdaptiveRamGrowthExecutionProfile::Resident,
+            ),
             900_000,
             10_000,
             0,
@@ -536,7 +551,12 @@ fn should_keep_the_global_maximum_for_a_phase_without_any_evidence() {
     // later prefill reserves proportionally.
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::prefill(2_048, 0, false, false),
+            AdaptiveRamGrowthContext::prefill(
+                2_048,
+                0,
+                false,
+                AdaptiveRamGrowthExecutionProfile::Resident,
+            ),
             900_000,
             10_000,
             0,

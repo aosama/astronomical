@@ -257,7 +257,29 @@ impl Qwen3_5EngineState {
                             "visual embedding suffix planning failed: {visual_embedding_suffix_plan_error}"
                         ))
                     })?;
-                self.resolve_visual_embeddings_for_processed_images(
+                let visual_embedding_model = self.model.as_ref().ok_or_else(|| {
+                    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                })?;
+                let visual_embedding_model_contract = self
+                    .persistent_visual_embedding_model_contract
+                    .as_ref()
+                    .ok_or_else(|| {
+                        super::fatal_engine_error(
+                            "Qwen3.5 persistent visual embedding model contract is not loaded",
+                        )
+                    })?;
+                let visual_embedding_context =
+                    crate::qwen3_5_core::vision::VisualEmbeddingEngineContext {
+                        runtime: visual_embedding_model.runtime(),
+                        vision_model: visual_embedding_model.vision_model(),
+                        compiled_elementwise_graphs: &visual_embedding_model
+                            .compiled_elementwise_graphs,
+                        visual_embedding_model_contract,
+                        persistent_prompt_cache: self.persistent_prompt_cache.as_deref(),
+                    };
+                crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images(
+                    visual_embedding_context,
+                    &mut self.persistent_prompt_cache_counters,
                     inference_request.request_id(),
                     inference_request.processed_visual_images(),
                     &visual_embedding_suffix_plan,
@@ -266,10 +288,6 @@ impl Qwen3_5EngineState {
             } else {
                 None
             };
-            let sparse_experts_are_paged = self
-                .model
-                .as_ref()
-                .is_some_and(|loaded_model| loaded_model.sparse_experts_are_paged());
             let sampling_selects_highest_logit =
                 matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
             let effective_temperature_thousandths = match sampling_strategy {
@@ -281,7 +299,6 @@ impl Qwen3_5EngineState {
             };
             tracing::info!(
                 request_id = inference_request.request_id().value(),
-                sparse_experts_are_paged,
                 persistent_prompt_cache_is_available,
                 sampling_selects_highest_logit,
                 effective_temperature_thousandths,

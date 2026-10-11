@@ -391,9 +391,6 @@ impl Qwen3_5Model {
                 key_normalization_scale_weight,
             },
             expert_pager,
-            // Publication occurs only after core materialization and a fresh idle
-            // memory sample in the engine loading path.
-            resident_expert_weights: None,
             retained_experts,
             route_observation: RefCell::new(
                 crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(

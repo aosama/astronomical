@@ -6,11 +6,7 @@ use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
 use crate::qwen3_5_streaming;
 
-/// Admits context against the current expert owner, then reclaims paged retention.
-///
-/// Whole-owner demotion is orchestrated by the mutable engine before this model
-/// helper runs. Once paged, this helper can reclaim the exact native deficit and
-/// retry the unchanged projection before rejecting the user's request.
+/// Admits context against the paged expert cache, reclaiming its exact deficit.
 pub(crate) fn validate_context_memory_admission(
     model: &Qwen3_5Model,
     memory_limits: MlxMemoryLimits,
@@ -39,7 +35,7 @@ pub(crate) fn validate_context_memory_admission(
         temporary_workspace_bytes: temporary_workspace_reservation_bytes,
         retained_expert_payload_bytes: 0,
         active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
-        complete_experts_are_resident: model.resident_expert_weights.is_some(),
+        complete_experts_are_resident: false,
     }
     .projected_active_memory_bytes()
     .unwrap_or(usize::MAX);
@@ -55,7 +51,7 @@ pub(crate) fn validate_context_memory_admission(
         )
         .unwrap_or(usize::MAX),
         active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
-        complete_experts_are_resident: model.resident_expert_weights.is_some(),
+        complete_experts_are_resident: false,
     };
     crate::memory::log_context_admission_projection(
         "context_admission_after_owner_check",
@@ -71,7 +67,7 @@ pub(crate) fn validate_context_memory_admission(
         }
         MemoryAdmissionDecision::DemoteCompleteResidency { .. } => {
             return Err(invalid_request_error(
-                "generation context requires complete expert demotion before paged admission",
+                "streaming context admission requested an unsupported residency transition",
             ));
         }
         MemoryAdmissionDecision::Reject { .. } => {
@@ -190,48 +186,6 @@ pub(crate) fn validate_context_memory_admission(
     ))
 }
 
-pub(crate) fn context_memory_admission_fits_without_expert_reclamation(
-    model: &Qwen3_5Model,
-    memory_limits: MlxMemoryLimits,
-    context_memory_reservation_bytes_per_token: usize,
-    context_token_count_requiring_reservation: usize,
-    temporary_workspace_reservation_bytes: usize,
-    additional_maximum_expert_page_reservation_bytes: usize,
-) -> Result<bool, InferenceEngineError> {
-    let projection = build_context_memory_admission_projection(
-        model,
-        memory_limits,
-        context_memory_reservation_bytes_per_token,
-        context_token_count_requiring_reservation,
-        temporary_workspace_reservation_bytes,
-        additional_maximum_expert_page_reservation_bytes,
-    )?;
-    let context_admission_requirements = ContextAdmissionRequirements {
-        current_active_memory_bytes: projection.memory_snapshot.active_memory_bytes(),
-        context_growth_bytes: projection.context_reservation_bytes,
-        expert_page_reservation_bytes: projection.maximum_expert_page_reservation_bytes,
-        temporary_workspace_bytes: temporary_workspace_reservation_bytes,
-        retained_expert_payload_bytes: usize::try_from(
-            model
-                .expert_weight_memory_cache_statistics()
-                .resident_payload_byte_count,
-        )
-        .unwrap_or(usize::MAX),
-        active_memory_ceiling_bytes: projection.configured_mlx_memory_limit_bytes,
-        complete_experts_are_resident: model.resident_expert_weights.is_some(),
-    };
-    crate::memory::log_context_admission_projection(
-        "resident_fit_without_reclamation",
-        context_token_count_requiring_reservation,
-        context_memory_reservation_bytes_per_token,
-        context_admission_requirements,
-    );
-    Ok(matches!(
-        context_admission_requirements.decide(),
-        MemoryAdmissionDecision::Admit
-    ))
-}
-
 struct ContextMemoryAdmissionProjection {
     memory_snapshot: MlxMemorySnapshot,
     context_reservation_bytes: usize,
@@ -254,9 +208,7 @@ fn build_context_memory_admission_projection(
     let context_reservation_bytes = context_token_count_requiring_reservation
         .checked_mul(context_memory_reservation_bytes_per_token)
         .ok_or_else(|| invalid_request_error("generation context memory reservation overflowed"))?;
-    // Resident forwards need no route reserve because all expert arrays already
-    // contribute to active memory. Paged forwards reserve one largest top-K page.
-    let maximum_target_expert_page_reservation_bytes = if model.sparse_experts_are_paged() {
+    let maximum_target_expert_page_reservation_bytes = if model.expert_pager.is_some() {
         model
             .expert_pager
             .as_ref()

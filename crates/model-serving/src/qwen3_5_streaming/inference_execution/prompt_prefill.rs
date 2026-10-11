@@ -51,31 +51,6 @@ impl Qwen3_5EngineState {
             plan.direct_publication_workspace_bytes,
         )?;
 
-        // Admission can demote a complete resident expert owner into paged
-        // streaming. The Prefill plan published before admission described the
-        // owner that existed then, so it names no complete-layer target and this
-        // chunk would stream every expert layer and retain nothing. Decode
-        // seating would then read the identical payload from storage a second
-        // time in the same request (issue #339). Republish the plan now, after
-        // the demotion and before the forward, so the streamed complete layers
-        // are offered to retained ownership bounded by the retained ceiling.
-        if admission_outcome.demoted_complete_resident_expert_owner {
-            let input_token_count =
-                u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
-            // The activation reserve is operation-scoped (issue #644): this
-            // chunk's own token count is the operation about to run.
-            let operation_token_count = u64::try_from(plan.prefill_token_count).unwrap_or(u64::MAX);
-            self.model
-                .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-                .republish_prefill_residency_plan_after_demotion(
-                    input_token_count,
-                    operation_token_count,
-                    &mut active_request.performance_attribution,
-                )
-                .map_err(qwen3_5_runtime_error)?;
-        }
-
         let prefill_request_checkpoint = active_request
             .prefill_request_checkpoint()
             .map_err(qwen3_5_runtime_error)?;
@@ -114,11 +89,6 @@ impl Qwen3_5EngineState {
             &plan.all_completed_prefill_chunk_tokens,
             &mut boundary_checkpoints,
         )?;
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-
         // Test-only: force a capacity rejection after the forward succeeds.
         if std::mem::take(&mut active_request.force_next_prefill_capacity_rejection_for_tests) {
             return Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
@@ -138,7 +108,7 @@ impl Qwen3_5EngineState {
             forward_chunk_elapsed_millis: forward_elapsed.as_millis() as u64,
             adaptive_ram_growth_context: plan
                 .adaptive_ram_growth_context
-                .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                .with_execution_profile(crate::AdaptiveRamGrowthExecutionProfile::Paged),
             exact_temporary_workspace_bytes: plan.exact_temporary_workspace_bytes,
             boundary_checkpoints,
         })

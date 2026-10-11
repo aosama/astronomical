@@ -7,10 +7,9 @@
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
-use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-    PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes,
+    safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 use super::Qwen3_5Model;
@@ -70,21 +69,14 @@ impl Qwen3_5Model {
             )
         })?;
         let expert_statistics = self.expert_weight_memory_cache_statistics();
-        let complete_experts_are_resident = self.resident_expert_weights.is_some();
-        let complete_residency_required_headroom_bytes = if complete_experts_are_resident {
-            self.required_complete_expert_residency_headroom_bytes()
-                .map_err(InferenceEngineError::from)?
-        } else {
-            0
-        };
         let ceiling_change_decision = MemoryCeilingChangeRequirements {
             current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
             requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
             minimum_safe_ceiling_bytes: minimum_mlx_memory_ceiling_bytes,
             current_active_memory_bytes,
             retained_paged_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
-            complete_experts_are_resident,
-            complete_residency_required_headroom_bytes,
+            complete_experts_are_resident: false,
+            complete_residency_required_headroom_bytes: 0,
         }
         .decide();
         if let MemoryCeilingChangeDecision::Reject { .. } = ceiling_change_decision {
@@ -172,26 +164,6 @@ impl Qwen3_5Model {
                     policy_update_error,
                 ));
             }
-            let mut transition_performance_attribution = PerformanceAttribution::disabled();
-            let promotion_outcome = match self.try_promote_experts_to_resident(
-                Qwen3_5ExpertResidencyTransitionReason::CeilingRaise,
-                &mut transition_performance_attribution,
-            ) {
-                Ok(promotion_outcome) => promotion_outcome,
-                Err(promotion_error) => {
-                    return Err(self.restore_failed_raised_memory_limit(
-                        current_mlx_memory_limits,
-                        previous_expert_paging_memory_ceiling_bytes,
-                        InferenceEngineError::from(promotion_error),
-                    ));
-                }
-            };
-            tracing::info!(
-                requested_mlx_memory_ceiling_bytes,
-                ?promotion_outcome,
-                expert_memory_mode = ?self.expert_memory_mode(),
-                "completed expert residency work for raised MLX memory ceiling"
-            );
         }
         Ok((
             minimum_mlx_memory_ceiling_bytes,
@@ -204,28 +176,14 @@ impl Qwen3_5Model {
         requested_mlx_memory_ceiling_bytes: u64,
         ceiling_change_decision: MemoryCeilingChangeDecision,
     ) -> Result<(), InferenceEngineError> {
-        let (must_demote_complete_residency, retained_paged_expert_reclamation_bytes) =
-            match ceiling_change_decision {
-                MemoryCeilingChangeDecision::Lower {
-                    must_demote_complete_residency,
-                    retained_paged_expert_reclamation_bytes,
-                } => (
-                    must_demote_complete_residency,
-                    retained_paged_expert_reclamation_bytes,
-                ),
-                _ => (false, 0),
-            };
-        if must_demote_complete_residency {
-            let mut disabled_performance_attribution = PerformanceAttribution::disabled();
-            self.demote_resident_experts_to_paging(
-                Qwen3_5ExpertResidencyTransitionReason::CeilingLower,
-                &mut disabled_performance_attribution,
-            )
-            .map_err(InferenceEngineError::from)?;
-        }
-        if self.resident_expert_weights.is_none()
-            && let Some(retained_experts) = self.retained_experts.as_ref()
-        {
+        let retained_paged_expert_reclamation_bytes = match ceiling_change_decision {
+            MemoryCeilingChangeDecision::Lower {
+                retained_paged_expert_reclamation_bytes,
+                ..
+            } => retained_paged_expert_reclamation_bytes,
+            _ => 0,
+        };
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
             retained_experts
                 .borrow_mut()
                 .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);

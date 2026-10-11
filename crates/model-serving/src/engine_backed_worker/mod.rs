@@ -15,6 +15,7 @@ pub struct EngineBackedWorker<
     pub(crate) minimum_mlx_memory_ceiling_bytes: u64,
     pub(crate) worker_runtime_feature_configuration:
         Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
+    pub(crate) selected_model: Option<support::SelectedModel>,
 }
 
 pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine> {
@@ -39,6 +40,7 @@ mod memory_limit;
 mod model_swap;
 mod output;
 mod protocol;
+mod retry;
 mod support;
 
 pub use support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};

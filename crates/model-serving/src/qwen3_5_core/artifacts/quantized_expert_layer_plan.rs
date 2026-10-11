@@ -1,4 +1,4 @@
-//! Startup-validated layer plan construction and source manifest building.
+//! Shared startup-validated expert layer plan construction from SafeTensors headers.
 //!
 //! Complete pager construction shares one SafeTensors header cache across every layer and validates
 //! all tensor geometry. Standalone callers retain a one-layer cache. `build_source_manifests()`
@@ -16,7 +16,8 @@ use crate::expert_paging::quantized_expert_validation;
 use crate::expert_paging::safetensors_header::{
     SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry,
 };
-use crate::qwen3_5::{OptiQQuantizationProfile, Qwen3_5Config};
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::quantizations::optiq::OptiQQuantizationProfile;
 
 /// The three MoE projection names in an expert's SwitchMLP block.
 pub(crate) const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
@@ -42,6 +43,32 @@ pub fn build_quantized_expert_layer_plan(
         layer_prefix,
         qwen3_5_config,
     )
+}
+
+/// Builds every decoder layer plan while parsing each referenced shard header once.
+pub fn build_quantized_expert_layer_plans(
+    model_dir: &Path,
+    weight_map: &HashMap<String, String>,
+    stored_tensor_name_by_canonical_name: &HashMap<String, String>,
+    config: &Qwen3_5Config,
+    decoder_layer_count: usize,
+) -> Result<Vec<QuantizedExpertLayerPlan>, ExpertManifestError> {
+    let mut layer_plans = Vec::with_capacity(decoder_layer_count);
+    let mut header_cache = HashMap::new();
+    for decoder_layer_index in 0..decoder_layer_count {
+        let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
+        layer_plans.push(
+            build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+                model_dir,
+                weight_map,
+                stored_tensor_name_by_canonical_name,
+                &layer_prefix,
+                config,
+                &mut header_cache,
+            )?,
+        );
+    }
+    Ok(layer_plans)
 }
 
 pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(

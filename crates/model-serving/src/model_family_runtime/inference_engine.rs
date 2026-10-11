@@ -3,14 +3,15 @@ use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use crate::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError, K2HorizonMoVAEngine, MlxMemoryLimitAdjustment,
-    MlxMemoryTelemetry, Qwen3_5Engine,
+    MlxMemoryTelemetry, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
 };
 
 use super::ModelFamilyInferenceRequest;
 
 /// Family-tagged inference engine used by the generic worker.
 pub enum ModelFamilyInferenceEngine {
-    Qwen3_5(Qwen3_5Engine),
+    Qwen3_5(Qwen3_5ResidentEngine),
+    Qwen3_5Streaming(Qwen3_5StreamingEngine),
     K2HorizonMoVA(K2HorizonMoVAEngine),
 }
 
@@ -20,6 +21,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.load().await,
+            Self::Qwen3_5Streaming(engine) => engine.load().await,
             Self::K2HorizonMoVA(engine) => engine.load().await,
         }
     }
@@ -32,6 +34,10 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
             (Self::Qwen3_5(engine), ModelFamilyInferenceRequest::Qwen3_5(inference_request)) => {
                 engine.start_generation(inference_request).await
             }
+            (
+                Self::Qwen3_5Streaming(engine),
+                ModelFamilyInferenceRequest::Qwen3_5(inference_request),
+            ) => engine.start_generation(inference_request).await,
             (
                 Self::K2HorizonMoVA(engine),
                 ModelFamilyInferenceRequest::K2HorizonMoVA(inference_request),
@@ -46,6 +52,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<GeneratedToken, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.decode_next_token(request_id).await,
+            Self::Qwen3_5Streaming(engine) => engine.decode_next_token(request_id).await,
             Self::K2HorizonMoVA(engine) => engine.decode_next_token(request_id).await,
         }
     }
@@ -57,6 +64,11 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<(), InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => {
+                engine
+                    .inject_input_tokens(request_id, input_token_ids)
+                    .await
+            }
+            Self::Qwen3_5Streaming(engine) => {
                 engine
                     .inject_input_tokens(request_id, input_token_ids)
                     .await
@@ -75,6 +87,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<GenerationFinalization, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.cancel_generation(request_id).await,
+            Self::Qwen3_5Streaming(engine) => engine.cancel_generation(request_id).await,
             Self::K2HorizonMoVA(engine) => engine.cancel_generation(request_id).await,
         }
     }
@@ -84,6 +97,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.collect_persistent_prompt_cache_stats().await,
+            Self::Qwen3_5Streaming(engine) => engine.collect_persistent_prompt_cache_stats().await,
             Self::K2HorizonMoVA(engine) => engine.collect_persistent_prompt_cache_stats().await,
         }
     }
@@ -94,6 +108,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.clear_persistent_prompt_cache(model_id).await,
+            Self::Qwen3_5Streaming(engine) => engine.clear_persistent_prompt_cache(model_id).await,
             Self::K2HorizonMoVA(engine) => engine.clear_persistent_prompt_cache(model_id).await,
         }
     }
@@ -103,6 +118,7 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => engine.collect_mlx_memory_telemetry().await,
+            Self::Qwen3_5Streaming(engine) => engine.collect_mlx_memory_telemetry().await,
             Self::K2HorizonMoVA(engine) => engine.collect_mlx_memory_telemetry().await,
         }
     }
@@ -113,6 +129,11 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         match self {
             Self::Qwen3_5(engine) => {
+                engine
+                    .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+                    .await
+            }
+            Self::Qwen3_5Streaming(engine) => {
                 engine
                     .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
                     .await

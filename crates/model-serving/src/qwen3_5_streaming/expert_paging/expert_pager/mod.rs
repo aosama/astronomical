@@ -129,30 +129,6 @@ impl Qwen3_5ExpertPager {
             })
     }
 
-    pub(crate) fn complete_expert_entry_count(&self) -> usize {
-        self.layer_plans
-            .iter()
-            .fold(0_usize, |entry_count, layer_plan| {
-                entry_count.saturating_add(layer_plan.expert_capacity)
-            })
-    }
-
-    /// Lists the shard paths that resident expert materialization must open.
-    ///
-    /// Callers open their own descriptors instead of cloning these: a cloned
-    /// descriptor shares the open file description, so a cache-retention flag
-    /// set on it would leak into the pager's own reads. That leak is silent and
-    /// asymmetric — the pager would lose its second-level cache and re-fault
-    /// gigabytes while the materializer believed it had isolated the flag
-    /// (issue #1120). Listing paths keeps the ownership decision at the call
-    /// site, where the retention policy is already named.
-    pub(crate) fn resident_expert_source_file_paths(&self) -> Vec<PathBuf> {
-        self.resident_expert_source_files
-            .iter()
-            .map(|(source_file_path, _source_file)| source_file_path.clone())
-            .collect()
-    }
-
     pub(crate) fn remove_resident_expert_source_files_for_tests(&mut self) {
         self.resident_expert_source_files.clear();
     }
@@ -183,11 +159,6 @@ impl Qwen3_5ExpertPager {
     ) {
         self.memory_budget
             .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
-    }
-
-    #[must_use]
-    pub(crate) fn observed_transient_high_water_bytes(&self) -> u64 {
-        self.memory_budget.observed_transient_high_water_bytes()
     }
 
     pub(crate) fn configured_mlx_memory_ceiling_bytes(&self) -> u64 {

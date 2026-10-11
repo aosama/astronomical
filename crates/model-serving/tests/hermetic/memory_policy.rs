@@ -1,8 +1,9 @@
 use astronomical_model_serving::{
-    AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
-    CompleteResidencyRequirements, ContextAdmissionRequirements, ExpertMemoryMode,
-    ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryAdmissionDecision, MemoryBoundary,
-    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, classify_expert_memory_mode,
+    AdaptiveRamGrowthExecutionProfile, AllocationAdmissionDecision, AllocationAdmissionObservation,
+    CompleteResidencyDecision, CompleteResidencyRequirements, ContextAdmissionRequirements,
+    ExpertMemoryMode, ForwardRecoveryDecision, ForwardRecoveryRequirements,
+    MemoryAdmissionDecision, MemoryBoundary, MemoryCeilingChangeDecision,
+    MemoryCeilingChangeRequirements, classify_expert_memory_mode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,
@@ -178,7 +179,7 @@ fn should_authorize_only_one_retry_after_required_experts_were_reclaimed() {
         retained_expert_payload_bytes_after_reclamation: 100,
         active_memory_ceiling_bytes: 1_000,
         has_already_retried_after_reclamation: false,
-        sparse_experts_are_paged: false,
+        execution_profile: AdaptiveRamGrowthExecutionProfile::Resident,
     };
 
     assert_eq!(

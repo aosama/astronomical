@@ -1,4 +1,4 @@
-//! Sparse routing selects resident experts, cached experts, or SSD streaming.
+//! Sparse routing selects retained experts or SSD streaming.
 
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -33,16 +33,7 @@ impl Qwen3_5Model {
                 description: "paged MoE hidden states must include token and hidden dimensions",
             })?;
         let (selected_indices, selected_scores) = performance_attribution.measure_operation(
-            if self.resident_expert_weights.is_some()
-                && matches!(
-                    paged_prefill_execution_mode,
-                    Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
-                )
-            {
-                PerformanceOperation::ResidentMoeGraphConstruction
-            } else {
-                PerformanceOperation::PagedRouterGraphConstruction
-            },
+            PerformanceOperation::PagedRouterGraphConstruction,
             |_performance_attribution| {
                 let router_logits = match &mixture_of_experts_weights.router_projection {
                     Qwen3_5MoERouterGateWeights::Affine(quantized_weights) => {
@@ -82,23 +73,6 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .retain_layer_route(layer_index, &selected_indices);
         }
-        if should_use_loaded_model_mode
-            && let Some(resident_expert_layer_weights) = self
-                .resident_expert_weights
-                .as_ref()
-                .and_then(|resident_expert_weights| resident_expert_weights.layer(layer_index))
-        {
-            return self.forward_moe_resident_with_performance_attribution(
-                hidden_states,
-                mixture_of_experts_weights,
-                resident_expert_layer_weights,
-                &selected_indices,
-                &selected_scores,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            );
-        }
-
         // A seated complete layer remaps every route on-device. Do not copy
         // router indices to the host for that layer.
         if should_use_loaded_model_mode && self.retained_experts.is_some() {

@@ -8,9 +8,9 @@
 //! 2. Release allocator cache using the synchronization rule appropriate to the
 //!    failure type.
 //! 3. Reconstruct the fixed workspace needed by the unchanged chunk.
-//! 4. Demote a complete resident owner when present; paged reclamation cannot nibble it.
-//! 5. Then reclaim elastic retained expert pages.
-//! 6. Authorize one retry only when ownership proves the target was released.
+//! 4. Reclaim elastic retained expert pages.
+//! 5. Authorize a retry only when the execution profile permits it and ownership proves the
+//!    target was released.
 //!
 //! The two public helpers differ because typed active-limit rejection exposes the
 //! failed allocation size and may still synchronize cleanly, whereas GPU OOM can
@@ -18,11 +18,10 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::qwen3_5_streaming::{
-    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
-};
+use crate::qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
-    ForwardRecoveryPolicy, InferenceEngineError, PerformanceCounter, PerformanceOperation,
+    AdaptiveRamGrowthExecutionProfile, ForwardRecoveryPolicy, InferenceEngineError,
+    PerformanceCounter, PerformanceOperation,
 };
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5PrefillRequestCheckpoint};
@@ -72,8 +71,6 @@ impl Qwen3_5EngineState {
         );
         let retained_payload_before_reclamation =
             u64::try_from(retained_expert_payload_bytes).unwrap_or(u64::MAX);
-        let did_demote_complete_resident_owner =
-            demote_complete_resident_owner_for_prefill_recovery(self, active_request)?;
         let model = self
             .model
             .as_ref()
@@ -89,17 +86,12 @@ impl Qwen3_5EngineState {
         model.shrink_request_expert_residency_after_reclamation(
             retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
         );
-        let sparse_experts_are_paged = model.sparse_experts_are_paged();
-        if did_demote_complete_resident_owner {
-            republish_prefill_residency_plan_after_demotion(self, active_request)?;
-        }
-
         let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
             expert_reclamation_target_bytes,
-            sparse_experts_are_paged,
+            AdaptiveRamGrowthExecutionProfile::Paged,
         );
         tracing::warn!(
             request_id = request_id.value(),
@@ -114,9 +106,8 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_reclamation =
                 memory_snapshot_before_reclamation.active_memory_bytes(),
             active_memory_bytes_after_reclamation,
-            did_demote_complete_resident_owner,
             should_retry_same_prefill_chunk,
-            "native MLX prefill allocation reached the active-memory ceiling; released resident or paged experts for the fixed chunk"
+            "native MLX prefill allocation reached the active-memory ceiling; reclaimed retained experts for the fixed chunk"
         );
         Ok(should_retry_same_prefill_chunk)
     }
@@ -169,8 +160,6 @@ impl Qwen3_5EngineState {
             active_memory_limit_bytes,
             fixed_forward_workspace_bytes,
         );
-        let did_demote_complete_resident_owner =
-            demote_complete_resident_owner_for_prefill_recovery(self, active_request)?;
         let model = self
             .model
             .as_ref()
@@ -186,16 +175,12 @@ impl Qwen3_5EngineState {
         model.shrink_request_expert_residency_after_reclamation(
             retained_payload_before_reclamation.saturating_sub(retained_payload_after_reclamation),
         );
-        let sparse_experts_are_paged = model.sparse_experts_are_paged();
-        if did_demote_complete_resident_owner {
-            republish_prefill_residency_plan_after_demotion(self, active_request)?;
-        }
         let should_retry_same_prefill_chunk = ForwardRecoveryPolicy::retry_is_authorized(
             has_already_retried_after_reclamation,
             retained_payload_before_reclamation,
             retained_payload_after_reclamation,
             expert_reclamation_target_bytes,
-            sparse_experts_are_paged,
+            AdaptiveRamGrowthExecutionProfile::Paged,
         );
         tracing::warn!(
             request_id = request_id.value(),
@@ -208,9 +193,8 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_reclamation =
                 memory_snapshot_before_reclamation.active_memory_bytes(),
             active_memory_bytes_after_reclamation,
-            did_demote_complete_resident_owner,
             should_retry_same_prefill_chunk,
-            "graphics-processor memory exhaustion; released resident or paged experts for the fixed chunk"
+            "graphics-processor memory exhaustion; reclaimed retained experts for the fixed chunk"
         );
         Ok(should_retry_same_prefill_chunk)
     }
@@ -259,68 +243,6 @@ fn clear_allocator_cache_without_stream_sync(
             |_performance_attribution| model.runtime().clear_allocator_cache(),
         )
         .map_err(qwen3_5_runtime_error)
-}
-
-/// Republishes the Prefill residency plan after a recovery demotion.
-///
-/// Recovery demotes the complete resident expert owner and shrinks the request
-/// contract before the chunk retries. The plan in effect at that point was
-/// published before the transition and describes the owner that existed then,
-/// so the retried forward streams every complete expert layer with no target
-/// and retains none. Decode seating would then read the identical payload from
-/// storage a second time in the same request (issue #339).
-fn republish_prefill_residency_plan_after_demotion(
-    engine_state: &mut Qwen3_5EngineState,
-    active_request: &mut Qwen3_5EngineRequest,
-) -> Result<(), InferenceEngineError> {
-    let context_token_count =
-        u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
-    // The activation reserve is operation-scoped (issue #644): the retried
-    // chunk's workspace bound, not the whole prompt's imagined workspace.
-    let operation_token_count = u64::try_from(
-        engine_state
-            .prompt_processing_chunk_sizer
-            .maximum_prompt_processing_chunk_size_tokens()
-            .min(
-                active_request
-                    .maximum_successful_prefill_chunk_tokens()
-                    .unwrap_or(usize::MAX),
-            ),
-    )
-    .unwrap_or(u64::MAX);
-    engine_state
-        .model
-        .as_ref()
-        .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-        .republish_prefill_residency_plan_after_demotion(
-            context_token_count,
-            operation_token_count,
-            &mut active_request.performance_attribution,
-        )
-        .map_err(InferenceEngineError::from)
-}
-
-fn demote_complete_resident_owner_for_prefill_recovery(
-    engine_state: &mut Qwen3_5EngineState,
-    active_request: &mut Qwen3_5EngineRequest,
-) -> Result<bool, InferenceEngineError> {
-    let complete_experts_are_resident = engine_state
-        .model
-        .as_ref()
-        .is_some_and(|model| model.resident_expert_weights.is_some());
-    if !complete_experts_are_resident {
-        return Ok(false);
-    }
-    engine_state
-        .model
-        .as_mut()
-        .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-        .demote_resident_experts_to_paging(
-            Qwen3_5ExpertResidencyTransitionReason::RequestPressure,
-            &mut active_request.performance_attribution,
-        )
-        .map_err(InferenceEngineError::from)?;
-    Ok(true)
 }
 
 fn record_rejection_and_restore_checkpoint(

@@ -17,7 +17,8 @@ mod ram_geometry;
 mod ram_values;
 
 pub use adaptive_growth::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+    AdaptiveRamGrowthGuardError,
 };
 pub use adaptive_growth_projection::{
     AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,

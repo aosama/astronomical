@@ -255,30 +255,6 @@ impl RetainedExpertCache {
         }
     }
 
-    /// Takes ownership of every complete layer for resident adoption, then
-    /// releases whatever remains.
-    ///
-    /// Issue #501: the complete-resident promotion can build the resident owner
-    /// from these arrays instead of re-reading the identical payload from
-    /// storage. Complete layers are returned in the layer-index order the
-    /// resident owner consumes; a partial page is not adoptable and is released
-    /// with the rest of the cache. Accounting is transferred with ownership, so
-    /// the cache stops charging adopted payload before the promotion's fit
-    /// projection re-adds it as resident payload.
-    pub fn take_complete_layers_for_resident_adoption(
-        &mut self,
-        expert_capacity: usize,
-    ) -> Vec<(usize, Qwen3_5PagedExpertWeights)> {
-        let mut adopted_complete_layers = Vec::new();
-        for layer_index in 0..self.tables_by_layer.len() {
-            if let Some(weights) = self.take_complete_layer(layer_index, expert_capacity) {
-                adopted_complete_layers.push((layer_index, weights));
-            }
-        }
-        self.release_all();
-        adopted_complete_layers
-    }
-
     /// Probes warm-table coverage for one decode token's routed experts.
     ///
     /// Issue #373: the all-or-nothing rule serves a token from retained RAM only
@@ -326,32 +302,6 @@ impl RetainedExpertCache {
             .saturating_sub(removed.full_padded_payload_bytes);
         self.eviction_count = self.eviction_count.saturating_add(1);
         true
-    }
-
-    /// Takes ownership of one complete layer's weights for resident adoption.
-    ///
-    /// Issue #501: the complete-resident promotion can build the resident owner
-    /// from these arrays instead of re-reading the identical payload from
-    /// storage. A complete layer's table adopted its streamed page as-is, so the
-    /// returned weights are compact and expert-index ordered — the shape the
-    /// resident owner wants. Accounting is transferred: the caller now owns the
-    /// payload, so the cache stops charging it. Returns `None` when the layer is
-    /// absent or only partially retained, because a partial page cannot become
-    /// a complete resident layer.
-    pub fn take_complete_layer(
-        &mut self,
-        layer_index: usize,
-        expert_capacity: usize,
-    ) -> Option<Qwen3_5PagedExpertWeights> {
-        if !self.has_complete_layer(layer_index, expert_capacity) {
-            return None;
-        }
-        let table_slot = self.tables_by_layer.get_mut(layer_index)?;
-        let removed = table_slot.take()?;
-        self.resident_payload_bytes = self
-            .resident_payload_bytes
-            .saturating_sub(removed.full_padded_payload_bytes);
-        Some(removed.weights)
     }
 
     pub fn update_maximum_resident_payload_bytes(

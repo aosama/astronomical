@@ -142,7 +142,7 @@ impl Qwen3_5EngineState {
     /// Admits one forward pass and starts an operation-local MLX peak sample.
     fn begin_adaptive_ram_growth(
         &mut self,
-        mut adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         request_decoder_state: &RequestDecoderStateStack,
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
@@ -153,7 +153,7 @@ impl Qwen3_5EngineState {
         // ends with this block so later demotion/reclamation may borrow it mutably.
         let (
             target_persistent_state_growth_bytes,
-            mut routed_expert_page_reservation_bytes,
+            routed_expert_page_reservation_bytes,
             mut memory_snapshot_before_growth,
             mut retained_expert_payload_bytes_before_growth,
         ) = {
@@ -167,7 +167,7 @@ impl Qwen3_5EngineState {
                     adaptive_ram_growth_context.forward_token_count(),
                 )
                 .map_err(qwen3_5_runtime_error)?;
-            let routed_expert_page_reservation_bytes = if model.sparse_experts_are_paged() {
+            let routed_expert_page_reservation_bytes = if model.expert_pager.is_some() {
                 // Reserve the largest model-derived routed page, not merely the
                 // route expected from this token. Router output is lazy and is not
                 // known on the host at initial admission.
@@ -255,52 +255,17 @@ impl Qwen3_5EngineState {
                 log_adaptive_ram_growth_admission_decision(
                     adaptive_ram_growth_context,
                     &first_forward_projection,
-                    "demote_resident_experts_or_reclaim_paged_experts",
+                    "reclaim_paged_experts",
                 );
-            }
-            // Chunk size is fixed. Complete resident experts are the elastic
-            // owner: demote them at the configured forward size so page-level
-            // reclamation can free enough memory for that same chunk.
-            if let Some(resident_demotion) = self.demote_resident_experts_for_adaptive_growth(
-                adaptive_ram_growth_context,
-                exact_context_growth_bytes,
-                exact_temporary_workspace_bytes,
-            )? {
-                // Demotion changes active memory, routed-page need, and the
-                // residency dimension of learned context. Replace every dependent
-                // value together; mixing pre/post-demotion evidence is invalid.
-                adaptive_ram_growth_context = resident_demotion.adaptive_ram_growth_context;
-                memory_snapshot_before_growth = resident_demotion.memory_snapshot;
-                routed_expert_page_reservation_bytes =
-                    resident_demotion.routed_expert_page_reservation_bytes;
-                first_forward_projection = resident_demotion.projection;
-                retained_expert_payload_bytes_before_growth = self
-                    .model
-                    .as_ref()
-                    .ok_or_else(|| {
-                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?
-                    .expert_weight_memory_cache_statistics()
-                    .resident_payload_byte_count;
             }
 
             if !first_forward_projection.fits_stable_and_peak_limits() {
-                // From here onward experts must be paged. Every retained page is an
-                // elastic byte, so the pure plan's one-byte-in/one-byte-out proof is
-                // valid for stable and expected-peak deficits.
+                // Every retained page is an elastic byte, so the pure plan's
+                // one-byte-in/one-byte-out proof applies to both memory limits.
                 let expert_weight_memory_cache_statistics_before_reclamation = {
                     let model = self.model.as_ref().ok_or_else(|| {
                         super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
-                    if model.resident_expert_weights.is_some() {
-                        return Err(
-                            AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
-                                reason:
-                                    "resident expert ownership remained indivisible after demotion"
-                                        .to_owned(),
-                            },
-                        );
-                    }
                     model.expert_weight_memory_cache_statistics()
                 };
                 let mut previous_pass_released_pages = None;

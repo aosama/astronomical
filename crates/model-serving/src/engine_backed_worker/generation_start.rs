@@ -23,7 +23,10 @@ where
         &mut self,
         generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<
+        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
+        WorkerRuntimeError,
+    >
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -42,7 +45,7 @@ where
             return Ok(None);
         }
 
-        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut() else {
+        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_ref() else {
             event_writer
                 .send_event(&WorkerEvent::Failed {
                     request_id,
@@ -75,11 +78,21 @@ where
             reason: "chat prompt token count exceeds the protocol range".to_owned(),
         })?;
         let inference_request = prepared_generation.inference_request;
-        let generation_start = match loaded_model
-            .engine
-            .start_generation(inference_request)
-            .await
-        {
+        let mut streaming_retry_request = inference_request.clone_for_streaming_retry();
+        let mut streaming_retry_attempted = false;
+        let generation_start_result = {
+            let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
+            else {
+                return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
+                    reason: "the loaded model was removed before generation started".to_owned(),
+                });
+            };
+            loaded_model
+                .engine
+                .start_generation(inference_request)
+                .await
+        };
+        let generation_start = match generation_start_result {
             Ok(generation_start) => generation_start,
             Err(InferenceEngineError::EngineBusy) => {
                 event_writer
@@ -93,6 +106,34 @@ where
             Err(InferenceEngineError::InvalidRequest { reason }) => {
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                 return Ok(None);
+            }
+            Err(InferenceEngineError::ResidentForkRequired { reason }) => {
+                let Some(retry_request) = streaming_retry_request.take() else {
+                    Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
+                    return Ok(None);
+                };
+                match self
+                    .retry_resident_generation_on_streaming(request_id, retry_request, reason)
+                    .await
+                {
+                    Ok(generation_start) => {
+                        streaming_retry_attempted = true;
+                        generation_start
+                    }
+                    Err(InferenceEngineError::InvalidRequest { reason }) => {
+                        Self::send_invalid_request_failure(request_id, reason, event_writer)
+                            .await?;
+                        return Ok(None);
+                    }
+                    Err(retry_error) => {
+                        return fatal::report_fatal_engine_error(
+                            request_id,
+                            retry_error,
+                            event_writer,
+                        )
+                        .await;
+                    }
+                }
             }
             Err(engine_error) => {
                 return fatal::report_fatal_engine_error(request_id, engine_error, event_writer)
@@ -143,6 +184,8 @@ where
             cached_prompt_token_count,
             required_prompt_processing_token_count,
             prepared_generation.request_output,
+            streaming_retry_request,
+            streaming_retry_attempted,
         );
         active_engine_generation.last_reported_expert_memory_mode = initial_expert_memory_mode;
         active_engine_generation.persistent_prompt_cache_diagnostics = generation_start

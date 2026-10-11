@@ -321,7 +321,7 @@ impl Qwen3_5Model {
         let graph_submission_layer_interval =
             usize::try_from(astronomical_ipc_protocol::graph_submission_layer_interval(
                 token_count,
-                self.sparse_experts_are_paged(),
+                true,
                 self.chunking.prefill_graph_submission_layer_interval,
                 self.chunking
                     .experimental_ssd_paging_prefill_graph_submission_layer_interval,

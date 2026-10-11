@@ -4,9 +4,6 @@ mod cached_plus_streamed_page_route;
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
-/// Atomic complete-owner promote/demote. No sticky "stay paged" flag.
-#[cfg(feature = "direct-mlx")]
-mod expert_residency_transition;
 /// Temporary retained-page freeze while the remaining prompt still needs RAM.
 #[cfg(feature = "direct-mlx")]
 mod expert_retention_memory_pressure;
@@ -29,8 +26,6 @@ mod phase_aware_expert_residency;
 mod prefill_execution_mode;
 #[cfg(feature = "direct-mlx")]
 mod read_through_residency;
-#[cfg(feature = "direct-mlx")]
-mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
@@ -117,8 +112,6 @@ pub(crate) use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embeddin
 
 #[cfg(feature = "direct-mlx")]
 pub use cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_residency_transition::Qwen3_5ExpertResidencyTransitionReason;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_retention_memory_pressure::reclaim_retained_experts_for_request_memory_pressure;
 pub use mixed_decode_execution::qwen3_5_moe_combine_partial_route_outputs_for_tests;

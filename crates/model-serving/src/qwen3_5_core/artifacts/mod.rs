@@ -1,6 +1,9 @@
 mod artifact;
 mod artifact_helpers;
 mod artifact_inventory;
+#[cfg(feature = "direct-mlx")]
+pub mod expert_gate_up_fusion_plan;
+pub mod quantized_expert_layer_plan;
 mod ram_budget_measurements;
 mod shard_index;
 pub(crate) mod streaming_revision;
@@ -15,6 +18,9 @@ pub(crate) use super::quantizations;
 pub(crate) use super::quantizations::optiq::{OptiQMetadata, OptiQMetadataError};
 pub(crate) use super::vision::{Qwen3_5VisionConfig, vision_tensor_spec};
 pub use artifact::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
+pub use quantized_expert_layer_plan::{
+    build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
+};
 pub use ram_budget_measurements::{
     Qwen3_5RamBudgetGeometryError, mlx_ram_budget_model_geometry_from_validated_artifact,
 };

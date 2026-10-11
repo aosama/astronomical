@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::qwen3_5::Qwen3_5Config;
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
 
 use super::config::{
     OptiQQuantizationProfile, is_mlx_affine_quantization_bit_width_supported,

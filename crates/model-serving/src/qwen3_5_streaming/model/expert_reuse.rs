@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// How one forward should execute one mixture-of-experts layer.
-pub(super) enum ExpertPageDisposition {
+pub(crate) enum ExpertPageDisposition {
     /// A complete cached layer covers every possible route.
     FullHit,
     /// This layer is not seated. Prefill streams the complete layer.
