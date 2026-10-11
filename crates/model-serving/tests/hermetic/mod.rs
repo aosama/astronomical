@@ -38,5 +38,6 @@ mod raw_safetensors_inventory;
 mod required_files;
 mod retained_expert_page_cache;
 mod route_observation;
+mod serving_memory_ceiling;
 mod sparse_experts;
 mod tensor_inventory;

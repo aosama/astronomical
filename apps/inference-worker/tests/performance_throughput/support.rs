@@ -276,6 +276,22 @@ pub(crate) async fn measure_throughput(
         .await
         .expect("the supervisor should launch the measured worker");
         wait_until_idle(&worker_handle, READY_ATTEMPT_LIMIT).await;
+        if let Some(configured_maximum_mlx_memory_bytes) = journey.maximum_mlx_memory_bytes {
+            let effective_mlx_memory_ceiling_bytes =
+                worker_handle.worker_health_snapshot().mlx_memory_ceiling_bytes;
+            assert!(
+                effective_mlx_memory_ceiling_bytes <= MAXIMUM_MODEL_MEMORY_BYTES,
+                "the configured {configured_maximum_mlx_memory_bytes}-byte real-model journey must be capped at or below the {MAXIMUM_MODEL_MEMORY_BYTES}-byte effective limit before model loading, got {effective_mlx_memory_ceiling_bytes}",
+            );
+            if matches!(
+                journey.journey_kind,
+                ThroughputJourneyKind::MemoryCeilingSweep
+            ) {
+                eprintln!(
+                    "[memory-ceiling-sweep] preflight configured_bytes={configured_maximum_mlx_memory_bytes} effective_bytes={effective_mlx_memory_ceiling_bytes} maximum_effective_bytes={MAXIMUM_MODEL_MEMORY_BYTES} status=passed"
+                );
+            }
+        }
         worker_handle
     })
     .await

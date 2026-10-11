@@ -58,6 +58,7 @@ mod phase;
 mod reclamation;
 mod recovery;
 mod residency;
+mod serving_ceiling;
 mod telemetry;
 mod utilization;
 mod vocabulary;
@@ -113,6 +114,9 @@ pub use residency::{
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_enact_planned_expert_release,
+};
+pub use serving_ceiling::{
+    effective_mlx_serving_memory_ceiling_bytes, recommended_gpu_serving_memory_ceiling_bytes,
 };
 pub use telemetry::{MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 pub use utilization::MemoryCeilingUtilization;

@@ -19,8 +19,9 @@ runs and why it exists. Real-model journeys are invoked directly with
   it uses no model runtime or installed model files.
 - `cargo test -p astronomical-model-serving --test hermetic_tests qwen3_5_import_direction -- --test-threads=1`
   — enforces the Qwen3.5 module dependency direction: both engines depend on
-  shared core, never on each other, and attribution plus the family facade do
-  not depend on engine internals.
+  shared core, never on each other; resident owns no pager; the transitional
+  family re-export module is absent; and attribution contains no streaming-only
+  route dependency.
 - `cargo test -p astronomical-model-serving --test hermetic_tests hermetic::performance_attribution::measurement::should_record_an_external_operation_interval_only_when_attribution_is_enabled -- --exact --test-threads=1`
   — verifies that an operation measured outside the request-owning thread is
   recorded against the request report's monotonic start time.
@@ -77,10 +78,13 @@ first and last and interleaves the rest so page-cache warmth cannot masquerade
 as a ceiling effect.
 
 - `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::memory_ceiling_sweep::should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
-- The same command with `..._28gb_...`, `..._32gb_...`, and `..._35gb_...`
-  runs the remaining cells. Each journey uses a 2,048-token prefill chunk,
-  a 500-token output target, a 500-input/50-output warmup, and stays within
-  the 36 GB test ceiling. Partial rates and load/generation I/O evidence are
+- The same command with `..._28gb_...`, `..._32gb_...`, `..._35gb_...`,
+  `..._38gb_...`, and `..._40gb_...` runs the remaining cells. Each journey
+  uses a 2,048-token prefill chunk, a 500-token output target, and a
+  500-input/50-output warmup. Before loading the model, the worker-reported
+  effective ceiling must be no greater than 36 GB; otherwise the cell fails
+  closed without loading a model. Completed 38 GB and 40 GB cells must report
+  hybrid expert residency. Partial rates and load/generation I/O evidence are
   recorded.
 
 ### Serving throughput (production-faithful rates)

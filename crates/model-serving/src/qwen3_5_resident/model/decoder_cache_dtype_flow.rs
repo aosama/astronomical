@@ -9,7 +9,9 @@
 use astronomical_mlx_c_rust::MlxDtype;
 
 use crate::decoder_cache::DecoderCacheTensorDtype;
-use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan, SafetensorsDtype};
+use crate::qwen3_5_core::artifacts::{
+    QuantizationMode, QuantizedExpertLayerPlan, SafetensorsDtype,
+};
 use crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes;
 
 use super::decoder_layer_weights::{

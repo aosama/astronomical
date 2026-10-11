@@ -15,6 +15,7 @@ where
             })),
             model_factory: None,
             machine_mlx_memory_ceiling_bytes: 0,
+            serving_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             worker_runtime_feature_configuration: None,
@@ -44,6 +45,7 @@ where
             })),
             model_factory: Some(model_factory),
             machine_mlx_memory_ceiling_bytes: 0,
+            serving_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             worker_runtime_feature_configuration: None,
@@ -68,11 +70,21 @@ where
             loaded_runtime: None,
             model_factory: Some(model_factory),
             machine_mlx_memory_ceiling_bytes,
+            serving_mlx_memory_ceiling_bytes: machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
             worker_runtime_feature_configuration: None,
             selected_model: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_serving_mlx_memory_ceiling(
+        mut self,
+        serving_mlx_memory_ceiling_bytes: u64,
+    ) -> Self {
+        self.serving_mlx_memory_ceiling_bytes = serving_mlx_memory_ceiling_bytes;
+        self
     }
 
     /// Attaches the worker-startup feature policy that must be acknowledged to the supervisor.

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use astronomical_runtime_integration::weights_file_cache_retention;
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
 
-use crate::expert_paging::{
+use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;

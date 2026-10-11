@@ -1,6 +1,9 @@
 use astronomical_inference_worker::worker_startup::{
     GpuWiredMemoryLimitSetting, WorkerProcessError, WorkerStartupError,
-    parse_iogpu_wired_limit_setting, resolve_effective_mlx_memory_ceiling_bytes,
+    derive_serving_mlx_memory_ceiling_bytes, parse_iogpu_wired_limit_setting,
+};
+use astronomical_model_serving::{
+    effective_mlx_serving_memory_ceiling_bytes, recommended_gpu_serving_memory_ceiling_bytes,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -43,25 +46,65 @@ fn should_include_the_exact_mlx_cause_in_a_worker_startup_failure() {
 }
 
 #[test]
-fn should_use_machine_mlx_ceiling_when_config_override_is_absent() {
+fn should_reject_working_sets_that_cannot_produce_a_positive_serving_ceiling() {
+    for recommended_gpu_working_set_bytes in [0, 1_000_000_000, 2 * 1024 * 1024 * 1024] {
+        let startup_error =
+            derive_serving_mlx_memory_ceiling_bytes(recommended_gpu_working_set_bytes)
+                .expect_err("a zero serving ceiling must fail worker startup");
+
+        assert!(matches!(
+            &startup_error,
+            WorkerStartupError::RecommendedGpuWorkingSetTooSmall
+        ));
+        assert!(
+            startup_error
+                .to_string()
+                .contains("cannot produce a positive serving memory ceiling")
+        );
+    }
+}
+
+#[test]
+fn should_accept_a_working_set_that_produces_a_positive_serving_ceiling() {
     assert_eq!(
-        resolve_effective_mlx_memory_ceiling_bytes(None, 40_000_000_000),
-        40_000_000_000
+        derive_serving_mlx_memory_ceiling_bytes(2 * 1024 * 1024 * 1024 + 1)
+            .expect("a positive serving ceiling should be derived"),
+        1
+    );
+}
+
+#[test]
+fn should_use_the_serving_ceiling_when_config_override_is_absent() {
+    assert_eq!(
+        effective_mlx_serving_memory_ceiling_bytes(
+            None,
+            40_000_000_000,
+            recommended_gpu_serving_memory_ceiling_bytes(40_000_000_000),
+        ),
+        35_000_000_000
     );
 }
 
 #[test]
 fn should_use_lower_configured_mlx_ceiling() {
     assert_eq!(
-        resolve_effective_mlx_memory_ceiling_bytes(Some(32_000_000_000), 40_000_000_000),
+        effective_mlx_serving_memory_ceiling_bytes(
+            Some(32_000_000_000),
+            40_000_000_000,
+            recommended_gpu_serving_memory_ceiling_bytes(40_000_000_000),
+        ),
         32_000_000_000
     );
 }
 
 #[test]
-fn should_clamp_a_higher_configured_value_to_the_machine_ceiling() {
+fn should_clamp_a_higher_configured_value_to_the_serving_ceiling() {
     assert_eq!(
-        resolve_effective_mlx_memory_ceiling_bytes(Some(48_000_000_000), 40_000_000_000),
-        40_000_000_000
+        effective_mlx_serving_memory_ceiling_bytes(
+            Some(48_000_000_000),
+            40_000_000_000,
+            recommended_gpu_serving_memory_ceiling_bytes(40_000_000_000),
+        ),
+        35_000_000_000
     );
 }
