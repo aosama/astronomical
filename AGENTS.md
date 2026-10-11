@@ -64,3 +64,11 @@
 ## Memory Management Ownership In This Codebase
 
 - The package under <repo-root>/crates/model-serving/src/memory must be where all memory management code is located. Including but not limited to policies, decisions, streaming and any other memory related calculations.
+
+## Documentation under <repo-root>/docs Writing Conventions
+
+- Markdown authored in the <repo-root>/docs/ directory must be terse, define every acronym verbosely on first use, and have all assumptions eliminated before any file there is edited or written. The docs/performance-optimizations-lessons.md file holds only durable engineering lessons that enhance performance for LLMs, VLMs, and MLX APIs (never raw performance metrics), covering matmuls, MLX kernel differences, MLX-core caching, C++ gotchas, the slowdown from overly precise data types, and MoE expert sorting. New files must not be created in the docs/ directory without the user's explicit agreement, and <repo-root>/docs/ files are exempt from the repository's maximum file-length limit.
+
+## Scripts Folder Conventions
+
+The <repo-root>/scripts/ directory must not contain scripts that test other scripts, and must not create or retain wrappers that run tests through Cargo commands since the Cargo commands themselves should be used directly. Whenever a command can be invoked directly, proactively record the required cargo command in <repo-root>/cargo-commands-for-testing.md and delete the now-redundant test-command wrapper.

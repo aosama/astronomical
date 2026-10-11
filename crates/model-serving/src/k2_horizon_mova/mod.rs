@@ -1,6 +1,8 @@
 //! Native Rust owner for the K2 Horizon MoVA family.
 //!
-//! See `agents.md` in this directory for memory ownership and family-not-artifact rules.
+//! See `AGENTS.md` for memory ownership rules: all memory management lives in
+//! `crates/model-serving/src/memory`. This family maps tensors and enacts those
+//! decisions; it does not re-derive that arithmetic.
 
 mod artifacts;
 mod cache_layout;
