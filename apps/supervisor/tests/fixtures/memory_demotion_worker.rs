@@ -29,7 +29,14 @@ use astronomical_ipc_protocol::{
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
-const STARTUP_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
+/// How long the fixture waits for the supervisor's guaranteed-first
+/// `InitializeWorker` command. Every scenario using this fixture launches the
+/// worker through `WorkerHandle`, which writes that command immediately after
+/// spawning, so a long wait is free on an idle host; the window only has to be
+/// wide enough to absorb a heavily loaded continuous-integration runner, where
+/// a shorter timeout silently skipped the launch observation and the runtime
+/// acknowledgement and diverged every role that depends on them.
+const STARTUP_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const WORKER_PROCESS_IDENTIFIER_PREFIX: &str = "demotion-worker-";
 const LAUNCH_ORDER_LOG_FILE: &str = "demotion-launch-order.log";
 const MACHINE_MEMORY_CEILING_BYTES: u64 = 40_000_000_000;
@@ -88,27 +95,23 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());
     let startup_configuration = read_startup_configuration(&mut command_reader).await?;
 
-    if let Some(startup_configuration) = startup_configuration.as_ref() {
-        record_launch_observation(
-            &startup_configuration.logging_directory,
-            &startup_configuration.configuration_generation,
-        )?;
-    }
+    record_launch_observation(
+        &startup_configuration.logging_directory,
+        &startup_configuration.configuration_generation,
+    )?;
 
     let mut effective_memory_ceiling_bytes = MACHINE_MEMORY_CEILING_BYTES;
-    if let Some(startup_configuration) = startup_configuration.as_ref() {
-        if let Some(configured_maximum_mlx_memory_bytes) =
-            startup_configuration.configured_maximum_mlx_memory_bytes
-        {
-            effective_memory_ceiling_bytes = configured_maximum_mlx_memory_bytes;
-        }
-        // The silent branch models a candidate that starts and then stops
-        // talking: it must neither acknowledge nor exit, so the supervisor's
-        // acknowledgement timeout is what rejects it.
-        if startup_configuration.configuration_generation == SILENT_ACKNOWLEDGEMENT_GENERATION {
-            while command_reader.next_command().await?.is_some() {}
-            return Ok(());
-        }
+    if let Some(configured_maximum_mlx_memory_bytes) =
+        startup_configuration.configured_maximum_mlx_memory_bytes
+    {
+        effective_memory_ceiling_bytes = configured_maximum_mlx_memory_bytes;
+    }
+    // The silent branch models a candidate that starts and then stops
+    // talking: it must neither acknowledge nor exit, so the supervisor's
+    // acknowledgement timeout is what rejects it.
+    if startup_configuration.configuration_generation == SILENT_ACKNOWLEDGEMENT_GENERATION {
+        while command_reader.next_command().await?.is_some() {}
+        return Ok(());
     }
 
     event_writer
@@ -119,24 +122,22 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
         })
         .await?;
 
-    if let Some(startup_configuration) = startup_configuration.as_ref() {
-        let acknowledged_generation = if startup_configuration.configuration_generation
-            == MISMATCHED_ACKNOWLEDGEMENT_GENERATION
-        {
-            UNREQUESTED_ACKNOWLEDGED_GENERATION
-        } else {
-            startup_configuration.configuration_generation.as_str()
-        };
-        event_writer
-            .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
-                worker_runtime_feature_configuration: runtime_configuration(
-                    startup_configuration,
-                    acknowledged_generation,
-                    None,
-                ),
-            })
-            .await?;
-    }
+    let acknowledged_generation = if startup_configuration.configuration_generation
+        == MISMATCHED_ACKNOWLEDGEMENT_GENERATION
+    {
+        UNREQUESTED_ACKNOWLEDGED_GENERATION
+    } else {
+        startup_configuration.configuration_generation.as_str()
+    };
+    event_writer
+        .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+            worker_runtime_feature_configuration: runtime_configuration(
+                &startup_configuration,
+                acknowledged_generation,
+                None,
+            ),
+        })
+        .await?;
 
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
@@ -144,10 +145,10 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                 model_directory,
                 model_configuration,
             } => {
-                if startup_configuration.as_ref().is_some_and(|configuration| {
-                    configuration.configuration_generation == REPLACEMENT_CONFIGURATION_GENERATION
-                        && model_directory.ends_with(RESTORE_FAILURE_MODEL_DIRECTORY_SUFFIX)
-                }) {
+                if startup_configuration.configuration_generation
+                    == REPLACEMENT_CONFIGURATION_GENERATION
+                    && model_directory.ends_with(RESTORE_FAILURE_MODEL_DIRECTORY_SUFFIX)
+                {
                     event_writer
                         .send_event(&WorkerEvent::ModelSwapFailed {
                             loaded_model_remains_ready: false,
@@ -166,17 +167,15 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         capabilities: chat_capabilities(model_configuration.autoregressive()),
                     })
                     .await?;
-                if let Some(startup_configuration) = startup_configuration.as_ref() {
-                    event_writer
-                        .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
-                            worker_runtime_feature_configuration: runtime_configuration(
-                                startup_configuration,
-                                &startup_configuration.configuration_generation,
-                                Some(model_configuration.runtime_configuration()),
-                            ),
-                        })
-                        .await?;
-                }
+                event_writer
+                    .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
+                        worker_runtime_feature_configuration: runtime_configuration(
+                            &startup_configuration,
+                            &startup_configuration.configuration_generation,
+                            Some(model_configuration.runtime_configuration()),
+                        ),
+                    })
+                    .await?;
                 emit_memory_snapshot(&mut event_writer, MlxMemorySnapshotSource::ModelLoaded)
                     .await?;
             }
@@ -212,29 +211,45 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                     })
                     .await?;
             }
+            WorkerCommand::SampleMlxMemory => {
+                // The supervisor's idle sampler polls ready workers on an
+                // interval with a bounded acknowledgement timeout; ignoring the
+                // sample would let the wait expire and contain the worker.
+                emit_memory_snapshot(&mut event_writer, MlxMemorySnapshotSource::IdlePoll).await?;
+            }
+            WorkerCommand::Cancel { .. } => {}
             _ => {}
         }
     }
-    if let Some(startup_configuration) = startup_configuration.as_ref() {
-        if startup_configuration.configuration_generation == TRUSTED_CONFIGURATION_GENERATION {
-            tokio::time::sleep(TRUSTED_EXIT_LINGER).await;
-        }
+    if startup_configuration.configuration_generation == TRUSTED_CONFIGURATION_GENERATION {
+        tokio::time::sleep(TRUSTED_EXIT_LINGER).await;
     }
     Ok(())
 }
 
 async fn read_startup_configuration(
     command_reader: &mut ProtocolReader<tokio::io::Stdin>,
-) -> Result<Option<WorkerStartupConfiguration>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<WorkerStartupConfiguration, Box<dyn std::error::Error + Send + Sync>> {
     match tokio::time::timeout(STARTUP_COMMAND_TIMEOUT, command_reader.next_command()).await {
         Ok(Ok(Some(WorkerCommand::InitializeWorker(startup_configuration)))) => {
-            Ok(Some(startup_configuration))
+            Ok(startup_configuration)
         }
-        Ok(Ok(Some(unexpected_command))) => Err(std::io::Error::other(format!(
-            "unexpected first worker command: {unexpected_command:?}"
+        Ok(Ok(Some(unexpected_first_command))) => Err(std::io::Error::other(format!(
+            "unexpected first worker command: {unexpected_first_command:?}"
         ))
         .into()),
-        Ok(Ok(None)) | Ok(Err(_)) | Err(_) => Ok(None),
+        // Unlike fixtures a bare test daemon may launch, this fixture cannot
+        // role-play without its launch configuration: the generation selects
+        // the scripted role and the logging directory carries the ordering
+        // evidence. Diverging silently would strain every downstream branch.
+        Ok(Ok(None)) => {
+            Err("the supervisor closed the worker input before sending InitializeWorker".into())
+        }
+        Ok(Err(protocol_error)) => Err(protocol_error.into()),
+        Err(_) => Err(std::io::Error::other(format!(
+            "the supervisor did not send InitializeWorker within {STARTUP_COMMAND_TIMEOUT:?}"
+        ))
+        .into()),
     }
 }
 
