@@ -15,11 +15,6 @@
 
 - Run cargo fmt or similar commands only before committing; that is, when the user asks you to commit, run cargo fmt.
 
-## Defaults for this Codebase
-
-- Any test case that utilizes an end-to-end model (a real model) should not be configured to allocate, acquire, or reserve more than 36 GB of RAM. Beyond that, macOS goes into resource contention and the test is meaningless. Exceptions can be made for explicit tests after user agreement; memorialize the agreement in code comments with the reasoning for the exception.
-- The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
-
 ## Never Hardwire Local Developer Environment Into the Codebase
 
 - Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.
@@ -44,17 +39,20 @@
 
 ## Requirements for Performance Profiling and Attribution
 
-- This codebase needs to be performance optimized; to achieve that, all our code, regardless of which part, needs to have performance logging and attribution that can be switched on and off through a config parameter. The performance logging needs to capture start time and end time of each operation. This will allow us to ATTRIBUTE performance issues to specific code parts. Without attribution we will be guessing why we are observing a slowdown, which is a bad state to be in; hence it is imperative that when you are editing code, refactoring, or creating new code, it follows a unified performance logging and attribution pattern.
+- This codebase needs to be performance optimized; to achieve that, all our code, regardless of which part, needs to have performance logging and attribution that can be switched on and off through a config parameter. The performance logging needs to capture start time and end time of each operation. This will allow us to ATTRIBUTE performance issues to specific code parts. Without attribution you will be guessing why we are observing a slowdown, which is a bad state to be in; hence it is imperative that when you are editing code, refactoring, or creating new code, it follows a unified performance logging and attribution pattern.
 
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging, and finally token generation. In short, any and all operations involved in actually serving a model request to the end user.
 
 - If you need to run performance attribution to performance profile the code with attribution logging, you can do that through the e2e test cases versus doing it through a fully running development instance. If tests do not exist, you can then create a new test after a careful and comprehensive review of the existing journeys and/or e2e test cases.
 
-## Test Fixtures and Their Reuse for Performance and Correctness Tests
+## Test Fixture And Input Text For Real Model Tests
 
 - The fixture of Romeo and Juliet MUST be used as the source test input for LLMs; there should not be random text or tokens used for testing.
 
-- Assert model normalization and execution with structural validity checks derived from config (layer count matches, hidden size matches, shard count is positive, total bytes equals sum of shard sizes, affine profiles contain valid bits and group sizes, end tokens are present). Do not assert golden-master constants like exact byte counts, exact shard counts, or exact affine profile sets that couple tests to one specific quantization artifact — those change with every packaging variant and should not block swapping the reference model.
+## Testing Defaults for this Codebase
+
+- Any test case that utilizes an end-to-end model (a real model) should not be configured to allocate, acquire, or reserve more than 36 GB of RAM. Beyond that, macOS goes into resource contention and the test is meaningless. Exceptions can be made for explicit tests after user agreement; memorialize the agreement in code comments with the reasoning for the exception.
+- The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
 
 ## Instructions for Performance Throughput Tests Under apps/inference-worker/tests/performance_throughput
 
@@ -63,6 +61,6 @@
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
 
-## Memory Management Codebase
+## Memory Management Ownership In This Codebase
 
 - The package under <repo-root>/crates/model-serving/src/memory must be where all memory management code is located. Including but not limited to policies, decisions, streaming and any other memory related calculations.

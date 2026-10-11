@@ -14,6 +14,9 @@ impl WorkerEvent {
             Self::MlxMemorySample { .. } => "mlx_memory_sample".to_owned(),
             Self::MlxMemoryLimitChanged { .. } => "mlx_memory_limit_changed".to_owned(),
             Self::MlxMemoryLimitRejected { .. } => "mlx_memory_limit_rejected".to_owned(),
+            Self::MlxMemoryLimitRestartRequired { .. } => {
+                "mlx_memory_limit_restart_required".to_owned()
+            }
             Self::ExpertMemoryModeChanged { .. } => "expert_memory_mode_changed".to_owned(),
             Self::GenerationFinalized { request_id, .. } => {
                 format!("generation_finalized request_id={}", request_id.value())

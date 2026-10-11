@@ -150,6 +150,28 @@ pub(super) fn handle_worker_event(
                 reason,
             );
         }
+        WorkerEvent::MlxMemoryLimitRestartRequired {
+            requested_mlx_memory_ceiling_bytes,
+            effective_mlx_memory_ceiling_bytes,
+            reason,
+            ..
+        } => {
+            // The worker keeps its loaded runtime and old ceilings. The memory
+            // transition belongs to a stop-first restart: an idle apply already
+            // returned to the endpoint, and a queued apply defers to the queued
+            // reconciliation, so only bounded health state changes here.
+            tracing::warn!(
+                requested_mlx_memory_ceiling_bytes,
+                effective_mlx_memory_ceiling_bytes,
+                reason = %reason,
+                "worker reported that reaching the requested MLX ceiling requires a worker restart"
+            );
+            crate::worker_health::publish_mlx_memory_limit_restart_required(
+                health_snapshot,
+                requested_mlx_memory_ceiling_bytes,
+                &reason,
+            );
+        }
         WorkerEvent::ModelSwapped { .. } => {
             return Err(protocol_violation(
                 "model swap acknowledgement outside model swap wait",

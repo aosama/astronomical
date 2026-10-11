@@ -209,6 +209,26 @@ pub enum WorkerEvent {
         machine_mlx_memory_ceiling_bytes: u64,
         reason: String,
     },
+    /// Reports that the requested ceiling is valid but needs a new worker process.
+    ///
+    /// The loaded resident engine cannot reach the requested ceiling in place,
+    /// and constructing its streaming replacement inside this process would
+    /// briefly require both model runtimes, so the memory cannot be released
+    /// deterministically. The worker keeps its loaded runtime and unchanged
+    /// ceilings; the supervisor owns a stop-first process restart under the
+    /// persisted lower ceiling.
+    MlxMemoryLimitRestartRequired {
+        /// Requested effective ceiling in bytes that this process cannot adopt.
+        requested_mlx_memory_ceiling_bytes: u64,
+        /// Effective ceiling after serving-envelope clamping, as requested.
+        effective_mlx_memory_ceiling_bytes: u64,
+        /// Safe idle lower bound the loaded model currently reports.
+        minimum_mlx_memory_ceiling_bytes: u64,
+        /// Configuration generation that owns the requested memory policy.
+        configuration_generation: String,
+        /// Bounded explanation suitable for the worker protocol.
+        reason: String,
+    },
     /// Reports a change in sparse-expert residency without affecting model output.
     ExpertMemoryModeChanged {
         expert_memory_mode: ExpertMemoryMode,

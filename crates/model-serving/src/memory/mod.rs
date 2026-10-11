@@ -54,6 +54,7 @@ mod admission;
 mod budget;
 mod ceiling;
 mod expert_cache;
+mod geometry_floor;
 mod phase;
 mod reclamation;
 mod recovery;
@@ -94,6 +95,7 @@ pub use expert_cache::{
     DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
     PreviousTokenPrefetchPlan, ResidentExpertWeight, plan_previous_token_prefetch,
 };
+pub use geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
 pub use phase::MemoryPhase;
 pub use reclamation::{
     ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,

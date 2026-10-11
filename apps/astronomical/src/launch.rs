@@ -80,11 +80,12 @@ pub fn prepare_launch(
     })
 }
 
-/// Returns the first candidate whose `/v1/status` looks like Astronomical.
+/// Returns the own-channel candidate whose `/v1/status` looks like Astronomical.
 ///
-/// A stopped instance refuses loopback immediately, so probing both channels
-/// costs nothing on the happy path. Status must include `application` so a
-/// random listener on the same port is not treated as the product.
+/// The candidate list holds only the binary's own instance (strict channel
+/// isolation); when that daemon is down the launch refuses instead of falling
+/// back to the other channel. Status must include `application` so a random
+/// listener on the same port is not treated as the product.
 fn first_healthy_instance(
     candidate_bind_addresses: &[SocketAddr],
     http_timeout: Duration,

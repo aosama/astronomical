@@ -24,6 +24,20 @@ pub enum InferenceEngineError {
         reason: String,
     },
 
+    /// Internal signal that the loaded resident engine cannot honor the
+    /// requested live ceiling and the worker should replace it with a
+    /// streaming engine under the requested limit.
+    ///
+    /// The worker consumes this signal during an explicit live memory-limit
+    /// update. It must never be sent to the client as this variant.
+    #[error(
+        "resident execution requires a streaming replacement for the requested ceiling: {reason}"
+    )]
+    ResidentStreamingReplacementRequired {
+        /// Bounded capacity reason retained for a real failure if streaming replacement fails.
+        reason: String,
+    },
+
     /// The requested live MLX ceiling is below the loaded model's safe idle minimum.
     #[error(
         "requested MLX memory ceiling {requested_mlx_memory_ceiling_bytes} bytes is below the safe minimum {minimum_mlx_memory_ceiling_bytes} bytes: {reason}"

@@ -1,37 +1,24 @@
 //! Atomic coordination of a live MLX ceiling and binary expert ownership.
 //!
-//! Lowering first demotes a complete resident owner when necessary, then reclaims
-//! retained pages before MLX enforces the smaller limit. Raising lets MLX accept
-//! capacity before Rust publishes a larger budget and atomically attempts complete
-//! residency. A failed raised transition restores both native and Rust ceilings.
+//! Resident lowering reclaims allocator memory before installing a smaller MLX
+//! ceiling; if complete weights still exceed it, the supervisor replaces the
+//! worker instead. Raising lets MLX accept capacity before Rust publishes a
+//! larger budget and attempts complete residency. A failed raise restores both
+//! native and Rust ceilings.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::{
     InferenceEngineError, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-    PerformanceAttribution, safe_minimum_mlx_memory_ceiling_bytes,
+    geometry_safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 use super::Qwen3_5ResidentModel;
 
 impl Qwen3_5ResidentModel {
     pub(crate) fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
-        let current_mlx_memory_snapshot = self
-            .runtime
-            .memory_snapshot()
-            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-        let current_idle_active_mlx_memory_bytes =
-            u64::try_from(current_mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
-                    "current MLX active memory exceeds the u64 range",
-                )
-            })?;
-        let evictable_retained_expert_payload_bytes = 0;
-        let maximum_expert_page_reserve_bytes = 0;
-        Ok(safe_minimum_mlx_memory_ceiling_bytes(
-            current_idle_active_mlx_memory_bytes,
-            evictable_retained_expert_payload_bytes,
-            maximum_expert_page_reserve_bytes,
+        Ok(geometry_safe_minimum_mlx_memory_ceiling_bytes(
+            &self.mlx_ram_budget().model_geometry(),
         ))
     }
 
@@ -71,11 +58,19 @@ impl Qwen3_5ResidentModel {
         }
         .decide();
         if let MemoryCeilingChangeDecision::Reject { .. } = ceiling_change_decision {
-            return Err(InferenceEngineError::MlxMemoryLimitRejected {
-                requested_mlx_memory_ceiling_bytes,
-                minimum_mlx_memory_ceiling_bytes,
+            if requested_mlx_memory_ceiling_bytes < minimum_mlx_memory_ceiling_bytes {
+                // Even a streaming replacement cannot serve below the artifact's
+                // geometry floor, so the honest answer is the typed rejection.
+                return Err(InferenceEngineError::MlxMemoryLimitRejected {
+                    requested_mlx_memory_ceiling_bytes,
+                    minimum_mlx_memory_ceiling_bytes,
+                    reason: "the requested ceiling is below the model's streaming execution floor"
+                        .to_owned(),
+                });
+            }
+            return Err(InferenceEngineError::ResidentStreamingReplacementRequired {
                 reason:
-                    "the loaded model needs its non-evictable memory and one expert page reserve"
+                    "the resident engine cannot shrink below its loaded memory; the requested ceiling requires streaming execution"
                         .to_owned(),
             });
         }
@@ -99,10 +94,8 @@ impl Qwen3_5ResidentModel {
             MemoryCeilingChangeDecision::Lower { .. }
         );
         if is_lowering_mlx_memory_ceiling {
-            // Native eviction comes first because the old MLX ceiling still
-            // permits the bookkeeping and synchronization needed to release
-            // pages. Installing the smaller runtime limit first could make the
-            // reclamation operation reject its own temporary work.
+            // Reclamation runs under the old ceiling so cleanup can synchronize
+            // and release allocator memory before native enforcement tightens.
             let post_reclamation_mlx_memory_snapshot = self
                 .runtime
                 .synchronize_gpu_stream_and_clear_allocator_cache()
@@ -117,9 +110,9 @@ impl Qwen3_5ResidentModel {
                 )
             })?;
             if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
-                return Err(super::super::inference_execution::fatal_engine_error(
-                    "resident model memory remained above the requested MLX ceiling",
-                ));
+                return Err(InferenceEngineError::ResidentStreamingReplacementRequired {
+                    reason: "resident model memory remained above the requested MLX ceiling after reclamation; streaming execution is required".to_owned(),
+                });
             }
         }
 
