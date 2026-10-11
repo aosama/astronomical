@@ -3,19 +3,34 @@ use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
+use astronomical_model_serving::{
+    effective_mlx_serving_memory_ceiling_bytes, recommended_gpu_serving_memory_ceiling_bytes,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::model_family_factory::{InferenceWorker, ModelFamilyFactory};
+use crate::worker_startup_gpu_memory::sample_gpu_memory_limits;
 
 const PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME: &str = "performance-attribution.jsonl";
 
 pub use crate::worker_startup_error::{WorkerProcessError, WorkerStartupError};
 pub use crate::worker_startup_gpu_memory::{
     GpuWiredMemoryLimitSetting, derive_mlx_memory_limits_from_gpu_wired_limit,
-    parse_iogpu_wired_limit_setting, resolve_effective_mlx_memory_ceiling_bytes,
-    sample_iogpu_wired_limit_bytes,
+    parse_iogpu_wired_limit_setting, sample_iogpu_wired_limit_bytes,
 };
 pub use crate::worker_startup_logging::initialize_tracing;
+
+/// Rejects a zero serving envelope before it reaches the process-wide MLX memory limit.
+pub fn derive_serving_mlx_memory_ceiling_bytes(
+    recommended_gpu_working_set_bytes: u64,
+) -> Result<u64, WorkerStartupError> {
+    let serving_mlx_memory_ceiling_bytes =
+        recommended_gpu_serving_memory_ceiling_bytes(recommended_gpu_working_set_bytes);
+    if serving_mlx_memory_ceiling_bytes == 0 {
+        return Err(WorkerStartupError::RecommendedGpuWorkingSetTooSmall);
+    }
+    Ok(serving_mlx_memory_ceiling_bytes)
+}
 
 /// Starts an idle worker that loads a supported model only after an explicit
 /// SwapModel command from the supervisor.
@@ -78,19 +93,57 @@ where
             .global_prompt_cache_maximum_size_bytes,
         loaded_model: None,
     };
-    let machine_mlx_memory_ceiling_bytes = sample_iogpu_wired_limit_bytes()
+    let sampled_gpu_memory_limits = sample_gpu_memory_limits()
         .await
         .map_err(WorkerProcessError::Startup)?;
+    let machine_mlx_memory_ceiling_bytes =
+        sampled_gpu_memory_limits.machine_mlx_memory_ceiling_bytes;
+    let machine_mlx_memory_ceiling_bytes_u64 = u64::try_from(machine_mlx_memory_ceiling_bytes)
+        .map_err(|_| {
+            WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+                description: "machine MLX memory ceiling exceeds the u64 range",
+            })
+        })?;
+    let recommended_gpu_working_set_bytes = u64::try_from(
+        sampled_gpu_memory_limits.recommended_gpu_working_set_bytes,
+    )
+    .map_err(|_| {
+        WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+            description: "recommended GPU working set exceeds the u64 range",
+        })
+    })?;
+    let serving_mlx_memory_ceiling_bytes =
+        derive_serving_mlx_memory_ceiling_bytes(recommended_gpu_working_set_bytes)
+            .map_err(WorkerProcessError::Startup)?;
     let configured_maximum_mlx_memory_bytes =
         worker_startup_configuration.configured_maximum_mlx_memory_bytes;
-    let effective_mlx_memory_ceiling_bytes = resolve_effective_mlx_memory_ceiling_bytes(
+    let effective_mlx_memory_ceiling_bytes_u64 = effective_mlx_serving_memory_ceiling_bytes(
         configured_maximum_mlx_memory_bytes,
-        machine_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes_u64,
+        serving_mlx_memory_ceiling_bytes,
     );
+    if let Some(configured_maximum_mlx_memory_bytes) = configured_maximum_mlx_memory_bytes
+        && configured_maximum_mlx_memory_bytes > serving_mlx_memory_ceiling_bytes
+    {
+        tracing::warn!(
+            configured_maximum_mlx_memory_bytes,
+            serving_mlx_memory_ceiling_bytes,
+            effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
+            "configured MLX memory ceiling exceeds the serving envelope and was clamped"
+        );
+    }
+    let effective_mlx_memory_ceiling_bytes =
+        usize::try_from(effective_mlx_memory_ceiling_bytes_u64).map_err(|_| {
+            WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+                description: "effective MLX memory ceiling exceeds the platform integer range",
+            })
+        })?;
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
         machine_mlx_memory_ceiling_bytes,
+        recommended_gpu_working_set_bytes,
+        serving_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
         persistent_prompt_cache_enabled,
@@ -110,17 +163,10 @@ where
     let engine_worker: InferenceWorker =
         InferenceWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
             model_factory,
-            u64::try_from(machine_mlx_memory_ceiling_bytes).map_err(|_| {
-                WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
-                    description: "machine MLX memory ceiling exceeds the u64 range",
-                })
-            })?,
-            u64::try_from(effective_mlx_memory_ceiling_bytes).map_err(|_| {
-                WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
-                    description: "MLX memory ceiling exceeds the u64 range",
-                })
-            })?,
+            machine_mlx_memory_ceiling_bytes_u64,
+            effective_mlx_memory_ceiling_bytes_u64,
         )
+        .with_serving_mlx_memory_ceiling(serving_mlx_memory_ceiling_bytes)
         .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
     engine_worker
         .run_with_protocol(command_reader, event_writer)

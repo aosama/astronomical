@@ -7,9 +7,9 @@ use std::path::Path;
 use astronomical_runtime_integration::MlxRuntime;
 use astronomical_runtime_integration::weights_file_cache_retention;
 
-use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::kernel_capability;
 use crate::kernel_capability::CustomMetalKernelFamily;
+use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::model_math::routing;
 use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,

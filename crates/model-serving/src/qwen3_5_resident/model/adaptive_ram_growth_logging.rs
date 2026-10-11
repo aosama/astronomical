@@ -1,5 +1,6 @@
-use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
-use crate::{AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection};
+use crate::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection, ExpertWeightMemoryCacheStatistics,
+};
 
 pub(crate) fn log_adaptive_ram_growth_admission_decision(
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
