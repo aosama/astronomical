@@ -1,4 +1,4 @@
-//! Qwen3.5 family exports shared capabilities and explicit engine choices.
+//! Qwen3.5 family exports the shared capabilities used by both engines.
 
 pub(crate) use crate::qwen3_5_core::{
     artifacts, configuration, decoder, quantizations, text, vision,
@@ -29,17 +29,6 @@ pub use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
-#[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_streaming::inference_execution::{
-    Qwen3_5PrefillExecutionContext, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
-    persistent_prompt_cache_publication_advances_parent_chain,
-    safe_minimum_mlx_memory_ceiling_bytes,
-};
-#[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_streaming::model::Qwen3_5Model;
-#[cfg(feature = "direct-mlx")]
-pub use crate::qwen3_5_streaming::model::Qwen3_5TargetForwardOutput;
 pub use artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
     Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,

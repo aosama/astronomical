@@ -21,4 +21,17 @@ impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
             Self::K2HorizonMoVA(_) => None,
         }
     }
+
+    fn record_streaming_retry_interval(
+        &mut self,
+        started_at: std::time::Instant,
+        ended_at: std::time::Instant,
+    ) {
+        match self {
+            Self::Qwen3_5(inference_request) => {
+                inference_request.record_streaming_retry_interval(started_at, ended_at);
+            }
+            Self::K2HorizonMoVA(_) => {}
+        }
+    }
 }

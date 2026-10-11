@@ -5,7 +5,7 @@ use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::{
     EmbeddingEngine, ImageGenerationEngine, InferenceEngine, InferenceEngineError,
-    ModelGenerationProcessor,
+    ModelGenerationProcessor, PreparedInferenceRequest,
 };
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
@@ -20,7 +20,7 @@ where
     pub(super) async fn retry_resident_generation_on_streaming(
         &mut self,
         request_id: RequestId,
-        retry_request: Processor::InferenceRequest,
+        mut retry_request: Processor::InferenceRequest,
         resident_fork_reason: String,
     ) -> Result<crate::EngineGenerationStart, InferenceEngineError> {
         let Some(SelectedModel {
@@ -43,7 +43,7 @@ where
             });
         }
 
-        let _retry_operation = StreamingRetryPerformanceLog::start(
+        let retry_operation_log = StreamingRetryPerformanceLog::start(
             model_factory.performance_attribution_enabled(),
             request_id,
         );
@@ -77,6 +77,12 @@ where
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
         self.loaded_runtime = Some(LoadedRuntime::Autoregressive(replacement_model));
 
+        if let Some(retry_operation_started_at) = retry_operation_log.started_at {
+            retry_request.record_streaming_retry_interval(
+                retry_operation_started_at,
+                std::time::Instant::now(),
+            );
+        }
         let generation_start = {
             let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
             else {

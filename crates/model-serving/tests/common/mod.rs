@@ -253,22 +253,24 @@ impl Drop for MlxMemoryPolicyGuard {
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-/// Uses only the machine ceiling so residency acceptance is not changed by
-/// a developer's ordinary lower application cap.
+/// Caps model acceptance memory at the repository's permitted real-model budget.
 pub(crate) async fn sample_machine_serving_acceptance_mlx_memory_limits() -> MlxMemoryLimits {
     let machine_mlx_memory_ceiling_bytes = sample_machine_mlx_memory_ceiling_bytes().await;
+    let configured_mlx_memory_ceiling_bytes =
+        machine_mlx_memory_ceiling_bytes.min(MAXIMUM_MODEL_TEST_MEMORY_BYTES);
     eprintln!(
-        "[model-artifact-machine-memory] machine_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
-        machine_mlx_memory_ceiling_bytes,
-        machine_mlx_memory_ceiling_bytes,
-        machine_mlx_memory_ceiling_bytes,
+        "[model-artifact-machine-memory] machine_mlx_memory_ceiling_bytes={} configured_test_memory_ceiling_bytes={}",
+        machine_mlx_memory_ceiling_bytes, configured_mlx_memory_ceiling_bytes,
     );
     MlxMemoryLimits::new(
-        machine_mlx_memory_ceiling_bytes,
-        machine_mlx_memory_ceiling_bytes,
+        configured_mlx_memory_ceiling_bytes,
+        configured_mlx_memory_ceiling_bytes,
     )
-    .expect("the machine model-artifact MLX memory limits should be valid")
+    .expect("the model-artifact test MLX memory limits should be valid")
 }
+
+#[cfg(feature = "direct-mlx")]
+const MAXIMUM_MODEL_TEST_MEMORY_BYTES: usize = 36_000_000_000;
 
 #[cfg(feature = "direct-mlx")]
 async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {

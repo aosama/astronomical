@@ -37,7 +37,7 @@ async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
         Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            16,
+            2_048,
         )
         .expect("the test resident prefill chunk size should be valid"),
         248_069,
