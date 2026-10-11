@@ -6,7 +6,9 @@
 //! whose leftover tail is short enough to seed directly.
 
 use super::engine_request::Qwen3_5EngineRequest;
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model, Qwen3_5TargetForwardOutput};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use crate::qwen3_5_streaming::model::Qwen3_5TargetForwardOutput;
 
 pub(super) fn chunk_requires_visual_embeddings(
     active_request: &Qwen3_5EngineRequest,

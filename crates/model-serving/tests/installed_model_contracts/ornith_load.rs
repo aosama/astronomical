@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    PerformanceAttribution, PerformanceAttributionLog, Qwen3_5ArtifactValidator,
+    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 use tokio::time::timeout;
 
@@ -72,29 +72,30 @@ async fn load_and_generate_with_configured_ornith_artifact() {
     let performance_attribution_directory = tempfile::tempdir()
         .expect("the Ornith journey should create a performance-attribution directory");
     let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
-    let mut ornith_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
-        validated_artifact,
-        mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
-        None,
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-        )
-        .expect("the Ornith journey prompt-processing chunk size should be valid"),
-        crate::serving_acceptance::support::IMAGE_PAD_TOKEN_ID,
-        model_directory,
-        crate::common::standard_worker_chunking_configuration(),
-        true,
-        PerformanceAttribution::enabled(),
-        PerformanceAttributionLog::open(
-            &performance_attribution_directory
-                .path()
-                .join("performance-attribution.jsonl"),
+    let mut ornith_engine =
+        Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
+            validated_artifact,
+            mlx_memory_limits.active_memory_limit_bytes(),
+            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+            None,
+            Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
+                ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+            )
+            .expect("the Ornith journey prompt-processing chunk size should be valid"),
+            crate::serving_acceptance::support::IMAGE_PAD_TOKEN_ID,
+            model_directory,
+            crate::common::standard_worker_chunking_configuration(),
             true,
+            PerformanceAttribution::enabled(),
+            PerformanceAttributionLog::open(
+                &performance_attribution_directory
+                    .path()
+                    .join("performance-attribution.jsonl"),
+                true,
+            )
+            .expect("the Ornith journey performance-attribution log should open"),
         )
-        .expect("the Ornith journey performance-attribution log should open"),
-    )
-    .expect("the configured Ornith engine settings should be valid");
+        .expect("the configured Ornith engine settings should be valid");
 
     eprintln!("[{ORNITH_ACCEPTANCE_PHASE_NAME}] status=progress phase=model_load");
     crate::serving_acceptance::support::performance_attribution::load_engine_with_progress(

@@ -1,7 +1,7 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5Engine,
-    Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
+    GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest,
+    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
 };
 
 use super::engine_prompt_cache::{
@@ -31,13 +31,15 @@ async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
     // This value deliberately violates the model's persistent-state alignment. Disabled cache
     // execution must never resolve or validate a storage contract that cannot be used.
     cache_disabled_chunking_configuration.prompt_cache_block_tokens = Some(1);
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),
         None,
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(16)
-            .expect("the test prefill chunk size should be valid"),
+        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+            16,
+        )
+        .expect("the test resident prefill chunk size should be valid"),
         248_069,
         model_directory.to_path_buf(),
         cache_disabled_chunking_configuration,

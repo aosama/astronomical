@@ -5,7 +5,8 @@
 //! before the first generate token. SSD reads stay in the pager; this file only
 //! walks the decided indexes.
 
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, complete_layer_indexes_required_before_decode,
 };

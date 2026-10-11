@@ -1,7 +1,7 @@
 use std::{fs, time::Duration};
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{InferenceEngine, Qwen3_5Engine, Qwen3_5InferenceRequest};
+use astronomical_model_serving::{InferenceEngine, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine};
 use tokio::time::timeout;
 
 use super::engine_prompt_cache::{
@@ -159,7 +159,7 @@ async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
 }
 
 async fn run_one_token_request(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+    qwen3_5_engine: &mut Qwen3_5ResidentEngine,
     request_id: RequestId,
     prompt_token_ids: &[u32],
 ) -> (u32, Vec<u32>) {

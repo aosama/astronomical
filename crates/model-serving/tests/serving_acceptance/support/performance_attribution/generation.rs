@@ -1,13 +1,14 @@
 use super::{IMAGE_PAD_TOKEN_ID, PROGRESS_INTERVAL};
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5Engine, Qwen3_5InferenceRequest,
+    GeneratedToken, InferenceEngine, PerformanceAttribution, Qwen3_5InferenceRequest,
+    Qwen3_5StreamingEngine,
 };
 use std::time::Instant;
 use tokio::time::{MissedTickBehavior, interval};
 
 pub(crate) async fn run_attributed_generation(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
     request_id: RequestId,
     prompt_token_ids: &[u32],
     phase_name: &str,

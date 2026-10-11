@@ -9,6 +9,7 @@ Throughput comparisons in this repository use a single measurement run per side;
 - Cost of the wrong scope was not display-only: the inflated activation reserve sat inside the expert retention budget, forcing a complete-resident demotion to SSD streaming mid-prefill (27.8 GB to 4.7 GB active) that the corrected ~2 GB reserve eliminates entirely. Wrong reserve arithmetic converts directly into avoidable SSD reads.
 - Keep per-token linear projection only where the underlying quantity truly scales per token (context/KV state: measured 2.0 GB at 45K matches the per-token arithmetic exactly). For quantities owned by one operation, resolve evidence at the operation's own token count and let a static geometric floor bound unmeasured shapes.
 - Keep complete-residency and pager-backed activation evidence separate even when token counts match. Paging changes the forward's temporary-memory behavior, and the correct operation bound must match the engine profile that will execute; use a typed `Resident` or `Paged` profile, with Hybrid and Paged ownership sharing the pager-backed profile.
+- Keep prefill chunk policies engine-specific: resident execution uses its fixed chunk, while streaming owns its SSD chunk and folds a short tail to avoid another leftover-expert page sweep. Construct the selected policy with the selected engine so the memory-admission operation bound cannot use the other path's chunk size or tail behavior.
 
 ## First principles
 

@@ -215,7 +215,7 @@ impl Qwen3_5Model {
                         &weights,
                         expert_pager.as_ref(),
                     )?;
-                crate::qwen3_5::qwen3_5_decoder_cache_layout(
+                crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(
                     &config,
                     usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(
                         |_| Qwen3_5ExecutionError::InvalidInput {

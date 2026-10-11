@@ -13,7 +13,7 @@ use thiserror::Error;
 use crate::expert_paging::{
     ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
 };
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -54,7 +54,7 @@ pub enum ExpertPagingError {
 /// so the kernel never depends on streaming types (issue #1132). Memory-budget
 /// rejections surface as the kernel's admission variant; native runtime
 /// failures surface as the kernel's runtime variant.
-impl From<ExpertPagingError> for crate::qwen3_5::model::Qwen3_5ExecutionError {
+impl From<ExpertPagingError> for crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError {
     fn from(expert_paging_error: ExpertPagingError) -> Self {
         match expert_paging_error {
             ExpertPagingError::MemoryBudget(memory_admission_error) => {
