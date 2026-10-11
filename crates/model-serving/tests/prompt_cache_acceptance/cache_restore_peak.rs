@@ -5,8 +5,8 @@ use std::time::Duration;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, InferenceEngine, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
+    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::timeout;
@@ -80,11 +80,11 @@ async fn run_cache_restore_peak_acceptance() {
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.prompt_cache_block_tokens = Some(CACHE_RESTORE_PEAK_BLOCK_TOKENS);
     let prompt_processing_chunk_sizer =
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
         )
         .expect("the selected prefill chunk size should be valid");
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         memory_limits.active_memory_limit_bytes(),
         memory_limits.allocator_cache_memory_limit_bytes(),
@@ -234,7 +234,7 @@ async fn run_cache_restore_peak_acceptance() {
 /// The ten-second memory ticker answers the paired question of whether the GPU
 /// is wired and computing while no event arrives.
 async fn generate_token_ids_with_event_timing(
-    qwen3_5_engine: &mut Qwen3_5Engine,
+    qwen3_5_engine: &mut Qwen3_5ResidentEngine,
     request_id: RequestId,
     generated_token_count: usize,
     phase_label: &'static str,

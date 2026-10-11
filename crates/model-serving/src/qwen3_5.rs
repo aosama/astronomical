@@ -1,22 +1,45 @@
-//! The Qwen3.5 family module. During the issue #1132 migration this is a
-//! re-export shell; the engine facade lands here when the fork completes.
+//! Qwen3.5 family exports shared capabilities and explicit engine choices.
 
-// Issue #1132 migration step 1: the paging-free family kernel moved to
-// `qwen3_5_core`. These re-exports keep every existing `crate::qwen3_5::`
-// path resolving until the engine fork deletes this bridge.
 pub(crate) use crate::qwen3_5_core::{
     artifacts, configuration, decoder, quantizations, text, vision,
 };
 
-// Issue #1132 migration step 4: the engine tree joined `qwen3_5_streaming`.
-// These module re-exports keep every existing `crate::qwen3_5::model` and
-// `crate::qwen3_5::inference_execution` path resolving until the engine fork
-// deletes the bridge.
 #[cfg(feature = "direct-mlx")]
-pub(crate) use crate::qwen3_5_streaming::inference_execution;
+pub use crate::qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use crate::qwen3_5_streaming::model;
-
+pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
+    Qwen3_5GatedDeltaBoundaryCheckpointResult, qwen3_5_gated_delta_checkpoint_kernel,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
+    qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
+};
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model_math::gated_delta_sequence::{
+    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
+    qwen3_5_gated_delta_sequence_ops_fallback,
+};
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model_math::gated_delta_step::qwen3_5_gated_delta_step;
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
+    is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
+};
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_streaming::inference_execution::{
+    Qwen3_5PrefillExecutionContext, Qwen3_5StreamingEngine,
+    Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
+    persistent_prompt_cache_publication_advances_parent_chain,
+    safe_minimum_mlx_memory_ceiling_bytes,
+};
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_streaming::model::Qwen3_5Model;
+#[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_streaming::model::Qwen3_5TargetForwardOutput;
 pub use artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
     Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
@@ -32,24 +55,6 @@ pub use decoder::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
-};
-#[cfg(feature = "direct-mlx")]
-pub use inference_execution::{
-    Qwen3_5Engine, Qwen3_5PrefillExecutionContext, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5PromptProcessingChunkSizerError,
-    persistent_prompt_cache_publication_advances_parent_chain,
-    safe_minimum_mlx_memory_ceiling_bytes,
-};
-#[cfg(feature = "direct-mlx")]
-pub use model::{
-    Qwen3_5ExecutionError, Qwen3_5GatedDeltaBoundaryCheckpointResult, Qwen3_5Model,
-    Qwen3_5ModelChunkingConfiguration, Qwen3_5TargetForwardOutput, Qwen3_5Weights,
-    is_gdn_decode_prework_eligible, qwen3_5_full_attention_step,
-    qwen3_5_gated_delta_checkpoint_kernel, qwen3_5_gated_delta_kernel,
-    qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_sequence_ops_fallback,
-    qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
-    qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback, qwen3_5_gated_delta_step,
-    qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
 };
 pub use quantizations::optiq::{OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile};
 #[cfg(feature = "direct-mlx")]

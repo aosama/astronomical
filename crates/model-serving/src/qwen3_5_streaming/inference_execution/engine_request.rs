@@ -16,10 +16,11 @@ use crate::{
 };
 
 use super::qwen3_5_runtime_error;
-use crate::qwen3_5::{
-    Qwen3_5Model, RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
+use crate::qwen3_5_core::decoder::{
+    RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
 };
 use crate::qwen3_5_core::text::sampler;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use astronomical_mlx_c_rust::MlxArray;
 
 /// Retained request state needed to retry one rejected prompt-processing attempt.

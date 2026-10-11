@@ -29,7 +29,7 @@ use crate::{
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
-    Qwen3_5EngineState, Qwen3_5PromptProcessingChunkSizer, fatal_engine_error,
+    Qwen3_5EngineState, Qwen3_5StreamingPromptProcessingChunkSizer, fatal_engine_error,
     qwen3_5_runtime_error,
 };
 use crate::qwen3_5_streaming::model::memory_admission;
@@ -73,7 +73,6 @@ impl Qwen3_5EngineState {
             .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
                 active_request.prefill_cursor,
                 prefill_end_exclusive,
-                crate::AdaptiveRamGrowthExecutionProfile::Paged,
                 active_request
                     .maximum_successful_prefill_chunk_tokens()
                     .unwrap_or(usize::MAX),
@@ -144,7 +143,7 @@ impl Qwen3_5EngineState {
                 }
                 Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
                     if let Some(smaller_executable_chunk_size_tokens) =
-                        Qwen3_5PromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
+                        Qwen3_5StreamingPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
                             attempted_prefill_chunk_token_count,
                         )
                     {
@@ -195,7 +194,7 @@ impl Qwen3_5EngineState {
                             .record_counter(PerformanceCounter::PrefillCapacityRetryCount, 1);
                     } else {
                         if let Some(smaller_executable_chunk_size_tokens) =
-                            Qwen3_5PromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
+                            Qwen3_5StreamingPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
                                 attempted_prefill_chunk_token_count,
                             )
                         {
@@ -230,7 +229,7 @@ impl Qwen3_5EngineState {
                             .record_counter(PerformanceCounter::PrefillCapacityRetryCount, 1);
                     } else {
                         if let Some(smaller_executable_chunk_size_tokens) =
-                            Qwen3_5PromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
+                            Qwen3_5StreamingPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
                                 attempted_prefill_chunk_token_count,
                             )
                         {

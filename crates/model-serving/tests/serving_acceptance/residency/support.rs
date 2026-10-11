@@ -7,8 +7,8 @@
 use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
     GeneratedToken, GenerationFinalization, InferenceEngine, Qwen3_5ArtifactValidator,
-    Qwen3_5Engine, Qwen3_5InferenceRequest, Qwen3_5PromptProcessingChunkSizer,
-    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
+    Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5Tokenizer,
 };
 
 pub(super) const RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT: usize = 256;
@@ -92,7 +92,7 @@ pub(super) fn construct_automatic_residency_engine(
     allocator_cache_memory_limit_bytes: usize,
     request_id: RequestId,
     required_prompt_token_count: usize,
-) -> (Qwen3_5Engine, Vec<u32>, u32, usize) {
+) -> (Qwen3_5StreamingEngine, Vec<u32>, u32, usize) {
     assert!(
         model_directory.is_dir(),
         "the configured sparse checkpoint must be available"
@@ -121,21 +121,22 @@ pub(super) fn construct_automatic_residency_engine(
         .config()
         .context_memory_reservation_bytes(total_context_token_count)
         .expect("the request context memory reservation should fit usize");
-    let qwen3_5_engine = Qwen3_5Engine::new_with_runtime_chunking_and_performance_attribution(
-        validated_artifact,
-        active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
-        None,
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(2_048)
-            .expect("the test prefill_chunk_tokens should be valid"),
-        think_end_token_id,
-        model_directory,
-        crate::common::standard_worker_chunking_configuration(),
-        false,
-        astronomical_model_serving::PerformanceAttribution::disabled(),
-        astronomical_model_serving::PerformanceAttributionLog::disabled(),
-    )
-    .expect("the automatic expert-residency engine settings should be valid");
+    let qwen3_5_engine =
+        Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            None,
+            Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(2_048)
+                .expect("the test streaming prefill chunk size should be valid"),
+            think_end_token_id,
+            model_directory,
+            crate::common::standard_worker_chunking_configuration(),
+            false,
+            astronomical_model_serving::PerformanceAttribution::disabled(),
+            astronomical_model_serving::PerformanceAttributionLog::disabled(),
+        )
+        .expect("the automatic expert-residency engine settings should be valid");
     (
         qwen3_5_engine,
         prompt_token_ids,

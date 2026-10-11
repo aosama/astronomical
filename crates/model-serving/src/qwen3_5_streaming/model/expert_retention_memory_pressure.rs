@@ -28,8 +28,8 @@ use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::InferenceEngineError;
 
-use crate::qwen3_5::inference_execution;
-use crate::qwen3_5::model::Qwen3_5Model;
+use crate::qwen3_5_streaming::inference_execution;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
     /// Caps retained expert ownership at an absolute maximum, reclaiming
@@ -117,7 +117,7 @@ impl Qwen3_5Model {
     pub(crate) fn limit_expert_retention_for_request_memory_pressure(
         &self,
         retained_expert_payload_reclamation_target_bytes: usize,
-    ) -> Result<bool, crate::qwen3_5::model::Qwen3_5ExecutionError> {
+    ) -> Result<bool, crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
         let Some(retained_experts) = self.retained_experts.as_ref() else {
             return Ok(false);
         };

@@ -21,7 +21,7 @@ use crate::{
     DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution, RequestExpertResidency,
 };
 
-use crate::qwen3_5::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
 /// The streaming engine's model: shared base plus residency-forked state.
 #[derive(Debug)]

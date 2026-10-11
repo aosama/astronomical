@@ -2,7 +2,8 @@
 
 use astronomical_mlx_c_rust::MlxArray;
 
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5Model {
     /// Copies and normalizes one route for compact page planning.

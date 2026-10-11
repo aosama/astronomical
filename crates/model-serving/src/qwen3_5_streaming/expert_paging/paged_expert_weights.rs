@@ -16,7 +16,7 @@ use astronomical_mlx_c_rust::MlxArray;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 
 pub(super) fn build_paged_expert_weights(
     loaded_tensors: &mut HashMap<String, MlxArray>,

@@ -21,6 +21,10 @@ runs and why it exists. Real-model journeys are invoked directly with
   — enforces the Qwen3.5 module dependency direction: both engines depend on
   shared core, never on each other, and core avoids temporary legacy-shell
   imports.
+- `cargo test -p astronomical-model-serving --features direct-mlx --test hermetic_tests prompt_processing_chunk_sizer -- --test-threads=1`
+  — verifies that resident and streaming execution use separate chunk-sizer
+  policies: resident uses fixed chunks, while streaming owns SSD chunk sizing
+  and short-tail folding.
 - `cargo test -p astronomical-model-serving --features direct-mlx --test hermetic_tests engine_backed_worker::chat::resident_streaming_retry -- --test-threads=1`
   — verifies the private resident-to-streaming request retry, including
   one-shot behavior, pre-output eligibility, preservation of request cache
