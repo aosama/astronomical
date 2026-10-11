@@ -57,51 +57,33 @@ impl Qwen3_5EngineState {
                     "generation context memory reservation overflowed",
                 )
             })?;
-        let (prefill_activation_workspace_bytes, complete_experts_are_resident) = {
+        let prefill_activation_workspace_bytes = {
             let model = self
                 .model
                 .as_ref()
                 .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            let complete_experts_are_resident = model.resident_expert_weights.is_some();
-            // Layer-weight activation heuristics and the SSD stream slot already
-            // live inside the seated active snapshot. Adding them again stacks
-            // exclusive paper peaks on top of RAM that is already allocated.
-            if complete_experts_are_resident {
-                (0, true)
-            } else {
-                let ram_budget = model.mlx_ram_budget();
-                // The activation reserve belongs to one forward, so it is
-                // sized by the planned chunk bound, never the total context
-                // length. Sizing it from the context multiplied a chunk-shaped
-                // learned observation into a reserve several times the
-                // ceiling and rejected every later request (issue #690); the
-                // planned chunk size is the same operation scope `plan()`
-                // already resolves (issue #644). The bound follows the
-                // residency mode that will actually run: each mode's forwards
-                // record activation evidence at that mode's own operation
-                // scope, so resolving one mode's promise at the other mode's
-                // scope inflated the reserve by the chunk ratio (measured
-                // 2026-10-10).
-                let planned_prefill_operation_token_count = u64::try_from(
-                    self.prompt_processing_chunk_sizer
-                        .prompt_processing_operation_bound_tokens(model.sparse_experts_are_paged()),
+            let ram_budget = model.mlx_ram_budget();
+            // The activation reserve belongs to one forward, so it is sized
+            // by the planned chunk bound, never by total context length.
+            let planned_prefill_operation_token_count = u64::try_from(
+                self.prompt_processing_chunk_sizer
+                    .prompt_processing_operation_bound_tokens(
+                        crate::AdaptiveRamGrowthExecutionProfile::Paged,
+                    ),
+            )
+            .unwrap_or(u64::MAX);
+            usize::try_from(ram_budget.activation_headroom_bytes(
+                MemoryPhase::Prefill,
+                planned_prefill_operation_token_count,
+            ))
+            .map_err(|_| {
+                memory_admission::invalid_request_error(
+                    "prefill activation workspace exceeds the platform range",
                 )
-                .unwrap_or(u64::MAX);
-                let prefill_activation_workspace_bytes =
-                    usize::try_from(ram_budget.activation_headroom_bytes(
-                        MemoryPhase::Prefill,
-                        planned_prefill_operation_token_count,
-                    ))
-                    .map_err(|_| {
-                        memory_admission::invalid_request_error(
-                            "prefill activation workspace exceeds the platform range",
-                        )
-                    })?;
-                (prefill_activation_workspace_bytes, false)
-            }
+            })?
         };
         let temporary_workspace_reservation_bytes = request_context_temporary_workspace_bytes(
-            complete_experts_are_resident,
+            false,
             context_growth_bytes,
             0,
             0,
@@ -123,7 +105,7 @@ impl Qwen3_5EngineState {
             temporary_workspace_reservation_bytes,
             0,
         );
-        self.validate_context_memory_admission_with_resident_expert_demotion(
+        self.validate_context_memory_admission(
             total_context_tokens,
             temporary_workspace_reservation_bytes,
             0,

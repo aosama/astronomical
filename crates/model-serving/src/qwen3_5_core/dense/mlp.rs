@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use astronomical_mlx_c_rust::MlxArray;
 
-use crate::qwen3_5::Qwen3_5Config;
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5::model::weights;
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_core::model_math::weights;
 
 /// Pre-bound projections for one dense Qwen3.5 SwiGLU MLP layer.
 #[derive(Debug)]
@@ -51,7 +52,7 @@ pub(crate) fn bind_qwen3_5_dense_mlp_weights(
     })
 }
 
-impl Qwen3_5Model {
+impl Qwen3_5ModelBase {
     pub(crate) fn forward_qwen3_5_dense_mlp(
         &self,
         normalized_attention: &MlxArray,

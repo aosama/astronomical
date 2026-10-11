@@ -32,7 +32,6 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 use crate::{AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
@@ -65,19 +64,6 @@ impl Qwen3_5EngineState {
             tracing::info!(
                 request_id = request_id.value(),
                 "released prefill request-pressure expert retention ceiling before decode"
-            );
-        }
-        // Cache restore and prefill may demote a fitting model for a temporary
-        // workspace. Decode no longer needs that workspace, so put every expert
-        // back in RAM when the ceiling still admits it.
-        if let Err(residency_restore_error) = model.try_promote_experts_to_resident(
-            Qwen3_5ExpertResidencyTransitionReason::DecodeHandoff,
-            &mut active_request.performance_attribution,
-        ) {
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %residency_restore_error,
-                "complete expert residency restore before decode failed; paging remains"
             );
         }
         let context_token_count =

@@ -34,6 +34,7 @@ mod model_visible_correction;
 mod prefill_progress;
 mod prompt_cache_stats;
 mod ready_and_model_lifecycle;
+mod resident_streaming_retry;
 pub(super) mod scripted_chat_test_doubles;
 mod scripted_model_factory_test_doubles;
 pub(super) mod support;

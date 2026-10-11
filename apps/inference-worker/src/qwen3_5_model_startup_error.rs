@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use astronomical_model_serving::{
     InferenceEngineError, Qwen3_5ArtifactValidationError, Qwen3_5PromptProcessingChunkSizerError,
-    Qwen3_5TokenizerError,
+    Qwen3_5ResidentPromptProcessingChunkSizerError, Qwen3_5TokenizerError,
 };
 use thiserror::Error;
 
@@ -32,6 +32,8 @@ pub enum Qwen3_5ModelStartupError {
     },
     #[error("failed to configure Qwen3.5 prompt-processing chunks")]
     PromptProcessingChunkSizing(#[source] Qwen3_5PromptProcessingChunkSizerError),
+    #[error("failed to configure resident Qwen3.5 prompt-processing chunks")]
+    ResidentPromptProcessingChunkSizing(#[source] Qwen3_5ResidentPromptProcessingChunkSizerError),
     #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
     EngineInitialization {
         model_directory: PathBuf,
@@ -51,6 +53,9 @@ impl Qwen3_5ModelStartupError {
             }
             Self::EngineInitialization { .. } => "Qwen3.5 engine initialization failed".to_owned(),
             Self::OpenPerformanceAttributionLog { .. } | Self::PromptProcessingChunkSizing(_) => {
+                "model initialization failed".to_owned()
+            }
+            Self::ResidentPromptProcessingChunkSizing(_) => {
                 "model initialization failed".to_owned()
             }
         };

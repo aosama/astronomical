@@ -1,8 +1,9 @@
 use astronomical_model_serving::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryPhase,
-    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
-    hot_expert_warm_slot_count, plan_expert_residency, publish_request_stable_residency_plan,
+    AdaptiveRamGrowthExecutionProfile, CurrentExpertLayerResidency, ExpertLayerGeometry,
+    ExpertLayerResidencyTarget, ExpertResidencyPlanError, ForwardRecoveryDecision,
+    ForwardRecoveryRequirements, MemoryPhase, RequestExpertLayerRole, RequestExpertResidency,
+    RetainedExpertPageClass, hot_expert_warm_slot_count, plan_expert_residency,
+    publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_enact_planned_expert_release,
@@ -133,7 +134,7 @@ fn should_cap_hot_expert_warm_tables_at_the_layer_expert_count() {
 }
 
 #[test]
-fn should_refuse_the_same_prefill_chunk_retry_when_sparse_experts_are_paged() {
+fn should_refuse_the_same_prefill_chunk_retry_for_paged_execution() {
     let resident_retry = ForwardRecoveryRequirements {
         stable_active_memory_bytes: 900,
         active_memory_bytes_at_failure: 950,
@@ -143,10 +144,10 @@ fn should_refuse_the_same_prefill_chunk_retry_when_sparse_experts_are_paged() {
         retained_expert_payload_bytes_after_reclamation: 100,
         active_memory_ceiling_bytes: 1_000,
         has_already_retried_after_reclamation: false,
-        sparse_experts_are_paged: false,
+        execution_profile: AdaptiveRamGrowthExecutionProfile::Resident,
     };
     let paged_retry = ForwardRecoveryRequirements {
-        sparse_experts_are_paged: true,
+        execution_profile: AdaptiveRamGrowthExecutionProfile::Paged,
         ..resident_retry
     };
 

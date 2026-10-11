@@ -45,5 +45,3 @@ pub(crate) use super::artifacts::ValidatedQwen3_5Artifact;
 pub(crate) use super::vision::{
     Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5ProcessedImage,
 };
-#[cfg(feature = "direct-mlx")]
-pub(crate) use crate::qwen3_5::model::Qwen3_5Model;

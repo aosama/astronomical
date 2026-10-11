@@ -13,6 +13,8 @@ pub(crate) mod decoder_layer_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod error;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod expert_gate_up_fusion;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod forward_contract;
@@ -20,7 +22,9 @@ pub(crate) mod forward_contract;
 pub(crate) mod gated_delta_boundary_checkpoints;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_pipelined_kernel;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_sequence;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_sequence_contract;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_step;

@@ -77,11 +77,12 @@ pub(crate) use admission::{
     log_context_admission_projection, log_generation_context_workspace_reservation,
 };
 pub use budget::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, AdaptiveRamGrowthGuardError,
-    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    RamBudgetGeometryError, measured_non_expert_forward_growth_bytes,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+    AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
+    AdaptiveRamGrowthTransientReserveSource, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
+    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
+    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, RamBudgetGeometryError,
+    measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };

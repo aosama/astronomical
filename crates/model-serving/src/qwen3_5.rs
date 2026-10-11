@@ -5,7 +5,7 @@
 // `qwen3_5_core`. These re-exports keep every existing `crate::qwen3_5::`
 // path resolving until the engine fork deletes this bridge.
 pub(crate) use crate::qwen3_5_core::{
-    artifacts, configuration, decoder, dense, quantizations, text, vision,
+    artifacts, configuration, decoder, quantizations, text, vision,
 };
 
 // Issue #1132 migration step 4: the engine tree joined `qwen3_5_streaming`.

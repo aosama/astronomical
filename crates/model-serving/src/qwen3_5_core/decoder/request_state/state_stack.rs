@@ -2,7 +2,7 @@ use crate::decoder_cache::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,
 };
-use crate::qwen3_5::Qwen3_5Config;
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use super::state_stack_layout::{
@@ -97,19 +97,19 @@ impl RequestDecoderStateStack {
         let decoder_layer_cache_dtypes = (0..qwen3_5_config.layer_count() as usize)
             .map(|decoder_layer_index| {
                 if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                    crate::qwen3_5::decoder::Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+                    crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes::FullAttention {
                         keys: configured_activation_cache_dtype,
                         values: configured_activation_cache_dtype,
                     }
                 } else {
-                    crate::qwen3_5::decoder::Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
+                    crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
                         convolution: configured_activation_cache_dtype,
                     }
                 }
             })
             .collect::<Vec<_>>();
         let decoder_cache_layout =
-            crate::qwen3_5::decoder::cache_layout::qwen3_5_decoder_cache_layout(
+            crate::qwen3_5_core::decoder::cache_layout::qwen3_5_decoder_cache_layout(
                 qwen3_5_config,
                 usize::try_from(full_attention_kv_state_growth_tokens).map_err(|_| {
                     request_decoder_state_error(

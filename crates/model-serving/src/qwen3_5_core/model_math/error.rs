@@ -57,6 +57,8 @@ pub enum Qwen3_5ExecutionError {
     MemoryAdmissionRejected(#[from] crate::MlxAllocationAdmissionError),
     #[error("expert source failure: {description}")]
     ExpertSourceFailure { description: String },
+    #[error("validated expert layer plan construction failed: {description}")]
+    ExpertLayerPlan { description: String },
     #[error("persistent prompt-cache disk-store error: {0}")]
     PersistentPromptCache(#[from] crate::PersistentPromptCacheDiskStoreError),
     #[error("persistent prompt-cache state bridge error: {0}")]

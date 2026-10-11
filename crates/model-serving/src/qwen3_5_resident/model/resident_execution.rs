@@ -6,11 +6,12 @@
 
 use astronomical_mlx_c_rust::MlxArray;
 
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
-use crate::qwen3_5_streaming::expert_residency::{
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_resident::experts::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
+use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::sparse_experts::{
     ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
 };
@@ -24,7 +25,7 @@ use super::routing::{
 };
 use crate::sparse_experts;
 
-impl Qwen3_5Model {
+impl Qwen3_5ResidentModel {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_resident_with_performance_attribution(
         &self,

@@ -13,6 +13,19 @@ runs and why it exists. Real-model journeys are invoked directly with
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
 - `cargo test-hermetic-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
+- `cargo test -p astronomical-model-serving --test hermetic_tests qwen3_5_moe_hermetic -- --test-threads=1`
+  — the focused Qwen3.5 sparse-artifact lane for quantization configuration,
+  native/affine single- and multi-layer planning, and tensor-profile contracts;
+  it uses no model runtime or installed model files.
+- `cargo test -p astronomical-model-serving --test hermetic_tests qwen3_5_import_direction -- --test-threads=1`
+  — enforces the Qwen3.5 module dependency direction: both engines depend on
+  shared core, never on each other, and core avoids temporary legacy-shell
+  imports.
+- `cargo test -p astronomical-model-serving --features direct-mlx --test hermetic_tests engine_backed_worker::chat::resident_streaming_retry -- --test-threads=1`
+  — verifies the private resident-to-streaming request retry, including
+  one-shot behavior, pre-output eligibility, preservation of request cache
+  identity, and release of the replay request after the first generated token
+  without loading a model.
 
 ## Real-model acceptance journeys (Apple-Silicon host, serial only)
 

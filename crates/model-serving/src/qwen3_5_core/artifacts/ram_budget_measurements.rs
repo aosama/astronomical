@@ -6,7 +6,6 @@
 //! owned by `memory`; this file only measures. It does not load weights onto
 //! the GPU and does not invent gigabyte souvenirs.
 
-use std::collections::HashMap;
 use std::path::Path;
 
 use thiserror::Error;
@@ -17,8 +16,8 @@ use crate::memory::{
     MeasuredExpertLayerPayload, RamBudgetGeometryError,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
-use crate::qwen3_5::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
-use crate::qwen3_5_streaming::expert_paging::quantized_expert_layer_plan;
+use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan;
+use crate::qwen3_5_core::artifacts::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
 
 /// Why disk-only RAM measurements could not be composed for this artifact.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -41,8 +40,28 @@ pub fn mlx_ram_budget_model_geometry_from_validated_artifact(
     {
         return Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts);
     }
-    let layer_plans =
-        expert_layer_plans_from_validated_artifact(validated_artifact, model_directory)?;
+    let layer_plans = quantized_expert_layer_plan::build_quantized_expert_layer_plans(
+        model_directory,
+        &validated_artifact
+            .shard_index()
+            .language_tensor_name_to_shard_file_name()
+            .iter()
+            .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
+            .collect(),
+        &validated_artifact
+            .tensor_inventory()
+            .locations()
+            .map(|location| {
+                (
+                    location.canonical_name().to_owned(),
+                    location.stored_name().to_owned(),
+                )
+            })
+            .collect(),
+        validated_artifact.config(),
+        validated_artifact.config().layer_count() as usize,
+    )
+    .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
     let measured_layer_payloads = measured_layer_payloads(&layer_plans)?;
     let complete_residency_transient_bytes = complete_residency_transient_bytes(&layer_plans)?;
     mlx_ram_budget_model_geometry_from_measured_layer_facts(
@@ -80,7 +99,7 @@ fn complete_residency_transient_bytes(
 ) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
     #[cfg(feature = "direct-mlx")]
     {
-        crate::qwen3_5_streaming::maximum_resident_gate_up_fusion_transient_payload_bytes(
+        super::expert_gate_up_fusion_plan::maximum_expert_gate_up_fusion_transient_payload_bytes(
             layer_plans,
         )
         .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)
@@ -108,43 +127,4 @@ fn map_composer_error(composer_error: RamBudgetGeometryError) -> Qwen3_5RamBudge
             Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow
         }
     }
-}
-
-fn expert_layer_plans_from_validated_artifact(
-    validated_artifact: &ValidatedQwen3_5Artifact,
-    model_directory: &Path,
-) -> Result<Vec<QuantizedExpertLayerPlan>, Qwen3_5RamBudgetGeometryError> {
-    let tensor_name_to_shard_file_name: HashMap<String, String> = validated_artifact
-        .shard_index()
-        .language_tensor_name_to_shard_file_name()
-        .iter()
-        .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
-        .collect();
-    let stored_tensor_name_by_canonical_name = validated_artifact
-        .tensor_inventory()
-        .locations()
-        .map(|location| {
-            (
-                location.canonical_name().to_owned(),
-                location.stored_name().to_owned(),
-            )
-        })
-        .collect::<HashMap<_, _>>();
-    let decoder_layer_count = validated_artifact.config().layer_count() as usize;
-    let mut layer_plans = Vec::with_capacity(decoder_layer_count);
-    let mut safetensors_header_by_source_file = HashMap::new();
-    for decoder_layer_index in 0..decoder_layer_count {
-        let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
-        let layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
-            model_directory,
-            &tensor_name_to_shard_file_name,
-            &stored_tensor_name_by_canonical_name,
-            &layer_prefix,
-            validated_artifact.config(),
-            &mut safetensors_header_by_source_file,
-        )
-        .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
-        layer_plans.push(layer_plan);
-    }
-    Ok(layer_plans)
 }

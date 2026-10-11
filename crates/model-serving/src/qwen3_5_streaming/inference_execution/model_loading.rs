@@ -11,7 +11,6 @@ use super::persistent_prompt_cache_startup_logging;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5::model::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5::{Qwen3_5ImageProcessor, Qwen3_5Model};
-use crate::qwen3_5_streaming::Qwen3_5ExpertResidencyTransitionReason;
 
 impl Qwen3_5EngineState {
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
@@ -63,7 +62,7 @@ impl Qwen3_5EngineState {
                     "failed to validate model chunking configuration: {configuration_error}"
                 ))
             })?;
-            let mut model = Qwen3_5Model::load_with_performance_attribution(
+            let model = Qwen3_5Model::load_with_performance_attribution(
                 runtime,
                 validated_artifact,
                 &self.model_directory,
@@ -177,14 +176,6 @@ impl Qwen3_5EngineState {
             model
                 .runtime()
                 .synchronize_gpu_stream_and_clear_allocator_cache()
-                .map_err(qwen3_5_runtime_error)?;
-            // Core and vision loading are complete. Only now is active memory
-            // a stable baseline for exact complete-expert admission.
-            model
-                .try_promote_experts_to_resident(
-                    Qwen3_5ExpertResidencyTransitionReason::Startup,
-                    &mut model_loading_performance_attribution,
-                )
                 .map_err(qwen3_5_runtime_error)?;
             Ok((
                 model,

@@ -7,8 +7,7 @@
 use astronomical_ipc_protocol::ChatMessage;
 
 use super::tokenizer_error::Qwen3_5TokenizerError;
-use crate::qwen3_5::Qwen3_5ImageProcessor;
-use crate::qwen3_5::Qwen3_5ProcessedImage;
+use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5ProcessedImage};
 
 /// Extracts one token-count vector per user message from the conversation history.
 ///

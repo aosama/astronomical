@@ -1,5 +1,7 @@
 //! Deterministic Qwen3.5 prompt-processing chunk boundaries.
 
+use crate::AdaptiveRamGrowthExecutionProfile;
+
 mod configuration;
 
 pub use configuration::Qwen3_5PromptProcessingChunkSizerError;
@@ -49,7 +51,7 @@ impl Qwen3_5PromptProcessingChunkSizer {
         self.next_prompt_processing_chunk_end_for_expert_residency(
             chunk_start_token_position,
             final_prompt_end_token_position_exclusive,
-            false,
+            AdaptiveRamGrowthExecutionProfile::Resident,
         )
     }
 
@@ -72,7 +74,7 @@ impl Qwen3_5PromptProcessingChunkSizer {
             .max(self.ssd_streaming_prompt_processing_chunk_size_tokens)
     }
 
-    /// The token bound that resolves one residency mode's activation promise.
+    /// The token bound that resolves one execution profile's activation promise.
     ///
     /// Each mode's forwards record activation evidence at that mode's own
     /// operation scope, so the bound must match the mode that will actually
@@ -80,27 +82,30 @@ impl Qwen3_5PromptProcessingChunkSizer {
     /// larger of the two chunks — inflated the reserve by the chunk ratio and
     /// rejected every later request (measured 2026-10-10).
     ///
-    /// The mode argument is the decision admission already made for this
-    /// request, not a prediction: evidence recorded under one regime is not
+    /// The profile argument is the decision admission already made for this
+    /// request, not a prediction: evidence recorded under one profile is not
     /// transferable to the other, because paging itself changes the observed
     /// activation transient.
     #[must_use]
     pub fn prompt_processing_operation_bound_tokens(
         &self,
-        sparse_experts_are_paged: bool,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
     ) -> usize {
-        self.configured_prompt_processing_chunk_size_tokens(sparse_experts_are_paged)
+        self.configured_prompt_processing_chunk_size_tokens(execution_profile)
     }
 
     #[must_use]
     fn configured_prompt_processing_chunk_size_tokens(
         &self,
-        sparse_experts_are_paged: bool,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
     ) -> usize {
-        if sparse_experts_are_paged {
-            self.ssd_streaming_prompt_processing_chunk_size_tokens
-        } else {
-            self.fixed_prompt_processing_chunk_size_tokens
+        match execution_profile {
+            AdaptiveRamGrowthExecutionProfile::Resident => {
+                self.fixed_prompt_processing_chunk_size_tokens
+            }
+            AdaptiveRamGrowthExecutionProfile::Paged => {
+                self.ssd_streaming_prompt_processing_chunk_size_tokens
+            }
         }
     }
 
@@ -109,12 +114,12 @@ impl Qwen3_5PromptProcessingChunkSizer {
         &self,
         chunk_start_token_position: usize,
         final_prompt_end_token_position_exclusive: usize,
-        sparse_experts_are_paged: bool,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
     ) -> usize {
         self.next_prompt_processing_chunk_end_with_maximum_executable_capacity(
             chunk_start_token_position,
             final_prompt_end_token_position_exclusive,
-            sparse_experts_are_paged,
+            execution_profile,
             usize::MAX,
         )
     }
@@ -124,15 +129,15 @@ impl Qwen3_5PromptProcessingChunkSizer {
         &self,
         chunk_start_token_position: usize,
         final_prompt_end_token_position_exclusive: usize,
-        sparse_experts_are_paged: bool,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
         maximum_executable_chunk_size_tokens: usize,
     ) -> usize {
         let configured_chunk_size_tokens =
-            self.configured_prompt_processing_chunk_size_tokens(sparse_experts_are_paged);
+            self.configured_prompt_processing_chunk_size_tokens(execution_profile);
         let executable_chunk_size_tokens = configured_chunk_size_tokens
             .min(maximum_executable_chunk_size_tokens)
             .max(1);
-        if sparse_experts_are_paged {
+        if execution_profile == AdaptiveRamGrowthExecutionProfile::Paged {
             return paged_chunk_end_after_folding_short_remainder(
                 chunk_start_token_position,
                 final_prompt_end_token_position_exclusive,
@@ -150,7 +155,7 @@ impl Qwen3_5PromptProcessingChunkSizer {
         &self,
         chunk_start_token_position: usize,
         final_prompt_end_token_position_exclusive: usize,
-        sparse_experts_are_paged: bool,
+        execution_profile: AdaptiveRamGrowthExecutionProfile,
         maximum_executable_chunk_size_tokens: usize,
     ) -> Vec<(usize, usize)> {
         let mut remaining_chunk_ranges = Vec::new();
@@ -160,7 +165,7 @@ impl Qwen3_5PromptProcessingChunkSizer {
                 .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
                     current_chunk_start,
                     final_prompt_end_token_position_exclusive,
-                    sparse_experts_are_paged,
+                    execution_profile,
                     maximum_executable_chunk_size_tokens,
                 );
             if current_chunk_end <= current_chunk_start {

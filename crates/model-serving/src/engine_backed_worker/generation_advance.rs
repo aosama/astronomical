@@ -8,7 +8,10 @@ use tokio::io::AsyncWrite;
 use super::fatal;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
-use crate::{GeneratedToken, ImageGenerationEngine, InferenceEngine, InferenceEngineError};
+use crate::{
+    EngineGenerationStart, GeneratedToken, ImageGenerationEngine, InferenceEngine,
+    InferenceEngineError,
+};
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
@@ -23,9 +26,15 @@ where
 {
     pub(crate) async fn advance_generation<WriteTransport>(
         &mut self,
-        mut active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        mut active_generation: ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<
+        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
+        WorkerRuntimeError,
+    >
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -40,27 +49,70 @@ where
         }
 
         let request_id = active_generation.request_id;
-        let generated_token = {
+        let decode_result = {
             let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
             else {
                 return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                     reason: "generation continued after the loaded model was removed".to_owned(),
                 });
             };
-            match loaded_model.engine.decode_next_token(request_id).await {
-                Ok(generated_token) => generated_token,
-                Err(InferenceEngineError::InvalidRequest { reason }) => {
+            loaded_model.engine.decode_next_token(request_id).await
+        };
+        let generated_token = match decode_result {
+            Ok(generated_token) => generated_token,
+            Err(InferenceEngineError::InvalidRequest { reason }) => {
+                Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
+                return Ok(None);
+            }
+            Err(InferenceEngineError::ResidentForkRequired { reason })
+                if active_generation.can_retry_streaming() =>
+            {
+                let Some(streaming_retry_request) =
+                    active_generation.streaming_retry_request.take()
+                else {
                     Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                     return Ok(None);
-                }
-                Err(engine_error) => {
-                    return fatal::report_fatal_engine_error(
+                };
+                active_generation.streaming_retry_attempted = true;
+                match self
+                    .retry_resident_generation_on_streaming(
                         request_id,
-                        engine_error,
-                        event_writer,
+                        streaming_retry_request,
+                        reason,
                     )
-                    .await;
+                    .await
+                {
+                    Ok(generation_start) => {
+                        self.apply_streaming_retry_start(
+                            &mut active_generation,
+                            generation_start,
+                            event_writer,
+                        )
+                        .await?;
+                        return Ok(Some(active_generation));
+                    }
+                    Err(InferenceEngineError::InvalidRequest { reason }) => {
+                        Self::send_invalid_request_failure(request_id, reason, event_writer)
+                            .await?;
+                        return Ok(None);
+                    }
+                    Err(retry_error) => {
+                        return fatal::report_fatal_engine_error(
+                            request_id,
+                            retry_error,
+                            event_writer,
+                        )
+                        .await;
+                    }
                 }
+            }
+            Err(InferenceEngineError::ResidentForkRequired { reason }) => {
+                Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
+                return Ok(None);
+            }
+            Err(engine_error) => {
+                return fatal::report_fatal_engine_error(request_id, engine_error, event_writer)
+                    .await;
             }
         };
         match generated_token {
@@ -72,6 +124,7 @@ where
                 first_decode_forward_elapsed_millis,
                 generation_finalization,
             } => {
+                active_generation.streaming_retry_request = None;
                 if let Some(elapsed_millis) = first_decode_forward_elapsed_millis {
                     event_writer
                         .send_event(&WorkerEvent::FirstDecodeCompleted {
@@ -353,5 +406,58 @@ where
                 Ok(Some(active_generation))
             }
         }
+    }
+
+    async fn apply_streaming_retry_start<WriteTransport>(
+        &self,
+        active_generation: &mut ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
+        generation_start: EngineGenerationStart,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        self.emit_persistent_prompt_cache_stats(event_writer)
+            .await?;
+        active_generation.cached_token_count = generation_start.cached_token_count();
+        active_generation.required_prompt_processing_token_count = active_generation
+            .prompt_token_count
+            .saturating_sub(generation_start.restored_prompt_prefix_token_count());
+        active_generation.prompt_work_reuse =
+            astronomical_ipc_protocol::WorkerPromptWorkReuse::default();
+        active_generation.prefill_processed_tokens = 0;
+        active_generation.prefill_elapsed_millis = 0;
+        active_generation.generation_started_at = None;
+        active_generation.last_reported_expert_memory_mode = generation_start.expert_memory_mode();
+        active_generation.persistent_prompt_cache_diagnostics = generation_start
+            .persistent_prompt_cache_diagnostics()
+            .cloned();
+
+        if let Some(expert_memory_mode) = generation_start.expert_memory_mode() {
+            event_writer
+                .send_event(&WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode })
+                .await?;
+        }
+        if active_generation.required_prompt_processing_token_count > 1
+            && let Some(prompt_processing_phase) = generation_start.prompt_processing_phase()
+        {
+            event_writer
+                .send_event(&WorkerEvent::PrefillProgress {
+                    request_id: active_generation.request_id,
+                    prompt_processing_phase,
+                    processed_tokens: 0,
+                    total_tokens: active_generation.required_prompt_processing_token_count,
+                    elapsed_millis: 0,
+                    forward_prefill_chunk_elapsed_millis: None,
+                    completed_prefill_chunk_tokens: None,
+                    mlx_memory_snapshot: None,
+                    expert_residency: None,
+                })
+                .await?;
+        }
+        Ok(())
     }
 }

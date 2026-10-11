@@ -8,8 +8,8 @@ use std::time::Instant;
 use astronomical_ipc_protocol::RequestId;
 
 use crate::{
-    AdaptiveRamGrowthContext, GeneratedToken, InferenceEngineError, PerformanceAttributionOutcome,
-    PerformanceOperation,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, GeneratedToken,
+    InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::completed_forward_memory::{
@@ -166,15 +166,10 @@ impl Qwen3_5EngineState {
                 }
                 None => {
                     let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
-                    let sparse_experts_are_paged = self
-                        .model
-                        .as_ref()
-                        .ok_or_else(|| {
-                            super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                        })?
-                        .sparse_experts_are_paged();
-                    let adaptive_ram_growth_context =
-                        AdaptiveRamGrowthContext::decode(1, sparse_experts_are_paged);
+                    let adaptive_ram_growth_context = AdaptiveRamGrowthContext::decode(
+                        1,
+                        AdaptiveRamGrowthExecutionProfile::Paged,
+                    );
                     let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
                         adaptive_ram_growth_context,
                         &mut active_request.performance_attribution,
@@ -190,40 +185,24 @@ impl Qwen3_5EngineState {
                     let model = self.model.as_ref().ok_or_else(|| {
                         super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
                     })?;
-                    // This log is the first-token decode seam. After the restore
-                    // above, `sparse_experts_are_paged` tells whether generation
-                    // will use the complete owner or stream/split retained pages.
+                    // This log is the first-token decode seam after prompt restore.
                     tracing::info!(
                         request_id = request_id.value(),
                         context_token_count = active_request.input_token_ids.len(),
-                        sparse_experts_are_paged,
+                        expert_memory_mode = ?model.expert_memory_mode(),
                         generation_residency_preparation_attempted =
                             active_request.generation_residency_preparation_attempted,
                         "starting first decode forward after prompt processing"
                     );
                     first_decode_forward_started_at = Some(Instant::now());
-                    let final_prompt_logits = if model.sparse_experts_are_paged() {
-                        // Paged decode resolves deferred GPU missing-route bitmaps
-                        // on a synchronous completion root before the token is
-                        // observable.
-                        model
-                            .forward_chunk_with_performance_attribution(
-                                &[final_prompt_token_id],
-                                active_request.next_position_tokens,
-                                &mut active_request.request_decoder_state,
-                                &mut active_request.performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?
-                    } else {
-                        model
-                            .build_forward_chunk_with_performance_attribution(
-                                &[final_prompt_token_id],
-                                active_request.next_position_tokens,
-                                &mut active_request.request_decoder_state,
-                                &mut active_request.performance_attribution,
-                            )
-                            .map_err(InferenceEngineError::from)?
-                    };
+                    let final_prompt_logits = model
+                        .forward_chunk_with_performance_attribution(
+                            &[final_prompt_token_id],
+                            active_request.next_position_tokens,
+                            &mut active_request.request_decoder_state,
+                            &mut active_request.performance_attribution,
+                        )
+                        .map_err(InferenceEngineError::from)?;
                     active_request.advance_position(1)?;
                     let first_generated_token =
                         active_request.build_generated_token(model, &final_prompt_logits)?;
@@ -234,24 +213,10 @@ impl Qwen3_5EngineState {
                         final_prompt_token_id,
                         &mut active_request.performance_attribution,
                     );
-                    if !model.sparse_experts_are_paged() {
-                        active_request
-                            .performance_attribution
-                            .measure_operation(
-                                PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                                |_performance_attribution| {
-                                    model.async_evaluate_generation(
-                                        &first_generated_token,
-                                        &active_request.request_decoder_state,
-                                    )
-                                },
-                            )
-                            .map_err(InferenceEngineError::from)?;
-                    }
                     record_completed_adaptive_ram_growth(
                         &mut self.adaptive_ram_growth_guard,
                         adaptive_ram_growth_context
-                            .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                            .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
                         true,
                         model,
                         active_memory_bytes_before_growth,
@@ -354,13 +319,8 @@ impl Qwen3_5EngineState {
             ));
         }
 
-        let sparse_experts_are_paged = self
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-            .sparse_experts_are_paged();
         let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, sparse_experts_are_paged);
+            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged);
         let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
             adaptive_ram_growth_context,
             &mut active_request.performance_attribution,
@@ -413,24 +373,10 @@ impl Qwen3_5EngineState {
             );
             next_generated_token
         };
-        if !model.sparse_experts_are_paged() {
-            active_request
-                .performance_attribution
-                .measure_operation(
-                    PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                    |_performance_attribution| {
-                        model.async_evaluate_generation(
-                            &next_generated_token,
-                            &active_request.request_decoder_state,
-                        )
-                    },
-                )
-                .map_err(InferenceEngineError::from)?;
-        }
         let completed_forward_memory = collect_completed_forward_memory_snapshot(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context
-                .with_sparse_experts_are_paged(model.sparse_experts_are_paged()),
+                .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
             true,
             model,
             active_memory_bytes_before_growth,

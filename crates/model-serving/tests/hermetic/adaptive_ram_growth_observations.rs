@@ -4,11 +4,15 @@
 //! readable: this file explains how completed forwards teach reusable transient
 //! evidence, while `adaptive_ram_growth_guard.rs` covers projection boundaries.
 
-use astronomical_model_serving::{AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, MemoryPhase};
+use astronomical_model_serving::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+    MemoryPhase,
+};
 
-const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext = AdaptiveRamGrowthContext::decode(1, false);
+const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
+    AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
 const DEFAULT_PREFILL_CONTEXT: AdaptiveRamGrowthContext =
-    AdaptiveRamGrowthContext::prefill(128, 0, false, false);
+    AdaptiveRamGrowthContext::prefill(128, 0, false, AdaptiveRamGrowthExecutionProfile::Resident);
 
 #[test]
 fn should_keep_prefill_and_decode_transient_high_water_values_independent() {
@@ -245,7 +249,7 @@ fn should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_
 
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, true),
+            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged),
             27_806_577_158,
             192_061_440,
             70_778_880,

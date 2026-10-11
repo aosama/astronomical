@@ -7,11 +7,11 @@ use std::path::{Path, PathBuf};
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
-use super::quantized_expert_layer_plan;
 use crate::MlxAllocationAdmission;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
-use crate::qwen3_5::Qwen3_5Config;
+use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan;
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
 
 impl Qwen3_5ExpertPager {
     /// Returns the number of MoE layers with validated layer plans.

@@ -46,11 +46,6 @@ impl Qwen3_5EngineState {
             return Ok(None);
         }
         let prefill_start = active_request.prefill_cursor;
-        let sparse_experts_are_paged = self
-            .model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-            .sparse_experts_are_paged();
         self.model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
@@ -78,7 +73,7 @@ impl Qwen3_5EngineState {
             .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
                 active_request.prefill_cursor,
                 prefill_end_exclusive,
-                sparse_experts_are_paged,
+                crate::AdaptiveRamGrowthExecutionProfile::Paged,
                 active_request
                     .maximum_successful_prefill_chunk_tokens()
                     .unwrap_or(usize::MAX),

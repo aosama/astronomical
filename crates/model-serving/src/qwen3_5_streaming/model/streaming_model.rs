@@ -15,7 +15,7 @@ use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
 use crate::qwen3_5_streaming::{
     PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
-    Qwen3_5ResidentExpertWeights, RetainedExpertCache,
+    RetainedExpertCache,
 };
 use crate::{
     DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution, RequestExpertResidency,
@@ -29,8 +29,6 @@ pub struct Qwen3_5StreamingModel {
     pub(crate) base: Qwen3_5ModelBase,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
-    /// Complete contiguous expert arrays when the whole sparse payload fits.
-    pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
     pub(crate) retained_experts: Option<RefCell<RetainedExpertCache>>,
     /// Pure target published at load and refreshed before mandatory expert reads.
@@ -64,33 +62,11 @@ impl std::ops::DerefMut for Qwen3_5StreamingModel {
 }
 
 impl Qwen3_5StreamingModel {
-    /// Returns one mode-neutral expert-memory snapshot.
-    ///
-    /// Resident mode reports complete-owner entries and payload while retaining
-    /// native cumulative page counters at their prior values. Paged mode reports
-    /// the native cache directly. This lets telemetry change ownership without
-    /// resetting process-lifetime paging evidence.
+    /// Returns the retained pager cache's expert-memory snapshot.
     #[must_use]
     pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
         if self.expert_pager.is_none() {
             return ExpertWeightMemoryCacheStatistics::default();
-        }
-        if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
-            return ExpertWeightMemoryCacheStatistics {
-                entry_count: resident_expert_weights.expert_entry_count(),
-                resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
-                maximum_resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
-                eviction_count: 0,
-                disk_page_load_count: 0,
-                disk_batch_load_count: 0,
-                complete_layer_count: resident_expert_weights.layer_count(),
-                complete_layer_payload_byte_count: resident_expert_weights.payload_byte_count(),
-                partial_layer_count: 0,
-                partial_layer_payload_byte_count: 0,
-                mandatory_read_promotion_count: 0,
-                complete_layer_eviction_count: 0,
-                partial_layer_eviction_count: 0,
-            };
         }
         self.retained_experts.as_ref().map_or_else(
             ExpertWeightMemoryCacheStatistics::default,

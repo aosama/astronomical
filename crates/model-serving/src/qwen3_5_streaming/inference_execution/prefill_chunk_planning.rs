@@ -4,7 +4,8 @@
 //! projection, and adaptive-RAM growth context without side effects.
 
 use crate::{
-    AdaptiveRamGrowthContext, persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile,
+    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
 use super::Qwen3_5EngineState;
@@ -138,13 +139,13 @@ impl Qwen3_5EngineState {
             0,
             Qwen3_5PrefillExecutionContext::new(
                 active_request.visual_embeddings.is_some(),
-                model.sparse_experts_are_paged(),
+                AdaptiveRamGrowthExecutionProfile::Paged,
                 self.persistent_prompt_cache.is_some()
                     && active_request.can_use_persistent_prompt_cache,
             )
             .context_identifier_flags(),
             active_request.visual_embeddings.is_some(),
-            model.sparse_experts_are_paged(),
+            AdaptiveRamGrowthExecutionProfile::Paged,
         );
 
         Ok(PrefillChunkPlan {

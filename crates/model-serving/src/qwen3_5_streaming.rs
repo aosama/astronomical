@@ -1,7 +1,4 @@
-pub(crate) mod artifacts;
 pub(crate) mod expert_paging;
-#[cfg(feature = "direct-mlx")]
-pub(crate) mod expert_residency;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod inference_execution;
 #[cfg(feature = "direct-mlx")]
@@ -9,6 +6,8 @@ pub(crate) mod model;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
+#[cfg(feature = "direct-mlx")]
+pub use inference_execution::Qwen3_5Engine as Qwen3_5StreamingEngine;
 
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::build_source_manifests;
@@ -16,7 +15,6 @@ pub use crate::expert_paging::build_source_manifests;
 pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_paging::RetainedExpertCache;
-pub use expert_paging::quantized_expert_layer_plan::build_quantized_expert_layer_plan;
 pub use expert_paging::route_observation::{
     LayerRoutedExpertIds, ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
     sorted_unique_layer_routed_expert_ids,
@@ -24,17 +22,9 @@ pub use expert_paging::route_observation::{
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_residency::Qwen3_5ResidentExpertWeights;
-#[cfg(feature = "direct-mlx")]
-pub use expert_residency::maximum_resident_gate_up_fusion_transient_payload_bytes;
-#[cfg(feature = "direct-mlx")]
-pub use expert_residency::{
-    ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
-};
-#[cfg(feature = "direct-mlx")]
 pub(crate) use model::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
-    Qwen3_5ExpertResidencyTransitionReason, reclaim_retained_experts_for_request_memory_pressure,
+    reclaim_retained_experts_for_request_memory_pressure,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{

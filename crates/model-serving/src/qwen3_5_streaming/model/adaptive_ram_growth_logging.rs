@@ -18,7 +18,7 @@ pub(crate) fn log_adaptive_ram_growth_admission_decision(
         decision,
         phase = ?adaptive_ram_growth_context.memory_phase(),
         forward_token_count = adaptive_ram_growth_context.forward_token_count(),
-        sparse_experts_are_paged = adaptive_ram_growth_context.sparse_experts_are_paged(),
+        execution_profile = ?adaptive_ram_growth_context.execution_profile(),
         current_active_memory_bytes = adaptive_ram_growth_projection.current_active_memory_bytes(),
         exact_persistent_growth_bytes =
             adaptive_ram_growth_projection.exact_persistent_growth_bytes(),

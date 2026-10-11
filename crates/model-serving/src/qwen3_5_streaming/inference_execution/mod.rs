@@ -1,5 +1,6 @@
 mod advance_generation;
 mod completed_forward_memory;
+mod context_memory_admission;
 /// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decode_expert_memory_handoff;
 mod decoder_state_reuse;
@@ -28,7 +29,6 @@ mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
 mod request_memory_release;
-mod resident_memory_pressure;
 mod start_generation;
 mod terminal_prefill_seed;
 mod test_controls;

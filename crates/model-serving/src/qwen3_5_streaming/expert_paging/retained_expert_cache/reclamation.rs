@@ -33,14 +33,6 @@ impl RetainedExpertCache {
             .is_some()
     }
 
-    pub fn release_all(&mut self) -> bool {
-        let had_experts = self.resident_payload_bytes > 0;
-        for layer_index in 0..self.tables_by_layer.len() {
-            self.remove_layer(layer_index);
-        }
-        had_experts
-    }
-
     #[must_use]
     pub fn statistics(&self) -> ExpertWeightMemoryCacheStatistics {
         let occupied_layer_count = self

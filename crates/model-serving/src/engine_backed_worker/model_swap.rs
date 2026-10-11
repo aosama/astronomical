@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
-use super::support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
+use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
 
@@ -150,6 +150,10 @@ where
         };
 
         self.loaded_runtime = Some(replacement_runtime);
+        self.selected_model = Some(SelectedModel {
+            model_directory: model_directory.to_owned(),
+            model_configuration: model_configuration.clone(),
+        });
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
         event_writer.send_event(&model_swapped_event).await?;
         if let Some(mut worker_runtime_feature_configuration) =
@@ -212,7 +216,12 @@ fn bounded_embedding_engine_load_failure(
         .collect()
 }
 
-fn factory_runtime_matches_configuration<Processor, Engine, ImageEngine, EmbeddingsEngine>(
+pub(super) fn factory_runtime_matches_configuration<
+    Processor,
+    Engine,
+    ImageEngine,
+    EmbeddingsEngine,
+>(
     factory_runtime: &ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
     model_configuration: &WorkerModelConfiguration,
 ) -> bool {
