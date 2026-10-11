@@ -36,8 +36,9 @@ use crate::performance_throughput::completion::{
 // through the journey driver rather than through its own module path.
 pub(crate) use crate::performance_throughput::completion::ThroughputMeasurement;
 use crate::performance_throughput::historical_record::{
-    ThroughputJourneyKind, ThroughputRecord, append_throughput_history, current_unix_epoch_millis,
-    format_utc_timestamp, history_log_path, recorded_git_commit, throughput_record_json,
+    MemoryCellBudgetExhaustedStage, ThroughputJourneyKind, ThroughputRecord,
+    append_throughput_history, current_unix_epoch_millis, format_utc_timestamp, history_log_path,
+    recorded_git_commit, throughput_record_json,
 };
 use crate::performance_throughput::machine_specs::MachineSpecs;
 use crate::performance_throughput::worker_environment::{
@@ -148,6 +149,7 @@ impl ThroughputJourney {
 pub(crate) struct JourneyRunOutcome {
     pub(crate) measurement: ThroughputMeasurement,
     pub(crate) measured_budget_exhausted: bool,
+    pub(crate) budget_exhausted_stage: Option<MemoryCellBudgetExhaustedStage>,
     pub(crate) final_health_snapshot: WorkerHealthSnapshot,
     /// The last active-request progress observed by the background sampler,
     /// which survives cancellation: a cancelled generation clears the health
@@ -296,6 +298,7 @@ pub(crate) async fn measure_throughput(
                     decode_tokens_per_second: 0.0,
                 },
                 measured_budget_exhausted: true,
+                budget_exhausted_stage: Some(MemoryCellBudgetExhaustedStage::LaunchOrIdle),
                 final_health_snapshot: WorkerHandle::unavailable().worker_health_snapshot(),
                 last_observed_active_request_progress: None,
                 logging_directory,
@@ -396,7 +399,14 @@ pub(crate) async fn measure_throughput(
             false
         });
     }
-    let measured_budget_exhausted = !measured_completed;
+    let budget_exhausted_stage = if !warmup_completed {
+        Some(MemoryCellBudgetExhaustedStage::Warmup)
+    } else if !measured_completed {
+        Some(MemoryCellBudgetExhaustedStage::Measured)
+    } else {
+        None
+    };
+    let measured_budget_exhausted = budget_exhausted_stage.is_some();
     let final_health_snapshot = worker_handle.worker_health_snapshot();
     // The sampler holds one final poll's worth of lag; stop it, then prefer the
     // live snapshot's progress and fall back to what the sampler preserved.
@@ -436,6 +446,7 @@ pub(crate) async fn measure_throughput(
     JourneyRunOutcome {
         measurement,
         measured_budget_exhausted,
+        budget_exhausted_stage,
         final_health_snapshot,
         last_observed_active_request_progress,
         logging_directory,

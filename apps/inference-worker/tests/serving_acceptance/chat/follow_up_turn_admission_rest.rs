@@ -16,13 +16,15 @@ use std::fs;
 use std::path::Path;
 
 use super::openai_rest::{
-    E2E_TIMEOUT, launch_serving_rest_server_for_model, post_chat_completion,
+    E2E_TIMEOUT, launch_serving_rest_server_for_model_with_memory_limit, post_chat_completion,
     stop_serving_rest_server,
 };
 use super::thinking_budget_support::{
     MAXIMUM_OUTPUT_TOKEN_COUNT, ROMEO_AND_JULIET_SOURCE, write_thinking_budget_acceptance_config,
 };
 use crate::small_dense_model;
+
+const MAXIMUM_MODEL_TEST_MEMORY_BYTES: u64 = 36_000_000_000;
 
 /// The complete Romeo and Juliet fixture spans several 2,048-token prefill
 /// chunks, which is what teaches the adaptive budget its chunk-shaped
@@ -58,11 +60,12 @@ async fn should_admit_the_follow_up_turn_after_a_long_successful_prefill() {
         );
         let performance_log_directory = tempfile::tempdir()
             .expect("the follow-up-turn journey should create a performance-log directory");
-        let rest_server = launch_serving_rest_server_for_model(
+        let rest_server = launch_serving_rest_server_for_model_with_memory_limit(
             &selected_model.model_id,
             selected_model.model_directory,
             Some(isolated_worker_home.path()),
             Some(performance_log_directory.path()),
+            Some(MAXIMUM_MODEL_TEST_MEMORY_BYTES),
         )
         .await;
 
@@ -179,11 +182,12 @@ async fn should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider()
         );
         let performance_log_directory = tempfile::tempdir()
             .expect("the follow-up-turn journey should create a performance-log directory");
-        let rest_server = launch_serving_rest_server_for_model(
+        let rest_server = launch_serving_rest_server_for_model_with_memory_limit(
             &selected_model.model_id,
             selected_model.model_directory,
             Some(isolated_worker_home.path()),
             Some(performance_log_directory.path()),
+            Some(MAXIMUM_MODEL_TEST_MEMORY_BYTES),
         )
         .await;
 

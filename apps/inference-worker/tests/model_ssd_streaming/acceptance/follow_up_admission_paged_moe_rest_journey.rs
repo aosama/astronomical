@@ -28,13 +28,11 @@ use crate::support::{acceptance_evidence, configured_installed_model_directory_b
 
 const LOG_MARKER: &str = "[follow-up-admission-paged-moe]";
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
-/// The regression guard shape: the resident chunk teaches the budget at its
-/// own operation scope, while a wider-than-resident SSD-streaming chunk is
-/// the bound the paged follow-up admission resolves at. With the pre-fix code
-/// this pair inflated the reserve by the chunk ratio; with the fix each mode
-/// resolves its own scope, so both turns must simply complete.
+/// Both engines use the fixed 2,048-token test span here. The dense companion
+/// separately configures a wider SSD chunk while remaining resident, so this
+/// paged journey can preserve the same deterministic prefill shape.
 const RESIDENT_CHUNK_TOKENS: u32 = 2_048;
-const SSD_STREAMING_CHUNK_TOKENS: u32 = 4_096;
+const SSD_STREAMING_CHUNK_TOKENS: u32 = RESIDENT_CHUNK_TOKENS;
 const MAXIMUM_MODEL_TEST_MEMORY_BYTES: u64 = 36_000_000_000;
 const TEN_THOUSAND_TOKEN_ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
