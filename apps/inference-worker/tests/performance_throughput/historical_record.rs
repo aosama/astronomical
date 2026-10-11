@@ -33,6 +33,14 @@ pub enum ThroughputJourneyKind {
     MemoryCeilingSweep,
 }
 
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryCellBudgetExhaustedStage {
+    LaunchOrIdle,
+    Warmup,
+    Measured,
+}
+
 /// The memory-constraint cell one ceiling-sweep record ran under, plus the
 /// residency and byte-traffic evidence that distinguishes deliberate expert
 /// paging from kernel-paged swap collapse. The core pair is
@@ -68,6 +76,8 @@ pub struct MemoryCellRecord {
     /// cancelled; the rates and token counts above are partial evidence, while
     /// the byte counters cover everything observed before the boundary.
     pub budget_exhausted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_exhausted_stage: Option<MemoryCellBudgetExhaustedStage>,
 }
 
 /// One throughput measurement captured from the measured completion of a
