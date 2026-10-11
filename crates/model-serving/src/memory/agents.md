@@ -1,2 +1,0 @@
-- If you change code here, prove it with the model-memory acceptance test journeys.
-- Logging is very important for the code in this folder so you can introspect the logs and understand what was the memory and/or streaming behaviour given the change you made.
