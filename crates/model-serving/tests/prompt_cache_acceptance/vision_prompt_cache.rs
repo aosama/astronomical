@@ -264,7 +264,7 @@ fn representative_visual_request_with_optional_later_image(
                     tool_choice: ChatToolChoice::None,
                     settings: ChatGenerationSettings {
                         max_output_tokens: 1,
-                        temperature_thousandths: Some(0),
+                        temperature_thousandths: None,
                         top_p_thousandths: None,
                         seed: Some(VISUAL_ACCEPTANCE_SAMPLING_SEED),
                         thinking_budget: None,

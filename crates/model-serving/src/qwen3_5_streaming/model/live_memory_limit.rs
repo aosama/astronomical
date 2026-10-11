@@ -1,9 +1,7 @@
-//! Atomic coordination of a live MLX ceiling and binary expert ownership.
+//! Coordinates the live MLX ceiling with the streaming pager's retained-page budget.
 //!
-//! Lowering first demotes a complete resident owner when necessary, then reclaims
-//! retained pages before MLX enforces the smaller limit. Raising lets MLX accept
-//! capacity before Rust publishes a larger budget and atomically attempts complete
-//! residency. A failed raised transition restores both native and Rust ceilings.
+//! Keeping both limits in one transition prevents the retained cache from exceeding
+//! the user's current memory grant.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -27,8 +25,7 @@ impl Qwen3_5Model {
                 )
             })?;
         let expert_weight_memory_cache_statistics = self.expert_weight_memory_cache_statistics();
-        // Sparse expert payload is elastic in either mode: the complete owner can
-        // demote, while paged mode can evict retained slots. Dense weights are not.
+        // Retained sparse pages are reclaimable; dense weights are not.
         let evictable_retained_expert_payload_bytes = if self.expert_pager.is_some() {
             expert_weight_memory_cache_statistics.resident_payload_byte_count
         } else {

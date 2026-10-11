@@ -1,6 +1,6 @@
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{PerformanceAttribution, PreparedInferenceRequest};
+use crate::{PerformanceAttribution, PerformanceOperation, PreparedInferenceRequest};
 
 use super::Qwen3_5ProcessedImage;
 
@@ -31,6 +31,18 @@ impl PreparedInferenceRequest for Qwen3_5InferenceRequest {
 
     fn clone_for_streaming_retry(&self) -> Option<Self> {
         Some(self.clone())
+    }
+
+    fn record_streaming_retry_interval(
+        &mut self,
+        started_at: std::time::Instant,
+        ended_at: std::time::Instant,
+    ) {
+        self.performance_attribution.record_operation_interval(
+            PerformanceOperation::ResidentToStreamingRetry,
+            started_at,
+            ended_at,
+        );
     }
 }
 

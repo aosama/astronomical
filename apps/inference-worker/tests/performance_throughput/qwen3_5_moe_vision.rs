@@ -9,20 +9,22 @@
 //! prefill of the visual embeddings — not just text with a token image. With
 //! the continuation instruction and the Romeo and Juliet opening the full
 //! input is ~10,300 tokens, clearing the >=10,000-token input requirement;
-//! each measured completion acquires ~1,000 output tokens.
+//! each measured completion acquires 500 output tokens.
 //!
 //! The image is built in-test as a solid-color PNG, so the fixture stays
 //! source-controlled and tiny while the patch grid stays large; visual token
 //! counts depend only on the resized grid, not the pixel content.
 //!
 //! The test case follows AGENTS.md "Instructions for Performance Throughput
-//! Tests": the ~1,000-token warmup completion (small image, ~100 output
+//! Tests": the ~500-token warmup completion (small image, ~50 output
 //! tokens) is discarded so first-use JIT kernel compilation — including the
 //! vision tower's — never inflates the measured prefill, the SSD (persistent
 //! prompt) cache is disabled, and the measured completion's server-attributed
 //! rates persist to the durable historical record under the "vision" journey
 //! kind, which delineates them from the text journey's lines in the same
-//! shared history log. The journey asserts nothing about the measured rates.
+//! shared history log. The journey verifies measured token counts and zero
+//! cache reuse; both chunk sizes are fixed at 2,048 tokens and the memory
+//! ceiling is capped at 36 GB.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU
 //! memory, so it is `#[ignore]`d and not wired into CI. Invoke it directly with
@@ -50,32 +52,32 @@ const WARMUP_IMAGE_SIDE_PIXELS: u32 = 448;
 /// into 9,216 visual tokens.
 const MEASURED_IMAGE_SIDE_PIXELS: u32 = 3_072;
 
-/// The short warmup: a ~1,000-token Romeo and Juliet opening, continued for a
+/// The short warmup: a ~500-token Romeo and Juliet opening, continued for a
 /// short passage, that spins up first-use JIT kernels before the measured run.
 const WARMUP_INPUT_INSTRUCTION: &str =
     "Describe the supplied image, then continue the supplied Romeo and Juliet story above.";
 
-/// The ~1,000-token Romeo and Juliet opening used as the warmup and measured
-/// continuation source.
+/// The Romeo and Juliet source used for the bounded warmup and measured
+/// continuation.
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
 
-/// The warmup output cap: ~100 output tokens.
-const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 100;
+/// The warmup output cap.
+const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;
 
 /// The continuation instruction prepended to the measured image and the Romeo
 /// and Juliet source.
-const MEASURED_INPUT_INSTRUCTION: &str = "Describe the supplied image, then continue the supplied Romeo and Juliet story above for approximately 1000 words.";
+const MEASURED_INPUT_INSTRUCTION: &str = "Describe the supplied image, then continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 
-/// The measured output cap: ~1,000 output tokens (±10% acceptable).
-const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 1_000;
+/// The measured output cap: 500 output tokens (±10% acceptable).
+const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
 
 /// The sampling temperature in thousandths (1_000 = 1.0, unclamped).
 const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 
 /// Measures the resident sparse-MoE model's VISION serving prompt-processing
 /// and decode throughput: after a short small-image warmup, a 9,216-visual-
-/// token image plus the Romeo and Juliet continuation drives ~1,000 output
+/// token image plus the Romeo and Juliet continuation drives 500 output
 /// tokens with the SSD (persistent prompt) cache disabled, and the measured
 /// completion's server-attributed rates are persisted to the durable
 /// historical record under the "vision" journey kind.
@@ -83,9 +85,12 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 #[ignore = "loads the resident 35B sparse-MoE model and measures its vision serving throughput over IPC"]
 #[serial]
 fn should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throughput() {
-    let journey = ThroughputJourney::production_default(
+    let mut journey = ThroughputJourney::production_default(
         ThroughputJourneyKind::Vision,
-        WARMUP_INPUT_INSTRUCTION.to_owned() + "\n\n" + ROMEO_AND_JULIET_SOURCE,
+        throughput_support::romeo_and_juliet_warmup_prompt(
+            WARMUP_INPUT_INSTRUCTION,
+            ROMEO_AND_JULIET_SOURCE,
+        ),
         vec![solid_color_png(WARMUP_IMAGE_SIDE_PIXELS)],
         WARMUP_MAXIMUM_OUTPUT_TOKENS,
         MEASURED_INPUT_INSTRUCTION.to_owned() + "\n\n" + ROMEO_AND_JULIET_SOURCE,
@@ -93,7 +98,12 @@ fn should_measure_resident_sparse_moe_vision_prompt_processing_and_decode_throug
         MEASURED_MAXIMUM_OUTPUT_TOKENS,
         TEMPERATURE_THOUSANDTHS,
     );
-    throughput_support::run_journey_with_timeout(support::resident_sparse_moe_model_id(), journey);
+    journey.maximum_mlx_memory_bytes = Some(throughput_support::MAXIMUM_MODEL_MEMORY_BYTES);
+    let measured_throughput = throughput_support::run_journey_with_timeout(
+        support::resident_sparse_moe_model_id(),
+        journey,
+    );
+    throughput_support::assert_measurement_shape(&measured_throughput);
 }
 
 /// Encodes one solid-color PNG of the requested side length. The pixel content

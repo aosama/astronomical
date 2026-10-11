@@ -6,11 +6,12 @@
 //! - adaptive RAM growth supplies learned transient and peak evidence;
 //! - expert residency exposes the elastic bytes that may be reclaimed.
 //!
-//! Initial request admission may demote an indivisible complete-resident expert
-//! model. Per-forward admission then preserves the chosen chunk/token count and
-//! reclaims only enough retained paged experts to satisfy stable and expected-peak
-//! limits. Recovery-only headroom is diagnostic: an actual typed MLX allocation
-//! failure owns checkpoint rollback, exact reclamation, and one unchanged retry.
+//! Initial request admission reclaims retained pages only; complete-residency
+//! admission belongs to the resident engine. Per-forward admission preserves the
+//! chosen chunk/token count and reclaims only enough retained pages to satisfy
+//! stable and expected-peak limits. Recovery-only headroom is diagnostic: an
+//! actual typed MLX allocation failure owns checkpoint rollback, exact
+//! reclamation, and one unchanged retry.
 //!
 //! On successful admission this module constrains retained expert ownership to
 //! the strict-ceiling capacity left by the concrete forward reserve. That handoff
@@ -209,7 +210,7 @@ impl Qwen3_5EngineState {
             )
         })?;
         // The first projection describes ownership exactly as sampled. It may be
-        // replaced below after complete-resident demotion or paged-byte eviction.
+        // replaced below after retained-page eviction.
         let mut first_forward_projection = self
             .adaptive_ram_growth_guard
             .project_growth_for_context(

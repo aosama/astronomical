@@ -131,10 +131,12 @@ pub enum PerformanceOperation {
     PreviousTokenPrefetch,
     CompiledElementwiseGraphConstruction,
     ExpertLayerPlanConstruction,
+    ArtifactRamBudgetGeometry,
+    ResidentToStreamingRetry,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::ExpertLayerPlanConstruction as usize + 1;
+    pub(super) const COUNT: usize = Self::ResidentToStreamingRetry as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -259,6 +261,8 @@ impl PerformanceOperation {
         Self::PreviousTokenPrefetch,
         Self::CompiledElementwiseGraphConstruction,
         Self::ExpertLayerPlanConstruction,
+        Self::ArtifactRamBudgetGeometry,
+        Self::ResidentToStreamingRetry,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -465,6 +469,8 @@ impl PerformanceOperation {
             Self::CompiledElementwiseGraphConstruction => "compiled_elementwise_graph_construction",
             Self::ExpertLayerPlanConstruction => "expert_layer_plan_construction",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
+            Self::ArtifactRamBudgetGeometry => "artifact_ram_budget_geometry",
+            Self::ResidentToStreamingRetry => "resident_to_streaming_retry",
         }
     }
 

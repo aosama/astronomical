@@ -35,6 +35,7 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
 /// resolves its own scope, so both turns must simply complete.
 const RESIDENT_CHUNK_TOKENS: u32 = 2_048;
 const SSD_STREAMING_CHUNK_TOKENS: u32 = 4_096;
+const MAXIMUM_MODEL_TEST_MEMORY_BYTES: u64 = 36_000_000_000;
 const TEN_THOUSAND_TOKEN_ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
 const TURN_ONE_INSTRUCTION: &str =
@@ -67,16 +68,16 @@ async fn run_follow_up_admission_journey() {
         .canonicalize()
         .unwrap_or(isolated_worker_home_path);
     let artifact_payload_bytes = artifact_directory_regular_file_bytes(&model_directory);
-    // A ceiling at 87 percent of the artifact payload forces the paged regime
-    // (the measured production shape: a 36.83 GB artifact under a 32 GB
-    // ceiling) while staying far enough below the machine bound that the
-    // journey itself cannot collapse the kernel pager.
-    let ceiling_bytes = artifact_payload_bytes.saturating_mul(87) / 100;
+    // A ceiling below the validated artifact payload forces the paged regime.
+    let ceiling_bytes =
+        (artifact_payload_bytes.saturating_mul(87) / 100).min(MAXIMUM_MODEL_TEST_MEMORY_BYTES);
     let ceiling_gb = ceiling_bytes / 1_000_000_000;
     let ceiling_bytes = ceiling_gb * 1_000_000_000;
     assert!(
-        ceiling_bytes > 0 && ceiling_bytes < artifact_payload_bytes,
-        "the discovered artifact must admit a paged ceiling below its payload"
+        ceiling_bytes > 0
+            && ceiling_bytes < artifact_payload_bytes
+            && ceiling_bytes <= MAXIMUM_MODEL_TEST_MEMORY_BYTES,
+        "the discovered artifact must admit a paged ceiling within the model-test budget"
     );
     write_follow_up_admission_config(&isolated_worker_home_path, &model_directory, ceiling_gb);
     eprintln!(

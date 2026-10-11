@@ -100,6 +100,16 @@ pub trait PreparedInferenceRequest {
     {
         None
     }
+
+    /// Adds a completed resident-to-streaming replacement interval to the replay request.
+    ///
+    /// Request types without request-scoped performance attribution may keep the default.
+    fn record_streaming_retry_interval(
+        &mut self,
+        _started_at: std::time::Instant,
+        _ended_at: std::time::Instant,
+    ) {
+    }
 }
 
 /// Synchronous architecture-specific implementation executed only on the MLX owner thread.

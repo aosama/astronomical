@@ -79,16 +79,15 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
-        // Keep model borrows operation-local. Memory admission may demote the
-        // complete resident owner through `&mut self`; every forward must borrow
-        // the model again afterward and observe the newly selected mode.
+        // Keep model borrows operation-local because memory admission may reclaim
+        // retained pages through `&mut self`.
         if let Some(prefill_progress) =
             self.advance_prompt_prefill_if_pending(request_id, active_request)?
         {
             return Ok(ActiveRequestAdvance::Continue(prefill_progress));
         }
-        // Restore complete RAM ownership before the UI says "Preparing generation".
-        // Announcing first left a multi-second streaming label on a fitting model.
+        // Restore the decode-phase retained-page budget before announcing
+        // generation preparation, so the UI does not report the prefill policy.
         if !active_request.generation_residency_preparation_attempted {
             active_request.generation_residency_preparation_attempted = true;
             self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
