@@ -23,6 +23,9 @@ use crate::support::serving_rest::{
     SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
     stop_real_model_rest_server,
 };
+use crate::support::worker_process_observation::{
+    WorkerProcessTimeline, is_process_running, sole_worker_child_process_identifier,
+};
 use crate::support::{
     artifact_bytes::acceptance_model_scan_root, configured_installed_model_directory_by_id,
     exact_model_prompt, resident_sparse_moe_model_id,
@@ -117,12 +120,25 @@ async fn run_lower_ceiling_demotion_journey() {
         "the demotion target must remain at or above the streaming geometry floor: target={lowered_ceiling_bytes} floor={initial_floor_bytes}"
     );
 
+    let trusted_worker_process_identifier = sole_worker_child_process_identifier(
+        "the resident baseline must own exactly one real worker process",
+    );
+
+    // The supervisor replaces the worker across a process boundary, so observe
+    // that boundary from outside the supervisor. An in-process runtime swap
+    // would keep the same worker process for the whole journey.
+    let worker_process_timeline = WorkerProcessTimeline::start();
     let lowered_ceiling_document = put_json_endpoint(
         server_address,
         "/v1/config/maximum-mlx-memory",
         &json!({"maximum_mlx_memory_gb": lowered_ceiling_gb}),
     )
     .await;
+    let observed_worker_processes = worker_process_timeline.stop().await;
+    assert_worker_process_boundary_crossed(
+        trusted_worker_process_identifier,
+        &observed_worker_processes,
+    );
     assert_eq!(
         lowered_ceiling_document["effective_mlx_memory_ceiling_bytes"].as_u64(),
         Some(lowered_ceiling_bytes),
@@ -164,6 +180,46 @@ const DEMOTION_BASELINE_ASSISTANT_PLACEHOLDER: &str = "(baseline answer)";
 const BEHAVIOR_PROMPT_CONTEXT_BYTES: u64 = 100_000_000;
 /// Gap keeping the demotion target clearly below the artifact payload.
 const DEMOTION_MARGIN_BELOW_ARTIFACT_BYTES: u64 = 4_000_000_000;
+
+/// Requires that the demotion crossed a real process boundary: the original
+/// worker was reaped, a different worker now serves, and at no sampled instant
+/// were two model-bearing workers alive at once.
+fn assert_worker_process_boundary_crossed(
+    trusted_worker_process_identifier: u32,
+    observed_worker_processes: &[Vec<u32>],
+) {
+    if let Some(overlapping_identifiers) = observed_worker_processes
+        .iter()
+        .find(|identifiers| identifiers.len() > 1)
+    {
+        panic!(
+            "two model-bearing workers coexisted during the demotion, which a stop-first restart cannot produce: {overlapping_identifiers:?} in {observed_worker_processes:?}"
+        );
+    }
+    assert!(
+        !is_process_running(trusted_worker_process_identifier),
+        "the resident worker {trusted_worker_process_identifier} must be reaped before the replacement loads"
+    );
+    assert!(
+        observed_worker_processes
+            .iter()
+            .any(|identifiers| identifiers.is_empty()),
+        "a stop-first demotion must be observable as an interval in which no model-bearing worker process exists; a candidate-first overlap would instead show both workers at once. Observed {observed_worker_processes:?}"
+    );
+    let demoted_worker_process_identifier = sole_worker_child_process_identifier(
+        "the demoted journey must own exactly one replacement worker process",
+    );
+    assert_ne!(
+        demoted_worker_process_identifier, trusted_worker_process_identifier,
+        "a real model-bearing process boundary must separate the resident and streaming phases; the timeline was {observed_worker_processes:?}"
+    );
+    assert!(
+        observed_worker_processes
+            .iter()
+            .any(|identifiers| identifiers.contains(&trusted_worker_process_identifier)),
+        "the timeline should have observed the resident worker before it was reaped: {observed_worker_processes:?}"
+    );
+}
 
 struct SparseArtifactResidencyGeometry {
     complete_residency_with_headroom_bytes: u64,

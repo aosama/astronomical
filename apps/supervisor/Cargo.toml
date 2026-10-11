@@ -59,6 +59,12 @@ path = "tests/fixtures/replacement_ready_worker.rs"
 bench = false
 test = false
 
+[[bin]]
+name = "astronomical-supervisor-memory-demotion-worker"
+path = "tests/fixtures/memory_demotion_worker.rs"
+bench = false
+test = false
+
 [lints]
 workspace = true
 
