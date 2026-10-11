@@ -32,6 +32,8 @@ mod qwen3_5_execution_error;
 mod qwen3_5_import_direction;
 #[cfg(feature = "direct-mlx")]
 mod qwen_prompt_processing_chunk_sizer;
+#[cfg(feature = "direct-mlx")]
+mod qwen_resident_prompt_processing_chunk_sizer;
 mod raw_safetensors_inventory;
 mod required_files;
 mod retained_expert_page_cache;

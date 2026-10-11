@@ -56,11 +56,11 @@ pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
 pub use prompt_processing_chunk_sizer::{
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5PromptProcessingChunkSizerError,
+    Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
 };
 
 /// Qwen3.5 inference engine backed by the architecture-neutral MLX owner driver.
-pub type Qwen3_5Engine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
+pub type Qwen3_5StreamingEngine = MlxInferenceEngine<Qwen3_5InferenceExecution>;
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// Starts the owner thread with an explicit `prefill_chunk_tokens` sizer.
@@ -73,11 +73,11 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
-    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+    ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
         Self::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
@@ -99,14 +99,14 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
         adaptive_ram_growth_guard_enabled: bool,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
-    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+    ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
         let maximum_context_tokens = validated_artifact.config().maximum_position_count();
         Self::new_with_effective_context_runtime_chunking_and_performance_attribution(
             validated_artifact,
@@ -131,7 +131,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         active_memory_limit_bytes: usize,
         allocator_cache_memory_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-        prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
         maximum_context_tokens: u32,
@@ -139,7 +139,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         adaptive_ram_growth_guard_enabled: bool,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
-    ) -> Result<Qwen3_5Engine, InferenceEngineError> {
+    ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
                 fatal_engine_error("full-attention growth tokens exceed Int32 range")
@@ -232,7 +232,7 @@ pub struct Qwen3_5InferenceExecution {
     pub(crate) persistent_visual_embedding_model_contract:
         Option<PersistentVisualEmbeddingModelContract>,
     pub(crate) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
-    prompt_processing_chunk_sizer: Qwen3_5PromptProcessingChunkSizer,
+    prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
     chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,

@@ -1,11 +1,12 @@
 //! Returns a packed complete expert layer on hit, or streams one complete layer on miss.
 
 use crate::expert_paging::QuantizedExpertPageManifest;
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page,

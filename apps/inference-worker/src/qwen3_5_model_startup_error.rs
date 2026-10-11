@@ -2,8 +2,9 @@ use std::io;
 use std::path::PathBuf;
 
 use astronomical_model_serving::{
-    InferenceEngineError, Qwen3_5ArtifactValidationError, Qwen3_5PromptProcessingChunkSizerError,
-    Qwen3_5ResidentPromptProcessingChunkSizerError, Qwen3_5TokenizerError,
+    InferenceEngineError, Qwen3_5ArtifactValidationError,
+    Qwen3_5ResidentPromptProcessingChunkSizerError,
+    Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5TokenizerError,
 };
 use thiserror::Error;
 
@@ -31,7 +32,7 @@ pub enum Qwen3_5ModelStartupError {
         source: io::Error,
     },
     #[error("failed to configure Qwen3.5 prompt-processing chunks")]
-    PromptProcessingChunkSizing(#[source] Qwen3_5PromptProcessingChunkSizerError),
+    StreamingPromptProcessingChunkSizing(#[source] Qwen3_5StreamingPromptProcessingChunkSizerError),
     #[error("failed to configure resident Qwen3.5 prompt-processing chunks")]
     ResidentPromptProcessingChunkSizing(#[source] Qwen3_5ResidentPromptProcessingChunkSizerError),
     #[error("failed to start Qwen3.5 engine at {model_directory:?}")]
@@ -52,7 +53,8 @@ impl Qwen3_5ModelStartupError {
                 "Qwen3.5 processor initialization failed".to_owned()
             }
             Self::EngineInitialization { .. } => "Qwen3.5 engine initialization failed".to_owned(),
-            Self::OpenPerformanceAttributionLog { .. } | Self::PromptProcessingChunkSizing(_) => {
+            Self::OpenPerformanceAttributionLog { .. }
+            | Self::StreamingPromptProcessingChunkSizing(_) => {
                 "model initialization failed".to_owned()
             }
             Self::ResidentPromptProcessingChunkSizing(_) => {

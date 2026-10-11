@@ -6,8 +6,8 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     InferenceEngine, PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
-    Qwen3_5ArtifactValidator, Qwen3_5Engine, Qwen3_5InferenceRequest,
-    Qwen3_5PromptProcessingChunkSizer, Qwen3_5Tokenizer, qwen3_5_decoder_cache_layout,
+    Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
+    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer, qwen3_5_decoder_cache_layout,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
@@ -270,7 +270,7 @@ fn repeat_fixture_prompt_to_token_count(
 }
 
 async fn measured_expert_payload_bytes(
-    qwen3_5_engine: &Qwen3_5Engine,
+    qwen3_5_engine: &Qwen3_5ResidentEngine,
     expert_memory_mode: ExpertMemoryMode,
 ) -> u64 {
     if expert_memory_mode == ExpertMemoryMode::Resident {
@@ -291,19 +291,19 @@ async fn load_memory_acceptance_engine(
     model_directory: &Path,
     persistent_prompt_cache_directory: Option<&Path>,
     mlx_memory_limits: MlxMemoryLimits,
-) -> Qwen3_5Engine {
+) -> Qwen3_5ResidentEngine {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the model-artifact checkpoint should validate before engine loading");
     let prefill_chunk_sizer =
-        Qwen3_5PromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
+        Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS,
         )
         .expect("the selected fixed prefill size should be valid");
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.prompt_cache_block_tokens =
         Some(MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS);
-    let mut qwen3_5_engine = Qwen3_5Engine::new_with_prompt_processing_chunk_sizer(
+    let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.allocator_cache_memory_limit_bytes(),

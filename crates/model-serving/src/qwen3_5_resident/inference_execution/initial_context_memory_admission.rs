@@ -84,9 +84,7 @@ impl Qwen3_5EngineState {
                 // 2026-10-10).
                 let planned_prefill_operation_token_count = u64::try_from(
                     self.prompt_processing_chunk_sizer
-                        .prompt_processing_operation_bound_tokens(
-                            AdaptiveRamGrowthExecutionProfile::Resident,
-                        ),
+                        .prompt_processing_operation_bound_tokens(),
                 )
                 .unwrap_or(u64::MAX);
                 let prefill_activation_workspace_bytes =

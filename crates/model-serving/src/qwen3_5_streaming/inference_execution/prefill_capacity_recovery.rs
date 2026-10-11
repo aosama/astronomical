@@ -259,7 +259,7 @@ fn record_rejection_and_restore_checkpoint(
         .map_err(qwen3_5_runtime_error)
 }
 
-fn retained_expert_payload_bytes(model: &crate::qwen3_5::model::Qwen3_5Model) -> usize {
+fn retained_expert_payload_bytes(model: &crate::qwen3_5_streaming::model::Qwen3_5Model) -> usize {
     usize::try_from(
         model
             .expert_weight_memory_cache_statistics()
@@ -269,7 +269,7 @@ fn retained_expert_payload_bytes(model: &crate::qwen3_5::model::Qwen3_5Model) ->
 }
 
 fn reclaim_and_sample_active_memory(
-    model: &crate::qwen3_5::model::Qwen3_5Model,
+    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
     expert_reclamation_target_bytes: usize,
     active_memory_bytes_before_reclamation: usize,
 ) -> Result<usize, InferenceEngineError> {

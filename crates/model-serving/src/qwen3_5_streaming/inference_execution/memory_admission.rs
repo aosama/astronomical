@@ -17,12 +17,12 @@
 //! prevents mandatory reads from consuming bytes already proven necessary for
 //! decoder growth, one operation-local expert page, and transient work.
 
-use crate::qwen3_5::decoder::RequestDecoderStateStack;
-use crate::qwen3_5::model::adaptive_ram_growth_logging::{
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_streaming;
+use crate::qwen3_5_streaming::model::adaptive_ram_growth_logging::{
     log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
 };
-use crate::qwen3_5::model::memory_admission;
-use crate::qwen3_5_streaming;
+use crate::qwen3_5_streaming::model::memory_admission;
 use crate::{
     AdaptiveRamGrowthContext, InferenceEngineError, MemoryPhase, PagedExpertReclamationStep,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation,

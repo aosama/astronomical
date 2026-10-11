@@ -5,7 +5,7 @@ use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter, Performanc
 use super::completed_forward_memory::CompletedForwardMemoryObservation;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
-use crate::qwen3_5::Qwen3_5Model;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 pub(in crate::qwen3_5_streaming) struct GeneratedTokenEmission {
     pub(in crate::qwen3_5_streaming) generated_token: GeneratedToken,

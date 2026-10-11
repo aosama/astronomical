@@ -7,7 +7,7 @@ use super::tests::{
     streamed_weights_for_expert_count, test_runtime,
 };
 use super::*;
-use crate::qwen3_5::model::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 
 /// Issue #955 invariant: after every flush, a table's real payload must equal
 /// the per-expert geometry bytes times its slot-map occupancy. The second

@@ -5,14 +5,11 @@ pub(crate) mod inference_execution;
 pub(crate) mod model;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
-#[cfg(feature = "direct-mlx")]
-pub use inference_execution::Qwen3_5Engine as Qwen3_5StreamingEngine;
-
-#[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::build_source_manifests;
 #[cfg(feature = "direct-mlx")]
 pub use crate::expert_paging::contiguous_selected_runs;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_paging::RetainedExpertCache;
 pub use expert_paging::route_observation::{

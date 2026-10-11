@@ -3,7 +3,7 @@
 //! Workspace composition and demote-or-admit live in `memory/`. This module
 //! measures request facts and records a rejection when the request cannot fit.
 
-use crate::qwen3_5::model::memory_admission;
+use crate::qwen3_5_streaming::model::memory_admission;
 use crate::{
     InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceAttributionOutcome,
     request_context_temporary_workspace_bytes,
@@ -67,9 +67,7 @@ impl Qwen3_5EngineState {
             // by the planned chunk bound, never by total context length.
             let planned_prefill_operation_token_count = u64::try_from(
                 self.prompt_processing_chunk_sizer
-                    .prompt_processing_operation_bound_tokens(
-                        crate::AdaptiveRamGrowthExecutionProfile::Paged,
-                    ),
+                    .prompt_processing_operation_bound_tokens(),
             )
             .unwrap_or(u64::MAX);
             usize::try_from(ram_budget.activation_headroom_bytes(

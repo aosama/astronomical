@@ -18,7 +18,8 @@ use super::terminal_prefill_seed::{
     seed_terminal_text_prefill_after_prompt_cache_boundaries,
 };
 
-use crate::qwen3_5::model::{Qwen3_5ExecutionError, Qwen3_5Model};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 /// Outcome of visual, history-capture, or text prefill.
 pub(super) struct ForwardDispatchOutcome {
