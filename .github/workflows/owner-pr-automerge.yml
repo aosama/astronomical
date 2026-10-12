@@ -26,7 +26,10 @@ on:
       - completed
 
 permissions:
-  contents: read
+  # The squash merge creates a commit on the base branch, so contents write
+  # is required for the merge endpoint and for the head-branch deletion;
+  # pull-requests write authorizes the merge endpoint itself.
+  contents: write
   pull-requests: write
 
 jobs:
