@@ -64,8 +64,10 @@ where
 
     /// Flushes queued frames, then drops the owned write transport to deliver EOF.
     pub async fn close(mut self) -> Result<(), ProtocolError> {
-        self.framed_writer
-            .close()
+        // tokio-util 0.7.20 added more Encoder impls for LengthDelimitedCodec,
+        // so the item type must be pinned here exactly as the send path pins
+        // it through Bytes::from.
+        SinkExt::<Bytes>::close(&mut self.framed_writer)
             .await
             .map_err(ProtocolError::WriteFrame)
     }
