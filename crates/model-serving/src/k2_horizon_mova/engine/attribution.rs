@@ -128,7 +128,22 @@ impl K2HorizonMoVAInferenceExecution {
             &mut active.performance_attribution,
             PerformanceAttribution::disabled(),
         );
-        drop(active);
+        // Retain the live KV for in-memory prefix adoption (issue #1167)
+        // before the generation drops. This teardown runs for both completed
+        // and cancelled generations; the retention bounds the adoptable
+        // boundary to the verified KV offset, so a cancelled generation
+        // retains only the state it actually processed.
+        self.retained_live_prefix = match self.persistent_prompt_cache.as_ref() {
+            Some(persistent_prompt_cache) => {
+                super::retained_live_prefix::take_retained_live_prefix(
+                    active,
+                    &persistent_prompt_cache.model_contract,
+                    self.in_memory_prefix_adoption_enabled,
+                    self.ceiling_bytes as usize,
+                )
+            }
+            None => None,
+        };
         self.record_generation_performance_attribution(
             performance_attribution,
             request_id,

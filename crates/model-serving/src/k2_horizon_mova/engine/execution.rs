@@ -38,6 +38,7 @@ pub struct K2HorizonMoVAPendingStartup {
     pub full_attention_kv_state_growth_tokens: u32,
     pub decode_stage_attribution_enabled: bool,
     pub prefill_stage_attribution_enabled: bool,
+    pub in_memory_prefix_adoption_enabled: bool,
     pub quantized_kv_cache_enabled: bool,
     pub fused_expert_decode_enabled: bool,
 }
@@ -46,9 +47,15 @@ pub struct K2HorizonMoVAInferenceExecution {
     pending_startup: Option<K2HorizonMoVAPendingStartup>,
     pub(super) model: Option<K2HorizonMoVAModel>,
     pub(super) active: Option<K2HorizonMoVAActiveGeneration>,
+    /// The last completed generation's live KV, retained for in-memory
+    /// prefix adoption (issue #1167); dropped when the next request fails
+    /// to adopt it.
+    pub(in crate::k2_horizon_mova) retained_live_prefix:
+        Option<super::retained_live_prefix::RetainedLiveKvPrefix>,
     pub(super) ceiling_bytes: u64,
     pub(super) allocator_cache_bytes: u64,
     prompt_processing_chunk_tokens: u32,
+    pub(super) in_memory_prefix_adoption_enabled: bool,
     pub(super) performance_attribution_log: PerformanceAttributionLog,
     performance_attribution_enabled: bool,
     pub(super) attribution_model_id: Option<String>,
@@ -68,7 +75,7 @@ pub struct K2HorizonMoVAInferenceExecution {
     fused_expert_decode_enabled: bool,
 }
 
-pub(super) struct K2HorizonMoVAActiveGeneration {
+pub(in crate::k2_horizon_mova) struct K2HorizonMoVAActiveGeneration {
     pub(super) request_id: RequestId,
     pub(super) remaining_output_tokens: u32,
     pub(super) remaining_prompt_token_ids: Vec<u32>,
@@ -91,13 +98,16 @@ impl K2HorizonMoVAInferenceExecution {
         let ceiling_bytes = pending_startup.effective_mlx_memory_ceiling_bytes as u64;
         let allocator_cache_bytes = pending_startup.allocator_cache_memory_limit_bytes as u64;
         let prompt_processing_chunk_tokens = pending_startup.prompt_processing_chunk_tokens.max(1);
+        let in_memory_prefix_adoption_enabled = pending_startup.in_memory_prefix_adoption_enabled;
         Self {
             pending_startup: Some(pending_startup),
             model: None,
             active: None,
+            retained_live_prefix: None,
             ceiling_bytes,
             allocator_cache_bytes,
             prompt_processing_chunk_tokens,
+            in_memory_prefix_adoption_enabled,
             performance_attribution_log: PerformanceAttributionLog::disabled(),
             performance_attribution_enabled: false,
             attribution_model_id: None,

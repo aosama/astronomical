@@ -163,6 +163,10 @@ pub(super) fn isolated_home_with_overrides(
         serde_json::json!(attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
+    if let Ok(adoption_override) = std::env::var("K2_JOURNEY_PREFIX_ADOPTION") {
+        config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] =
+            serde_json::json!(adoption_override != "0");
+    }
     config_document["chunking"]["experimental_prefill_stage_attribution_enabled"] =
         serde_json::json!(prefill_stage_attribution_enabled());
     config_document["chunking"]["experimental_quantized_kv_cache_enabled"] =

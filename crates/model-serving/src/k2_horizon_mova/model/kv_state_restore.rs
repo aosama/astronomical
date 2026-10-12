@@ -33,4 +33,24 @@ impl K2HorizonMoVAKvState {
             ),
         }
     }
+
+    /// Rolls the logical offset back to an adopted prefix boundary; the
+    /// stale KV tail is overwritten by subsequent in-place updates.
+    pub fn truncate_to_offset(
+        &mut self,
+        checkpoint_offset_tokens: i32,
+    ) -> Result<(), MlxRuntimeError> {
+        match self {
+            Self::FullPrecision(state) => state.truncate_to_offset(checkpoint_offset_tokens),
+            Self::Quantized(state) => state.truncate_to_offset(checkpoint_offset_tokens),
+        }
+    }
+
+    /// Logical payload bytes across both K and V slabs.
+    pub fn payload_byte_count(&self) -> u64 {
+        match self {
+            Self::FullPrecision(state) => state.payload_byte_count(),
+            Self::Quantized(state) => state.payload_byte_count(),
+        }
+    }
 }
