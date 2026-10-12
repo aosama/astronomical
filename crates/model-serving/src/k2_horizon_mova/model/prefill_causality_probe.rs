@@ -171,7 +171,7 @@ fn prefill_logits(
         .expect("probe logits should project")
 }
 
-fn load_probe_model(runtime: MlxRuntime) -> K2HorizonMoVAModel {
+pub(super) fn load_probe_model(runtime: MlxRuntime) -> K2HorizonMoVAModel {
     let model_directory = configured_k2_horizon_mova_model_directory();
     let mut performance_attribution = PerformanceAttribution::disabled();
     let validated_artifact = crate::K2HorizonMoVAArtifactValidator::new()
@@ -192,7 +192,9 @@ fn load_probe_model(runtime: MlxRuntime) -> K2HorizonMoVAModel {
     }
 }
 
-fn configured_k2_horizon_mova_model_directory() -> PathBuf {
+/// Resolves the installed K2 Horizon MoVA artifact directory from the
+/// development machine's model directories plus the e2e registry role map.
+pub(super) fn configured_k2_horizon_mova_model_directory() -> PathBuf {
     let role_to_model_id =
         serde_json::from_str::<BTreeMap<String, String>>(E2E_TEST_MODEL_NAMES_JSON)
             .expect("registry/e2e_test_model_names.json should parse");
@@ -207,7 +209,7 @@ fn configured_k2_horizon_mova_model_directory() -> PathBuf {
         .expect("the causality probe model should be discoverable")
 }
 
-fn probe_runtime() -> MlxRuntime {
+pub(super) fn probe_runtime() -> MlxRuntime {
     let memory_limit_bytes = maximum_recommended_gpu_working_set_size_bytes()
         .expect("MLX should expose the default GPU wired-memory working set");
     MlxRuntime::initialize(
@@ -217,7 +219,7 @@ fn probe_runtime() -> MlxRuntime {
     .expect("probe MLX runtime")
 }
 
-fn romeo_and_juliet_prompt_token_ids(model: &K2HorizonMoVAModel) -> Vec<u32> {
+pub(super) fn romeo_and_juliet_prompt_token_ids(model: &K2HorizonMoVAModel) -> Vec<u32> {
     let tokenizer = crate::K2HorizonMoVATokenizer::from_json_bytes(
         &std::fs::read(configured_k2_horizon_mova_model_directory().join("tokenizer.json"))
             .expect("the installed K2 tokenizer should be readable"),
