@@ -26,7 +26,7 @@ use crate::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn handle_worker_completion_event(
+pub(in crate::worker) fn handle_worker_completion_event(
     request_id: RequestId,
     prompt_token_count: u32,
     generated_token_count: u16,

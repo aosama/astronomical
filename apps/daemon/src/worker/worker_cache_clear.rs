@@ -5,7 +5,7 @@ use astronomical_ipc_protocol::WorkerEvent;
 use tokio::sync::{Semaphore, oneshot};
 use tokio::time::{Instant, timeout};
 
-use crate::worker::worker_containment;
+use crate::worker::process::worker_containment;
 use crate::worker::worker_event_handler;
 use crate::worker::worker_loop_types::ActiveWorkerRequest;
 use crate::{

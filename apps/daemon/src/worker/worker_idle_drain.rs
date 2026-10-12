@@ -12,11 +12,11 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::time::Instant;
 
-use crate::worker::worker_cache_clear;
-use crate::worker::worker_memory_limit::{
+use crate::worker::memory::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate,
     apply_pending_mlx_memory_limit_if_idle, contain_mlx_memory_limit_failure,
 };
+use crate::worker::worker_cache_clear;
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, WorkerHealthSnapshot, WorkerProcess,
     worker::worker_loop_types::ActiveWorkerRequest,

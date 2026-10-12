@@ -23,7 +23,7 @@ use crate::{
 };
 
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn wait_for_startup_runtime_configuration(
+pub(in crate::worker) async fn wait_for_startup_runtime_configuration(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     is_ready: &mut bool,

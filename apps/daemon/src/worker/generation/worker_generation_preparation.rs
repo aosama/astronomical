@@ -15,7 +15,7 @@ use crate::{
     worker::worker_loop_types::ActiveGeneration,
 };
 
-pub(super) fn handle_generation_preparation_started(
+pub(in crate::worker) fn handle_generation_preparation_started(
     request_id: RequestId,
     expert_residency: ExpertResidencySnapshot,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,

@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Result of waiting for a worker model-swap acknowledgement.
-pub(super) enum ModelSwapWaitOutcome {
+pub(in crate::worker) enum ModelSwapWaitOutcome {
     Loaded,
     Rejected { model_load_failure_reason: String },
 }
@@ -24,7 +24,7 @@ pub(super) enum ModelSwapWaitOutcome {
 /// Process-scoped telemetry and configuration events may have been queued
 /// before `SwapModel`. They remain valid while the swap acknowledgement is
 /// pending and must update daemon health rather than terminate the worker.
-pub(super) async fn wait_for_model_swap(
+pub(in crate::worker) async fn wait_for_model_swap(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     is_ready: &mut bool,
