@@ -68,6 +68,7 @@ pub enum PerformanceOperation {
     PrefillFeedForwardGraphicsProcessorCompletionWait,
     PrefillMixtureOfValuesGraphicsProcessorCompletionWait,
     PrefillSharedExpertGraphicsProcessorCompletionWait,
+    LoadWarmupForwardSpan,
     ExpertPagingDiagnosticLogging,
     DecodeAsyncEvaluationSubmission,
     GeneratedTokenItemSynchronizationWait,
@@ -200,6 +201,7 @@ impl PerformanceOperation {
         Self::PrefillFeedForwardGraphicsProcessorCompletionWait,
         Self::PrefillMixtureOfValuesGraphicsProcessorCompletionWait,
         Self::PrefillSharedExpertGraphicsProcessorCompletionWait,
+        Self::LoadWarmupForwardSpan,
         Self::ExpertPagingDiagnosticLogging,
         Self::DecodeAsyncEvaluationSubmission,
         Self::GeneratedTokenItemSynchronizationWait,
@@ -391,6 +393,7 @@ impl PerformanceOperation {
             Self::PrefillSharedExpertGraphicsProcessorCompletionWait => {
                 "prefill_shared_expert_graphics_processor_completion_wait"
             }
+            Self::LoadWarmupForwardSpan => "load_warmup_forward_span",
             Self::ExpertPagingDiagnosticLogging => "expert_paging_diagnostic_logging",
             Self::DecodeAsyncEvaluationSubmission => "decode_async_evaluation_submission",
             Self::GeneratedTokenItemSynchronizationWait => {

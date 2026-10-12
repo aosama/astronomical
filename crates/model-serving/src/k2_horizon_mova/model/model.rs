@@ -168,4 +168,62 @@ impl K2HorizonMoVAModel {
         sampled.evaluate()?;
         Ok(sampled.item_u32()?)
     }
+
+    /// Runs one prefill-shaped and one decode-shaped dummy forward so the
+    /// first real request pays neither the Metal pipeline-state compilation
+    /// nor the allocator's first-touch of the resident weights. The prefill
+    /// warmup runs at the configured serving chunk width so its compiled
+    /// pipeline states match the shapes a real first chunk dispatches; the
+    /// decode warmup runs causally unmasked at the resulting offset, which is
+    /// exactly the decode shape. The dummy identifiers are spread across the
+    /// vocabulary so the routers fan every layer's assignments across all of
+    /// its experts: identical dummy rows would all route to the same few
+    /// experts and leave the rest of the resident weights' pages cold, which
+    /// would hand the first real chunk a multi-second first-touch read of
+    /// every expert it routes to. The caches use the serving KV mode — a
+    /// warmup on the other storage mode compiles the wrong kernel family and
+    /// leaves the first real chunk to pay the quantized or full-precision
+    /// path's compilation itself. Every throwaway cache is dropped afterward,
+    /// so no served state or request math is affected.
+    pub fn run_load_warmup(
+        &self,
+        chunk_token_count: usize,
+        quantized_kv_cache_enabled: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), K2HorizonMoVAExecutionError> {
+        let vocabulary_size = self.config.vocab_size().max(1) as usize;
+        let prefill_warmup_token_ids = (0..chunk_token_count.max(1))
+            .map(|warmup_token_index| ((warmup_token_index * 7919) % vocabulary_size) as u32)
+            .collect::<Vec<_>>();
+        let mut prefill_caches = self.build_throwaway_caches(quantized_kv_cache_enabled)?;
+        let prefill_hidden_states = self.forward(
+            &prefill_warmup_token_ids,
+            &mut prefill_caches,
+            performance_attribution,
+            None,
+        )?;
+        let prefill_logits = self.logits_for_last_token(&prefill_hidden_states)?;
+        self.runtime.evaluate_arrays(&[&prefill_logits])?;
+
+        let mut decode_caches = self.build_throwaway_caches(quantized_kv_cache_enabled)?;
+        // A single-token forward is causally unmasked regardless of offset,
+        // so a fresh cache yields the same kernel shapes as real decode.
+        let decode_hidden_states =
+            self.forward(&[0], &mut decode_caches, performance_attribution, None)?;
+        let decode_logits = self.logits_for_last_token(&decode_hidden_states)?;
+        self.runtime.evaluate_arrays(&[&decode_logits])?;
+        Ok(())
+    }
+
+    fn build_throwaway_caches(
+        &self,
+        quantized_kv_cache_enabled: bool,
+    ) -> Result<Vec<K2HorizonMoVAKvState>, K2HorizonMoVAExecutionError> {
+        (0..self.config.num_hidden_layers())
+            .map(|_| {
+                K2HorizonMoVAKvState::build(quantized_kv_cache_enabled, 256)
+                    .map_err(K2HorizonMoVAExecutionError::from)
+            })
+            .collect()
+    }
 }
