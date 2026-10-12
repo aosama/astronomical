@@ -37,6 +37,7 @@ pub struct K2HorizonMoVAPendingStartup {
     pub prompt_cache_common_prefix_stride_blocks: u32,
     pub full_attention_kv_state_growth_tokens: u32,
     pub decode_stage_attribution_enabled: bool,
+    pub prefill_stage_attribution_enabled: bool,
     pub quantized_kv_cache_enabled: bool,
     pub fused_expert_decode_enabled: bool,
 }
@@ -62,6 +63,7 @@ pub struct K2HorizonMoVAInferenceExecution {
     prompt_cache_common_prefix_stride_blocks: u32,
     full_attention_kv_state_growth_tokens: u32,
     decode_stage_attribution_enabled: bool,
+    prefill_stage_attribution_enabled: bool,
     quantized_kv_cache_enabled: bool,
     fused_expert_decode_enabled: bool,
 }
@@ -109,6 +111,7 @@ impl K2HorizonMoVAInferenceExecution {
             prompt_cache_common_prefix_stride_blocks: 1,
             full_attention_kv_state_growth_tokens: 256,
             decode_stage_attribution_enabled: false,
+            prefill_stage_attribution_enabled: false,
             quantized_kv_cache_enabled: false,
             fused_expert_decode_enabled: false,
         }

@@ -149,6 +149,12 @@
           "description": "Diagnostic mode that runs decode forwards as stage-split evaluations so one attribution report decomposes decode time. Roughly doubles decode time; never enable in normal serving.",
           "x-astronomical-apply-mode": "model-reload"
         },
+        "experimental_prefill_stage_attribution_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Diagnostic mode that runs prefill chunks as stage-split evaluations so one attribution report decomposes prefill time across attention, mixture-of-values, and expert stages. Synchronizes the graphics processor several times per layer; never enable in normal serving.",
+          "x-astronomical-apply-mode": "model-reload"
+        },
         "experimental_fused_moe_decode_enabled": {
           "type": "boolean",
           "default": false,

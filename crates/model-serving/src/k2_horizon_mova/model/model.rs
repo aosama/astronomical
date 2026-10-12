@@ -53,7 +53,7 @@ impl K2HorizonMoVAModel {
         token_ids: &[u32],
         caches: &mut [K2HorizonMoVAKvState],
         performance_attribution: &mut PerformanceAttribution,
-        stage_attribution: bool,
+        stage_attribution: Option<super::stage_attribution_scope::StageAttributionScope>,
     ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
         let token_array = self
             .runtime

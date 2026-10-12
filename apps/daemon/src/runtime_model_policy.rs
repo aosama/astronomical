@@ -66,6 +66,8 @@ pub(crate) fn worker_chunking_configuration(
             .prompt_cache_common_prefix_stride_blocks(),
         experimental_decode_stage_attribution_enabled: chunking
             .experimental_decode_stage_attribution_enabled(),
+        experimental_prefill_stage_attribution_enabled: chunking
+            .experimental_prefill_stage_attribution_enabled(),
         experimental_quantized_kv_cache_enabled: chunking.experimental_quantized_kv_cache_enabled(),
         experimental_fused_moe_decode_enabled: chunking.experimental_fused_moe_decode_enabled(),
     }

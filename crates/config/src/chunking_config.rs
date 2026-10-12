@@ -28,6 +28,8 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_decode_stage_attribution_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_prefill_stage_attribution_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_quantized_kv_cache_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_fused_moe_decode_enabled: Option<bool>,
@@ -45,6 +47,7 @@ pub struct ConfiguredChunkingFields {
     pub prompt_cache_block_tokens: bool,
     pub prompt_cache_common_prefix_stride_blocks: bool,
     pub experimental_decode_stage_attribution_enabled: bool,
+    pub experimental_prefill_stage_attribution_enabled: bool,
     pub experimental_quantized_kv_cache_enabled: bool,
     pub experimental_fused_moe_decode_enabled: bool,
 }
@@ -85,6 +88,9 @@ impl ChunkingConfigFile {
                 .is_some(),
             experimental_decode_stage_attribution_enabled: self
                 .experimental_decode_stage_attribution_enabled
+                .is_some(),
+            experimental_prefill_stage_attribution_enabled: self
+                .experimental_prefill_stage_attribution_enabled
                 .is_some(),
             experimental_quantized_kv_cache_enabled: self
                 .experimental_quantized_kv_cache_enabled
@@ -127,6 +133,9 @@ impl ChunkingConfigFile {
             experimental_decode_stage_attribution_enabled: model
                 .experimental_decode_stage_attribution_enabled
                 .or(global.experimental_decode_stage_attribution_enabled),
+            experimental_prefill_stage_attribution_enabled: model
+                .experimental_prefill_stage_attribution_enabled
+                .or(global.experimental_prefill_stage_attribution_enabled),
             experimental_quantized_kv_cache_enabled: model
                 .experimental_quantized_kv_cache_enabled
                 .or(global.experimental_quantized_kv_cache_enabled),
@@ -170,6 +179,7 @@ pub struct ChunkingConfig {
     prompt_cache_block_tokens: Option<u32>,
     prompt_cache_common_prefix_stride_blocks: u32,
     experimental_decode_stage_attribution_enabled: bool,
+    experimental_prefill_stage_attribution_enabled: bool,
     experimental_quantized_kv_cache_enabled: bool,
     experimental_fused_moe_decode_enabled: bool,
 }
@@ -209,6 +219,9 @@ impl ChunkingConfig {
                 .unwrap_or(DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
             experimental_decode_stage_attribution_enabled: configured
                 .experimental_decode_stage_attribution_enabled
+                .unwrap_or(false),
+            experimental_prefill_stage_attribution_enabled: configured
+                .experimental_prefill_stage_attribution_enabled
                 .unwrap_or(false),
             experimental_quantized_kv_cache_enabled: configured
                 .experimental_quantized_kv_cache_enabled
@@ -315,6 +328,16 @@ impl ChunkingConfig {
         self.experimental_decode_stage_attribution_enabled
     }
 
+    /// Returns whether prefill chunks may run stage-split evaluations for
+    /// deep attribution. This diagnostic mode synchronizes the graphics
+    /// processor several times per layer and must never be enabled in
+    /// normal serving; it exists to attribute prefill time across the
+    /// attention, mixture-of-values, and expert stages.
+    #[must_use]
+    pub const fn experimental_prefill_stage_attribution_enabled(&self) -> bool {
+        self.experimental_prefill_stage_attribution_enabled
+    }
+
     /// Returns whether the KV cache stores quantized slabs for long-context
     /// decode bandwidth. Changes attention numerics; quality-gated.
     #[must_use]
@@ -335,6 +358,7 @@ impl Default for ChunkingConfig {
     fn default() -> Self {
         Self {
             experimental_decode_stage_attribution_enabled: false,
+            experimental_prefill_stage_attribution_enabled: false,
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:

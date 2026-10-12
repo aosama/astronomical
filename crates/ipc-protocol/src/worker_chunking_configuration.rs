@@ -33,6 +33,11 @@ pub struct WorkerChunkingConfiguration {
     /// for deep attribution. Roughly doubles decode time; never for serving.
     #[serde(default)]
     pub experimental_decode_stage_attribution_enabled: bool,
+    /// Diagnostic mode that runs prefill chunks as stage-split evaluations
+    /// for deep attribution. Synchronizes the graphics processor several
+    /// times per layer; never for serving.
+    #[serde(default)]
+    pub experimental_prefill_stage_attribution_enabled: bool,
     /// Diagnostic/quality-gated mode that stores the KV slab quantized.
     #[serde(default)]
     pub experimental_quantized_kv_cache_enabled: bool,

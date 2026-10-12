@@ -10,6 +10,9 @@ mod ops;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod prefill_causality_probe;
 mod quantized_attention;
+mod stage_attribution_scope;
+
+pub(crate) use stage_attribution_scope::StageAttributionScope;
 mod weight_binding;
 mod weights;
 

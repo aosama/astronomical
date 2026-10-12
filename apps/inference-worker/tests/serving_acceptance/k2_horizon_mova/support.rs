@@ -28,6 +28,15 @@ fn fused_moe_decode_enabled() -> bool {
         .unwrap_or(true)
 }
 
+/// Opts the K2 journeys into prefill stage-split evaluations for deep
+/// attribution. The stage waits synchronize the graphics processor several
+/// times per layer, so they stay off unless the diagnostic is requested.
+fn prefill_stage_attribution_enabled() -> bool {
+    std::env::var("K2_JOURNEY_PREFILL_STAGE_ATTRIBUTION")
+        .map(|value| value == "1")
+        .unwrap_or(false)
+}
+
 pub(super) fn public_model_id() -> &'static str {
     crate::support::k2_horizon_mova_model_id()
 }
@@ -154,6 +163,8 @@ pub(super) fn isolated_home_with_overrides(
         serde_json::json!(attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
+    config_document["chunking"]["experimental_prefill_stage_attribution_enabled"] =
+        serde_json::json!(prefill_stage_attribution_enabled());
     config_document["chunking"]["experimental_quantized_kv_cache_enabled"] =
         serde_json::json!(quantized_kv_cache_enabled);
     config_document["chunking"]["experimental_fused_moe_decode_enabled"] =

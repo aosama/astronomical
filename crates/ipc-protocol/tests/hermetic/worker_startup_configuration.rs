@@ -64,6 +64,7 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                     prompt_cache_block_tokens: None,
                     prompt_cache_common_prefix_stride_blocks: 4,
                     experimental_decode_stage_attribution_enabled: false,
+                    experimental_prefill_stage_attribution_enabled: false,
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },
@@ -105,6 +106,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                 prompt_cache_block_tokens: None,
                 prompt_cache_common_prefix_stride_blocks: 4,
                 experimental_decode_stage_attribution_enabled: false,
+                experimental_prefill_stage_attribution_enabled: false,
                 experimental_quantized_kv_cache_enabled: false,
                 experimental_fused_moe_decode_enabled: false,
             },
@@ -131,6 +133,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                     "prompt_cache_block_tokens": null,
                     "prompt_cache_common_prefix_stride_blocks": 4,
                     "experimental_decode_stage_attribution_enabled": false,
+                    "experimental_prefill_stage_attribution_enabled": false,
                     "experimental_quantized_kv_cache_enabled": false,
                     "experimental_fused_moe_decode_enabled": false
                 }
