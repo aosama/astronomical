@@ -57,7 +57,7 @@ main() {
     mkdir -p \
         "${SANDBOX_DIRECTORY}/scripts" \
         "${SANDBOX_DIRECTORY}/apps/inference-worker/tests" \
-        "${SANDBOX_DIRECTORY}/apps/supervisor/tests" \
+        "${SANDBOX_DIRECTORY}/apps/daemon/tests" \
         "${SANDBOX_DIRECTORY}/crates/model-serving/tests" \
         "${SANDBOX_DIRECTORY}/experimental"
     cp "${repository_root}/scripts/check-test-channel-isolation.sh" \

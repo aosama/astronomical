@@ -1,9 +1,9 @@
 [workspace]
 members = [
     "crates/mlx-c-rust",
-    "apps/astronomical",
+    "apps/astronomical-cli",
     "apps/inference-worker",
-    "apps/supervisor",
+    "apps/daemon",
     "crates/config",
     "crates/ipc-protocol",
     "crates/model-serving",
@@ -13,9 +13,9 @@ members = [
 ]
 default-members = [
     "crates/mlx-c-rust",
-    "apps/astronomical",
+    "apps/astronomical-cli",
     "apps/inference-worker",
-    "apps/supervisor",
+    "apps/daemon",
     "crates/config",
     "crates/ipc-protocol",
     "crates/model-serving",

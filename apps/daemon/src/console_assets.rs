@@ -1,9 +1,9 @@
-//! Embedded single-page admin console served by the supervisor.
+//! Embedded single-page admin console served by the daemon.
 //!
 //! The Observatory console is embedded directly into the `astronomicald` binary
-//! through `include_str!` so the supervisor has no filesystem dependency and no
+//! through `include_str!` so the daemon has no filesystem dependency and no
 //! separate frontend build step. The console shell and its assets live at
-//! `apps/supervisor/console/` and are reached via `../console/...`; the chat
+//! `apps/daemon/console/` and are reached via `../console/...`; the chat
 //! answer render stack is served by `console_render_assets` (merged in below).
 
 use axum::{Router, body::Body, http::header, response::Response, routing::get};
