@@ -8,7 +8,7 @@ use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
-use super::{
+use crate::library::{
     DiskCapacityQuery, DownloadCatalogEntry, DownloadDiskCapacityCheck, DownloadDiskPreflight,
     DownloadDiskPreflightError, DownloadExecutablePreflight, DownloadExecutablePreflightError,
     DownloadJob, DownloadJobError, DownloadJobStore, DownloadJobStoreError, HuggingFaceHub,
@@ -162,7 +162,7 @@ where
     async fn validate_executable_identity(
         &self,
         catalog_entry: &DownloadCatalogEntry,
-        manifest: &super::hugging_face_hub::HuggingFaceManifest,
+        manifest: &crate::library::HuggingFaceManifest,
     ) -> Result<(), DownloadManifestPreflightError> {
         let executable_preflight = DownloadExecutablePreflight::new(self.hub.clone());
         self.attribution_log

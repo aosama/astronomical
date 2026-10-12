@@ -9,9 +9,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{
-    DownloadFileDigest, HuggingFaceManifest,
-    download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision},
+use crate::library::{
+    DownloadFileDigest, HuggingFaceManifest, is_valid_huggingface_id, is_valid_immutable_revision,
 };
 
 pub(crate) const MAXIMUM_DOWNLOAD_JOB_BYTES: usize = 8_000_000;

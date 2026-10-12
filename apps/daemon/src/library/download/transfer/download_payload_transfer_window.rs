@@ -14,12 +14,12 @@ use std::{
 use futures_util::stream::{FuturesUnordered, StreamExt};
 
 use super::{
-    DownloadJob, DownloadJobError, DownloadJobFile, DownloadPayloadTransfer,
-    DownloadPayloadTransferError, DownloadProgressSnapshot,
+    DownloadPayloadTransfer, DownloadPayloadTransferError,
     download_payload_transfer_segment::{
         PayloadSegment, SegmentedFileAssembler, plan_payload_segments,
     },
 };
+use crate::library::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadProgressSnapshot};
 use crate::{DaemonPerformanceMeasurement, DaemonPerformanceOperation};
 
 /// Concurrent in-flight ranged transfers per journey. The bound is deliberately network-scoped:

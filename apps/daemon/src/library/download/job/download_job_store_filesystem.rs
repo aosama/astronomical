@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::DownloadJobStoreError;
 
-pub(super) fn metadata_without_symlink(
+pub(in crate::library::download) fn metadata_without_symlink(
     path: &Path,
 ) -> Result<Option<fs::Metadata>, DownloadJobStoreError> {
     match fs::symlink_metadata(path) {
@@ -23,7 +23,7 @@ pub(super) fn metadata_without_symlink(
     }
 }
 
-pub(super) fn ensure_descendant_directory_or_absent(
+pub(in crate::library::download) fn ensure_descendant_directory_or_absent(
     base_directory: &Path,
     directory_path: &Path,
 ) -> Result<(), DownloadJobStoreError> {
@@ -45,7 +45,7 @@ pub(super) fn ensure_descendant_directory_or_absent(
     Ok(())
 }
 
-pub(super) fn safely_join_existing_path(
+pub(in crate::library::download) fn safely_join_existing_path(
     base_directory: &Path,
     relative_path: &Path,
 ) -> Result<PathBuf, DownloadJobStoreError> {
@@ -63,7 +63,7 @@ pub(super) fn safely_join_existing_path(
     Ok(joined_path)
 }
 
-pub(super) fn remove_directory_if_empty(
+pub(in crate::library::download) fn remove_directory_if_empty(
     directory_path: &Path,
 ) -> Result<bool, DownloadJobStoreError> {
     match fs::remove_dir(directory_path) {
@@ -83,7 +83,9 @@ pub(super) fn remove_directory_if_empty(
     }
 }
 
-pub(super) fn remove_file_if_present(file_path: &Path) -> Result<(), DownloadJobStoreError> {
+pub(in crate::library::download) fn remove_file_if_present(
+    file_path: &Path,
+) -> Result<(), DownloadJobStoreError> {
     match fs::remove_file(file_path) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -94,7 +96,9 @@ pub(super) fn remove_file_if_present(file_path: &Path) -> Result<(), DownloadJob
     }
 }
 
-pub(super) fn synchronize_directory(directory_path: &Path) -> Result<(), DownloadJobStoreError> {
+pub(in crate::library::download) fn synchronize_directory(
+    directory_path: &Path,
+) -> Result<(), DownloadJobStoreError> {
     File::open(directory_path)
         .and_then(|directory| directory.sync_all())
         .map_err(|source| DownloadJobStoreError::SynchronizeDirectory {

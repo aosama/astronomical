@@ -1,11 +1,11 @@
 //! Attributed transition from verified payloads to restart-safe publication intent.
 
-use super::{DownloadJob, DownloadJobStore, DownloadJobStoreError};
+use crate::library::{DownloadJob, DownloadJobStore, DownloadJobStoreError};
 use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
-pub(super) async fn reconcile_publication_intent(
+pub(in crate::library::download) async fn reconcile_publication_intent(
     job_store: DownloadJobStore,
     attribution_log: &DaemonPerformanceAttributionLog,
     publication_job: DownloadJob,

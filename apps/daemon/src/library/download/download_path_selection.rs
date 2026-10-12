@@ -1,6 +1,6 @@
 //! Validated release-authored selection of executable files from an immutable repository tree.
 
-use super::hugging_face_hub_bounds;
+use crate::library::hub::hugging_face_hub_bounds;
 
 const MAXIMUM_INCLUDED_PATH_COUNT: usize = 64;
 const MAXIMUM_INCLUDED_PATH_BYTES: usize = 1_024;
