@@ -3,10 +3,10 @@ import XCTest
 
 @testable import AstronomicalMenuCore
 
-final class SupervisorStatusCompatibilityTests: XCTestCase {
+final class DaemonStatusCompatibilityTests: XCTestCase {
   func test_should_decode_image_generation_progress_from_the_public_status_contract() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","progress":{"phase":"denoising","completed_steps":2,"total_steps":4,"elapsed_ms":1000}}"#.utf8
       )
@@ -20,7 +20,7 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
 
   func test_should_decode_a_legacy_status_document_without_new_telemetry_fields() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","ready_model_id":null,"progress":null,"expert_memory_mode":null}
@@ -35,7 +35,7 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
 
   func test_should_decode_path_safe_duplicate_model_feedback_for_the_menu() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"idle","configuration":{"configured_generation":"configured","resolved_generation":"resolved","effective_generation":"effective","is_effective":false,"restart_required":false,"model_discovery_diagnostics":[{"code":"ambiguous_model_identity","model_id":"shared-model","configured_root_numbers":[1,2]}]}}"#.utf8
       )
@@ -49,7 +49,7 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
 
   func test_should_decode_unavailable_model_directory_feedback_for_the_menu() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"idle","configuration":{"configured_generation":"configured","resolved_generation":"resolved","effective_generation":"effective","is_effective":true,"restart_required":false,"model_discovery_diagnostics":[{"code":"unavailable_model_directory","model_id":"","configured_root_numbers":[4]}]}}"#.utf8
       )
@@ -66,7 +66,7 @@ final class SupervisorStatusCompatibilityTests: XCTestCase {
     // no longer carries a predictor section, and decoding must ignore one if
     // an older worker still publishes it.
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"idle","predictor":{"runtime":"cpu","training_active":false,"top_k_accuracy_percent":24.7,"pages_avoided_percent":0.0}}"#
           .utf8)

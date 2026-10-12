@@ -20,7 +20,7 @@ use super::{
         PayloadSegment, SegmentedFileAssembler, plan_payload_segments,
     },
 };
-use crate::{SupervisorPerformanceMeasurement, SupervisorPerformanceOperation};
+use crate::{DaemonPerformanceMeasurement, DaemonPerformanceOperation};
 
 /// Concurrent in-flight ranged transfers per journey. The bound is deliberately network-scoped:
 /// stream count does not scale with model size or machine hardware, so one value serves every
@@ -199,7 +199,7 @@ impl DownloadPayloadTransfer {
                     let segment_start_bytes = payload_segment.start_offset_bytes();
                     let outcome = attribution_log
                         .measure_async_operation(
-                            SupervisorPerformanceOperation::FileTransfer,
+                            DaemonPerformanceOperation::FileTransfer,
                             || {
                                 transfer.transfer_payload_segment(
                                     &transfer_job,
@@ -212,9 +212,9 @@ impl DownloadPayloadTransfer {
                             },
                             |transfer_outcome| {
                                 let measurement = if transfer_outcome.is_ok() {
-                                    SupervisorPerformanceMeasurement::success()
+                                    DaemonPerformanceMeasurement::success()
                                 } else {
-                                    SupervisorPerformanceMeasurement::failure()
+                                    DaemonPerformanceMeasurement::failure()
                                 };
                                 measurement
                                     .with_file_transfer(
@@ -226,7 +226,7 @@ impl DownloadPayloadTransfer {
                                             segment_outcome.contiguous_end_bytes
                                         }),
                                     )
-                                    .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
+                                    .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
                             },
                         )
                         .await

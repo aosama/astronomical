@@ -1,4 +1,4 @@
-//! Shared embeddings result types for the supervisor HTTP boundary.
+//! Shared embeddings result types for the daemon HTTP boundary.
 //!
 //! Live dispatch lives on `ImageGenerationExecutor` because `ApplicationState`
 //! holds one executor trait object for chat, image, and embeddings. A second

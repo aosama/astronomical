@@ -89,7 +89,7 @@ pub struct OpenAiChatCompletionRequest {
 }
 
 impl OpenAiChatCompletionRequest {
-    /// Validates request bounds before the supervisor sends structured data to the worker.
+    /// Validates request bounds before the daemon sends structured data to the worker.
     /// Unknown top-level fields are deliberately absorbed and ignored: callers replay
     /// provider-specific options that the local endpoint has no use for, and one
     /// unsupported option must not reject the whole request (#772).
@@ -312,7 +312,7 @@ impl OpenAiChatCompletionRequest {
     }
 }
 
-/// Validated OpenAI request data ready for translation at the supervisor boundary.
+/// Validated OpenAI request data ready for translation at the daemon boundary.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenAiChatCompletionRequestParts {
     /// Exact model ID targeted by the client.

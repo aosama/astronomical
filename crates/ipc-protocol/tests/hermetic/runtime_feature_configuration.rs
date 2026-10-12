@@ -42,15 +42,15 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
             )),
         },
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
         .await
         .expect("acknowledgement should write");
-    let decoded_event = supervisor_reader
+    let decoded_event = daemon_reader
         .next_event()
         .await
         .expect("acknowledgement should decode")

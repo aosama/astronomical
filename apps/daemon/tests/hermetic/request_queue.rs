@@ -9,7 +9,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::supervisor;
+use crate::common::daemon;
 
 /// Second request should wait for the first to complete and then start,
 /// rather than being immediately rejected with CapacityUnavailable.
@@ -257,7 +257,7 @@ async fn should_reject_request_when_queue_is_full() {
 async fn launch_fixture() -> astronomical_daemon::WorkerHandle {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
-    let worker_executor = supervisor::launch_test_executor(worker_executable_path)
+    let worker_executor = daemon::launch_test_executor(worker_executable_path)
         .await
         .expect("the worker should launch");
     wait_for_health(&worker_executor, WorkerHealthStatus::Ready).await;

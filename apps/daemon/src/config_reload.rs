@@ -20,7 +20,7 @@ use thiserror::Error;
 use crate::RuntimeModelPolicy;
 use crate::resolved_model_policy_catalog::ResolvedModelPolicyCatalog;
 
-/// Immutable snapshot of every resolved runtime value the supervisor needs
+/// Immutable snapshot of every resolved runtime value the daemon needs
 /// to decide whether a config reload requires a worker restart, a full REST
 /// API restart, or only an in-place update.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -51,7 +51,7 @@ pub struct ResolvedRuntimeConfig {
     pub configured_prompt_cache_maximum_size_bytes: Option<u64>,
     /// Resolved SSD-backed prompt-cache policy (worker-startup field).
     pub prompt_cache_config: PromptCacheConfig,
-    /// Resolved supervisor bind address (REST API restart required to change).
+    /// Resolved daemon bind address (REST API restart required to change).
     pub bind_address: String,
     /// Resolved logging policy (REST API restart required to change).
     pub logging_config: LoggingConfig,
@@ -113,9 +113,9 @@ impl ResolvedRuntimeConfigResolver {
         &self,
         user_config: &AstronomicalConfig,
     ) -> Result<ResolvedRuntimeConfig, ResolvedRuntimeConfigError> {
-        let supervisor_bind_address = self
+        let daemon_bind_address = self
             .instance_paths
-            .validate_configured_bind_address(user_config.supervisor_bind_address()?)?;
+            .validate_configured_bind_address(user_config.daemon_bind_address()?)?;
         let configured_model_directories = user_config.model_directories().to_vec();
         let (mut discovered_models, model_discovery_diagnostics) =
             self.discover_effective_models(&configured_model_directories)?;
@@ -180,7 +180,7 @@ impl ResolvedRuntimeConfigResolver {
             configured_prompt_cache_maximum_size_bytes: user_config
                 .configured_prompt_cache_maximum_size_bytes()?,
             prompt_cache_config,
-            bind_address: supervisor_bind_address.to_string(),
+            bind_address: daemon_bind_address.to_string(),
             logging_config,
         })
     }
@@ -214,7 +214,7 @@ impl ResolvedRuntimeConfigResolver {
 }
 
 impl ResolvedRuntimeConfig {
-    /// Converts supervisor-resolved worker settings into the IPC bootstrap DTO.
+    /// Converts daemon-resolved worker settings into the IPC bootstrap DTO.
     #[must_use]
     pub fn worker_startup_configuration(&self) -> WorkerStartupConfiguration {
         WorkerStartupConfiguration {
@@ -358,7 +358,7 @@ impl ConfigReloadDiff {
             in_place_reloaded_fields.push("maximum_mlx_memory_gb".to_owned());
         }
         if current.performance_attribution_enabled != candidate.performance_attribution_enabled {
-            // Supervisor and worker attribution share one setting, while the supervisor writer is
+            // Daemon and worker attribution share one setting, while the daemon writer is
             // opened before the listener binds. An application restart keeps both owners aligned.
             restart_required_fields.push("diagnostics.performance_attribution_enabled".to_owned());
         }
@@ -371,7 +371,7 @@ impl ConfigReloadDiff {
             worker_restart_required = true;
         }
         if current.bind_address != candidate.bind_address {
-            restart_required_fields.push("supervisor.bind_address".to_owned());
+            restart_required_fields.push("daemon.bind_address".to_owned());
         }
         if current.logging_config != candidate.logging_config {
             restart_required_fields.push("logging".to_owned());

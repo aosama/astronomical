@@ -34,7 +34,7 @@ fn discovery_root_for_model_directory(model_directory: &Path) -> &Path {
 }
 
 /// Builds an isolated Development home pinned to the measured model and resolves
-/// the supervisor-owned bootstrap settings for the worker. The worker's logging
+/// the daemon-owned bootstrap settings for the worker. The worker's logging
 /// directory is pointed at a persistent per-model directory so its log lines
 /// survive the isolated home's panic-unwind cleanup and stay readable after a
 /// failed journey.

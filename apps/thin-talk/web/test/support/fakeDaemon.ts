@@ -1,17 +1,17 @@
 /**
- * A scripted stand-in for the supervisor's HTTP surface. It answers the status
+ * A scripted stand-in for the daemon's HTTP surface. It answers the status
  * handshake, the model catalog, and a chat-completions request whose reply is a
- * real SSE byte stream, so SupervisorClient's streaming parser runs against
+ * real SSE byte stream, so DaemonClient's streaming parser runs against
  * genuine Response/ReadableStream objects.
  */
-export interface RecordedSupervisorRequest {
+export interface RecordedDaemonRequest {
   readonly url: string;
   readonly method: string;
   readonly body: string | null;
 }
 
-export interface FakeSupervisorOptions {
-  readonly supervisorBaseURL: string;
+export interface FakeDaemonOptions {
+  readonly daemonBaseURL: string;
   readonly channel: string;
   readonly stateDirectory: string;
   readonly models?: unknown[];
@@ -22,20 +22,20 @@ export interface FakeSupervisorOptions {
 }
 
 const DEFAULT_CHAT_LINES = [
-  'data: {"choices":[{"delta":{"content":"Hello from the fake supervisor."}}]}',
+  'data: {"choices":[{"delta":{"content":"Hello from the fake daemon."}}]}',
   'data: {"choices":[{"delta":{"content":" Second sentence."}}]}',
   "data: [DONE]",
 ];
 
-export class FakeSupervisor {
-  public readonly requests: RecordedSupervisorRequest[] = [];
-  private readonly options: FakeSupervisorOptions;
+export class FakeDaemon {
+  public readonly requests: RecordedDaemonRequest[] = [];
+  private readonly options: FakeDaemonOptions;
 
-  public constructor(options: FakeSupervisorOptions) {
+  public constructor(options: FakeDaemonOptions) {
     this.options = options;
   }
 
-  /** Replaces the global fetch the SupervisorClient resolves at call time. */
+  /** Replaces the global fetch the DaemonClient resolves at call time. */
   public install(): void {
     const handler = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
       this.handle(input, init);
@@ -47,7 +47,7 @@ export class FakeSupervisor {
     this.requests.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? init.body : null });
     if (url.endsWith("/v1/status")) {
       if (this.options.failHandshake) {
-        return new Response("supervisor is pretending to be down", { status: 503 });
+        return new Response("daemon is pretending to be down", { status: 503 });
       }
       return Response.json({
         status: "ready",
@@ -63,7 +63,7 @@ export class FakeSupervisor {
     if (url.endsWith("/v1/chat/completions")) {
       return sseResponse(this.options.chatStreamLines ?? DEFAULT_CHAT_LINES);
     }
-    return new Response("no such route on the fake supervisor", { status: 404 });
+    return new Response("no such route on the fake daemon", { status: 404 });
   }
 
   public chatRequestBody(): Record<string, unknown> | null {

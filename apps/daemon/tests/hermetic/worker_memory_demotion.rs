@@ -2,7 +2,7 @@
 //!
 //! The contract these tests pin is that the trusted worker process has exited
 //! and been reaped before any replacement process is launched. Asserting that
-//! from the supervisor's own control flow would only restate the implementation,
+//! from the daemon's own control flow would only restate the implementation,
 //! so the ordering is observed from the replacement process itself: the worker
 //! fixture records the liveness of every sibling worker at the instant it
 //! starts. A stop-first restart therefore records its predecessor as gone, and a

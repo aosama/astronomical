@@ -2,35 +2,35 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { installDom, installConfig, waitFor } from "./support/dom";
 import { FakeSessionHost } from "./support/fakeHost";
-import { FakeSupervisor } from "./support/fakeSupervisor";
+import { FakeDaemon } from "./support/fakeDaemon";
 import { bootChatClient } from "../src/boot";
 
-const SUPERVISOR_BASE_URL = "http://127.0.0.1:6733";
+const DAEMON_BASE_URL = "http://127.0.0.1:6733";
 
 interface Journey {
   host: FakeSessionHost;
-  supervisor: FakeSupervisor;
+  daemon: FakeDaemon;
 }
 
-/** Boots the real client wiring against the fake host and fake supervisor.
+/** Boots the real client wiring against the fake host and fake daemon.
  * Pass a previous journey to keep its host files across a fresh page —
  * the same persistence a relaunch of the real app would see. */
 function bootJourney(previous?: Journey): Journey {
   installDom();
-  installConfig(SUPERVISOR_BASE_URL);
+  installConfig(DAEMON_BASE_URL);
   const host = previous?.host ?? new FakeSessionHost(
     (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
     (callId, message) => window.__thintalkBridge?.reject(callId, message),
   );
   host.install();
-  const supervisor = previous?.supervisor ?? new FakeSupervisor({
-    supervisorBaseURL: SUPERVISOR_BASE_URL,
+  const daemon = previous?.daemon ?? new FakeDaemon({
+    daemonBaseURL: DAEMON_BASE_URL,
     channel: "development",
     stateDirectory: "~/.astronomical-dev",
   });
-  supervisor.install();
+  daemon.install();
   bootChatClient();
-  return { host, supervisor };
+  return { host, daemon };
 }
 
 function sendUserMessage(text: string): void {
@@ -62,19 +62,19 @@ async function waitUntilReady(): Promise<void> {
 }
 
 test("a full chat journey: boot, send, stream, persist", async () => {
-  const { host, supervisor } = bootJourney();
+  const { host, daemon } = bootJourney();
 
   // Boot settles: handshake, model catalog, and a fresh untitled session.
   await waitFor(
-    () => supervisor.requests.some((request) => request.url.endsWith("/v1/models")),
+    () => daemon.requests.some((request) => request.url.endsWith("/v1/models")),
     "boot to reach the model catalog",
   );
   await waitUntilReady();
 
-  // The user asks, the fake supervisor streams the reply.
+  // The user asks, the fake daemon streams the reply.
   sendUserMessage("Summarize the prologue of Romeo and Juliet.");
   await waitFor(
-    () => renderedMessageTexts().some((text) => text.includes("Hello from the fake supervisor.")),
+    () => renderedMessageTexts().some((text) => text.includes("Hello from the fake daemon.")),
     "the streamed reply to render",
   );
   await waitFor(() => host.fileCount() === 1, "the session document to be saved");
@@ -87,10 +87,10 @@ test("a full chat journey: boot, send, stream, persist", async () => {
   assert.equal(savedPayload.messages[0].role, "user");
   assert.match(savedPayload.messages[0].content, /Romeo and Juliet/);
   assert.equal(savedPayload.messages[1].role, "assistant");
-  assert.match(savedPayload.messages[1].content, /Hello from the fake supervisor\./);
+  assert.match(savedPayload.messages[1].content, /Hello from the fake daemon\./);
 
-  // The chat request asked the supervisor for a streaming completion.
-  const chatBody = supervisor.chatRequestBody();
+  // The chat request asked the daemon for a streaming completion.
+  const chatBody = daemon.chatRequestBody();
   assert.ok(chatBody, "a chat completions request was made");
   assert.equal(chatBody["stream"], true);
   assert.equal(chatBody["model"], "fake-chat-model");
@@ -113,19 +113,19 @@ test("a second boot restores the persisted transcript from the host", async () =
 
 test("a failed handshake shows the failure notice instead of a transcript", async () => {
   installDom();
-  installConfig(SUPERVISOR_BASE_URL);
+  installConfig(DAEMON_BASE_URL);
   const host = new FakeSessionHost(
     (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
     (callId, message) => window.__thintalkBridge?.reject(callId, message),
   );
   host.install();
-  const supervisor = new FakeSupervisor({
-    supervisorBaseURL: SUPERVISOR_BASE_URL,
-    // A supervisor from another channel must be refused by the handshake.
+  const daemon = new FakeDaemon({
+    daemonBaseURL: DAEMON_BASE_URL,
+    // A daemon from another channel must be refused by the handshake.
     channel: "stable",
     stateDirectory: "~/.astronomical-dev",
   });
-  supervisor.install();
+  daemon.install();
   bootChatClient();
 
   // A load failure renders as the empty-state notice, not the composer banner
@@ -134,5 +134,5 @@ test("a failed handshake shows the failure notice instead of a transcript", asyn
     const notice = document.querySelector<HTMLElement>("#empty-state-notice");
     return (notice?.textContent ?? "").includes("runtime channel");
   }, "the failure notice to appear");
-  assert.equal(host.fileCount(), 0, "no session is written when the supervisor is unreachable");
+  assert.equal(host.fileCount(), 0, "no session is written when the daemon is unreachable");
 }, { timeout: 30_000 });

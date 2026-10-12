@@ -1,6 +1,6 @@
 //! Bounded per-request evidence explaining persistent prompt-cache behavior.
 //!
-//! These types cross the worker/supervisor boundary and can enter local JSONL
+//! These types cross the worker/daemon boundary and can enter local JSONL
 //! performance logs. They intentionally contain counters, enums, and a short hash
 //! prefix only—never prompts, complete hashes, model paths, or tensor contents.
 

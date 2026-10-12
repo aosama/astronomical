@@ -11,7 +11,7 @@
  *   `window.__thintalkConfig` (read by `boot.ts`) and the session-bridge double
  *   is the prebuilt `preview/preview-shim.js` (the compiled `installPreviewShim`
  *   glue). Both load as `<script src=...>` and pass the CSP.
- * - The supervisor endpoints (`/v1/status`, `/v1/models`, `/v1/chat/completions`)
+ * - The daemon endpoints (`/v1/status`, `/v1/models`, `/v1/chat/completions`)
  *   are served by this same process, with the chat completion streamed over real
  *   SSE so token rendering is visible in the browser.
  * - The port is taken from an environment variable and, if busy, falls back to a
@@ -40,10 +40,10 @@ const preferredPortArg =
     : 0;
 const preferredPort = preferredPortArg || Number(process.env.THINTALK_PREVIEW_PORT) || DEFAULT_PORT;
 
-let supervisorBaseURL = `http://127.0.0.1:${preferredPort}`;
+let daemonBaseURL = `http://127.0.0.1:${preferredPort}`;
 let actualPort = preferredPort;
 const previewConfig = {
-  supervisorBaseURL,
+  daemonBaseURL,
   expectedChannel,
   expectedStateDirectory,
 };
@@ -116,7 +116,7 @@ const contentTypes = {
 };
 
 const server = http.createServer((request, response) => {
-  const url = new URL(request.url ?? "/", supervisorBaseURL);
+  const url = new URL(request.url ?? "/", daemonBaseURL);
   const requestStartedAtMs = performance.now();
   response.on("finish", () => {
     const durationMs = (performance.now() - requestStartedAtMs).toFixed(1);
@@ -156,7 +156,7 @@ const server = http.createServer((request, response) => {
     // different origins, so the config is derived per request from the Host
     // header rather than fixed at startup.
     const requestHost = request.headers.host ?? `127.0.0.1:${actualPort}`;
-    const requestConfig = { ...previewConfig, supervisorBaseURL: `http://${requestHost}` };
+    const requestConfig = { ...previewConfig, daemonBaseURL: `http://${requestHost}` };
     response.writeHead(200, { "content-type": contentTypes[".js"], "cache-control": "no-store" });
     response.end(`window.__thintalkConfig = ${JSON.stringify(requestConfig)};`);
     return;
@@ -218,8 +218,8 @@ async function start() {
 
   const boundPort = server.address().port;
   actualPort = boundPort;
-  supervisorBaseURL = `http://127.0.0.1:${boundPort}`;
-  console.log(`[dev-server] Thin Talk preview running at ${supervisorBaseURL}`);
+  daemonBaseURL = `http://127.0.0.1:${boundPort}`;
+  console.log(`[dev-server] Thin Talk preview running at ${daemonBaseURL}`);
   console.log("[dev-server] Sessions persist in localStorage; clear site data for a fresh start.");
 }
 

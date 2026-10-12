@@ -9,24 +9,24 @@ async fn should_inject_model_visible_correction_tokens_and_continue_generation()
         CorrectionRequestingProcessor,
         CorrectionAwareChatEngine::new(Arc::clone(&injected_model_feedback_token_batches)),
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
-    supervisor_writer
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(751, 13)))
         .await
         .expect("the worker should receive a chat request");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             generated_token_count: 1,
             ..
@@ -40,20 +40,20 @@ async fn should_inject_model_visible_correction_tokens_and_continue_generation()
         &[vec![81, 82, 83]],
     );
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             generated_token_count: 2,
             ..
         }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             reason: ChatGenerationCompletionReason::ToolCalls,
             ..
         }
     ));
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 struct CorrectionAwareChatEngine {

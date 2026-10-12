@@ -20,11 +20,11 @@ async fn should_round_trip_one_embeddings_command() {
         encoding_format: EmbeddingEncodingFormat::Base64,
         dimensions: Some(256),
     });
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("a bounded embeddings command should be written");
@@ -58,9 +58,9 @@ async fn should_round_trip_embeddings_completed_failed_and_finalized_events() {
         mlx_memory_snapshot: None,
     };
 
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&completed_event)
@@ -76,21 +76,21 @@ async fn should_round_trip_embeddings_completed_failed_and_finalized_events() {
         .expect("a finalized embeddings event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the completed embeddings frame should decode"),
         Some(completed_event)
     );
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the failed embeddings event frame should decode"),
         Some(failed_event)
     );
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the finalized embeddings event frame should decode"),

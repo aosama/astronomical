@@ -82,7 +82,7 @@ enum MlxMemoryLegendItem: Equatable {
 struct MlxMemoryBreakdownBar: View {
   let activeByteCount: UInt64
   let limitByteCount: UInt64
-  let breakdown: SupervisorStatusDocument.MlxMemoryBreakdown
+  let breakdown: DaemonStatusDocument.MlxMemoryBreakdown
   let headroomSplit: MlxHeadroomSplit
   let sourceTitle: String
   @State private var selectedMemoryLegendItem: MlxMemoryLegendItem?

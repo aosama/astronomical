@@ -1,4 +1,4 @@
-import { SupervisorClient } from "./SupervisorClient";
+import { DaemonClient } from "./DaemonClient";
 import { SessionBridge } from "./SessionBridge";
 import { SessionStore } from "./SessionStore";
 import { SessionPreferences } from "./SessionPreferences";
@@ -31,7 +31,7 @@ const COMPOSER_FONT_SIZE_STEP = 1;
  * it is drawn.
  */
 export class ChatController {
-  private readonly client: SupervisorClient;
+  private readonly client: DaemonClient;
   private readonly bridge: SessionBridge;
   private readonly store: SessionStore;
   private readonly log = new ConversationLog();
@@ -49,7 +49,7 @@ export class ChatController {
   private selectedModelID: string | null = null;
   private isStreaming = false;
 
-  public constructor(init: { client: SupervisorClient; bridge: SessionBridge; store: SessionStore }) {
+  public constructor(init: { client: DaemonClient; bridge: SessionBridge; store: SessionStore }) {
     this.client = init.client;
     this.bridge = init.bridge;
     this.store = init.store;

@@ -5,7 +5,7 @@
 //! still in the pipe. A SwapModel in that window treats a missing health
 //! generation as "policy already ready", then the later
 //! RuntimeFeatureConfigurationApplied looks like an illegal loaded-model
-//! change and the supervisor contains the worker.
+//! change and the daemon contains the worker.
 //!
 //! The wait is once per worker process. Live memory updates may change the
 //! configuration generation, and a rejected swap may clear it from health;

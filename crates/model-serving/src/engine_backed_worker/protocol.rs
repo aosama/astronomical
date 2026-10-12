@@ -61,7 +61,7 @@ where
                     .send_event(&loaded_model.processor.ready_event())
                     .await?;
                 // The menu's expert-mode label must be reported fact from the moment readiness
-                // is published. Without this event the label stays a supervisor-side fallback
+                // is published. Without this event the label stays a daemon-side fallback
                 // guess until the first generation starts, which mislabels paged loads.
                 if let Some(expert_memory_mode) = engine_load_result.expert_memory_mode() {
                     event_writer

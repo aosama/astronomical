@@ -114,7 +114,7 @@ pub(super) async fn run_worker_pass(
         worker_startup_configuration,
     )
     .await
-    .expect("the supervisor should launch the measured worker");
+    .expect("the daemon should launch the measured worker");
     wait_until_idle(&worker_handle).await;
     let idle_worker_startup_duration = worker_started_at.elapsed();
     let worker_process_id = find_worker_process_id().await;

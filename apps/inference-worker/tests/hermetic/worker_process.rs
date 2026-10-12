@@ -79,7 +79,7 @@ async fn should_start_the_production_worker_from_an_ipc_startup_configuration() 
         PathBuf::from(&worker_executable_path),
     )
     .load()
-    .expect("the supervisor-side worker configuration should resolve");
+    .expect("the daemon-side worker configuration should resolve");
     let mut worker_process = Command::new(worker_executable_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

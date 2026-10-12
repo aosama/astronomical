@@ -4,7 +4,7 @@
 
 import Foundation
 
-extension SupervisorStatusDocument {
+extension DaemonStatusDocument {
   struct Progress: Codable, Equatable {
     enum Unit: Equatable {
       case tokens

@@ -70,7 +70,7 @@ struct FirstRunWelcomeView: View {
     .frame(width: 460)
   }
 
-  private var statusDocument: SupervisorStatusDocument {
+  private var statusDocument: DaemonStatusDocument {
     telemetryStore.statusDocument
   }
 

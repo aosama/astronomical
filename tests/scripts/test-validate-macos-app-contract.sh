@@ -84,7 +84,7 @@ case "${2:-}" in
     AstronomicalBuildDate) printf '%s\n' 20260819 ;;
     CFBundleIdentifier) printf '%s\n' dev.astronomical.app.development ;;
     CFBundleIconFile) printf '%s\n' Astronomical.icns ;;
-    AstronomicalSupervisorPort) printf '%s\n' 6733 ;;
+    AstronomicalDaemonPort) printf '%s\n' 6733 ;;
     AstronomicalStateDirectoryName) printf '%s\n' .astronomical-dev ;;
     *) exit 1 ;;
 esac

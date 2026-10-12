@@ -13,13 +13,13 @@ use crate::{
 /// Matches the HTTP chat transport ceiling so one validated local request stays one IPC message.
 pub const MAX_IPC_FRAME_BYTES: usize = 32 * 1024 * 1024;
 
-/// Supervisor-local correlation identifier for one generation request.
+/// Daemon-local correlation identifier for one generation request.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct RequestId(u64);
 
 impl RequestId {
-    /// Creates a request identifier from a supervisor-local monotonic value.
+    /// Creates a request identifier from a daemon-local monotonic value.
     #[must_use]
     pub const fn new(raw_request_id: u64) -> Self {
         Self(raw_request_id)
@@ -80,7 +80,7 @@ pub enum MlxMemorySnapshotSource {
     DecodeSubmitted,
     /// Request state and reclaimable allocator memory were released.
     Finalized,
-    /// The ready worker was idle when the supervisor requested a refresh.
+    /// The ready worker was idle when the daemon requested a refresh.
     IdlePoll,
     /// A live MLX memory-ceiling control operation completed.
     MemoryLimitAdjusted,
@@ -153,7 +153,7 @@ pub enum WorkerCommand {
     ///
     /// When `model_id` is `None`, the entire global cache root is wiped. When
     /// `model_id` is `Some`, only the `<global_root>/<model_id>/` tree is
-    /// removed. The supervisor sends this from `DELETE /v1/cache` and waits
+    /// removed. The daemon sends this from `DELETE /v1/cache` and waits
     /// for `PromptCacheCleared` before responding to the HTTP caller.
     ClearPromptCache {
         /// Optional scoped model identity. `None` clears everything.
@@ -174,7 +174,7 @@ pub enum WorkerEvent {
     },
     /// Reports that the worker process is running without a model loaded.
     ///
-    /// The supervisor must send `SwapModel` before forwarding the first
+    /// The daemon must send `SwapModel` before forwarding the first
     /// generation request.
     Idle {
         /// Immutable machine-derived MLX ceiling in bytes.
@@ -215,7 +215,7 @@ pub enum WorkerEvent {
     /// and constructing its streaming replacement inside this process would
     /// briefly require both model runtimes, so the memory cannot be released
     /// deterministically. The worker keeps its loaded runtime and unchanged
-    /// ceilings; the supervisor owns a stop-first process restart under the
+    /// ceilings; the daemon owns a stop-first process restart under the
     /// persisted lower ceiling.
     MlxMemoryLimitRestartRequired {
         /// Requested effective ceiling in bytes that this process cannot adopt.
@@ -389,7 +389,7 @@ pub enum WorkerEvent {
     /// Reports cumulative persistent prompt-cache observability counters and disk footprint.
     ///
     /// Emitted by the worker after the model finishes loading and after each
-    /// generation completes, so the supervisor can expose cache health through
+    /// generation completes, so the daemon can expose cache health through
     /// `GET /v1/cache/stats` without reading the cache directory itself.
     PersistentPromptCacheStats {
         persistent_prompt_cache_hits: u64,
@@ -409,7 +409,7 @@ pub enum WorkerEvent {
     },
     /// Confirms a persistent prompt-cache deletion completed.
     ///
-    /// Emitted by the worker after processing `ClearPromptCache`. The supervisor
+    /// Emitted by the worker after processing `ClearPromptCache`. The daemon
     /// waits for this event before responding to the HTTP caller with the
     /// deletion outcome.
     PromptCacheCleared {

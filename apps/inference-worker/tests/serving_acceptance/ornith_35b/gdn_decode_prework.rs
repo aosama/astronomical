@@ -11,7 +11,7 @@
 //! Run the journey alternately with the variable unset (engaged) and set to
 //! `0` (disengaged) so thermal state cannot order-confound the comparison;
 //! aggregate the medians across the alternation. Decode rates come from
-//! supervisor status differencing, never attribution spans. A warm-up
+//! daemon status differencing, never attribution spans. A warm-up
 //! completion absorbs the model load and first-use JIT compilation.
 //! Persistent prompt caching makes each measured completion after the warmup
 //! a pure decode measurement over the identical Romeo and Juliet prompt.
@@ -119,7 +119,7 @@ async fn measure_ambient_prework_decode() {
     stop_resident_rest_server(rest_server).await;
 }
 
-/// One `/v1/status` serving-session snapshot. The supervisor folds each
+/// One `/v1/status` serving-session snapshot. The daemon folds each
 /// request's rates into rolling averages, so the per-request measurement is
 /// recovered by differencing two snapshots bracketing exactly one request.
 struct ServingSessionSample {
@@ -156,7 +156,7 @@ impl ServingSessionSample {
             - previous.completed_request_count as f64 * previous.average_generation_tok_per_second;
         assert!(
             decode_tok_per_second.is_finite() && decode_tok_per_second > 0.0,
-            "the supervisor must attribute a positive decode rate to every completion: {} -> {}",
+            "the daemon must attribute a positive decode rate to every completion: {} -> {}",
             previous.average_generation_tok_per_second,
             self.average_generation_tok_per_second,
         );

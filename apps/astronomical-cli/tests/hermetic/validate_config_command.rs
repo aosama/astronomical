@@ -122,7 +122,7 @@ fn should_report_effective_values_for_valid_config() {
     assert!(rendered_text.contains("Model directories: 1"));
     assert!(rendered_text.contains("/absolute/model/library"));
     assert!(rendered_text.contains("Runtime instance: development"));
-    assert!(rendered_text.contains("Supervisor bind address: 127.0.0.1"));
+    assert!(rendered_text.contains("Daemon bind address: 127.0.0.1"));
     assert!(rendered_text.ends_with('\n'));
 }
 
@@ -198,7 +198,7 @@ fn should_render_json_report_for_scripts() {
     for report_key in [
         "configuration_file_path",
         "generation",
-        "supervisor_bind_address",
+        "daemon_bind_address",
         "persistent_prompt_cache_enabled",
         "maximum_mlx_memory_bytes",
         "performance_attribution_enabled",

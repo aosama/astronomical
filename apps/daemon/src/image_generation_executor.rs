@@ -27,7 +27,7 @@ pub enum ImageGenerationExecutionError {
     WorkerUnavailable,
 }
 
-/// Supervisor-owned bounds for image execution and lack of forward progress.
+/// Daemon-owned bounds for image execution and lack of forward progress.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ImageGenerationTimeouts {
     pub execution_timeout: Duration,
@@ -97,7 +97,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// Starts one native embeddings request on this executor.
     ///
     /// Embeddings share this trait so chat, image, and embeddings keep one
-    /// supervisor executor object; default methods leave chat-only test
+    /// daemon executor object; default methods leave chat-only test
     /// executors compiling without an embeddings impl.
     fn start_embeddings_generation(
         &self,

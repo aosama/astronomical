@@ -133,7 +133,7 @@ pub fn try_discover_model_with_id(
                 model_size_bytes: family_metadata.model_size_bytes,
             })
         }
-        // The native T2I engine is wired end to end (worker factory arm, supervisor image
+        // The native T2I engine is wired end to end (worker factory arm, daemon image
         // policy, preflight, catalog), so a verified Qwen-Image-2.1 artifact now advertises
         // with the same evidence shape as FLUX.2 Klein.
         ModelFamily::QwenImage21 => {

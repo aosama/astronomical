@@ -16,11 +16,10 @@ use tokio::sync::watch;
 use crate::{
     GenerationStartError, ImageGenerationExecutor,
     config_reload::ResolvedRuntimeConfig,
-    library::{DownloadCatalog, LibraryDownloadCoordinator},
-    supervisor_performance_attribution::{
-        SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-        SupervisorPerformanceOperation,
+    daemon_performance_attribution::{
+        DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
     },
+    library::{DownloadCatalog, LibraryDownloadCoordinator},
 };
 
 /// Built-in chat model used when the client sends no model and the user has
@@ -58,7 +57,7 @@ impl DaemonIpcService {
 #[derive(Clone)]
 pub struct DaemonIpcGenerationContext {
     /// Executor backed by the single resident local worker. Image-generation
-    /// executor is the widest supervisor executor trait: it carries chat,
+    /// executor is the widest daemon executor trait: it carries chat,
     /// image, and embeddings start methods with worker health.
     pub executor: Arc<dyn ImageGenerationExecutor>,
     /// Live model policy defaults, present only when config reloading is wired.
@@ -82,26 +81,26 @@ pub struct DaemonIpcGenerationContext {
 pub async fn start_daemon_ipc_service(
     instance_paths: &AstronomicalInstancePaths,
     generation_context: DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
 ) -> Result<DaemonIpcService, DaemonTransportError> {
     let socket_path = instance_paths.ipc_socket_file_path();
     let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone()).await?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     // The spawned task must own the log: the service loop runs far longer
     // than this function's borrow of the application state.
-    let service_attribution_log = supervisor_attribution_log.clone();
+    let service_attribution_log = daemon_attribution_log.clone();
     let service_task = tokio::spawn(async move {
         let mut shutdown_receiver = shutdown_receiver;
         loop {
             let generation_context = generation_context.clone();
-            let supervisor_attribution_log = service_attribution_log.clone();
+            let daemon_attribution_log = service_attribution_log.clone();
             tokio::select! {
                 _ = shutdown_receiver.changed() => break,
                 serve_outcome = daemon_listener.serve_streaming_request(
                     move |daemon_request, streaming_response_writer| {
                         handle_streaming_daemon_request(
                             generation_context,
-                            supervisor_attribution_log,
+                            daemon_attribution_log,
                             daemon_request,
                             streaming_response_writer,
                         )
@@ -135,7 +134,7 @@ pub async fn start_daemon_ipc_service(
 
 async fn handle_streaming_daemon_request(
     generation_context: DaemonIpcGenerationContext,
-    supervisor_attribution_log: SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: DaemonPerformanceAttributionLog,
     daemon_request: DaemonRequest,
     mut streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
@@ -146,8 +145,8 @@ async fn handle_streaming_daemon_request(
                 application_name: DAEMON_APPLICATION_NAME.to_owned(),
             };
             send_attributed_streaming_response(
-                &supervisor_attribution_log,
-                SupervisorPerformanceOperation::DaemonIpcHandshake,
+                &daemon_attribution_log,
+                DaemonPerformanceOperation::DaemonIpcHandshake,
                 &mut streaming_response_writer,
                 &handshake_response,
             )
@@ -164,8 +163,8 @@ async fn handle_streaming_daemon_request(
                 )),
             };
             send_attributed_streaming_response(
-                &supervisor_attribution_log,
-                SupervisorPerformanceOperation::DaemonIpcStatus,
+                &daemon_attribution_log,
+                DaemonPerformanceOperation::DaemonIpcStatus,
                 &mut streaming_response_writer,
                 &status_response,
             )
@@ -178,9 +177,9 @@ async fn handle_streaming_daemon_request(
             settings,
             schema_json,
         } => {
-            supervisor_attribution_log
+            daemon_attribution_log
                 .measure_async_operation_best_effort(
-                    SupervisorPerformanceOperation::DaemonIpcChatGenerate,
+                    DaemonPerformanceOperation::DaemonIpcChatGenerate,
                     || {
                         super::daemon_ipc_chat::stream_chat_generation(
                             &generation_context,
@@ -195,9 +194,9 @@ async fn handle_streaming_daemon_request(
                     },
                     |stream_outcome| {
                         if stream_outcome.is_ok() {
-                            SupervisorPerformanceMeasurement::success()
+                            DaemonPerformanceMeasurement::success()
                         } else {
-                            SupervisorPerformanceMeasurement::failure()
+                            DaemonPerformanceMeasurement::failure()
                         }
                     },
                 )
@@ -210,7 +209,7 @@ async fn handle_streaming_daemon_request(
         } => {
             crate::daemon_ipc_embeddings::run_embeddings_generation(
                 &generation_context,
-                &supervisor_attribution_log,
+                &daemon_attribution_log,
                 model,
                 inputs,
                 dimensions,
@@ -221,7 +220,7 @@ async fn handle_streaming_daemon_request(
         DaemonRequest::ModelsList => {
             crate::daemon_ipc_models::handle_models_list(
                 &generation_context,
-                &supervisor_attribution_log,
+                &daemon_attribution_log,
                 streaming_response_writer,
             )
             .await
@@ -229,7 +228,7 @@ async fn handle_streaming_daemon_request(
         DaemonRequest::Catalog => {
             crate::daemon_ipc_models::handle_catalog(
                 &generation_context,
-                &supervisor_attribution_log,
+                &daemon_attribution_log,
                 streaming_response_writer,
             )
             .await
@@ -237,7 +236,7 @@ async fn handle_streaming_daemon_request(
         DaemonRequest::DownloadStart { model_id } => {
             crate::daemon_ipc_models::handle_download_start(
                 &generation_context,
-                &supervisor_attribution_log,
+                &daemon_attribution_log,
                 model_id,
                 streaming_response_writer,
             )
@@ -246,7 +245,7 @@ async fn handle_streaming_daemon_request(
         DaemonRequest::DownloadStatus => {
             crate::daemon_ipc_models::handle_download_status(
                 &generation_context,
-                &supervisor_attribution_log,
+                &daemon_attribution_log,
                 streaming_response_writer,
             )
             .await
@@ -254,7 +253,7 @@ async fn handle_streaming_daemon_request(
         DaemonRequest::DefaultModelSet { model_id } => {
             crate::daemon_ipc_models::handle_default_model_set(
                 &generation_context,
-                &supervisor_attribution_log,
+                &daemon_attribution_log,
                 model_id,
                 streaming_response_writer,
             )
@@ -274,20 +273,20 @@ pub(super) fn effective_default_model_id(instance_paths: &AstronomicalInstancePa
 }
 
 async fn send_attributed_streaming_response(
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
-    operation: SupervisorPerformanceOperation,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+    operation: DaemonPerformanceOperation,
     streaming_response_writer: &mut StreamingResponseWriter,
     daemon_response: &DaemonResponse,
 ) -> Result<(), DaemonTransportError> {
-    supervisor_attribution_log
+    daemon_attribution_log
         .measure_async_operation_best_effort(
             operation,
             || streaming_response_writer.send_response(daemon_response),
             |send_outcome| {
                 if send_outcome.is_ok() {
-                    SupervisorPerformanceMeasurement::success()
+                    DaemonPerformanceMeasurement::success()
                 } else {
-                    SupervisorPerformanceMeasurement::failure()
+                    DaemonPerformanceMeasurement::failure()
                 }
             },
         )

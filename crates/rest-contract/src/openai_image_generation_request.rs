@@ -78,7 +78,7 @@ impl OpenAiImageGenerationRequest {
     }
 }
 
-/// Validated image request data ready for supervisor translation.
+/// Validated image request data ready for daemon translation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenAiImageGenerationRequestParts {
     pub model: String,

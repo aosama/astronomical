@@ -34,7 +34,7 @@ pub enum WorkerTerminationOutcome {
         /// Whether the child reported a successful process exit.
         process_exit_successful: bool,
     },
-    /// The supervisor had to send a termination signal before reaping.
+    /// The daemon had to send a termination signal before reaping.
     Forced {
         /// Whether the child nevertheless reported a successful process exit.
         process_exit_successful: bool,

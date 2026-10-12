@@ -3,9 +3,9 @@
 use std::{io, path::Path, sync::Arc, time::Duration};
 
 use astronomical_daemon::{
-    DiskCapacityQuery, DownloadCatalog, DownloadJobStore, DownloadPublicationRefresh,
-    HubPayloadRequest, HubTransportError, LibraryDownloadCoordinator,
-    SupervisorPerformanceAttributionLog, build_application_with_library_download,
+    DaemonPerformanceAttributionLog, DiskCapacityQuery, DownloadCatalog, DownloadJobStore,
+    DownloadPublicationRefresh, HubPayloadRequest, HubTransportError, LibraryDownloadCoordinator,
+    build_application_with_library_download,
 };
 use axum::{
     Router,
@@ -53,7 +53,7 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
             hub.clone(),
             hub,
             Arc::new(ValidatingDiscoveryRefresh),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         ));
         let application = build_application_with_library_download(
@@ -139,7 +139,7 @@ async fn should_remain_publishing_until_discovery_validates_the_published_model(
             hub.clone(),
             hub,
             Arc::new(FailingDiscoveryRefresh),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         ));
         let application = build_application_with_library_download(
@@ -389,7 +389,7 @@ fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Route
         hub.clone(),
         hub,
         Arc::new(ValidatingDiscoveryRefresh),
-        SupervisorPerformanceAttributionLog::open(test_directory, false)
+        DaemonPerformanceAttributionLog::open(test_directory, false)
             .expect("disabled attribution should construct"),
     ));
     build_application_with_library_download(

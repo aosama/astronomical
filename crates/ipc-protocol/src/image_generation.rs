@@ -302,7 +302,7 @@ pub struct WorkerEmbeddingCapabilities {
 }
 
 impl WorkerEmbeddingCapabilities {
-    /// Enforces positive geometry before the supervisor can advertise the endpoint.
+    /// Enforces positive geometry before the daemon can advertise the endpoint.
     pub fn validate(&self) -> Result<(), WorkerModelCapabilitiesValidationError> {
         if self.vector_width == 0 {
             return Err(WorkerModelCapabilitiesValidationError::ZeroEmbeddingVectorWidth);

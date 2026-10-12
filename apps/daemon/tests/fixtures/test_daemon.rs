@@ -15,11 +15,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         state_directory,
         AstronomicalRuntimeInstance::Development,
     );
-    let supervisor_bind_address = instance_paths.default_bind_address();
+    let daemon_bind_address = instance_paths.default_bind_address();
     let worker_executable_path =
         PathBuf::from(env::var(TEST_WORKER_EXECUTABLE_PATH_ENVIRONMENT_VARIABLE)?);
-    let listener = TcpListener::bind(supervisor_bind_address).await?;
-    let bound_supervisor_address = listener.local_addr()?;
+    let listener = TcpListener::bind(daemon_bind_address).await?;
+    let bound_daemon_address = listener.local_addr()?;
     let performance_log_directory = instance_paths.logging_directory();
     std::fs::create_dir_all(&performance_log_directory)?;
     let performance_log = GenerationPerformanceLog::open(&performance_log_directory)?;
@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .await?;
     let application = astronomical_daemon::build_application(worker_handle.clone());
 
-    println!("astronomicald listening on http://{bound_supervisor_address}");
+    println!("astronomicald listening on http://{bound_daemon_address}");
 
     let serve_result = axum::serve(listener, application)
         .with_graceful_shutdown(shutdown_signal())

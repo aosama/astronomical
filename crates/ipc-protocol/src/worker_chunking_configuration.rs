@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Complete resolved model-serving work-partition contract supplied by the supervisor.
+/// Complete resolved model-serving work-partition contract supplied by the daemon.
 ///
 /// The user-facing configuration is validated before this data transfer object
 /// is created. Keeping these values together prevents the worker, model, cache,

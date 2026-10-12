@@ -28,7 +28,7 @@ where
         }
     }
 
-    /// Serializes and transmits one supervisor command frame.
+    /// Serializes and transmits one daemon command frame.
     pub async fn send_command(
         &mut self,
         worker_command: &WorkerCommand,

@@ -1,4 +1,4 @@
-//! Applies worker events to the shared supervisor health snapshot.
+//! Applies worker events to the shared daemon health snapshot.
 
 use std::sync::{Arc, RwLock};
 

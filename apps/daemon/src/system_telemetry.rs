@@ -1,11 +1,11 @@
 #![allow(unsafe_code)]
 
-//! Local macOS system telemetry exposed by the supervisor.
+//! Local macOS system telemetry exposed by the daemon.
 //!
 //! The Swift menu bar app samples GPU utilization directly from IOKit. A
 //! local API client can request the same measurement through
 //! `GET /v1/system/telemetry`. This module owns the crate's only FFI
-//! block; all other supervisor modules retain `deny(unsafe_code)`.
+//! block; all other daemon modules retain `deny(unsafe_code)`.
 //!
 //! The sampling logic mirrors `SystemTelemetrySampler.swift`: iterate
 //! `AGXAccelerator` services, read `PerformanceStatistics`, and extract
@@ -113,7 +113,7 @@ pub(crate) async fn sample_telemetry() -> Response {
     .into_response()
 }
 
-/// Returns the system-telemetry route, ready to merge into any supervisor
+/// Returns the system-telemetry route, ready to merge into any daemon
 /// `Router`. Keeps `application.rs` from growing past the 500-line principle.
 pub(crate) fn system_telemetry_routes<S>() -> Router<S>
 where

@@ -1,8 +1,8 @@
-//! Effective model discovery in the precedence the supervisor daemon serves.
+//! Effective model discovery in the precedence the daemon daemon serves.
 //!
 //! One automatic Library destination (the instance state models directory) is scanned first and
 //! wins identity collisions with the authored config roots, because Library publication owns
-//! that destination. The supervisor resolver and the model-serving acceptance harness both
+//! that destination. The daemon resolver and the model-serving acceptance harness both
 //! resolve through this module, so journeys cannot drift from what the daemon advertises.
 
 use std::collections::HashSet;
@@ -28,7 +28,7 @@ pub enum EffectiveModelDiscoveryError {
     Discovered(#[from] DiscoveredModelError),
 }
 
-/// Executable models plus diagnostics in the precedence the supervisor serves.
+/// Executable models plus diagnostics in the precedence the daemon serves.
 #[derive(Debug)]
 pub struct EffectiveModelDiscovery {
     pub discovered_models: Vec<DiscoveredModel>,
@@ -36,7 +36,7 @@ pub struct EffectiveModelDiscovery {
 }
 
 /// Discovers executable models across one automatic Library root plus the authored config roots,
-/// in the production precedence the supervisor serves: the automatic Library destination wins
+/// in the production precedence the daemon serves: the automatic Library destination wins
 /// identity collisions with authored roots, and an absent automatic root is simply skipped.
 pub fn discover_effective_models(
     automatic_models_directory: &Path,

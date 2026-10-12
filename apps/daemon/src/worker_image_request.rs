@@ -250,7 +250,7 @@ pub(super) async fn handle_generate_image_command(
 ///
 /// The public endpoint already validates dimensions against the discovery-time envelope,
 /// so a rejection here means the loaded advertisement disagrees with what was admitted —
-/// logged at error level because that disagreement is a supervisor/worker contract break.
+/// logged at error level because that disagreement is a daemon/worker contract break.
 fn image_envelope_rejection_reason(
     settings: &ImageGenerationSettings,
     capabilities: &ImageGenerationCapabilities,

@@ -13,11 +13,15 @@ mod config_reveal_endpoint;
 mod configuration_status;
 mod console_assets;
 mod console_render_assets;
+mod daemon_download_attribution;
 mod daemon_ipc;
 mod daemon_ipc_chat;
 pub mod daemon_ipc_chat_schema;
 mod daemon_ipc_embeddings;
 mod daemon_ipc_models;
+mod daemon_performance_attribution;
+mod daemon_performance_measurement;
+mod daemon_performance_record;
 mod embeddings_executor;
 mod generation_performance_log;
 mod image_generation_executor;
@@ -48,10 +52,6 @@ mod serving_session_snapshot;
 mod shutdown_control;
 mod status_endpoint;
 mod structured_output;
-mod supervisor_download_attribution;
-mod supervisor_performance_attribution;
-mod supervisor_performance_measurement;
-mod supervisor_performance_record;
 mod system_telemetry;
 mod worker;
 mod worker_cache_clear;
@@ -112,6 +112,9 @@ pub use config_reload::{
     ResolvedRuntimeConfigResolver,
 };
 pub use daemon_ipc::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
+pub use daemon_performance_attribution::{
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
+};
 pub use embeddings_executor::{EmbeddingsExecutionError, EmbeddingsOutput};
 pub use generation_performance_log::{
     GenerationPerformanceLog, GenerationPerformanceRecord, ImageGenerationPerformanceRecord,
@@ -152,10 +155,6 @@ pub use resolved_configuration_generation::ResolvedConfigurationGeneration;
 pub use runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 pub use serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
-pub use supervisor_performance_attribution::{
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
-};
 pub use system_telemetry::parse_macos_memory_pressure_level;
 pub use worker_cache_clear::PromptCacheClearOutcome;
 pub use worker_control_error::WorkerControlError;

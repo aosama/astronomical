@@ -1,7 +1,7 @@
 //! Shared harness for the stop-first memory-demotion acceptance tests.
 //!
 //! The demotion tests observe the process boundary from outside the
-//! supervisor's control flow, so the harness owns the fixture launch, the
+//! daemon's control flow, so the harness owns the fixture launch, the
 //! launch-observation log assertions, and the process-liveness probes those
 //! observations rely on.
 

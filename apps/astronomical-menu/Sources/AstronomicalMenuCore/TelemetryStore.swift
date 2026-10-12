@@ -28,7 +28,7 @@ enum ControlActionFeedback: Equatable {
 
 @MainActor
 final class TelemetryStore: ObservableObject {
-  @Published private(set) var statusDocument = SupervisorStatusDocument.unavailable
+  @Published private(set) var statusDocument = DaemonStatusDocument.unavailable
   @Published private(set) var systemTelemetrySnapshot = SystemTelemetrySnapshot.unavailable
   @Published private(set) var controlActionFeedback: ControlActionFeedback?
   @Published private(set) var lastStatusRefreshErrorMessage: String?
@@ -41,14 +41,14 @@ final class TelemetryStore: ObservableObject {
   /// on transient feedback never race the dismissal window.
   typealias ControlActionFeedbackDismissalSleep = @Sendable (Duration) async -> Void
 
-  private let supervisorClient: any SupervisorClient
+  private let daemonClient: any DaemonClient
   private let controlActionFeedbackDismissalDelay: Duration
   private let controlActionFeedbackDismissalSleep: ControlActionFeedbackDismissalSleep
   private let workerPolicyConfirmationRetryDelay: Duration
   private let systemTelemetrySampler = SystemTelemetrySampler()
   private let systemTelemetryClock = ContinuousClock()
   private var pollingTask: Task<Void, Never>?
-  private var latestStatusRefreshTask: Task<SupervisorStatusDocument, Never>?
+  private var latestStatusRefreshTask: Task<DaemonStatusDocument, Never>?
   private var latestStatusRefreshSequence = 0
   private var controlActionFeedbackDismissalTask: Task<Void, Never>?
   private var controlActionFeedbackGeneration = 0
@@ -57,12 +57,12 @@ final class TelemetryStore: ObservableObject {
   private var lastSystemTelemetrySampleTime: ContinuousClock.Instant?
 
   init(
-    supervisorClient: any SupervisorClient = LocalSupervisorClient(),
+    daemonClient: any DaemonClient = LocalDaemonClient(),
     controlActionFeedbackDismissalDelay: Duration = .seconds(1),
     controlActionFeedbackDismissalSleep: ControlActionFeedbackDismissalSleep? = nil,
     workerPolicyConfirmationRetryDelay: Duration = defaultWorkerPolicyConfirmationRetryDelay
   ) {
-    self.supervisorClient = supervisorClient
+    self.daemonClient = daemonClient
     self.controlActionFeedbackDismissalDelay = controlActionFeedbackDismissalDelay
     self.controlActionFeedbackDismissalSleep = controlActionFeedbackDismissalSleep
       ?? { delay in try? await Task.sleep(for: delay) }
@@ -112,7 +112,7 @@ final class TelemetryStore: ObservableObject {
     let memoryUpdateFeedbackGeneration = presentControlActionFeedback(
       .inProgress("Updating maximum model RAM…"))
     do {
-      let updateMessage = try await supervisorClient.updateMaximumMlxMemoryGigabytes(
+      let updateMessage = try await daemonClient.updateMaximumMlxMemoryGigabytes(
         maximumMlxMemoryGigabytes)
       guard controlActionFeedbackGeneration == memoryUpdateFeedbackGeneration else { return }
       let successFeedbackGeneration = presentControlActionFeedback(.success(updateMessage))
@@ -132,7 +132,7 @@ final class TelemetryStore: ObservableObject {
     let configurationReloadFeedbackGeneration = presentControlActionFeedback(
       .inProgress("Reloading configuration…"))
     do {
-      let configurationReloadResult = try await supervisorClient.reloadConfiguration()
+      let configurationReloadResult = try await daemonClient.reloadConfiguration()
       guard controlActionFeedbackGeneration == configurationReloadFeedbackGeneration else {
         return
       }
@@ -225,13 +225,13 @@ final class TelemetryStore: ObservableObject {
   }
 
   @discardableResult
-  func refresh() async -> SupervisorStatusDocument {
+  func refresh() async -> DaemonStatusDocument {
     latestStatusRefreshSequence += 1
     let statusRefreshSequence = latestStatusRefreshSequence
     let precedingStatusRefreshTask = latestStatusRefreshTask
     let statusRefreshTask = Task { @MainActor [weak self] in
       if let precedingStatusRefreshTask { _ = await precedingStatusRefreshTask.value }
-      guard let self else { return SupervisorStatusDocument.unavailable }
+      guard let self else { return DaemonStatusDocument.unavailable }
       return await self.performStatusRefresh()
     }
     latestStatusRefreshTask = statusRefreshTask
@@ -242,11 +242,11 @@ final class TelemetryStore: ObservableObject {
     return refreshedStatusDocument
   }
 
-  private func performStatusRefresh() async -> SupervisorStatusDocument {
-    let refreshResult: (statusDocument: SupervisorStatusDocument, errorMessage: String?)
+  private func performStatusRefresh() async -> DaemonStatusDocument {
+    let refreshResult: (statusDocument: DaemonStatusDocument, errorMessage: String?)
     do {
-      refreshResult = (try await supervisorClient.fetchStatus(), nil)
-      hasDiscoveredModels = await supervisorClient.modelsAreAvailable()
+      refreshResult = (try await daemonClient.fetchStatus(), nil)
+      hasDiscoveredModels = await daemonClient.modelsAreAvailable()
     } catch {
       // Polling must remain self-healing, while retaining enough bounded context to distinguish
       // contract drift from an ordinary stopped server during acceptance and support.
@@ -275,7 +275,7 @@ final class TelemetryStore: ObservableObject {
     lastSystemTelemetrySampleTime = currentSampleTime
   }
 
-  private func apply(_ nextStatusDocument: SupervisorStatusDocument) {
+  private func apply(_ nextStatusDocument: DaemonStatusDocument) {
     statusDocument = nextStatusDocument
     if !popoverIsVisible {
       editableMaximumMlxMemoryGigabytes = nextStatusDocument.configuredMaximumMlxMemoryGigabytes
@@ -343,7 +343,7 @@ final class TelemetryStore: ObservableObject {
   }
 
   private func maximumWholeDecimalGigabytes(
-    for statusDocument: SupervisorStatusDocument
+    for statusDocument: DaemonStatusDocument
   ) -> UInt64 {
     statusDocument.machineMlxMemoryCeilingBytes / 1_000_000_000
   }

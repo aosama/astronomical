@@ -14,10 +14,10 @@ use std::{
 };
 
 use astronomical_daemon::{
-    DiskCapacityQuery, DownloadCatalog, DownloadJobPublicErrorCode, DownloadJobState,
-    DownloadPublicationRefresh, HubHttpRequest, HubHttpResponse, HubPayloadFuture,
-    HubPayloadRequest, HubPayloadTransport, HubTransport, HubTransportError, HubTransportFuture,
-    LibraryDownloadCoordinator, SupervisorPerformanceAttributionLog,
+    DaemonPerformanceAttributionLog, DiskCapacityQuery, DownloadCatalog,
+    DownloadJobPublicErrorCode, DownloadJobState, DownloadPublicationRefresh, HubHttpRequest,
+    HubHttpResponse, HubPayloadFuture, HubPayloadRequest, HubPayloadTransport, HubTransport,
+    HubTransportError, HubTransportFuture, LibraryDownloadCoordinator,
 };
 use tempfile::TempDir;
 
@@ -221,7 +221,7 @@ impl DownloadJourney {
             transport.clone() as Arc<dyn HubTransport>,
             transport as Arc<dyn HubPayloadTransport>,
             Arc::new(IgnoreDiscoveryRefresh),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         );
         coordinator

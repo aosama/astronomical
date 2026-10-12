@@ -9,7 +9,7 @@
 //! enter the comparison), then seven cache-warm completions over the
 //! identical full Romeo and Juliet prompt feed the medians. All rates are
 //! server-attributed, never client wall clock: prefill and decode both come
-//! from the supervisor's per-request counters, which `/v1/status` only
+//! from the daemon's per-request counters, which `/v1/status` only
 //! exposes as a rolling average and this journey recovers exactly by
 //! differencing consecutive snapshots. Decode deliberately does not come
 //! from attribution reports: their `decode_advance_span` counts chunk spans
@@ -232,7 +232,7 @@ fn read_jsonl_lines(path: &std::path::Path) -> Option<Vec<Value>> {
     )
 }
 
-/// One `/v1/status` serving-session snapshot. The supervisor folds each
+/// One `/v1/status` serving-session snapshot. The daemon folds each
 /// request's prefill and generation rates into rolling averages, so the
 /// per-request measurement is recovered by differencing two snapshots that
 /// bracket exactly one request.
@@ -297,13 +297,13 @@ impl ServingSessionSample {
             - previous_measurement_count as f64 * previous.average_generation_tok_per_second;
         assert!(
             prefill_tok_per_second.is_finite() && prefill_tok_per_second > 0.0,
-            "the supervisor must attribute a positive prefill rate to every completion: {} -> {}",
+            "the daemon must attribute a positive prefill rate to every completion: {} -> {}",
             previous.average_prefill_tok_per_second,
             self.average_prefill_tok_per_second,
         );
         assert!(
             decode_tok_per_second.is_finite() && decode_tok_per_second > 0.0,
-            "the supervisor must attribute a positive generation rate to every completion: {} -> {}",
+            "the daemon must attribute a positive generation rate to every completion: {} -> {}",
             previous.average_generation_tok_per_second,
             self.average_generation_tok_per_second,
         );

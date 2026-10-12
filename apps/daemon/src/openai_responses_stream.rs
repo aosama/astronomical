@@ -12,7 +12,7 @@ use crate::{
     OpenAiResponsesCollector,
 };
 
-/// Encodes supervisor generation events into semantic Responses events.
+/// Encodes daemon generation events into semantic Responses events.
 pub struct OpenAiResponsesStreamEncoder {
     response_id: String,
     created_at_unix_seconds: u64,

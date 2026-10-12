@@ -2,7 +2,7 @@
 //!
 //! The memory-demotion contract crosses a process boundary: the trusted worker
 //! must exit and be reaped before any replacement process exists. Proving that
-//! from the supervisor's own control flow would only restate the implementation,
+//! from the daemon's own control flow would only restate the implementation,
 //! so these helpers observe the boundary from outside it — by sampling which
 //! worker subprocesses the harness itself owns across the transition.
 
@@ -52,7 +52,7 @@ pub(crate) fn worker_child_process_identifiers() -> Vec<u32> {
 
 /// Requires the harness to own exactly one worker process and returns its
 /// identifier, so a journey can pin the worker identity before and after a
-/// supervisor-driven replacement.
+/// daemon-driven replacement.
 pub(crate) fn sole_worker_child_process_identifier(context: &str) -> u32 {
     let mut worker_identifiers = worker_child_process_identifiers();
     worker_identifiers.sort_unstable();

@@ -160,7 +160,7 @@ validate_real_model() {
         '{model:$model,messages:[{role:"user",content:$prompt}],max_tokens:16,stream:false}' > "$request_file"
     if ! curl --silent --show-error --fail --max-time 120 \
         --header 'Content-Type: application/json' --data-binary "@${request_file}" \
-        "${supervisor_base_url}/v1/chat/completions" > "${VALIDATION_TEMP_DIRECTORY}/chat-response.json"; then
+        "${daemon_base_url}/v1/chat/completions" > "${VALIDATION_TEMP_DIRECTORY}/chat-response.json"; then
         print_error "live serving probe request failed for model: ${model_identifier}"
         print_daemon_diagnostics
         exit 1
@@ -273,22 +273,22 @@ main() {
     application_build_date="$(read_plist_value AstronomicalBuildDate)"
     bundle_identifier="$(read_plist_value CFBundleIdentifier)"
     bundle_icon_file="$(read_plist_value CFBundleIconFile)"
-    supervisor_port="$(read_plist_value AstronomicalSupervisorPort)"
+    daemon_port="$(read_plist_value AstronomicalDaemonPort)"
     state_directory_name=""
     case "$application_channel" in
         stable)
-            expected_supervisor_port="6732"
+            expected_daemon_port="6732"
             expected_state_directory_name=".astronomical"
             expected_bundle_identifier="dev.astronomical.app"
             [ "$application_is_dirty" = "false" ] || { print_error "Stable bundle must not be dirty"; exit 1; }
             ;;
         development)
-            expected_supervisor_port="6733"
+            expected_daemon_port="6733"
             expected_state_directory_name=".astronomical-dev"
             expected_bundle_identifier="dev.astronomical.app.development"
             ;;
         app-store)
-            expected_supervisor_port="6732"
+            expected_daemon_port="6732"
             expected_bundle_identifier="app.astronomical.appstore"
             # App Store bundles carry no state-directory name: state derives from
             # Application Support. A present key is the failure, so its absence
@@ -300,7 +300,7 @@ main() {
             ;;
         *) print_error "invalid bundle channel"; exit 1 ;;
     esac
-    case "$supervisor_port" in ''|*[!0-9]*) print_error "invalid bundle supervisor port"; exit 1 ;; esac
+    case "$daemon_port" in ''|*[!0-9]*) print_error "invalid bundle daemon port"; exit 1 ;; esac
     case "$application_build_number" in ''|*[!0-9]*) print_error "invalid bundle build number"; exit 1 ;; esac
     case "$application_build_date" in ????????) ;; *) print_error "bundle build date must use YYYYMMDD"; exit 1 ;; esac
     case "$application_build_date" in *[!0-9]*) print_error "bundle build date must use YYYYMMDD"; exit 1 ;; esac
@@ -308,7 +308,7 @@ main() {
     [ -n "$application_commit" ] || { print_error "bundle commit is unavailable"; exit 1; }
     [ "$bundle_icon_file" = "Astronomical.icns" ] || { print_error "bundle icon identity is invalid"; exit 1; }
     case "$application_is_dirty" in true|false) ;; *) print_error "invalid bundle dirty marker"; exit 1 ;; esac
-    [ "$supervisor_port" = "$expected_supervisor_port" ] || { print_error "bundle channel and supervisor port disagree"; exit 1; }
+    [ "$daemon_port" = "$expected_daemon_port" ] || { print_error "bundle channel and daemon port disagree"; exit 1; }
     if [ "$application_channel" != "app-store" ]; then
         state_directory_name="$(read_plist_value AstronomicalStateDirectoryName)"
         [ "$state_directory_name" = "$expected_state_directory_name" ] || {
@@ -333,7 +333,7 @@ main() {
         *"${application_version}"*"${application_commit}"*) ;;
         *) print_error "app and bundled daemon identities do not match"; exit 1 ;;
     esac
-    supervisor_base_url="http://127.0.0.1:${supervisor_port}"
+    daemon_base_url="http://127.0.0.1:${daemon_port}"
     finish_step
 
     if [ "$BUNDLE_ONLY" = "true" ]; then
@@ -341,7 +341,7 @@ main() {
         return
     fi
 
-    if curl --silent --fail --max-time 2 "${supervisor_base_url}/health" >/dev/null 2>&1; then
+    if curl --silent --fail --max-time 2 "${daemon_base_url}/health" >/dev/null 2>&1; then
         print_error "${application_channel} endpoint is already occupied; validation will not stop an unowned instance"
         exit 1
     fi
@@ -356,15 +356,15 @@ main() {
     "$daemon_executable" --instance "$application_channel" \
         > "${VALIDATION_TEMP_DIRECTORY}/daemon.log" 2>&1 &
     LAUNCHED_DAEMON_PID="$!"
-    wait_for_url "${supervisor_base_url}/health" "${application_channel} health"
+    wait_for_url "${daemon_base_url}/health" "${application_channel} health"
     status_file="${VALIDATION_TEMP_DIRECTORY}/status.json"
-    curl --silent --show-error --fail --max-time 10 "${supervisor_base_url}/v1/status" > "$status_file"
+    curl --silent --show-error --fail --max-time 10 "${daemon_base_url}/v1/status" > "$status_file"
     jq --exit-status \
         --arg channel "$application_channel" --arg version "$application_version" --arg commit "$application_commit" \
         '.application.channel == $channel and .application.version == $version and .application.commit == $commit' \
         "$status_file" >/dev/null
     models_file="${VALIDATION_TEMP_DIRECTORY}/models.json"
-    curl --silent --show-error --fail --max-time 10 "${supervisor_base_url}/v1/models" > "$models_file"
+    curl --silent --show-error --fail --max-time 10 "${daemon_base_url}/v1/models" > "$models_file"
     jq --exit-status '.data | type == "array"' "$models_file" >/dev/null
     finish_step
 
@@ -386,7 +386,7 @@ main() {
 
     start_step "shutdown-${application_channel}-daemon"
     curl --silent --show-error --fail --max-time 10 --request POST \
-        "${supervisor_base_url}/v1/control/shutdown" >/dev/null
+        "${daemon_base_url}/v1/control/shutdown" >/dev/null
     if ! wait_for_process_exit "$LAUNCHED_DAEMON_PID" "$WAIT_TIMEOUT_SECONDS"; then
         terminate_process_bounded "$LAUNCHED_DAEMON_PID" "validation-daemon"
         print_error "daemon did not complete graceful shutdown"

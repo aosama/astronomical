@@ -171,14 +171,14 @@ enum OpenAiResponseAssistantPhase {
     FinalAnswer,
 }
 
-/// Validated Responses input ready for supervisor translation.
+/// Validated Responses input ready for daemon translation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OpenAiResponseInputParts {
     Text(String),
     Items(Vec<OpenAiResponseInputItemParts>),
 }
 
-/// One validated input item ready for supervisor translation.
+/// One validated input item ready for daemon translation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OpenAiResponseInputItemParts {
     SystemMessage {

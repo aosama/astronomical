@@ -19,7 +19,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_present_target_prompt_cache_reuse() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","serving_session":{"completed_request_count":2,"total_prompt_token_count":90000,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":10000,"target_reused_prompt_work_token_count":8000,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":20}}
@@ -215,7 +215,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_render_generation_rate_for_an_active_generation() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
@@ -247,7 +247,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_present_image_generation_as_active_model_work() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","ready_model_size_bytes":4200000000,"progress":{"phase":"denoising","completed_steps":2,"total_steps":4,"elapsed_ms":1000},"expert_memory_mode":null}
@@ -269,7 +269,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_keep_post_denoising_image_work_active_without_claiming_completion() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","progress":{"phase":"decoding","completed_steps":4,"total_steps":4,"elapsed_ms":1250}}"#.utf8
       )
@@ -284,7 +284,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_label_completed_denoising_as_one_finished_phase_not_a_finished_image() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"image_generation","ready_model_id":"fictional/flux-model","progress":{"phase":"denoising","completed_steps":4,"total_steps":4,"elapsed_ms":1000}}"#.utf8
       )
@@ -300,7 +300,7 @@ final class StatusPresentationContractTests: XCTestCase {
     // This is the complete public-status journey that previously appeared as
     // SSD streaming merely because its execution owner remained hybrid.
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"resident","expert_residency":{"total_layer_count":40,"resident_expert_count":10240,"resident_expert_payload_bytes":19595788288}}
@@ -318,7 +318,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
     for expertResidencyJSON in incompleteResidencyCases {
       let statusDocument = try JSONDecoder().decode(
-        SupervisorStatusDocument.self,
+        DaemonStatusDocument.self,
         from: Data(
           """
           {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_residency":\(expertResidencyJSON)}
@@ -333,7 +333,7 @@ final class StatusPresentationContractTests: XCTestCase {
     // Mode changes and detailed topology snapshots are separate worker events.
     // A newer paged mode must win over an older all-complete snapshot.
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"paged","expert_residency":{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0}}
@@ -355,7 +355,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
     for (source, expectedSourceTitle) in expectedSourceTitles {
       let statusDocument = try JSONDecoder().decode(
-        SupervisorStatusDocument.self,
+        DaemonStatusDocument.self,
         from: Data(
           """
           {"status":"ready","activity":"idle","mlx_memory_snapshot":{"source":"\(source)","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":0,"peak_memory_bytes":12000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000}
@@ -370,7 +370,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_keep_idle_progress_and_model_footprint_placeholders_visible() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","ready_model_id":null,"progress":null,"expert_memory_mode":null,"mlx_memory_snapshot":null,"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
@@ -388,7 +388,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_present_only_prompt_work_remaining_after_cache_restoration() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"prompt_processing","progress":{"phase":"target","processed_tokens":2048,"total_tokens":5000,"elapsed_ms":1000}}"#.utf8
       )
@@ -401,7 +401,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_calculate_eta_after_the_first_progress_token() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         #"{"status":"ready","activity":"prompt_processing","progress":{"phase":"target","processed_tokens":0,"total_tokens":14412,"elapsed_ms":250}}"#.utf8
       )
@@ -416,7 +416,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_use_plain_language_for_prompt_processing_rate() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"prompt_processing","ready_model_id":"Ornith","progress":{"phase":"target","processed_tokens":1076,"total_tokens":14412,"elapsed_ms":1000},"expert_memory_mode":"resident","mlx_memory_snapshot":{"source":"prefill","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":0,"model_core_payload_bytes":0,"context_state_payload_bytes":0},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
@@ -431,7 +431,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_use_singular_request_grammar_for_one_completed_request() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","ready_model_id":"Ornith","progress":null,"expert_memory_mode":"resident","mlx_memory_snapshot":{"source":"finalized","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":0,"model_core_payload_bytes":0,"context_state_payload_bytes":0},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":1,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":70.4}}
@@ -443,7 +443,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_explain_how_much_of_the_session_prompts_were_reused_and_new() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(
         """
         {"status":"ready","activity":"idle","serving_session":{"completed_request_count":3,"total_prompt_token_count":20637,"total_reused_prompt_token_count":16384,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":70.4}}
@@ -463,7 +463,7 @@ final class StatusPresentationContractTests: XCTestCase {
 
   func test_should_distinguish_loading_from_unavailable() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(#"{"status":"loading","activity":"idle"}"#.utf8)
     )
 

@@ -2,7 +2,7 @@
 //!
 //! This is the markdown / KaTeX / Mermaid / code renderer plus the model-output
 //! sanitiser that the chat transcript renders with. Every file is embedded with
-//! `include_str!` / `include_bytes!` so the supervisor keeps no filesystem
+//! `include_str!` / `include_bytes!` so the daemon keeps no filesystem
 //! dependency and needs no frontend build step.
 //!
 //! The files are symlinks into Thin Talk's canvas shell

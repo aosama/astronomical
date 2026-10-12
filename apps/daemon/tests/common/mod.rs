@@ -23,7 +23,7 @@ use image::{
 };
 use tokio::sync::mpsc;
 
-pub(crate) mod supervisor;
+pub(crate) mod daemon;
 
 pub const MODEL_ID: &str = "astronomical/application-test-model";
 
