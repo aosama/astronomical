@@ -26,7 +26,10 @@ on:
       - completed
 
 permissions:
-  contents: read
+  # The squash merge creates a commit on the base branch, so contents write
+  # is required for the merge endpoint and for the head-branch deletion;
+  # pull-requests write authorizes the merge endpoint itself.
+  contents: write
   pull-requests: write
 
 jobs:
@@ -101,6 +104,34 @@ jobs:
             if (failed.length > 0) {
               core.info(
                 `[owner-pr-automerge] status=skipped reason=failing_checks pull_request=${pullRequest.number} failed=${failed.join(",")}`,
+              );
+              return;
+            }
+            // Branch protection requires the head to be up to date with the
+            // base before merging; a green but stale pull request must be
+            // updated first, and the update's own fresh checks re-trigger
+            // this evaluation for the merge.
+            if (fullPullRequest.mergeable_state === "behind") {
+              try {
+                await github.rest.pulls.updateBranch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pullRequest.number,
+                  expected_head_sha: fullPullRequest.head.sha,
+                });
+                core.info(
+                  `[owner-pr-automerge] status=branch_updated pull_request=${pullRequest.number}`,
+                );
+              } catch (error) {
+                core.info(
+                  `[owner-pr-automerge] status=skipped reason=branch_update_rejected pull_request=${pullRequest.number} message=${error.message}`,
+                );
+              }
+              return;
+            }
+            if (fullPullRequest.mergeable_state === "dirty") {
+              core.info(
+                `[owner-pr-automerge] status=skipped reason=merge_conflict pull_request=${pullRequest.number}`,
               );
               return;
             }
