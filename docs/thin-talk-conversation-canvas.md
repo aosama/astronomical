@@ -128,5 +128,5 @@ opens the persistent Thin Talk window. There is no second Applications entry, no
 Dock or Spotlight icon, and no separate update feed — one download, one install location,
 one icon. Directly building and launching the package (`apps/thin-talk/run-thin-talk.sh`)
 remains a developer affordance, not an end-user journey. The thin-client boundary is
-unchanged: the canvas stays a rendering tenant over the one supervisor REST contract.
+unchanged: the canvas stays a rendering tenant over the one daemon REST contract.
 This matches the revised Surface and launch-point decisions on issue 647.
