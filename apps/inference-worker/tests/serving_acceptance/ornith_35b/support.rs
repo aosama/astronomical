@@ -60,7 +60,10 @@ pub(super) fn prefill_attribution_warmup_prompt() -> String {
 /// both explicitly disabled, so the baseline measures the path users run and
 /// a developer's local diagnostics settings cannot leak into the numbers.
 pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile::TempDir {
-    isolated_home(model_directory, "ornith-35b-throughput-journey", false)
+    // Attribution stays on for this measurement journey: the per-request
+    // restore spans and the prefix-adoption diagnostic are the evidence the
+    // prefix-adoption A/B compares, and the journey itself reports them.
+    isolated_home(model_directory, "ornith-35b-throughput-journey", true)
 }
 
 /// Builds the isolated Development home for the prefill attribution journey:
@@ -111,11 +114,10 @@ fn isolated_home(
         serde_json::json!(performance_attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
-    config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] = serde_json::json!(
-        std::env::var("ORNITH_JOURNEY_PREFIX_ADOPTION")
-            .map(|value| value == "1")
-            .unwrap_or(false)
-    );
+    if let Ok(adoption_override) = std::env::var("ORNITH_JOURNEY_PREFIX_ADOPTION") {
+        config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] =
+            serde_json::json!(adoption_override == "1");
+    }
     if let Ok(chunk_override) = std::env::var("STREAMING_JOURNEY_CHUNK_TOKENS") {
         config_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] = serde_json::json!(
             chunk_override
