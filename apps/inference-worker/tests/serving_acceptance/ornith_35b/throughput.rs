@@ -41,7 +41,7 @@ async fn should_measure_resident_sparse_moe_prompt_processing_and_decode_through
 
 async fn run_throughput_journey() {
     let model_id = resident_model_id();
-    let (_isolated_home, rest_server) = launch_resident_rest_server().await;
+    let (isolated_home, rest_server) = launch_resident_rest_server().await;
     let server_address = rest_server.server_address;
 
     eprintln!("[ornith-35b] phase=jit-warmup model={model_id}");
@@ -126,6 +126,110 @@ async fn run_throughput_journey() {
     );
 
     stop_resident_rest_server(rest_server).await;
+    report_prefix_adoption_evidence(isolated_home.path());
+}
+
+/// Reads the journey's worker attribution log and prints the per-completion
+/// restore evidence the prefix-adoption A/B compares: the restore-side span
+/// occurrences and total (prefix lookup, KV-block reads, state
+/// reconstruction, recurrent-snapshot read). Arm B (adoption off) shows the
+/// restore spans on every cache-hit completion; arm A (adoption on) shows
+/// zero restore-span occurrences — the live state was adopted instead.
+fn report_prefix_adoption_evidence(isolated_home: &std::path::Path) {
+    let adoption_arm_enabled = std::env::var("ORNITH_JOURNEY_PREFIX_ADOPTION")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let attribution_log_path = isolated_home
+        .join(".astronomical-dev")
+        .join("logs")
+        .join("performance-attribution.jsonl");
+    let Some(generation_reports) = read_jsonl_lines(&attribution_log_path).map(|reports| {
+        reports
+            .into_iter()
+            .filter(|report| {
+                report.get("report_kind").and_then(Value::as_str) == Some("generation")
+            })
+            .collect::<Vec<_>>()
+    }) else {
+        eprintln!("[ornith-35b-adoption] no worker attribution log found");
+        return;
+    };
+
+    eprintln!(
+        "[ornith-35b-adoption] completion kv_block_read_occurrences restore_span_occurrences restore_spans_ms"
+    );
+    for (completion_index, generation_report) in generation_reports.iter().enumerate() {
+        let (kv_block_read_occurrences, restore_span_occurrences, restore_spans_ms) =
+            restore_span_evidence(generation_report);
+        eprintln!(
+            "[ornith-35b-adoption] completion={} kv_block_read_occurrences={kv_block_read_occurrences} restore_span_occurrences={restore_span_occurrences} restore_spans_ms={restore_spans_ms:.1}",
+            completion_index + 1,
+        );
+        if adoption_arm_enabled && completion_index > 0 {
+            assert_eq!(
+                kv_block_read_occurrences, 0,
+                "completion {completion_index} must adopt the retained live state and read no \
+                 KV blocks from the disk store"
+            );
+        }
+    }
+}
+
+/// Counts and sums the restore-side operation spans (prefix lookup, KV-block
+/// reads, state reconstruction, recurrent-snapshot read) in one generation
+/// report; zero occurrences mean the live state was adopted. The KV-block
+/// read count is returned separately: it is the byte-moving part of the
+/// restore that adoption must eliminate.
+fn restore_span_evidence(generation_report: &Value) -> (u64, u64, f64) {
+    const RESTORE_OPERATIONS: [&str; 4] = [
+        "persistent_prompt_cache_prefix_lookup",
+        "persistent_prompt_cache_kv_block_read",
+        "persistent_prompt_cache_state_reconstruction",
+        "persistent_prompt_cache_recurrent_snapshot_read",
+    ];
+    generation_report
+        .get("operations")
+        .and_then(Value::as_array)
+        .map(|operations| {
+            let mut restore_span_occurrences = 0_u64;
+            let mut restore_spans_ms = 0.0;
+            let mut kv_block_read_occurrences = 0_u64;
+            for operation in operations {
+                let operation_name = operation.get("operation").and_then(Value::as_str);
+                if !RESTORE_OPERATIONS.contains(&operation_name.unwrap_or("")) {
+                    continue;
+                }
+                let occurrence_count = operation
+                    .get("occurrence_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                restore_span_occurrences += occurrence_count;
+                if operation_name == Some("persistent_prompt_cache_kv_block_read") {
+                    kv_block_read_occurrences += occurrence_count;
+                }
+                restore_spans_ms += operation
+                    .get("total_elapsed_nanoseconds")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0)
+                    / 1_000_000.0;
+            }
+            (
+                kv_block_read_occurrences,
+                restore_span_occurrences,
+                restore_spans_ms,
+            )
+        })
+        .unwrap_or((0, 0, 0.0))
+}
+
+fn read_jsonl_lines(path: &std::path::Path) -> Option<Vec<Value>> {
+    let log_bytes = std::fs::read(path).ok()?;
+    Some(
+        log_bytes
+            .split(|byte| *byte == b'\n')
+            .filter_map(|line_bytes| serde_json::from_slice(line_bytes).ok())
+            .collect(),
+    )
 }
 
 /// One `/v1/status` serving-session snapshot. The supervisor folds each
@@ -219,7 +323,7 @@ impl ServingSessionSample {
 fn median(samples: &mut [f64]) -> f64 {
     samples.sort_by(|first, second| first.total_cmp(second));
     let middle = samples.len() / 2;
-    if samples.len() % 2 == 0 {
+    if samples.len().is_multiple_of(2) {
         (samples[middle - 1] + samples[middle]) / 2.0
     } else {
         samples[middle]

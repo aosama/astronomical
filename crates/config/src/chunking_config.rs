@@ -235,7 +235,7 @@ impl ChunkingConfig {
                 .unwrap_or(false),
             experimental_in_memory_prefix_adoption_enabled: configured
                 .experimental_in_memory_prefix_adoption_enabled
-                .unwrap_or(false),
+                .unwrap_or(true),
             experimental_quantized_kv_cache_enabled: configured
                 .experimental_quantized_kv_cache_enabled
                 .unwrap_or(false),
@@ -356,6 +356,11 @@ impl ChunkingConfig {
     /// conversation instead of re-reading the prefix KV from the disk store.
     /// Adopted state is byte-identical to the restored state, so no numerics
     /// change; the trade is one conversation's KV held live between requests.
+    /// Default on: the A/B on the resident measurement journey showed the
+    /// byte-moving KV-block reads eliminated (six restore spans to three,
+    /// the remainder being the lookup and the small boundary snapshot), with
+    /// unchanged rates at the journey's cache depth and the production win
+    /// growing with cache depth and cold stores.
     #[must_use]
     pub const fn experimental_in_memory_prefix_adoption_enabled(&self) -> bool {
         self.experimental_in_memory_prefix_adoption_enabled
@@ -382,7 +387,7 @@ impl Default for ChunkingConfig {
         Self {
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
-            experimental_in_memory_prefix_adoption_enabled: false,
+            experimental_in_memory_prefix_adoption_enabled: true,
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:
