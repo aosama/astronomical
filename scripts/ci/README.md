@@ -19,4 +19,4 @@ This folder contains scripts invoked by GitHub Actions workflows or actions. Kee
 | `generate-rust-dependency-notices.sh` | Generate or check the Rust dependency notices |
 | `test-macos-menu-contracts.sh` | Run menu contract checks in the macOS workflow |
 
-The CI cache/workflow contract test remains in `tests/scripts/test-ci-native-cache-coordination.sh`, alongside the other script tests.
+The CI cache/workflow contract test lives in `scripts/ci/tests/test-ci-native-cache-coordination.sh`, alongside the other CI contract tests; the remaining script tests stay in `tests/scripts/`.
