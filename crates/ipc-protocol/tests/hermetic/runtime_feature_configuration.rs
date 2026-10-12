@@ -33,6 +33,7 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
                         prompt_cache_block_tokens: Some(128),
                         prompt_cache_common_prefix_stride_blocks: 4,
                         experimental_decode_stage_attribution_enabled: false,
+                        experimental_prefill_stage_attribution_enabled: false,
                         experimental_quantized_kv_cache_enabled: false,
                         experimental_fused_moe_decode_enabled: false,
                     },

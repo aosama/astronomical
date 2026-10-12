@@ -4,7 +4,9 @@ use std::time::Instant;
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerPromptWorkReuse};
 
-use crate::k2_horizon_mova::model::{K2HorizonMoVAExecutionError, K2HorizonMoVAModel};
+use crate::k2_horizon_mova::model::{
+    K2HorizonMoVAExecutionError, K2HorizonMoVAModel, StageAttributionScope,
+};
 use crate::{
     GeneratedToken, InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheDiskStore,
@@ -17,6 +19,7 @@ pub(super) fn prefill_next_chunk(
     active: &mut K2HorizonMoVAActiveGeneration,
     prompt_processing_chunk_tokens: u32,
     persistent_prompt_cache: Option<&PersistentPromptCacheDiskStore>,
+    prefill_stage_attribution_enabled: bool,
 ) -> Result<GeneratedToken, InferenceEngineError> {
     let chunk_token_count = (prompt_processing_chunk_tokens as usize)
         .min(active.remaining_prompt_token_ids.len())
@@ -35,11 +38,14 @@ pub(super) fn prefill_next_chunk(
         .measure_operation(
             PerformanceOperation::PromptPrefillAdvanceSpan,
             |performance_attribution| {
+                let stage_attribution = (prefill_stage_attribution_enabled
+                    && performance_attribution.is_enabled())
+                .then_some(StageAttributionScope::Prefill);
                 model.forward(
                     &chunk_token_ids,
                     &mut active.caches,
                     performance_attribution,
-                    false,
+                    stage_attribution,
                 )
             },
         )

@@ -115,6 +115,40 @@ fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
         !chunking.experimental_decode_stage_attribution_enabled(),
         "attribution-gated stage evaluations roughly double decode time and must stay diagnostic-only"
     );
+    assert!(
+        !chunking.experimental_prefill_stage_attribution_enabled(),
+        "attribution-gated stage evaluations must stay diagnostic-only for prefill too"
+    );
+}
+
+#[test]
+fn should_resolve_the_prefill_stage_attribution_opt_in() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "chunking": {
+            "experimental_prefill_stage_attribution_enabled": true
+          }
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("prefill stage attribution configuration should load");
+    let chunking = astronomical_config
+        .chunking()
+        .expect("chunking configuration should resolve");
+
+    assert!(
+        chunking.experimental_prefill_stage_attribution_enabled(),
+        "the prefill stage-attribution opt-in must resolve true when configured"
+    );
+    let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
+    assert_eq!(
+        persisted_chunking["experimental_prefill_stage_attribution_enabled"],
+        true
+    );
 }
 
 #[test]

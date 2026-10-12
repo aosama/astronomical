@@ -197,6 +197,7 @@ fn prepare_startup(
             prompt_cache_common_prefix_stride_blocks,
             full_attention_kv_state_growth_tokens,
             decode_stage_attribution_enabled: serving_settings.decode_stage_attribution_enabled,
+            prefill_stage_attribution_enabled: serving_settings.prefill_stage_attribution_enabled,
             quantized_kv_cache_enabled: serving_settings.quantized_kv_cache_enabled,
             fused_expert_decode_enabled: serving_settings.fused_expert_decode_enabled,
         },
