@@ -28,7 +28,7 @@ write_fixture_commands() {
 
     cat > "${fake_command_directory}/cargo" <<'CARGO'
 #!/usr/bin/env sh
-printf '%s\n' '{"packages":[{"name":"astronomical-supervisor","version":"0.2.1","repository":"https://github.com/example/astronomical"}]}'
+printf '%s\n' '{"packages":[{"name":"astronomical-daemon","version":"0.2.1","repository":"https://github.com/example/astronomical"}]}'
 CARGO
     cat > "${fake_command_directory}/git" <<'GIT'
 #!/usr/bin/env sh

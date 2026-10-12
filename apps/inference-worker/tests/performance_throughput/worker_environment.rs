@@ -11,8 +11,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use astronomical_daemon::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
 use astronomical_ipc_protocol::WorkerStartupConfiguration;
-use astronomical_supervisor::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
 
 /// Resolves the directory to advertise as the configuration's
 /// `model_directories` entry for `model_directory`.

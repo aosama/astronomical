@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     HubHttpRequest, HubHttpResponse, HubTransport, HubTransportError, HubTransportFuture,
     HuggingFaceHub,
 };

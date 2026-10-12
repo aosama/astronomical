@@ -68,10 +68,8 @@ impl ChatGenerationExecutor for DelayedAdmissionExecutor {
         Box<
             dyn std::future::Future<
                     Output = Result<
-                        tokio::sync::mpsc::Receiver<
-                            astronomical_supervisor::ChatGenerationStreamEvent,
-                        >,
-                        astronomical_supervisor::GenerationStartError,
+                        tokio::sync::mpsc::Receiver<astronomical_daemon::ChatGenerationStreamEvent>,
+                        astronomical_daemon::GenerationStartError,
                     >,
                 > + Send
                 + '_,
@@ -86,9 +84,9 @@ impl ChatGenerationExecutor for DelayedAdmissionExecutor {
         })
     }
 
-    fn worker_health_snapshot(&self) -> astronomical_supervisor::WorkerHealthSnapshot {
+    fn worker_health_snapshot(&self) -> astronomical_daemon::WorkerHealthSnapshot {
         self.delegate.worker_health_snapshot()
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for DelayedAdmissionExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for DelayedAdmissionExecutor {}

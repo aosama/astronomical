@@ -6,13 +6,13 @@ use std::{
     time::Duration,
 };
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
+    ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
+};
 use astronomical_inference_worker::worker_startup;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    ResolvedRuntimeConfigResolver, WorkerHandle, WorkerHealthStatus,
 };
 use serde_json::json;
 use serial_test::serial;

@@ -216,7 +216,7 @@ main() {
             state_directory_name=".astronomical-dev"
             icon_channel="development"
             menu_swift_product="astronomical-menu"
-            supervisor_cargo_features=""
+            daemon_cargo_features=""
             ;;
         stable)
             # Only the promoted ~/Applications copy should appear in Spotlight.
@@ -228,7 +228,7 @@ main() {
             state_directory_name=".astronomical"
             icon_channel="stable"
             menu_swift_product="astronomical-menu"
-            supervisor_cargo_features=""
+            daemon_cargo_features=""
             ;;
         app-store)
             # The Mac App Store distribution variant of the Stable product.
@@ -244,7 +244,7 @@ main() {
             state_directory_name=""
             icon_channel="stable"
             menu_swift_product="astronomical-menu-app-store"
-            supervisor_cargo_features="--features astronomical-supervisor/app-store-state-root"
+            daemon_cargo_features="--features astronomical-daemon/app-store-state-root"
             ;;
         *)
             print_error "channel must be development, stable, or app-store"
@@ -260,8 +260,8 @@ main() {
         exit 2
     fi
     cargo_workspace_metadata="$(cargo metadata --no-deps --format-version 1)"
-    application_version="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
-    application_repository_url="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .repository')"
+    application_version="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-daemon") | .version')"
+    application_repository_url="$(printf '%s' "$cargo_workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-daemon") | .repository')"
     sparkle_update_feed_url="${ASTRONOMICAL_UPDATE_FEED_URL:-$(github_pages_feed_url "$application_repository_url")}"
     build_commit="$(git rev-parse --short=12 HEAD)"
     build_number="$(git rev-list --count HEAD)"
@@ -311,9 +311,9 @@ main() {
     # Cargo prints its own live compilation progress to stderr.
     cargo build --release --target "$host_target_triple" \
         -p astronomical-inference-worker --bin astronomical-inference-worker \
-        -p astronomical-supervisor --bin astronomicald \
+        -p astronomical-daemon --bin astronomicald \
         -p astronomical-cli --bin astronomical \
-        $supervisor_cargo_features
+        $daemon_cargo_features
     # The Thin Talk offline shell is generated from tracked TypeScript by
     # apps/thin-talk/web/build-web.mjs. SwiftPM copies Resources/web verbatim, so
     # npm produces bundle.js/bundle.css before it builds astronomical-menu; without

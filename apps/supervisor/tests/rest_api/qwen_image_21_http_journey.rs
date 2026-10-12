@@ -15,7 +15,7 @@
 //! garbling that keeps neighbour pixels correlated.
 //!
 //! Prerequisites: the real worker binary must sit next to the daemon binary, so build both
-//! before running (`cargo build -p astronomical-supervisor -p astronomical-inference-worker`).
+//! before running (`cargo build -p astronomical-daemon -p astronomical-inference-worker`).
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};

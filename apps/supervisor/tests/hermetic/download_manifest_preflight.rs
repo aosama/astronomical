@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DiskCapacityQuery, DownloadCatalog, DownloadDiskPreflight, DownloadDiskPreflightError,
     DownloadJobStore, DownloadManifestPreflight, DownloadManifestPreflightError, HubHttpRequest,
     HubHttpResponse, HubTransport, HubTransportError, HubTransportFuture, HuggingFaceHub,

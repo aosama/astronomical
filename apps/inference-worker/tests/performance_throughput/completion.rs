@@ -12,12 +12,12 @@ use std::time::Duration;
 
 use tokio::time::sleep;
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHandle, WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatImageInput, ChatMessage, ChatToolChoice,
     RequestId,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHandle, WorkerHealthStatus,
 };
 use serde::Deserialize;
 

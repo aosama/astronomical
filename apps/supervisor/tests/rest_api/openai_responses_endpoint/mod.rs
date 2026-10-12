@@ -1,13 +1,13 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
 use astronomical_config::DiscoveredModel;
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
+    build_application, build_application_with_discovered_models,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatModelCapabilities,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
-    build_application, build_application_with_discovered_models,
 };
 use axum::{
     body::{Body, to_bytes},

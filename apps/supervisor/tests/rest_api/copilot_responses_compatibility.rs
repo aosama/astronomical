@@ -1,11 +1,11 @@
 use std::{future::Future, pin::Pin};
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatMessage, ChatModelCapabilities,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatMessage, ChatModelCapabilities,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -288,4 +288,4 @@ impl ChatGenerationExecutor for CopilotResponsesExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for CopilotResponsesExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for CopilotResponsesExecutor {}

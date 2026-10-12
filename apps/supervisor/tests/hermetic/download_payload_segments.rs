@@ -2,7 +2,7 @@
 
 use std::{fs, sync::Arc, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DownloadJobStore, DownloadPayloadTransfer, DownloadPayloadTransferOutcome,
     DownloadTransferControl, HubPayloadRequest, HubPayloadResponse, PAYLOAD_TRANSFER_SEGMENT_BYTES,
 };

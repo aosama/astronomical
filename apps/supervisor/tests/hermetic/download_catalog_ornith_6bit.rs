@@ -1,6 +1,6 @@
 //! Bundled-catalog contract for the text-only Ornith 1.5 35B-A3B MLX offer.
 
-use astronomical_supervisor::{DownloadCatalog, DownloadCatalogFamily};
+use astronomical_daemon::{DownloadCatalog, DownloadCatalogFamily};
 
 #[test]
 fn should_offer_ornith_1_5_35b_a3b_mlx_6bit_from_the_bundled_catalog() {

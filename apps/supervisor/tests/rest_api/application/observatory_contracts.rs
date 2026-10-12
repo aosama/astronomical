@@ -1,9 +1,9 @@
-use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MlxMemorySnapshotSource, WorkerMlxMemorySnapshot,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
     build_application, parse_macos_memory_pressure_level,
+};
+use astronomical_ipc_protocol::{
+    ChatModelCapabilities, MlxMemorySnapshotSource, WorkerMlxMemorySnapshot,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -388,7 +388,7 @@ impl ContractScriptedExecutor {
     }
 }
 
-impl astronomical_supervisor::ChatGenerationExecutor for ContractScriptedExecutor {
+impl astronomical_daemon::ChatGenerationExecutor for ContractScriptedExecutor {
     fn start_chat_generation(
         &self,
         _generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
@@ -396,18 +396,14 @@ impl astronomical_supervisor::ChatGenerationExecutor for ContractScriptedExecuto
         Box<
             dyn std::future::Future<
                     Output = Result<
-                        tokio::sync::mpsc::Receiver<
-                            astronomical_supervisor::ChatGenerationStreamEvent,
-                        >,
-                        astronomical_supervisor::GenerationStartError,
+                        tokio::sync::mpsc::Receiver<astronomical_daemon::ChatGenerationStreamEvent>,
+                        astronomical_daemon::GenerationStartError,
                     >,
                 > + Send
                 + '_,
         >,
     > {
-        Box::pin(
-            async move { Err(astronomical_supervisor::GenerationStartError::WorkerUnavailable) },
-        )
+        Box::pin(async move { Err(astronomical_daemon::GenerationStartError::WorkerUnavailable) })
     }
 
     fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
@@ -415,4 +411,4 @@ impl astronomical_supervisor::ChatGenerationExecutor for ContractScriptedExecuto
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for ContractScriptedExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for ContractScriptedExecutor {}

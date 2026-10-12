@@ -1,13 +1,13 @@
 use std::time::Duration;
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
+    GenerationStartError, WorkerActivity, WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationSettings, ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES,
     MlxMemorySnapshotSource, RequestId,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
-    GenerationStartError, WorkerActivity, WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -434,7 +434,7 @@ async fn should_fail_one_stream_when_the_worker_exits() {
         .expect("shutdown should succeed");
 }
 
-async fn launch_fixture() -> astronomical_supervisor::WorkerHandle {
+async fn launch_fixture() -> astronomical_daemon::WorkerHandle {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = supervisor::launch_test_executor(worker_executable_path)
@@ -479,7 +479,7 @@ async fn receive_event(
 }
 
 async fn wait_for_health(
-    worker_executor: &astronomical_supervisor::WorkerHandle,
+    worker_executor: &astronomical_daemon::WorkerHandle,
     expected_status: WorkerHealthStatus,
 ) {
     let health_deadline = Instant::now() + Duration::from_secs(5);
@@ -497,7 +497,7 @@ async fn wait_for_health(
 }
 
 async fn wait_for_activity(
-    worker_executor: &astronomical_supervisor::WorkerHandle,
+    worker_executor: &astronomical_daemon::WorkerHandle,
     expected_worker_activity: WorkerActivity,
 ) {
     let activity_deadline = Instant::now() + Duration::from_secs(2);

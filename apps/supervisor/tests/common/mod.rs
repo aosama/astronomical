@@ -7,15 +7,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput, WorkerActivity,
+    WorkerHealthSnapshot, WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatModelCapabilities, EmbeddingsCommand, GeneratedImage,
     ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationResultMetadata,
     WorkerModelCapabilities,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput,
-    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput, WorkerActivity,
-    WorkerHealthSnapshot, WorkerHealthStatus,
 };
 use image::{
     ExtendedColorType, ImageEncoder,
@@ -178,7 +178,7 @@ impl ChatGenerationExecutor for ScriptedExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for ScriptedExecutor {
+impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {
     fn start_image_generation(
         &self,
         image_generation_command: ImageGenerationCommand,

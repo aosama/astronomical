@@ -4,7 +4,7 @@ use std::{path::Path, process::Stdio, time::Duration};
 
 use tokio::{process::Command, time::timeout};
 
-use astronomical_supervisor::DownloadCatalog;
+use astronomical_daemon::DownloadCatalog;
 
 use super::daemon_process::{
     get_endpoint, spawn_actual_instance_daemon, terminate_daemon, write_instance_config,

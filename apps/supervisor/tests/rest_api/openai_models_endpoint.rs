@@ -38,7 +38,7 @@ async fn should_list_the_independent_token_limits_produced_by_model_discovery() 
             .into_iter()
             .flat_map(|directory_scan| directory_scan.discovered_models)
             .collect();
-    let application = astronomical_supervisor::build_application_with_discovered_models(
+    let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         discovered_models,
     );
@@ -78,7 +78,7 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
             max_output_tokens: 20_480,
             context_window: 262_144,
         }));
-    let application = astronomical_supervisor::build_application(scripted_executor);
+    let application = astronomical_daemon::build_application(scripted_executor);
     let models_response = application
         .oneshot(
             Request::builder()
@@ -130,7 +130,7 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
 
 #[tokio::test]
 async fn should_get_a_discovered_model_by_provider_prefixed_id() {
-    let application = astronomical_supervisor::build_application_with_discovered_models(
+    let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![discovered_model_with_vision_support(true)],
     );
@@ -170,7 +170,7 @@ async fn should_get_a_discovered_model_by_provider_prefixed_id() {
 
 #[tokio::test]
 async fn should_list_text_only_input_modality_for_a_discovered_model_without_vision_support() {
-    let application = astronomical_supervisor::build_application_with_discovered_models(
+    let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![discovered_model_with_vision_support(false)],
     );
@@ -209,7 +209,7 @@ async fn should_list_text_only_input_modality_for_a_discovered_model_without_vis
 
 #[tokio::test]
 async fn should_list_image_model_metadata_without_autoregressive_token_limits() {
-    let application = astronomical_supervisor::build_application_with_discovered_models(
+    let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![discovered_image_model()],
     );
@@ -262,7 +262,7 @@ async fn should_project_family_derived_reasoning_and_tool_capabilities() {
     };
     capabilities.supports_reasoning = false;
     capabilities.supports_tool_calls = false;
-    let application = astronomical_supervisor::build_application_with_discovered_models(
+    let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![discovered_model],
     );
@@ -291,8 +291,7 @@ async fn should_project_family_derived_reasoning_and_tool_capabilities() {
 
 #[tokio::test]
 async fn should_return_an_openai_model_not_found_error_for_an_unknown_model() {
-    let application =
-        astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
+    let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
     let model_response = application
         .oneshot(
             Request::builder()
@@ -315,7 +314,7 @@ async fn should_return_an_openai_model_not_found_error_for_an_unknown_model() {
 
 #[tokio::test]
 async fn should_not_advertise_stale_model_metadata_when_the_worker_is_unavailable() {
-    let application = astronomical_supervisor::build_application(ScriptedExecutor::unavailable());
+    let application = astronomical_daemon::build_application(ScriptedExecutor::unavailable());
     let models_response = application
         .oneshot(
             Request::builder()
@@ -341,7 +340,7 @@ async fn should_fail_closed_when_discovered_model_capabilities_are_invalid() {
     };
     capabilities.max_input_tokens = capabilities.context_window;
     capabilities.max_output_tokens = 1;
-    let application = astronomical_supervisor::build_application_with_discovered_models(
+    let application = astronomical_daemon::build_application_with_discovered_models(
         ScriptedExecutor::ready(Vec::new()),
         vec![invalid_discovered_model],
     );

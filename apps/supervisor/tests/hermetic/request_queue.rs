@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationQueueDepth, GenerationStartError,
     MlxMemoryLimitUpdateOutcome, WorkerHealthStatus,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -254,7 +254,7 @@ async fn should_reject_request_when_queue_is_full() {
         .expect("shutdown should succeed");
 }
 
-async fn launch_fixture() -> astronomical_supervisor::WorkerHandle {
+async fn launch_fixture() -> astronomical_daemon::WorkerHandle {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = supervisor::launch_test_executor(worker_executable_path)
@@ -300,7 +300,7 @@ async fn receive_event_with_timeout(
 }
 
 async fn wait_for_health(
-    worker_executor: &astronomical_supervisor::WorkerHandle,
+    worker_executor: &astronomical_daemon::WorkerHandle,
     expected_status: WorkerHealthStatus,
 ) {
     let health_deadline = Instant::now() + Duration::from_secs(5);

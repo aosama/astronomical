@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DiskCapacityQuery, DownloadCatalog, DownloadJobPublicErrorCode, DownloadJobState,
     DownloadPublicationRefresh, HubHttpRequest, HubHttpResponse, HubPayloadFuture,
     HubPayloadRequest, HubPayloadTransport, HubTransport, HubTransportError, HubTransportFuture,
@@ -275,7 +275,7 @@ impl DownloadJourney {
 }
 
 struct FailedJobWaiter {
-    failed_job: astronomical_supervisor::DownloadJob,
+    failed_job: astronomical_daemon::DownloadJob,
 }
 
 impl FailedJobWaiter {

@@ -7,13 +7,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use astronomical_daemon::{
+    ResolvedRuntimeConfig, build_application, build_development_application_with_reload,
+};
 use astronomical_ipc_protocol::{
     WorkerChunkingConfiguration, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
     WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
-};
-use astronomical_supervisor::{
-    ResolvedRuntimeConfig, build_application, build_development_application_with_reload,
 };
 use axum::{
     Router,

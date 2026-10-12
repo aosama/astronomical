@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     GenerationPerformanceLog, ImageGenerationTimeouts, WorkerControlError, WorkerHandle,
 };
 

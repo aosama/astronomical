@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
     ResolvedRuntimeConfigResolver, ShutdownController, WorkerHandle, WorkerHealthStatus,
     build_application_with_full_control, build_application_with_shutdown,

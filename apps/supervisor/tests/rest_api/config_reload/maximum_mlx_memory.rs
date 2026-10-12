@@ -2,11 +2,11 @@ use super::*;
 
 use std::collections::HashMap;
 
+use astronomical_daemon::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
-use astronomical_supervisor::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 
 const DELAYED_MEMORY_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const ROMEO_AND_JULIET: &str = include_str!(

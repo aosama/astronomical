@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
     SupervisorPerformanceOperation,
 };

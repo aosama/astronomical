@@ -8,11 +8,11 @@ use std::{
     time::Duration,
 };
 
-use astronomical_model_serving::FLUX2_KLEIN_OFFICIAL_MODEL_ID;
-use astronomical_supervisor::{
+use astronomical_daemon::{
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, WorkerHandle,
     build_development_application_with_reload,
 };
+use astronomical_model_serving::FLUX2_KLEIN_OFFICIAL_MODEL_ID;
 use serde_json::Value;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle, time::sleep};
 

@@ -2,7 +2,7 @@
 
 use std::{fs, sync::Arc, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadPayloadTransfer,
     DownloadPayloadTransferOutcome, DownloadProgressSnapshot, DownloadPublication,
     DownloadTransferControl, HubPayloadResponse, HubTransportError,
@@ -310,7 +310,7 @@ async fn should_retain_staging_and_fail_closed_for_bad_range_or_checksum() {
             assert!(
                 matches!(
                     transfer_error,
-                    astronomical_supervisor::DownloadPayloadTransferError::ChecksumMismatch { .. }
+                    astronomical_daemon::DownloadPayloadTransferError::ChecksumMismatch { .. }
                 ),
                 "checksum corruption returned {transfer_error:?}"
             );

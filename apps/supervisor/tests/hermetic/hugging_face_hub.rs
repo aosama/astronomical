@@ -2,7 +2,7 @@
 
 use std::{future::Future, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DownloadCatalog, DownloadFileDigest, DownloadJob, HubHttpRequest, HubHttpResponse,
     HubHttpResponseError, HubPayloadRequest, HubPayloadTransport, HubTransport, HuggingFaceHub,
     HuggingFaceHubError, HuggingFaceHubLimits, ReqwestHubTransport,

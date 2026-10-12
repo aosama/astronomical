@@ -246,11 +246,11 @@ async fn append_memory_cell_record(
 /// it was dying at. A cell cancelled mid-prefill contributes the prefill
 /// partial; one cancelled mid-generation contributes the decode partial.
 fn apply_partial_progress_rates(
-    preserved_progress: Option<&astronomical_supervisor::ActiveRequestProgress>,
+    preserved_progress: Option<&astronomical_daemon::ActiveRequestProgress>,
     measurement: &mut throughput_support::ThroughputMeasurement,
 ) {
     match preserved_progress {
-        Some(astronomical_supervisor::ActiveRequestProgress::Prefill {
+        Some(astronomical_daemon::ActiveRequestProgress::Prefill {
             processed_tokens,
             elapsed_millis,
             ..
@@ -262,7 +262,7 @@ fn apply_partial_progress_rates(
                 *processed_tokens as f64 * 1_000.0 / *elapsed_millis as f64
             };
         }
-        Some(astronomical_supervisor::ActiveRequestProgress::Generation {
+        Some(astronomical_daemon::ActiveRequestProgress::Generation {
             generated_token_count,
             elapsed_millis,
             ..
