@@ -268,11 +268,11 @@ assert_workflow_contract() {
         raise "Observatory contracts are missing from required CI" unless observatory_step
         expected_observatory_command = [
           "node", "--test", "--test-reporter=spec",
-          "apps/supervisor/console/console.test.js",
-          "apps/supervisor/console/library.test.js",
-          "apps/supervisor/console/library-fetch.test.js",
-          "apps/supervisor/console/connect.test.js",
-          "apps/supervisor/console/playground.test.js",
+          "apps/daemon/console/console.test.js",
+          "apps/daemon/console/library.test.js",
+          "apps/daemon/console/library-fetch.test.js",
+          "apps/daemon/console/connect.test.js",
+          "apps/daemon/console/playground.test.js",
         ]
         # The required-CI command now tees to a durable log for rerun-safe
         # debugging, so assert the test invocation is present rather than the
