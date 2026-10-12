@@ -4,37 +4,42 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.68</title>
-            <pubDate>Sun, 11 Oct 2026 11:36:07 -0400</pubDate>
-            <sparkle:version>1144</sparkle:version>
-            <sparkle:shortVersionString>0.2.68</sparkle:shortVersionString>
+            <title>0.2.69</title>
+            <pubDate>Mon, 12 Oct 2026 06:50:43 -0400</pubDate>
+            <sparkle:version>1165</sparkle:version>
+            <sparkle:shortVersionString>0.2.69</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.68
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.69
 
-Astronomical 0.2.68 improves how Qwen3.5 models use memory and how they adapt when you change the memory ceiling.
+This release makes multi-turn conversations faster and improves first-request latency after a model load.
 
-## What is new
+## Faster multi-turn conversations
 
-- **Qwen3.5 engine restructure.** The Qwen3.5 model is now split into a shared core plus dedicated resident and streaming engines, sharpening how resident experts and SSD-streamed paging experts are scheduled. Resident models load and serve with clearer memory accounting.
-- **Automatic engine selection and retry.** The worker now selects and recovers between resident and streaming execution paths without a manual model reload, so transient conditions are handled within a request.
-- **Enforced serving ceilings.** The MLX working-memory ceiling is now enforced with explicit Qwen3.5 boundaries, keeping the live footprint within the configured ceiling.
-- **Queued memory demotion on ceiling change.** Lowering the memory ceiling now reclaims memory deterministically through a queued demotion instead of rejecting requests mid-session.
-- **Better serving evidence.** Memory admission now reflects real observed demand via a hardened learned activation reserve, reducing over-reservation while keeping paged models safe.
+Continuing a conversation no longer re-reads the previous turn's attention state from the on-disk prompt cache. The engine now retains the completed generation's state in memory — bounded by a retention policy tied to the memory ceiling — and adopts it directly on the next turn of the same conversation. The retained state is byte-identical to what the disk restore produced, so responses are unchanged; the eliminated re-read cost grows with conversation length and is largest when the disk cache is cold. Enabled by default for the resident and K2 Horizon MoVA serving families, with a status-surface diagnostic that reports whether each turn was served from memory or from disk.
+
+## Faster first request after model load
+
+The K2 Horizon MoVA serving family now warms its forward path once at load — compiling the decode path and touching the hot buffers — so the measured one-time warm-up cost moves from your first prompt into the load step.
+
+## Optional per-stage prompt attribution
+
+A new opt-in configuration flag splits prompt-processing time by stage (attention versus other compute) on supported families, and the status surface now reports richer prompt-cache diagnostics, making slow prompts attributable to specific stages.
+
+## Clarity renames
+
+Background service components are renamed for clarity: `astronomical-supervisor` becomes `astronomical-daemon`, and the command-line app becomes `astronomical-cli`. Configuration files, on-disk state, and daily workflows are unaffected.
 
 ## Compatibility
 
-- Requires macOS 14.0 or later and Apple Silicon.
-- The upgrade is seamless: installed models, settings, and the persistent prompt cache are preserved. No migration is needed.
-
-## Distribution
-
-This release is signed with a Developer ID, notarized, and stapled, and published through the public download and the signed Sparkle update channel.
+- No breaking configuration changes; existing configuration loads as before.
+- Conversations, model caches, and on-disk state are preserved across the update.
+- Distributed as a signed and notarized DMG for Apple silicon (macOS 14.0 and above) with a signed Sparkle update feed; the published artifacts are digest-verified against the reviewed release manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.68/Astronomical-0.2.68-macOS-arm64.dmg" length="19002618" type="application/octet-stream" sparkle:edSignature="46T5lbz0CwCZwj1K6Th245dacLkJF/P9uEgtro3MmmVzq2r49XGdYln8Y+50rxGgJ2IOI3sgANUJ1tLvTVGkDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.69/Astronomical-0.2.69-macOS-arm64.dmg" length="19013456" type="application/octet-stream" sparkle:edSignature="/rZjkihz3xSQt4BOfpbucJsjgYdEN4AEeeqt/YLPxfDFrpB0rWoeph3Z6/dtwnEjly6sLbrQIl0k8h3l3snVDQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: xRhpTFHtNqLNYPkEnh9XR8uiQ3ALotKgHyqc+B4ErruLeAOHAJLlReTBl07bHyBiVnBN6o1MuNTR0v9x3jv/DA==
-length: 2768
+edSignature: mAkMLhL6nARO4MKLqccGgFd1DU7DM0RP0dgKPefnQauGml57ouND+ItfnWtNxZ/VUvINnWWzpxly1//wpgP4AA==
+length: 3279
 -->

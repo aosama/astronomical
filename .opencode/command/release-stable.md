@@ -59,7 +59,7 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 5. Run, in order:
 
 ```sh
-tests/scripts/release/test-release-contracts.sh
+scripts/release/tests/test-release-contracts.sh
 cargo fmt --all -- --check
 cargo test-hermetic-and-rest
 ```
@@ -179,4 +179,4 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - Why is the macOS hermetic verification check "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full hermetic run. The remaining required checks must still reach a terminal success state.
 - Why does the `## Linked issue` section reject my explanation? The repository validator enforces exactly one machine-parsable reference line in that section so release provenance stays auditable. Explanations belong above the heading.
 - Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
-- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-hermetic-and-rest`. The Stable packaging contracts run explicitly through `tests/scripts/release/test-release-contracts.sh`, relocated from `scripts/release/tests/`.
+- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-hermetic-and-rest`. The Stable packaging contracts run explicitly through `scripts/release/tests/test-release-contracts.sh` (consolidated back under the release scripts it exercises; it lived at `tests/scripts/release/` in between).
