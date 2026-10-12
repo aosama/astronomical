@@ -33,9 +33,11 @@
 - Code files should remain around the 500-line marker, not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
 
-## Prohibited Terminology: "qualification"
+## Prohibited Terminology: "qualification" and "hermetic"
 
 - The term "qualification" and all of its variants ("qualify", "qualified", "qualifier", etc.) are prohibited in this repository and in your discourse. Never use these terms in code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies to the user.
+- The term "hermetic" and all of its variants are prohibited and being fully decommissioned (tracked in issue #1208): never use them in new code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies. Where you encounter existing occurrences, remove them and replace with the test-classification vocabulary below, using the most specific applicable term rather than a generic one.
+- Test classification vocabulary (mandatory replacement for "hermetic"): the word that was conflated described a property, not a scope. Say **offline** for the property (sealed and deterministic: no real network beyond localhost, no real model artifacts, no machine state — everything scripted, so the test passes identically on any laptop); say **unit** for in-process logic with fakes; say **integration** for tests crossing a component seam through stubs or fixture binaries (unix-socket IPC, spawned fixture worker processes, real filesystem); say **end-to-end (E2E)** for tests driving the real `astronomicald` binary over its real HTTP surface; say **acceptance** for the env-gated journeys that load real model artifacts. When one test spans several tiers, name the highest seam it crosses.
 
 ## Requirements for Performance Profiling and Attribution
 
