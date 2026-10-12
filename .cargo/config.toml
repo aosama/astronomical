@@ -15,3 +15,9 @@ warnings = "deny"
 test-hermetic = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--test", "hermetic_tests"]
 test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-daemon", "--test", "rest_api_tests"]
 test-hermetic-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--test", "hermetic_tests", "--test", "rest_api_tests"]
+# verify: compile the whole workspace across ALL targets (libs, tests,
+# examples, benches) without running anything. This is the pre-push gate —
+# it catches type errors in any crate or test binary (the class of failure
+# that only surfaces in CI when skipped) for one local compile instead of a
+# paid GitHub Actions round trip. Run `cargo verify` before every push.
+verify = ["check", "--workspace", "--all-targets"]
