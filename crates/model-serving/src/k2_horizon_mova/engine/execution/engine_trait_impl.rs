@@ -11,12 +11,16 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerEvent};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::{K2HorizonMoVAActiveGeneration, K2HorizonMoVAInferenceExecution};
+use crate::k2_horizon_mova::engine::retained_live_prefix::{
+    install_retained_live_prefix, take_retained_live_prefix,
+};
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
 use crate::k2_horizon_mova::model::StageAttributionScope;
 use crate::k2_horizon_mova::model::{
     FusedExpertDecodeKernels, K2HorizonMoVAModel, K2HorizonMoVAWeights,
 };
 use crate::k2_horizon_mova::{K2HorizonMoVAInferenceRequest, K2HorizonMoVAThinkingBudgetState};
+use crate::persistent_cache::PersistentPromptCachePrefixLookup;
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use crate::{
@@ -182,6 +186,22 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
                 reason: "K2 Horizon MoVA prompt must contain tokens".to_owned(),
             });
         }
+        // Retain the completed generation's live KV for in-memory prefix
+        // adoption (issue #1167) if one is still seated here; the normal
+        // completion path already retained it in the attribution teardown,
+        // and that retained state must survive this read, so overwrite only
+        // when a generation is actually present.
+        if let Some(completed_generation) = self.active.take() {
+            self.retained_live_prefix = match self.persistent_prompt_cache.as_ref() {
+                Some(persistent_prompt_cache) => take_retained_live_prefix(
+                    completed_generation,
+                    &persistent_prompt_cache.model_contract,
+                    self.in_memory_prefix_adoption_enabled,
+                    self.ceiling_bytes as usize,
+                ),
+                None => None,
+            };
+        }
         let mut caches = (0..model.config.num_hidden_layers())
             .map(|_| {
                 K2HorizonMoVAKvState::build(
@@ -221,7 +241,41 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             if restored_token_count >= prompt_token_ids.len() && block_token_count > 0 {
                 restored_token_count = restored_token_count.saturating_sub(block_token_count);
             }
-            if restored_token_count > 0 {
+            // In-memory prefix adoption (issue #1167): match the prompt's
+            // chain against the retained live KV before touching the disk
+            // store. An adopted prefix can even rescue a disk miss.
+            let mut adopted_from_live_prefix = false;
+            if self.in_memory_prefix_adoption_enabled
+                && let Some(retained_live_prefix) = self.retained_live_prefix.take()
+            {
+                let retained_lookup = performance_attribution.measure_operation(
+                    PerformanceOperation::PersistentPromptCachePrefixLookup,
+                    |_| {
+                        PersistentPromptCachePrefixLookup::for_retained_complete_block_keys(
+                            &persistent_prompt_cache.model_contract,
+                            &prompt_token_ids,
+                            &[],
+                            &retained_live_prefix.complete_block_keys,
+                            |_block_hash| false,
+                        )
+                    },
+                );
+                if retained_lookup.restored_token_count() > 0
+                    && retained_lookup.restored_token_count() >= restored_token_count
+                {
+                    cached_token_count = install_retained_live_prefix(
+                        retained_live_prefix,
+                        &retained_lookup,
+                        &mut caches,
+                        &mut last_published_block_key,
+                        &mut self.persistent_prompt_cache_counters,
+                    )?;
+                    adopted_from_live_prefix = true;
+                }
+            }
+            if adopted_from_live_prefix {
+                // The adopted live state serves; no disk blocks are read.
+            } else if restored_token_count > 0 {
                 let (restored_block_key, restored_tokens) =
                     super::super::prompt_cache::restore_prompt_prefix(
                         &model.runtime,

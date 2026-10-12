@@ -84,6 +84,26 @@ impl QuantizedFullAttentionKeyValueState {
         self.offset_tokens
     }
 
+    /// Rolls the logical offset back to an adopted or checkpointed boundary;
+    /// the stale packed tail is overwritten by subsequent in-place updates.
+    pub fn truncate_to_offset(
+        &mut self,
+        checkpoint_offset_tokens: i32,
+    ) -> Result<(), MlxRuntimeError> {
+        if checkpoint_offset_tokens < 0 {
+            return Err(quantized_state_error(
+                "truncate checkpoint offset must not be negative",
+            ));
+        }
+        if checkpoint_offset_tokens > self.offset_tokens {
+            return Err(quantized_state_error(
+                "truncate checkpoint offset must not exceed the current KV offset",
+            ));
+        }
+        self.offset_tokens = checkpoint_offset_tokens;
+        Ok(())
+    }
+
     /// Read-only access to the packed keys slab for restore evaluation.
     #[must_use]
     pub fn quantized_keys_state(&self) -> Option<&MlxArray> {
