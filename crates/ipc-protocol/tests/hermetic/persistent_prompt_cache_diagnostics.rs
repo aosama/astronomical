@@ -32,6 +32,7 @@ fn should_round_trip_bounded_persistent_prompt_cache_request_diagnostics_on_comp
             allocator_bytes_cleared_for_publication: 4_096,
             expert_bytes_reclaimed_for_publication: 8_192,
             expert_bytes_reclaimed_for_restore: 16_384,
+            in_memory_prefix_adoption: None,
         }),
         reason: ChatGenerationCompletionReason::EndOfSequence,
     };

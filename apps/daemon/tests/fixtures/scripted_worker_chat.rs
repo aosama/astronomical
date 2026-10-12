@@ -165,5 +165,6 @@ fn accepted_cache_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics
         allocator_bytes_cleared_for_publication: 512,
         expert_bytes_reclaimed_for_publication: 1_024,
         expert_bytes_reclaimed_for_restore: 0,
+        in_memory_prefix_adoption: None,
     }
 }
