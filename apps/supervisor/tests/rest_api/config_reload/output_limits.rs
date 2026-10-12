@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use astronomical_daemon::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
-use astronomical_supervisor::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
 
 use super::*;
 

@@ -142,7 +142,7 @@ To build only the optimized daemon and worker:
 
     CARGO_BUILD_JOBS="$(sysctl -n hw.logicalcpu)" cargo build --release \
       -p astronomical-inference-worker --bin astronomical-inference-worker \
-      -p astronomical-supervisor --bin astronomicald
+      -p astronomical-daemon --bin astronomicald
 
 ## Connect locally
 

@@ -1,10 +1,10 @@
 use std::time::Duration;
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerControlError, WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -149,7 +149,7 @@ async fn should_keep_worker_ready_when_cancellation_publishes_prompt_cache_stats
         "prompt-cache stats during cancellation must not disable the worker"
     );
     let published_cache_stats =
-        astronomical_supervisor::PersistentPromptCacheSummary::from_worker_event(
+        astronomical_daemon::PersistentPromptCacheSummary::from_worker_event(
             health_snapshot.persistent_prompt_cache_stats.as_ref(),
         );
     assert_eq!(published_cache_stats.hits, 1);
@@ -264,7 +264,7 @@ async fn receive_event(
 }
 
 async fn assert_worker_accepts_followup_request(
-    worker_executor: &astronomical_supervisor::WorkerHandle,
+    worker_executor: &astronomical_daemon::WorkerHandle,
 ) {
     let mut followup_stream = worker_executor
         .start_chat_generation(command_for_model("astronomical/test-worker"))
@@ -277,7 +277,7 @@ async fn assert_worker_accepts_followup_request(
 }
 
 async fn wait_for_active_memory(
-    worker_executor: &astronomical_supervisor::WorkerHandle,
+    worker_executor: &astronomical_daemon::WorkerHandle,
     expected_active_memory_bytes: Option<u64>,
 ) {
     let memory_deadline = Instant::now() + Duration::from_secs(5);
@@ -298,7 +298,7 @@ async fn wait_for_active_memory(
 }
 
 async fn wait_for_health(
-    worker_executor: &astronomical_supervisor::WorkerHandle,
+    worker_executor: &astronomical_daemon::WorkerHandle,
     expected_status: WorkerHealthStatus,
 ) {
     let health_deadline = Instant::now() + Duration::from_secs(5);

@@ -1,6 +1,6 @@
 //! Bundled-catalog contract for the K2 Horizon MoVA 36B A4B 4-bit offer.
 
-use astronomical_supervisor::{DownloadCatalog, DownloadCatalogFamily};
+use astronomical_daemon::{DownloadCatalog, DownloadCatalogFamily};
 
 #[test]
 fn should_offer_the_stacked_affine_k2_horizon_mova_variant_from_the_bundled_catalog() {

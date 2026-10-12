@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use astronomical_supervisor::{ChatGenerationExecutor, WorkerHandle, WorkerHealthStatus};
+use astronomical_daemon::{ChatGenerationExecutor, WorkerHandle, WorkerHealthStatus};
 use tokio::time::{Instant, sleep};
 
 use crate::common::supervisor;

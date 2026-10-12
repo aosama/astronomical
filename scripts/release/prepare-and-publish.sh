@@ -146,8 +146,8 @@ validate_release_identity() {
     done
 
     workspace_metadata="$(cargo metadata --no-deps --format-version 1)"
-    workspace_version="$(printf '%s' "$workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .version')"
-    repository_url="$(printf '%s' "$workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-supervisor") | .repository')"
+    workspace_version="$(printf '%s' "$workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-daemon") | .version')"
+    repository_url="$(printf '%s' "$workspace_metadata" | jq --raw-output '.packages[] | select(.name == "astronomical-daemon") | .repository')"
     [ "$release_version" = "$workspace_version" ] || {
         print_error "release tag ${RELEASE_TAG} does not match workspace version ${workspace_version}"
         exit 1

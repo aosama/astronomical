@@ -1,12 +1,12 @@
 use std::time::Duration;
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, PendingPromptCacheClear, ServingSessionSnapshot, WorkerHealthSnapshot,
+    WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ImageGenerationCapabilities, WorkerModelCapabilities,
     WorkerPromptWorkReuse,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, PendingPromptCacheClear, ServingSessionSnapshot, WorkerHealthSnapshot,
-    WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -151,18 +151,17 @@ fn should_preserve_the_serving_session_when_the_resident_model_is_replaced() {
         max_output_tokens: 20,
         context_window: 120,
     };
-    let mut previous_health_snapshot =
-        astronomical_supervisor::WorkerHealthSnapshot::ready_with_model(
-            "first-model".to_owned(),
-            capabilities.clone(),
-        );
+    let mut previous_health_snapshot = astronomical_daemon::WorkerHealthSnapshot::ready_with_model(
+        "first-model".to_owned(),
+        capabilities.clone(),
+    );
     previous_health_snapshot.mlx_memory_ceiling_bytes = 40_000;
     previous_health_snapshot
         .serving_session
         .record_completed_request(1_000, 750, Some(10.0), Some(20.0));
 
     let replacement_health_snapshot =
-        astronomical_supervisor::WorkerHealthSnapshot::ready_with_replacement_model(
+        astronomical_daemon::WorkerHealthSnapshot::ready_with_replacement_model(
             "second-model".to_owned(),
             capabilities,
             3_000,

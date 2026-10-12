@@ -1,8 +1,8 @@
 //! Public status contracts for image activity stay separate from text Observatory contracts so
 //! each cross-language progress shape remains small and directly reviewable.
 
+use astronomical_daemon::{ActiveRequestProgress, WorkerActivity};
 use astronomical_ipc_protocol::ImageGenerationPhase;
-use astronomical_supervisor::{ActiveRequestProgress, WorkerActivity};
 use axum::{
     body::{Body, to_bytes},
     http::Request,
@@ -22,9 +22,8 @@ async fn should_expose_image_generation_progress_with_completed_and_total_steps_
         total_steps: 4,
         elapsed_millis: 1_000,
     });
-    let application = astronomical_supervisor::build_application(ContractScriptedExecutor::ready(
-        health_snapshot,
-    ));
+    let application =
+        astronomical_daemon::build_application(ContractScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()

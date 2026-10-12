@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DownloadJob, DownloadPublicationRefresh, HubPayloadFuture, HubPayloadRequest,
     HubPayloadResponse, HubPayloadTransport, HubTransportError,
     SupervisorPerformanceAttributionLog,

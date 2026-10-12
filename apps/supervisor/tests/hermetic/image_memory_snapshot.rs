@@ -3,8 +3,8 @@
 
 use std::time::Duration;
 
+use astronomical_daemon::{ChatGenerationExecutor, ImageGenerationExecutor};
 use astronomical_ipc_protocol::MlxMemorySnapshotSource;
-use astronomical_supervisor::{ChatGenerationExecutor, ImageGenerationExecutor};
 use tokio::time::{Instant, sleep, timeout};
 
 use super::image_generation;
@@ -54,7 +54,7 @@ async fn should_publish_a_live_mlx_memory_snapshot_from_image_progress_steps() {
 }
 
 async fn wait_for_latest_memory_snapshot_source(
-    worker_handle: &astronomical_supervisor::WorkerHandle,
+    worker_handle: &astronomical_daemon::WorkerHandle,
     expected_source: MlxMemorySnapshotSource,
     timeout_message: &str,
 ) {

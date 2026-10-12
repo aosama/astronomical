@@ -4,12 +4,10 @@ use std::{
     time::Duration,
 };
 
+use astronomical_daemon::{ResolvedRuntimeConfigResolver, WorkerProcess, WorkerTerminationOutcome};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
-};
-use astronomical_supervisor::{
-    ResolvedRuntimeConfigResolver, WorkerProcess, WorkerTerminationOutcome,
 };
 use tokio::{process::Command, time::timeout};
 

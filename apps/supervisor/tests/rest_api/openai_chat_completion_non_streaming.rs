@@ -1,12 +1,12 @@
 use std::{future::Future, pin::Pin};
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
+    GenerationStartError, WorkerHealthSnapshot, build_application,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatModelCapabilities,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
-    GenerationStartError, WorkerHealthSnapshot, build_application,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -381,4 +381,4 @@ impl ChatGenerationExecutor for ScriptedExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for ScriptedExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {}

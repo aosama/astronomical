@@ -2,7 +2,7 @@
 
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     HubHttpRequest, HubHttpResponse, HubPayloadByteStream, HubPayloadFuture, HubPayloadRequest,
     HubPayloadResponse, HubPayloadTransport, HubTransport, HubTransportError, HubTransportFuture,
 };

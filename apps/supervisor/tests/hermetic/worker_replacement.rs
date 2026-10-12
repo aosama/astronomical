@@ -2,16 +2,16 @@
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
+    RuntimeModelGenerationDefaults, RuntimeModelPolicy, WorkerHandle, WorkerHealthSnapshot,
+    WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerLogLevel,
     WorkerModelConfiguration, WorkerStartupConfiguration,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    RuntimeModelGenerationDefaults, RuntimeModelPolicy, WorkerHandle, WorkerHealthSnapshot,
-    WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep};
 

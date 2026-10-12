@@ -203,4 +203,4 @@ impl ChatGenerationExecutor for ScriptedResponsesExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for ScriptedResponsesExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for ScriptedResponsesExecutor {}

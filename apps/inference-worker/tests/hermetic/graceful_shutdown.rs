@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use astronomical_supervisor::{WorkerProcess, WorkerTerminationOutcome};
+use astronomical_daemon::{WorkerProcess, WorkerTerminationOutcome};
 
 #[tokio::test]
 async fn should_stop_after_graceful_shutdown_timeout_escalates_and_reaps_worker() {

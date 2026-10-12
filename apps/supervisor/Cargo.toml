@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-supervisor"
+name = "astronomical-daemon"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true

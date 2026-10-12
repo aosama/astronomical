@@ -22,10 +22,10 @@ use std::path::PathBuf;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatImageInput, RequestId};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle, WorkerHealthSnapshot,
 };
+use astronomical_ipc_protocol::{ChatImageInput, RequestId};
 use tokio::time::sleep;
 
 use crate::performance_throughput::completion::{
@@ -156,7 +156,7 @@ pub(crate) struct JourneyRunOutcome {
     /// snapshot's progress, so a cell that died mid-prefill still reports its
     /// partial prefill rate from here.
     pub(crate) last_observed_active_request_progress:
-        Option<astronomical_supervisor::ActiveRequestProgress>,
+        Option<astronomical_daemon::ActiveRequestProgress>,
     pub(crate) logging_directory: PathBuf,
 }
 
@@ -326,7 +326,7 @@ pub(crate) async fn measure_throughput(
     // after cancellation clears the health snapshot, so a budget-exhausted
     // cell still reports the prefill or decode rate it was dying at.
     let last_observed_active_request_progress = std::sync::Arc::new(std::sync::Mutex::new(
-        None::<astronomical_supervisor::ActiveRequestProgress>,
+        None::<astronomical_daemon::ActiveRequestProgress>,
     ));
     let sampler_stop_signal = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let progress_sampler = tokio::spawn({

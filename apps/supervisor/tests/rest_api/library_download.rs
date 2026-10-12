@@ -2,7 +2,7 @@
 
 use std::{io, path::Path, sync::Arc, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DiskCapacityQuery, DownloadCatalog, DownloadJobStore, DownloadPublicationRefresh,
     HubPayloadRequest, HubTransportError, LibraryDownloadCoordinator,
     SupervisorPerformanceAttributionLog, build_application_with_library_download,

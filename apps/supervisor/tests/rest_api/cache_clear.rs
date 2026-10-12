@@ -3,14 +3,14 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, ResolvedRuntimeConfig,
     ResolvedRuntimeConfigResolver, RuntimeModelPolicy, ShutdownController, WorkerHandle,
     WorkerHealthStatus, build_application, build_application_with_full_control,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -229,7 +229,7 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
         DELAYED_MODEL_ID.to_owned(),
         RuntimeModelPolicy {
             model_directory,
-            generation_defaults: astronomical_supervisor::RuntimeModelGenerationDefaults {
+            generation_defaults: astronomical_daemon::RuntimeModelGenerationDefaults {
                 maximum_output_tokens: 128,
                 configured_maximum_output_tokens: None,
                 temperature_thousandths: None,
@@ -338,7 +338,7 @@ fn delayed_generation_command(request_id: u64) -> ChatGenerationCommand {
 
 async fn receive_generation_completion(
     generation_events: &mut tokio::sync::mpsc::Receiver<
-        astronomical_supervisor::ChatGenerationStreamEvent,
+        astronomical_daemon::ChatGenerationStreamEvent,
     >,
 ) {
     timeout(Duration::from_secs(2), generation_events.recv())

@@ -5,7 +5,7 @@ use std::{io::Cursor, path::PathBuf};
 use astronomical_config::{
     DiscoveredModel, ImageGenerationCapabilities, ModelCapabilities, ModelFamily, ModelLicense,
 };
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ImageGenerationExecutionError, build_application_with_discovered_models,
 };
 use axum::{

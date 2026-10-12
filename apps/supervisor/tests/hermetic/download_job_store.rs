@@ -4,7 +4,7 @@ use std::fs;
 use std::sync::{Arc, Barrier};
 use std::time::Duration;
 
-use astronomical_supervisor::{DownloadJob, DownloadJobStore, DownloadJobStoreError};
+use astronomical_daemon::{DownloadJob, DownloadJobStore, DownloadJobStoreError};
 use tempfile::TempDir;
 
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";

@@ -6,7 +6,7 @@ use std::{
     sync::Mutex,
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DiskCapacityQuery, DownloadDiskPreflight, DownloadDiskPreflightError, DownloadJob,
 };
 

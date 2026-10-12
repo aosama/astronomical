@@ -1,12 +1,12 @@
 use std::fs;
 
+use astronomical_daemon::{GenerationPerformanceLog, GenerationPerformanceRecord};
 use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
     WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
-use astronomical_supervisor::{GenerationPerformanceLog, GenerationPerformanceRecord};
 
 #[test]
 fn should_create_generation_performance_record_with_computed_throughput() {

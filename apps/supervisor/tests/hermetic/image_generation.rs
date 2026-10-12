@@ -2,14 +2,14 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
-    ImageGenerationCommand, ImageGenerationSettings, RequestId,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, GenerationQueueDepth, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationTimeouts,
     MlxMemoryLimitUpdateOutcome, PromptCacheClearOutcome, WorkerControlError, WorkerHealthStatus,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
+    ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -491,7 +491,7 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
         .expect("shutdown should succeed");
 }
 
-pub(super) async fn launch_scripted_worker() -> astronomical_supervisor::WorkerHandle {
+pub(super) async fn launch_scripted_worker() -> astronomical_daemon::WorkerHandle {
     let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
     let worker_handle = crate::common::supervisor::launch_test_executor(executable_path)
@@ -502,7 +502,7 @@ pub(super) async fn launch_scripted_worker() -> astronomical_supervisor::WorkerH
 }
 
 async fn wait_for_worker_status(
-    worker_handle: &astronomical_supervisor::WorkerHandle,
+    worker_handle: &astronomical_daemon::WorkerHandle,
     expected_status: WorkerHealthStatus,
 ) {
     let status_deadline = Instant::now() + Duration::from_secs(2);

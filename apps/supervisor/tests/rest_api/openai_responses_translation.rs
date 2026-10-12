@@ -18,7 +18,7 @@ fn should_translate_string_input_into_one_user_chat_message() {
     .expect("the Responses request should deserialize");
 
     let chat_generation_command =
-        astronomical_supervisor::translate_openai_responses_request(RequestId::new(700), request)
+        astronomical_daemon::translate_openai_responses_request(RequestId::new(700), request)
             .expect("the Responses request should translate");
 
     assert_eq!(
@@ -64,7 +64,7 @@ fn should_translate_summary_reasoning_and_function_loop_replay() {
     .expect("the function-loop request should deserialize");
 
     let chat_generation_command =
-        astronomical_supervisor::translate_openai_responses_request(RequestId::new(701), request)
+        astronomical_daemon::translate_openai_responses_request(RequestId::new(701), request)
             .expect("the manual function loop should translate");
 
     assert_eq!(

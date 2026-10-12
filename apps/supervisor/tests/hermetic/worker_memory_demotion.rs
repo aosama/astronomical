@@ -10,11 +10,11 @@
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
-use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, RuntimeModelPolicy, WorkerHandle,
     WorkerHealthStatus,
 };
+use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
 use tokio::time::timeout;
 
 use super::worker_model_swap::{

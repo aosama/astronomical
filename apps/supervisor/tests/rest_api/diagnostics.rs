@@ -1,4 +1,4 @@
-use astronomical_supervisor::{
+use astronomical_daemon::{
     build_openai_chat_request_diagnostic_snapshot,
     build_openai_chat_request_info_diagnostic_snapshot,
 };

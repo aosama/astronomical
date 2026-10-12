@@ -2,13 +2,13 @@
 
 use std::collections::HashMap;
 
+use astronomical_daemon::{
+    ChatGenerationStreamEvent, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerModelConfiguration,
-};
-use astronomical_supervisor::{
-    ChatGenerationStreamEvent, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
 };
 
 use super::*;
