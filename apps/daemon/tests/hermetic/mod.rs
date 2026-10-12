@@ -14,7 +14,6 @@ mod local_api_website_sample;
 mod model_load_timeout;
 mod persistent_prompt_cache_diagnostics;
 mod request_queue;
-mod site_readability;
 mod worker_cancellation;
 mod worker_health_snapshot;
 mod worker_launch;
