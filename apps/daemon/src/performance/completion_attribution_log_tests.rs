@@ -8,7 +8,7 @@
 
 use std::fs;
 
-use astronomical_daemon::{
+use crate::{
     CompletedToolCall, CompletionArgumentsRecord, CompletionAttributionLog,
     CompletionToolCallRecord,
 };

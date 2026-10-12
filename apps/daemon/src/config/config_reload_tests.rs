@@ -8,13 +8,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::{
+    ConfigReloadDecision, ConfigReloadDiff, ResolvedConfigurationGeneration, ResolvedRuntimeConfig,
+    RuntimeModelPolicy,
+};
 use astronomical_config::{
     ChatModelCapabilities, ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
     PromptCacheConfig,
-};
-use astronomical_daemon::{
-    ConfigReloadDecision, ConfigReloadDiff, ResolvedConfigurationGeneration, ResolvedRuntimeConfig,
-    RuntimeModelPolicy,
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
@@ -362,7 +362,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
 fn sample_runtime_model_policy() -> RuntimeModelPolicy {
     RuntimeModelPolicy {
         model_directory: PathBuf::from("/tmp/models/default"),
-        generation_defaults: astronomical_daemon::RuntimeModelGenerationDefaults {
+        generation_defaults: crate::RuntimeModelGenerationDefaults {
             maximum_output_tokens: 20_480,
             configured_maximum_output_tokens: None,
             temperature_thousandths: None,
@@ -443,7 +443,7 @@ fn image_discovered_model(
 fn image_runtime_model_policy(revision: &str) -> RuntimeModelPolicy {
     RuntimeModelPolicy {
         model_directory: PathBuf::from("/fictional/models/FLUX.2-klein-4B"),
-        generation_defaults: astronomical_daemon::RuntimeModelGenerationDefaults {
+        generation_defaults: crate::RuntimeModelGenerationDefaults {
             maximum_output_tokens: 0,
             configured_maximum_output_tokens: None,
             temperature_thousandths: None,

@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_daemon::{GenerationPerformanceLog, GenerationPerformanceRecord};
+use crate::{GenerationPerformanceLog, GenerationPerformanceRecord};
 use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
     WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
