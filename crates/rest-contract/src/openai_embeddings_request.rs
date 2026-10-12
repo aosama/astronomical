@@ -33,7 +33,7 @@ pub enum OpenAiEmbeddingInput {
     Multiple(Vec<String>),
 }
 
-/// Validated embeddings request ready for supervisor translation.
+/// Validated embeddings request ready for daemon translation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenAiEmbeddingsRequestParts {
     pub model: String,

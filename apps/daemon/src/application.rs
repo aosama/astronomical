@@ -426,7 +426,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let router = if supports_shutdown {
         router.route(
             "/v1/control/shutdown",
-            post(crate::shutdown_control::request_supervisor_shutdown),
+            post(crate::shutdown_control::request_daemon_shutdown),
         )
     } else {
         router

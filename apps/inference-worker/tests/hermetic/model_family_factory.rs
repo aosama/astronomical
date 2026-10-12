@@ -92,7 +92,7 @@ async fn should_reject_unpinned_flux_identity_before_model_loading() {
 }
 
 #[tokio::test]
-async fn should_reject_changed_evidence_between_supervisor_discovery_and_worker_load() {
+async fn should_reject_changed_evidence_between_daemon_discovery_and_worker_load() {
     // A mutated revision breaks the worker's config-vs-directory identity
     // check before artifact verification runs; the other mutations leave
     // provenance intact and are caught by exact-directory verification.
@@ -117,7 +117,7 @@ async fn should_reject_changed_evidence_between_supervisor_discovery_and_worker_
         let model_directory = flux_model_directory();
         let discovered_model =
             astronomical_config::discover_models(&[model_directory.path().to_path_buf()])
-                .expect("supervisor discovery should complete")
+                .expect("daemon discovery should complete")
                 .remove(0)
                 .discovered_models
                 .remove(0);

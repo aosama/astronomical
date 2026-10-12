@@ -33,7 +33,7 @@ enum ConstraintKind {
 }
 
 impl StructuredTokenConstraint {
-    /// Compiles one supervisor-validated constraint or explains why this
+    /// Compiles one daemon-validated constraint or explains why this
     /// worker cannot mask it. A compile failure is request-scoped, so the
     /// loaded worker stays reusable for later requests.
     pub(crate) fn compile(

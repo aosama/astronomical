@@ -172,7 +172,7 @@ impl AstronomicalConfig {
 
     /// Finds one exact model ID beneath the configured recursive model roots.
     ///
-    /// The discovery rules are shared with supervisor model registration, so the
+    /// The discovery rules are shared with daemon model registration, so the
     /// returned path is an executable discovered model directory rather than an
     /// arbitrary directory whose name happens to match.
     pub fn find_configured_model_directory_by_id(
@@ -201,7 +201,7 @@ impl AstronomicalConfig {
     }
 
     /// Resolves and validates the loopback-only HTTP bind address.
-    pub fn supervisor_bind_address(&self) -> Result<SocketAddr, AstronomicalConfigError> {
+    pub fn daemon_bind_address(&self) -> Result<SocketAddr, AstronomicalConfigError> {
         let raw_bind_address = self.instance_paths.default_bind_address().to_string();
         parse_loopback_bind_address(&raw_bind_address)
     }
@@ -254,7 +254,7 @@ impl AstronomicalConfig {
             .transpose()
     }
 
-    /// Resolves bounded hourly file logging for the supervisor or worker.
+    /// Resolves bounded hourly file logging for the daemon or worker.
     pub fn logging(&self) -> Result<LoggingConfig, AstronomicalConfigError> {
         let configured_diagnostics = self.user_config_file.diagnostics.as_ref();
         Ok(LoggingConfig::new(
@@ -351,18 +351,18 @@ impl AstronomicalConfig {
 fn parse_loopback_bind_address(
     raw_bind_address: &str,
 ) -> Result<SocketAddr, AstronomicalConfigError> {
-    let supervisor_bind_address = raw_bind_address.parse::<SocketAddr>().map_err(|source| {
+    let daemon_bind_address = raw_bind_address.parse::<SocketAddr>().map_err(|source| {
         AstronomicalConfigError::ParseBindAddress {
             raw_bind_address: raw_bind_address.to_owned(),
             source,
         }
     })?;
-    if !supervisor_bind_address.ip().is_loopback() {
+    if !daemon_bind_address.ip().is_loopback() {
         return Err(AstronomicalConfigError::NonLoopbackBindAddress {
-            supervisor_bind_address,
+            daemon_bind_address,
         });
     }
-    Ok(supervisor_bind_address)
+    Ok(daemon_bind_address)
 }
 
 fn prompt_cache_size_gb_to_bytes(

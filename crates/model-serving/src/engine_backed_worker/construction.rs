@@ -87,7 +87,7 @@ where
         self
     }
 
-    /// Attaches the worker-startup feature policy that must be acknowledged to the supervisor.
+    /// Attaches the worker-startup feature policy that must be acknowledged to the daemon.
     #[must_use]
     pub fn with_worker_runtime_feature_configuration(
         mut self,

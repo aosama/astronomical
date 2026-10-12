@@ -189,7 +189,7 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
         worker_handle.stage_memory_configuration_generation(memory_effective_generation.clone());
         // A restart-required candidate is not wholly effective yet. Sending its full
         // generation would make the worker's next model acknowledgement disagree with
-        // the supervisor's memory-only live configuration.
+        // the daemon's memory-only live configuration.
         match worker_handle
             .update_mlx_memory_limit(
                 effective_mlx_memory_ceiling_bytes,

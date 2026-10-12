@@ -11,7 +11,7 @@ pub struct WorkerAutoregressiveModelConfiguration {
     pub model_id: String,
     /// Effective prompt-plus-output context capability.
     pub maximum_context_tokens: u32,
-    /// Independent output capability; request defaults remain supervisor-owned.
+    /// Independent output capability; request defaults remain daemon-owned.
     pub maximum_output_tokens: u32,
     pub chunking: WorkerChunkingConfiguration,
 }
@@ -89,7 +89,7 @@ pub enum WorkerModelConfiguration {
     Embeddings(WorkerEmbeddingModelConfiguration),
 }
 
-/// Path-free loaded-model policy acknowledged to the supervisor and local status API.
+/// Path-free loaded-model policy acknowledged to the daemon and local status API.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(
     tag = "kind",

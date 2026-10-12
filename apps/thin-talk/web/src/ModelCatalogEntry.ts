@@ -1,5 +1,5 @@
 /**
- * One decoded raw model entry from `/v1/models`. The supervisor publishes input
+ * One decoded raw model entry from `/v1/models`. The daemon publishes input
  * modalities and the endpoints each model supports, so a chat app can keep only
  * the models that can receive chat requests.
  */

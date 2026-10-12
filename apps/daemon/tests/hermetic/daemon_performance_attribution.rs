@@ -8,8 +8,7 @@ use std::{
 };
 
 use astronomical_daemon::{
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 use tokio::sync::Notify;
 
@@ -20,21 +19,20 @@ async fn should_execute_disabled_async_measurement_without_reading_the_clock() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let clock_call_count = Arc::new(AtomicUsize::new(0));
         let clock_call_count_for_clock = Arc::clone(&clock_call_count);
-        let attribution_log =
-            SupervisorPerformanceAttributionLog::from_writer_and_clock_when_enabled(
-                io::sink(),
-                move || {
-                    clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst);
-                    Ok(1_000)
-                },
-                false,
-            );
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock_when_enabled(
+            io::sink(),
+            move || {
+                clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst);
+                Ok(1_000)
+            },
+            false,
+        );
 
         let operation_output = attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::ManifestFetch,
+                DaemonPerformanceOperation::ManifestFetch,
                 || async { 42_u64 },
-                |_| SupervisorPerformanceMeasurement::success(),
+                |_| DaemonPerformanceMeasurement::success(),
             )
             .await
             .expect("disabled attribution must not affect async work");
@@ -52,14 +50,14 @@ async fn should_record_deterministic_async_manifest_measurement() {
         let written_bytes = Arc::new(Mutex::new(Vec::new()));
         let clock_call_count = Arc::new(AtomicUsize::new(0));
         let clock_call_count_for_clock = Arc::clone(&clock_call_count);
-        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock(
             SharedWriter::new(Arc::clone(&written_bytes)),
             move || {
                 let clock_index = clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst);
                 Ok([1_000, 1_025][clock_index])
             },
         );
-        let measurement = SupervisorPerformanceMeasurement::success()
+        let measurement = DaemonPerformanceMeasurement::success()
             .with_manifest_fetch(
                 "astronomical-test/example-qwen",
                 TEST_REVISION,
@@ -70,7 +68,7 @@ async fn should_record_deterministic_async_manifest_measurement() {
 
         let operation_output = attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::ManifestFetch,
+                DaemonPerformanceOperation::ManifestFetch,
                 || async { "manifest fetched" },
                 |_| measurement,
             )
@@ -104,7 +102,7 @@ async fn should_record_daemon_ipc_status_without_download_metadata() {
         let written_bytes = Arc::new(Mutex::new(Vec::new()));
         let clock_call_count = Arc::new(AtomicUsize::new(0));
         let clock_call_count_for_clock = Arc::clone(&clock_call_count);
-        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock(
             SharedWriter::new(Arc::clone(&written_bytes)),
             move || {
                 let clock_index = clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst);
@@ -114,9 +112,9 @@ async fn should_record_daemon_ipc_status_without_download_metadata() {
 
         attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::LibraryCatalogLoad,
+                DaemonPerformanceOperation::LibraryCatalogLoad,
                 || async {},
-                |_| SupervisorPerformanceMeasurement::success(),
+                |_| DaemonPerformanceMeasurement::success(),
             )
             .await
             .expect("library catalog attribution should be recorded");
@@ -135,15 +133,15 @@ async fn should_record_daemon_ipc_status_without_download_metadata() {
 async fn should_preserve_best_effort_operation_output_when_the_start_clock_fails() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let attribution_log =
-            SupervisorPerformanceAttributionLog::from_writer_and_clock(io::sink(), || {
+            DaemonPerformanceAttributionLog::from_writer_and_clock(io::sink(), || {
                 Err(io::Error::other("intentional start clock failure"))
             });
 
         let operation_output = attribution_log
             .measure_async_operation_best_effort(
-                SupervisorPerformanceOperation::LibraryCatalogLoad,
+                DaemonPerformanceOperation::LibraryCatalogLoad,
                 || async { "Romeo and Juliet" },
-                |_| SupervisorPerformanceMeasurement::success(),
+                |_| DaemonPerformanceMeasurement::success(),
             )
             .await;
 
@@ -158,7 +156,7 @@ async fn should_preserve_best_effort_operation_output_when_the_writer_fails() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let operation_completed = Arc::new(AtomicBool::new(false));
         let operation_completed_for_operation = Arc::clone(&operation_completed);
-        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock(
             CompletionCheckingWriter {
                 operation_completed: Arc::clone(&operation_completed),
             },
@@ -167,12 +165,12 @@ async fn should_preserve_best_effort_operation_output_when_the_writer_fails() {
 
         let operation_output = attribution_log
             .measure_async_operation_best_effort(
-                SupervisorPerformanceOperation::LibraryCatalogLoad,
+                DaemonPerformanceOperation::LibraryCatalogLoad,
                 || async move {
                     operation_completed_for_operation.store(true, Ordering::SeqCst);
                     "Two households"
                 },
-                |_| SupervisorPerformanceMeasurement::success(),
+                |_| DaemonPerformanceMeasurement::success(),
             )
             .await;
 
@@ -188,7 +186,7 @@ async fn should_not_hold_the_writer_lock_while_an_async_operation_is_blocked() {
         let written_bytes = Arc::new(Mutex::new(Vec::new()));
         let clock_value = Arc::new(AtomicUsize::new(1_000));
         let clock_value_for_clock = Arc::clone(&clock_value);
-        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock(
             SharedWriter::new(Arc::clone(&written_bytes)),
             move || Ok(clock_value_for_clock.fetch_add(1, Ordering::SeqCst) as u64),
         );
@@ -201,7 +199,7 @@ async fn should_not_hold_the_writer_lock_while_an_async_operation_is_blocked() {
         let first_operation = tokio::spawn(async move {
             first_log
                 .measure_async_operation(
-                    SupervisorPerformanceOperation::FileTransfer,
+                    DaemonPerformanceOperation::FileTransfer,
                     || async move {
                         first_started_signal.notify_one();
                         first_release_signal.notified().await;
@@ -214,7 +212,7 @@ async fn should_not_hold_the_writer_lock_while_an_async_operation_is_blocked() {
 
         attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::Verification,
+                DaemonPerformanceOperation::Verification,
                 || async {},
                 |_| verification_measurement(),
             )
@@ -241,7 +239,7 @@ async fn should_report_end_clock_failure_only_after_async_operation_completes() 
         let clock_call_count = Arc::new(AtomicUsize::new(0));
         let clock_call_count_for_clock = Arc::clone(&clock_call_count);
         let attribution_log =
-            SupervisorPerformanceAttributionLog::from_writer_and_clock(io::sink(), move || {
+            DaemonPerformanceAttributionLog::from_writer_and_clock(io::sink(), move || {
                 if clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst) == 0 {
                     Ok(1_000)
                 } else {
@@ -252,7 +250,7 @@ async fn should_report_end_clock_failure_only_after_async_operation_completes() 
 
         let attribution_error = attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::DiskPreflight,
+                DaemonPerformanceOperation::DiskPreflight,
                 || async move {
                     operation_completed_for_operation.store(true, Ordering::SeqCst);
                 },
@@ -276,7 +274,7 @@ async fn should_report_write_failure_only_after_async_operation_completes() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let operation_completed = Arc::new(AtomicBool::new(false));
         let operation_completed_for_operation = Arc::clone(&operation_completed);
-        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock(
             CompletionCheckingWriter {
                 operation_completed: Arc::clone(&operation_completed),
             },
@@ -285,7 +283,7 @@ async fn should_report_write_failure_only_after_async_operation_completes() {
 
         let attribution_error = attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::Verification,
+                DaemonPerformanceOperation::Verification,
                 || async move {
                     operation_completed_for_operation.store(true, Ordering::SeqCst);
                 },
@@ -311,7 +309,7 @@ fn should_reject_noncanonical_file_transfer_attribution_paths() {
         "weights/./model.safetensors",
         "weights/model.safetensors/",
     ] {
-        let measurement_error = SupervisorPerformanceMeasurement::success()
+        let measurement_error = DaemonPerformanceMeasurement::success()
             .with_file_transfer(
                 "astronomical-test/example-qwen",
                 TEST_REVISION,
@@ -330,14 +328,14 @@ fn deterministic_clock() -> impl Fn() -> io::Result<u64> + Send + Sync + 'static
     move || Ok(1_000 + clock_call_count.fetch_add(1, Ordering::SeqCst) as u64)
 }
 
-fn disk_preflight_measurement() -> SupervisorPerformanceMeasurement {
-    SupervisorPerformanceMeasurement::failure()
+fn disk_preflight_measurement() -> DaemonPerformanceMeasurement {
+    DaemonPerformanceMeasurement::failure()
         .with_disk_preflight("astronomical-test/example-qwen", TEST_REVISION, 100, 50)
         .expect("disk preflight attribution fixture should be valid")
 }
 
-fn file_transfer_measurement() -> SupervisorPerformanceMeasurement {
-    SupervisorPerformanceMeasurement::success()
+fn file_transfer_measurement() -> DaemonPerformanceMeasurement {
+    DaemonPerformanceMeasurement::success()
         .with_file_transfer(
             "astronomical-test/example-qwen",
             TEST_REVISION,
@@ -348,8 +346,8 @@ fn file_transfer_measurement() -> SupervisorPerformanceMeasurement {
         .expect("file transfer attribution fixture should be valid")
 }
 
-fn verification_measurement() -> SupervisorPerformanceMeasurement {
-    SupervisorPerformanceMeasurement::cancelled()
+fn verification_measurement() -> DaemonPerformanceMeasurement {
+    DaemonPerformanceMeasurement::cancelled()
         .with_verification("astronomical-test/example-qwen", TEST_REVISION, 1, 100)
         .expect("verification attribution fixture should be valid")
 }

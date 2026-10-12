@@ -33,7 +33,7 @@ pub fn derive_serving_mlx_memory_ceiling_bytes(
 }
 
 /// Starts an idle worker that loads a supported model only after an explicit
-/// SwapModel command from the supervisor.
+/// SwapModel command from the daemon.
 pub async fn run_bootstrapped_worker<ReadTransport, WriteTransport>(
     read_transport: ReadTransport,
     write_transport: WriteTransport,

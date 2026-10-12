@@ -2,25 +2,24 @@
 
 use super::{DownloadJob, DownloadJobStore, DownloadJobStoreError};
 use crate::{
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
 pub(super) async fn reconcile_publication_intent(
     job_store: DownloadJobStore,
-    attribution_log: &SupervisorPerformanceAttributionLog,
+    attribution_log: &DaemonPerformanceAttributionLog,
     publication_job: DownloadJob,
 ) -> Result<Result<(), DownloadJobStoreError>, std::io::Error> {
     let measurement_job = publication_job.clone();
     attribution_log
         .measure_blocking_operation(
-            SupervisorPerformanceOperation::Verification,
+            DaemonPerformanceOperation::Verification,
             move || job_store.replace_current_for_publication(&publication_job),
             move |reconciliation_outcome| {
                 let measurement = if reconciliation_outcome.is_ok() {
-                    SupervisorPerformanceMeasurement::success()
+                    DaemonPerformanceMeasurement::success()
                 } else {
-                    SupervisorPerformanceMeasurement::failure()
+                    DaemonPerformanceMeasurement::failure()
                 };
                 measurement
                     .with_verification(
@@ -29,7 +28,7 @@ pub(super) async fn reconcile_publication_intent(
                         measurement_job.files().len(),
                         measurement_job.bytes_total(),
                     )
-                    .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
+                    .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
             },
         )
         .await

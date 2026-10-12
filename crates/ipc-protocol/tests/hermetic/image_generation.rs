@@ -81,16 +81,15 @@ async fn should_round_trip_an_image_generation_journey() {
             mlx_memory_snapshot: Some(finalized_image_memory_snapshot()),
         },
     ];
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let (supervisor_reader_transport, supervisor_writer_transport) =
-        tokio::io::split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_reader_transport, daemon_writer_transport) = tokio::io::split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = tokio::io::split(worker_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
     let mut worker_reader = ProtocolReader::new(worker_reader_transport);
     let mut worker_writer = ProtocolWriter::new(worker_writer_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("the image command should be written");
@@ -108,7 +107,7 @@ async fn should_round_trip_an_image_generation_journey() {
             .await
             .expect("the image generation event should be written");
         assert_eq!(
-            supervisor_reader
+            daemon_reader
                 .next_event()
                 .await
                 .expect("the image generation event should decode"),

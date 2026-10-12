@@ -24,17 +24,17 @@ pub const QWEN_IMAGE_21_IMAGE_DIMENSION_MULTIPLE_PIXELS: u32 =
 pub const QWEN_IMAGE_21_MINIMUM_IMAGE_GENERATION_STEPS: u16 = 1;
 /// Upper step bound: the reference pipeline's default inference step count, which is also
 /// the schedule every served request runs (mirrored as the discovery-time
-/// `default_steps` in the config crate because the supervisor cannot reach this crate).
+/// `default_steps` in the config crate because the daemon cannot reach this crate).
 pub const QWEN_IMAGE_21_MAXIMUM_IMAGE_GENERATION_STEPS: u16 = 40;
 /// Qwen-Image-2.1 samples without classifier-free guidance; 1.0 is the neutral scale the
-/// reference documents for exactly that case, and the supervisor always sends it.
+/// reference documents for exactly that case, and the daemon always sends it.
 pub const QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS: u32 = 1_000;
 /// Activation headroom above the three components' weight bytes. The render releases the
 /// encoder and transformer before the VAE decode, so the peak is the decode's staged f32
 /// activations; two gigabytes covered it on every measured revision.
 pub const QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
-/// The capabilities a loaded Qwen-Image-2.1 engine advertises to the supervisor.
+/// The capabilities a loaded Qwen-Image-2.1 engine advertises to the daemon.
 #[must_use]
 pub fn qwen_image_21_image_generation_capabilities() -> ImageGenerationCapabilities {
     ImageGenerationCapabilities {

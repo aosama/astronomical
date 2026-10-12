@@ -56,7 +56,7 @@ async fn should_serve_the_library_and_discover_instance_models_without_configure
         assert!(
             !instance_state_directory
                 .path()
-                .join("logs/supervisor-performance-attribution.jsonl")
+                .join("logs/daemon-performance-attribution.jsonl")
                 .exists()
         );
 
@@ -98,7 +98,7 @@ async fn should_record_the_startup_catalog_load_when_attribution_is_enabled() {
         let attribution_text = std::fs::read_to_string(
             instance_state_directory
                 .path()
-                .join("logs/supervisor-performance-attribution.jsonl"),
+                .join("logs/daemon-performance-attribution.jsonl"),
         )
         .expect("startup must flush the required catalog attribution record before binding");
         let attribution_record: serde_json::Value = serde_json::from_str(attribution_text.trim())
@@ -137,7 +137,7 @@ async fn should_fail_before_binding_when_the_startup_attribution_file_cannot_ope
         std::fs::create_dir_all(
             instance_state_directory
                 .path()
-                .join("logs/supervisor-performance-attribution.jsonl"),
+                .join("logs/daemon-performance-attribution.jsonl"),
         )
         .expect("a directory should occupy the required attribution file path");
 
@@ -157,7 +157,7 @@ async fn should_fail_before_binding_when_the_startup_attribution_file_cannot_ope
         assert!(!String::from_utf8_lossy(&daemon_output.stdout).contains("listening on http://"));
         assert!(
             String::from_utf8_lossy(&daemon_output.stderr)
-                .contains("failed to create the supervisor performance-attribution log")
+                .contains("failed to create the daemon performance-attribution log")
         );
     })
     .await

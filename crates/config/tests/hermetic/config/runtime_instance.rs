@@ -103,7 +103,7 @@ fn should_generate_the_development_first_run_config_with_the_development_port() 
 
     assert_eq!(
         development_config
-            .supervisor_bind_address()
+            .daemon_bind_address()
             .expect("development address should resolve")
             .to_string(),
         "127.0.0.1:6733"
@@ -136,7 +136,7 @@ fn should_load_a_supplied_test_home_only_from_the_development_channel() {
 
     assert_eq!(
         development_config
-            .supervisor_bind_address()
+            .daemon_bind_address()
             .expect("Development endpoint should resolve")
             .to_string(),
         "127.0.0.1:6733"
@@ -168,7 +168,7 @@ fn should_allow_an_explicit_test_state_directory_to_select_an_ephemeral_endpoint
 
     assert_eq!(
         explicit_config
-            .supervisor_bind_address()
+            .daemon_bind_address()
             .expect("explicit endpoint should resolve")
             .to_string(),
         "127.0.0.1:0"

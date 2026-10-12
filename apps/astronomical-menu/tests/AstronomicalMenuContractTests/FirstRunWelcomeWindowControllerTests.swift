@@ -103,7 +103,7 @@ final class FirstRunWelcomeWindowControllerTests: XCTestCase {
   private var testIdentity: ApplicationIdentity {
     ApplicationIdentity(
       channel: .development,
-      supervisorPort: 0,
+      daemonPort: 0,
       stateDirectoryName: nil,
       version: "test",
       buildNumber: "0",

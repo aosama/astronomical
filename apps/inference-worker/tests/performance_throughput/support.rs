@@ -1,7 +1,7 @@
 //! Journey driver: launch, warm up, measure, and record one throughput journey.
 //!
 //! The driver launches the production inference-worker process over the
-//! supervisor IPC boundary, runs one short warmup completion to spin up first-use
+//! daemon IPC boundary, runs one short warmup completion to spin up first-use
 //! JIT kernels, then one measured completion over the real prompt, and reads the
 //! worker's authoritative per-request throughput (`prefill_tok_per_second` and
 //! `generation_tok_per_second`) from the generation performance log. The warmup
@@ -274,7 +274,7 @@ pub(crate) async fn measure_throughput(
             worker_startup_configuration,
         )
         .await
-        .expect("the supervisor should launch the measured worker");
+        .expect("the daemon should launch the measured worker");
         wait_until_idle(&worker_handle, READY_ATTEMPT_LIMIT).await;
         if let Some(configured_maximum_mlx_memory_bytes) = journey.maximum_mlx_memory_bytes {
             let effective_mlx_memory_ceiling_bytes =

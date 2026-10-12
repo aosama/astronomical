@@ -56,12 +56,12 @@ final class ChatWindowControllerTests: XCTestCase {
   private func bootstrap() throws {
     _ = NSApplication.shared
     // The identity points at an isolated port, so the client behind the
-    // window never touches a real supervisor during these journeys. Port 0
+    // window never touches a real daemon during these journeys. Port 0
     // answers immediately with a connection-refused failure the surface
     // classifies; the window presentation itself does not depend on the reply.
     controller = ChatWindowController(thinTalkIdentity: ThinTalkApplicationIdentity(
       channel: .development,
-      supervisorPort: 0,
+      daemonPort: 0,
       stateDirectoryName: ".astronomical-tests",
       version: "test",
       buildNumber: "0",

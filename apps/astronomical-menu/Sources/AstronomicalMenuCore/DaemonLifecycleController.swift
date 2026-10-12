@@ -142,7 +142,7 @@ enum DaemonLifecycleError: LocalizedError {
 @MainActor
 final class DaemonLifecycleController {
   private let applicationIdentity: ApplicationIdentity
-  private let supervisorClient: any SupervisorClient
+  private let daemonClient: any DaemonClient
   private let ownershipStore: DaemonOwnershipStore
   private let readinessTimeout: Duration
   private let readinessPollInterval: Duration
@@ -155,7 +155,7 @@ final class DaemonLifecycleController {
   private(set) var ownsDaemon = false
 
   init(
-    supervisorClient: any SupervisorClient,
+    daemonClient: any DaemonClient,
     applicationIdentity: ApplicationIdentity = .current(),
     readinessTimeout: Duration = .seconds(8),
     readinessPollInterval: Duration = .milliseconds(100),
@@ -166,7 +166,7 @@ final class DaemonLifecycleController {
     ownershipRecordURL: URL? = nil,
     daemonArguments: [String]? = nil
   ) {
-    self.supervisorClient = supervisorClient
+    self.daemonClient = daemonClient
     self.applicationIdentity = applicationIdentity
     self.readinessTimeout = readinessTimeout
     self.readinessPollInterval = readinessPollInterval
@@ -181,7 +181,7 @@ final class DaemonLifecycleController {
   }
 
   func startDaemonIfNeeded() async throws {
-    if await supervisorClient.healthIsAvailable() {
+    if await daemonClient.healthIsAvailable() {
       try await waitForExistingInstanceReadiness()
       return
     }
@@ -190,7 +190,7 @@ final class DaemonLifecycleController {
     else { throw DaemonLifecycleError.bundledDaemonUnavailable }
     recoverStaleOwnershipRecord(
       menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
-    if await supervisorClient.healthIsAvailable() {
+    if await daemonClient.healthIsAvailable() {
       try await waitForExistingInstanceReadiness()
       return
     }
@@ -200,17 +200,17 @@ final class DaemonLifecycleController {
   }
 
   func restartDaemon() async throws -> String {
-    if await supervisorClient.healthIsAvailable() {
-      try await supervisorClient.requestShutdown()
-      for _ in 0..<unownedDaemonStopPollCount where await supervisorClient.healthIsAvailable() {
+    if await daemonClient.healthIsAvailable() {
+      try await daemonClient.requestShutdown()
+      for _ in 0..<unownedDaemonStopPollCount where await daemonClient.healthIsAvailable() {
         try await Task.sleep(for: unownedDaemonStopPollInterval)
       }
-      if await supervisorClient.healthIsAvailable(), !ownsDaemon {
+      if await daemonClient.healthIsAvailable(), !ownsDaemon {
         throw DaemonLifecycleError.unownedDaemonDidNotStop
       }
     }
     if ownsDaemon { stopOwnedDaemon() }
-    if await supervisorClient.healthIsAvailable() {
+    if await daemonClient.healthIsAvailable() {
       throw DaemonLifecycleError.unownedDaemonDidNotStop
     }
     guard let daemonExecutableURL = bundledDaemonExecutableURL(),
@@ -269,11 +269,11 @@ final class DaemonLifecycleController {
       // A dead child must win over a health poll. Otherwise a fast exit can be
       // reported as a readiness timeout after SIGTERM reaps a zombie.
       try throwIfOwnedDaemonExited()
-      if await supervisorClient.expectedInstanceIsHealthy() { return }
+      if await daemonClient.expectedInstanceIsHealthy() { return }
       try throwIfOwnedDaemonExited()
       try await Task.sleep(for: readinessPollInterval)
     }
-    if await supervisorClient.expectedInstanceIsHealthy() { return }
+    if await daemonClient.expectedInstanceIsHealthy() { return }
     try throwIfOwnedDaemonExited()
     if reapOwnedDaemonWithin(.milliseconds(50)) {
       try throwIfOwnedDaemonExited()
@@ -305,10 +305,10 @@ final class DaemonLifecycleController {
     let readinessClock = ContinuousClock()
     let readinessDeadline = readinessClock.now.advanced(by: readinessTimeout)
     while readinessClock.now < readinessDeadline {
-      if await supervisorClient.expectedInstanceIsHealthy() { return }
+      if await daemonClient.expectedInstanceIsHealthy() { return }
       try await Task.sleep(for: readinessPollInterval)
     }
-    if await supervisorClient.expectedInstanceIsHealthy() { return }
+    if await daemonClient.expectedInstanceIsHealthy() { return }
     throw DaemonLifecycleError.existingDaemonNotReady(
       applicationIdentity.expectedConfigurationFile)
   }

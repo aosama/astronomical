@@ -8,13 +8,13 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   public override init() {}
 
   private let applicationIdentity = ApplicationIdentity.current()
-  private lazy var supervisorClient = LocalSupervisorClient(applicationIdentity: applicationIdentity)
-  private lazy var telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+  private lazy var daemonClient = LocalDaemonClient(applicationIdentity: applicationIdentity)
+  private lazy var telemetryStore = TelemetryStore(daemonClient: daemonClient)
   private lazy var applicationUpdateController: any ApplicationUpdateChecking =
     ApplicationUpdateControllerInstaller.makeController(
       applicationChannel: applicationIdentity.channel)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
-    supervisorClient: supervisorClient, applicationIdentity: applicationIdentity)
+    daemonClient: daemonClient, applicationIdentity: applicationIdentity)
   private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
   private lazy var chatWindowController = ChatWindowController(

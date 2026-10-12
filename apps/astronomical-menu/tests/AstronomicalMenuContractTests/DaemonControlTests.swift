@@ -9,7 +9,7 @@ final class DaemonControlTests: XCTestCase {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/does-not-exist/astronomicald")
     defer { testContext.removeTemporaryDirectory() }
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: 1))
+      daemonClient: DelayedReadinessDaemonClient(readyAfterCheckCount: 1))
 
     do {
       try await daemonLifecycleController.startDaemonIfNeeded()
@@ -26,7 +26,7 @@ final class DaemonControlTests: XCTestCase {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/bin/sleep")
     defer { testContext.removeTemporaryDirectory() }
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: StuckExternalSupervisorClient(), daemonArguments: ["30"],
+      daemonClient: StuckExternalDaemonClient(), daemonArguments: ["30"],
       readinessTimeout: .milliseconds(30))
 
     do {
@@ -50,7 +50,7 @@ final class DaemonControlTests: XCTestCase {
     // budget only has to tolerate runner load; a sub-quarter-second wall clock failed
     // repeatedly on loaded CI runners (issue #738).
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: ExistingDelayedReadinessSupervisorClient(readyAfterCheckCount: 3),
+      daemonClient: ExistingDelayedReadinessDaemonClient(readyAfterCheckCount: 3),
       readinessTimeout: .seconds(2))
 
     try await daemonLifecycleController.startDaemonIfNeeded()
@@ -63,7 +63,7 @@ final class DaemonControlTests: XCTestCase {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/usr/bin/false")
     defer { testContext.removeTemporaryDirectory() }
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: .max))
+      daemonClient: DelayedReadinessDaemonClient(readyAfterCheckCount: .max))
 
     do {
       try await daemonLifecycleController.startDaemonIfNeeded()
@@ -100,13 +100,13 @@ final class DaemonControlTests: XCTestCase {
 
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: failOnceScriptURL.path)
     defer { testContext.removeTemporaryDirectory() }
-    let supervisorClient = DelayedReadinessSupervisorClient(readyAfterCheckCount: 1)
+    let daemonClient = DelayedReadinessDaemonClient(readyAfterCheckCount: 1)
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: supervisorClient,
+      daemonClient: daemonClient,
       daemonArguments: [failOnceMarkerURL.path],
       readinessTimeout: .milliseconds(250))
     defer { daemonLifecycleController.stopOwnedDaemon() }
-    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let telemetryStore = TelemetryStore(daemonClient: daemonClient)
     let maintenanceCompleted = expectation(description: "daemon became ready after retry")
 
     let maintenanceTask = Task { @MainActor in
@@ -127,9 +127,9 @@ final class DaemonControlTests: XCTestCase {
   func test_should_present_a_startup_configuration_failure_in_control_feedback() async throws {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/usr/bin/false")
     defer { testContext.removeTemporaryDirectory() }
-    let supervisorClient = DelayedReadinessSupervisorClient(readyAfterCheckCount: .max)
-    let daemonLifecycleController = testContext.makeController(supervisorClient: supervisorClient)
-    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let daemonClient = DelayedReadinessDaemonClient(readyAfterCheckCount: .max)
+    let daemonLifecycleController = testContext.makeController(daemonClient: daemonClient)
+    let telemetryStore = TelemetryStore(daemonClient: daemonClient)
 
     await startDaemonForApplication(
       daemonLifecycleController: daemonLifecycleController,
@@ -146,9 +146,9 @@ final class DaemonControlTests: XCTestCase {
   func test_should_not_complete_restart_before_expected_instance_health() async throws {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/bin/sleep")
     defer { testContext.removeTemporaryDirectory() }
-    let supervisorClient = ControlledReadinessSupervisorClient()
+    let daemonClient = ControlledReadinessDaemonClient()
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: supervisorClient,
+      daemonClient: daemonClient,
       daemonArguments: ["30"])
     defer { daemonLifecycleController.stopOwnedDaemon() }
     let restartCompletion = RestartCompletionState()
@@ -157,11 +157,11 @@ final class DaemonControlTests: XCTestCase {
       let restartMessage = try await daemonLifecycleController.restartDaemon()
       await restartCompletion.record(message: restartMessage)
     }
-    try await supervisorClient.waitUntilReadinessWasChecked()
+    try await daemonClient.waitUntilReadinessWasChecked()
 
     let messageBeforeHealth = await restartCompletion.message
     XCTAssertNil(messageBeforeHealth)
-    await supervisorClient.confirmExpectedInstanceHealth()
+    await daemonClient.confirmExpectedInstanceHealth()
     try await restartTask.value
     let messageAfterHealth = await restartCompletion.message
     XCTAssertNotNil(messageAfterHealth)
@@ -171,9 +171,9 @@ final class DaemonControlTests: XCTestCase {
   func test_should_complete_startup_and_restart_after_delayed_health() async throws {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/bin/sleep")
     defer { testContext.removeTemporaryDirectory() }
-    let startupClient = DelayedReadinessSupervisorClient(readyAfterCheckCount: 3)
+    let startupClient = DelayedReadinessDaemonClient(readyAfterCheckCount: 3)
     let startupController = testContext.makeController(
-      supervisorClient: startupClient,
+      daemonClient: startupClient,
       daemonArguments: ["30"],
       readinessTimeout: .seconds(2))
     defer { startupController.stopOwnedDaemon() }
@@ -182,9 +182,9 @@ final class DaemonControlTests: XCTestCase {
     XCTAssertTrue(startupController.ownsDaemon)
     startupController.stopOwnedDaemon()
 
-    let restartClient = DelayedReadinessSupervisorClient(readyAfterCheckCount: 3)
+    let restartClient = DelayedReadinessDaemonClient(readyAfterCheckCount: 3)
     let restartController = testContext.makeController(
-      supervisorClient: restartClient,
+      daemonClient: restartClient,
       daemonArguments: ["30"])
     defer { restartController.stopOwnedDaemon() }
     let restartMessage = try await restartController.restartDaemon()
@@ -197,7 +197,7 @@ final class DaemonControlTests: XCTestCase {
     let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/bin/sleep")
     defer { testContext.removeTemporaryDirectory() }
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: .max),
+      daemonClient: DelayedReadinessDaemonClient(readyAfterCheckCount: .max),
       daemonArguments: ["30"],
       readinessTimeout: .milliseconds(30))
     defer { daemonLifecycleController.stopOwnedDaemon() }
@@ -228,7 +228,7 @@ final class DaemonControlTests: XCTestCase {
     // a 10ms deadline elapsed before the just-spawned child reaped under load and the exit
     // was misreported as a readiness timeout (issue #738).
     let daemonLifecycleController = testContext.makeController(
-      supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: .max),
+      daemonClient: DelayedReadinessDaemonClient(readyAfterCheckCount: .max),
       readinessTimeout: .seconds(2))
 
     do {
@@ -259,7 +259,7 @@ final class DaemonControlTests: XCTestCase {
         daemonExecutablePath: "/usr/bin/false", applicationIdentity: applicationIdentity)
       defer { testContext.removeTemporaryDirectory() }
       let daemonLifecycleController = testContext.makeController(
-        supervisorClient: DelayedReadinessSupervisorClient(readyAfterCheckCount: .max))
+        daemonClient: DelayedReadinessDaemonClient(readyAfterCheckCount: .max))
 
       do {
         try await daemonLifecycleController.startDaemonIfNeeded()
@@ -277,7 +277,7 @@ final class DaemonControlTests: XCTestCase {
   @MainActor
   func test_should_report_when_an_unowned_server_does_not_stop() async {
     let daemonLifecycleController = DaemonLifecycleController(
-      supervisorClient: StuckExternalSupervisorClient(),
+      daemonClient: StuckExternalDaemonClient(),
       unownedDaemonStopPollCount: 3,
       unownedDaemonStopPollInterval: .milliseconds(1)
     )
@@ -312,12 +312,12 @@ private struct DaemonLifecycleTestContext {
 
   @MainActor
   func makeController(
-    supervisorClient: any SupervisorClient,
+    daemonClient: any DaemonClient,
     daemonArguments: [String]? = nil,
     readinessTimeout: Duration = .milliseconds(250)
   ) -> DaemonLifecycleController {
     DaemonLifecycleController(
-      supervisorClient: supervisorClient,
+      daemonClient: daemonClient,
       applicationIdentity: applicationIdentity,
       readinessTimeout: readinessTimeout,
       readinessPollInterval: .milliseconds(5),
@@ -335,7 +335,7 @@ private struct DaemonLifecycleTestContext {
   }
 }
 
-private actor DelayedReadinessSupervisorClient: SupervisorClient {
+private actor DelayedReadinessDaemonClient: DaemonClient {
   private let readyAfterCheckCount: Int
   private var readinessCheckCount = 0
 
@@ -343,7 +343,7 @@ private actor DelayedReadinessSupervisorClient: SupervisorClient {
     self.readyAfterCheckCount = readyAfterCheckCount
   }
 
-  func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
+  func fetchStatus() async throws -> DaemonStatusDocument { .unavailable }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     ConfigurationReloadResult(message: "Config reloaded")
@@ -359,11 +359,11 @@ private actor DelayedReadinessSupervisorClient: SupervisorClient {
   }
 }
 
-private actor ControlledReadinessSupervisorClient: SupervisorClient {
+private actor ControlledReadinessDaemonClient: DaemonClient {
   private var expectedInstanceIsReady = false
   private var readinessWasChecked = false
 
-  func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
+  func fetchStatus() async throws -> DaemonStatusDocument { .unavailable }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     ConfigurationReloadResult(message: "Config reloaded")
@@ -392,13 +392,13 @@ private actor ControlledReadinessSupervisorClient: SupervisorClient {
   }
 }
 
-private actor ExistingDelayedReadinessSupervisorClient: SupervisorClient {
+private actor ExistingDelayedReadinessDaemonClient: DaemonClient {
   private let readyAfterCheckCount: Int
   private var readinessCheckCount = 0
 
   init(readyAfterCheckCount: Int) { self.readyAfterCheckCount = readyAfterCheckCount }
 
-  func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
+  func fetchStatus() async throws -> DaemonStatusDocument { .unavailable }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     ConfigurationReloadResult(message: "Config reloaded")
@@ -429,7 +429,7 @@ private enum ReadinessTestError: Error {
 private func testApplicationIdentity(channel: ApplicationChannel) -> ApplicationIdentity {
   ApplicationIdentity(
     channel: channel,
-    supervisorPort: channel.defaultSupervisorPort,
+    daemonPort: channel.defaultDaemonPort,
     stateDirectoryName: channel.stateDirectoryName,
     version: "1.0.0",
     buildNumber: "1",
@@ -437,8 +437,8 @@ private func testApplicationIdentity(channel: ApplicationChannel) -> Application
     isDirty: false)
 }
 
-private struct StuckExternalSupervisorClient: SupervisorClient {
-  func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
+private struct StuckExternalDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument { .unavailable }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     ConfigurationReloadResult(message: "Config reloaded")

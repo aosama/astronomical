@@ -93,7 +93,7 @@ async fn run_dense_cached_token_report_journey() {
         "the warm request must stream model-generated text"
     );
 
-    // The performance record is the authoritative supervisor-side observation of
+    // The performance record is the authoritative daemon-side observation of
     // the worker Completed event, which is the same value the OpenAI usage surface
     // forwards as prompt_tokens_details.cached_tokens.
     let performance_records = read_performance_records(performance_log_directory.path());

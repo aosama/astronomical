@@ -168,13 +168,12 @@ async fn should_attribute_image_performance_only_after_finalization() {
         .expect("Cargo should provide the scripted worker fixture path");
     let performance_log_directory =
         tempfile::tempdir().expect("the performance log directory should be created");
-    let worker_handle =
-        crate::common::supervisor::launch_test_executor_with_performance_log_directory(
-            executable_path,
-            performance_log_directory.path(),
-        )
-        .await
-        .expect("the scripted worker should launch");
+    let worker_handle = crate::common::daemon::launch_test_executor_with_performance_log_directory(
+        executable_path,
+        performance_log_directory.path(),
+    )
+    .await
+    .expect("the scripted worker should launch");
     wait_for_worker_status(&worker_handle, WorkerHealthStatus::Ready).await;
 
     let mut image_receiver = worker_handle
@@ -259,7 +258,7 @@ async fn should_contain_an_image_request_without_a_bounded_cancellation_acknowle
     let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
     let worker_handle =
-        crate::common::supervisor::launch_test_executor_with_cancellation_acknowledgement_timeout(
+        crate::common::daemon::launch_test_executor_with_cancellation_acknowledgement_timeout(
             executable_path,
             Duration::from_millis(100),
         )
@@ -315,7 +314,7 @@ async fn should_cancel_image_execution_and_progress_stalls_with_the_shared_bound
         let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
             .expect("Cargo should provide the scripted worker fixture path");
         let worker_handle =
-            crate::common::supervisor::launch_test_executor_with_image_generation_timeouts(
+            crate::common::daemon::launch_test_executor_with_image_generation_timeouts(
                 executable_path,
                 Duration::from_millis(250),
                 timeouts,
@@ -354,14 +353,13 @@ async fn should_cancel_image_execution_and_progress_stalls_with_the_shared_bound
 async fn should_refresh_the_stall_deadline_for_every_monotonic_image_progress_event() {
     let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
-    let worker_handle =
-        crate::common::supervisor::launch_test_executor_with_image_generation_timeouts(
-            executable_path,
-            Duration::from_millis(250),
-            ImageGenerationTimeouts::new(Duration::from_secs(3), Duration::from_secs(1)),
-        )
-        .await
-        .expect("the scripted worker should launch");
+    let worker_handle = crate::common::daemon::launch_test_executor_with_image_generation_timeouts(
+        executable_path,
+        Duration::from_millis(250),
+        ImageGenerationTimeouts::new(Duration::from_secs(3), Duration::from_secs(1)),
+    )
+    .await
+    .expect("the scripted worker should launch");
     wait_for_worker_status(&worker_handle, WorkerHealthStatus::Ready).await;
 
     let mut image_receiver = worker_handle
@@ -494,7 +492,7 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
 pub(super) async fn launch_scripted_worker() -> astronomical_daemon::WorkerHandle {
     let executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
-    let worker_handle = crate::common::supervisor::launch_test_executor(executable_path)
+    let worker_handle = crate::common::daemon::launch_test_executor(executable_path)
         .await
         .expect("the scripted worker should launch");
     wait_for_worker_status(&worker_handle, WorkerHealthStatus::Ready).await;

@@ -2,7 +2,7 @@
 
 import Foundation
 
-final class StubSupervisorURLProtocol: URLProtocol, @unchecked Sendable {
+final class StubDaemonURLProtocol: URLProtocol, @unchecked Sendable {
   struct ResponseConfiguration {
     let statusCode: Int
     let responseBody: Data
@@ -46,7 +46,7 @@ final class StubSupervisorURLProtocol: URLProtocol, @unchecked Sendable {
 
   static func urlSessionConfiguration() -> URLSessionConfiguration {
     let urlSessionConfiguration = URLSessionConfiguration.ephemeral
-    urlSessionConfiguration.protocolClasses = [StubSupervisorURLProtocol.self]
+    urlSessionConfiguration.protocolClasses = [StubDaemonURLProtocol.self]
     return urlSessionConfiguration
   }
 

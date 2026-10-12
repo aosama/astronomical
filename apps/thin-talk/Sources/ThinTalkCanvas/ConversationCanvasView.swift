@@ -5,7 +5,7 @@ import WebKit
 /// The conversation canvas: one web view rendering the bundled HTML client.
 ///
 /// This is a dumb host, deliberately. The page owns the conversation state, the
-/// transcript rendering, and the supervisor conversation; Swift owns only what a
+/// transcript rendering, and the daemon conversation; Swift owns only what a
 /// web page cannot do for itself: reading and writing session files, the system
 /// pasteboard, opening external links, and injecting the runtime configuration.
 /// Everything else crosses the bridge as data.

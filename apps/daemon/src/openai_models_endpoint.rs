@@ -27,7 +27,7 @@ const CHAT_COMPLETIONS_ENDPOINT_PATH: &str = "/v1/chat/completions";
 const RESPONSES_ENDPOINT_PATH: &str = "/v1/responses";
 const IMAGE_GENERATIONS_ENDPOINT_PATH: &str = "/v1/images/generations";
 
-/// Lists every model the supervisor can currently advertise safely.
+/// Lists every model the daemon can currently advertise safely.
 pub(crate) async fn list_models(State(application_state): State<ApplicationState>) -> Response {
     let model_advertisement_created_at_unix_seconds = current_unix_seconds();
     match advertised_models_for_application_state(

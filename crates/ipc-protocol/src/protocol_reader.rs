@@ -7,7 +7,7 @@ use crate::{
     decode_command, decode_daemon_request, decode_daemon_response, decode_event,
 };
 
-/// Receives bounded, length-delimited JSON commands from the supervisor.
+/// Receives bounded, length-delimited JSON commands from the daemon.
 pub struct ProtocolReader<ReadTransport> {
     framed_reader: FramedRead<ReadTransport, LengthDelimitedCodec>,
 }
@@ -27,7 +27,7 @@ where
         }
     }
 
-    /// Reads the next supervisor command, or `None` when the transport closes cleanly.
+    /// Reads the next daemon command, or `None` when the transport closes cleanly.
     pub async fn next_command(&mut self) -> Result<Option<WorkerCommand>, ProtocolError> {
         let Some(serialized_command) = self.next_frame().await? else {
             return Ok(None);

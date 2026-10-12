@@ -1,9 +1,9 @@
 /**
  * The decoded `/v1/status` document used for the readiness handshake. Both keys
- * are optional in the type because the supervisor may answer with a partial
+ * are optional in the type because the daemon may answer with a partial
  * document; the handshake treats a missing key as a mismatch.
  */
-export class SupervisorStatus {
+export class DaemonStatus {
   public readonly channel: string | null;
   public readonly stateDirectory: string | null;
   public readonly status: string | null;
@@ -18,9 +18,9 @@ export class SupervisorStatus {
     this.status = init.status;
   }
 
-  public static fromPlain(plain: unknown): SupervisorStatus {
+  public static fromPlain(plain: unknown): DaemonStatus {
     if (typeof plain !== "object" || plain === null) {
-      return new SupervisorStatus({ channel: null, stateDirectory: null, status: null });
+      return new DaemonStatus({ channel: null, stateDirectory: null, status: null });
     }
     const record = plain as Record<string, unknown>;
     const application = record["application"];
@@ -30,6 +30,6 @@ export class SupervisorStatus {
     const stateDirectory =
       typeof applicationRecord["state_directory"] === "string" ? applicationRecord["state_directory"] : null;
     const status = typeof record["status"] === "string" ? record["status"] : null;
-    return new SupervisorStatus({ channel, stateDirectory, status });
+    return new DaemonStatus({ channel, stateDirectory, status });
   }
 }

@@ -5,8 +5,7 @@ use std::io;
 use thiserror::Error;
 
 use crate::{
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
 use super::{
@@ -21,7 +20,7 @@ pub struct DownloadManifestPreflight<CapacityQuery> {
     job_store: DownloadJobStore,
     disk_preflight: DownloadDiskPreflight<CapacityQuery>,
     hub: HuggingFaceHub,
-    attribution_log: SupervisorPerformanceAttributionLog,
+    attribution_log: DaemonPerformanceAttributionLog,
 }
 
 /// Typed failure from the ordered manifest-preflight journey.
@@ -52,7 +51,7 @@ where
         job_store: DownloadJobStore,
         disk_preflight: DownloadDiskPreflight<CapacityQuery>,
         hub: HuggingFaceHub,
-        attribution_log: SupervisorPerformanceAttributionLog,
+        attribution_log: DaemonPerformanceAttributionLog,
     ) -> Self {
         Self {
             job_store,
@@ -101,7 +100,7 @@ where
         let _initial_capacity = self
             .attribution_log
             .measure_blocking_operation(
-                SupervisorPerformanceOperation::DiskPreflight,
+                DaemonPerformanceOperation::DiskPreflight,
                 {
                     let disk_preflight = self.disk_preflight.clone();
                     let models_directory = models_directory.to_path_buf();
@@ -120,7 +119,7 @@ where
         let manifest_outcome = self
             .attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::ManifestFetch,
+                DaemonPerformanceOperation::ManifestFetch,
                 || {
                     self.hub.fetch_selected_manifest(
                         catalog_entry.huggingface_id(),
@@ -129,14 +128,14 @@ where
                     )
                 },
                 |manifest_outcome| match manifest_outcome {
-                    Ok(manifest) => SupervisorPerformanceMeasurement::validated_manifest_fetch(
+                    Ok(manifest) => DaemonPerformanceMeasurement::validated_manifest_fetch(
                         true,
                         catalog_entry.huggingface_id(),
                         catalog_entry.revision(),
                         manifest.files().len(),
                         manifest.total_bytes(),
                     ),
-                    Err(_) => SupervisorPerformanceMeasurement::validated_manifest_fetch(
+                    Err(_) => DaemonPerformanceMeasurement::validated_manifest_fetch(
                         false,
                         catalog_entry.huggingface_id(),
                         catalog_entry.revision(),
@@ -168,10 +167,10 @@ where
         let executable_preflight = DownloadExecutablePreflight::new(self.hub.clone());
         self.attribution_log
             .measure_async_operation(
-                SupervisorPerformanceOperation::ExecutablePreflight,
+                DaemonPerformanceOperation::ExecutablePreflight,
                 || executable_preflight.validate(manifest),
                 |validation_outcome| {
-                    SupervisorPerformanceMeasurement::validated_executable_preflight(
+                    DaemonPerformanceMeasurement::validated_executable_preflight(
                         validation_outcome.is_ok(),
                         catalog_entry.huggingface_id(),
                         catalog_entry.revision(),
@@ -195,7 +194,7 @@ where
         let _exact_capacity = self
             .attribution_log
             .measure_blocking_operation(
-                SupervisorPerformanceOperation::DiskPreflight,
+                DaemonPerformanceOperation::DiskPreflight,
                 {
                     let disk_preflight = self.disk_preflight.clone();
                     let models_directory = self.job_store.models_directory().to_path_buf();
@@ -244,7 +243,7 @@ where
 fn disk_measurement(
     catalog_entry: &DownloadCatalogEntry,
     capacity_outcome: &Result<DownloadDiskCapacityCheck, DownloadDiskPreflightError>,
-) -> SupervisorPerformanceMeasurement {
+) -> DaemonPerformanceMeasurement {
     let (is_success, required_bytes, available_bytes) = match capacity_outcome {
         Ok(capacity_check) => (
             true,
@@ -268,7 +267,7 @@ fn disk_measurement(
         ),
         Err(DownloadDiskPreflightError::ExactManifestRequired) => (false, 0, 0),
     };
-    SupervisorPerformanceMeasurement::validated_disk_preflight(
+    DaemonPerformanceMeasurement::validated_disk_preflight(
         is_success,
         catalog_entry.huggingface_id(),
         catalog_entry.revision(),

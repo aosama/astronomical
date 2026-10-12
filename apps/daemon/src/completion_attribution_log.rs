@@ -38,7 +38,7 @@ const COMPLETION_ARGUMENTS_FULL_LIMIT_BYTES: usize = 8_192;
 pub struct CompletionAttributionRecord {
     /// Unix epoch milliseconds when the record was written (request completion time).
     pub timestamp_millis: u64,
-    /// Supervisor-local monotonic request identifier.
+    /// Daemon-local monotonic request identifier.
     pub request_id: u64,
     /// The model that produced this generation.
     pub model_id: String,

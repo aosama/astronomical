@@ -53,15 +53,15 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
     .expect("daemon startup output should exist");
     assert!(startup_line.starts_with(DAEMON_STARTUP_PREFIX));
 
-    let supervisor_log_text = wait_for_supervisor_log_diagnostic(
+    let daemon_log_text = wait_for_daemon_log_diagnostic(
         development_state_directory.path(),
         WORKER_STDERR_DIAGNOSTIC,
     )
     .await;
 
-    assert!(supervisor_log_text.contains("worker process exited after closing its event stream"));
-    assert!(supervisor_log_text.contains("exit code 0"));
-    assert!(supervisor_log_text.contains(WORKER_STDERR_DIAGNOSTIC));
+    assert!(daemon_log_text.contains("worker process exited after closing its event stream"));
+    assert!(daemon_log_text.contains("exit code 0"));
+    assert!(daemon_log_text.contains(WORKER_STDERR_DIAGNOSTIC));
     daemon_process::terminate_daemon(&daemon_process);
     let _daemon_exit_status = daemon_process
         .wait()
@@ -69,34 +69,34 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
         .expect("the diagnostic daemon should be reaped");
 }
 
-async fn wait_for_supervisor_log_diagnostic(
+async fn wait_for_daemon_log_diagnostic(
     state_directory: &Path,
     expected_diagnostic: &str,
 ) -> String {
     let diagnostic_deadline = Instant::now() + Duration::from_secs(3);
     let log_directory = state_directory.join("logs");
     while Instant::now() < diagnostic_deadline {
-        let supervisor_log_text = read_supervisor_logs(&log_directory);
-        if supervisor_log_text.contains(expected_diagnostic) {
-            return supervisor_log_text;
+        let daemon_log_text = read_daemon_logs(&log_directory);
+        if daemon_log_text.contains(expected_diagnostic) {
+            return daemon_log_text;
         }
         sleep(Duration::from_millis(25)).await;
     }
-    panic!("supervisor log did not retain the expected worker diagnostic");
+    panic!("daemon log did not retain the expected worker diagnostic");
 }
 
-fn read_supervisor_logs(log_directory: &Path) -> String {
+fn read_daemon_logs(log_directory: &Path) -> String {
     let Ok(log_entries) = std::fs::read_dir(log_directory) else {
         return String::new();
     };
-    let mut supervisor_log_text = String::new();
+    let mut daemon_log_text = String::new();
     for log_entry in log_entries.flatten() {
         let file_name = log_entry.file_name();
-        if file_name.to_string_lossy().starts_with("supervisor.")
+        if file_name.to_string_lossy().starts_with("daemon.")
             && let Ok(log_text) = std::fs::read_to_string(log_entry.path())
         {
-            supervisor_log_text.push_str(&log_text);
+            daemon_log_text.push_str(&log_text);
         }
     }
-    supervisor_log_text
+    daemon_log_text
 }

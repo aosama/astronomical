@@ -12,10 +12,10 @@ use std::{
 };
 
 use astronomical_daemon::{
-    DiskCapacityQuery, DownloadCatalog, DownloadDiskPreflight, DownloadDiskPreflightError,
-    DownloadJobStore, DownloadManifestPreflight, DownloadManifestPreflightError, HubHttpRequest,
-    HubHttpResponse, HubTransport, HubTransportError, HubTransportFuture, HuggingFaceHub,
-    SupervisorPerformanceAttributionLog,
+    DaemonPerformanceAttributionLog, DiskCapacityQuery, DownloadCatalog, DownloadDiskPreflight,
+    DownloadDiskPreflightError, DownloadJobStore, DownloadManifestPreflight,
+    DownloadManifestPreflightError, HubHttpRequest, HubHttpResponse, HubTransport,
+    HubTransportError, HubTransportFuture, HuggingFaceHub,
 };
 use tempfile::TempDir;
 
@@ -54,7 +54,7 @@ async fn should_check_disk_before_hub_and_persist_exact_manifest_after_the_secon
         let written_attribution = Arc::new(Mutex::new(Vec::new()));
         let clock_call_count = Arc::new(AtomicUsize::new(0));
         let clock_call_count_for_clock = Arc::clone(&clock_call_count);
-        let attribution_log = SupervisorPerformanceAttributionLog::from_writer_and_clock(
+        let attribution_log = DaemonPerformanceAttributionLog::from_writer_and_clock(
             SharedWriter(Arc::clone(&written_attribution)),
             move || Ok(1_000 + clock_call_count_for_clock.fetch_add(1, Ordering::SeqCst) as u64),
         );
@@ -119,7 +119,7 @@ async fn should_stop_before_hub_io_when_initial_disk_admission_fails() {
                 available_bytes: Arc::new(Mutex::new([100].into())),
             }),
             HuggingFaceHub::new(transport.clone()),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         );
 
@@ -164,7 +164,7 @@ async fn should_stop_before_hub_io_when_initial_disk_admission_fails() {
                 available_bytes: Arc::new(Mutex::new([1_000, 1_000].into())),
             }),
             HuggingFaceHub::new(retry_transport.clone()),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         );
 
@@ -213,7 +213,7 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
                 available_bytes: Arc::new(Mutex::new([1_000, 5].into())),
             }),
             HuggingFaceHub::new(first_transport),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         );
 
@@ -251,7 +251,7 @@ async fn should_resume_persisted_exact_manifest_with_synchronized_staging_progre
                 available_bytes: Arc::new(Mutex::new([35].into())),
             }),
             HuggingFaceHub::new(resumed_transport.clone()),
-            SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+            DaemonPerformanceAttributionLog::open(test_directory.path(), false)
                 .expect("disabled attribution should construct"),
         );
 

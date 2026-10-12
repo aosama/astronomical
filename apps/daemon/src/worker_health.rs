@@ -18,7 +18,7 @@ pub(crate) use publisher::{
     publish_worker_expert_residency, record_prompt_work_reuse, record_serving_session,
 };
 
-/// Coarse worker availability state exposed by the supervisor readiness endpoint.
+/// Coarse worker availability state exposed by the daemon readiness endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerHealthStatus {
     /// The worker process is responsive but its inference engine is still loading.
@@ -62,11 +62,11 @@ impl WorkerHealthStatus {
 pub enum WorkerActivity {
     /// No generation request is active.
     Idle,
-    /// A request is active but no output has reached the supervisor yet.
+    /// A request is active but no output has reached the daemon yet.
     PromptProcessing,
     /// Prompt processing finished and expert ownership is being prepared for decode.
     GenerationPreparation,
-    /// At least one generated output has reached the supervisor.
+    /// At least one generated output has reached the daemon.
     Generating,
     /// Native image conditioning, denoising, decoding, or encoding is active.
     ImageGeneration,
@@ -94,7 +94,7 @@ pub enum ActiveRequestProgress {
         prompt_processing_phase: WorkerPromptProcessingPhase,
         processed_tokens: u32,
         total_tokens: u32,
-        /// Supervisor wall-clock origin used only for live status presentation.
+        /// Daemon wall-clock origin used only for live status presentation.
         request_started_at: Instant,
         elapsed_millis: u64,
         /// Present only after the engine completes and measures a prefill chunk.
@@ -215,7 +215,7 @@ impl PersistentPromptCacheSummary {
     }
 }
 
-/// Snapshot of the supervisor's current worker health assessment.
+/// Snapshot of the daemon's current worker health assessment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkerHealthSnapshot {
     /// Coarse worker availability state.

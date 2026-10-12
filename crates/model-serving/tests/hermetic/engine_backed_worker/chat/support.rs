@@ -64,12 +64,12 @@ pub(super) fn ready_event() -> WorkerEvent {
 }
 
 pub(super) async fn next_event<ReadTransport>(
-    supervisor_reader: &mut ProtocolReader<ReadTransport>,
+    daemon_reader: &mut ProtocolReader<ReadTransport>,
 ) -> WorkerEvent
 where
     ReadTransport: tokio::io::AsyncRead + Unpin,
 {
-    supervisor_reader
+    daemon_reader
         .next_event()
         .await
         .expect("the worker should write a valid event")
@@ -77,15 +77,15 @@ where
 }
 
 pub(super) async fn close_worker_transport<WriteTransport>(
-    supervisor_writer: ProtocolWriter<WriteTransport>,
+    daemon_writer: ProtocolWriter<WriteTransport>,
     worker_task: JoinHandle<Result<(), WorkerRuntimeError>>,
 ) where
     WriteTransport: AsyncWrite + Unpin,
 {
-    supervisor_writer
+    daemon_writer
         .close()
         .await
-        .expect("the supervisor should close the worker transport");
+        .expect("the daemon should close the worker transport");
     assert!(
         timeout(Duration::from_secs(1), worker_task)
             .await

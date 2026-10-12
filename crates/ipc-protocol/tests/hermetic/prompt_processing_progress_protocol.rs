@@ -54,16 +54,16 @@ async fn should_round_trip_prefill_progress_before_the_first_completed_forward()
 }
 
 async fn assert_round_tripped_worker_event(worker_event: WorkerEvent) {
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
         .await
         .expect("a prompt-processing progress event should be written");
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the prompt-processing progress event should decode"),

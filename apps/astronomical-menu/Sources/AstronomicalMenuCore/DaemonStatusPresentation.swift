@@ -3,7 +3,7 @@
 
 import Foundation
 
-extension SupervisorStatusDocument {
+extension DaemonStatusDocument {
   var isActive: Bool {
     activity == "prompt_processing" || activity == "generation_preparation"
       || activity == "generating" || activity == "image_generation"

@@ -1,7 +1,7 @@
 //! Shared production-boundary harness for real-model REST acceptance journeys.
 //!
 //! These tests do not call the model object directly. They launch the real worker
-//! subprocess, connect it to the real supervisor/router, send public HTTP requests,
+//! subprocess, connect it to the real daemon/router, send public HTTP requests,
 //! and observe public status. This is the widest local boundary that proves a user
 //! can actually serve a configured model after memory-policy changes.
 //!
@@ -125,7 +125,7 @@ pub(crate) async fn launch_real_model_rest_server_for_models(
     let mut worker_startup_configuration = resolved_runtime_config.worker_startup_configuration();
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         Some(maximum_mlx_memory_bytes);
-    // Keep the supervisor record beside the isolated worker logs so acceptance
+    // Keep the daemon record beside the isolated worker logs so acceptance
     // journeys can reconcile public request timing with worker attribution after
     // an orderly stop. The entire directory remains owned by the test tempdir.
     let performance_log_directory = runtime_config_resolver.instance_paths().logging_directory();

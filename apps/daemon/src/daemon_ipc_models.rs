@@ -18,13 +18,12 @@ use crate::{
         DaemonIpcGenerationContext, send_terminal_streaming_response,
         unknown_model_rejection_reason,
     },
+    daemon_performance_attribution::{
+        DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
+    },
     library::{
         CatalogEntryProjection, DownloadCatalog, DownloadCatalogEntry, DownloadJob,
         LibraryDownloadCoordinator, requestable_model_id_from_huggingface_id,
-    },
-    supervisor_performance_attribution::{
-        SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-        SupervisorPerformanceOperation,
     },
     worker_health::WorkerHealthSnapshot,
 };
@@ -44,18 +43,18 @@ pub(crate) async fn send_request_rejection(
 /// Lists the models discovered on this machine with their resident marker.
 pub(super) async fn handle_models_list(
     generation_context: &DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
-    let listed_models = supervisor_attribution_log
+    let listed_models = daemon_attribution_log
         .measure_async_operation_best_effort(
-            SupervisorPerformanceOperation::DaemonIpcModelsList,
+            DaemonPerformanceOperation::DaemonIpcModelsList,
             || async {
                 let health_snapshot = generation_context.executor.worker_health_snapshot();
                 let discovered_models = live_discovered_models(generation_context);
                 build_listed_models(&health_snapshot, &discovered_models)
             },
-            |_| SupervisorPerformanceMeasurement::success(),
+            |_| DaemonPerformanceMeasurement::success(),
         )
         .await;
     let list_response = DaemonResponse::ModelsList {
@@ -93,12 +92,12 @@ fn build_listed_models(
 /// Lists the release download catalog with local readiness per entry.
 pub(super) async fn handle_catalog(
     generation_context: &DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
-    let catalog_response = supervisor_attribution_log
+    let catalog_response = daemon_attribution_log
         .measure_async_operation_best_effort(
-            SupervisorPerformanceOperation::DaemonIpcCatalog,
+            DaemonPerformanceOperation::DaemonIpcCatalog,
             || async {
                 let current_job = active_download_job(generation_context).await;
                 let validated_publications =
@@ -112,7 +111,7 @@ pub(super) async fn handle_catalog(
                 );
                 build_catalog_response(&projections)
             },
-            |_| SupervisorPerformanceMeasurement::success(),
+            |_| DaemonPerformanceMeasurement::success(),
         )
         .await;
     send_terminal_streaming_response(streaming_response_writer, &catalog_response).await
@@ -148,7 +147,7 @@ fn build_catalog_response(projections: &[CatalogEntryProjection]) -> DaemonRespo
 /// the same catalog entry. Rejects when a different download is active.
 pub(super) async fn handle_download_start(
     generation_context: &DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
     model_id: String,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
@@ -175,15 +174,15 @@ pub(super) async fn handle_download_start(
         .await;
     };
     let huggingface_id = catalog_entry.huggingface_id().to_owned();
-    let start_outcome = supervisor_attribution_log
+    let start_outcome = daemon_attribution_log
         .measure_async_operation_best_effort(
-            SupervisorPerformanceOperation::DaemonIpcDownloadStart,
+            DaemonPerformanceOperation::DaemonIpcDownloadStart,
             || start_or_resume_download(download_coordinator, &huggingface_id),
             |outcome| {
                 if outcome.is_ok() {
-                    SupervisorPerformanceMeasurement::success()
+                    DaemonPerformanceMeasurement::success()
                 } else {
-                    SupervisorPerformanceMeasurement::failure()
+                    DaemonPerformanceMeasurement::failure()
                 }
             },
         )
@@ -257,14 +256,14 @@ async fn start_or_resume_download(
 /// Reports the active library download job, if any.
 pub(super) async fn handle_download_status(
     generation_context: &DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
-    let download_job = supervisor_attribution_log
+    let download_job = daemon_attribution_log
         .measure_async_operation_best_effort(
-            SupervisorPerformanceOperation::DaemonIpcDownloadStatus,
+            DaemonPerformanceOperation::DaemonIpcDownloadStatus,
             || active_download_job(generation_context),
-            |_| SupervisorPerformanceMeasurement::success(),
+            |_| DaemonPerformanceMeasurement::success(),
         )
         .await;
     let download_response = DaemonResponse::DownloadStatus {
@@ -289,13 +288,13 @@ fn download_job_to_wire(download_job: &DownloadJob) -> DaemonDownloadJob {
 /// discovered models, so manual installs can also become the default.
 pub(super) async fn handle_default_model_set(
     generation_context: &DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
     model_id: String,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
-    let set_outcome = supervisor_attribution_log
+    let set_outcome = daemon_attribution_log
         .measure_async_operation_best_effort(
-            SupervisorPerformanceOperation::DaemonIpcDefaultModelSet,
+            DaemonPerformanceOperation::DaemonIpcDefaultModelSet,
             || async {
                 let normalized_model_id = normalize_default_model_id(
                     generation_context.download_catalog.as_ref(),
@@ -314,9 +313,9 @@ pub(super) async fn handle_default_model_set(
             },
             |outcome| {
                 if outcome.is_ok() {
-                    SupervisorPerformanceMeasurement::success()
+                    DaemonPerformanceMeasurement::success()
                 } else {
-                    SupervisorPerformanceMeasurement::failure()
+                    DaemonPerformanceMeasurement::failure()
                 }
             },
         )

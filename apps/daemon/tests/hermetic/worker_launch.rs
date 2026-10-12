@@ -184,7 +184,7 @@ async fn should_contain_a_worker_that_does_not_acknowledge_a_memory_limit_update
             .update_mlx_memory_limit(30_000_000_000, "timeout-memory-generation".to_owned()),
     )
     .await
-    .expect("the supervisor should bound the acknowledgement wait")
+    .expect("the daemon should bound the acknowledgement wait")
     .expect_err("an unacknowledged memory update should fail");
 
     assert!(

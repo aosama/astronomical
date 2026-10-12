@@ -6,7 +6,7 @@
 
 // The workspace confines unsafe code to runtime-integration's MLX-C boundary,
 // and this module is model-serving's single documented exception, mirroring the
-// supervisor's system-telemetry module: sampling evidence is inseparable from
+// daemon's system-telemetry module: sampling evidence is inseparable from
 // the accounting syscall and C layout that produce it, and splitting the
 // snapshot from its syscall would put an FFI seam through the evidence path.
 // The unsafe surface never escapes this file — one extern declaration, one

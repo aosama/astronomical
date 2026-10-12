@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::{ChatGenerationStreamErrorCode, ChatGenerationStreamEvent};
 
-/// Encodes bounded supervisor chat events into OpenAI-compatible SSE chunks.
+/// Encodes bounded daemon chat events into OpenAI-compatible SSE chunks.
 pub(crate) struct OpenAiChatStreamEncoder {
     completion_id: String,
     created: u64,

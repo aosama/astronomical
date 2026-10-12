@@ -12,11 +12,11 @@ use std::{
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
 use astronomical_daemon::{
     ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog,
-    DaemonIpcGenerationContext, DownloadCatalog, DownloadCatalogError, GenerationPerformanceLog,
+    DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement,
+    DaemonPerformanceOperation, DownloadCatalog, DownloadCatalogError, GenerationPerformanceLog,
     ImageGenerationTimeouts, LibraryDownloadCoordinatorError, LibraryModelDiscoveryRefresh,
     ReqwestHubTransportBuildError, ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver,
-    ShutdownController, SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation, WorkerControlError, WorkerHandle,
+    ShutdownController, WorkerControlError, WorkerHandle,
     build_application_with_full_control_and_library_download, start_daemon_ipc_service,
 };
 use astronomical_ipc_protocol::DaemonTransportError;
@@ -100,7 +100,7 @@ fn initialize_tracing(
     std::fs::create_dir_all(logging_config.directory()).map_err(DaemonError::CreateLogDirectory)?;
     let file_appender = tracing_appender::rolling::Builder::new()
         .rotation(tracing_appender::rolling::Rotation::HOURLY)
-        .filename_prefix("supervisor")
+        .filename_prefix("daemon")
         .filename_suffix("log")
         .max_log_files(logging_config.retained_files())
         .build(logging_config.directory())
@@ -132,23 +132,23 @@ async fn run_daemon(
     user_config: AstronomicalConfig,
 ) -> Result<(), DaemonError> {
     let logging_config = user_config.logging()?;
-    let supervisor_attribution_log = SupervisorPerformanceAttributionLog::open(
+    let daemon_attribution_log = DaemonPerformanceAttributionLog::open(
         logging_config.directory(),
         user_config.performance_attribution_enabled(),
     )
-    .map_err(DaemonError::CreateSupervisorPerformanceAttributionLog)?;
-    let download_catalog = supervisor_attribution_log
+    .map_err(DaemonError::CreateDaemonPerformanceAttributionLog)?;
+    let download_catalog = daemon_attribution_log
         .measure_operation(
-            SupervisorPerformanceOperation::LibraryCatalogLoad,
+            DaemonPerformanceOperation::LibraryCatalogLoad,
             DownloadCatalog::load_bundled,
             |catalog_outcome| match catalog_outcome {
-                Ok(download_catalog) => SupervisorPerformanceMeasurement::successful_catalog_load(
+                Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
                 ),
-                Err(_) => SupervisorPerformanceMeasurement::failure(),
+                Err(_) => DaemonPerformanceMeasurement::failure(),
             },
         )
-        .map_err(DaemonError::RecordSupervisorPerformanceAttribution)?
+        .map_err(DaemonError::RecordDaemonPerformanceAttribution)?
         .map_err(DaemonError::LoadDownloadCatalog)?;
     let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_instance(
         instance_paths.clone(),
@@ -157,18 +157,18 @@ async fn run_daemon(
     let resolved_runtime_config = runtime_config_resolver
         .resolve(&user_config)
         .map_err(DaemonError::ResolveRuntimeConfig)?;
-    let supervisor_bind_address = resolved_runtime_config
+    let daemon_bind_address = resolved_runtime_config
         .bind_address
         .parse::<SocketAddr>()
         .map_err(DaemonError::ParseResolvedBindAddress)?;
-    let listener = TcpListener::bind(supervisor_bind_address)
+    let listener = TcpListener::bind(daemon_bind_address)
         .await
-        .map_err(DaemonError::BindSupervisor)?;
-    let bound_supervisor_address = listener
+        .map_err(DaemonError::BindDaemon)?;
+    let bound_daemon_address = listener
         .local_addr()
-        .map_err(DaemonError::ReadBoundSupervisorAddress)?;
+        .map_err(DaemonError::ReadBoundDaemonAddress)?;
     tracing::info!(
-        bind_address = %bound_supervisor_address,
+        bind_address = %bound_daemon_address,
         channel = instance_paths
             .runtime_instance()
             .map_or("explicit", astronomical_config::AstronomicalRuntimeInstance::as_str),
@@ -224,7 +224,7 @@ async fn run_daemon(
             hub_transport.clone(),
             hub_transport,
             discovery_refresh,
-            supervisor_attribution_log.clone(),
+            daemon_attribution_log.clone(),
         ));
     library_download_coordinator
         .recover_startup_state()
@@ -243,7 +243,7 @@ async fn run_daemon(
             library_download_coordinator: Some(Arc::clone(&library_download_coordinator)),
             instance_paths: instance_paths.clone(),
         },
-        &supervisor_attribution_log,
+        &daemon_attribution_log,
     )
     .await
     .map_err(DaemonError::StartDaemonIpc)?;
@@ -257,7 +257,7 @@ async fn run_daemon(
         library_download_coordinator,
     );
 
-    println!("astronomicald listening on http://{bound_supervisor_address}");
+    println!("astronomicald listening on http://{bound_daemon_address}");
 
     let serve_result = axum::serve(listener, application)
         .with_graceful_shutdown(shutdown_signal(internal_shutdown_receiver))
@@ -329,8 +329,8 @@ enum DaemonError {
     #[error("invalid Astronomical configuration: {0}")]
     Configuration(#[from] AstronomicalConfigError),
 
-    #[error("failed to bind supervisor listener: {0}")]
-    BindSupervisor(#[source] io::Error),
+    #[error("failed to bind daemon listener: {0}")]
+    BindDaemon(#[source] io::Error),
 
     #[error("failed to resolve current daemon executable path: {0}")]
     ResolveCurrentExecutable(#[source] io::Error),
@@ -338,10 +338,10 @@ enum DaemonError {
     #[error("current daemon executable path does not have a parent directory")]
     MissingExecutableDirectory,
 
-    #[error("failed to read bound supervisor listener address: {0}")]
-    ReadBoundSupervisorAddress(#[source] io::Error),
+    #[error("failed to read bound daemon listener address: {0}")]
+    ReadBoundDaemonAddress(#[source] io::Error),
 
-    #[error("failed to serve supervisor HTTP listener: {0}")]
+    #[error("failed to serve daemon HTTP listener: {0}")]
     ServeHttp(#[source] io::Error),
 
     #[error("failed to shut down inference worker: {0}")]
@@ -358,10 +358,10 @@ enum DaemonError {
     CreatePerformanceLog(#[source] io::Error),
     #[error("failed to create the completion attribution log: {0}")]
     CreateCompletionAttributionLog(#[source] io::Error),
-    #[error("failed to create the supervisor performance-attribution log: {0}")]
-    CreateSupervisorPerformanceAttributionLog(#[source] io::Error),
-    #[error("failed to record supervisor performance attribution: {0}")]
-    RecordSupervisorPerformanceAttribution(#[source] io::Error),
+    #[error("failed to create the daemon performance-attribution log: {0}")]
+    CreateDaemonPerformanceAttributionLog(#[source] io::Error),
+    #[error("failed to record daemon performance attribution: {0}")]
+    RecordDaemonPerformanceAttribution(#[source] io::Error),
     #[error("invalid bundled download catalog: {0}")]
     LoadDownloadCatalog(#[source] DownloadCatalogError),
     #[error("failed to construct the Hugging Face transfer client: {0}")]
@@ -370,7 +370,7 @@ enum DaemonError {
     RecoverLibraryDownload(#[source] LibraryDownloadCoordinatorError),
     #[error("failed to resolve runtime configuration: {0}")]
     ResolveRuntimeConfig(#[source] ResolvedRuntimeConfigError),
-    #[error("resolved supervisor bind address became invalid: {0}")]
+    #[error("resolved daemon bind address became invalid: {0}")]
     ParseResolvedBindAddress(#[source] std::net::AddrParseError),
     #[error("failed to initialize Astronomical tracing: {reason}")]
     InitializeTracing { reason: String },

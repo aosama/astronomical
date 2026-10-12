@@ -28,7 +28,7 @@ A new opt-in configuration flag splits prompt-processing time by stage (attentio
 
 ## Clarity renames
 
-Background service components are renamed for clarity: `astronomical-supervisor` becomes `astronomical-daemon`, and the command-line app becomes `astronomical-cli`. Configuration files, on-disk state, and daily workflows are unaffected.
+The background service package is now `astronomical-daemon`, and the command-line app is `astronomical-cli`. Configuration files, on-disk state, and daily workflows are unaffected.
 
 ## Compatibility
 
