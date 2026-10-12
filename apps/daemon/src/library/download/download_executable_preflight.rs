@@ -16,7 +16,7 @@ use astronomical_config::{
 use serde_json::Value;
 use thiserror::Error;
 
-use super::{HuggingFaceHub, HuggingFaceHubError, hugging_face_hub::HuggingFaceManifest};
+use crate::library::{HuggingFaceHub, HuggingFaceHubError, HuggingFaceManifest};
 
 /// Diffusers pipelines carry both files; disk discovery classifies `model_index.json` first, and
 /// the gate must apply that same precedence or it could reject an executable pipeline.

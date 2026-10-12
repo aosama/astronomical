@@ -4,16 +4,16 @@ use std::{fs, path::PathBuf};
 
 use super::{
     DownloadJob, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
-    DownloadPublicationRefresh,
     download_job_store_filesystem::{
         ensure_descendant_directory_or_absent, metadata_without_symlink, remove_file_if_present,
         synchronize_directory,
     },
     download_job_store_lock::acquire_existing_store_transaction_lock,
-    download_payload_verification::verify_download_job_at_directory,
-    download_publication_provenance::write_publication_provenance,
-    download_staged_file::create_descendant_directories,
 };
+use crate::library::DownloadPublicationRefresh;
+use crate::library::download::download_publication_provenance::write_publication_provenance;
+use crate::library::download::transfer::download_payload_verification::verify_download_job_at_directory;
+use crate::library::download::transfer::download_staged_file::create_descendant_directories;
 
 impl DownloadJobStore {
     /// Persists publication intent after preparing new staging or digest-matching prior output.

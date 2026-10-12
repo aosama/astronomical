@@ -10,10 +10,9 @@ use std::{
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
-use super::{
-    DownloadFileDigest, DownloadJob, DownloadPayloadTransferError,
-    download_job_store_filesystem::safely_join_existing_path,
-};
+use super::{DownloadFileDigest, DownloadPayloadTransferError};
+use crate::library::DownloadJob;
+use crate::library::download::job::download_job_store_filesystem::safely_join_existing_path;
 
 pub(super) fn verify_download_job(
     models_directory: &Path,
@@ -23,7 +22,7 @@ pub(super) fn verify_download_job(
     verify_download_job_at_directory(&staging_directory, download_job)
 }
 
-pub(super) fn verify_download_job_at_directory(
+pub(in crate::library::download) fn verify_download_job_at_directory(
     download_directory: &Path,
     download_job: &DownloadJob,
 ) -> Result<(), DownloadPayloadTransferError> {
