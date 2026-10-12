@@ -35,6 +35,7 @@ mod worker_cancellation;
 mod worker_health_snapshot;
 mod worker_launch;
 mod worker_memory_demotion;
+mod worker_memory_demotion_support;
 mod worker_memory_limit_model_swap;
 mod worker_model_swap;
 mod worker_replacement;
