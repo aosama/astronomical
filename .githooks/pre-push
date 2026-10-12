@@ -1,0 +1,44 @@
+#!/usr/bin/env sh
+
+set -eu
+
+REPOSITORY_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+    printf '%s\n' '[pre-push] status=failed reason=not-a-git-worktree' >&2
+    exit 1
+}
+
+# Every push triggers a paid GitHub Actions round trip; a compile failure that
+# one local `cargo verify` compile would have caught wastes that money and
+# several minutes of wall clock. Gate the push on the full workspace compile
+# across all targets. ASTRONOMICAL_SKIP_PRE_PUSH=1 escapes deliberately, for
+# example when pushing a branch whose failures are the subject under test.
+if [ "${ASTRONOMICAL_SKIP_PRE_PUSH:-0}" = "1" ]; then
+    printf '%s\n' '[pre-push] status=skipped reason=ASTRONOMICAL_SKIP_PRE_PUSH=1'
+    exit 0
+fi
+
+printf '%s\n' "[pre-push] status=start check=cargo-verify root=${REPOSITORY_ROOT}"
+started_epoch_seconds="$(date +%s)"
+if (cd "${REPOSITORY_ROOT}" && cargo verify); then
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-push] status=success check=cargo-verify elapsed_seconds=${elapsed_seconds}"
+else
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-push] status=failed check=cargo-verify elapsed_seconds=${elapsed_seconds}" >&2
+    printf '%s\n' '[pre-push] hint=fix the compile errors locally before spending a GitHub Actions run' >&2
+    exit 1
+fi
+
+# Dependency bumps change the generated license notices; a stale digest fails
+# the CI notices gate, so prove it fresh here for one local digest comparison.
+printf '%s\n' '[pre-push] status=start check=rust-dependency-notices-digest'
+started_epoch_seconds="$(date +%s)"
+if (cd "${REPOSITORY_ROOT}" && sh scripts/ci/generate-rust-dependency-notices.sh --check); then
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-push] status=success check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}"
+    exit 0
+fi
+elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+printf '%s\n' "[pre-push] status=failed check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}" >&2
+printf '%s\n' '[pre-push] hint=run scripts/ci/generate-rust-dependency-notices.sh and commit the result' >&2
+exit 1
