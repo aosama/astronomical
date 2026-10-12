@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::application::ApplicationState;
 
-use super::{DownloadJob, DownloadJobPublicErrorCode, LibraryDownloadCoordinatorError};
+use crate::library::{DownloadJob, DownloadJobPublicErrorCode, LibraryDownloadCoordinatorError};
 
 const MAXIMUM_DOWNLOAD_CONTROL_BODY_BYTES: usize = 4_096;
 

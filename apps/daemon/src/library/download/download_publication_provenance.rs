@@ -8,17 +8,17 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use super::{
-    DownloadJobStoreError,
-    download_job_store_filesystem::{metadata_without_symlink, synchronize_directory},
-    download_staged_file::create_descendant_directories,
+use crate::library::DownloadJobStoreError;
+use crate::library::download::job::download_job_store_filesystem::{
+    metadata_without_symlink, synchronize_directory,
 };
+use crate::library::download::transfer::download_staged_file::create_descendant_directories;
 
 const CONFIG_REVISION_METADATA_PATH: &str = ".cache/huggingface/download/config.json.metadata";
 const LIBRARY_PROVENANCE_FILE_NAME: &str = ".astronomical-library-provenance.json";
 static NEXT_PROVENANCE_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
-pub(super) fn write_publication_provenance(
+pub(in crate::library::download) fn write_publication_provenance(
     model_directory: &Path,
     provider_model_id: &str,
     revision: &str,

@@ -11,7 +11,8 @@ use std::{
 use thiserror::Error;
 use tokio::{sync::Mutex, task::JoinHandle};
 
-use super::{
+use crate::DaemonPerformanceAttributionLog;
+use crate::library::{
     DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadDiskPreflight,
     DownloadExecutablePreflightError, DownloadJob, DownloadJobPublicErrorCode, DownloadJobState,
     DownloadJobStore, DownloadJobStoreError, DownloadManifestPreflight,
@@ -19,7 +20,6 @@ use super::{
     DownloadProgressSnapshot, DownloadPublication, DownloadPublicationRefresh,
     DownloadTransferControl, HubPayloadTransport, HubTransport, HuggingFaceHub,
 };
-use crate::DaemonPerformanceAttributionLog;
 
 #[derive(Clone)]
 struct SharedDiskCapacityQuery(Arc<dyn DiskCapacityQuery>);
@@ -386,9 +386,12 @@ fn preflight_public_error(
 }
 
 fn hub_preflight_public_error(
-    hub_error: &super::HuggingFaceHubError,
+    hub_error: &crate::library::HuggingFaceHubError,
 ) -> DownloadJobPublicErrorCode {
-    if matches!(hub_error, super::HuggingFaceHubError::DownloadGated) {
+    if matches!(
+        hub_error,
+        crate::library::HuggingFaceHubError::DownloadGated
+    ) {
         DownloadJobPublicErrorCode::DownloadGated
     } else {
         DownloadJobPublicErrorCode::DownloadFailed

@@ -8,7 +8,7 @@ use std::{
 
 use thiserror::Error;
 
-use super::{DownloadJobStore, DownloadJobStoreError};
+use crate::library::{DownloadJobStore, DownloadJobStoreError};
 use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };

@@ -7,15 +7,16 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    DownloadFileDigest, DownloadPathSelection,
-    download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision},
-    download_file_digest::is_lowercase_hex,
-    download_job::MAXIMUM_DOWNLOAD_JOB_BYTES,
     hub_transport::{HubHttpRequest, HubHttpResponse, HubTransport, HubTransportError},
     hugging_face_hub_bounds::{
         estimated_durable_file_metadata_bytes, has_ancestor_path, has_descendant_path,
         is_canonical_ascii_path, parse_next_link, validate_tree_page_url,
     },
+};
+use crate::library::download::job::download_job::MAXIMUM_DOWNLOAD_JOB_BYTES;
+use crate::library::download::transfer::download_file_digest::is_lowercase_hex;
+use crate::library::{
+    DownloadFileDigest, DownloadPathSelection, is_valid_huggingface_id, is_valid_immutable_revision,
 };
 
 const HUGGING_FACE_ORIGIN: &str = "https://huggingface.co";
