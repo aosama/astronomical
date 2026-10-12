@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_daemon::{
+use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 use tokio::sync::Notify;
