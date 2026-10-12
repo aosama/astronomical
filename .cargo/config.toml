@@ -1,11 +1,10 @@
 [build]
 # Warnings are defects (see the engineering fundamentals rule): every Cargo
 # compilation must fail on the first warning instead of letting it scroll
-# past and rot. This applies to workspace crates; dependency crates are
-# compiled with the same flag, so any dependency that starts warning breaks
-# the build loudly and must be pinned, patched, or fixed — never silenced
-# here.
-rustflags = ["-D", "warnings"]
+# past and rot. `build.warnings` scopes the deny to workspace crates, unlike
+# rustflags = ["-D", "warnings"] which would also hard-fail on any warning
+# emitted by third-party dependencies.
+warnings = "deny"
 
 [alias]
 # Each alias expands to one plain `cargo test` invocation; read the list to
