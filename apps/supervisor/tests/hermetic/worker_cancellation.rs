@@ -14,7 +14,7 @@ use crate::common::supervisor::{
 
 #[tokio::test]
 async fn should_replace_a_worker_that_does_not_acknowledge_cancellation() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor_with_cancellation_acknowledgement_timeout(
         worker_executable_path,
@@ -48,7 +48,7 @@ async fn should_replace_a_worker_that_does_not_acknowledge_cancellation() {
 
 #[tokio::test]
 async fn should_keep_worker_ready_when_prefill_cancellation_acknowledgement_is_delayed() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
         .await
@@ -86,7 +86,7 @@ async fn should_keep_worker_ready_when_prefill_cancellation_acknowledgement_is_d
 
 #[tokio::test]
 async fn should_replace_a_worker_after_an_unexpected_cancellation_event() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
         .await
@@ -126,7 +126,7 @@ async fn should_replace_a_worker_after_an_unexpected_cancellation_event() {
 
 #[tokio::test]
 async fn should_keep_worker_ready_when_cancellation_publishes_prompt_cache_stats() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
         .await
@@ -172,7 +172,7 @@ async fn should_keep_worker_ready_when_cancellation_publishes_prompt_cache_stats
 
 #[tokio::test]
 async fn should_keep_worker_ready_when_cancellation_publishes_mlx_memory() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
         .await
@@ -203,7 +203,7 @@ async fn should_keep_worker_ready_when_cancellation_publishes_mlx_memory() {
 
 #[tokio::test]
 async fn should_keep_worker_ready_when_cancellation_clears_mlx_memory() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
         .await

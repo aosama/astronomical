@@ -220,7 +220,7 @@ impl CacheClearTestContext {
 
 async fn launch_cache_clear_application() -> CacheClearTestContext {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temporary_directory = tempfile::tempdir().expect("test directory should be created");

@@ -110,7 +110,7 @@ fn initialize_tracing(
     let (file_writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
         .buffered_lines_limit(logging_config.buffered_line_limit())
         .lossy(true)
-        .thread_name("astronomical-supervisor-log-writer")
+        .thread_name("astronomical-daemon-log-writer")
         .finish(file_appender);
     let filter = EnvFilter::new(logging_config.level().as_str());
     fmt()

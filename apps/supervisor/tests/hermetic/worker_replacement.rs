@@ -38,7 +38,7 @@ async fn should_replace_the_trusted_worker_only_after_exact_candidate_acknowledg
     let acknowledged_configuration = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-idle-worker"),
+            fixture_path("astronomical-daemon-idle-worker"),
             candidate_catalog,
             startup_configuration(CANDIDATE_GENERATION, &test_context.temporary_directory),
         )
@@ -69,7 +69,7 @@ async fn should_accept_candidate_configuration_before_initial_readiness() {
     let acknowledged_configuration = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-replacement-ready-worker"),
+            fixture_path("astronomical-daemon-replacement-ready-worker"),
             model_policy_catalog(CANDIDATE_MODEL_ID),
             startup_configuration(
                 CONFIGURATION_BEFORE_READY_GENERATION,
@@ -97,7 +97,7 @@ async fn should_match_the_exact_tagged_flux_runtime_configuration_during_replace
     let acknowledged_configuration = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-replacement-ready-worker"),
+            fixture_path("astronomical-daemon-replacement-ready-worker"),
             flux_model_policy_catalog("reviewed-revision"),
             startup_configuration(MATCHING_FLUX_GENERATION, &test_context.temporary_directory),
         )
@@ -127,7 +127,7 @@ async fn should_reject_flux_replacement_when_the_acknowledged_revision_differs()
     let replacement_error = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-replacement-ready-worker"),
+            fixture_path("astronomical-daemon-replacement-ready-worker"),
             flux_model_policy_catalog("different-revision"),
             startup_configuration(MATCHING_FLUX_GENERATION, &test_context.temporary_directory),
         )
@@ -177,7 +177,7 @@ async fn should_reject_ready_candidate_without_matching_loaded_model_acknowledge
     let replacement_error = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-replacement-ready-worker"),
+            fixture_path("astronomical-daemon-replacement-ready-worker"),
             model_policy_catalog(CANDIDATE_MODEL_ID),
             startup_configuration(
                 INCONSISTENT_READY_GENERATION,
@@ -205,7 +205,7 @@ async fn should_reap_mismatched_candidate_and_keep_trusted_worker_serving() {
     let replacement_error = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-replacement-ready-worker"),
+            fixture_path("astronomical-daemon-replacement-ready-worker"),
             model_policy_catalog(CANDIDATE_MODEL_ID),
             startup_configuration(CANDIDATE_GENERATION, &test_context.temporary_directory),
         )
@@ -231,7 +231,7 @@ async fn should_keep_the_trusted_worker_when_candidate_readiness_times_out() {
     let replacement_error = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-loading-forever-worker"),
+            fixture_path("astronomical-daemon-loading-forever-worker"),
             model_policy_catalog(CANDIDATE_MODEL_ID),
             startup_configuration(CANDIDATE_GENERATION, &test_context.temporary_directory),
         )
@@ -252,7 +252,7 @@ async fn should_keep_the_trusted_worker_when_candidate_exits_before_acknowledgem
     let replacement_error = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-mismatched-ready-worker"),
+            fixture_path("astronomical-daemon-mismatched-ready-worker"),
             model_policy_catalog(CANDIDATE_MODEL_ID),
             startup_configuration(CANDIDATE_GENERATION, &test_context.temporary_directory),
         )
@@ -277,7 +277,7 @@ async fn should_reject_generation_scoped_candidate_events_and_keep_trusted_worke
     let replacement_error = test_context
         .worker_handle
         .restart_worker_with_startup_configuration(
-            fixture_path("astronomical-supervisor-replacement-ready-worker"),
+            fixture_path("astronomical-daemon-replacement-ready-worker"),
             model_policy_catalog(CANDIDATE_MODEL_ID),
             startup_configuration(
                 PROTOCOL_INVALID_GENERATION,
@@ -308,7 +308,7 @@ impl ReplacementTestContext {
             .expect("the replacement test directory should be created")
             .keep();
         let worker_handle = WorkerHandle::launch_with_startup_configuration(
-            fixture_path("astronomical-supervisor-idle-worker"),
+            fixture_path("astronomical-daemon-idle-worker"),
             model_load_timeout,
             GenerationPerformanceLog::open(&temporary_directory)
                 .expect("the performance log should open"),
