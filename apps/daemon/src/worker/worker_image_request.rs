@@ -15,11 +15,11 @@ use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationOutput, ImageGenerationTimeouts,
     RuntimeModelPolicy, WorkerActivity, WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
-    worker::worker_containment::{cancel_active_generation, contain_worker_failure},
+    worker::process::worker_containment::{cancel_active_generation, contain_worker_failure},
+    worker::process::worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
+    worker::process::worker_startup_runtime::wait_for_startup_runtime_configuration,
     worker::worker_health::{clear_active_request_progress, publish_activity},
     worker::worker_loop_types::{ActiveImageGeneration, ActiveWorkerRequest},
-    worker::worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
-    worker::worker_startup_runtime::wait_for_startup_runtime_configuration,
 };
 
 #[allow(clippy::too_many_arguments)]

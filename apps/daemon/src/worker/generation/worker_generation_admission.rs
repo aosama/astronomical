@@ -20,7 +20,7 @@ use crate::{
 const MAXIMUM_PREFILL_PROGRESS_EVENT_CAPACITY: usize = 2_049;
 
 impl WorkerHandle {
-    pub(super) fn start_chat_generation_with_queue_admission(
+    pub(in crate::worker) fn start_chat_generation_with_queue_admission(
         &self,
         chat_generation_command: ChatGenerationCommand,
         admission_sender: Option<oneshot::Sender<()>>,
@@ -75,7 +75,7 @@ impl WorkerHandle {
         })
     }
 
-    pub(super) fn start_image_generation_with_queue_admission(
+    pub(in crate::worker) fn start_image_generation_with_queue_admission(
         &self,
         image_generation_command: ImageGenerationCommand,
         admission_sender: Option<oneshot::Sender<()>>,
@@ -132,7 +132,7 @@ impl WorkerHandle {
         })
     }
 
-    pub(super) fn start_embeddings_generation_with_queue_admission(
+    pub(in crate::worker) fn start_embeddings_generation_with_queue_admission(
         &self,
         embeddings_command: EmbeddingsCommand,
         admission_sender: Option<oneshot::Sender<()>>,

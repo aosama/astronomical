@@ -6,17 +6,15 @@
 //! worker's IPC stream. Generation-scoped events must match the active
 //! request or are treated as protocol violations.
 
+pub(crate) mod generation;
+pub(crate) mod memory;
+pub(crate) mod process;
+
 pub(crate) mod worker_cache_clear;
-pub(crate) mod worker_completion_event;
-pub(crate) mod worker_containment;
 pub(crate) mod worker_control_error;
 pub(crate) mod worker_embeddings_event;
 pub(crate) mod worker_embeddings_request;
 pub(crate) mod worker_event_handler;
-pub(crate) mod worker_generate;
-pub(crate) mod worker_generation_admission;
-pub(crate) mod worker_generation_output;
-pub(crate) mod worker_generation_preparation;
 pub(crate) mod worker_handle;
 pub(crate) mod worker_handle_chat;
 pub(crate) mod worker_handle_image;
@@ -25,14 +23,6 @@ pub(crate) mod worker_idle_drain;
 pub(crate) mod worker_image_event;
 pub(crate) mod worker_image_request;
 pub(crate) mod worker_loop_types;
-pub(crate) mod worker_memory_demotion;
-pub(crate) mod worker_memory_limit;
-pub(crate) mod worker_model_swap;
-pub(crate) mod worker_prefill_progress;
-pub(crate) mod worker_process;
-pub(crate) mod worker_replacement;
-pub(crate) mod worker_startup_runtime;
-pub(crate) mod worker_stderr_tail;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -41,7 +31,7 @@ use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::{Instant, MissedTickBehavior, interval};
 
-use crate::worker::worker_memory_limit::{
+use crate::worker::memory::worker_memory_limit::{
     MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate, apply_mlx_memory_limit,
     take_generation_start_after_pending_memory_limit,
 };
@@ -50,9 +40,11 @@ use crate::{
     ImageGenerationExecutionError, ImageGenerationTimeouts, RuntimeModelPolicy, WorkerControlError,
     WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
     serving::chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
-    worker::worker_containment::{
+    worker::memory::worker_memory_demotion::MemoryDemotionRestart,
+    worker::process::worker_containment::{
         cancel_active_generation, close_worker_if_running, contain_worker_failure, shutdown_worker,
     },
+    worker::process::worker_replacement::WorkerReplacement,
     worker::worker_event_handler::handle_worker_event,
     worker::worker_health::{publish_health, publish_pending_mlx_memory_ceiling},
     worker::worker_idle_drain::{
@@ -60,8 +52,6 @@ use crate::{
         wait_for_image_execution_deadline,
     },
     worker::worker_loop_types::{ActiveWorkerRequest, WorkerLoopCommand},
-    worker::worker_memory_demotion::MemoryDemotionRestart,
-    worker::worker_replacement::WorkerReplacement,
 };
 
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
@@ -168,7 +158,7 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = worker_generate::handle_generate_command(
+                        if let Err(control_error) = generation::worker_generate::handle_generate_command(
                             &mut worker_process,
                             active_generation_permit,
                             generation_command,

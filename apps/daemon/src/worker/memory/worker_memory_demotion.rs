@@ -22,7 +22,7 @@ use tokio::time::{Instant, timeout};
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, RuntimeModelPolicy, WorkerControlError,
     WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
-    worker::worker_containment::fail_active_generation,
+    worker::process::worker_containment::fail_active_generation,
     worker::worker_event_handler::handle_worker_event, worker::worker_health::publish_health,
     worker::worker_loop_types::ActiveWorkerRequest,
 };
@@ -30,7 +30,7 @@ use crate::{
 const MAXIMUM_DEFERRED_DEMOTION_PROCESS_EVENTS: usize = 64;
 
 /// Inputs for one stop-first memory-demotion restart of the trusted worker.
-pub(super) struct MemoryDemotionRestart {
+pub(in crate::worker) struct MemoryDemotionRestart {
     candidate_executable_path: std::path::PathBuf,
     candidate_model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     candidate_startup_configuration: WorkerStartupConfiguration,
@@ -39,7 +39,7 @@ pub(super) struct MemoryDemotionRestart {
 }
 
 impl MemoryDemotionRestart {
-    pub(super) fn new(
+    pub(in crate::worker) fn new(
         candidate_executable_path: std::path::PathBuf,
         candidate_model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
         candidate_startup_configuration: WorkerStartupConfiguration,
@@ -62,7 +62,7 @@ impl MemoryDemotionRestart {
     /// transition, so no request can start between shutdown and restored-model
     /// readiness.
     #[allow(clippy::too_many_arguments)]
-    pub(super) async fn execute(
+    pub(in crate::worker) async fn execute(
         self,
         trusted_worker_process: &mut WorkerProcess,
         trusted_model_policy_catalog: &mut Arc<HashMap<String, RuntimeModelPolicy>>,
@@ -301,7 +301,7 @@ impl MemoryDemotionRestart {
             .await?;
         let swap_wait_outcome = timeout(
             self.acknowledgement_timeout,
-            crate::worker::worker_model_swap::wait_for_model_swap(
+            crate::worker::process::worker_model_swap::wait_for_model_swap(
                 replacement_worker_process,
                 health_snapshot,
                 is_ready,
@@ -325,8 +325,8 @@ impl MemoryDemotionRestart {
         })
         .and_then(|swap_wait_outcome| swap_wait_outcome)?;
         match swap_wait_outcome {
-            crate::worker::worker_model_swap::ModelSwapWaitOutcome::Loaded => Ok(()),
-            crate::worker::worker_model_swap::ModelSwapWaitOutcome::Rejected {
+            crate::worker::process::worker_model_swap::ModelSwapWaitOutcome::Loaded => Ok(()),
+            crate::worker::process::worker_model_swap::ModelSwapWaitOutcome::Rejected {
                 model_load_failure_reason,
             } => Err(WorkerControlError::WorkerProtocolViolation {
                 description: "memory demotion restored-worker model swap was rejected",

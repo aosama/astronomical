@@ -93,6 +93,8 @@ pub use serving::image_generation_executor::{
 pub use serving::serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
 pub use system_telemetry::parse_macos_memory_pressure_level;
+pub use worker::memory::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
+pub use worker::process::worker_process::{WorkerProcess, WorkerTerminationOutcome};
 pub use worker::worker_cache_clear::PromptCacheClearOutcome;
 pub use worker::worker_control_error::WorkerControlError;
 pub use worker::worker_handle::{GenerationQueueDepth, WorkerHandle};
@@ -100,5 +102,3 @@ pub use worker::worker_health::{
     ActiveRequestProgress, ExpertResidencySnapshot, PendingPromptCacheClear,
     PersistentPromptCacheSummary, WorkerActivity, WorkerHealthSnapshot, WorkerHealthStatus,
 };
-pub use worker::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
-pub use worker::worker_process::{WorkerProcess, WorkerTerminationOutcome};

@@ -16,7 +16,7 @@ use crate::{
     WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
 
-pub(super) async fn cancel_active_generation(
+pub(in crate::worker) async fn cancel_active_generation(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut Option<ActiveWorkerRequest>,
@@ -330,7 +330,7 @@ async fn cancel_worker_request(
     })?
 }
 
-pub(super) async fn contain_worker_failure(
+pub(in crate::worker) async fn contain_worker_failure(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut Option<ActiveWorkerRequest>,
@@ -370,7 +370,7 @@ pub(super) async fn contain_worker_failure(
     );
 }
 
-pub(super) fn fail_active_generation(
+pub(in crate::worker) fn fail_active_generation(
     active_request: &mut Option<ActiveWorkerRequest>,
     error_code: ChatGenerationStreamErrorCode,
 ) {
@@ -395,7 +395,7 @@ pub(super) fn fail_active_generation(
     }
 }
 
-pub(super) async fn close_worker_if_running(worker_process: &mut WorkerProcess) {
+pub(in crate::worker) async fn close_worker_if_running(worker_process: &mut WorkerProcess) {
     if worker_process.process_id().is_some()
         && let Err(shutdown_error) = worker_process.close().await
     {
@@ -406,7 +406,7 @@ pub(super) async fn close_worker_if_running(worker_process: &mut WorkerProcess) 
 /// Publishes the shutdown health transition, fails any active generation,
 /// and closes the worker process, returning the termination outcome for the
 /// shutdown reply.
-pub(super) async fn shutdown_worker(
+pub(in crate::worker) async fn shutdown_worker(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut Option<ActiveWorkerRequest>,
