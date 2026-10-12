@@ -1,6 +1,7 @@
+/// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
+mod adopt_retained_live_prefix;
 mod advance_generation;
 mod completed_forward_memory;
-/// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decoder_state_reuse;
 pub(crate) mod engine_request;
 pub(in crate::qwen3_5_resident) mod generated_token_emission;
@@ -26,10 +27,12 @@ mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
 mod request_memory_release;
+pub(super) mod retained_live_prefix;
 mod start_generation;
 mod terminal_prefill_seed;
 mod test_controls;
 mod visual_embeddings_runtime;
+use retained_live_prefix::RetainedLiveDecoderPrefix;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -194,6 +197,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             persistent_prompt_cache: None,
             prompt_processing_chunk_sizer,
             chunking,
+            retained_live_prefix: None,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
         })
@@ -231,6 +235,10 @@ pub struct Qwen3_5InferenceExecution {
     pub(crate) persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
     prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
     chunking: WorkerChunkingConfiguration,
+    /// The last completed generation's live decoder state, retained for
+    /// in-memory prefix adoption (issue #1167). Dropped when the next request
+    /// fails to adopt it or when the retention policy says so at completion.
+    pub(in crate::qwen3_5_resident) retained_live_prefix: Option<RetainedLiveDecoderPrefix>,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
     vocabulary_size: u32,
 }

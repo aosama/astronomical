@@ -49,8 +49,9 @@ pub use message_codec::{
     encode_daemon_request, encode_daemon_response, encode_event,
 };
 pub use persistent_prompt_cache_diagnostics::{
-    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
-    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
+    WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
+    WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
+    WorkerPersistentPromptCacheRequestDiagnostics,
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };

@@ -11,6 +11,7 @@ mod persistent_prompt_cache_model_contract;
 mod persistent_prompt_cache_partial_tail_lookup;
 mod persistent_prompt_cache_prefill_boundary;
 mod persistent_prompt_cache_prefix_lookup;
+mod persistent_prompt_cache_retained_prefix_lookup;
 mod persistent_prompt_cache_stats;
 mod persistent_visual_embedding_key;
 mod persistent_visual_embedding_suffix_plan;

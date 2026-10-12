@@ -30,6 +30,8 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_prefill_stage_attribution_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) experimental_in_memory_prefix_adoption_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_quantized_kv_cache_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_fused_moe_decode_enabled: Option<bool>,
@@ -48,6 +50,7 @@ pub struct ConfiguredChunkingFields {
     pub prompt_cache_common_prefix_stride_blocks: bool,
     pub experimental_decode_stage_attribution_enabled: bool,
     pub experimental_prefill_stage_attribution_enabled: bool,
+    pub experimental_in_memory_prefix_adoption_enabled: bool,
     pub experimental_quantized_kv_cache_enabled: bool,
     pub experimental_fused_moe_decode_enabled: bool,
 }
@@ -91,6 +94,9 @@ impl ChunkingConfigFile {
                 .is_some(),
             experimental_prefill_stage_attribution_enabled: self
                 .experimental_prefill_stage_attribution_enabled
+                .is_some(),
+            experimental_in_memory_prefix_adoption_enabled: self
+                .experimental_in_memory_prefix_adoption_enabled
                 .is_some(),
             experimental_quantized_kv_cache_enabled: self
                 .experimental_quantized_kv_cache_enabled
@@ -136,6 +142,9 @@ impl ChunkingConfigFile {
             experimental_prefill_stage_attribution_enabled: model
                 .experimental_prefill_stage_attribution_enabled
                 .or(global.experimental_prefill_stage_attribution_enabled),
+            experimental_in_memory_prefix_adoption_enabled: model
+                .experimental_in_memory_prefix_adoption_enabled
+                .or(global.experimental_in_memory_prefix_adoption_enabled),
             experimental_quantized_kv_cache_enabled: model
                 .experimental_quantized_kv_cache_enabled
                 .or(global.experimental_quantized_kv_cache_enabled),
@@ -180,6 +189,7 @@ pub struct ChunkingConfig {
     prompt_cache_common_prefix_stride_blocks: u32,
     experimental_decode_stage_attribution_enabled: bool,
     experimental_prefill_stage_attribution_enabled: bool,
+    experimental_in_memory_prefix_adoption_enabled: bool,
     experimental_quantized_kv_cache_enabled: bool,
     experimental_fused_moe_decode_enabled: bool,
 }
@@ -222,6 +232,9 @@ impl ChunkingConfig {
                 .unwrap_or(false),
             experimental_prefill_stage_attribution_enabled: configured
                 .experimental_prefill_stage_attribution_enabled
+                .unwrap_or(false),
+            experimental_in_memory_prefix_adoption_enabled: configured
+                .experimental_in_memory_prefix_adoption_enabled
                 .unwrap_or(false),
             experimental_quantized_kv_cache_enabled: configured
                 .experimental_quantized_kv_cache_enabled
@@ -338,6 +351,16 @@ impl ChunkingConfig {
         self.experimental_prefill_stage_attribution_enabled
     }
 
+    /// Returns whether the engine may retain the just-completed generation's
+    /// live decoder state and adopt it for the next turn of the same
+    /// conversation instead of re-reading the prefix KV from the disk store.
+    /// Adopted state is byte-identical to the restored state, so no numerics
+    /// change; the trade is one conversation's KV held live between requests.
+    #[must_use]
+    pub const fn experimental_in_memory_prefix_adoption_enabled(&self) -> bool {
+        self.experimental_in_memory_prefix_adoption_enabled
+    }
+
     /// Returns whether the KV cache stores quantized slabs for long-context
     /// decode bandwidth. Changes attention numerics; quality-gated.
     #[must_use]
@@ -359,6 +382,7 @@ impl Default for ChunkingConfig {
         Self {
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
+            experimental_in_memory_prefix_adoption_enabled: false,
             experimental_quantized_kv_cache_enabled: false,
             experimental_fused_moe_decode_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:

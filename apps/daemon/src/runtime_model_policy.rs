@@ -68,6 +68,8 @@ pub(crate) fn worker_chunking_configuration(
             .experimental_decode_stage_attribution_enabled(),
         experimental_prefill_stage_attribution_enabled: chunking
             .experimental_prefill_stage_attribution_enabled(),
+        experimental_in_memory_prefix_adoption_enabled: chunking
+            .experimental_in_memory_prefix_adoption_enabled(),
         experimental_quantized_kv_cache_enabled: chunking.experimental_quantized_kv_cache_enabled(),
         experimental_fused_moe_decode_enabled: chunking.experimental_fused_moe_decode_enabled(),
     }
