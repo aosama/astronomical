@@ -15,7 +15,7 @@ use crate::common::supervisor;
 async fn should_persist_worker_cache_diagnostics_for_a_completed_user_request() {
     let performance_log_directory = tempfile::tempdir()
         .expect("the diagnostics journey should create a performance log directory");
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = supervisor::launch_test_executor_with_performance_log_directory(
         worker_executable_path,

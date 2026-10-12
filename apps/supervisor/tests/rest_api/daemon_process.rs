@@ -125,9 +125,9 @@ async fn should_keep_worker_unready_when_the_loaded_model_is_unexpected() {
     // With config-driven discovery, the supervisor no longer rejects models
     // based on a hardcoded expected model ID. This test now verifies that
     // the worker starts and becomes ready with whatever model it loads.
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-daemon")
+    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-daemon")
         .expect("Cargo should provide the test daemon path");
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let (mut daemon_process, daemon_address) = spawn_daemon_with_worker_ready_model(
         &daemon_executable_path,
@@ -161,9 +161,9 @@ async fn should_keep_worker_unready_when_the_loaded_model_is_unexpected() {
 
 #[tokio::test]
 async fn should_show_generation_progress_for_malformed_model_output_before_stream_failure() {
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-daemon")
+    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-daemon")
         .expect("Cargo should provide the test daemon path");
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let (mut daemon_process, daemon_address) = spawn_daemon_with_worker_ready_model(
         &daemon_executable_path,
@@ -298,9 +298,9 @@ async fn should_reject_retired_supervisor_configuration_for_a_standard_instance(
 
 #[tokio::test]
 async fn should_serve_responses_json_and_sse_through_the_daemon_process() {
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-daemon")
+    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-daemon")
         .expect("Cargo should provide the test daemon path");
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let (mut daemon_process, daemon_address) = spawn_daemon_with_worker_ready_model(
         &daemon_executable_path,

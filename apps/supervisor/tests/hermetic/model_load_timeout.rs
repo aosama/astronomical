@@ -8,7 +8,7 @@ use crate::common::supervisor;
 #[tokio::test]
 async fn should_force_terminate_and_reap_a_worker_that_keeps_loading() {
     let worker_executable_path =
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-loading-forever-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-loading-forever-worker")
             .expect("Cargo should provide the loading-forever worker fixture path");
     let worker_executor = supervisor::launch_test_worker_with_model_load_timeout(
         worker_executable_path,
@@ -34,7 +34,7 @@ async fn should_force_terminate_and_reap_a_worker_that_keeps_loading() {
 #[tokio::test]
 async fn should_report_loading_health_until_engine_readiness() {
     let worker_executable_path =
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-delayed-engine-ready-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-delayed-engine-ready-worker")
             .expect("Cargo should provide the delayed-engine-ready worker fixture path");
     let worker_executor = supervisor::launch_test_worker_with_model_load_timeout(
         worker_executable_path,

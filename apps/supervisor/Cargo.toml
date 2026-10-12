@@ -12,55 +12,55 @@ name = "astronomicald"
 path = "src/main.rs"
 
 [[bin]]
-name = "astronomical-supervisor-test-worker"
+name = "astronomical-daemon-test-worker"
 path = "tests/fixtures/scripted_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-idle-worker"
+name = "astronomical-daemon-idle-worker"
 path = "tests/fixtures/idle_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-test-daemon"
+name = "astronomical-daemon-test-daemon"
 path = "tests/fixtures/test_daemon.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-loading-forever-worker"
+name = "astronomical-daemon-loading-forever-worker"
 path = "tests/fixtures/loading_forever_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-delayed-engine-ready-worker"
+name = "astronomical-daemon-delayed-engine-ready-worker"
 path = "tests/fixtures/delayed_engine_ready_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-mismatched-ready-worker"
+name = "astronomical-daemon-mismatched-ready-worker"
 path = "tests/fixtures/mismatched_ready_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-stderr-probe-worker"
+name = "astronomical-daemon-stderr-probe-worker"
 path = "tests/fixtures/stderr_probe_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-replacement-ready-worker"
+name = "astronomical-daemon-replacement-ready-worker"
 path = "tests/fixtures/replacement_ready_worker.rs"
 bench = false
 test = false
 
 [[bin]]
-name = "astronomical-supervisor-memory-demotion-worker"
+name = "astronomical-daemon-memory-demotion-worker"
 path = "tests/fixtures/memory_demotion_worker.rs"
 bench = false
 test = false

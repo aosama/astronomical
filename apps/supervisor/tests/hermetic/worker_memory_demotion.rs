@@ -377,13 +377,14 @@ fn process_is_running(process_identifier: &str) -> bool {
 
 fn demotion_fixture_path() -> PathBuf {
     PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-memory-demotion-worker")
-            .unwrap_or_else(|_| {
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-memory-demotion-worker").unwrap_or_else(
+            |_| {
                 panic!(
                     "Cargo should provide the \
-                     astronomical-supervisor-memory-demotion-worker fixture path"
+                     astronomical-daemon-memory-demotion-worker fixture path"
                 )
-            }),
+            },
+        ),
     )
 }
 

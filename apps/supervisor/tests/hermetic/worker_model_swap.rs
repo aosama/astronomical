@@ -305,7 +305,7 @@ async fn should_not_dispatch_an_image_after_disconnect_during_model_swap() {
 
 pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temporary_log_directory =

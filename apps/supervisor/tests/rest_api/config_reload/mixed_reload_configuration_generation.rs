@@ -20,7 +20,7 @@ async fn should_load_a_model_after_a_mixed_reload_applies_only_the_memory_config
 {
     timeout(Duration::from_secs(10), async {
         let worker_executable_path = PathBuf::from(
-            std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+            std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
                 .expect("Cargo should provide the idle worker fixture path"),
         );
         let config_home =

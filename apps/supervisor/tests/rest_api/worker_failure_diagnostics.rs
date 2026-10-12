@@ -16,7 +16,7 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
         .expect("Cargo should provide the astronomicald executable path");
     let worker_executable_path =
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-stderr-probe-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-stderr-probe-worker")
             .expect("Cargo should provide the stderr-probe worker fixture path");
     let development_state_directory = tempfile::tempdir().expect("state should be created");
     daemon_process::write_instance_config(development_state_directory.path());

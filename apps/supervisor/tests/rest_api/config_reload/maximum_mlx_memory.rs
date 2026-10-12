@@ -16,7 +16,7 @@ const ROMEO_AND_JULIET: &str = include_str!(
 #[tokio::test]
 async fn should_require_full_reload_when_other_configuration_changes_are_pending() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let config_home_directory = tempfile::tempdir()
@@ -80,7 +80,7 @@ async fn should_require_full_reload_when_other_configuration_changes_are_pending
 #[tokio::test]
 async fn should_not_let_a_rejected_update_restore_over_a_newer_memory_setting() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let config_home_directory = tempfile::tempdir()
@@ -140,7 +140,7 @@ async fn should_not_let_a_rejected_update_restore_over_a_newer_memory_setting() 
 async fn should_preserve_persisted_intent_when_queued_application_is_rejected() {
     timeout(Duration::from_secs(10), async {
         let worker_executable_path = PathBuf::from(
-            std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+            std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
                 .expect("Cargo should provide the idle worker fixture path"),
         );
         let config_home_directory = tempfile::tempdir()
@@ -226,7 +226,7 @@ async fn should_preserve_persisted_intent_when_queued_application_is_rejected() 
 async fn should_rollback_live_state_when_a_reloaded_memory_setting_is_rejected_after_queueing() {
     timeout(Duration::from_secs(10), async {
         let worker_executable_path = PathBuf::from(
-            std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+            std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
                 .expect("Cargo should provide the idle worker fixture path"),
         );
         let config_home_directory = tempfile::tempdir()

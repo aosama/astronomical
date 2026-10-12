@@ -18,7 +18,7 @@ const DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION: &str =
 #[tokio::test]
 async fn should_complete_generation_when_startup_runtime_acknowledgement_is_still_in_flight() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temporary_log_directory =
