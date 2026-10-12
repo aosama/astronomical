@@ -9,7 +9,7 @@ use crate::{
     worker::worker_loop_types::ActiveGeneration,
 };
 
-pub(super) fn handle_worker_prefill_progress(
+pub(in crate::worker) fn handle_worker_prefill_progress(
     worker_prefill_progress_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut ActiveGeneration,

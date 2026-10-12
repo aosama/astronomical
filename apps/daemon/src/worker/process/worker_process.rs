@@ -15,7 +15,7 @@ use tokio::{
     time::timeout,
 };
 
-use crate::{WorkerControlError, worker::worker_stderr_tail::WorkerStderrTail};
+use crate::{WorkerControlError, worker::process::worker_stderr_tail::WorkerStderrTail};
 
 const WORKER_STDERR_READ_BYTES: usize = 1_024;
 const WORKER_EXIT_DIAGNOSTIC_SETTLE_TIMEOUT: Duration = Duration::from_secs(1);

@@ -13,14 +13,14 @@ use tokio::time::{Instant, timeout};
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError, RuntimeModelPolicy,
     WorkerActivity, WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
-    worker::worker_containment::{cancel_active_generation, contain_worker_failure},
+    worker::process::worker_containment::{cancel_active_generation, contain_worker_failure},
+    worker::process::worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
+    worker::process::worker_startup_runtime::wait_for_startup_runtime_configuration,
     worker::worker_health::{clear_active_request_progress, publish_activity},
     worker::worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
-    worker::worker_model_swap::{ModelSwapWaitOutcome, wait_for_model_swap},
-    worker::worker_startup_runtime::wait_for_startup_runtime_configuration,
 };
 
-pub(super) async fn handle_generate_command(
+pub(in crate::worker) async fn handle_generate_command(
     worker_process: &mut WorkerProcess,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
     generation_command: astronomical_ipc_protocol::ChatGenerationCommand,

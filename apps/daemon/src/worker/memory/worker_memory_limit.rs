@@ -6,7 +6,7 @@ use std::{
 use astronomical_ipc_protocol::WorkerEvent;
 use tokio::time::{Instant, timeout};
 
-use crate::worker::worker_containment;
+use crate::worker::process::worker_containment;
 use crate::worker::worker_event_handler;
 use crate::worker::worker_loop_types::ActiveWorkerRequest;
 use crate::{
@@ -27,13 +27,13 @@ pub enum MlxMemoryLimitUpdateOutcome {
 }
 
 /// A live ceiling raise that waited because a generation was already running.
-pub(super) struct PendingMlxMemoryLimitUpdate {
+pub(in crate::worker) struct PendingMlxMemoryLimitUpdate {
     pub effective_mlx_memory_ceiling_bytes: u64,
     pub configuration_generation: String,
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn apply_mlx_memory_limit(
+pub(in crate::worker) async fn apply_mlx_memory_limit(
     worker_process: &mut WorkerProcess,
     effective_mlx_memory_ceiling_bytes: u64,
     configuration_generation: String,
@@ -102,7 +102,7 @@ pub(super) async fn apply_mlx_memory_limit(
     }
 }
 
-pub(super) async fn contain_mlx_memory_limit_failure(
+pub(in crate::worker) async fn contain_mlx_memory_limit_failure(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut Option<ActiveWorkerRequest>,
@@ -132,7 +132,7 @@ pub(super) async fn contain_mlx_memory_limit_failure(
 /// embeddings work, because `select` can deliver a Generate that was
 /// sitting in the channel beside the raise.
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn apply_pending_mlx_memory_limit_if_idle(
+pub(in crate::worker) async fn apply_pending_mlx_memory_limit_if_idle(
     pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,
     worker_process: &mut WorkerProcess,
     model_load_timeout: Duration,
@@ -168,7 +168,7 @@ pub(super) async fn apply_pending_mlx_memory_limit_if_idle(
 /// after refusing the start (rejected raise or control failure). The caller
 /// must `continue` the worker loop when this returns `None`.
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn take_generation_start_after_pending_memory_limit(
+pub(in crate::worker) async fn take_generation_start_after_pending_memory_limit(
     pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,
     worker_process: &mut WorkerProcess,
     model_load_timeout: Duration,

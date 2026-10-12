@@ -18,7 +18,7 @@ use crate::{
     worker::worker_loop_types::ActiveGeneration,
 };
 
-pub(super) fn handle_worker_output(
+pub(in crate::worker) fn handle_worker_output(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut ActiveGeneration,
@@ -135,7 +135,7 @@ pub(super) fn handle_worker_output(
     Ok(())
 }
 
-pub(super) fn handle_worker_generation_progress(
+pub(in crate::worker) fn handle_worker_generation_progress(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &mut ActiveGeneration,
@@ -206,7 +206,7 @@ pub(super) fn handle_worker_generation_progress(
     Ok(())
 }
 
-pub(super) fn handle_worker_first_decode_completed(
+pub(in crate::worker) fn handle_worker_first_decode_completed(
     worker_event: WorkerEvent,
     active_request: &mut ActiveGeneration,
 ) -> Result<(), WorkerControlError> {
@@ -242,7 +242,7 @@ pub(super) fn handle_worker_first_decode_completed(
     Ok(())
 }
 
-pub(super) fn handle_worker_prompt_work_reuse(
+pub(in crate::worker) fn handle_worker_prompt_work_reuse(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_request: &ActiveGeneration,
