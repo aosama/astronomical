@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use astronomical_daemon::{
+use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
     DownloadCatalog, DownloadCatalogFamily,
 };

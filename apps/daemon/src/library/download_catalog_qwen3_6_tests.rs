@@ -1,6 +1,6 @@
 //! Bundled-catalog contract for the Qwen 3.6 35B-A3B OptiQ 4-bit offer.
 
-use astronomical_daemon::{DownloadCatalog, DownloadCatalogFamily};
+use crate::{DownloadCatalog, DownloadCatalogFamily};
 
 #[test]
 fn should_offer_qwen_3_6_35b_a3b_optiq_4bit_from_the_bundled_catalog() {
