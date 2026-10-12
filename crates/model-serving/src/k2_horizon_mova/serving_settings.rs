@@ -20,6 +20,7 @@ pub struct K2HorizonMoVAServingSettings {
     pub full_attention_kv_state_growth_tokens: u32,
     pub decode_stage_attribution_enabled: bool,
     pub prefill_stage_attribution_enabled: bool,
+    pub in_memory_prefix_adoption_enabled: bool,
     pub quantized_kv_cache_enabled: bool,
     pub fused_expert_decode_enabled: bool,
 }
@@ -38,6 +39,7 @@ impl K2HorizonMoVAServingSettings {
             full_attention_kv_state_growth_tokens: 256,
             decode_stage_attribution_enabled: false,
             prefill_stage_attribution_enabled: false,
+            in_memory_prefix_adoption_enabled: false,
             quantized_kv_cache_enabled: false,
             fused_expert_decode_enabled: false,
         }
