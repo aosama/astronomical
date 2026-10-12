@@ -14,8 +14,8 @@ use astronomical_ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartup
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
 use crate::worker;
+use crate::worker::memory::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 use crate::worker::worker_loop_types::WorkerLoopCommand;
-use crate::worker::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
 
 const WORKER_COMMAND_CAPACITY: usize = 8;
 const DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT: Duration = Duration::from_secs(60);

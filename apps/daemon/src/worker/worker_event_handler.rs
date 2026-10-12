@@ -13,12 +13,13 @@ use crate::{
     ChatGenerationStreamEvent, CompletionAttributionLog, ExpertResidencySnapshot,
     GenerationPerformanceLog, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
     serving::chat_generation_executor::try_send_stream_event,
-    worker::worker_completion_event::handle_worker_completion_event,
-    worker::worker_generation_output::{
+    worker::generation::worker_completion_event::handle_worker_completion_event,
+    worker::generation::worker_generation_output::{
         handle_worker_first_decode_completed, handle_worker_generation_progress,
         handle_worker_output, handle_worker_prompt_work_reuse,
     },
-    worker::worker_generation_preparation::handle_generation_preparation_started,
+    worker::generation::worker_generation_preparation::handle_generation_preparation_started,
+    worker::generation::worker_prefill_progress::handle_worker_prefill_progress,
     worker::worker_health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
         publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
@@ -26,7 +27,6 @@ use crate::{
         publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
     },
     worker::worker_loop_types::{ActiveGeneration, ActiveWorkerRequest},
-    worker::worker_prefill_progress::handle_worker_prefill_progress,
 };
 
 /// Applies one typed worker event to daemon-owned request and health state.
