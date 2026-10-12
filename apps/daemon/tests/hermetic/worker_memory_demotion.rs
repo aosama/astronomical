@@ -8,9 +8,6 @@
 //! starts. A stop-first restart therefore records its predecessor as gone, and a
 //! candidate-first restart would record it as alive.
 
-use std::sync::Arc;
-use std::time::Duration;
-
 use astronomical_daemon::{
     ChatGenerationExecutor, MlxMemoryLimitUpdateOutcome, WorkerHealthStatus,
 };
