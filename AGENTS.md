@@ -71,4 +71,6 @@
 
 ## Scripts Folder Conventions
 
-The <repo-root>/scripts/ directory must not contain scripts that test other scripts, and must not create or retain wrappers that run tests through Cargo commands since the Cargo commands themselves should be used directly. Whenever a command can be invoked directly, proactively record the required cargo command in <repo-root>/cargo-commands-for-testing.md and delete the now-redundant test-command wrapper.
+- The <repo-root>/scripts/ directory must not contain scripts that test other scripts, and must not create or retain wrappers that run tests through Cargo commands since the Cargo commands themselves should be used directly. Whenever a command can be invoked directly, proactively record the required cargo command in <repo-root>/cargo-commands-for-testing.md and delete the now-redundant test-command wrapper.
+
+- All **Release releated scripts** must live are under "<repo-root>/scripts/release" , they will help you through the release process.
