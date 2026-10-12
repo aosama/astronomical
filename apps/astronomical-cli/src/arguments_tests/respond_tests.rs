@@ -1,107 +1,56 @@
+//! Parsing of the `respond` verb: positional or `--text` prompt, repeatable
+//! `--image` flags, the generation controls, and the `--schema` file flag.
+
 use std::path::PathBuf;
 
-use astronomical_cli::errors::UsageError;
-use astronomical_cli::{CliCommand, LaunchArguments, RespondArguments};
+use crate::arguments::CliCommand;
+use crate::errors::UsageError;
+use crate::respond_arguments::RespondArguments;
 
-use super::test_support::{
-    parse, respond_arguments, respond_arguments_with, respond_arguments_with_schema,
-};
+use super::parse;
 
-#[test]
-fn should_print_help_for_help_flag() {
-    assert_eq!(parse(&["--help"]).expect("help"), CliCommand::Help);
-    assert_eq!(
-        parse(&["launch", "-h"]).expect("launch help"),
-        CliCommand::Help
-    );
-    assert!(
-        astronomical_cli::help_text()
-            .contains("       astronomical launch opencode [--model MODEL_ID]")
-    );
-}
-
-#[test]
-fn should_ignore_verbose_as_a_global_flag() {
-    assert_eq!(
-        parse(&["--verbose", "launch", "opencode"]).expect("verbose then launch"),
-        CliCommand::Launch(LaunchArguments {
-            tool_slug: Some("opencode".to_owned()),
-            model_id: None,
-        })
-    );
-    assert_eq!(
-        parse(&["launch", "-v", "opencode"]).expect("launch verbose"),
-        CliCommand::Launch(LaunchArguments {
-            tool_slug: Some("opencode".to_owned()),
-            model_id: None,
-        })
-    );
-}
-
-#[test]
-fn should_print_version_for_version_flag() {
-    assert_eq!(parse(&["--version"]).expect("version"), CliCommand::Version);
-}
-
-#[test]
-fn should_require_a_command_when_invoked_bare() {
-    match parse(&[]) {
-        Err(UsageError::MissingCommand) => {}
-        other => panic!("expected missing command, got {other:?}"),
+/// Builds `respond` arguments with only the prompt, model, and stream mode
+/// set, for tests that exercise one dimension at a time.
+fn respond_arguments(prompt: &str, model_id: Option<&str>, no_stream: bool) -> RespondArguments {
+    RespondArguments {
+        prompt: prompt.to_owned(),
+        images: Vec::new(),
+        model_id: model_id.map(str::to_owned),
+        instructions: None,
+        thinking_budget: None,
+        schema_path: None,
+        no_stream,
     }
 }
 
-#[test]
-fn should_parse_launch_without_a_tool_name() {
-    assert_eq!(
-        parse(&["launch"]).expect("launch"),
-        CliCommand::Launch(LaunchArguments {
-            tool_slug: None,
-            model_id: None,
-        })
-    );
-}
-
-#[test]
-fn should_parse_launch_opencode_and_model_flag_in_either_order() {
-    let expected = CliCommand::Launch(LaunchArguments {
-        tool_slug: Some("opencode".to_owned()),
-        model_id: Some("library-chat-model".to_owned()),
-    });
-    assert_eq!(
-        parse(&["launch", "opencode", "--model", "library-chat-model"]).expect("tool then model"),
-        expected
-    );
-    assert_eq!(
-        parse(&["launch", "--model", "library-chat-model", "opencode"]).expect("model then tool"),
-        expected
-    );
-}
-
-#[test]
-fn should_reject_unknown_tools_as_launch_arguments_not_usage() {
-    assert_eq!(
-        parse(&["launch", "copilot"]).expect("copilot is a launch argument"),
-        CliCommand::Launch(LaunchArguments {
-            tool_slug: Some("copilot".to_owned()),
-            model_id: None,
-        })
-    );
-}
-
-#[test]
-fn should_reject_two_tool_names() {
-    match parse(&["launch", "opencode", "pi"]) {
-        Err(UsageError::MultipleTools) => {}
-        other => panic!("expected multiple tools, got {other:?}"),
+/// Builds `respond` arguments with the generation controls set: the
+/// instructions and the thinking budget.
+fn respond_arguments_with(
+    prompt: &str,
+    instructions: Option<&str>,
+    thinking_budget: Option<u16>,
+) -> RespondArguments {
+    RespondArguments {
+        prompt: prompt.to_owned(),
+        images: Vec::new(),
+        model_id: None,
+        instructions: instructions.map(str::to_owned),
+        thinking_budget,
+        schema_path: None,
+        no_stream: false,
     }
 }
 
-#[test]
-fn should_reject_a_missing_model_value() {
-    match parse(&["launch", "--model"]) {
-        Err(UsageError::MissingValue("--model")) => {}
-        other => panic!("expected missing model value, got {other:?}"),
+/// Builds `respond` arguments with the structured-output schema file set.
+fn respond_arguments_with_schema(prompt: &str, schema_path: Option<PathBuf>) -> RespondArguments {
+    RespondArguments {
+        prompt: prompt.to_owned(),
+        images: Vec::new(),
+        model_id: None,
+        instructions: None,
+        thinking_budget: None,
+        schema_path,
+        no_stream: false,
     }
 }
 

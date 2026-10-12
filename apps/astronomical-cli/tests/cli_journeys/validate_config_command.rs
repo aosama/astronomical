@@ -1,4 +1,4 @@
-//! Hermetic acceptance tests for `astronomical validate config` (issue #821
+//! Offline acceptance journeys for `astronomical validate config` (issue #821
 //! slice 1). The verb must load a configuration file in-process, report its
 //! effective values, and fail with a recovery message on missing or invalid
 //! documents. No daemon, no GPU, no network.
@@ -10,29 +10,18 @@ use astronomical_cli::{
 };
 use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 
-use super::test_support;
-
-fn parsed_validate_config(arguments: &[&str]) -> astronomical_cli::ValidateConfigArguments {
-    let mut full_arguments = vec!["validate", "config"];
-    full_arguments.extend_from_slice(arguments);
-    match test_support::parse(&full_arguments) {
-        Ok(astronomical_cli::CliCommand::ValidateConfig(validate_arguments)) => validate_arguments,
-        other => panic!("expected validate config command, got {other:?}"),
-    }
-}
-
-struct HermeticStateDirectory {
+struct SandboxStateDirectory {
     _temporary_directory: tempfile::TempDir,
     instance_paths: AstronomicalInstancePaths,
 }
 
-fn hermetic_instance_paths() -> HermeticStateDirectory {
+fn sandbox_instance_paths() -> SandboxStateDirectory {
     let temporary_directory = tempfile::tempdir().expect("temporary state directory");
     let instance_paths = AstronomicalInstancePaths::for_state_directory(
         temporary_directory.path().join("state"),
         AstronomicalRuntimeInstance::Development,
     );
-    HermeticStateDirectory {
+    SandboxStateDirectory {
         _temporary_directory: temporary_directory,
         instance_paths,
     }
@@ -73,46 +62,13 @@ fn rendered_report(
 }
 
 #[test]
-fn should_default_validate_config_to_development_instance() {
-    let validate_arguments = parsed_validate_config(&[]);
-    assert_eq!(
-        validate_arguments.runtime_instance,
-        AstronomicalRuntimeInstance::Development
-    );
-    assert!(!validate_arguments.render_json);
-}
-
-#[test]
-fn should_parse_stable_instance_flag() {
-    let validate_arguments = parsed_validate_config(&["--instance", "stable"]);
-    assert_eq!(
-        validate_arguments.runtime_instance,
-        AstronomicalRuntimeInstance::Stable
-    );
-}
-
-#[test]
-fn should_reject_unknown_instance_name() {
-    let usage_error = test_support::parse(&["validate", "config", "--instance", "beta"])
-        .expect_err("unknown instance");
-    assert!(usage_error.to_string().contains("stable"));
-}
-
-#[test]
-fn should_reject_validate_without_config_noun() {
-    let usage_error =
-        test_support::parse(&["validate", "models"]).expect_err("only config is supported");
-    assert!(usage_error.to_string().contains("config"));
-}
-
-#[test]
 fn should_report_effective_values_for_valid_config() {
-    let hermetic_state = hermetic_instance_paths();
-    write_config_file(&hermetic_state.instance_paths, MINIMAL_VALID_CONFIG_JSON);
-    let rendered_text = rendered_report(&hermetic_state.instance_paths).expect("valid config");
+    let sandbox_state = sandbox_instance_paths();
+    write_config_file(&sandbox_state.instance_paths, MINIMAL_VALID_CONFIG_JSON);
+    let rendered_text = rendered_report(&sandbox_state.instance_paths).expect("valid config");
     assert!(
         rendered_text.contains(
-            hermetic_state
+            sandbox_state
                 .instance_paths
                 .config_file_path()
                 .to_string_lossy()
@@ -128,14 +84,14 @@ fn should_report_effective_values_for_valid_config() {
 
 #[test]
 fn should_fail_when_config_file_is_missing() {
-    let hermetic_state = hermetic_instance_paths();
+    let sandbox_state = sandbox_instance_paths();
     let validation_error =
-        rendered_report(&hermetic_state.instance_paths).expect_err("no config file written");
+        rendered_report(&sandbox_state.instance_paths).expect_err("no config file written");
     match validation_error {
         ValidateConfigError::ConfigFileMissing { config_file_path } => {
             assert_eq!(
                 config_file_path,
-                hermetic_state.instance_paths.config_file_path()
+                sandbox_state.instance_paths.config_file_path()
             );
         }
         other => panic!("expected missing config file error, got {other:?}"),
@@ -144,13 +100,13 @@ fn should_fail_when_config_file_is_missing() {
 
 #[test]
 fn should_fail_when_config_document_is_invalid() {
-    let hermetic_state = hermetic_instance_paths();
-    write_config_file(&hermetic_state.instance_paths, r#"{ "unexpected": true }"#);
+    let sandbox_state = sandbox_instance_paths();
+    write_config_file(&sandbox_state.instance_paths, r#"{ "unexpected": true }"#);
     let validation_error =
-        rendered_report(&hermetic_state.instance_paths).expect_err("invalid config document");
+        rendered_report(&sandbox_state.instance_paths).expect_err("invalid config document");
     assert!(
         validation_error.to_string().contains(
-            hermetic_state
+            sandbox_state
                 .instance_paths
                 .config_file_path()
                 .to_string_lossy()
@@ -161,8 +117,8 @@ fn should_fail_when_config_document_is_invalid() {
 
 #[test]
 fn should_render_json_report_for_scripts() {
-    let hermetic_state = hermetic_instance_paths();
-    write_config_file(&hermetic_state.instance_paths, MINIMAL_VALID_CONFIG_JSON);
+    let sandbox_state = sandbox_instance_paths();
+    write_config_file(&sandbox_state.instance_paths, MINIMAL_VALID_CONFIG_JSON);
     let mut rendered_output = Vec::new();
     let mut ignored_errors = Vec::new();
     run_validate_config(
@@ -171,7 +127,7 @@ fn should_render_json_report_for_scripts() {
             render_json: true,
         },
         &mut ValidateConfigDependencies {
-            instance_paths: hermetic_state.instance_paths.clone(),
+            instance_paths: sandbox_state.instance_paths.clone(),
             stdout: &mut rendered_output,
             stderr: &mut ignored_errors,
         },
