@@ -4,7 +4,7 @@
 
 use std::{io::Write, path::PathBuf};
 
-use astronomical_cli::{CliCommand, StatusDependencies};
+use astronomical_cli::StatusDependencies;
 use astronomical_ipc_protocol::DaemonWorkerStatus;
 use tokio::time::timeout;
 
@@ -23,11 +23,6 @@ fn status_dependencies<'a>(
         stdout: stdout as &mut dyn Write,
         request_timeout: TEST_TIMEOUT,
     }
-}
-
-#[test]
-fn should_parse_status_as_a_plain_verb() {
-    assert_eq!(test_support::parse(&["status"]), Ok(CliCommand::Status));
 }
 
 #[tokio::test]

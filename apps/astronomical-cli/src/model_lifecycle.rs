@@ -293,7 +293,10 @@ fn download_timeout_reason(model_id: &str) -> String {
 /// the leaf derived from it against the request's leaf. The leaf is derived
 /// here rather than taken from the wire's `requestable_model_id`, which
 /// stays `None` until the entry is ready on this Mac.
-fn catalog_entry_matches(catalog_entry: &DaemonCatalogEntry, requested_model_id: &str) -> bool {
+pub(crate) fn catalog_entry_matches(
+    catalog_entry: &DaemonCatalogEntry,
+    requested_model_id: &str,
+) -> bool {
     catalog_entry.huggingface_id == requested_model_id
         || astronomical_config::leaf_model_id(&catalog_entry.huggingface_id)
             == astronomical_config::leaf_model_id(requested_model_id)
@@ -302,7 +305,7 @@ fn catalog_entry_matches(catalog_entry: &DaemonCatalogEntry, requested_model_id:
 /// Usage-grade rejection for a model neither installed nor downloadable:
 /// near matches from what the machine actually has, plus the pointer to the
 /// full downloadable list.
-fn unknown_model_reason(
+pub(crate) fn unknown_model_reason(
     requested_model_id: &str,
     installed_models: &[DaemonListedModel],
     required_capability: RequiredCapability,
@@ -326,7 +329,7 @@ fn unknown_model_reason(
 
 /// One live-progress line: the terminal re-uses the line while the download
 /// runs. Sizes render in decimal SI gigabytes (1 GB = 1,000,000,000 bytes).
-fn render_download_progress(download_job: &DaemonDownloadJob) -> String {
+pub(crate) fn render_download_progress(download_job: &DaemonDownloadJob) -> String {
     if download_job.bytes_total == 0 {
         return format!("{}: {}", download_job.huggingface_id, download_job.state);
     }
@@ -341,108 +344,4 @@ fn render_download_progress(download_job: &DaemonDownloadJob) -> String {
         total_gigabytes,
         percentage,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn catalog_entry(
-        huggingface_id: &str,
-        requestable_model_id: Option<&str>,
-    ) -> DaemonCatalogEntry {
-        DaemonCatalogEntry {
-            huggingface_id: huggingface_id.to_owned(),
-            display_name: huggingface_id.to_owned(),
-            family: "qwen".to_owned(),
-            approximate_size_bytes: 1_000_000_000,
-            ready_on_this_mac: false,
-            requestable_model_id: requestable_model_id.map(str::to_owned),
-            download_state: None,
-            context_window: Some(32_768),
-            supports_reasoning: false,
-            supports_vision: false,
-            supports_tool_calls: false,
-            supports_image_generation: false,
-            supports_embeddings: false,
-        }
-    }
-
-    #[test]
-    fn catalog_entry_matches_by_huggingface_id_or_leaf_even_when_not_ready() {
-        let ready_catalog_entry =
-            catalog_entry("mlx-community/Qwen3.5-2B-4bit", Some("Qwen3.5-2B-4bit"));
-        assert!(catalog_entry_matches(
-            &ready_catalog_entry,
-            "mlx-community/Qwen3.5-2B-4bit"
-        ));
-        assert!(catalog_entry_matches(
-            &ready_catalog_entry,
-            "Qwen3.5-2B-4bit"
-        ));
-        assert!(catalog_entry_matches(
-            &ready_catalog_entry,
-            "other-ns/Qwen3.5-2B-4bit"
-        ));
-        assert!(!catalog_entry_matches(
-            &ready_catalog_entry,
-            "Qwen3.5-4B-4bit"
-        ));
-        // Not-ready entries carry no requestable id on the wire; the leaf
-        // must still match because the daemon derives it from the hf id.
-        let not_ready_catalog_entry = catalog_entry("mlx-community/Qwen3.5-2B-4bit", None);
-        assert!(catalog_entry_matches(
-            &not_ready_catalog_entry,
-            "Qwen3.5-2B-4bit"
-        ));
-    }
-
-    #[test]
-    fn render_download_progress_uses_decimal_gigabytes() {
-        let download_job = DaemonDownloadJob {
-            huggingface_id: "example/2gb-model".to_owned(),
-            state: "downloading".to_owned(),
-            bytes_completed: 1_500_000_000,
-            bytes_total: 2_000_000_000,
-            error: None,
-        };
-        assert_eq!(
-            render_download_progress(&download_job),
-            "example/2gb-model: downloading 1.5 GB / 2 GB (75%)"
-        );
-    }
-
-    #[test]
-    fn render_download_progress_without_a_total_only_shows_state() {
-        let download_job = DaemonDownloadJob {
-            huggingface_id: "example/unknown-size".to_owned(),
-            state: "fetching_manifest".to_owned(),
-            bytes_completed: 0,
-            bytes_total: 0,
-            error: None,
-        };
-        assert_eq!(
-            render_download_progress(&download_job),
-            "example/unknown-size: fetching_manifest"
-        );
-    }
-
-    #[test]
-    fn unknown_model_reason_lists_near_matches_and_the_supported_hint() {
-        let installed_models = vec![DaemonListedModel {
-            model_id: "Qwen3.5-2B-4bit".to_owned(),
-            family: "qwen3_5".to_owned(),
-            context_window: Some(32_768),
-            supports_embeddings: false,
-            is_resident: false,
-            size_bytes: 1_500_000_000,
-        }];
-        let reason = unknown_model_reason(
-            "Qwen3.5-14B-4bit",
-            &installed_models,
-            RequiredCapability::Chat,
-        );
-        assert!(reason.contains("did you mean: qwen3.5-2b-4bit"), "{reason}");
-        assert!(reason.contains("astronomical models supported"), "{reason}");
-    }
 }

@@ -3,14 +3,14 @@
 
 use std::{io::Write, path::PathBuf};
 
-use astronomical_cli::{CliCommand, ModelsCommand, ModelsDependencies, UsageError};
+use astronomical_cli::{ModelsCommand, ModelsDependencies};
 use tokio::time::timeout;
 
 use super::stub_daemon::{
     StubCatalogEntry, StubDaemonConfig, StubInstalledModel, spawn_stub_daemon, stub_download_job,
 };
 use super::test_support::{
-    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory, parse,
+    DOWNLOAD_POLL_INTERVAL, SOCKET_FILE_NAME, TEST_TIMEOUT, fresh_test_directory,
 };
 
 fn models_dependencies<'a>(
@@ -26,60 +26,6 @@ fn models_dependencies<'a>(
         download_stage_bound: TEST_TIMEOUT,
         download_poll_interval: DOWNLOAD_POLL_INTERVAL,
     }
-}
-
-#[test]
-fn should_parse_models_subcommands() {
-    assert_eq!(
-        parse(&["models", "list"]),
-        Ok(CliCommand::Models(ModelsCommand::List))
-    );
-    assert_eq!(
-        parse(&["models", "supported"]),
-        Ok(CliCommand::Models(ModelsCommand::Supported))
-    );
-    assert_eq!(
-        parse(&["models", "default"]),
-        Ok(CliCommand::Models(ModelsCommand::Default {
-            model_id: None
-        }))
-    );
-    assert_eq!(
-        parse(&["models", "default", "test/model"]),
-        Ok(CliCommand::Models(ModelsCommand::Default {
-            model_id: Some("test/model".to_owned())
-        }))
-    );
-    assert_eq!(
-        parse(&["models", "download", "test/model"]),
-        Ok(CliCommand::Models(ModelsCommand::Download {
-            model_id: "test/model".to_owned()
-        }))
-    );
-}
-
-#[test]
-fn should_reject_models_without_a_subcommand_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["models"]),
-        Err(UsageError::ModelsSubcommandRequired)
-    ));
-}
-
-#[test]
-fn should_reject_models_with_an_unknown_subcommand_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["models", "reboot"]),
-        Err(UsageError::UnknownModelsSubcommand(subcommand)) if subcommand == "reboot"
-    ));
-}
-
-#[test]
-fn should_reject_models_download_without_a_model_id_as_a_usage_error() {
-    assert!(matches!(
-        parse(&["models", "download"]),
-        Err(UsageError::ModelsDownloadModelRequired)
-    ));
 }
 
 /// Stub with two installed models (one resident) plus a three-entry catalog

@@ -9,6 +9,10 @@ runs and why it exists. Real-model journeys are invoked directly with
 
 - `cargo test-hermetic` — runs every package's `hermetic_tests` binary. The
   fast, machine-independent verification lane; safe to run on any host.
+- `cargo test -p astronomical-cli` — the CLI verb surface: unit tests live
+  beside their source as `*_tests.rs` modules inside `src/`, and the
+  `hermetic_tests` target runs the stub-daemon/stub-server verb journeys
+  under `tests/cli_journeys/`. No daemon, no GPU, no network.
 - `cargo test-rest-api` — runs the REST contract and daemon
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
 - `cargo test-hermetic-and-rest` — both lanes together. This is the
