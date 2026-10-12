@@ -32,7 +32,6 @@ mod mlx_safetensors_memory_writer;
 mod mlx_safetensors_writer;
 #[cfg(feature = "mlx")]
 mod positional_file_read_metrics;
-pub mod weights_file_cache_retention;
 
 pub use mlx_metallib_path::resolve_mlx_metallib_path;
 #[cfg(feature = "mlx")]
