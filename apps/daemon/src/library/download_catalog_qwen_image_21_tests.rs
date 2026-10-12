@@ -1,6 +1,6 @@
 //! Bundled-catalog contract for the Qwen-Image-2.1 family offer.
 
-use astronomical_daemon::{DownloadCatalog, DownloadCatalogFamily};
+use crate::{DownloadCatalog, DownloadCatalogFamily};
 
 #[test]
 fn should_package_qwen_image_2_1_with_only_its_executable_pipeline_graph() {

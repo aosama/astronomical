@@ -83,3 +83,26 @@ pub use hugging_face_hub::{
     HubManifestFile, HuggingFaceHub, HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest,
 };
 pub use reqwest_hub_transport::{ReqwestHubTransport, ReqwestHubTransportBuildError};
+
+#[cfg(test)]
+mod download_catalog_k2_horizon_mova_tests;
+#[cfg(test)]
+mod download_catalog_ornith_6bit_tests;
+#[cfg(test)]
+mod download_catalog_qwen3_6_tests;
+#[cfg(test)]
+mod download_catalog_qwen_image_21_tests;
+#[cfg(test)]
+mod download_catalog_tests;
+#[cfg(test)]
+mod download_disk_preflight_tests;
+#[cfg(test)]
+mod download_executable_preflight_tests;
+#[cfg(test)]
+mod download_job_store_tests;
+#[cfg(test)]
+mod download_job_tests;
+#[cfg(test)]
+mod download_manifest_preflight_tests;
+#[cfg(test)]
+mod hugging_face_hub_tests;

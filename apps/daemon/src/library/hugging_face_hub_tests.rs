@@ -2,15 +2,16 @@
 
 use std::{future::Future, time::Duration};
 
-use astronomical_daemon::{
+use crate::{
     DownloadCatalog, DownloadFileDigest, DownloadJob, HubHttpRequest, HubHttpResponse,
     HubHttpResponseError, HubPayloadRequest, HubPayloadTransport, HubTransport, HuggingFaceHub,
     HuggingFaceHubError, HuggingFaceHubLimits, ReqwestHubTransport,
 };
 
-mod support;
+#[cfg(test)]
+mod support_tests;
 
-use support::{
+use support_tests::{
     ScriptedExchange, announce, hub_with_tree, metadata_url, scripted_transport, tree_url,
     valid_metadata_exchange,
 };

@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_daemon::{
+use crate::{
     DaemonPerformanceAttributionLog, DiskCapacityQuery, DownloadCatalog,
     DownloadJobPublicErrorCode, DownloadJobState, DownloadPublicationRefresh, HubHttpRequest,
     HubHttpResponse, HubPayloadFuture, HubPayloadRequest, HubPayloadTransport, HubTransport,
@@ -275,7 +275,7 @@ impl DownloadJourney {
 }
 
 struct FailedJobWaiter {
-    failed_job: astronomical_daemon::DownloadJob,
+    failed_job: crate::DownloadJob,
 }
 
 impl FailedJobWaiter {
