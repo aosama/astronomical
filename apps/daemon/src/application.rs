@@ -1,14 +1,14 @@
-use crate::config_reload::{ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver};
+use crate::config::config_reload::{ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver};
+use crate::http::status_endpoint::status_check;
 use crate::library::{
     DownloadCatalog, LibraryDownloadCoordinator, library_catalog_routes, library_download_routes,
 };
-use crate::status_endpoint::status_check;
 use crate::{
     ImageGenerationExecutor, WorkerHandle,
-    console_assets::console_routes,
-    openai_chat_endpoint,
-    openai_models_endpoint::{list_models, retrieve_model},
-    openai_responses_endpoint,
+    console::console_assets::console_routes,
+    http::openai_chat_endpoint,
+    http::openai_models_endpoint::{list_models, retrieve_model},
+    http::openai_responses_endpoint,
     system_telemetry::system_telemetry_routes,
 };
 use astronomical_config::DiscoveredModel;
@@ -370,7 +370,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         .merge(console_routes())
         .merge(library_catalog_routes())
         .merge(library_download_routes())
-        .merge(crate::config_reveal_endpoint::config_reveal_routes())
+        .merge(crate::http::config_reveal_endpoint::config_reveal_routes())
         .merge(system_telemetry_routes())
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
@@ -390,18 +390,18 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         );
     let router = router.route(
         "/v1/images/generations",
-        post(crate::openai_image_generation_endpoint::create_image_generation)
+        post(crate::http::openai_image_generation_endpoint::create_image_generation)
             .layer(DefaultBodyLimit::max(MAX_OPENAI_CHAT_REQUEST_BODY_BYTES)),
     );
     let router = router.route(
         "/v1/embeddings",
-        post(crate::openai_embeddings_endpoint::create_embeddings)
+        post(crate::http::openai_embeddings_endpoint::create_embeddings)
             .layer(DefaultBodyLimit::max(MAX_OPENAI_CHAT_REQUEST_BODY_BYTES)),
     );
     let router = if supports_config_reload {
         router.route(
             "/v1/config/reload",
-            post(crate::config_reload_endpoint::reload_config),
+            post(crate::http::config_reload_endpoint::reload_config),
         )
     } else {
         router
@@ -409,7 +409,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let router = if supports_cache_clear {
         router.route(
             "/v1/cache",
-            delete(crate::cache_clear_endpoint::clear_cache),
+            delete(crate::http::cache_clear_endpoint::clear_cache),
         )
     } else {
         router
@@ -417,7 +417,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let router = if supports_live_mlx_memory_control {
         router.route(
             "/v1/config/maximum-mlx-memory",
-            put(crate::maximum_mlx_memory_endpoint::update_maximum_mlx_memory)
+            put(crate::http::maximum_mlx_memory_endpoint::update_maximum_mlx_memory)
                 .layer(DefaultBodyLimit::max(4 * 1024)),
         )
     } else {
