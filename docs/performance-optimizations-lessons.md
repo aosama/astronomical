@@ -2,6 +2,12 @@
 
 Throughput comparisons in this repository use a single measurement run per side; repeated or interleaved passes are not required.
 
+## The Metal recommended working set tracks the operator's wired-limit raise (issue #1120)
+
+- MLX's `max_recommended_working_set_size` device-info entry is not a stable machine constant. With the kernel's `iogpu.wired_limit_mb` at its default policy it reads the unified-memory degradation threshold (roughly three quarters of physical memory); the moment the operator raises the wired limit, it reports the raised wired limit byte for byte. Any envelope, reserve, or ceiling derived from the recommended value therefore moves with the operator's raise — the derivation is correct arithmetic over a shifting input, and consumers must decide explicitly whether their anchor is the degradation threshold or the operator's intent.
+- A serving envelope derived from the recommended value keeps protecting an unraised machine, and on a machine with a deliberately raised wired limit it deliberately admits larger resident ceilings — that is the operator taking responsibility for the pressure. Test guards that cap real-model journeys at a fixed byte limit below the envelope remain the layer that protects the test machine; the two layers answer different questions and must not be conflated.
+- Sweep-cell budgets are evidence bounds, not physics. Re-bounding a serving budget changes which ceiling cells complete; comparing a re-bounded cell against historical rates recorded under a wider budget measures the bound, not the machine. Compare byte counters and residency modes across budget changes, and re-run rate comparisons only under the same budget.
+
 ## Live memory-ceiling demotion needs a process boundary (issue #1139)
 
 - A memory ceiling cannot be lowered inside the process that holds the memory. MLX allocations are process-global and are not released deterministically while another model runtime is being constructed alongside them, so a resident-to-streaming demotion that builds its replacement in-process briefly requires both model runtimes and reclaims nothing. Lowering the limit after loading the replacement does not help either: the peak already happened. Enforce the boundary structurally — stop and reap the old process before launching the replacement — not through timing, sleep, or an assumed scheduler.
