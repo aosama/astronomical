@@ -25,9 +25,8 @@ main() {
     if forbidden_matches="$(
         rg --line-number --glob '*.rs' "$forbidden_pattern" \
             "${repository_root}/apps/inference-worker/tests" \
-            "${repository_root}/apps/supervisor/tests" \
-            "${repository_root}/crates/model-serving/tests" \
-            "${repository_root}/experimental" 2>&1
+            "${repository_root}/apps/daemon/tests" \
+            "${repository_root}/crates/model-serving/tests" 2>&1
     )"
     then
         printf '%s\n' "$forbidden_matches" >&2
