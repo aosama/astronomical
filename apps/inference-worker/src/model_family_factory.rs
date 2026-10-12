@@ -274,6 +274,9 @@ impl
                                 decode_stage_attribution_enabled: model_configuration
                                     .chunking
                                     .experimental_decode_stage_attribution_enabled,
+                                prefill_stage_attribution_enabled: model_configuration
+                                    .chunking
+                                    .experimental_prefill_stage_attribution_enabled,
                                 quantized_kv_cache_enabled: model_configuration
                                     .chunking
                                     .experimental_quantized_kv_cache_enabled,

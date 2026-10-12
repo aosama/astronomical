@@ -12,6 +12,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::{K2HorizonMoVAActiveGeneration, K2HorizonMoVAInferenceExecution};
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
+use crate::k2_horizon_mova::model::StageAttributionScope;
 use crate::k2_horizon_mova::model::{
     FusedExpertDecodeKernels, K2HorizonMoVAModel, K2HorizonMoVAWeights,
 };
@@ -117,6 +118,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             pending.prompt_cache_common_prefix_stride_blocks;
         self.full_attention_kv_state_growth_tokens = pending.full_attention_kv_state_growth_tokens;
         self.decode_stage_attribution_enabled = pending.decode_stage_attribution_enabled;
+        self.prefill_stage_attribution_enabled = pending.prefill_stage_attribution_enabled;
         self.quantized_kv_cache_enabled = pending.quantized_kv_cache_enabled;
         self.fused_expert_decode_enabled = pending.fused_expert_decode_enabled;
         self.persistent_prompt_cache_disk_store_config =
@@ -287,6 +289,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
                     active,
                     prompt_processing_chunk_tokens,
                     self.persistent_prompt_cache.as_deref(),
+                    self.prefill_stage_attribution_enabled,
                 )?
             };
             if let GeneratedToken::PrefillProgress {
@@ -341,8 +344,9 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
                         .measure_operation(
                             PerformanceOperation::DecodeAdvanceSpan,
                             |performance_attribution| {
-                                let stage_attribution = performance_attribution.is_enabled()
-                                    && self.decode_stage_attribution_enabled;
+                                let stage_attribution = (performance_attribution.is_enabled()
+                                    && self.decode_stage_attribution_enabled)
+                                    .then_some(StageAttributionScope::Decode);
                                 model.forward(
                                     &[token_id],
                                     &mut active.caches,
@@ -438,7 +442,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             &input_token_ids,
             &mut active.caches,
             &mut performance_attribution,
-            false,
+            None,
         );
         active.performance_attribution = performance_attribution;
         forward_result.map_err(super::super::prefill::execution_error)?;

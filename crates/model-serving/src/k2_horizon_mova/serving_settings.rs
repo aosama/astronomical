@@ -19,6 +19,7 @@ pub struct K2HorizonMoVAServingSettings {
     pub performance_attribution_log_path: Option<PathBuf>,
     pub full_attention_kv_state_growth_tokens: u32,
     pub decode_stage_attribution_enabled: bool,
+    pub prefill_stage_attribution_enabled: bool,
     pub quantized_kv_cache_enabled: bool,
     pub fused_expert_decode_enabled: bool,
 }
@@ -36,6 +37,7 @@ impl K2HorizonMoVAServingSettings {
             performance_attribution_log_path: None,
             full_attention_kv_state_growth_tokens: 256,
             decode_stage_attribution_enabled: false,
+            prefill_stage_attribution_enabled: false,
             quantized_kv_cache_enabled: false,
             fused_expert_decode_enabled: false,
         }

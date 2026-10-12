@@ -160,7 +160,7 @@ fn prefill_logits(
                     &prompt_token_ids[chunk_start..chunk_end],
                     &mut caches,
                     &mut performance_attribution,
-                    false,
+                    None,
                 )
                 .expect("probe prefill chunk should forward"),
         );

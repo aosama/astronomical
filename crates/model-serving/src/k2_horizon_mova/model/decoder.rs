@@ -14,6 +14,7 @@ use super::ops::{
     gathered_value_experts, grouped_rms_norm, merge_heads, reshape_heads, route_k2_experts,
 };
 use super::quantized_attention;
+use super::stage_attribution_scope::StageAttributionScope;
 use super::weights::{
     K2HorizonMoVADenseAttentionWeights, K2HorizonMoVADenseMlpWeights, K2HorizonMoVALayerWeights,
     K2HorizonMoVAMoVAAttentionWeights, K2HorizonMoVASparseMlpWeights,
@@ -78,7 +79,7 @@ pub fn forward_layer(
     sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     match layer_weights {
         K2HorizonMoVALayerWeights::Dense {
@@ -184,7 +185,7 @@ fn dense_attention(
     is_causal: bool,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     // One fused quantized projection produces q, k, and v; rows are packed
     // independently so the fused route is bit-identical to three projections.
@@ -245,7 +246,7 @@ fn mova_attention(
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     let token_count = hidden_states.shape().get(1).copied().unwrap_or(1);
     let flat = runtime.reshape(
@@ -313,9 +314,9 @@ fn mova_attention(
         config.num_key_value_heads(),
         config.head_dim(),
     )?;
-    if stage_attribution {
+    if let Some(attribution_scope) = stage_attribution {
         performance_attribution.measure_operation(
-            crate::PerformanceOperation::DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
+            attribution_scope.mixture_of_values_completion_wait(),
             |_| runtime.evaluate_arrays(&[&values]),
         )?;
     }
@@ -351,7 +352,7 @@ fn finish_attention(
     is_causal: bool,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     let queries = runtime.rope(
         &queries,
@@ -428,7 +429,7 @@ fn apply_attention_tail(
     gate_proj: Option<&super::affine::K2HorizonMoVAAffineLinear>,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     let mut attention = attention;
     if let (Some(gate_proj), Some(gate_func)) = (gate_proj, config.attention_gate_func()) {
@@ -445,11 +446,11 @@ fn apply_attention_tail(
     }
     let merged = merge_heads(runtime, &attention)?;
     let attention_output = o_proj.project(runtime, &merged)?;
-    if stage_attribution {
-        performance_attribution.measure_operation(
-            crate::PerformanceOperation::DecodeAttentionGraphicsProcessorCompletionWait,
-            |_| runtime.evaluate_arrays(&[&attention_output]),
-        )?;
+    if let Some(attribution_scope) = stage_attribution {
+        performance_attribution
+            .measure_operation(attribution_scope.attention_completion_wait(), |_| {
+                runtime.evaluate_arrays(&[&attention_output])
+            })?;
     }
     Ok(attention_output)
 }
@@ -460,7 +461,7 @@ fn dense_mlp(
     weights: &K2HorizonMoVADenseMlpWeights,
     compiled_swiglu: &MlxCompiledSwiGlu,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     let mlp_output = dense_swiglu(
         runtime,
@@ -470,11 +471,11 @@ fn dense_mlp(
         &weights.down_proj,
         compiled_swiglu,
     )?;
-    if stage_attribution {
-        performance_attribution.measure_operation(
-            crate::PerformanceOperation::DecodeFeedForwardGraphicsProcessorCompletionWait,
-            |_| runtime.evaluate_arrays(&[&mlp_output]),
-        )?;
+    if let Some(attribution_scope) = stage_attribution {
+        performance_attribution
+            .measure_operation(attribution_scope.feed_forward_completion_wait(), |_| {
+                runtime.evaluate_arrays(&[&mlp_output])
+            })?;
     }
     Ok(mlp_output)
 }
@@ -488,7 +489,7 @@ fn sparse_mlp(
     sorted_expert_reduction_kernel: Option<&MlxMetalKernel>,
     fused_expert_decode: Option<&FusedExpertDecodeKernels>,
     performance_attribution: &mut PerformanceAttribution,
-    stage_attribution: bool,
+    stage_attribution: Option<StageAttributionScope>,
 ) -> Result<MlxArray, K2HorizonMoVAExecutionError> {
     let token_count = hidden_states.shape().get(1).copied().unwrap_or(1);
     let batch = hidden_states.shape().first().copied().unwrap_or(1);
@@ -534,18 +535,18 @@ fn sparse_mlp(
         &weights.shared_down,
         compiled_swiglu,
     )?;
-    if stage_attribution {
-        performance_attribution.measure_operation(
-            crate::PerformanceOperation::DecodeFeedForwardGraphicsProcessorCompletionWait,
-            |_| runtime.evaluate_arrays(&[&combined]),
-        )?;
+    if let Some(attribution_scope) = stage_attribution {
+        performance_attribution
+            .measure_operation(attribution_scope.feed_forward_completion_wait(), |_| {
+                runtime.evaluate_arrays(&[&combined])
+            })?;
     }
     let summed = runtime.add(&combined, &shared)?;
-    if stage_attribution {
-        performance_attribution.measure_operation(
-            crate::PerformanceOperation::DecodeSharedExpertGraphicsProcessorCompletionWait,
-            |_| runtime.evaluate_arrays(&[&summed]),
-        )?;
+    if let Some(attribution_scope) = stage_attribution {
+        performance_attribution
+            .measure_operation(attribution_scope.shared_expert_completion_wait(), |_| {
+                runtime.evaluate_arrays(&[&summed])
+            })?;
     }
     Ok(runtime.reshape(&summed, &[batch, token_count, config.hidden_size() as i32])?)
 }

@@ -66,6 +66,8 @@ pub enum PerformanceOperation {
     PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait,
     PrefillFullAttentionGraphicsProcessorCompletionWait,
     PrefillFeedForwardGraphicsProcessorCompletionWait,
+    PrefillMixtureOfValuesGraphicsProcessorCompletionWait,
+    PrefillSharedExpertGraphicsProcessorCompletionWait,
     ExpertPagingDiagnosticLogging,
     DecodeAsyncEvaluationSubmission,
     GeneratedTokenItemSynchronizationWait,
@@ -196,6 +198,8 @@ impl PerformanceOperation {
         Self::PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait,
         Self::PrefillFullAttentionGraphicsProcessorCompletionWait,
         Self::PrefillFeedForwardGraphicsProcessorCompletionWait,
+        Self::PrefillMixtureOfValuesGraphicsProcessorCompletionWait,
+        Self::PrefillSharedExpertGraphicsProcessorCompletionWait,
         Self::ExpertPagingDiagnosticLogging,
         Self::DecodeAsyncEvaluationSubmission,
         Self::GeneratedTokenItemSynchronizationWait,
@@ -380,6 +384,12 @@ impl PerformanceOperation {
             }
             Self::PrefillFeedForwardGraphicsProcessorCompletionWait => {
                 "prefill_feed_forward_graphics_processor_completion_wait"
+            }
+            Self::PrefillMixtureOfValuesGraphicsProcessorCompletionWait => {
+                "prefill_mixture_of_values_graphics_processor_completion_wait"
+            }
+            Self::PrefillSharedExpertGraphicsProcessorCompletionWait => {
+                "prefill_shared_expert_graphics_processor_completion_wait"
             }
             Self::ExpertPagingDiagnosticLogging => "expert_paging_diagnostic_logging",
             Self::DecodeAsyncEvaluationSubmission => "decode_async_evaluation_submission",
