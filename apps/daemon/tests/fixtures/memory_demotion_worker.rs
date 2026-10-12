@@ -122,6 +122,12 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
         })
         .await?;
 
+    // In-place live ceiling updates rename the owning generation without a
+    // restart; every later acknowledgement must carry the current generation
+    // so the supervisor's identity binding keeps holding after an update.
+    let mut acknowledged_configuration_generation =
+        startup_configuration.configuration_generation.clone();
+
     let acknowledged_generation = if startup_configuration.configuration_generation
         == MISMATCHED_ACKNOWLEDGEMENT_GENERATION
     {
@@ -171,13 +177,28 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                     .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
                         worker_runtime_feature_configuration: runtime_configuration(
                             &startup_configuration,
-                            &startup_configuration.configuration_generation,
+                            &acknowledged_configuration_generation,
                             Some(model_configuration.runtime_configuration()),
                         ),
                     })
                     .await?;
                 emit_memory_snapshot(&mut event_writer, MlxMemorySnapshotSource::ModelLoaded)
                     .await?;
+            }
+            WorkerCommand::UpdateMlxMemoryLimit {
+                effective_mlx_memory_ceiling_bytes,
+                configuration_generation,
+            } => {
+                event_writer
+                    .send_event(&WorkerEvent::MlxMemoryLimitChanged {
+                        effective_mlx_memory_ceiling_bytes,
+                        minimum_mlx_memory_ceiling_bytes: MINIMUM_MEMORY_CEILING_BYTES,
+                        expert_memory_mode: ExpertMemoryMode::Hybrid,
+                        mlx_memory_snapshot: None,
+                        expert_residency: None,
+                    })
+                    .await?;
+                acknowledged_configuration_generation = configuration_generation;
             }
             WorkerCommand::Generate(generation_command) => {
                 // Finalization precedes completion, matching the real worker's
