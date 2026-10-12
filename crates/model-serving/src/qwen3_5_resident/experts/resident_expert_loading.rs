@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_runtime_integration::weights_file_cache_retention;
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors, PositionalFileReadMetrics};
 
 use crate::qwen3_5_core::artifacts::{
@@ -56,16 +55,17 @@ impl Qwen3_5ResidentExpertWeights {
             .collect::<BTreeSet<_>>();
         let mut resident_source_shards = HashMap::new();
         for source_file_path in source_file_paths {
-            let resident_source_shard = runtime.load_safetensors(
-                weights_file_cache_retention::open_weights_file(
-                    &source_file_path,
-                    weights_file_cache_retention::WeightsFileCacheRetention::MaterializeOnce,
-                )
-                .map_err(|retention_error| {
+            let resident_source_file =
+                std::fs::File::open(&source_file_path).map_err(|open_error| {
                     Qwen3_5ExecutionError::ExpertSourceFailure {
-                        description: retention_error.to_string(),
+                        description: format!(
+                            "opening expert source file {} failed: {open_error}",
+                            source_file_path.display()
+                        ),
                     }
-                })?,
+                })?;
+            let resident_source_shard = runtime.load_safetensors(
+                resident_source_file,
                 positional_file_read_metrics.as_ref().map(Arc::clone),
             )?;
             resident_source_shards.insert(source_file_path, resident_source_shard);
