@@ -92,7 +92,23 @@ impl MemoryDemotionRestart {
         .await?;
         let shutdown_elapsed_millis = demotion_started_at.elapsed().as_millis();
 
-        let mut candidate_worker_process = self.launch_candidate().await?;
+        // A failed launch must leave the same truthful unavailable state as a
+        // rejected acknowledgement: the trusted worker is already gone, so
+        // pretending a model is still loading would hide that nothing serves.
+        let mut candidate_worker_process = match self.launch_candidate().await {
+            Ok(candidate_worker_process) => candidate_worker_process,
+            Err(candidate_launch_error) => {
+                publish_health(
+                    health_snapshot,
+                    WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+                );
+                tracing::error!(
+                    error = %candidate_launch_error,
+                    "memory-demotion replacement candidate could not launch"
+                );
+                return Err(candidate_launch_error);
+            }
+        };
         let launch_elapsed_millis = demotion_started_at.elapsed().as_millis();
 
         let candidate_acknowledgement = match timeout(
