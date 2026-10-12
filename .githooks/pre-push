@@ -22,9 +22,23 @@ started_epoch_seconds="$(date +%s)"
 if (cd "${REPOSITORY_ROOT}" && cargo verify); then
     elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
     printf '%s\n' "[pre-push] status=success check=cargo-verify elapsed_seconds=${elapsed_seconds}"
+else
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-push] status=failed check=cargo-verify elapsed_seconds=${elapsed_seconds}" >&2
+    printf '%s\n' '[pre-push] hint=fix the compile errors locally before spending a GitHub Actions run' >&2
+    exit 1
+fi
+
+# Dependency bumps change the generated license notices; a stale digest fails
+# the CI notices gate, so prove it fresh here for one local digest comparison.
+printf '%s\n' '[pre-push] status=start check=rust-dependency-notices-digest'
+started_epoch_seconds="$(date +%s)"
+if (cd "${REPOSITORY_ROOT}" && sh scripts/ci/generate-rust-dependency-notices.sh --check); then
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-push] status=success check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}"
     exit 0
 fi
 elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
-printf '%s\n' "[pre-push] status=failed check=cargo-verify elapsed_seconds=${elapsed_seconds}" >&2
-printf '%s\n' '[pre-push] hint=fix the compile errors locally before spending a GitHub Actions run' >&2
+printf '%s\n' "[pre-push] status=failed check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}" >&2
+printf '%s\n' '[pre-push] hint=run scripts/ci/generate-rust-dependency-notices.sh and commit the result' >&2
 exit 1
