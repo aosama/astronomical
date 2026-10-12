@@ -33,6 +33,9 @@ pub(crate) mod openai_client;
 ))]
 #[allow(dead_code)]
 pub(crate) mod serving_rest;
+#[cfg(feature = "serving-acceptance")]
+#[allow(dead_code)]
+pub(crate) mod worker_process_observation;
 
 #[path = "../../../../crates/model-serving/tests/common/e2e_test_model_names.rs"]
 #[allow(dead_code)]
