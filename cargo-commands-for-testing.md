@@ -9,7 +9,7 @@ runs and why it exists. Real-model journeys are invoked directly with
 
 - `cargo test-hermetic` — runs every package's `hermetic_tests` binary. The
   fast, machine-independent verification lane; safe to run on any host.
-- `cargo test-rest-api` — runs the REST contract and supervisor
+- `cargo test-rest-api` — runs the REST contract and daemon
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
 - `cargo test-hermetic-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
@@ -137,7 +137,7 @@ maximum configured active-memory ceiling.
 ### Live ceiling demotion journeys (stop-first worker restart)
 
 Both journeys lower the public MLX ceiling below the loaded artifact size. The
-resident engine cannot shrink in place, so the supervisor stops and reaps the
+resident engine cannot shrink in place, so the daemon stops and reaps the
 old worker before it launches the replacement, and the streaming engine then
 serves the same conversation. Each journey is `#[serial]`, runs with one test
 thread, uses the Romeo and Juliet fixture with a fixed 2,048-token prefill
@@ -152,7 +152,7 @@ because it exercises solid-state-drive streaming.
   the active request must finish normally, and the restart must not begin until
   that request completes.
 
-The hermetic supervisor tests that pin the stop-first ordering and the four
+The hermetic daemon tests that pin the stop-first ordering and the four
 failure branches need no real model and no optimized build:
 
 - `cargo test -p astronomical-daemon --test hermetic_tests worker_memory_demotion -- --test-threads=1`

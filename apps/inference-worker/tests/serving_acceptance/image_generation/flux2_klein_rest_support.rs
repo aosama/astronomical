@@ -1,4 +1,4 @@
-//! Isolated production supervisor and worker boundary for native FLUX acceptance.
+//! Isolated production daemon and worker boundary for native FLUX acceptance.
 
 use std::{
     fs,

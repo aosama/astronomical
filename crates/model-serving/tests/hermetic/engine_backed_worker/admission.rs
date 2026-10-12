@@ -17,11 +17,11 @@ use tokio::time::timeout;
 #[tokio::test]
 async fn should_report_memory_admission_failure_without_stopping_the_worker() {
     let engine_worker = EngineBackedWorker::new(PassthroughProcessor, RejectingEngine);
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
@@ -29,16 +29,16 @@ async fn should_report_memory_admission_failure_without_stopping_the_worker() {
     });
 
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Ready { .. }
     ));
     for request_number in [1_u64, 2_u64] {
-        supervisor_writer
+        daemon_writer
             .send_command(&WorkerCommand::Generate(chat_command(request_number)))
             .await
             .expect("the worker should receive the generation request");
         assert_eq!(
-            next_event(&mut supervisor_reader).await,
+            next_event(&mut daemon_reader).await,
             WorkerEvent::Failed {
                 request_id: RequestId::new(request_number),
                 reason: ChatGenerationFailureReason::invalid_request(
@@ -48,10 +48,10 @@ async fn should_report_memory_admission_failure_without_stopping_the_worker() {
         );
     }
 
-    supervisor_writer
+    daemon_writer
         .close()
         .await
-        .expect("the supervisor should close the worker transport");
+        .expect("the daemon should close the worker transport");
     assert!(
         timeout(Duration::from_secs(1), worker_task)
             .await
@@ -64,11 +64,11 @@ async fn should_report_memory_admission_failure_without_stopping_the_worker() {
 #[tokio::test]
 async fn should_report_mid_generation_memory_growth_rejection_without_stopping_the_worker() {
     let engine_worker = EngineBackedWorker::new(PassthroughProcessor, GrowthRejectingEngine);
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
@@ -76,16 +76,16 @@ async fn should_report_mid_generation_memory_growth_rejection_without_stopping_t
     });
 
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Ready { .. }
     ));
     for request_number in [1_u64, 2_u64] {
-        supervisor_writer
+        daemon_writer
             .send_command(&WorkerCommand::Generate(chat_command(request_number)))
             .await
             .expect("the worker should receive the generation request");
         assert_eq!(
-            next_event(&mut supervisor_reader).await,
+            next_event(&mut daemon_reader).await,
             WorkerEvent::Failed {
                 request_id: RequestId::new(request_number),
                 reason: ChatGenerationFailureReason::invalid_request(
@@ -95,10 +95,10 @@ async fn should_report_mid_generation_memory_growth_rejection_without_stopping_t
         );
     }
 
-    supervisor_writer
+    daemon_writer
         .close()
         .await
-        .expect("the supervisor should close the worker transport");
+        .expect("the daemon should close the worker transport");
     assert!(
         timeout(Duration::from_secs(1), worker_task)
             .await
@@ -111,11 +111,11 @@ async fn should_report_mid_generation_memory_growth_rejection_without_stopping_t
 #[tokio::test]
 async fn should_report_injected_token_memory_growth_rejection_without_stopping_the_worker() {
     let engine_worker = EngineBackedWorker::new(FeedbackProcessor, FeedbackGrowthRejectingEngine);
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
@@ -123,15 +123,15 @@ async fn should_report_injected_token_memory_growth_rejection_without_stopping_t
     });
 
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Ready { .. }
     ));
     for request_number in [1_u64, 2_u64] {
-        supervisor_writer
+        daemon_writer
             .send_command(&WorkerCommand::Generate(chat_command(request_number)))
             .await
             .expect("the worker should receive the generation request");
-        let worker_event = next_event(&mut supervisor_reader).await;
+        let worker_event = next_event(&mut daemon_reader).await;
         assert!(
             matches!(
                 worker_event,
@@ -145,7 +145,7 @@ async fn should_report_injected_token_memory_growth_rejection_without_stopping_t
             "expected internal generation progress, got {worker_event:?}"
         );
         assert_eq!(
-            next_event(&mut supervisor_reader).await,
+            next_event(&mut daemon_reader).await,
             WorkerEvent::Failed {
                 request_id: RequestId::new(request_number),
                 reason: ChatGenerationFailureReason::invalid_request(
@@ -155,10 +155,10 @@ async fn should_report_injected_token_memory_growth_rejection_without_stopping_t
         );
     }
 
-    supervisor_writer
+    daemon_writer
         .close()
         .await
-        .expect("the supervisor should close the worker transport");
+        .expect("the daemon should close the worker transport");
     assert!(
         timeout(Duration::from_secs(1), worker_task)
             .await
@@ -189,13 +189,11 @@ fn chat_command(request_number: u64) -> ChatGenerationCommand {
     }
 }
 
-async fn next_event<ReadTransport>(
-    supervisor_reader: &mut ProtocolReader<ReadTransport>,
-) -> WorkerEvent
+async fn next_event<ReadTransport>(daemon_reader: &mut ProtocolReader<ReadTransport>) -> WorkerEvent
 where
     ReadTransport: tokio::io::AsyncRead + Unpin,
 {
-    supervisor_reader
+    daemon_reader
         .next_event()
         .await
         .expect("the worker should write a valid event")

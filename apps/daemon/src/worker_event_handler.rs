@@ -1,4 +1,4 @@
-//! Dispatches typed worker events to supervisor-owned request and health state.
+//! Dispatches typed worker events to daemon-owned request and health state.
 //!
 //! Process-scoped events (memory samples, readiness) are valid whenever their
 //! payload is valid. Generation-scoped events additionally require a matching
@@ -29,7 +29,7 @@ use crate::{
     worker_prefill_progress::handle_worker_prefill_progress,
 };
 
-/// Applies one typed worker event to supervisor-owned request and health state.
+/// Applies one typed worker event to daemon-owned request and health state.
 ///
 /// Process-scoped events such as memory samples are valid whenever their own
 /// payload is valid. Generation-scoped events additionally require a matching

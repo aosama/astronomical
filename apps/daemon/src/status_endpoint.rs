@@ -32,7 +32,7 @@ pub(super) async fn status_check(State(application_state): State<ApplicationStat
         }
         (false, _) => "custom",
     };
-    // Activity is supervisor-derived so the worker protocol stays focused on
+    // Activity is daemon-derived so the worker protocol stays focused on
     // generation data instead of duplicating phase-state events.
     let worker_health_snapshot = application_state
         .generation_executor

@@ -32,7 +32,7 @@ fn should_mark_bind_address_changes_as_rest_api_restart_required() {
         ConfigReloadDecision::RestApiRestartRequired {
             ref restart_required_fields,
             ..
-        } if restart_required_fields.contains(&"supervisor.bind_address".to_owned()) => {}
+        } if restart_required_fields.contains(&"daemon.bind_address".to_owned()) => {}
         unexpected => {
             panic!("a bind address change must require a full REST API restart, got {unexpected:?}")
         }

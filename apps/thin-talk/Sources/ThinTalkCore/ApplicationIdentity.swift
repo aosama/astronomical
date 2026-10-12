@@ -1,7 +1,7 @@
 import Foundation
 
 /// The runtime channel a thin chat app is built for. Each channel talks to an
-/// isolated supervisor state directory and a distinct local port.
+/// isolated daemon state directory and a distinct local port.
 public enum ThinTalkChannel: String, Equatable, Sendable {
   case stable
   case development
@@ -13,16 +13,16 @@ public enum ThinTalkChannel: String, Equatable, Sendable {
   /// The state directory this channel owns under the home directory.
   public var stateDirectoryName: String { self == .development ? ".astronomical-dev" : ".astronomical" }
 
-  /// The default supervisor port for this channel.
-  public var defaultSupervisorPort: Int { self == .development ? 6733 : 6732 }
+  /// The default daemon port for this channel.
+  public var defaultDaemonPort: Int { self == .development ? 6733 : 6732 }
 }
 
 /// Immutable application identity injected by the app bundle and shared by every
 /// local boundary. It is built from the Info.plist, never from the host machine,
-/// so the same binary can drive either isolated supervisor instance.
+/// so the same binary can drive either isolated daemon instance.
 public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   public let channel: ThinTalkChannel
-  public let supervisorPort: Int
+  public let daemonPort: Int
   public let stateDirectoryName: String
   public let version: String
   public let buildNumber: String
@@ -31,17 +31,17 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
 
   public static func current(bundle: Bundle = .main) -> ThinTalkApplicationIdentity {
     // Debug overrides: set THINTALK_CHANNEL=stable|development (and optionally
-    // THINTALK_SUPERVISOR_PORT) to target another installed supervisor without
+    // THINTALK_DAEMON_PORT) to target another installed daemon without
     // rebuilding Info.plist. Falls back to the bundle, then channel defaults.
     let environment = ProcessInfo.processInfo.environment
-    let explicitPort = Int(environment["THINTALK_SUPERVISOR_PORT"] ?? "")
+    let explicitPort = Int(environment["THINTALK_DAEMON_PORT"] ?? "")
     let explicitChannel = ThinTalkChannel(rawValue: environment["THINTALK_CHANNEL"] ?? "")
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
     let channel = explicitChannel ?? (ThinTalkChannel(rawValue: rawChannel ?? "") ?? .development)
-    let configuredPort = explicitPort ?? (bundle.object(forInfoDictionaryKey: "AstronomicalSupervisorPort") as? Int)
+    let configuredPort = explicitPort ?? (bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int)
     return ThinTalkApplicationIdentity(
       channel: channel,
-      supervisorPort: configuredPort ?? channel.defaultSupervisorPort,
+      daemonPort: configuredPort ?? channel.defaultDaemonPort,
       stateDirectoryName:
         (bundle.object(forInfoDictionaryKey: "AstronomicalStateDirectoryName") as? String)
           ?? channel.stateDirectoryName,
@@ -57,7 +57,7 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   /// Designated initializer covering every identity field.
   public init(
     channel: ThinTalkChannel,
-    supervisorPort: Int,
+    daemonPort: Int,
     stateDirectoryName: String,
     version: String,
     buildNumber: String,
@@ -65,7 +65,7 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
     isDirty: Bool
   ) {
     self.channel = channel
-    self.supervisorPort = supervisorPort
+    self.daemonPort = daemonPort
     self.stateDirectoryName = stateDirectoryName
     self.version = version
     self.buildNumber = buildNumber
@@ -74,10 +74,10 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   }
 
   /// Builds an identity from a bare port, primarily for tests.
-  public init(channel: ThinTalkChannel, supervisorPort: Int) {
+  public init(channel: ThinTalkChannel, daemonPort: Int) {
     self.init(
       channel: channel,
-      supervisorPort: supervisorPort,
+      daemonPort: daemonPort,
       stateDirectoryName: channel.stateDirectoryName,
       version: "0.1.0",
       buildNumber: "1",
@@ -87,12 +87,12 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   }
 
   /// Resolves the public endpoint URL for one REST path on this channel's
-  /// supervisor. Public endpoints need no authentication.
+  /// daemon. Public endpoints need no authentication.
   public func endpointURL(path: String) throws -> URL {
     guard path.hasPrefix("/") else {
       throw ThinTalkEndpointError.invalidEndpoint
     }
-    guard let endpointURL = URL(string: "http://127.0.0.1:\(supervisorPort)\(path)") else {
+    guard let endpointURL = URL(string: "http://127.0.0.1:\(daemonPort)\(path)") else {
       throw ThinTalkEndpointError.invalidEndpoint
     }
     return endpointURL
@@ -103,7 +103,7 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   public var expectedServerStateDirectory: String { "~/\(stateDirectoryName)" }
 }
 
-/// An endpoint path the identity cannot turn into a supervisor URL.
+/// An endpoint path the identity cannot turn into a daemon URL.
 public enum ThinTalkEndpointError: Error, Equatable, Sendable {
   case invalidEndpoint
 }

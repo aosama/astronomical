@@ -309,13 +309,13 @@ pub(super) async fn start_worker(
     ProtocolWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>>,
     JoinHandle<Result<(), WorkerRuntimeError>>,
 ) {
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_read, supervisor_write) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_read, daemon_write) = split(daemon_transport);
     let (worker_read, worker_write) = split(worker_transport);
     let worker_task = tokio::spawn(async move { worker.run(worker_read, worker_write).await });
     (
-        ProtocolReader::new(supervisor_read),
-        ProtocolWriter::new(supervisor_write),
+        ProtocolReader::new(daemon_read),
+        ProtocolWriter::new(daemon_write),
         worker_task,
     )
 }

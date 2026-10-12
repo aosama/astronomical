@@ -2,7 +2,7 @@ import Foundation
 import ThinTalkCore
 
 /// Maps the menu application's channel identity onto the chat surface's wire
-/// identity. The chat client validates the supervisor's channel and state
+/// identity. The chat client validates the daemon's channel and state
 /// directory during its handshake, so this mapping has to agree exactly with
 /// what the bundled daemon advertises for the same instance. The App Store
 /// build presents the Stable product identity (see ApplicationChannel), so it
@@ -15,7 +15,7 @@ enum ChatLaunchIdentity {
       applicationIdentity.channel == .development ? .development : .stable
     return ThinTalkCore.ThinTalkApplicationIdentity(
       channel: channel,
-      supervisorPort: applicationIdentity.supervisorPort,
+      daemonPort: applicationIdentity.daemonPort,
       stateDirectoryName: chatStateDirectoryName(
         channelOverride: applicationIdentity.stateDirectoryName),
       version: applicationIdentity.version,

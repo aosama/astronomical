@@ -106,11 +106,11 @@ main() {
     application_build_date="$(plutil -extract AstronomicalBuildDate raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     bundle_identifier="$(plutil -extract CFBundleIdentifier raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     bundle_icon_file="$(plutil -extract CFBundleIconFile raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
-    supervisor_port="$(plutil -extract AstronomicalSupervisorPort raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
+    daemon_port="$(plutil -extract AstronomicalDaemonPort raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     state_directory_name="$(plutil -extract AstronomicalStateDirectoryName raw -o - "${SOURCE_APP_BUNDLE}/Contents/Info.plist")"
     [ "$application_is_dirty" = "false" ] || { print_error "dirty builds cannot be promoted to Stable"; exit 1; }
     [ "$bundle_identifier" = "dev.astronomical.app" ] || { print_error "Stable bundle identifier is invalid"; exit 1; }
-    [ "$supervisor_port" = "6732" ] || { print_error "Stable bundle must use port 6732"; exit 1; }
+    [ "$daemon_port" = "6732" ] || { print_error "Stable bundle must use port 6732"; exit 1; }
     [ "$state_directory_name" = ".astronomical" ] || { print_error "Stable bundle state directory is invalid"; exit 1; }
     case "$application_build_number" in ''|*[!0-9]*) print_error "Stable bundle build number must be numeric"; exit 1 ;; esac
     case "$application_build_date" in ????????) ;; *) print_error "Stable bundle build date must use YYYYMMDD"; exit 1 ;; esac

@@ -16,11 +16,11 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         },
         0,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
@@ -28,7 +28,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     });
 
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Idle {
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
@@ -37,7 +37,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     );
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 0);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/requested-model".to_owned(),
             model_configuration: worker_model_configuration("requested-model"),
@@ -46,7 +46,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         .expect("the worker should receive the first requested model");
 
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ModelSwapped {
             expert_memory_mode: Some(astronomical_ipc_protocol::ExpertMemoryMode::Resident),
             ..
@@ -61,7 +61,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
         &[worker_model_configuration("requested-model")]
     );
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -88,29 +88,29 @@ async fn should_apply_a_clamped_live_ceiling_and_generation_to_the_next_model() 
         prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
-    let _idle_event = next_event(&mut supervisor_reader).await;
-    let _idle_runtime_configuration = next_event(&mut supervisor_reader).await;
-    supervisor_writer
+    let _idle_event = next_event(&mut daemon_reader).await;
+    let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/first-model".to_owned(),
             model_configuration: worker_model_configuration("first-model"),
         })
         .await
         .expect("the first model should load");
-    let _model_swapped_event = next_event(&mut supervisor_reader).await;
-    let _first_model_runtime_configuration = next_event(&mut supervisor_reader).await;
+    let _model_swapped_event = next_event(&mut daemon_reader).await;
+    let _first_model_runtime_configuration = next_event(&mut daemon_reader).await;
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 40_000_000_000,
             configuration_generation: "generation-after-memory-update".to_owned(),
@@ -118,7 +118,7 @@ async fn should_apply_a_clamped_live_ceiling_and_generation_to_the_next_model() 
         .await
         .expect("the live memory limit should reach the worker");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::MlxMemoryLimitChanged {
             effective_mlx_memory_ceiling_bytes: 35_000_000_000,
             expert_residency: Some(WorkerExpertResidencySnapshot {
@@ -130,7 +130,7 @@ async fn should_apply_a_clamped_live_ceiling_and_generation_to_the_next_model() 
         }
     ));
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/second-model".to_owned(),
             model_configuration: worker_model_configuration("second-model"),
@@ -138,11 +138,11 @@ async fn should_apply_a_clamped_live_ceiling_and_generation_to_the_next_model() 
         .await
         .expect("the replacement model should receive the updated MLX limit pair");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ModelSwapped { .. }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::RuntimeFeatureConfigurationApplied {
             worker_runtime_feature_configuration,
         } if worker_runtime_feature_configuration.configuration_generation
@@ -157,7 +157,7 @@ async fn should_apply_a_clamped_live_ceiling_and_generation_to_the_next_model() 
             (35_000_000_000, 32_000_000_000),
         ]
     );
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -184,20 +184,20 @@ async fn should_clamp_live_memory_updates_before_the_next_model_load() {
         prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    let _idle_event = next_event(&mut supervisor_reader).await;
-    let _idle_runtime_configuration = next_event(&mut supervisor_reader).await;
-    supervisor_writer
+    let _idle_event = next_event(&mut daemon_reader).await;
+    let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
+    daemon_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 40_000_000_000,
             configuration_generation: "generation-after-live-clamp".to_owned(),
@@ -205,14 +205,14 @@ async fn should_clamp_live_memory_updates_before_the_next_model_load() {
         .await
         .expect("the live memory limit should reach the idle worker");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::MlxMemoryLimitChanged {
             effective_mlx_memory_ceiling_bytes: 35_000_000_000,
             ..
         }
     ));
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/clamped-model".to_owned(),
             model_configuration: worker_model_configuration("clamped-model"),
@@ -220,11 +220,11 @@ async fn should_clamp_live_memory_updates_before_the_next_model_load() {
         .await
         .expect("the model should load after the clamped setting");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ModelSwapped { .. }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::RuntimeFeatureConfigurationApplied {
             worker_runtime_feature_configuration,
         } if worker_runtime_feature_configuration.configuration_generation
@@ -237,7 +237,7 @@ async fn should_clamp_live_memory_updates_before_the_next_model_load() {
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner()),
         vec![(35_000_000_000, 35_000_000_000)]
     );
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -249,11 +249,11 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
         },
         0,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
@@ -261,26 +261,25 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
     });
 
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Idle {
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
         }
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/invalid-model".to_owned(),
             model_configuration: worker_model_configuration("invalid-model"),
         })
         .await
         .expect("the worker should receive the invalid model selection");
-    let model_swap_failure_event =
-        timeout(Duration::from_millis(100), supervisor_reader.next_event())
-            .await
-            .expect("the worker should report model creation failure without waiting for a timeout")
-            .expect("the model failure event should be valid")
-            .expect("the worker transport should remain open");
+    let model_swap_failure_event = timeout(Duration::from_millis(100), daemon_reader.next_event())
+        .await
+        .expect("the worker should report model creation failure without waiting for a timeout")
+        .expect("the model failure event should be valid")
+        .expect("the worker transport should remain open");
     assert_eq!(
         model_swap_failure_event,
         WorkerEvent::ModelSwapFailed {
@@ -289,7 +288,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
         }
     );
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/valid-model".to_owned(),
             model_configuration: worker_model_configuration("valid-model"),
@@ -297,12 +296,12 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
         .await
         .expect("the idle worker should accept a later valid model");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ModelSwapped { .. }
     ));
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 2);
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -351,33 +350,33 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
         prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    let _idle_event = next_event(&mut supervisor_reader).await;
-    let _idle_runtime_configuration = next_event(&mut supervisor_reader).await;
-    supervisor_writer
+    let _idle_event = next_event(&mut daemon_reader).await;
+    let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/observed-model".to_owned(),
             model_configuration: worker_model_configuration("observed-model"),
         })
         .await
         .expect("the observed model should load");
-    let _model_swapped_event = next_event(&mut supervisor_reader).await;
-    let _model_runtime_configuration = next_event(&mut supervisor_reader).await;
+    let _model_swapped_event = next_event(&mut daemon_reader).await;
+    let _model_runtime_configuration = next_event(&mut daemon_reader).await;
 
     let WorkerEvent::MlxMemorySample {
         mlx_memory_snapshot: Some(model_loaded_snapshot),
         ..
-    } = next_event(&mut supervisor_reader).await
+    } = next_event(&mut daemon_reader).await
     else {
         panic!("load-complete must emit an MLX memory sample after the swap");
     };
@@ -398,7 +397,7 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     // The live-limit event lands after the ModelLoaded sample, so a split-less
     // telemetry here would overwrite the load-complete split on the status the
     // menu paints (issue #510).
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 24_000_000_000,
             configuration_generation: "limit-adjusted-generation".to_owned(),
@@ -408,7 +407,7 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     let WorkerEvent::MlxMemoryLimitChanged {
         mlx_memory_snapshot: Some(limit_adjusted_snapshot),
         ..
-    } = next_event(&mut supervisor_reader).await
+    } = next_event(&mut daemon_reader).await
     else {
         panic!("the live limit must publish an MLX memory sample");
     };
@@ -426,7 +425,7 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     assert_eq!(limit_adjusted_utilization.unexplained_headroom_bytes, 0);
     assert_eq!(limit_adjusted_utilization.owner_overrun_bytes, 0);
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -454,31 +453,31 @@ async fn should_report_restart_required_without_building_a_replacement_runtime()
         prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    let _idle_event = next_event(&mut supervisor_reader).await;
-    let _idle_runtime_configuration = next_event(&mut supervisor_reader).await;
-    supervisor_writer
+    let _idle_event = next_event(&mut daemon_reader).await;
+    let _idle_runtime_configuration = next_event(&mut daemon_reader).await;
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/resident-model".to_owned(),
             model_configuration: worker_model_configuration("resident-model"),
         })
         .await
         .expect("the resident model should load");
-    let _model_swapped_event = next_event(&mut supervisor_reader).await;
-    let _model_runtime_configuration = next_event(&mut supervisor_reader).await;
+    let _model_swapped_event = next_event(&mut daemon_reader).await;
+    let _model_runtime_configuration = next_event(&mut daemon_reader).await;
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 1);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 19_000_000_000,
             configuration_generation: "generation-demotion-requested".to_owned(),
@@ -490,7 +489,7 @@ async fn should_report_restart_required_without_building_a_replacement_runtime()
     // replacement runtime creation, no model swap, no limit adoption, and the
     // configuration generation stays untouched for the surviving worker.
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::MlxMemoryLimitRestartRequired {
             requested_mlx_memory_ceiling_bytes: 19_000_000_000,
             effective_mlx_memory_ceiling_bytes: 19_000_000_000,
@@ -512,7 +511,7 @@ async fn should_report_restart_required_without_building_a_replacement_runtime()
         "no additional model configuration may reach the factory during demotion"
     );
 
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
             effective_mlx_memory_ceiling_bytes: 38_000_000_000,
             configuration_generation: "generation-after-demotion".to_owned(),
@@ -520,12 +519,12 @@ async fn should_report_restart_required_without_building_a_replacement_runtime()
         .await
         .expect("the surviving worker should still accept ordinary limits");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::MlxMemoryLimitChanged {
             effective_mlx_memory_ceiling_bytes: 38_000_000_000,
             ..
         }
     ));
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }

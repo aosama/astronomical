@@ -9,7 +9,7 @@ const WORKER_RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(100);
 /// Tokio implements standard input with a blocking read that cannot be cancelled.
 /// A plain `#[tokio::main]` shutdown can therefore keep a failed worker process
 /// alive until its parent closes standard input. The timeout lets the process
-/// exit promptly so the supervisor observes EOF and releases the failed worker.
+/// exit promptly so the daemon observes EOF and releases the failed worker.
 pub fn run_worker_future_with_bounded_runtime_shutdown<Output, WorkerFuture, WorkerFutureFactory>(
     worker_future_factory: WorkerFutureFactory,
 ) -> io::Result<Output>

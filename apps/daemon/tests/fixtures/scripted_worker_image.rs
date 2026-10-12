@@ -1,4 +1,4 @@
-//! Deterministic image terminal ordering for supervisor lifecycle tests.
+//! Deterministic image terminal ordering for daemon lifecycle tests.
 
 use std::{io::Cursor, time::Duration};
 

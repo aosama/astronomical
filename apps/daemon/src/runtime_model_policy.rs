@@ -1,4 +1,4 @@
-//! Supervisor-owned per-model catalog entries used for routing and worker swaps.
+//! Daemon-owned per-model catalog entries used for routing and worker swaps.
 
 use std::path::PathBuf;
 

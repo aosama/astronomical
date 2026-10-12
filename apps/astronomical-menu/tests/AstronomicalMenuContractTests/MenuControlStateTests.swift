@@ -7,7 +7,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_surface_a_successful_configuration_reload_to_the_popover() async {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: SuccessfulReloadSupervisorClient()
+      daemonClient: SuccessfulReloadDaemonClient()
     )
 
     await telemetryStore.performConfigurationReload()
@@ -21,7 +21,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_not_report_worker_restart_success_before_status_confirms_the_acknowledged_policy() async {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: RestartAcknowledgedButStatusUnconfirmedSupervisorClient()
+      daemonClient: RestartAcknowledgedButStatusUnconfirmedDaemonClient()
     )
 
     await telemetryStore.performConfigurationReload()
@@ -35,7 +35,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_report_worker_restart_success_after_status_confirms_the_acknowledged_policy() async {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: RestartAcknowledgedAndStatusConfirmedSupervisorClient()
+      daemonClient: RestartAcknowledgedAndStatusConfirmedDaemonClient()
     )
 
     await telemetryStore.performConfigurationReload()
@@ -48,16 +48,16 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_confirm_a_worker_restart_when_polling_overlaps_delayed_confirmation() async {
-    let supervisorClient = OverlappingRestartConfirmationSupervisorClient()
-    let telemetryStore = contractTelemetryStore(supervisorClient: supervisorClient)
+    let daemonClient = OverlappingRestartConfirmationDaemonClient()
+    let telemetryStore = contractTelemetryStore(daemonClient: daemonClient)
     let configurationReloadTask = Task { @MainActor in
       await telemetryStore.performConfigurationReload()
     }
-    await supervisorClient.waitUntilFirstStatusRequestIsSuspended()
+    await daemonClient.waitUntilFirstStatusRequestIsSuspended()
 
     let pollingRefreshTask = Task { @MainActor in _ = await telemetryStore.refresh() }
     await Task.yield()
-    await supervisorClient.resumeFirstStatusRequest()
+    await daemonClient.resumeFirstStatusRequest()
     await configurationReloadTask.value
     await pollingRefreshTask.value
 
@@ -71,7 +71,7 @@ final class MenuControlStateTests: XCTestCase {
   func test_should_dismiss_a_successful_memory_update_one_second_after_application() async throws {
     let feedbackDismissalGate = FeedbackDismissalGate()
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient(),
+      daemonClient: SuccessfulMaximumMlxMemoryUpdateDaemonClient(),
       feedbackDismissalGate: feedbackDismissalGate
     )
 
@@ -94,10 +94,10 @@ final class MenuControlStateTests: XCTestCase {
 
   @MainActor
   func test_should_wait_for_a_queued_memory_update_to_take_effect_before_dismissing() async throws {
-    let supervisorClient = QueuedMaximumMlxMemoryUpdateSupervisorClient()
+    let daemonClient = QueuedMaximumMlxMemoryUpdateDaemonClient()
     let feedbackDismissalGate = FeedbackDismissalGate()
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: supervisorClient,
+      daemonClient: daemonClient,
       feedbackDismissalGate: feedbackDismissalGate
     )
 
@@ -107,7 +107,7 @@ final class MenuControlStateTests: XCTestCase {
       .success("MLX memory setting persisted and queued until generation finalizes")
     )
 
-    await supervisorClient.markMaximumMlxMemoryUpdateAsApplied()
+    await daemonClient.markMaximumMlxMemoryUpdateAsApplied()
     telemetryStore.refreshNow()
     try await Task.sleep(for: .milliseconds(10))
     XCTAssertNotNil(telemetryStore.controlActionFeedback)
@@ -119,7 +119,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_surface_a_late_memory_update_rejection_as_failure_feedback() async {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: RejectedMaximumMlxMemoryUpdateSupervisorClient()
+      daemonClient: RejectedMaximumMlxMemoryUpdateDaemonClient()
     )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -134,7 +134,7 @@ final class MenuControlStateTests: XCTestCase {
   func test_should_start_dismissal_after_a_status_refresh_precedes_the_update_response() async throws {
     let feedbackDismissalGate = FeedbackDismissalGate()
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: DelayedMaximumMlxMemoryUpdateSupervisorClient(),
+      daemonClient: DelayedMaximumMlxMemoryUpdateDaemonClient(),
       feedbackDismissalGate: feedbackDismissalGate
     )
     let memoryUpdateTask = Task { @MainActor in
@@ -157,7 +157,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_not_let_memory_success_dismiss_newer_server_feedback() async throws {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: SuccessfulMaximumMlxMemoryUpdateSupervisorClient()
+      daemonClient: SuccessfulMaximumMlxMemoryUpdateDaemonClient()
     )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -171,7 +171,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_ignore_a_memory_update_that_finishes_after_newer_feedback_begins() async {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: DelayedMaximumMlxMemoryUpdateSupervisorClient()
+      daemonClient: DelayedMaximumMlxMemoryUpdateDaemonClient()
     )
     let memoryUpdateTask = Task { @MainActor in
       await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -187,7 +187,7 @@ final class MenuControlStateTests: XCTestCase {
   @MainActor
   func test_should_surface_a_configuration_reload_failure_to_the_popover() async {
     let telemetryStore = contractTelemetryStore(
-      supervisorClient: FailingReloadSupervisorClient()
+      daemonClient: FailingReloadDaemonClient()
     )
 
     await telemetryStore.performConfigurationReload()
@@ -241,7 +241,7 @@ final class FeedbackDismissalGate: @unchecked Sendable {
 
 @MainActor
 private func contractTelemetryStore(
-  supervisorClient: any SupervisorClient,
+  daemonClient: any DaemonClient,
   feedbackDismissalGate: FeedbackDismissalGate? = nil
 ) -> TelemetryStore {
   let controlActionFeedbackDismissalSleep: TelemetryStore.ControlActionFeedbackDismissalSleep?
@@ -251,15 +251,15 @@ private func contractTelemetryStore(
     controlActionFeedbackDismissalSleep = nil
   }
   return TelemetryStore(
-    supervisorClient: supervisorClient,
+    daemonClient: daemonClient,
     controlActionFeedbackDismissalDelay: .milliseconds(80),
     controlActionFeedbackDismissalSleep: controlActionFeedbackDismissalSleep,
     workerPolicyConfirmationRetryDelay: .milliseconds(1)
   )
 }
 
-private struct SuccessfulReloadSupervisorClient: SupervisorClient {
-  func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
+private struct SuccessfulReloadDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument { .unavailable }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     ConfigurationReloadResult(message: "Config reloaded and applied by the worker")
@@ -270,7 +270,7 @@ private struct SuccessfulReloadSupervisorClient: SupervisorClient {
   func healthIsAvailable() async -> Bool { true }
 }
 
-private struct RestartAcknowledgedButStatusUnconfirmedSupervisorClient: SupervisorClient {
+private struct RestartAcknowledgedButStatusUnconfirmedDaemonClient: DaemonClient {
   private let acknowledgedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
     configurationGeneration: String(repeating: "a", count: 64),
     persistentPromptCacheEnabled: true,
@@ -278,10 +278,10 @@ private struct RestartAcknowledgedButStatusUnconfirmedSupervisorClient: Supervis
     loadedModel: nil
   )
 
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     // The prior worker's matching policy is not proof that the replacement has applied it. The
     // acknowledgment flag is the status-side owner for that lifecycle boundary.
-    SupervisorStatusDocument(
+    DaemonStatusDocument(
       status: "ready",
       activity: "idle",
       readyModelIdentifier: nil,
@@ -307,7 +307,7 @@ private struct RestartAcknowledgedButStatusUnconfirmedSupervisorClient: Supervis
   func healthIsAvailable() async -> Bool { true }
 }
 
-private struct RestartAcknowledgedAndStatusConfirmedSupervisorClient: SupervisorClient {
+private struct RestartAcknowledgedAndStatusConfirmedDaemonClient: DaemonClient {
   private let appliedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
     configurationGeneration: String(repeating: "a", count: 64),
     persistentPromptCacheEnabled: true,
@@ -315,8 +315,8 @@ private struct RestartAcknowledgedAndStatusConfirmedSupervisorClient: Supervisor
     loadedModel: nil
   )
 
-  func fetchStatus() async throws -> SupervisorStatusDocument {
-    SupervisorStatusDocument(
+  func fetchStatus() async throws -> DaemonStatusDocument {
+    DaemonStatusDocument(
       status: "ready",
       activity: "idle",
       readyModelIdentifier: nil,
@@ -342,7 +342,7 @@ private struct RestartAcknowledgedAndStatusConfirmedSupervisorClient: Supervisor
   func healthIsAvailable() async -> Bool { true }
 }
 
-private actor OverlappingRestartConfirmationSupervisorClient: SupervisorClient {
+private actor OverlappingRestartConfirmationDaemonClient: DaemonClient {
   private let appliedFeatureConfiguration = WorkerRuntimeFeatureConfiguration(
     configurationGeneration: String(repeating: "a", count: 64),
     persistentPromptCacheEnabled: true,
@@ -352,7 +352,7 @@ private actor OverlappingRestartConfirmationSupervisorClient: SupervisorClient {
   private var statusRequestCount = 0
   private var firstStatusRequestContinuation: CheckedContinuation<Void, Never>?
 
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     statusRequestCount += 1
     let currentStatusRequestCount = statusRequestCount
     if currentStatusRequestCount == 1 {
@@ -360,7 +360,7 @@ private actor OverlappingRestartConfirmationSupervisorClient: SupervisorClient {
         firstStatusRequestContinuation = continuation
       }
     }
-    return SupervisorStatusDocument(
+    return DaemonStatusDocument(
       status: "ready",
       activity: "idle",
       readyModelIdentifier: nil,
@@ -395,8 +395,8 @@ private actor OverlappingRestartConfirmationSupervisorClient: SupervisorClient {
   func healthIsAvailable() async -> Bool { true }
 }
 
-private struct SuccessfulMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+private struct SuccessfulMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
   }
 
@@ -413,10 +413,10 @@ private struct SuccessfulMaximumMlxMemoryUpdateSupervisorClient: SupervisorClien
   func healthIsAvailable() async -> Bool { true }
 }
 
-private actor QueuedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
+private actor QueuedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
   private var maximumMlxMemoryUpdateHasTakenEffect = false
 
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     if maximumMlxMemoryUpdateHasTakenEffect {
       return maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
     }
@@ -444,8 +444,8 @@ private actor QueuedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
   }
 }
 
-private struct RejectedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+private struct RejectedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     maximumMlxMemoryStatusDocument(
       effectiveMlxMemoryCeilingBytes: 30_000_000_000,
       mlxMemoryLimitError: "The worker could not apply the requested MLX memory ceiling"
@@ -465,8 +465,8 @@ private struct RejectedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient 
   func healthIsAvailable() async -> Bool { true }
 }
 
-private struct DelayedMaximumMlxMemoryUpdateSupervisorClient: SupervisorClient {
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+private struct DelayedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
   }
 
@@ -489,8 +489,8 @@ private func maximumMlxMemoryStatusDocument(
   pendingMlxMemoryCeilingBytes: UInt64? = nil,
   activity: String = "idle",
   mlxMemoryLimitError: String? = nil
-) -> SupervisorStatusDocument {
-  SupervisorStatusDocument(
+) -> DaemonStatusDocument {
+  DaemonStatusDocument(
     status: "ready",
     activity: activity,
     readyModelIdentifier: nil,
@@ -506,8 +506,8 @@ private func maximumMlxMemoryStatusDocument(
   )
 }
 
-private struct FailingReloadSupervisorClient: SupervisorClient {
-  func fetchStatus() async throws -> SupervisorStatusDocument { .unavailable }
+private struct FailingReloadDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument { .unavailable }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     throw ConfigurationReloadFailure.validationFailed

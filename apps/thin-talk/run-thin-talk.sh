@@ -3,7 +3,7 @@
 # Builds and launches the Thin Talk macOS app for one channel.
 #
 # Thin Talk is a thin client: it talks to the already-running Astronomical
-# supervisor over its public REST endpoints, so the bundle carries only the
+# daemon over its public REST endpoints, so the bundle carries only the
 # chat executable and its metadata. It bundles no daemon, worker, Sparkle
 # framework, or MLX metallib.
 #
@@ -48,14 +48,14 @@ case "$APPLICATION_CHANNEL" in
     development)
         bundle_name="Thin Talk Development"
         bundle_identifier="dev.astronomical.thin-talk.development"
-        supervisor_port="6733"
+        daemon_port="6733"
         state_directory_name=".astronomical-dev"
         icon_channel="development"
         ;;
     stable)
         bundle_name="Thin Talk"
         bundle_identifier="dev.astronomical.thin-talk"
-        supervisor_port="6732"
+        daemon_port="6732"
         state_directory_name=".astronomical"
         icon_channel="stable"
         ;;
@@ -93,7 +93,7 @@ mkdir -p "${app_bundle_path}/Contents/Resources"
     printf '  <key>LSMinimumSystemVersion</key><string>14.0</string>\n'
     printf '  <key>CFBundleIconFile</key><string>Astronomical.icns</string>\n'
     printf '  <key>AstronomicalChannel</key><string>%s</string>\n' "$APPLICATION_CHANNEL"
-    printf '  <key>AstronomicalSupervisorPort</key><integer>%s</integer>\n' "$supervisor_port"
+    printf '  <key>AstronomicalDaemonPort</key><integer>%s</integer>\n' "$daemon_port"
     printf '  <key>AstronomicalStateDirectoryName</key><string>%s</string>\n' "$state_directory_name"
     printf '%s\n' '  <key>CFBundlePackageType</key><string>APPL</string>'
     printf '%s\n' '</dict>'

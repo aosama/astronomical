@@ -3,7 +3,7 @@ use std::io;
 use astronomical_ipc_protocol::ProtocolError;
 use thiserror::Error;
 
-/// Errors raised while the supervisor launches, communicates with, or reaps a worker process.
+/// Errors raised while the daemon launches, communicates with, or reaps a worker process.
 #[derive(Debug, Error)]
 pub enum WorkerControlError {
     /// The operation and its best-effort cleanup both failed.
@@ -99,8 +99,8 @@ pub enum WorkerControlError {
     )]
     PromptCacheClearTimeout { cache_clear_timeout_millis: u128 },
 
-    /// The supervisor no longer owns a worker process to operate on.
-    #[error("supervisor does not currently own an active worker process")]
+    /// The daemon no longer owns a worker process to operate on.
+    #[error("daemon does not currently own an active worker process")]
     MissingActiveWorker,
 
     /// A control action was rejected because generation work is active or queued.

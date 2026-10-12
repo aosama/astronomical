@@ -1,7 +1,7 @@
 //! Atomic coordination of a live MLX ceiling and binary expert ownership.
 //!
 //! Resident lowering reclaims allocator memory before installing a smaller MLX
-//! ceiling; if complete weights still exceed it, the supervisor replaces the
+//! ceiling; if complete weights still exceed it, the daemon replaces the
 //! worker instead. Raising lets MLX accept capacity before Rust publishes a
 //! larger budget and attempts complete residency. A failed raise restores both
 //! native and Rust ceilings.

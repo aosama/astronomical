@@ -121,7 +121,7 @@ case "$2" in
     AstronomicalBuildDate) printf '%s\n' 20260814 ;;
     CFBundleIdentifier) printf '%s\n' dev.astronomical.app ;;
     CFBundleIconFile) printf '%s\n' Astronomical.icns ;;
-    AstronomicalSupervisorPort) printf '%s\n' 6732 ;;
+    AstronomicalDaemonPort) printf '%s\n' 6732 ;;
     AstronomicalStateDirectoryName) printf '%s\n' .astronomical ;;
     *) exit 1 ;;
 esac

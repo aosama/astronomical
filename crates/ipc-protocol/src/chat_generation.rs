@@ -12,7 +12,7 @@ pub const MAXIMUM_CHAT_SCHEMA_JSON_BYTES: usize = 65_536;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChatGenerationCommand {
-    /// The supervisor-generated request correlation identifier.
+    /// The daemon-generated request correlation identifier.
     pub request_id: RequestId,
     /// The exact worker-advertised model ID the request targets.
     pub model: String,
@@ -29,18 +29,18 @@ pub struct ChatGenerationCommand {
     pub structured_generation: Option<StructuredGenerationConstraint>,
 }
 
-/// One chat message crossing the supervisor-to-worker trust boundary.
+/// One chat message crossing the daemon-to-worker trust boundary.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "role", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ChatMessage {
     /// An initial model instruction.
     System {
-        /// Text content that was separately validated by the supervisor.
+        /// Text content that was separately validated by the daemon.
         content: String,
     },
     /// A user message, possibly carrying decoded image inputs.
     User {
-        /// Text content that was separately validated by the supervisor.
+        /// Text content that was separately validated by the daemon.
         content: String,
         /// Decoded image file payloads in document order. Empty for text-only users.
         #[serde(default)]
@@ -91,7 +91,7 @@ pub struct ChatAssistantToolCall {
 pub struct ChatAssistantToolFunction {
     /// The function name.
     pub name: String,
-    /// Canonical JSON arguments serialized by the supervisor.
+    /// Canonical JSON arguments serialized by the daemon.
     pub arguments_json: String,
 }
 
@@ -103,7 +103,7 @@ pub struct ChatToolDefinition {
     pub name: String,
     /// Optional caller-provided explanation.
     pub description: Option<String>,
-    /// Canonical JSON Schema serialized by the supervisor after bounded validation.
+    /// Canonical JSON Schema serialized by the daemon after bounded validation.
     pub parameters_json: String,
 }
 
@@ -143,7 +143,7 @@ pub struct ChatGenerationSettings {
     pub thinking_budget: Option<u16>,
 }
 
-/// Worker-enforced structured generation. The supervisor never sends a variant
+/// Worker-enforced structured generation. The daemon never sends a variant
 /// the worker cannot mask at sample time.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
@@ -247,6 +247,6 @@ pub enum ChatGenerationCompletionReason {
     MaximumOutputTokens,
     /// The model emitted at least one complete validated function call.
     ToolCalls,
-    /// The supervisor cancelled the active request.
+    /// The daemon cancelled the active request.
     Cancelled,
 }

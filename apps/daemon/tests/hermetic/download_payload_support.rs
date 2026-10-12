@@ -11,9 +11,8 @@ use std::{
 };
 
 use astronomical_daemon::{
-    DownloadJob, DownloadPublicationRefresh, HubPayloadFuture, HubPayloadRequest,
-    HubPayloadResponse, HubPayloadTransport, HubTransportError,
-    SupervisorPerformanceAttributionLog,
+    DaemonPerformanceAttributionLog, DownloadJob, DownloadPublicationRefresh, HubPayloadFuture,
+    HubPayloadRequest, HubPayloadResponse, HubPayloadTransport, HubTransportError,
 };
 use bytes::Bytes;
 use futures_util::stream;
@@ -308,9 +307,7 @@ pub(super) fn staged_file_path_for_relative_path(
         .join(relative_path)
 }
 
-pub(super) fn disabled_attribution(
-    test_directory: &TempDir,
-) -> SupervisorPerformanceAttributionLog {
-    SupervisorPerformanceAttributionLog::open(test_directory.path(), false)
+pub(super) fn disabled_attribution(test_directory: &TempDir) -> DaemonPerformanceAttributionLog {
+    DaemonPerformanceAttributionLog::open(test_directory.path(), false)
         .expect("disabled attribution should construct")
 }

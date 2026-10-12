@@ -42,9 +42,9 @@ export function installDom(): Window {
 }
 
 /** The config the Swift host would inject at document start. */
-export function installConfig(supervisorBaseURL: string): void {
+export function installConfig(daemonBaseURL: string): void {
   window.__thintalkConfig = {
-    supervisorBaseURL,
+    daemonBaseURL,
     expectedChannel: "development",
     expectedStateDirectory: "~/.astronomical-dev",
   };

@@ -238,13 +238,13 @@ fn validate_legacy_config(legacy_config: &LegacyConfigFile) -> Result<(), Astron
     }
     crate::ChunkingConfig::resolve(&legacy_config.chunking)?;
     if legacy_config
-        .supervisor
+        .daemon
         .as_ref()
-        .and_then(|supervisor| supervisor.bind_address.as_ref())
+        .and_then(|daemon| daemon.bind_address.as_ref())
         .is_some()
     {
         return Err(AstronomicalConfigError::LegacyMigration {
-            description: "legacy supervisor.bind_address cannot be represented because v1 derives the endpoint from the runtime channel; remove the setting to migrate"
+            description: "legacy daemon.bind_address cannot be represented because v1 derives the endpoint from the runtime channel; remove the setting to migrate"
                 .to_owned(),
         });
     }
@@ -269,7 +269,10 @@ struct LegacyConfigFile {
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     persistent_prompt_cache_enabled: Option<bool>,
     maximum_mlx_memory_gb: Option<u64>,
-    supervisor: Option<LegacySupervisorConfigFile>,
+    // Legacy v0 files wrote this section under the retired component name; the
+    // alias keeps one-way migration silent for configs saved before the rename.
+    #[serde(alias = "supervisor")]
+    daemon: Option<LegacyDaemonConfigFile>,
     prompt_cache_max_size_gb: Option<u64>,
     logging: Option<LegacyLoggingConfigFile>,
 }
@@ -286,7 +289,7 @@ struct LegacyLoggingConfigFile {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct LegacySupervisorConfigFile {
+struct LegacyDaemonConfigFile {
     bind_address: Option<String>,
 }
 

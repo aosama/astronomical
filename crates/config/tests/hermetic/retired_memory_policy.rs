@@ -75,8 +75,8 @@ fn should_reject_every_retired_consumer_configuration_field() {
             r#"{"prompt_cache":{"enabled":true,"max_size_gb":50}}"#,
         ),
         (
-            "supervisor worker_executable_path",
-            r#"{"supervisor":{"worker_executable_path":"/bin/worker"}}"#,
+            "daemon worker_executable_path",
+            r#"{"daemon":{"worker_executable_path":"/bin/worker"}}"#,
         ),
     ] {
         let temporary_home_directory =

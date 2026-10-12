@@ -3,10 +3,10 @@
 //!
 //! The memory-demotion contract is that the trusted worker has exited and been
 //! reaped before any replacement process is launched. Asserting that from the
-//! supervisor's own control flow would only restate the implementation, so this
+//! daemon's own control flow would only restate the implementation, so this
 //! fixture instead lets the *replacement* report what it observed at the instant
 //! it started: if the trusted worker were still alive then, the overlap is
-//! proven regardless of what the supervisor believes.
+//! proven regardless of what the daemon believes.
 //!
 //! Configuration generations select the scripted failure branches. The fixture
 //! speaks the real framed standard-input/standard-output transport, so no MLX or
@@ -29,7 +29,7 @@ use astronomical_ipc_protocol::{
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
-/// How long the fixture waits for the supervisor's guaranteed-first
+/// How long the fixture waits for the daemon's guaranteed-first
 /// `InitializeWorker` command. Every scenario using this fixture launches the
 /// worker through `WorkerHandle`, which writes that command immediately after
 /// spawning, so a long wait is free on an idle host; the window only has to be
@@ -43,16 +43,16 @@ const MACHINE_MEMORY_CEILING_BYTES: u64 = 40_000_000_000;
 const MINIMUM_MEMORY_CEILING_BYTES: u64 = 1;
 
 /// A candidate that never acknowledges its runtime configuration, forcing the
-/// supervisor's candidate-acknowledgement timeout to reject it.
+/// daemon's candidate-acknowledgement timeout to reject it.
 const SILENT_ACKNOWLEDGEMENT_GENERATION: &str = "silent-acknowledgement-generation";
-/// A candidate that acknowledges a configuration generation the supervisor did
+/// A candidate that acknowledges a configuration generation the daemon did
 /// not ask for, which identity binding must reject.
 const MISMATCHED_ACKNOWLEDGEMENT_GENERATION: &str = "mismatched-acknowledgement-generation";
 const UNREQUESTED_ACKNOWLEDGED_GENERATION: &str =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 /// A model directory suffix that makes restoration fail after the restart, so
-/// the supervisor must not publish readiness for a model it never loaded.
+/// the daemon must not publish readiness for a model it never loaded.
 const RESTORE_FAILURE_MODEL_DIRECTORY_SUFFIX: &str = "restore-failure-model";
 /// The replacement role, which is the only role allowed to script a restoration
 /// failure; the trusted worker must still be able to select the same model so
@@ -69,7 +69,7 @@ const TRUSTED_CONFIGURATION_GENERATION: &str = "trusted-generation";
 /// orderly shutdown completes. Without this pause a candidate-first bug could
 /// close that window before the probe ran, and the acceptance test would pass
 /// against exactly the overlap it exists to catch. Lingering well inside the
-/// supervisor's three-second shutdown timeout widens the window without changing
+/// daemon's three-second shutdown timeout widens the window without changing
 /// the ordering being measured.
 const TRUSTED_EXIT_LINGER: std::time::Duration = std::time::Duration::from_millis(1_500);
 
@@ -107,7 +107,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
         effective_memory_ceiling_bytes = configured_maximum_mlx_memory_bytes;
     }
     // The silent branch models a candidate that starts and then stops
-    // talking: it must neither acknowledge nor exit, so the supervisor's
+    // talking: it must neither acknowledge nor exit, so the daemon's
     // acknowledgement timeout is what rejects it.
     if startup_configuration.configuration_generation == SILENT_ACKNOWLEDGEMENT_GENERATION {
         while command_reader.next_command().await?.is_some() {}
@@ -124,7 +124,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
 
     // In-place live ceiling updates rename the owning generation without a
     // restart; every later acknowledgement must carry the current generation
-    // so the supervisor's identity binding keeps holding after an update.
+    // so the daemon's identity binding keeps holding after an update.
     let mut acknowledged_configuration_generation =
         startup_configuration.configuration_generation.clone();
 
@@ -203,7 +203,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
             WorkerCommand::Generate(generation_command) => {
                 // Finalization precedes completion, matching the real worker's
                 // emission order (engine_backed_worker output.rs) and the
-                // scripted worker fixture: the supervisor's completion handler
+                // scripted worker fixture: the daemon's completion handler
                 // takes the active request, so a finalize emitted after it is a
                 // protocol violation that force-terminates the worker mid-test
                 // and races the demotion command against the containment.
@@ -239,7 +239,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                     .await?;
             }
             WorkerCommand::SampleMlxMemory => {
-                // The supervisor's idle sampler polls ready workers on an
+                // The daemon's idle sampler polls ready workers on an
                 // interval with a bounded acknowledgement timeout; ignoring the
                 // sample would let the wait expire and contain the worker.
                 emit_memory_snapshot(&mut event_writer, MlxMemorySnapshotSource::IdlePoll).await?;
@@ -270,11 +270,11 @@ async fn read_startup_configuration(
         // the scripted role and the logging directory carries the ordering
         // evidence. Diverging silently would strain every downstream branch.
         Ok(Ok(None)) => {
-            Err("the supervisor closed the worker input before sending InitializeWorker".into())
+            Err("the daemon closed the worker input before sending InitializeWorker".into())
         }
         Ok(Err(protocol_error)) => Err(protocol_error.into()),
         Err(_) => Err(std::io::Error::other(format!(
-            "the supervisor did not send InitializeWorker within {STARTUP_COMMAND_TIMEOUT:?}"
+            "the daemon did not send InitializeWorker within {STARTUP_COMMAND_TIMEOUT:?}"
         ))
         .into()),
     }

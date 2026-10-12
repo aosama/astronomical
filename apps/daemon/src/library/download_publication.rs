@@ -10,8 +10,7 @@ use thiserror::Error;
 
 use super::{DownloadJobStore, DownloadJobStoreError};
 use crate::{
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
 pub trait DownloadPublicationRefresh: Send + Sync {
@@ -20,14 +19,14 @@ pub trait DownloadPublicationRefresh: Send + Sync {
 
 pub struct DownloadPublication {
     job_store: DownloadJobStore,
-    attribution_log: SupervisorPerformanceAttributionLog,
+    attribution_log: DaemonPerformanceAttributionLog,
 }
 
 #[derive(Debug, Error)]
 pub enum DownloadPublicationError {
     #[error("durable publication failed: {0}")]
     JobStore(#[from] DownloadJobStoreError),
-    #[error("supervisor performance attribution failed: {0}")]
+    #[error("daemon performance attribution failed: {0}")]
     Attribution(#[source] std::io::Error),
     #[error("publication task failed: {0}")]
     Task(#[source] tokio::task::JoinError),
@@ -37,7 +36,7 @@ impl DownloadPublication {
     #[must_use]
     pub fn new(
         job_store: DownloadJobStore,
-        attribution_log: SupervisorPerformanceAttributionLog,
+        attribution_log: DaemonPerformanceAttributionLog,
     ) -> Self {
         Self {
             job_store,
@@ -65,17 +64,17 @@ impl DownloadPublication {
         let publication_outcome = self
             .attribution_log
             .measure_blocking_operation(
-                SupervisorPerformanceOperation::Publication,
+                DaemonPerformanceOperation::Publication,
                 move || job_store.publish_current_job(&measured_refresh),
                 |publication_outcome| {
                     let measurement = if publication_outcome.is_ok() {
-                        SupervisorPerformanceMeasurement::success()
+                        DaemonPerformanceMeasurement::success()
                     } else {
-                        SupervisorPerformanceMeasurement::failure()
+                        DaemonPerformanceMeasurement::failure()
                     };
                     measurement
                         .with_publication(&huggingface_id, &revision)
-                        .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
+                        .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
                 },
             )
             .await
@@ -86,7 +85,7 @@ impl DownloadPublication {
 
 struct MeasuredDiscoveryRefresh {
     discovery_refresh: Arc<dyn DownloadPublicationRefresh>,
-    attribution_log: SupervisorPerformanceAttributionLog,
+    attribution_log: DaemonPerformanceAttributionLog,
     huggingface_id: String,
     revision: String,
 }
@@ -94,17 +93,17 @@ struct MeasuredDiscoveryRefresh {
 impl DownloadPublicationRefresh for MeasuredDiscoveryRefresh {
     fn refresh(&self, published_directory: &Path) -> Result<(), Box<dyn Error + Send + Sync>> {
         let refresh_outcome = self.attribution_log.measure_operation(
-            SupervisorPerformanceOperation::DiscoveryRefresh,
+            DaemonPerformanceOperation::DiscoveryRefresh,
             || self.discovery_refresh.refresh(published_directory),
             |refresh_outcome| {
                 let measurement = if refresh_outcome.is_ok() {
-                    SupervisorPerformanceMeasurement::success()
+                    DaemonPerformanceMeasurement::success()
                 } else {
-                    SupervisorPerformanceMeasurement::failure()
+                    DaemonPerformanceMeasurement::failure()
                 };
                 measurement
                     .with_discovery_refresh(&self.huggingface_id, &self.revision)
-                    .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
+                    .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
             },
         )?;
         refresh_outcome

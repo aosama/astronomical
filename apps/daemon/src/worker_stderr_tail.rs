@@ -2,14 +2,14 @@ use std::{collections::VecDeque, sync::Arc};
 
 use tokio::sync::Mutex;
 
-/// Maximum worker standard-error context retained for one fatal supervisor diagnostic.
+/// Maximum worker standard-error context retained for one fatal daemon diagnostic.
 const MAXIMUM_WORKER_STDERR_TAIL_BYTES: usize = 8 * 1_024;
 
 /// Shared bounded tail of diagnostics emitted before a worker process exits.
 ///
 /// The child drain task appends fixed-size reads while the worker-process owner
 /// snapshots the same tail after the IPC event stream closes. Keeping only the
-/// tail prevents a noisy or compromised child from growing supervisor memory.
+/// tail prevents a noisy or compromised child from growing daemon memory.
 #[derive(Clone, Default)]
 pub(crate) struct WorkerStderrTail {
     retained_bytes: Arc<Mutex<VecDeque<u8>>>,
@@ -28,7 +28,7 @@ impl WorkerStderrTail {
         }
     }
 
-    /// Returns a printable snapshot suitable for the supervisor's local log.
+    /// Returns a printable snapshot suitable for the daemon's local log.
     pub(crate) async fn diagnostic_snapshot(&self) -> String {
         let retained_bytes = self.retained_bytes.lock().await;
         let contiguous_bytes = retained_bytes.iter().copied().collect::<Vec<_>>();

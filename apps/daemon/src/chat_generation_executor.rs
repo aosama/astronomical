@@ -60,7 +60,7 @@ impl ChatGenerationStreamEvent {
     }
 }
 
-/// Supervisor-side reason a chat stream cannot continue.
+/// Daemon-side reason a chat stream cannot continue.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChatGenerationStreamErrorCode {
     WorkerUnavailable,

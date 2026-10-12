@@ -6,15 +6,15 @@ import XCTest
 
 @testable import AstronomicalMenuCore
 
-final class SupervisorStatusJourneyTests: XCTestCase {
+final class DaemonStatusJourneyTests: XCTestCase {
   @MainActor
   func test_should_present_a_complete_autoregressive_status_response_in_the_menu_store() async throws {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try fixtureData(named: "full-autoregressive-status")
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -31,12 +31,12 @@ final class SupervisorStatusJourneyTests: XCTestCase {
 
   @MainActor
   func test_should_present_a_complete_flux_status_response_in_the_menu_store() async throws {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try fixtureData(named: "full-flux-status")
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -52,12 +52,12 @@ final class SupervisorStatusJourneyTests: XCTestCase {
 
   @MainActor
   func test_should_present_a_complete_qwen_image_status_response_in_the_menu_store() async throws {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try fixtureData(named: "full-qwen-image-status")
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -76,12 +76,12 @@ final class SupervisorStatusJourneyTests: XCTestCase {
 
   @MainActor
   func test_should_present_a_complete_embedding_status_response_in_the_menu_store() async throws {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try fixtureData(named: "full-embedding-status")
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -107,12 +107,12 @@ final class SupervisorStatusJourneyTests: XCTestCase {
     loadedModel["kind"] = "some_future_image_family"
     runtimeConfiguration["loaded_model"] = loadedModel
     malformedStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try JSONSerialization.data(withJSONObject: malformedStatusFixture)
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -120,7 +120,7 @@ final class SupervisorStatusJourneyTests: XCTestCase {
     XCTAssertTrue(
       telemetryStore.lastStatusRefreshErrorMessage?.contains("some_future_image_family") == true)
 
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: validStatusResponse
     )
@@ -143,12 +143,12 @@ final class SupervisorStatusJourneyTests: XCTestCase {
     loadedModel["configuration"] = loadedModelConfiguration
     runtimeConfiguration["loaded_model"] = loadedModel
     malformedStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try JSONSerialization.data(withJSONObject: malformedStatusFixture)
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -156,7 +156,7 @@ final class SupervisorStatusJourneyTests: XCTestCase {
     XCTAssertTrue(
       telemetryStore.lastStatusRefreshErrorMessage?.contains("unexpected_execution_policy") == true)
 
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: validStatusResponse
     )
@@ -182,12 +182,12 @@ final class SupervisorStatusJourneyTests: XCTestCase {
     loadedModel["configuration"] = loadedModelConfiguration
     runtimeConfiguration["loaded_model"] = loadedModel
     malformedStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: try JSONSerialization.data(withJSONObject: malformedStatusFixture)
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let telemetryStore = TelemetryStore(supervisorClient: localDevelopmentSupervisorClient())
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
 
     await telemetryStore.refresh()
 
@@ -200,17 +200,17 @@ final class SupervisorStatusJourneyTests: XCTestCase {
   @MainActor
   func test_should_not_let_an_older_failure_replace_a_newer_success() async throws {
     let validStatusDocument = try decodedFixtureStatusDocument()
-    let supervisorClient = OutOfOrderStatusSupervisorClient(
+    let daemonClient = OutOfOrderStatusDaemonClient(
       successfulStatusDocument: validStatusDocument,
       firstRequestFails: true
     )
-    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let telemetryStore = TelemetryStore(daemonClient: daemonClient)
     let delayedRefreshTask = Task { _ = await telemetryStore.refresh() }
-    await supervisorClient.waitUntilFirstRequestIsSuspended()
+    await daemonClient.waitUntilFirstRequestIsSuspended()
 
     let latestRefreshTask = Task { _ = await telemetryStore.refresh() }
     await Task.yield()
-    await supervisorClient.resumeFirstRequest()
+    await daemonClient.resumeFirstRequest()
     await delayedRefreshTask.value
     await latestRefreshTask.value
 
@@ -221,17 +221,17 @@ final class SupervisorStatusJourneyTests: XCTestCase {
   @MainActor
   func test_should_not_let_an_older_success_clear_a_newer_failure() async throws {
     let validStatusDocument = try decodedFixtureStatusDocument()
-    let supervisorClient = OutOfOrderStatusSupervisorClient(
+    let daemonClient = OutOfOrderStatusDaemonClient(
       successfulStatusDocument: validStatusDocument,
       firstRequestFails: false
     )
-    let telemetryStore = TelemetryStore(supervisorClient: supervisorClient)
+    let telemetryStore = TelemetryStore(daemonClient: daemonClient)
     let delayedRefreshTask = Task { _ = await telemetryStore.refresh() }
-    await supervisorClient.waitUntilFirstRequestIsSuspended()
+    await daemonClient.waitUntilFirstRequestIsSuspended()
 
     let latestRefreshTask = Task { _ = await telemetryStore.refresh() }
     await Task.yield()
-    await supervisorClient.resumeFirstRequest()
+    await daemonClient.resumeFirstRequest()
     await delayedRefreshTask.value
     await latestRefreshTask.value
 
@@ -240,18 +240,18 @@ final class SupervisorStatusJourneyTests: XCTestCase {
       telemetryStore.lastStatusRefreshErrorMessage?.contains("Controlled status failure") == true)
   }
 
-  private func localDevelopmentSupervisorClient() -> LocalSupervisorClient {
-    LocalSupervisorClient(
+  private func localDevelopmentDaemonClient() -> LocalDaemonClient {
+    LocalDaemonClient(
       applicationIdentity: ApplicationIdentity(
         channel: .development,
-        supervisorPort: ApplicationChannel.development.defaultSupervisorPort,
+        daemonPort: ApplicationChannel.development.defaultDaemonPort,
         stateDirectoryName: ApplicationChannel.development.stateDirectoryName,
         version: "0.3.0",
         buildNumber: "300",
         commit: "abcdef1",
         isDirty: true
       ),
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
   }
 
@@ -261,9 +261,9 @@ final class SupervisorStatusJourneyTests: XCTestCase {
     return try Data(contentsOf: fixtureURL)
   }
 
-  private func decodedFixtureStatusDocument() throws -> SupervisorStatusDocument {
+  private func decodedFixtureStatusDocument() throws -> DaemonStatusDocument {
     try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: fixtureData(named: "full-autoregressive-status")
     )
   }
@@ -273,18 +273,18 @@ final class SupervisorStatusJourneyTests: XCTestCase {
   }
 }
 
-private actor OutOfOrderStatusSupervisorClient: SupervisorClient {
-  private let successfulStatusDocument: SupervisorStatusDocument
+private actor OutOfOrderStatusDaemonClient: DaemonClient {
+  private let successfulStatusDocument: DaemonStatusDocument
   private let firstRequestFails: Bool
   private var requestCount = 0
   private var firstRequestContinuation: CheckedContinuation<Void, Never>?
 
-  init(successfulStatusDocument: SupervisorStatusDocument, firstRequestFails: Bool) {
+  init(successfulStatusDocument: DaemonStatusDocument, firstRequestFails: Bool) {
     self.successfulStatusDocument = successfulStatusDocument
     self.firstRequestFails = firstRequestFails
   }
 
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     requestCount += 1
     let currentRequestCount = requestCount
     if currentRequestCount == 1 {

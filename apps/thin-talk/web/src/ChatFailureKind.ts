@@ -1,5 +1,5 @@
 /**
- * Every failure the conversation can hit, derived from the supervisor's public
+ * Every failure the conversation can hit, derived from the daemon's public
  * REST error signals. This is the client-facing view of the backend code, so the
  * client can map each failure to a concrete next action without knowing how the
  * response was decoded.
@@ -9,7 +9,7 @@ export enum ChatFailureKind {
   NO_USABLE_MODEL = "noUsableModel",
   /** The selected model will not load, including the memory-ceiling refusal. */
   MODEL_LOAD_FAILED = "modelLoadFailed",
-  /** The supervisor/daemon is unavailable or not ready to serve requests. */
+  /** The daemon is unavailable or not ready to serve requests. */
   WORKER_UNAVAILABLE = "workerUnavailable",
   /** Another request already owns the worker's bounded capacity. */
   ENGINE_BUSY = "engineBusy",

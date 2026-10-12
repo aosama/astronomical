@@ -10,7 +10,7 @@ import XCTest
 final class PromptCacheRestorePresentationTests: XCTestCase {
   func test_should_name_prompt_processing_without_progress_as_prompt_cache_restore() throws {
     let statusDocument = try JSONDecoder().decode(
-      SupervisorStatusDocument.self,
+      DaemonStatusDocument.self,
       from: Data(#"{"status":"ready","activity":"prompt_processing"}"#.utf8)
     )
 

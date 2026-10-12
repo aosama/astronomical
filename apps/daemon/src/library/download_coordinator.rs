@@ -19,7 +19,7 @@ use super::{
     DownloadProgressSnapshot, DownloadPublication, DownloadPublicationRefresh,
     DownloadTransferControl, HubPayloadTransport, HubTransport, HuggingFaceHub,
 };
-use crate::SupervisorPerformanceAttributionLog;
+use crate::DaemonPerformanceAttributionLog;
 
 #[derive(Clone)]
 struct SharedDiskCapacityQuery(Arc<dyn DiskCapacityQuery>);
@@ -56,7 +56,7 @@ pub struct LibraryDownloadCoordinator {
     metadata_transport: Arc<dyn HubTransport>,
     payload_transport: Arc<dyn HubPayloadTransport>,
     discovery_refresh: Arc<dyn DownloadPublicationRefresh>,
-    attribution_log: SupervisorPerformanceAttributionLog,
+    attribution_log: DaemonPerformanceAttributionLog,
     active_task: Mutex<Option<JoinHandle<()>>>,
     active_control: Mutex<Option<DownloadTransferControl>>,
     command_lock: Mutex<()>,
@@ -87,7 +87,7 @@ impl LibraryDownloadCoordinator {
         metadata_transport: Arc<dyn HubTransport>,
         payload_transport: Arc<dyn HubPayloadTransport>,
         discovery_refresh: Arc<dyn DownloadPublicationRefresh>,
-        attribution_log: SupervisorPerformanceAttributionLog,
+        attribution_log: DaemonPerformanceAttributionLog,
     ) -> Self {
         Self {
             download_catalog,
@@ -307,7 +307,7 @@ struct DownloadTaskDependencies {
     metadata_transport: Arc<dyn HubTransport>,
     payload_transport: Arc<dyn HubPayloadTransport>,
     discovery_refresh: Arc<dyn DownloadPublicationRefresh>,
-    attribution_log: SupervisorPerformanceAttributionLog,
+    attribution_log: DaemonPerformanceAttributionLog,
     transfer_control: DownloadTransferControl,
     validated_publications: Arc<Mutex<BTreeSet<String>>>,
     progress_snapshot: DownloadProgressSnapshot,

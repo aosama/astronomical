@@ -69,7 +69,7 @@ impl Default for ShutdownController {
 }
 
 /// Triggers the daemon's existing graceful-shutdown path.
-pub(crate) async fn request_supervisor_shutdown(
+pub(crate) async fn request_daemon_shutdown(
     State(application_state): State<ApplicationState>,
 ) -> Response {
     let Some(shutdown_controller) = application_state.shutdown_controller.as_ref() else {

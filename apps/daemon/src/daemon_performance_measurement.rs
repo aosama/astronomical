@@ -1,13 +1,13 @@
-//! Builds and validates operation-specific supervisor performance measurements.
+//! Builds and validates operation-specific daemon performance measurements.
 
 use std::io;
 
-use crate::supervisor_download_attribution::{
-    SupervisorDownloadMeasurementDetail, SupervisorDownloadOperationDetail, is_safe_relative_path,
+use crate::daemon_download_attribution::{
+    DaemonDownloadMeasurementDetail, DaemonDownloadOperationDetail, is_safe_relative_path,
 };
-use crate::{SupervisorPerformanceMeasurement, SupervisorPerformanceOperation};
+use crate::{DaemonPerformanceMeasurement, DaemonPerformanceOperation};
 
-impl SupervisorPerformanceMeasurement {
+impl DaemonPerformanceMeasurement {
     pub fn with_disk_preflight(
         mut self,
         huggingface_id: impl Into<String>,
@@ -15,10 +15,10 @@ impl SupervisorPerformanceMeasurement {
         required_bytes: u64,
         available_bytes: u64,
     ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
+        self.download_detail = Some(DaemonDownloadMeasurementDetail::new(
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::DiskPreflight {
+            DaemonDownloadOperationDetail::DiskPreflight {
                 required_bytes,
                 available_bytes,
             },
@@ -33,10 +33,10 @@ impl SupervisorPerformanceMeasurement {
         manifest_file_count: usize,
         manifest_total_bytes: u64,
     ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
+        self.download_detail = Some(DaemonDownloadMeasurementDetail::new(
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::ManifestFetch {
+            DaemonDownloadOperationDetail::ManifestFetch {
                 manifest_file_count,
                 manifest_total_bytes,
             },
@@ -56,13 +56,13 @@ impl SupervisorPerformanceMeasurement {
         if !is_safe_relative_path(&relative_file_path) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "supervisor attribution requires a bounded safe relative file path",
+                "daemon attribution requires a bounded safe relative file path",
             ));
         }
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
+        self.download_detail = Some(DaemonDownloadMeasurementDetail::new(
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::FileTransfer {
+            DaemonDownloadOperationDetail::FileTransfer {
                 relative_file_path,
                 resume_offset_bytes,
                 transferred_bytes,
@@ -78,10 +78,10 @@ impl SupervisorPerformanceMeasurement {
         verified_file_count: usize,
         verified_bytes: u64,
     ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
+        self.download_detail = Some(DaemonDownloadMeasurementDetail::new(
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::Verification {
+            DaemonDownloadOperationDetail::Verification {
                 verified_file_count,
                 verified_bytes,
             },
@@ -94,10 +94,10 @@ impl SupervisorPerformanceMeasurement {
         huggingface_id: impl Into<String>,
         revision: impl Into<String>,
     ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
+        self.download_detail = Some(DaemonDownloadMeasurementDetail::new(
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::Publication {},
+            DaemonDownloadOperationDetail::Publication {},
         )?);
         Ok(self)
     }
@@ -107,15 +107,15 @@ impl SupervisorPerformanceMeasurement {
         huggingface_id: impl Into<String>,
         revision: impl Into<String>,
     ) -> io::Result<Self> {
-        self.download_detail = Some(SupervisorDownloadMeasurementDetail::new(
+        self.download_detail = Some(DaemonDownloadMeasurementDetail::new(
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::DiscoveryRefresh {},
+            DaemonDownloadOperationDetail::DiscoveryRefresh {},
         )?);
         Ok(self)
     }
 
-    pub(super) fn matches_operation(&self, operation: SupervisorPerformanceOperation) -> bool {
+    pub(super) fn matches_operation(&self, operation: DaemonPerformanceOperation) -> bool {
         matches!(
             (
                 operation,
@@ -123,34 +123,34 @@ impl SupervisorPerformanceMeasurement {
                     .as_ref()
                     .map(|detail| &detail.operation_detail)
             ),
-            (SupervisorPerformanceOperation::LibraryCatalogLoad, None)
+            (DaemonPerformanceOperation::LibraryCatalogLoad, None)
                 | (
-                    SupervisorPerformanceOperation::DiskPreflight,
-                    Some(SupervisorDownloadOperationDetail::DiskPreflight { .. })
+                    DaemonPerformanceOperation::DiskPreflight,
+                    Some(DaemonDownloadOperationDetail::DiskPreflight { .. })
                 )
                 | (
-                    SupervisorPerformanceOperation::ManifestFetch,
-                    Some(SupervisorDownloadOperationDetail::ManifestFetch { .. })
+                    DaemonPerformanceOperation::ManifestFetch,
+                    Some(DaemonDownloadOperationDetail::ManifestFetch { .. })
                 )
                 | (
-                    SupervisorPerformanceOperation::ExecutablePreflight,
-                    Some(SupervisorDownloadOperationDetail::ExecutablePreflight { .. })
+                    DaemonPerformanceOperation::ExecutablePreflight,
+                    Some(DaemonDownloadOperationDetail::ExecutablePreflight { .. })
                 )
                 | (
-                    SupervisorPerformanceOperation::FileTransfer,
-                    Some(SupervisorDownloadOperationDetail::FileTransfer { .. })
+                    DaemonPerformanceOperation::FileTransfer,
+                    Some(DaemonDownloadOperationDetail::FileTransfer { .. })
                 )
                 | (
-                    SupervisorPerformanceOperation::Verification,
-                    Some(SupervisorDownloadOperationDetail::Verification { .. })
+                    DaemonPerformanceOperation::Verification,
+                    Some(DaemonDownloadOperationDetail::Verification { .. })
                 )
                 | (
-                    SupervisorPerformanceOperation::Publication,
-                    Some(SupervisorDownloadOperationDetail::Publication { .. })
+                    DaemonPerformanceOperation::Publication,
+                    Some(DaemonDownloadOperationDetail::Publication { .. })
                 )
                 | (
-                    SupervisorPerformanceOperation::DiscoveryRefresh,
-                    Some(SupervisorDownloadOperationDetail::DiscoveryRefresh { .. })
+                    DaemonPerformanceOperation::DiscoveryRefresh,
+                    Some(DaemonDownloadOperationDetail::DiscoveryRefresh { .. })
                 )
         )
     }

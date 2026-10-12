@@ -48,7 +48,7 @@ declare global {
 
   /** The config the Swift host injects via a document-start user script. */
   interface ThintalkConfigGlobal {
-    supervisorBaseURL: string;
+    daemonBaseURL: string;
     expectedChannel: string;
     expectedStateDirectory: string;
   }

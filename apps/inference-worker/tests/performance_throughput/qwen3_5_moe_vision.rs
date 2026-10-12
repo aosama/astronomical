@@ -1,5 +1,5 @@
 //! Measures the serving throughput of the resident 35B sparse-MoE model's
-//! VISION path over the supervisor IPC boundary: prompt-processing (prefill)
+//! VISION path over the daemon IPC boundary: prompt-processing (prefill)
 //! tokens per second and decode tokens per second, both server-attributed
 //! from the worker's generation performance log (never client wall clock).
 //!

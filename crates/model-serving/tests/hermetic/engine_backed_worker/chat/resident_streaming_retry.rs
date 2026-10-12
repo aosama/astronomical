@@ -254,17 +254,17 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
 
 #[tokio::test]
 async fn should_retry_a_resident_start_fork_once_with_the_same_cache_identity() {
-    let (mut supervisor_reader, mut supervisor_writer, worker_task, retry_count, identities, _, _) =
+    let (mut daemon_reader, mut daemon_writer, worker_task, retry_count, identities, _, _) =
         launch_retry_worker(RetryScenario::ResidentStartFork).await;
-    load_retry_model(&mut supervisor_reader, &mut supervisor_writer).await;
-    submit_retry_generation(&mut supervisor_writer, 901).await;
+    load_retry_model(&mut daemon_reader, &mut daemon_writer).await;
+    submit_retry_generation(&mut daemon_writer, 901).await;
 
     assert!(matches!(
-        next_retry_event(&mut supervisor_reader).await,
+        next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Output { request_id, .. } if request_id == RequestId::new(901)
     ));
     assert!(matches!(
-        next_retry_event(&mut supervisor_reader).await,
+        next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             request_id,
             cached_token_count: 1,
@@ -289,65 +289,65 @@ async fn should_retry_a_resident_start_fork_once_with_the_same_cache_identity() 
         ]
     );
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
 async fn should_retry_a_pre_output_resident_decode_fork_once() {
-    let (mut supervisor_reader, mut supervisor_writer, worker_task, retry_count, _, _, _) =
+    let (mut daemon_reader, mut daemon_writer, worker_task, retry_count, _, _, _) =
         launch_retry_worker(RetryScenario::ResidentDecodeForkBeforeOutput).await;
-    load_retry_model(&mut supervisor_reader, &mut supervisor_writer).await;
-    submit_retry_generation(&mut supervisor_writer, 902).await;
+    load_retry_model(&mut daemon_reader, &mut daemon_writer).await;
+    submit_retry_generation(&mut daemon_writer, 902).await;
 
     assert!(matches!(
-        next_retry_event(&mut supervisor_reader).await,
+        next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Output { request_id, .. } if request_id == RequestId::new(902)
     ));
     assert!(matches!(
-        next_retry_event(&mut supervisor_reader).await,
+        next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Completed { request_id, .. } if request_id == RequestId::new(902)
     ));
     assert_eq!(retry_count.load(Ordering::SeqCst), 1);
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
 async fn should_not_retry_after_a_response_fragment_is_visible() {
     let (
-        mut supervisor_reader,
-        mut supervisor_writer,
+        mut daemon_reader,
+        mut daemon_writer,
         worker_task,
         retry_count,
         _,
         streaming_retry_drop_count,
         continue_after_visible_output,
     ) = launch_retry_worker(RetryScenario::ResidentDecodeForkAfterOutput).await;
-    load_retry_model(&mut supervisor_reader, &mut supervisor_writer).await;
-    submit_retry_generation(&mut supervisor_writer, 903).await;
+    load_retry_model(&mut daemon_reader, &mut daemon_writer).await;
+    submit_retry_generation(&mut daemon_writer, 903).await;
 
     assert!(matches!(
-        next_retry_event(&mut supervisor_reader).await,
+        next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Output { request_id, .. } if request_id == RequestId::new(903)
     ));
     assert_eq!(streaming_retry_drop_count.load(Ordering::SeqCst), 1);
     continue_after_visible_output.notify_one();
     assert!(matches!(
-        next_retry_event(&mut supervisor_reader).await,
+        next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Failed { request_id, .. } if request_id == RequestId::new(903)
     ));
     assert_eq!(retry_count.load(Ordering::SeqCst), 0);
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
 async fn should_not_retry_a_streaming_fork_more_than_once() {
-    let (mut supervisor_reader, mut supervisor_writer, worker_task, retry_count, _, _, _) =
+    let (mut daemon_reader, mut daemon_writer, worker_task, retry_count, _, _, _) =
         launch_retry_worker(RetryScenario::StreamingFork).await;
-    load_retry_model(&mut supervisor_reader, &mut supervisor_writer).await;
-    submit_retry_generation(&mut supervisor_writer, 904).await;
+    load_retry_model(&mut daemon_reader, &mut daemon_writer).await;
+    submit_retry_generation(&mut daemon_writer, 904).await;
 
-    let failure_event = next_retry_event(&mut supervisor_reader).await;
+    let failure_event = next_retry_event(&mut daemon_reader).await;
     assert!(
         matches!(
             &failure_event,
@@ -356,7 +356,7 @@ async fn should_not_retry_a_streaming_fork_more_than_once() {
         "expected the streaming rejection, got {failure_event:?}"
     );
     assert_eq!(retry_count.load(Ordering::SeqCst), 1);
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 async fn launch_retry_worker(
@@ -384,8 +384,8 @@ async fn launch_retry_worker(
         },
         0,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
@@ -393,8 +393,8 @@ async fn launch_retry_worker(
             .await
     });
     (
-        ProtocolReader::new(supervisor_reader_transport),
-        ProtocolWriter::new(supervisor_writer_transport),
+        ProtocolReader::new(daemon_reader_transport),
+        ProtocolWriter::new(daemon_writer_transport),
         worker_task,
         streaming_retry_count,
         request_cache_identities,
@@ -404,17 +404,17 @@ async fn launch_retry_worker(
 }
 
 async fn load_retry_model<ReadTransport, WriteTransport>(
-    supervisor_reader: &mut ProtocolReader<ReadTransport>,
-    supervisor_writer: &mut ProtocolWriter<WriteTransport>,
+    daemon_reader: &mut ProtocolReader<ReadTransport>,
+    daemon_writer: &mut ProtocolWriter<WriteTransport>,
 ) where
     ReadTransport: tokio::io::AsyncRead + Unpin,
     WriteTransport: AsyncWrite + Unpin,
 {
     assert!(matches!(
-        next_retry_event(supervisor_reader).await,
+        next_retry_event(daemon_reader).await,
         WorkerEvent::Idle { .. }
     ));
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/requested-model".to_owned(),
             model_configuration: worker_model_configuration("requested-model"),
@@ -422,30 +422,30 @@ async fn load_retry_model<ReadTransport, WriteTransport>(
         .await
         .expect("the worker should load the requested model");
     assert!(matches!(
-        next_retry_event(supervisor_reader).await,
+        next_retry_event(daemon_reader).await,
         WorkerEvent::ModelSwapped { .. }
     ));
 }
 
 async fn submit_retry_generation<WriteTransport>(
-    supervisor_writer: &mut ProtocolWriter<WriteTransport>,
+    daemon_writer: &mut ProtocolWriter<WriteTransport>,
     request_id: u64,
 ) where
     WriteTransport: AsyncWrite + Unpin,
 {
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(request_id, 905)))
         .await
         .expect("the worker should receive the generation request");
 }
 
 async fn next_retry_event<ReadTransport>(
-    supervisor_reader: &mut ProtocolReader<ReadTransport>,
+    daemon_reader: &mut ProtocolReader<ReadTransport>,
 ) -> WorkerEvent
 where
     ReadTransport: tokio::io::AsyncRead + Unpin,
 {
-    timeout(Duration::from_secs(5), next_event(supervisor_reader))
+    timeout(Duration::from_secs(5), next_event(daemon_reader))
         .await
         .expect("the retry journey should emit an event within five seconds")
 }

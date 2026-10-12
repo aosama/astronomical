@@ -2,7 +2,7 @@
 //!
 //! Model-directory suffixes select scripted protocol behavior. The fixture uses
 //! the real framed standard-input/standard-output transport, so tests exercise
-//! supervisor queueing and event handling without loading MLX or local artifacts.
+//! daemon queueing and event handling without loading MLX or local artifacts.
 
 use std::{error::Error, process::ExitCode, time::Duration};
 

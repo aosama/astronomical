@@ -150,7 +150,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         worker_runtime_config.worker_startup_configuration(),
     )
     .await
-    .expect("the supervisor should launch the real worker");
+    .expect("the daemon should launch the real worker");
     wait_until_idle(&worker_handle).await;
     let worker_process_id = find_worker_process_id().await;
     let source_document = static_source_document(measurement_case.source_document);

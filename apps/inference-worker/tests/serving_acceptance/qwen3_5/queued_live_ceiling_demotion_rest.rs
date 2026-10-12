@@ -4,7 +4,7 @@
 //! The user lowers the public "Maximum model RAM" control mid-generation, so
 //! the worker queues the ceiling instead of applying it in place. The resident
 //! engine cannot shrink below its loaded memory, so after the generation
-//! finalizes the supervisor must still effectuate the request: replace the
+//! finalizes the daemon must still effectuate the request: replace the
 //! worker with a streaming engine under the persisted lower ceiling, clear the
 //! pending state and the restart-required error, and keep serving. This is the
 //! exact journey that wedged the Development app with a permanently pending

@@ -23,7 +23,7 @@ const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
 const CSS_CONTENT_TYPE: &str = "text/css; charset=utf-8";
 
-/// Returns the Observatory console routes, ready to merge into any supervisor
+/// Returns the Observatory console routes, ready to merge into any daemon
 /// `Router` without repeating asset routes across every builder variant.
 pub(crate) fn console_routes<S>() -> Router<S>
 where

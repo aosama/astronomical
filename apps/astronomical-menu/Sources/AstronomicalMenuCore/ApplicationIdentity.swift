@@ -15,13 +15,13 @@ public enum ApplicationChannel: String, Equatable, Sendable {
     case .appStore: nil
     }
   }
-  var defaultSupervisorPort: Int { self == .development ? 6733 : 6732 }
+  var defaultDaemonPort: Int { self == .development ? 6733 : 6732 }
 }
 
 /// Immutable application identity injected by the app bundle and shared by every local boundary.
 struct ApplicationIdentity: Equatable, Sendable {
   let channel: ApplicationChannel
-  let supervisorPort: Int
+  let daemonPort: Int
   let stateDirectoryName: String?
   let version: String
   let buildNumber: String
@@ -31,10 +31,10 @@ struct ApplicationIdentity: Equatable, Sendable {
   static func current(bundle: Bundle = .main) -> ApplicationIdentity {
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
     let channel = ApplicationChannel(rawValue: rawChannel ?? "") ?? .development
-    let configuredPort = bundle.object(forInfoDictionaryKey: "AstronomicalSupervisorPort") as? Int
+    let configuredPort = bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int
     return ApplicationIdentity(
       channel: channel,
-      supervisorPort: configuredPort ?? channel.defaultSupervisorPort,
+      daemonPort: configuredPort ?? channel.defaultDaemonPort,
       stateDirectoryName: (bundle.object(forInfoDictionaryKey: "AstronomicalStateDirectoryName") as? String)
         ?? channel.stateDirectoryName,
       version: (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "unknown",
@@ -45,8 +45,8 @@ struct ApplicationIdentity: Equatable, Sendable {
   }
 
   func endpointURL(path: String) throws -> URL {
-    guard let endpointURL = URL(string: "http://127.0.0.1:\(supervisorPort)\(path)") else {
-      throw SupervisorClientError.invalidEndpoint
+    guard let endpointURL = URL(string: "http://127.0.0.1:\(daemonPort)\(path)") else {
+      throw DaemonClientError.invalidEndpoint
     }
     return endpointURL
   }

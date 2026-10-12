@@ -1,6 +1,6 @@
 //! Safe deletion of global or model-scoped persistent prompt-cache trees.
 //!
-//! The worker is the sole owner of this operation. The supervisor sends an IPC
+//! The worker is the sole owner of this operation. The daemon sends an IPC
 //! command and never reads or mutates cache files directly.
 
 use std::fs;

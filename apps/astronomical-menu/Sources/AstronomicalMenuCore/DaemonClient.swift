@@ -1,10 +1,10 @@
 import Foundation
 
-private let maximumSupervisorResponseByteCount = 1_048_576
+private let maximumDaemonResponseByteCount = 1_048_576
 private let maximumMlxMemoryUpdateTimeoutSeconds: TimeInterval = 120
 
-protocol SupervisorClient: Sendable {
-  func fetchStatus() async throws -> SupervisorStatusDocument
+protocol DaemonClient: Sendable {
+  func fetchStatus() async throws -> DaemonStatusDocument
   func reloadConfiguration() async throws -> ConfigurationReloadResult
   func requestShutdown() async throws
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String
@@ -13,10 +13,10 @@ protocol SupervisorClient: Sendable {
   func modelsAreAvailable() async -> Bool
 }
 
-extension SupervisorClient {
+extension DaemonClient {
   func modelsAreAvailable() async -> Bool { false }
   func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
-    throw SupervisorClientError.serverRejected("Maximum model RAM control is unavailable")
+    throw DaemonClientError.serverRejected("Maximum model RAM control is unavailable")
   }
 
   func expectedInstanceIsHealthy() async -> Bool {
@@ -28,7 +28,7 @@ extension SupervisorClient {
   }
 }
 
-struct LocalSupervisorClient: SupervisorClient {
+struct LocalDaemonClient: DaemonClient {
   private let applicationIdentity: ApplicationIdentity
   private let urlSession: URLSession
 
@@ -40,25 +40,25 @@ struct LocalSupervisorClient: SupervisorClient {
     self.urlSession = urlSession
   }
 
-  func fetchStatus() async throws -> SupervisorStatusDocument {
+  func fetchStatus() async throws -> DaemonStatusDocument {
     let responseBody = try await request(path: "/v1/status", method: "GET", acceptedStatusCodes: [200])
     return try validateExpectedInstance(responseBody: responseBody)
   }
 
-  private func validateExpectedInstance(responseBody: Data) throws -> SupervisorStatusDocument {
-    let statusDocument = try JSONDecoder().decode(SupervisorStatusDocument.self, from: responseBody)
+  private func validateExpectedInstance(responseBody: Data) throws -> DaemonStatusDocument {
+    let statusDocument = try JSONDecoder().decode(DaemonStatusDocument.self, from: responseBody)
     guard let connectedChannel = statusDocument.application?.channel else {
       // A menu cannot safely control a process until the process proves which
       // isolated state and endpoint contract it owns.
-      throw SupervisorClientError.wrongInstance(
+      throw DaemonClientError.wrongInstance(
         expected: applicationIdentity.channel.rawValue, connected: "unidentified")
     }
     guard connectedChannel == applicationIdentity.channel.rawValue else {
-      throw SupervisorClientError.wrongInstance(
+      throw DaemonClientError.wrongInstance(
         expected: applicationIdentity.channel.rawValue, connected: connectedChannel)
     }
     guard statusDocument.application?.stateDirectory == applicationIdentity.expectedServerStateDirectory else {
-      throw SupervisorClientError.wrongStateDirectory(
+      throw DaemonClientError.wrongStateDirectory(
         expected: applicationIdentity.expectedServerStateDirectory,
         connected: statusDocument.application?.stateDirectory ?? "unidentified")
     }
@@ -110,21 +110,21 @@ struct LocalSupervisorClient: SupervisorClient {
     timeoutInterval: TimeInterval = 2
   ) async throws -> Data {
     let endpointURL = try applicationIdentity.endpointURL(path: path)
-    var supervisorRequest = URLRequest(url: endpointURL)
-    supervisorRequest.httpMethod = method
-    supervisorRequest.httpBody = requestBody
-    if requestBody != nil { supervisorRequest.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-    supervisorRequest.timeoutInterval = timeoutInterval
-    let (responseBody, response) = try await urlSession.data(for: supervisorRequest)
-    guard responseBody.count <= maximumSupervisorResponseByteCount else {
-      throw SupervisorClientError.responseTooLarge
+    var daemonRequest = URLRequest(url: endpointURL)
+    daemonRequest.httpMethod = method
+    daemonRequest.httpBody = requestBody
+    if requestBody != nil { daemonRequest.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+    daemonRequest.timeoutInterval = timeoutInterval
+    let (responseBody, response) = try await urlSession.data(for: daemonRequest)
+    guard responseBody.count <= maximumDaemonResponseByteCount else {
+      throw DaemonClientError.responseTooLarge
     }
     guard let httpResponse = response as? HTTPURLResponse else {
-      throw SupervisorClientError.unexpectedResponse
+      throw DaemonClientError.unexpectedResponse
     }
     guard acceptedStatusCodes.contains(httpResponse.statusCode) else {
       let serverMessage = try? JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody)
-      throw SupervisorClientError.serverRejected(
+      throw DaemonClientError.serverRejected(
         serverMessage?.message ?? "Server returned HTTP \(httpResponse.statusCode)"
       )
     }
@@ -191,7 +191,7 @@ private struct MaximumMlxMemoryRequest: Encodable {
   enum CodingKeys: String, CodingKey { case maximumMlxMemoryGigabytes = "maximum_mlx_memory_gb" }
 }
 
-enum SupervisorClientError: LocalizedError {
+enum DaemonClientError: LocalizedError {
   case invalidEndpoint
   case responseTooLarge
   case unexpectedResponse

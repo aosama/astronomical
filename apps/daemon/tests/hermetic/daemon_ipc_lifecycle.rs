@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 use tokio::time::timeout;
 
 use crate::common::daemon_ipc::{
-    HANDSHAKE_TEST_TIMEOUT, disabled_supervisor_attribution_log, fresh_instance_state_directory,
+    HANDSHAKE_TEST_TIMEOUT, disabled_daemon_attribution_log, fresh_instance_state_directory,
     unavailable_generation_context,
 };
 
@@ -21,14 +21,14 @@ async fn should_answer_handshake_with_application_identity_on_the_instance_socke
         state_directory.clone(),
         AstronomicalRuntimeInstance::Development,
     );
-    let supervisor_attribution_log = disabled_supervisor_attribution_log(&state_directory);
+    let daemon_attribution_log = disabled_daemon_attribution_log(&state_directory);
 
     let daemon_ipc_service: DaemonIpcService = timeout(
         HANDSHAKE_TEST_TIMEOUT,
         astronomical_daemon::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
-            &supervisor_attribution_log,
+            &daemon_attribution_log,
         ),
     )
     .await
@@ -75,14 +75,14 @@ async fn should_remove_the_daemon_socket_file_on_shutdown() {
         state_directory.clone(),
         AstronomicalRuntimeInstance::Development,
     );
-    let supervisor_attribution_log = disabled_supervisor_attribution_log(&state_directory);
+    let daemon_attribution_log = disabled_daemon_attribution_log(&state_directory);
 
     let daemon_ipc_service: DaemonIpcService = timeout(
         HANDSHAKE_TEST_TIMEOUT,
         astronomical_daemon::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
-            &supervisor_attribution_log,
+            &daemon_attribution_log,
         ),
     )
     .await
@@ -113,14 +113,14 @@ async fn should_refuse_a_second_daemon_listener_on_the_same_socket() {
         state_directory.clone(),
         AstronomicalRuntimeInstance::Development,
     );
-    let supervisor_attribution_log = disabled_supervisor_attribution_log(&state_directory);
+    let daemon_attribution_log = disabled_daemon_attribution_log(&state_directory);
 
     let running_service: DaemonIpcService = timeout(
         HANDSHAKE_TEST_TIMEOUT,
         astronomical_daemon::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
-            &supervisor_attribution_log,
+            &daemon_attribution_log,
         ),
     )
     .await
@@ -132,7 +132,7 @@ async fn should_refuse_a_second_daemon_listener_on_the_same_socket() {
         astronomical_daemon::start_daemon_ipc_service(
             &instance_paths,
             unavailable_generation_context(),
-            &supervisor_attribution_log,
+            &daemon_attribution_log,
         ),
     )
     .await

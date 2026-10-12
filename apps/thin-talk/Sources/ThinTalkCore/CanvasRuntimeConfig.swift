@@ -1,22 +1,22 @@
 import Foundation
 
 /// The runtime configuration the Swift host injects into the page before the
-/// bundle runs: where the supervisor listens and which channel this window
-/// belongs to. The page cannot discover these itself (the supervisor port is
+/// bundle runs: where the daemon listens and which channel this window
+/// belongs to. The page cannot discover these itself (the daemon port is
 /// channel-specific), so the host is the single source of truth.
 public struct CanvasRuntimeConfig: Equatable, Sendable, Encodable {
   private enum CodingKeys: String, CodingKey {
-    case supervisorBaseURL
+    case daemonBaseURL
     case expectedChannel
     case expectedStateDirectory
   }
 
-  public let supervisorBaseURL: String
+  public let daemonBaseURL: String
   public let expectedChannel: String
   public let expectedStateDirectory: String
 
-  public init(supervisorBaseURL: String, expectedChannel: String, expectedStateDirectory: String) {
-    self.supervisorBaseURL = supervisorBaseURL
+  public init(daemonBaseURL: String, expectedChannel: String, expectedStateDirectory: String) {
+    self.daemonBaseURL = daemonBaseURL
     self.expectedChannel = expectedChannel
     self.expectedStateDirectory = expectedStateDirectory
   }
@@ -24,7 +24,7 @@ public struct CanvasRuntimeConfig: Equatable, Sendable, Encodable {
   /// Builds the configuration for one application identity.
   public init(applicationIdentity: ThinTalkApplicationIdentity) {
     self.init(
-      supervisorBaseURL: "http://127.0.0.1:\(applicationIdentity.supervisorPort)",
+      daemonBaseURL: "http://127.0.0.1:\(applicationIdentity.daemonPort)",
       expectedChannel: applicationIdentity.channel.rawValue,
       expectedStateDirectory: applicationIdentity.expectedServerStateDirectory
     )

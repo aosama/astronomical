@@ -90,7 +90,7 @@ pub(super) fn assert_reported_interaction(
     );
     assert_eq!(
         append_performance["generation_preparation_expert_source_read_byte_count"], 0,
-        "the raw supervisor record must explicitly prove preparation performed no eager reads"
+        "the raw daemon record must explicitly prove preparation performed no eager reads"
     );
     let append_attribution = &reports.attribution_reports[1];
     assert_eq!(

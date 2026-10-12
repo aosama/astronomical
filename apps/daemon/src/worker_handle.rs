@@ -91,7 +91,7 @@ impl WorkerHandle {
         .await
     }
 
-    /// Launches a production worker with supervisor-resolved bootstrap settings.
+    /// Launches a production worker with daemon-resolved bootstrap settings.
     pub async fn launch_with_startup_configuration(
         worker_executable_path: impl AsRef<Path>,
         worker_model_load_timeout: Duration,
@@ -112,7 +112,7 @@ impl WorkerHandle {
         .await
     }
 
-    /// Launches a production worker with explicit supervisor-owned image lifecycle bounds.
+    /// Launches a production worker with explicit daemon-owned image lifecycle bounds.
     pub async fn launch_with_startup_configuration_and_image_generation_timeouts(
         worker_executable_path: impl AsRef<Path>,
         worker_model_load_timeout: Duration,
@@ -268,7 +268,7 @@ impl WorkerHandle {
         .await
     }
 
-    /// Replaces the production worker using supervisor-resolved bootstrap settings.
+    /// Replaces the production worker using daemon-resolved bootstrap settings.
     pub async fn restart_worker_with_startup_configuration(
         &self,
         worker_executable_path: PathBuf,

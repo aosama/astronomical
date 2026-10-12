@@ -1,7 +1,7 @@
 //! Completion-event validation, local performance logging, and stream delivery.
 //!
 //! Worker completion has four audiences with different contracts: protocol
-//! validation protects supervisor state, the local performance log receives
+//! validation protects daemon state, the local performance log receives
 //! cache diagnostics, the completion attribution log receives emitted tool
 //! calls when enabled, and the public stream receives only OpenAI-compatible
 //! completion fields. Keeping the fan-out here makes that separation explicit.

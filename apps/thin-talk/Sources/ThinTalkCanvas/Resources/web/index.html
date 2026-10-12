@@ -5,9 +5,9 @@
     <!--
       The page is a rendering tenant for model output, so it may execute only its
       own bundled scripts and may load images only through the private asset
-      scheme. The one network exception is connect-src for the loopback supervisor:
+      scheme. The one network exception is connect-src for the loopback daemon:
       the page calls the REST API directly, so a payload that slips past
-      sanitisation still cannot reach anywhere but this Mac's supervisor.
+      sanitisation still cannot reach anywhere but this Mac's daemon.
     -->
     <meta
       http-equiv="Content-Security-Policy"

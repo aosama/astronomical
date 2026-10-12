@@ -1,36 +1,36 @@
 /**
  * The runtime configuration the Swift host injects before the bundle runs: where
- * the supervisor listens and which instance this window belongs to. The page
- * cannot discover these itself (the supervisor port is channel-specific), so the
+ * the daemon listens and which instance this window belongs to. The page
+ * cannot discover these itself (the daemon port is channel-specific), so the
  * host is the single source of truth.
  */
 export class AppConfig {
-  public readonly supervisorBaseURL: string;
+  public readonly daemonBaseURL: string;
   public readonly expectedChannel: string;
   public readonly expectedStateDirectory: string;
 
   public constructor(init: {
-    supervisorBaseURL: string;
+    daemonBaseURL: string;
     expectedChannel: string;
     expectedStateDirectory: string;
   }) {
-    this.supervisorBaseURL = init.supervisorBaseURL;
+    this.daemonBaseURL = init.daemonBaseURL;
     this.expectedChannel = init.expectedChannel;
     this.expectedStateDirectory = init.expectedStateDirectory;
   }
 
   /** Reads and validates the host-injected config, throwing when the host did
-   * not inject one or the endpoint is not the loopback supervisor. */
+   * not inject one or the endpoint is not the loopback daemon. */
   public static fromWindow(config: unknown): AppConfig {
     if (typeof config !== "object" || config === null) {
       throw new Error("the host did not inject a runtime configuration");
     }
     const record = config as Record<string, unknown>;
-    const supervisorBaseURL = record["supervisorBaseURL"];
+    const daemonBaseURL = record["daemonBaseURL"];
     const expectedChannel = record["expectedChannel"];
     const expectedStateDirectory = record["expectedStateDirectory"];
-    if (typeof supervisorBaseURL !== "string" || !AppConfig.isLoopbackHTTP(supervisorBaseURL)) {
-      throw new Error("the injected supervisor endpoint is not a loopback HTTP URL");
+    if (typeof daemonBaseURL !== "string" || !AppConfig.isLoopbackHTTP(daemonBaseURL)) {
+      throw new Error("the injected daemon endpoint is not a loopback HTTP URL");
     }
     if (typeof expectedChannel !== "string" || expectedChannel.length === 0) {
       throw new Error("the injected configuration has no runtime channel");
@@ -38,7 +38,7 @@ export class AppConfig {
     if (typeof expectedStateDirectory !== "string" || expectedStateDirectory.length === 0) {
       throw new Error("the injected configuration has no state directory");
     }
-    return new AppConfig({ supervisorBaseURL, expectedChannel, expectedStateDirectory });
+    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory });
   }
 
   private static isLoopbackHTTP(candidate: string): boolean {

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import AstronomicalMenuCore
 
-final class SupervisorClientContractTests: XCTestCase {
+final class DaemonClientContractTests: XCTestCase {
   func test_should_keep_stable_and_development_endpoints_and_state_separate() throws {
     let stableIdentity = applicationIdentity(channel: .stable)
     let developmentIdentity = applicationIdentity(channel: .development)
@@ -25,18 +25,18 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_decode_a_worker_applied_configuration_reload_response() async throws {
-    StubSupervisorURLProtocol.responseConfiguration = .init(
+    StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 202,
       responseBody: Data(
         #"{"status":"reloaded","message":"Config reloaded and applied by the worker","worker_restart_completed":true,"candidate_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effective_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","worker_runtime_feature_configuration":{"configuration_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","persistent_prompt_cache_enabled":true,"prompt_cache_maximum_size_bytes":50000000000,"loaded_model":null}}"#.utf8)
     )
-    defer { StubSupervisorURLProtocol.responseConfiguration = nil }
+    defer { StubDaemonURLProtocol.responseConfiguration = nil }
 
-    let localSupervisorClient = LocalSupervisorClient(
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+    let localDaemonClient = LocalDaemonClient(
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
-    let configurationReloadResult = try await localSupervisorClient.reloadConfiguration()
+    let configurationReloadResult = try await localDaemonClient.reloadConfiguration()
 
     XCTAssertEqual(configurationReloadResult.message, "Config reloaded and applied by the worker")
     XCTAssertTrue(configurationReloadResult.workerRestartCompleted)
@@ -95,15 +95,15 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_reject_status_from_the_opposite_runtime_instance() async {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(
         #"{"application":{"version":"0.2.0","build_number":100,"commit":"abcdef1","is_dirty":false,"channel":"stable","channel_display_name":"Stable","state_directory":"~/.astronomical"},"status":"ready","activity":"idle"}"#.utf8)
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
-    let developmentClient = LocalSupervisorClient(
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let developmentClient = LocalDaemonClient(
       applicationIdentity: applicationIdentity(channel: .development),
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
     do {
@@ -117,20 +117,20 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_reject_an_unidentified_server_for_every_runtime_instance() async {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(#"{"status":"ready","activity":"idle"}"#.utf8)
     )
-    defer { StubSupervisorURLProtocol.statusResponseConfiguration = nil }
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
 
     for runtimeChannel in [ApplicationChannel.stable, ApplicationChannel.development] {
-      let localSupervisorClient = LocalSupervisorClient(
+      let localDaemonClient = LocalDaemonClient(
         applicationIdentity: applicationIdentity(channel: runtimeChannel),
-        urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+        urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
       )
 
       do {
-        _ = try await localSupervisorClient.fetchStatus()
+        _ = try await localDaemonClient.fetchStatus()
         XCTFail("Every menu must reject a server that cannot prove its runtime channel")
       } catch {
         XCTAssertEqual(
@@ -141,36 +141,36 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_report_an_occupied_endpoint_without_trusting_its_instance_identity() async {
-    StubSupervisorURLProtocol.responseConfiguration = .init(
+    StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(#"{"status":"ok"}"#.utf8)
     )
-    defer { StubSupervisorURLProtocol.responseConfiguration = nil }
-    let localSupervisorClient = LocalSupervisorClient(
+    defer { StubDaemonURLProtocol.responseConfiguration = nil }
+    let localDaemonClient = LocalDaemonClient(
       applicationIdentity: applicationIdentity(channel: .development),
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
-    let endpointIsOccupied = await localSupervisorClient.healthIsAvailable()
+    let endpointIsOccupied = await localDaemonClient.healthIsAvailable()
 
     XCTAssertTrue(endpointIsOccupied)
-    XCTAssertEqual(StubSupervisorURLProtocol.receivedRequestPaths.last, "/health")
+    XCTAssertEqual(StubDaemonURLProtocol.receivedRequestPaths.last, "/health")
   }
 
   func test_should_require_ready_acknowledged_effective_configuration_for_startup_health() async {
-    StubSupervisorURLProtocol.responseConfiguration = .init(
+    StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 200, responseBody: Data(#"{"status":"ok"}"#.utf8))
     defer {
-      StubSupervisorURLProtocol.responseConfiguration = nil
-      StubSupervisorURLProtocol.statusResponseConfiguration = nil
+      StubDaemonURLProtocol.responseConfiguration = nil
+      StubDaemonURLProtocol.statusResponseConfiguration = nil
     }
-    let developmentClient = LocalSupervisorClient(
+    let developmentClient = LocalDaemonClient(
       applicationIdentity: applicationIdentity(channel: .development),
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
     let applicationIdentityDocument = #""application":{"version":"0.2.0","build_number":100,"commit":"abcdef1","is_dirty":true,"channel":"development","channel_display_name":"Development","state_directory":"~/.astronomical-dev"}"#
 
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(
         "{\(applicationIdentityDocument),\"status\":\"loading\",\"activity\":\"idle\",\"worker_runtime_feature_configuration_applied\":false,\"configuration\":{\"configured_generation\":\"a\",\"resolved_generation\":\"a\",\"effective_generation\":null,\"is_effective\":false,\"restart_required\":false}}".utf8)
@@ -178,7 +178,7 @@ final class SupervisorClientContractTests: XCTestCase {
     let loadingInstanceIsHealthy = await developmentClient.expectedInstanceIsHealthy()
     XCTAssertFalse(loadingInstanceIsHealthy)
 
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(
         "{\(applicationIdentityDocument),\"status\":\"ready\",\"activity\":\"idle\",\"worker_runtime_feature_configuration_applied\":true,\"configuration\":{\"configured_generation\":\"a\",\"resolved_generation\":\"a\",\"effective_generation\":\"a\",\"is_effective\":true,\"restart_required\":false}}".utf8)
@@ -188,21 +188,21 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_refuse_to_control_the_opposite_runtime_instance() async {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(
         #"{"application":{"version":"0.2.0","build_number":100,"commit":"abcdef1","is_dirty":false,"channel":"stable","channel_display_name":"Stable","state_directory":"~/.astronomical"},"status":"ready","activity":"idle"}"#.utf8)
     )
-    StubSupervisorURLProtocol.responseConfiguration = .init(statusCode: 202, responseBody: Data())
-    StubSupervisorURLProtocol.receivedRequestPaths = []
+    StubDaemonURLProtocol.responseConfiguration = .init(statusCode: 202, responseBody: Data())
+    StubDaemonURLProtocol.receivedRequestPaths = []
     defer {
-      StubSupervisorURLProtocol.statusResponseConfiguration = nil
-      StubSupervisorURLProtocol.responseConfiguration = nil
-      StubSupervisorURLProtocol.receivedRequestPaths = []
+      StubDaemonURLProtocol.statusResponseConfiguration = nil
+      StubDaemonURLProtocol.responseConfiguration = nil
+      StubDaemonURLProtocol.receivedRequestPaths = []
     }
-    let developmentClient = LocalSupervisorClient(
+    let developmentClient = LocalDaemonClient(
       applicationIdentity: applicationIdentity(channel: .development),
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
     do {
@@ -212,26 +212,26 @@ final class SupervisorClientContractTests: XCTestCase {
       XCTAssertEqual(
         error.localizedDescription,
         "Expected the development server, but the stable instance answered")
-      XCTAssertEqual(StubSupervisorURLProtocol.receivedRequestPaths, ["/v1/status"])
+      XCTAssertEqual(StubDaemonURLProtocol.receivedRequestPaths, ["/v1/status"])
     }
   }
 
   func test_should_refuse_to_control_same_channel_server_with_unexpected_state() async {
-    StubSupervisorURLProtocol.statusResponseConfiguration = .init(
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(
         #"{"application":{"version":"0.2.0","build_number":100,"commit":"abcdef1","is_dirty":true,"channel":"development","channel_display_name":"Development","state_directory":"custom"},"status":"ready","activity":"idle"}"#.utf8)
     )
-    StubSupervisorURLProtocol.responseConfiguration = .init(statusCode: 202, responseBody: Data())
-    StubSupervisorURLProtocol.receivedRequestPaths = []
+    StubDaemonURLProtocol.responseConfiguration = .init(statusCode: 202, responseBody: Data())
+    StubDaemonURLProtocol.receivedRequestPaths = []
     defer {
-      StubSupervisorURLProtocol.statusResponseConfiguration = nil
-      StubSupervisorURLProtocol.responseConfiguration = nil
-      StubSupervisorURLProtocol.receivedRequestPaths = []
+      StubDaemonURLProtocol.statusResponseConfiguration = nil
+      StubDaemonURLProtocol.responseConfiguration = nil
+      StubDaemonURLProtocol.receivedRequestPaths = []
     }
-    let developmentClient = LocalSupervisorClient(
+    let developmentClient = LocalDaemonClient(
       applicationIdentity: applicationIdentity(channel: .development),
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
     do {
@@ -241,24 +241,24 @@ final class SupervisorClientContractTests: XCTestCase {
       XCTAssertEqual(
         error.localizedDescription,
         "Expected server state ~/.astronomical-dev, but the connected instance reported custom")
-      XCTAssertEqual(StubSupervisorURLProtocol.receivedRequestPaths, ["/v1/status"])
+      XCTAssertEqual(StubDaemonURLProtocol.receivedRequestPaths, ["/v1/status"])
     }
   }
 
   func test_should_preserve_the_server_message_when_configuration_reload_is_rejected() async {
-    StubSupervisorURLProtocol.responseConfiguration = .init(
+    StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 409,
       responseBody: Data(
         #"{"status":"busy","message":"A generation is active or queued; reload aborted"}"#.utf8)
     )
-    defer { StubSupervisorURLProtocol.responseConfiguration = nil }
+    defer { StubDaemonURLProtocol.responseConfiguration = nil }
 
-    let localSupervisorClient = LocalSupervisorClient(
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+    let localDaemonClient = LocalDaemonClient(
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
     do {
-      _ = try await localSupervisorClient.reloadConfiguration()
+      _ = try await localDaemonClient.reloadConfiguration()
       XCTFail("A rejected reload must throw")
     } catch {
       XCTAssertEqual(error.localizedDescription, "A generation is active or queued; reload aborted")
@@ -266,18 +266,18 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_present_invalid_configuration_feedback_when_reload_is_rejected() async {
-    StubSupervisorURLProtocol.responseConfiguration = .init(
+    StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 400,
       responseBody: Data(#"{"status":"invalid_config","message":"invalid Astronomical configuration"}"#.utf8)
     )
-    defer { StubSupervisorURLProtocol.responseConfiguration = nil }
+    defer { StubDaemonURLProtocol.responseConfiguration = nil }
 
-    let localSupervisorClient = LocalSupervisorClient(
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+    let localDaemonClient = LocalDaemonClient(
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
     do {
-      _ = try await localSupervisorClient.reloadConfiguration()
+      _ = try await localDaemonClient.reloadConfiguration()
       XCTFail("An invalid configuration reload must throw")
     } catch {
       XCTAssertEqual(error.localizedDescription, "invalid Astronomical configuration")
@@ -285,28 +285,28 @@ final class SupervisorClientContractTests: XCTestCase {
   }
 
   func test_should_allow_a_live_memory_update_to_use_the_bounded_reclamation_timeout() async throws {
-    StubSupervisorURLProtocol.responseConfiguration = .init(
+    StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 200,
       responseBody: Data(#"{"message":"MLX memory setting persisted and applied"}"#.utf8)
     )
-    StubSupervisorURLProtocol.receivedRequestTimeoutInterval = nil
+    StubDaemonURLProtocol.receivedRequestTimeoutInterval = nil
     defer {
-      StubSupervisorURLProtocol.responseConfiguration = nil
-      StubSupervisorURLProtocol.receivedRequestTimeoutInterval = nil
+      StubDaemonURLProtocol.responseConfiguration = nil
+      StubDaemonURLProtocol.receivedRequestTimeoutInterval = nil
     }
-    let localSupervisorClient = LocalSupervisorClient(
-      urlSession: URLSession(configuration: StubSupervisorURLProtocol.urlSessionConfiguration())
+    let localDaemonClient = LocalDaemonClient(
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
     )
 
-    _ = try await localSupervisorClient.updateMaximumMlxMemoryGigabytes(32)
+    _ = try await localDaemonClient.updateMaximumMlxMemoryGigabytes(32)
 
-    XCTAssertEqual(StubSupervisorURLProtocol.receivedRequestTimeoutInterval, 120)
+    XCTAssertEqual(StubDaemonURLProtocol.receivedRequestTimeoutInterval, 120)
   }
 
   private func applicationIdentity(channel: ApplicationChannel) -> ApplicationIdentity {
     ApplicationIdentity(
       channel: channel,
-      supervisorPort: channel.defaultSupervisorPort,
+      daemonPort: channel.defaultDaemonPort,
       stateDirectoryName: channel.stateDirectoryName,
       version: "0.2.0",
       buildNumber: "100",

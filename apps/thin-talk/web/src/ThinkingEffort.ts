@@ -2,7 +2,7 @@
  * How much thinking the model may spend before it must answer.
  *
  * The levels are the user-facing promise and the token counts are what the
- * supervisor enforces, so the number shown next to a level is the budget the
+ * daemon enforces, so the number shown next to a level is the budget the
  * server applies to that turn. Quick is the default because a first answer
  * should feel immediate; a reader who wants depth asks for it explicitly.
  */
@@ -31,7 +31,7 @@ export namespace ThinkingEffort {
     return ThinkingEffort.DEFAULT;
   }
 
-  /** The thinking-token budget the supervisor enforces for this level. */
+  /** The thinking-token budget the daemon enforces for this level. */
   export function thinkingBudgetTokens(effort: ThinkingEffort): number {
     switch (effort) {
       case ThinkingEffort.QUICK:
