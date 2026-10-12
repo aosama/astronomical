@@ -325,6 +325,7 @@ fn delayed_memory_model_policy(model_root: &std::path::Path) -> RuntimeModelPoli
                     prompt_cache_common_prefix_stride_blocks: 4,
                     experimental_decode_stage_attribution_enabled: false,
                     experimental_prefill_stage_attribution_enabled: false,
+                    experimental_in_memory_prefix_adoption_enabled: false,
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
                 },

@@ -264,6 +264,42 @@ impl PersistentPromptCachePrefixLookup {
         )
     }
 
+    /// Computes the longest prefix covered by the retained live decoder state.
+    ///
+    /// In-memory prefix adoption (issue #1167) matches the new prompt's hash
+    /// chain against the block keys the last completed generation published.
+    /// The retained state covers complete blocks only — its recurrent state
+    /// sits at the generation-end position, so the adopted boundary always
+    /// absorbs the boundary snapshot from the disk store, which is why the
+    /// recurrent predicate stays caller-supplied. No partial tail is probed:
+    /// tails are disk-store facts, and the exact-boundary rule matches the
+    /// disk restore so the adopted prefix always keeps a token to forward.
+    pub fn for_retained_complete_block_keys(
+        persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+        prompt_tokens: &[u32],
+        block_causal_inputs: &[PersistentPromptCacheBlockCausalInput],
+        retained_complete_block_keys: &[PersistentPromptCacheBlockKey],
+        persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
+    ) -> PersistentPromptCachePrefixLookupResult {
+        let retained_block_hashes = retained_complete_block_keys
+            .iter()
+            .map(|retained_block_key| retained_block_key.block_hash())
+            .collect::<Vec<_>>();
+        Self::for_prompt_with_block_causal_inputs_and_boundary_policy(
+            persistent_prompt_cache_model_contract,
+            prompt_tokens,
+            if block_causal_inputs.is_empty() {
+                None
+            } else {
+                Some(block_causal_inputs)
+            },
+            false,
+            false,
+            |block_hash| retained_block_hashes.contains(block_hash),
+            persistent_prompt_cache_recurrent_snapshot_exists,
+        )
+    }
+
     /// Computes the longest restorable prefix, additionally reusing one stored partial tail block.
     ///
     /// Multi-turn prompts grow by a partial final block between turns. When the

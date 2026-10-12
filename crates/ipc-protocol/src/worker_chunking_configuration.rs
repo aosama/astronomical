@@ -38,6 +38,13 @@ pub struct WorkerChunkingConfiguration {
     /// times per layer; never for serving.
     #[serde(default)]
     pub experimental_prefill_stage_attribution_enabled: bool,
+    /// Retains the last completed generation's live decoder state and adopts
+    /// it for the next turn of the same conversation instead of re-reading
+    /// the prefix KV from the disk store. Adopted state is byte-identical to
+    /// the restored state; the trade is one conversation's KV held between
+    /// requests.
+    #[serde(default)]
+    pub experimental_in_memory_prefix_adoption_enabled: bool,
     /// Diagnostic/quality-gated mode that stores the KV slab quantized.
     #[serde(default)]
     pub experimental_quantized_kv_cache_enabled: bool,

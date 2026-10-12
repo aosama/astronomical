@@ -111,6 +111,11 @@ fn isolated_home(
         serde_json::json!(performance_attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
+    config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] = serde_json::json!(
+        std::env::var("ORNITH_JOURNEY_PREFIX_ADOPTION")
+            .map(|value| value == "1")
+            .unwrap_or(false)
+    );
     if let Ok(chunk_override) = std::env::var("STREAMING_JOURNEY_CHUNK_TOKENS") {
         config_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] = serde_json::json!(
             chunk_override

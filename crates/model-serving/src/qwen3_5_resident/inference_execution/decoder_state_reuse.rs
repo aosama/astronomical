@@ -7,9 +7,9 @@
 use std::collections::HashMap;
 
 use astronomical_ipc_protocol::{
-    RequestId, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
-    WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
-    WorkerPersistentPromptCacheRequestDiagnostics,
+    RequestId, WorkerInMemoryPrefixAdoptionOutcome,
+    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
+    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
@@ -75,6 +75,51 @@ impl Qwen3_5EngineState {
             restored_token_count,
             lookup_diagnostics.restored_partial_tail_block_token_count(),
         );
+        // In-memory prefix adoption (issue #1167): match the prompt's chain
+        // against the retained live state before touching the disk store. An
+        // adopted prefix can even rescue a disk miss, because the live state
+        // may outlive blocks the store evicted.
+        let mut in_memory_prefix_adoption_outcome =
+            if !self.chunking.experimental_in_memory_prefix_adoption_enabled {
+                None
+            } else if self.retained_live_prefix.is_none() {
+                Some(WorkerInMemoryPrefixAdoptionOutcome::NoRetainedState)
+            } else {
+                let retained_live_prefix = self
+                    .retained_live_prefix
+                    .take()
+                    .unwrap_or_else(|| unreachable!("the holder was just proven present"));
+                let retained_lookup =
+                    PersistentPromptCachePrefixLookup::for_retained_complete_block_keys(
+                        &persistent_prompt_cache.model_contract,
+                        prompt_token_ids,
+                        block_causal_inputs,
+                        &retained_live_prefix.complete_block_keys,
+                        |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
+                    );
+                if retained_lookup.restored_token_count() > 0
+                    && retained_lookup.restored_token_count() >= restored_token_count
+                {
+                    return self.install_adopted_live_prefix(
+                        persistent_prompt_cache,
+                        retained_live_prefix,
+                        retained_lookup,
+                        request_decoder_state,
+                        performance_attribution,
+                    );
+                }
+                // The retained state lost to the disk store or diverged from
+                // this prompt's chain: drop it. Its arrays return to the
+                // allocator cache here rather than serving a conversation
+                // they no longer match.
+                if retained_lookup.restored_token_count() == 0 {
+                    Some(WorkerInMemoryPrefixAdoptionOutcome::ChainMismatch)
+                } else {
+                    Some(WorkerInMemoryPrefixAdoptionOutcome::RetainedStateShorter)
+                }
+            };
+        persistent_prompt_cache_diagnostics.in_memory_prefix_adoption =
+            in_memory_prefix_adoption_outcome.take();
         if restored_token_count == 0 {
             if matches!(
                 lookup_diagnostics.miss_reason(),
@@ -385,7 +430,7 @@ impl Qwen3_5EngineState {
     }
 }
 
-fn persistent_prompt_cache_request_diagnostics(
+pub(super) fn persistent_prompt_cache_request_diagnostics(
     persistent_prompt_cache_block_token_count: usize,
     lookup_diagnostics: &crate::PersistentPromptCacheLookupDiagnostics,
     restored_token_count: usize,
@@ -433,6 +478,7 @@ fn persistent_prompt_cache_request_diagnostics(
         allocator_bytes_cleared_for_publication: 0,
         expert_bytes_reclaimed_for_publication: 0,
         expert_bytes_reclaimed_for_restore: 0,
+        in_memory_prefix_adoption: None,
     }
 }
 

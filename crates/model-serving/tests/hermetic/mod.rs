@@ -18,6 +18,7 @@ mod memory_policy;
 mod mlx_ram_budget;
 mod mlx_ram_budget_admission_workspace;
 mod mlx_ram_budget_ceiling_adjustment;
+mod retained_prefix_policy;
 // The #596 reproduction exercises the feature-gated ModernBERT tokenizer, so it runs in the
 // unified (feature-enabled) lanes exactly like the other gated hermetic modules.
 #[cfg(feature = "direct-mlx")]

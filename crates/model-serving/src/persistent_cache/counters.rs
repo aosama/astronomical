@@ -23,6 +23,9 @@ pub struct PersistentPromptCacheCounters {
     persistent_prompt_cache_visual_embedding_hits: u64,
     persistent_prompt_cache_visual_embedding_misses: u64,
     persistent_prompt_cache_visual_embedding_rows_loaded: u64,
+    /// Requests that adopted the retained live decoder state instead of
+    /// restoring the prefix KV from the disk store (issue #1167).
+    persistent_prompt_cache_in_memory_prefix_adoption_hits: u64,
 }
 
 impl PersistentPromptCacheCounters {
@@ -38,6 +41,13 @@ impl PersistentPromptCacheCounters {
     }
 
     /// Records one persistent prompt-cache miss (cold prefill fallback).
+    /// Records one request that adopted the retained live state.
+    pub fn record_in_memory_prefix_adoption_hit(&mut self) {
+        self.persistent_prompt_cache_in_memory_prefix_adoption_hits = self
+            .persistent_prompt_cache_in_memory_prefix_adoption_hits
+            .saturating_add(1);
+    }
+
     pub fn record_cache_miss(&mut self) {
         self.persistent_prompt_cache_misses = self.persistent_prompt_cache_misses.saturating_add(1);
     }
