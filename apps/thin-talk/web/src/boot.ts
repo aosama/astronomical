@@ -2,7 +2,7 @@ import { AppConfig } from "./AppConfig";
 import { HostChannel } from "./HostChannel";
 import { SessionBridge } from "./SessionBridge";
 import { SessionStore } from "./SessionStore";
-import { SupervisorClient } from "./SupervisorClient";
+import { DaemonClient } from "./DaemonClient";
 import { TrustBoundary } from "./TrustBoundary";
 import { MathPipeline } from "./MathPipeline";
 import { DiagramPipeline } from "./DiagramPipeline";
@@ -32,7 +32,7 @@ export function bootChatClient(): AppShell {
   const host = new HostChannel();
   const bridge = new SessionBridge((request) => host.postSessionCall(request));
   const store = new SessionStore(bridge);
-  const client = new SupervisorClient(config);
+  const client = new DaemonClient(config);
 
   const trust = new TrustBoundary();
   const math = new MathPipeline(trust);

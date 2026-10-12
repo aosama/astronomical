@@ -1,5 +1,5 @@
 //! Measures the serving throughput of the resident 35B sparse-MoE model over the
-//! supervisor IPC boundary: prompt-processing (prefill) tokens per second and
+//! daemon IPC boundary: prompt-processing (prefill) tokens per second and
 //! decode tokens per second, both server-attributed from the worker's generation
 //! performance log (never client wall clock).
 //!

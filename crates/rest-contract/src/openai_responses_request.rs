@@ -195,7 +195,7 @@ impl OpenAiResponsesRequest {
     }
 }
 
-/// Validated Responses request data ready for supervisor translation.
+/// Validated Responses request data ready for daemon translation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenAiResponsesRequestParts {
     pub model: String,

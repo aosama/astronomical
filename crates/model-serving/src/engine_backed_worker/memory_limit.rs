@@ -193,13 +193,13 @@ where
     }
 
     /// Reports that this process cannot adopt the requested ceiling and the
-    /// supervisor must restart the worker under the persisted lower limit.
+    /// daemon must restart the worker under the persisted lower limit.
     ///
     /// Constructing the streaming replacement here would briefly require the
     /// resident and streaming model runtimes in one process, so MLX memory
     /// could not be released deterministically. The loaded runtime, ceilings,
     /// and configuration generation stay untouched so the worker remains an
-    /// honestly consistent server if the supervisor never performs the restart.
+    /// honestly consistent server if the daemon never performs the restart.
     async fn emit_mlx_memory_limit_restart_required<WriteTransport>(
         &self,
         requested_mlx_memory_ceiling_bytes: u64,
@@ -214,7 +214,7 @@ where
         tracing::info!(
             requested_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes,
             reason = %replacement_reason,
-            "resident engine cannot adopt the requested MLX ceiling in place; supervisor restart required"
+            "resident engine cannot adopt the requested MLX ceiling in place; daemon restart required"
         );
         event_writer
             .send_event(&WorkerEvent::MlxMemoryLimitRestartRequired {

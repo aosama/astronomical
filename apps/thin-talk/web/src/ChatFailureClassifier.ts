@@ -1,7 +1,7 @@
 import { ChatFailureKind } from "./ChatFailureKind";
 
 /**
- * Maps a supervisor HTTP status and raw body — or a streaming error chunk — to a
+ * Maps a daemon HTTP status and raw body — or a streaming error chunk — to a
  * classified failure kind. Recognises the public chat codes first, then falls
  * back to status-code heuristics so no failure is left unclassified.
  */
@@ -43,7 +43,7 @@ export class ChatFailureClassifier {
     }
   }
 
-  /** Extracts the failure reason from a lenient supervisor error document. Both
+  /** Extracts the failure reason from a lenient daemon error document. Both
    * `{status,message}` and `{error:{message}}` shapes are accepted. */
   public static reasonFromErrorDocument(bodyText: string): string | null {
     let document: unknown;

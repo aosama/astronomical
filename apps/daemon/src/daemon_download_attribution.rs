@@ -1,4 +1,4 @@
-//! Validated download-specific fields embedded in supervisor performance records.
+//! Validated download-specific fields embedded in daemon performance records.
 
 use std::{
     io,
@@ -12,31 +12,31 @@ use crate::library;
 const MAXIMUM_RELATIVE_PATH_BYTES: usize = 1_024;
 
 #[derive(Clone, Debug, Serialize)]
-pub(crate) struct SupervisorDownloadMeasurementDetail {
+pub(crate) struct DaemonDownloadMeasurementDetail {
     huggingface_id: String,
     revision: String,
     #[serde(flatten)]
-    pub(crate) operation_detail: SupervisorDownloadOperationDetail,
+    pub(crate) operation_detail: DaemonDownloadOperationDetail,
 }
 
-impl SupervisorDownloadMeasurementDetail {
+impl DaemonDownloadMeasurementDetail {
     pub(crate) fn new(
         huggingface_id: impl Into<String>,
         revision: impl Into<String>,
-        operation_detail: SupervisorDownloadOperationDetail,
+        operation_detail: DaemonDownloadOperationDetail,
     ) -> io::Result<Self> {
         let huggingface_id = huggingface_id.into();
         let revision = revision.into();
         if !library::is_valid_huggingface_id(&huggingface_id) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "supervisor attribution requires a validated Hugging Face identity",
+                "daemon attribution requires a validated Hugging Face identity",
             ));
         }
         if !library::is_valid_immutable_revision(&revision) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "supervisor attribution requires a validated immutable revision",
+                "daemon attribution requires a validated immutable revision",
             ));
         }
         Ok(Self::validated(huggingface_id, revision, operation_detail))
@@ -45,7 +45,7 @@ impl SupervisorDownloadMeasurementDetail {
     pub(crate) fn validated(
         huggingface_id: impl Into<String>,
         revision: impl Into<String>,
-        operation_detail: SupervisorDownloadOperationDetail,
+        operation_detail: DaemonDownloadOperationDetail,
     ) -> Self {
         Self {
             huggingface_id: huggingface_id.into(),
@@ -57,7 +57,7 @@ impl SupervisorDownloadMeasurementDetail {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
-pub(crate) enum SupervisorDownloadOperationDetail {
+pub(crate) enum DaemonDownloadOperationDetail {
     DiskPreflight {
         required_bytes: u64,
         available_bytes: u64,

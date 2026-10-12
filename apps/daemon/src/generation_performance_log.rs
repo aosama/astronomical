@@ -27,7 +27,7 @@ pub struct GenerationPerformanceRecord {
     /// - Unambiguous and timezone-free
     /// - Easily converted to any human-readable format by consumers: `date -r $((ts/1000))`
     pub timestamp_millis: u64,
-    /// Supervisor-local monotonic request identifier.
+    /// Daemon-local monotonic request identifier.
     pub request_id: u64,
     /// The model that produced this generation.
     pub model_id: String,
@@ -67,7 +67,7 @@ pub struct GenerationPerformanceRecord {
     /// Bounded cache lookup, publication, and reclamation attribution for this request.
     ///
     /// The worker computes this evidence while it owns MLX and disk-cache state;
-    /// the supervisor transports it unchanged into the completion record so log
+    /// the daemon transports it unchanged into the completion record so log
     /// readers can distinguish a true cache miss from publication memory pressure.
     pub persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
 }

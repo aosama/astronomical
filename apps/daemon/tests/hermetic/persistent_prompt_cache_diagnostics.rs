@@ -7,7 +7,7 @@ use astronomical_ipc_protocol::{
 use serde_json::Value;
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::supervisor;
+use crate::common::daemon;
 
 #[tokio::test]
 async fn should_persist_worker_cache_diagnostics_for_a_completed_user_request() {
@@ -15,7 +15,7 @@ async fn should_persist_worker_cache_diagnostics_for_a_completed_user_request() 
         .expect("the diagnostics journey should create a performance log directory");
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
-    let worker_executor = supervisor::launch_test_executor_with_performance_log_directory(
+    let worker_executor = daemon::launch_test_executor_with_performance_log_directory(
         worker_executable_path,
         performance_log_directory.path(),
     )

@@ -234,7 +234,7 @@ static FORCED_WORKER_VERDICTS_FOR_TESTS: OnceLock<WorkerKernelCapabilities> = On
 /// process — including model hot-swaps — reuses the retained result. The
 /// inference worker is one process per machine session, so a process-global
 /// owner is the exact once-per-worker lifetime the issue requires; the
-/// supervisor never links model-serving. Families without an implemented
+/// daemon never links model-serving. Families without an implemented
 /// probe stay unprobed and fail closed until their milestone lands.
 #[cfg(feature = "direct-mlx")]
 pub fn worker_process_kernel_capabilities(

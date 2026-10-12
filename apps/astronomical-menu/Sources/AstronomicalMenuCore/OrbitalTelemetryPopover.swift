@@ -137,7 +137,7 @@ struct OrbitalTelemetryPopover: View {
             .font(.caption)
             .foregroundStyle(.orange)
         }
-        Text("Config: \(applicationIdentity.expectedConfigurationFile) · Port \(applicationIdentity.supervisorPort)")
+        Text("Config: \(applicationIdentity.expectedConfigurationFile) · Port \(applicationIdentity.daemonPort)")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
@@ -208,7 +208,7 @@ struct OrbitalTelemetryPopover: View {
   }
 
   @ViewBuilder
-  private func maximumMlxMemoryControl(_ statusDocument: SupervisorStatusDocument) -> some View {
+  private func maximumMlxMemoryControl(_ statusDocument: DaemonStatusDocument) -> some View {
     if telemetryStore.minimumWholeDecimalGigabytes <= telemetryStore.maximumWholeDecimalGigabytes,
       telemetryStore.maximumWholeDecimalGigabytes > 0
     {

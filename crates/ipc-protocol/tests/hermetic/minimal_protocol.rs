@@ -59,11 +59,11 @@ async fn should_round_trip_an_unversioned_chat_command() {
         },
         structured_generation: None,
     });
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("a bounded unversioned chat command should be written");
@@ -82,9 +82,9 @@ async fn should_round_trip_expert_memory_mode_change_event() {
     let worker_event = WorkerEvent::ExpertMemoryModeChanged {
         expert_memory_mode: ExpertMemoryMode::Hybrid,
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -92,7 +92,7 @@ async fn should_round_trip_expert_memory_mode_change_event() {
         .expect("an expert memory mode event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the expert memory mode event frame should decode"),
@@ -109,9 +109,9 @@ async fn should_round_trip_generation_preparation_topology() {
         resident_expert_payload_bytes: 21_969_764_352,
         mlx_memory_snapshot: None,
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -119,7 +119,7 @@ async fn should_round_trip_generation_preparation_topology() {
         .expect("generation-preparation topology should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("generation-preparation topology should decode"),
@@ -134,9 +134,9 @@ async fn should_round_trip_idle_worker_mlx_memory_ceiling() {
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
         minimum_mlx_memory_ceiling_bytes: 1,
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -144,7 +144,7 @@ async fn should_round_trip_idle_worker_mlx_memory_ceiling() {
         .expect("the MLX memory ceiling event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the MLX memory ceiling event should decode"),
@@ -158,11 +158,11 @@ async fn should_round_trip_update_mlx_memory_limit_command() {
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
         configuration_generation: "memory-generation".to_owned(),
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("the live memory-limit command should be written");
@@ -196,9 +196,9 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
             reason: "loaded model minimum exceeds the requested ceiling".to_owned(),
         },
     ];
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     for worker_event in worker_events {
         worker_writer
@@ -206,7 +206,7 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
             .await
             .expect("the live memory-limit event should be written");
         assert_eq!(
-            supervisor_reader
+            daemon_reader
                 .next_event()
                 .await
                 .expect("the live memory-limit event should decode"),
@@ -231,16 +231,15 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
         }),
         expert_residency: None,
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let (supervisor_reader_transport, supervisor_writer_transport) =
-        tokio::io::split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_reader_transport, daemon_writer_transport) = tokio::io::split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = tokio::io::split(worker_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
     let mut worker_reader = ProtocolReader::new(worker_reader_transport);
     let mut worker_writer = ProtocolWriter::new(worker_writer_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("the idle memory sample command should be written");
@@ -256,7 +255,7 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
         .await
         .expect("the idle memory sample event should be written");
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the idle memory sample event should decode"),
@@ -289,14 +288,14 @@ async fn should_send_a_large_chat_command_as_one_bounded_frame() {
         .len();
     assert!(serialized_command_bytes > RETIRED_SMALL_FRAME_BYTES);
     assert!(serialized_command_bytes <= MAX_IPC_FRAME_BYTES);
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut frame_codec = LengthDelimitedCodec::new();
     frame_codec.set_max_frame_length(MAX_IPC_FRAME_BYTES);
     let mut worker_reader = FramedRead::new(worker_transport, frame_codec);
     let sent_worker_command = worker_command.clone();
     let writer_task =
-        tokio::spawn(async move { supervisor_writer.send_command(&sent_worker_command).await });
+        tokio::spawn(async move { daemon_writer.send_command(&sent_worker_command).await });
 
     let serialized_frame = worker_reader
         .next()
@@ -336,15 +335,15 @@ async fn should_round_trip_a_fifty_thousand_word_command_without_material_delay(
     let serialized_command_bytes = serde_json::to_vec(&worker_command)
         .expect("the 50K command should serialize")
         .len();
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
     let sent_worker_command = worker_command.clone();
 
     eprintln!("[ipc-50k] transferring {serialized_command_bytes} serialized bytes; ETA <5s");
     let transfer_started_at = Instant::now();
     let writer_task =
-        tokio::spawn(async move { supervisor_writer.send_command(&sent_worker_command).await });
+        tokio::spawn(async move { daemon_writer.send_command(&sent_worker_command).await });
     let received_command = timeout(Duration::from_secs(5), worker_reader.next_command())
         .await
         .expect("the 50K IPC transfer must finish within five seconds")
@@ -374,9 +373,9 @@ async fn should_round_trip_one_unified_chat_output_event() {
         mlx_memory_snapshot: None,
         expert_residency: None,
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -384,7 +383,7 @@ async fn should_round_trip_one_unified_chat_output_event() {
         .expect("a bounded unified output event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the output event frame should decode"),
@@ -403,9 +402,9 @@ async fn should_round_trip_generation_progress_event() {
         expert_residency: None,
     };
 
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -413,7 +412,7 @@ async fn should_round_trip_generation_progress_event() {
         .expect("a generation progress event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the generation progress event frame should decode"),
@@ -427,9 +426,9 @@ async fn should_round_trip_first_decode_completion_event() {
         request_id: RequestId::new(83),
         elapsed_millis: 1_234,
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -437,7 +436,7 @@ async fn should_round_trip_first_decode_completion_event() {
         .expect("a first decode completion event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the first decode completion frame should decode"),
@@ -464,9 +463,9 @@ async fn should_round_trip_one_persistent_prompt_cache_stats_event() {
         persistent_prompt_cache_visual_embedding_rows_loaded: 256,
     };
 
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
     worker_writer
         .send_event(&worker_event)
@@ -474,7 +473,7 @@ async fn should_round_trip_one_persistent_prompt_cache_stats_event() {
         .expect("a persistent prompt-cache stats event should be written");
 
     assert_eq!(
-        supervisor_reader
+        daemon_reader
             .next_event()
             .await
             .expect("the persistent prompt-cache stats event frame should decode"),

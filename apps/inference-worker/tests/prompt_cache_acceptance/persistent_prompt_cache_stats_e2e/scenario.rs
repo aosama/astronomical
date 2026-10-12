@@ -98,7 +98,7 @@ async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefi
         worker_startup_configuration,
     )
     .await
-    .expect("the supervisor should launch the model-artifact worker");
+    .expect("the daemon should launch the model-artifact worker");
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .await

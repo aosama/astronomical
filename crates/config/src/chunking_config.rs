@@ -175,7 +175,7 @@ pub const DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
 /// Resolved user-visible boundaries that partition model-serving work.
 ///
 /// Resolution is deliberately centralized at the configuration boundary. The
-/// supervisor passes this complete contract to the worker, and downstream
+/// daemon passes this complete contract to the worker, and downstream
 /// components convert only numeric representation—not policy or defaults.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChunkingConfig {

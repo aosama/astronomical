@@ -23,29 +23,29 @@ async fn should_report_prompt_cache_lookup_counters_when_generation_starts() {
         ScriptedChatEngine::with_cached_token_count(2_048)
             .with_active_generation_prompt_cache_stats(prompt_cache_stats_after_lookup.clone()),
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
-    supervisor_writer
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(91, 32)))
         .await
         .expect("the worker should receive a chat request");
 
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         prompt_cache_stats_after_lookup,
-        "the supervisor must see the classified cache lookup before a long prefill completes"
+        "the daemon must see the classified cache lookup before a long prefill completes"
     );
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -60,31 +60,27 @@ async fn should_delegate_a_loaded_model_cache_clear_to_the_engine_owner() {
             ScriptedChatProcessor::new(),
             ScriptedChatEngine::new().with_prompt_cache_clear_event(expected_clear_event.clone()),
         );
-        let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-        let (supervisor_reader_transport, supervisor_writer_transport) =
-            split(supervisor_transport);
+        let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+        let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
         let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-        let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-        let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+        let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+        let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
         let worker_task = tokio::spawn(async move {
             engine_worker
                 .run(worker_reader_transport, worker_writer_transport)
                 .await
         });
 
-        assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
-        supervisor_writer
+        assert_eq!(next_event(&mut daemon_reader).await, ready_event());
+        daemon_writer
             .send_command(&WorkerCommand::ClearPromptCache {
                 model_id: Some("example/scripted-chat".to_owned()),
             })
             .await
             .expect("worker should receive the cache-clear command");
-        assert_eq!(
-            next_event(&mut supervisor_reader).await,
-            expected_clear_event
-        );
+        assert_eq!(next_event(&mut daemon_reader).await, expected_clear_event);
 
-        close_worker_transport(supervisor_writer, worker_task).await;
+        close_worker_transport(daemon_writer, worker_task).await;
     })
     .await
     .expect("loaded-engine cache-clear journey should finish within two seconds");

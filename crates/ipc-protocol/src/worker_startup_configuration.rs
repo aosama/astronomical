@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::WorkerLoadedModelRuntimeConfiguration;
 
-/// Logging verbosity supplied by the supervisor when starting a worker.
+/// Logging verbosity supplied by the daemon when starting a worker.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkerLogLevel {

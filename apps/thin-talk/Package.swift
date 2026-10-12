@@ -10,7 +10,7 @@ import PackageDescription
 // directly in tests with a real web view and the real bundled assets.
 //
 // Tests in ThinTalkContractTests exercise the REST chat contract against a
-// stubbed wire, and the canvas against the real shell, so a live supervisor is
+// stubbed wire, and the canvas against the real shell, so a live daemon is
 // never required to verify behaviour.
 let package = Package(
     name: "ThinTalk",

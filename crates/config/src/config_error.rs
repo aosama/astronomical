@@ -58,14 +58,14 @@ pub enum AstronomicalConfigError {
         field_name: String,
         configured_path: PathBuf,
     },
-    #[error("failed to parse supervisor bind address '{raw_bind_address}'")]
+    #[error("failed to parse daemon bind address '{raw_bind_address}'")]
     ParseBindAddress {
         raw_bind_address: String,
         #[source]
         source: std::net::AddrParseError,
     },
-    #[error("refusing to bind supervisor to non-loopback address {supervisor_bind_address}")]
-    NonLoopbackBindAddress { supervisor_bind_address: SocketAddr },
+    #[error("refusing to bind daemon to non-loopback address {daemon_bind_address}")]
+    NonLoopbackBindAddress { daemon_bind_address: SocketAddr },
     #[error(
         "standard runtime instance must bind to {expected_bind_address}, not {configured_bind_address}"
     )]

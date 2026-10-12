@@ -23,7 +23,7 @@ struct ServerApplicationIdentity: Codable, Equatable {
   }
 }
 
-struct SupervisorStatusDocument: Codable, Equatable {
+struct DaemonStatusDocument: Codable, Equatable {
   struct MlxMemoryBreakdown: Equatable {
     let expertPayloadByteCount: UInt64
     let modelCorePayloadByteCount: UInt64
@@ -246,7 +246,7 @@ struct SupervisorStatusDocument: Codable, Equatable {
     self.servingSession = servingSession
   }
 
-  static let unavailable = SupervisorStatusDocument(
+  static let unavailable = DaemonStatusDocument(
     status: "unavailable", activity: "idle", readyModelIdentifier: nil, progress: nil,
     expertMemoryMode: nil,
     mlxMemoryCeilingBytes: 0, servingSession: .empty

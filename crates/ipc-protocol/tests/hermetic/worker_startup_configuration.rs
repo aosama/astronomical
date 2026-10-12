@@ -15,7 +15,7 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 #[tokio::test]
 async fn should_round_trip_worker_startup_configuration() {
     // Exercise every nested startup owner together so a newly added field cannot
-    // silently disappear between the supervisor and worker process boundary.
+    // silently disappear between the daemon and worker process boundary.
     let worker_command = WorkerCommand::InitializeWorker(WorkerStartupConfiguration {
         configuration_generation: "0123456789abcdef".repeat(4),
         global_prompt_cache_root_directory: PathBuf::from("/tmp/fictional-prompt-cache"),
@@ -27,11 +27,11 @@ async fn should_round_trip_worker_startup_configuration() {
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,
     });
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("worker startup configuration should be written");
@@ -72,11 +72,11 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
             },
         ),
     };
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("swap policy should be written");

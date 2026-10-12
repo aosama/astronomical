@@ -18,49 +18,49 @@ async fn should_emit_only_changed_expert_memory_modes_without_losing_token_outpu
         ScriptedChatProcessor::with_prompt_token_count(1),
         scripted_engine,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Resident,
         }
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(744, 12)))
         .await
         .expect("the worker should receive a chat request");
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Resident,
         }
     );
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged,
         }
     );
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             generated_token_count: 1,
             ..
         }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             persistent_prompt_cache_diagnostics: None,
             generated_token_count: 1,
@@ -68,7 +68,7 @@ async fn should_emit_only_changed_expert_memory_modes_without_losing_token_outpu
         }
     ));
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -99,69 +99,69 @@ async fn should_emit_the_recovered_resident_mode_before_completing_the_same_requ
         ScriptedChatProcessor::with_prompt_token_count(1),
         scripted_engine,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Resident,
         }
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(745, 2)))
         .await
         .expect("the worker should receive a chat request");
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Resident,
         }
     );
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged,
         }
     );
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             generated_token_count: 1,
             ..
         }
     ));
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Resident,
         }
     );
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             generated_token_count: 2,
             ..
         }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             generated_token_count: 2,
             ..
         }
     ));
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -180,42 +180,42 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
         ScriptedChatProcessor::with_prompt_token_count(1),
         scripted_engine,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged,
         }
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(746, 2)))
         .await
         .expect("the worker should receive the chat request");
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged,
         }
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Cancel {
             request_id: RequestId::new(746),
         })
         .await
         .expect("the worker should receive cancellation");
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::GenerationFinalized {
             request_id: RequestId::new(746),
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
@@ -233,7 +233,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
         }
     );
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             request_id: RequestId::new(746),
             prompt_token_count: 1,
@@ -245,7 +245,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
         }
     );
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }
 
 #[tokio::test]
@@ -281,36 +281,36 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
         ScriptedChatProcessor::with_prompt_token_count(1),
         scripted_engine,
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged,
         }
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(747, 1)))
         .await
         .expect("the worker should receive the chat request");
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged,
         }
     );
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::GenerationFinalized {
             request_id: RequestId::new(747),
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
@@ -328,14 +328,14 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
         }
     );
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             generated_token_count: 1,
             ..
         }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             generated_token_count: 1,
             ..
@@ -346,25 +346,25 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
         0,
         "an engine that already emitted terminal finalization must not receive a redundant cancellation"
     );
-    supervisor_writer
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(748, 2)))
         .await
         .expect("a terminally finalized engine should accept a follow-up request");
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::ExpertMemoryModeChanged {
             expert_memory_mode: ExpertMemoryMode::Paged
         }
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::GenerationFinalized {
             request_id,
             ..
         } if request_id == RequestId::new(748)
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Output {
             request_id,
             generated_token_count: 1,
@@ -372,7 +372,7 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
         } if request_id == RequestId::new(748)
     ));
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             request_id,
             generated_token_count: 1,
@@ -380,5 +380,5 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
         } if request_id == RequestId::new(748)
     ));
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }

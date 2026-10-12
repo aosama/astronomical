@@ -78,7 +78,7 @@ struct EffectiveConfigurationValues {
     configuration_file_path: PathBuf,
     generation: String,
     runtime_instance: AstronomicalRuntimeInstance,
-    supervisor_bind_address: SocketAddr,
+    daemon_bind_address: SocketAddr,
     model_directories: Vec<PathBuf>,
     configured_model_ids: Vec<String>,
     persistent_prompt_cache_enabled: bool,
@@ -93,8 +93,8 @@ fn effective_values_from_loaded_config(
     loaded_config: &AstronomicalConfig,
     config_file_path: &Path,
 ) -> Result<EffectiveConfigurationValues, ValidateConfigError> {
-    let supervisor_bind_address = loaded_config
-        .supervisor_bind_address()
+    let daemon_bind_address = loaded_config
+        .daemon_bind_address()
         .map_err(|source| ValidateConfigError::InconsistentConfiguration { source })?;
     let maximum_mlx_memory_bytes = loaded_config
         .maximum_mlx_memory_bytes()
@@ -109,7 +109,7 @@ fn effective_values_from_loaded_config(
             .instance_paths()
             .runtime_instance()
             .unwrap_or(AstronomicalRuntimeInstance::Development),
-        supervisor_bind_address,
+        daemon_bind_address,
         model_directories: loaded_config.model_directories().to_vec(),
         configured_model_ids: loaded_config
             .configured_model_ids()
@@ -140,8 +140,8 @@ fn render_text_report(
         runtime_instance_slug(effective_values.runtime_instance)
     ));
     report_lines.push(format!(
-        "Supervisor bind address: {supervisor_bind_address}",
-        supervisor_bind_address = effective_values.supervisor_bind_address
+        "Daemon bind address: {daemon_bind_address}",
+        daemon_bind_address = effective_values.daemon_bind_address
     ));
     report_lines.push(format!(
         "Model directories: {}",
@@ -187,7 +187,7 @@ fn render_json_report(
         "configuration_file_path": effective_values.configuration_file_path.display().to_string(),
         "generation": effective_values.generation,
         "runtime_instance": runtime_instance_slug(effective_values.runtime_instance),
-        "supervisor_bind_address": effective_values.supervisor_bind_address.to_string(),
+        "daemon_bind_address": effective_values.daemon_bind_address.to_string(),
         "model_directories": effective_values
             .model_directories
             .iter()

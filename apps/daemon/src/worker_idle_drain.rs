@@ -1,4 +1,4 @@
-//! Idle-time pending-work draining for the supervisor worker loop.
+//! Idle-time pending-work draining for the daemon worker loop.
 //!
 //! Before every select iteration the loop must apply an enacted MLX memory
 //! limit change and a pending prompt-cache clear while no generation is

@@ -2,7 +2,7 @@ import { ChatFailureKind } from "./ChatFailureKind";
 
 /**
  * One failure the conversation can hit, plus the human-readable reason the
- * supervisor reported. The reason is shown verbatim where it is safe; the next
+ * daemon reported. The reason is shown verbatim where it is safe; the next
  * action is derived from the kind.
  */
 export class ChatFailure extends Error {

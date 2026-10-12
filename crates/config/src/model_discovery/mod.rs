@@ -80,7 +80,7 @@ pub struct ImageGenerationCapabilities {
     /// Smallest renderable image side, mirroring the family's serving-profile minimum.
     ///
     /// Like `default_steps`, this mirrors the serving profile (`model-serving`) because
-    /// the supervisor cannot reach that crate; the endpoint validates against it before
+    /// the daemon cannot reach that crate; the endpoint validates against it before
     /// queue admission so out-of-envelope requests never trigger a model swap.
     pub minimum_dimension_pixels: u32,
     /// Largest reviewed image side, mirroring the family's serving-profile maximum.

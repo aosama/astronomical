@@ -34,16 +34,16 @@ async fn should_round_trip_prompt_cache_cleared_event() {
             blocks_removed: 1_247,
             bytes_freed: 8_589_934_592,
         };
-        let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+        let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
         let mut worker_writer = ProtocolWriter::new(worker_transport);
-        let mut supervisor_reader = ProtocolReader::new(supervisor_transport);
+        let mut daemon_reader = ProtocolReader::new(daemon_transport);
 
         worker_writer
             .send_event(&worker_event)
             .await
             .expect("prompt-cache cleared event should be written");
         assert_eq!(
-            supervisor_reader
+            daemon_reader
                 .next_event()
                 .await
                 .expect("prompt-cache cleared event should decode"),
@@ -54,11 +54,11 @@ async fn should_round_trip_prompt_cache_cleared_event() {
 }
 
 async fn assert_command_round_trip(worker_command: WorkerCommand) {
-    let (supervisor_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut daemon_writer = ProtocolWriter::new(daemon_transport);
     let mut worker_reader = ProtocolReader::new(worker_transport);
 
-    supervisor_writer
+    daemon_writer
         .send_command(&worker_command)
         .await
         .expect("prompt-cache clear command should be written");

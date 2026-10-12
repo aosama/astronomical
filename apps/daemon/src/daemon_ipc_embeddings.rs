@@ -8,10 +8,10 @@ use astronomical_ipc_protocol::{
 };
 
 use crate::{
-    DaemonIpcGenerationContext, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation, application::allocate_chat_request_id,
-    daemon_ipc::generation_start_rejection_reason, worker_health::WorkerHealthSnapshot,
+    DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement,
+    DaemonPerformanceOperation, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+    application::allocate_chat_request_id, daemon_ipc::generation_start_rejection_reason,
+    worker_health::WorkerHealthSnapshot,
 };
 
 /// Runs one IPC embeddings batch: resolves the resident-or-requested model,
@@ -19,15 +19,15 @@ use crate::{
 /// one terminal frame.
 pub(crate) async fn run_embeddings_generation(
     generation_context: &DaemonIpcGenerationContext,
-    supervisor_attribution_log: &SupervisorPerformanceAttributionLog,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
     model: Option<String>,
     inputs: Vec<String>,
     dimensions: Option<u32>,
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
-    supervisor_attribution_log
+    daemon_attribution_log
         .measure_async_operation_best_effort(
-            SupervisorPerformanceOperation::DaemonIpcEmbedGenerate,
+            DaemonPerformanceOperation::DaemonIpcEmbedGenerate,
             || async {
                 let terminal_response = resolve_embeddings_terminal_response(
                     generation_context,
@@ -41,9 +41,9 @@ pub(crate) async fn run_embeddings_generation(
             },
             |embeddings_outcome| {
                 if embeddings_outcome.is_ok() {
-                    SupervisorPerformanceMeasurement::success()
+                    DaemonPerformanceMeasurement::success()
                 } else {
-                    SupervisorPerformanceMeasurement::failure()
+                    DaemonPerformanceMeasurement::failure()
                 }
             },
         )

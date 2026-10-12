@@ -12,7 +12,7 @@ final class AppStoreChannelIdentityTests: XCTestCase {
   private func appStoreIdentity() -> ApplicationIdentity {
     ApplicationIdentity(
       channel: .appStore,
-      supervisorPort: 6732,
+      daemonPort: 6732,
       stateDirectoryName: nil,
       version: "0.3.0",
       buildNumber: "500",

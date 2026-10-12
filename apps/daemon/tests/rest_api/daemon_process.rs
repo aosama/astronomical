@@ -122,7 +122,7 @@ async fn should_keep_health_available_when_worker_startup_fails() {
 
 #[tokio::test]
 async fn should_keep_worker_unready_when_the_loaded_model_is_unexpected() {
-    // With config-driven discovery, the supervisor no longer rejects models
+    // With config-driven discovery, the daemon no longer rejects models
     // based on a hardcoded expected model ID. This test now verifies that
     // the worker starts and becomes ready with whatever model it loads.
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-daemon")
@@ -229,7 +229,7 @@ async fn should_fail_startup_when_user_config_is_malformed() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_raw_config(
         temp_home.path(),
-        r#"{"supervisor":{"bind_address":"127.0.0.1:0"}"#,
+        r#"{"daemon":{"bind_address":"127.0.0.1:0"}"#,
     );
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
         .expect("Cargo should provide the astronomicald executable path");
@@ -259,14 +259,14 @@ async fn should_fail_startup_when_user_config_is_malformed() {
 }
 
 #[tokio::test]
-async fn should_reject_retired_supervisor_configuration_for_a_standard_instance() {
+async fn should_reject_retired_daemon_configuration_for_a_standard_instance() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     let development_state_directory = temp_home.path().join(".astronomical-dev");
     std::fs::create_dir_all(&development_state_directory)
         .expect("development state directory should be created");
     std::fs::write(
         development_state_directory.join("config.json"),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"supervisor":{"bind_address":"127.0.0.1:6732"}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"daemon":{"bind_address":"127.0.0.1:6732"}}"#,
     )
     .expect("development config should be written");
     let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
@@ -285,13 +285,13 @@ async fn should_reject_retired_supervisor_configuration_for_a_standard_instance(
             .output(),
     )
     .await
-    .expect("the daemon should reject the retired supervisor field before the timeout")
+    .expect("the daemon should reject the retired daemon field before the timeout")
     .expect("the daemon should run");
 
     assert!(!daemon_output.status.success());
     let daemon_stderr = String::from_utf8_lossy(&daemon_output.stderr);
     assert!(
-        daemon_stderr.contains("unknown field `supervisor`"),
+        daemon_stderr.contains("unknown field `daemon`"),
         "stderr should explain the retired configuration field, got: {daemon_stderr}"
     );
 }

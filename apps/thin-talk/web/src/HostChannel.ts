@@ -7,7 +7,7 @@ interface ThintalkMessageHandlers {
 /**
  * The one place the page talks to its Swift host: session bridge calls, user
  * actions that must leave the page (copy, open a link), and error reports.
- * Everything else — chat traffic — goes straight to the supervisor over REST.
+ * Everything else — chat traffic — goes straight to the daemon over REST.
  */
 export class HostChannel {
   private readonly handlers: ThintalkMessageHandlers | null;

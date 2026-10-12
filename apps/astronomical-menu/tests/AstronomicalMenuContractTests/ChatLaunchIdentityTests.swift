@@ -4,7 +4,7 @@ import XCTest
 
 /// Contracts for how the menu application maps its channel identity onto the
 /// conversation surface's wire identity. The chat client validates the
-/// supervisor's channel and state directory during its handshake, so every
+/// daemon's channel and state directory during its handshake, so every
 /// mapping below is what keeps the Chat menu item talking to the instance the
 /// menu app itself started.
 final class ChatLaunchIdentityTests: XCTestCase {
@@ -13,7 +13,7 @@ final class ChatLaunchIdentityTests: XCTestCase {
   ) -> ApplicationIdentity {
     ApplicationIdentity(
       channel: channel,
-      supervisorPort: channel.defaultSupervisorPort,
+      daemonPort: channel.defaultDaemonPort,
       stateDirectoryName: channel.stateDirectoryName,
       version: "9.9",
       buildNumber: "999",
@@ -26,7 +26,7 @@ final class ChatLaunchIdentityTests: XCTestCase {
       from: menuIdentity(channel: .development))
 
     XCTAssertEqual(mapped.channel, .development)
-    XCTAssertEqual(mapped.supervisorPort, 6733)
+    XCTAssertEqual(mapped.daemonPort, 6733)
     XCTAssertEqual(mapped.stateDirectoryName, ".astronomical-dev")
     XCTAssertEqual(mapped.version, "9.9")
     XCTAssertEqual(mapped.commit, "test-commit")
@@ -36,7 +36,7 @@ final class ChatLaunchIdentityTests: XCTestCase {
     let mapped = ChatLaunchIdentity.chatIdentity(from: menuIdentity(channel: .stable))
 
     XCTAssertEqual(mapped.channel, .stable)
-    XCTAssertEqual(mapped.supervisorPort, 6732)
+    XCTAssertEqual(mapped.daemonPort, 6732)
     XCTAssertEqual(mapped.stateDirectoryName, ".astronomical")
     XCTAssertEqual(mapped.buildNumber, "999")
   }
@@ -48,7 +48,7 @@ final class ChatLaunchIdentityTests: XCTestCase {
     let mapped = ChatLaunchIdentity.chatIdentity(from: menuIdentity(channel: .appStore))
 
     XCTAssertEqual(mapped.channel, .stable)
-    XCTAssertEqual(mapped.supervisorPort, 6732)
+    XCTAssertEqual(mapped.daemonPort, 6732)
     XCTAssertEqual(mapped.stateDirectoryName, ".astronomical")
   }
 }

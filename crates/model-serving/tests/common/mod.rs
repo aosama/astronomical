@@ -329,7 +329,7 @@ pub(crate) fn configured_resident_sparse_moe_model_directory() -> PathBuf {
 }
 
 #[cfg(feature = "direct-mlx")]
-/// Resolves the executable models exactly as the supervisor daemon serves them: the automatic
+/// Resolves the executable models exactly as the daemon daemon serves them: the automatic
 /// Library destination takes precedence over the authored config roots. Using this instead of
 /// raw `discover_models(config.model_directories())` keeps acceptance journeys consistent with
 /// production even when an artifact exists only under the instance state models directory.

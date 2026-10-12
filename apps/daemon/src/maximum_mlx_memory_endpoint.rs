@@ -249,7 +249,7 @@ pub(crate) async fn update_maximum_mlx_memory(
         }
         Ok(MlxMemoryLimitUpdateOutcome::RestartRequired) => {
             // The loaded resident engine cannot reach the requested ceiling in
-            // place. The setting is valid and persisted; the supervisor now
+            // place. The setting is valid and persisted; the daemon now
             // owns a stop-first worker restart that restores the same model
             // under the lower ceiling before this request answers.
             let demotion_result = match worker_handle.reserve_generation_admission_for_demotion() {

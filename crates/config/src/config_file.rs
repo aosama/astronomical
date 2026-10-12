@@ -69,6 +69,9 @@ pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -
         if remove_field_from_object(root_object, "speculative_prefill") {
             removed_field_names.push("speculative_prefill".to_owned());
         }
+        if remove_field_from_object(root_object, "mtp_enabled") {
+            removed_field_names.push("mtp_enabled".to_owned());
+        }
         if remove_nested_field(
             root_object,
             "chunking",

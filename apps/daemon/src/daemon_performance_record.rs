@@ -1,4 +1,4 @@
-//! Serialized record shape and wall-clock source for supervisor performance attribution.
+//! Serialized record shape and wall-clock source for daemon performance attribution.
 
 use std::{
     io,
@@ -7,17 +7,17 @@ use std::{
 
 use serde::Serialize;
 
-use crate::supervisor_download_attribution::SupervisorDownloadMeasurementDetail;
+use crate::daemon_download_attribution::DaemonDownloadMeasurementDetail;
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum SupervisorPerformanceOutcome {
+pub(crate) enum DaemonPerformanceOutcome {
     Success,
     Failure,
     Paused,
     Cancelled,
 }
 
-impl SupervisorPerformanceOutcome {
+impl DaemonPerformanceOutcome {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Success => "success",
@@ -29,7 +29,7 @@ impl SupervisorPerformanceOutcome {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct SupervisorPerformanceAttributionRecord<'a> {
+pub(crate) struct DaemonPerformanceAttributionRecord<'a> {
     operation: &'static str,
     started_at_unix_millis: u64,
     ended_at_unix_millis: u64,
@@ -38,18 +38,18 @@ pub(crate) struct SupervisorPerformanceAttributionRecord<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     catalog_entry_count: Option<usize>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    download_detail: Option<&'a SupervisorDownloadMeasurementDetail>,
+    download_detail: Option<&'a DaemonDownloadMeasurementDetail>,
 }
 
-impl<'a> SupervisorPerformanceAttributionRecord<'a> {
+impl<'a> DaemonPerformanceAttributionRecord<'a> {
     pub(crate) fn new(
         operation: &'static str,
         started_at_unix_millis: u64,
         ended_at_unix_millis: u64,
         elapsed_nanoseconds: u64,
-        outcome: SupervisorPerformanceOutcome,
+        outcome: DaemonPerformanceOutcome,
         catalog_entry_count: Option<usize>,
-        download_detail: Option<&'a SupervisorDownloadMeasurementDetail>,
+        download_detail: Option<&'a DaemonDownloadMeasurementDetail>,
     ) -> Self {
         Self {
             operation,

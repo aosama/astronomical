@@ -124,8 +124,8 @@ async fn run_lower_ceiling_demotion_journey() {
         "the resident baseline must own exactly one real worker process",
     );
 
-    // The supervisor replaces the worker across a process boundary, so observe
-    // that boundary from outside the supervisor. An in-process runtime swap
+    // The daemon replaces the worker across a process boundary, so observe
+    // that boundary from outside the daemon. An in-process runtime swap
     // would keep the same worker process for the whole journey.
     let worker_process_timeline = WorkerProcessTimeline::start();
     let lowered_ceiling_document = put_json_endpoint(

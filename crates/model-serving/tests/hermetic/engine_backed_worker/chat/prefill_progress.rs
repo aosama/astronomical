@@ -74,24 +74,24 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         )
         .with_restored_prompt_prefix_token_count(10),
     );
-    let (supervisor_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (supervisor_reader_transport, supervisor_writer_transport) = split(supervisor_transport);
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
     let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
-    let mut supervisor_reader = ProtocolReader::new(supervisor_reader_transport);
-    let mut supervisor_writer = ProtocolWriter::new(supervisor_writer_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
     let worker_task = tokio::spawn(async move {
         engine_worker
             .run(worker_reader_transport, worker_writer_transport)
             .await
     });
 
-    assert_eq!(next_event(&mut supervisor_reader).await, ready_event());
-    supervisor_writer
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
+    daemon_writer
         .send_command(&WorkerCommand::Generate(chat_command(742, 12)))
         .await
         .expect("the worker should receive a chat request");
 
-    let initial_prefill_progress_event = next_event(&mut supervisor_reader).await;
+    let initial_prefill_progress_event = next_event(&mut daemon_reader).await;
     match initial_prefill_progress_event {
         WorkerEvent::PrefillProgress {
             request_id,
@@ -110,7 +110,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         other_event => panic!("expected initial uncached prefill progress, got {other_event:?}"),
     }
 
-    let first_completed_prefill_progress_event = next_event(&mut supervisor_reader).await;
+    let first_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
     match first_completed_prefill_progress_event {
         WorkerEvent::PrefillProgress {
             request_id,
@@ -153,7 +153,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         }
         other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
     }
-    let second_completed_prefill_progress_event = next_event(&mut supervisor_reader).await;
+    let second_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
     match second_completed_prefill_progress_event {
         WorkerEvent::PrefillProgress {
             request_id,
@@ -171,10 +171,10 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         }
         other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
     }
-    let _first_output_event = next_event(&mut supervisor_reader).await;
-    let _second_output_event = next_event(&mut supervisor_reader).await;
+    let _first_output_event = next_event(&mut daemon_reader).await;
+    let _second_output_event = next_event(&mut daemon_reader).await;
     assert_eq!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::PromptWorkReuse {
             request_id: RequestId::new(742),
             prompt_work_reuse: WorkerPromptWorkReuse {
@@ -184,7 +184,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         }
     );
     assert!(matches!(
-        next_event(&mut supervisor_reader).await,
+        next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             prompt_token_count: 15,
             cached_token_count: 3,
@@ -192,5 +192,5 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         }
     ));
 
-    close_worker_transport(supervisor_writer, worker_task).await;
+    close_worker_transport(daemon_writer, worker_task).await;
 }

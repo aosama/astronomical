@@ -212,7 +212,7 @@ main() {
             app_bundle_path="${release_directory}/Astronomical Development.app"
             bundle_name="Astronomical Development"
             bundle_identifier="dev.astronomical.app.development"
-            supervisor_port="6733"
+            daemon_port="6733"
             state_directory_name=".astronomical-dev"
             icon_channel="development"
             menu_swift_product="astronomical-menu"
@@ -224,7 +224,7 @@ main() {
             app_bundle_path="${release_directory}/Astronomical.app"
             bundle_name="Astronomical"
             bundle_identifier="dev.astronomical.app"
-            supervisor_port="6732"
+            daemon_port="6732"
             state_directory_name=".astronomical"
             icon_channel="stable"
             menu_swift_product="astronomical-menu"
@@ -240,7 +240,7 @@ main() {
             app_bundle_path="${release_directory}/Astronomical.app"
             bundle_name="Astronomical"
             bundle_identifier="app.astronomical.appstore"
-            supervisor_port="6732"
+            daemon_port="6732"
             state_directory_name=""
             icon_channel="stable"
             menu_swift_product="astronomical-menu-app-store"
@@ -362,7 +362,7 @@ main() {
         fi
         printf '  <key>AstronomicalChannel</key><string>%s</string>\n' "$APPLICATION_CHANNEL"
         printf '  <key>AstronomicalBuildDate</key><string>%s</string>\n' "$build_date_utc"
-        printf '  <key>AstronomicalSupervisorPort</key><integer>%s</integer>\n' "$supervisor_port"
+        printf '  <key>AstronomicalDaemonPort</key><integer>%s</integer>\n' "$daemon_port"
         if [ -n "$state_directory_name" ]; then
             printf '  <key>AstronomicalStateDirectoryName</key><string>%s</string>\n' "$state_directory_name"
         fi

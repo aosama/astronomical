@@ -19,9 +19,9 @@ use astronomical_config::{
 };
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DaemonIpcGenerationContext,
-    DaemonIpcService, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
-    ImageGenerationExecutor, ResolvedRuntimeConfig, RuntimeModelGenerationDefaults,
-    RuntimeModelPolicy, SupervisorPerformanceAttributionLog, WorkerHealthSnapshot,
+    DaemonIpcService, DaemonPerformanceAttributionLog, EmbeddingsExecutionError, EmbeddingsOutput,
+    GenerationStartError, ImageGenerationExecutor, ResolvedRuntimeConfig,
+    RuntimeModelGenerationDefaults, RuntimeModelPolicy, WorkerHealthSnapshot,
     start_daemon_ipc_service,
 };
 use astronomical_ipc_protocol::{
@@ -48,10 +48,10 @@ pub(crate) fn fresh_instance_state_directory(test_name: &str) -> PathBuf {
     state_directory
 }
 
-pub(crate) fn disabled_supervisor_attribution_log(
+pub(crate) fn disabled_daemon_attribution_log(
     state_directory: &Path,
-) -> SupervisorPerformanceAttributionLog {
-    SupervisorPerformanceAttributionLog::open(state_directory, false)
+) -> DaemonPerformanceAttributionLog {
+    DaemonPerformanceAttributionLog::open(state_directory, false)
         .expect("the disabled attribution log should open without writing")
 }
 
@@ -313,7 +313,7 @@ pub(crate) async fn start_stub_daemon_ipc_service_with_runtime_config(
         state_directory.to_path_buf(),
         AstronomicalRuntimeInstance::Development,
     );
-    let supervisor_attribution_log = disabled_supervisor_attribution_log(state_directory);
+    let daemon_attribution_log = disabled_daemon_attribution_log(state_directory);
     let generation_context = DaemonIpcGenerationContext {
         executor: Arc::clone(&stub_executor) as Arc<dyn ImageGenerationExecutor>,
         reloadable_config,
@@ -324,11 +324,7 @@ pub(crate) async fn start_stub_daemon_ipc_service_with_runtime_config(
     };
     timeout(
         HANDSHAKE_TEST_TIMEOUT,
-        start_daemon_ipc_service(
-            &instance_paths,
-            generation_context,
-            &supervisor_attribution_log,
-        ),
+        start_daemon_ipc_service(&instance_paths, generation_context, &daemon_attribution_log),
     )
     .await
     .expect("the daemon IPC service start should finish inside the test timeout")

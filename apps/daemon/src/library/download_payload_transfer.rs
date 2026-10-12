@@ -25,8 +25,7 @@ use super::{
     download_staged_file::open_staged_file_for_append,
 };
 use crate::{
-    SupervisorPerformanceAttributionLog, SupervisorPerformanceMeasurement,
-    SupervisorPerformanceOperation,
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
 const LIVE_PROGRESS_PUBLICATION_INTERVAL: Duration = Duration::from_millis(250);
@@ -45,7 +44,7 @@ pub enum DownloadPayloadTransferOutcome {
 pub struct DownloadPayloadTransfer {
     job_store: DownloadJobStore,
     transport: Arc<dyn HubPayloadTransport>,
-    attribution_log: SupervisorPerformanceAttributionLog,
+    attribution_log: DaemonPerformanceAttributionLog,
     transfer_control: DownloadTransferControl,
     progress_snapshot: DownloadProgressSnapshot,
 }
@@ -68,7 +67,7 @@ pub enum DownloadPayloadTransferError {
     WritePayload(#[source] std::io::Error),
     #[error("payload digest for {relative_path} does not match provider evidence")]
     ChecksumMismatch { relative_path: String },
-    #[error("supervisor performance attribution failed: {0}")]
+    #[error("daemon performance attribution failed: {0}")]
     Attribution(#[source] std::io::Error),
     #[error("download task failed: {0}")]
     Task(#[source] tokio::task::JoinError),
@@ -94,7 +93,7 @@ impl DownloadPayloadTransfer {
     pub fn new(
         job_store: DownloadJobStore,
         transport: Arc<dyn HubPayloadTransport>,
-        attribution_log: SupervisorPerformanceAttributionLog,
+        attribution_log: DaemonPerformanceAttributionLog,
         transfer_control: DownloadTransferControl,
     ) -> Self {
         Self::with_progress_snapshot(
@@ -110,7 +109,7 @@ impl DownloadPayloadTransfer {
     pub fn with_progress_snapshot(
         job_store: DownloadJobStore,
         transport: Arc<dyn HubPayloadTransport>,
-        attribution_log: SupervisorPerformanceAttributionLog,
+        attribution_log: DaemonPerformanceAttributionLog,
         transfer_control: DownloadTransferControl,
         progress_snapshot: DownloadProgressSnapshot,
     ) -> Self {
@@ -176,13 +175,13 @@ impl DownloadPayloadTransfer {
         let verification_outcome = self
             .attribution_log
             .measure_blocking_operation(
-                SupervisorPerformanceOperation::Verification,
+                DaemonPerformanceOperation::Verification,
                 move || verify_download_job(&models_directory, &verification_job),
                 |verification_outcome| {
                     let measurement = if verification_outcome.is_ok() {
-                        SupervisorPerformanceMeasurement::success()
+                        DaemonPerformanceMeasurement::success()
                     } else {
-                        SupervisorPerformanceMeasurement::failure()
+                        DaemonPerformanceMeasurement::failure()
                     };
                     measurement
                         .with_verification(
@@ -191,7 +190,7 @@ impl DownloadPayloadTransfer {
                             download_job.files().len(),
                             download_job.bytes_total(),
                         )
-                        .unwrap_or_else(|_| SupervisorPerformanceMeasurement::failure())
+                        .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
                 },
             )
             .await
@@ -375,7 +374,7 @@ impl DownloadPayloadTransfer {
         Ok(())
     }
 
-    pub(super) fn attribution_log(&self) -> &SupervisorPerformanceAttributionLog {
+    pub(super) fn attribution_log(&self) -> &DaemonPerformanceAttributionLog {
         &self.attribution_log
     }
 

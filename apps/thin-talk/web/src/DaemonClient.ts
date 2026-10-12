@@ -5,7 +5,7 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureClassifier } from "./ChatFailureClassifier";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ModelCatalogEntry } from "./ModelCatalogEntry";
-import { SupervisorStatus } from "./SupervisorStatus";
+import { DaemonStatus } from "./DaemonStatus";
 import { ThinkingEffort } from "./ThinkingEffort";
 
 /** How long a readiness/model request may take before the page gives up. */
@@ -14,7 +14,7 @@ const GET_TIMEOUT_MILLISECONDS = 2_000;
 const MAXIMUM_RESPONSE_BYTE_COUNT = 1_048_576;
 
 /** One streaming chat completion request body. `thinking_budget` uses the
- * supervisor's canonical numeric spelling: the REST contract rejects
+ * daemon's canonical numeric spelling: the REST contract rejects
  * unrecognised fields outright, so this key name is part of the wire agreement. */
 interface ChatCompletionRequestBody {
   model: string;
@@ -24,12 +24,12 @@ interface ChatCompletionRequestBody {
 }
 
 /**
- * Talks to a single supervisor instance over its public REST endpoints: the
+ * Talks to a single daemon instance over its public REST endpoints: the
  * readiness handshake, the model list, and streaming chat completion. All
  * network and decoding logic is isolated here so the controller never touches
  * the wire.
  */
-export class SupervisorClient {
+export class DaemonClient {
   public readonly stallTimeoutMilliseconds = 60_000;
   private readonly config: AppConfig;
 
@@ -37,14 +37,14 @@ export class SupervisorClient {
     this.config = config;
   }
 
-  /** Verifies this window is talking to the matching supervisor instance,
+  /** Verifies this window is talking to the matching daemon instance,
    * returning its status text. Throws when the endpoint answers with a
    * different runtime channel or state directory. */
   public async handshake(): Promise<string> {
     const bodyText = await this.requestText("/v1/status");
-    let status: SupervisorStatus;
+    let status: DaemonStatus;
     try {
-      status = SupervisorStatus.fromPlain(JSON.parse(bodyText));
+      status = DaemonStatus.fromPlain(JSON.parse(bodyText));
     } catch {
       throw new Error("The server returned an unexpected response.");
     }
@@ -93,7 +93,7 @@ export class SupervisorClient {
     };
     let response: Response;
     try {
-      response = await fetch(`${this.config.supervisorBaseURL}/v1/chat/completions`, {
+      response = await fetch(`${this.config.daemonBaseURL}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -103,9 +103,9 @@ export class SupervisorClient {
       if (init.signal.aborted) {
         return;
       }
-      // Pre-stream failure (e.g. a model that will not load): the supervisor's
+      // Pre-stream failure (e.g. a model that will not load): the daemon's
       // refusal never arrived as a response, so classify as unavailable.
-      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, SupervisorClient.describeNetworkError(error));
+      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, DaemonClient.describeNetworkError(error));
     }
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
@@ -201,11 +201,11 @@ export class SupervisorClient {
   private async requestText(path: string): Promise<string> {
     let response: Response;
     try {
-      response = await fetch(`${this.config.supervisorBaseURL}${path}`, {
+      response = await fetch(`${this.config.daemonBaseURL}${path}`, {
         signal: AbortSignal.timeout(GET_TIMEOUT_MILLISECONDS),
       });
     } catch (error) {
-      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, SupervisorClient.describeNetworkError(error));
+      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, DaemonClient.describeNetworkError(error));
     }
     const bodyText = await response.text();
     if (bodyText.length > MAXIMUM_RESPONSE_BYTE_COUNT) {

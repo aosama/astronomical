@@ -1,4 +1,4 @@
-//! Strict bundled catalog and supervisor attribution contracts.
+//! Strict bundled catalog and daemon attribution contracts.
 
 use std::{
     fs, io,
@@ -10,8 +10,8 @@ use std::{
 };
 
 use astronomical_daemon::{
-    DownloadCatalog, DownloadCatalogFamily, SupervisorPerformanceAttributionLog,
-    SupervisorPerformanceMeasurement, SupervisorPerformanceOperation,
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
+    DownloadCatalog, DownloadCatalogFamily,
 };
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -327,20 +327,20 @@ fn should_reject_unknown_duplicate_and_case_colliding_entries() {
 }
 
 #[test]
-fn should_leave_the_supervisor_attribution_file_absent_when_disabled() {
+fn should_leave_the_daemon_attribution_file_absent_when_disabled() {
     let log_directory = tempfile::tempdir().expect("a log directory should be created");
-    let attribution_log = SupervisorPerformanceAttributionLog::open(log_directory.path(), false)
+    let attribution_log = DaemonPerformanceAttributionLog::open(log_directory.path(), false)
         .expect("disabled attribution should remain inert");
 
     let measured_catalog = attribution_log
         .measure_operation(
-            SupervisorPerformanceOperation::LibraryCatalogLoad,
+            DaemonPerformanceOperation::LibraryCatalogLoad,
             || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
-                Ok(download_catalog) => SupervisorPerformanceMeasurement::successful_catalog_load(
+                Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
                 ),
-                Err(_) => SupervisorPerformanceMeasurement::failure(),
+                Err(_) => DaemonPerformanceMeasurement::failure(),
             },
         )
         .expect("disabled attribution should not affect the operation")
@@ -350,7 +350,7 @@ fn should_leave_the_supervisor_attribution_file_absent_when_disabled() {
     assert!(
         !log_directory
             .path()
-            .join("supervisor-performance-attribution.jsonl")
+            .join("daemon-performance-attribution.jsonl")
             .exists()
     );
 }
@@ -358,18 +358,18 @@ fn should_leave_the_supervisor_attribution_file_absent_when_disabled() {
 #[test]
 fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let log_directory = tempfile::tempdir().expect("a log directory should be created");
-    let attribution_log = SupervisorPerformanceAttributionLog::open(log_directory.path(), true)
+    let attribution_log = DaemonPerformanceAttributionLog::open(log_directory.path(), true)
         .expect("enabled attribution should open its writer");
 
     let successful_catalog = attribution_log
         .measure_operation(
-            SupervisorPerformanceOperation::LibraryCatalogLoad,
+            DaemonPerformanceOperation::LibraryCatalogLoad,
             || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
-                Ok(download_catalog) => SupervisorPerformanceMeasurement::successful_catalog_load(
+                Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
                 ),
-                Err(_) => SupervisorPerformanceMeasurement::failure(),
+                Err(_) => DaemonPerformanceMeasurement::failure(),
             },
         )
         .expect("successful attribution should be written");
@@ -377,9 +377,9 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
 
     let failed_catalog = attribution_log
         .measure_operation(
-            SupervisorPerformanceOperation::LibraryCatalogLoad,
+            DaemonPerformanceOperation::LibraryCatalogLoad,
             || DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#),
-            |_| SupervisorPerformanceMeasurement::failure(),
+            |_| DaemonPerformanceMeasurement::failure(),
         )
         .expect("failed operation attribution should still be written");
     assert!(failed_catalog.is_err());
@@ -387,7 +387,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let attribution_text = fs::read_to_string(
         log_directory
             .path()
-            .join("supervisor-performance-attribution.jsonl"),
+            .join("daemon-performance-attribution.jsonl"),
     )
     .expect("the attribution log should remain readable");
     let attribution_records = attribution_text
@@ -417,13 +417,13 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
 
 #[test]
 fn should_return_a_typed_io_error_when_an_enabled_attribution_write_fails() {
-    let attribution_log = SupervisorPerformanceAttributionLog::from_writer(AlwaysFailingWriter);
+    let attribution_log = DaemonPerformanceAttributionLog::from_writer(AlwaysFailingWriter);
 
     let attribution_error = attribution_log
         .measure_operation(
-            SupervisorPerformanceOperation::LibraryCatalogLoad,
+            DaemonPerformanceOperation::LibraryCatalogLoad,
             || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
-            |_| SupervisorPerformanceMeasurement::successful_catalog_load(0),
+            |_| DaemonPerformanceMeasurement::successful_catalog_load(0),
         )
         .expect_err("required attribution write failures must remain typed");
 
@@ -442,7 +442,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_timestamp_fails() 
     let clock_call_count_for_writer = Arc::clone(&clock_call_count);
     let measured_operation_executed_for_operation = Arc::clone(&measured_operation_executed);
     let attribution_log =
-        SupervisorPerformanceAttributionLog::from_writer_and_clock(io::sink(), move || {
+        DaemonPerformanceAttributionLog::from_writer_and_clock(io::sink(), move || {
             if clock_call_count_for_writer.fetch_add(1, Ordering::SeqCst) == 0 {
                 Ok(1_000)
             } else {
@@ -452,12 +452,12 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_timestamp_fails() 
 
     let attribution_error = attribution_log
         .measure_operation(
-            SupervisorPerformanceOperation::LibraryCatalogLoad,
+            DaemonPerformanceOperation::LibraryCatalogLoad,
             || {
                 measured_operation_executed_for_operation.store(true, Ordering::SeqCst);
                 DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#)
             },
-            |_| SupervisorPerformanceMeasurement::successful_catalog_load(0),
+            |_| DaemonPerformanceMeasurement::successful_catalog_load(0),
         )
         .expect_err("required attribution timestamp failures must remain typed");
 

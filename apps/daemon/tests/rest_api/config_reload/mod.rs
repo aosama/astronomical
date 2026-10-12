@@ -1,4 +1,4 @@
-//! Supervisor control endpoint tests: `POST /v1/config/reload` and
+//! Daemon control endpoint tests: `POST /v1/config/reload` and
 //! `POST /v1/control/shutdown`.
 
 use std::path::PathBuf;

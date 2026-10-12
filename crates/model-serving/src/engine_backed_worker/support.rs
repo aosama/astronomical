@@ -88,7 +88,7 @@ pub trait ModelFactory<
     /// Returns the global prompt-cache root directory, if the factory manages one.
     ///
     /// `None` means the factory does not own a cache (e.g. the `()` unit factory).
-    /// The supervisor uses this to compute the target path for cache-clear
+    /// The daemon uses this to compute the target path for cache-clear
     /// operations when no model is currently loaded.
     fn global_prompt_cache_root_directory(&self) -> Option<&Path> {
         None

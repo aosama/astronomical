@@ -3,14 +3,14 @@ use std::time::Duration;
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHandle, WorkerHealthStatus};
 use tokio::time::{Instant, sleep};
 
-use crate::common::supervisor;
+use crate::common::daemon;
 
 #[tokio::test]
 async fn should_force_terminate_and_reap_a_worker_that_keeps_loading() {
     let worker_executable_path =
         std::env::var("CARGO_BIN_EXE_astronomical-daemon-loading-forever-worker")
             .expect("Cargo should provide the loading-forever worker fixture path");
-    let worker_executor = supervisor::launch_test_worker_with_model_load_timeout(
+    let worker_executor = daemon::launch_test_worker_with_model_load_timeout(
         worker_executable_path,
         Duration::from_millis(40),
     )
@@ -36,7 +36,7 @@ async fn should_report_loading_health_until_engine_readiness() {
     let worker_executable_path =
         std::env::var("CARGO_BIN_EXE_astronomical-daemon-delayed-engine-ready-worker")
             .expect("Cargo should provide the delayed-engine-ready worker fixture path");
-    let worker_executor = supervisor::launch_test_worker_with_model_load_timeout(
+    let worker_executor = daemon::launch_test_worker_with_model_load_timeout(
         worker_executable_path,
         Duration::from_secs(2),
     )

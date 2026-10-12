@@ -1,4 +1,4 @@
-//! Switchable start/end attribution for supervisor-owned operations.
+//! Switchable start/end attribution for daemon-owned operations.
 
 use std::{
     fs::OpenOptions,
@@ -9,21 +9,20 @@ use std::{
     time::Instant,
 };
 
-use crate::supervisor_download_attribution::{
-    SupervisorDownloadMeasurementDetail, SupervisorDownloadOperationDetail,
+use crate::daemon_download_attribution::{
+    DaemonDownloadMeasurementDetail, DaemonDownloadOperationDetail,
 };
-use crate::supervisor_performance_record::{
-    SupervisorPerformanceAttributionRecord, SupervisorPerformanceOutcome, current_unix_epoch_millis,
+use crate::daemon_performance_record::{
+    DaemonPerformanceAttributionRecord, DaemonPerformanceOutcome, current_unix_epoch_millis,
 };
 
-const SUPERVISOR_PERFORMANCE_ATTRIBUTION_FILE_NAME: &str =
-    "supervisor-performance-attribution.jsonl";
+const DAEMON_PERFORMANCE_ATTRIBUTION_FILE_NAME: &str = "daemon-performance-attribution.jsonl";
 
-type SupervisorPerformanceClock = dyn Fn() -> io::Result<u64> + Send + Sync;
+type DaemonPerformanceClock = dyn Fn() -> io::Result<u64> + Send + Sync;
 
-/// Supervisor-owned operation names recorded by the common attribution log.
+/// Daemon-owned operation names recorded by the common attribution log.
 #[derive(Clone, Copy, Debug)]
-pub enum SupervisorPerformanceOperation {
+pub enum DaemonPerformanceOperation {
     LibraryCatalogLoad,
     DiskPreflight,
     ManifestFetch,
@@ -43,7 +42,7 @@ pub enum SupervisorPerformanceOperation {
     DaemonIpcDefaultModelSet,
 }
 
-impl SupervisorPerformanceOperation {
+impl DaemonPerformanceOperation {
     const fn as_str(self) -> &'static str {
         match self {
             Self::LibraryCatalogLoad => "library_catalog_load",
@@ -69,13 +68,13 @@ impl SupervisorPerformanceOperation {
 
 /// Explicit outcome and operation-specific metadata for one measured boundary.
 #[derive(Clone, Debug)]
-pub struct SupervisorPerformanceMeasurement {
-    pub(crate) outcome: SupervisorPerformanceOutcome,
+pub struct DaemonPerformanceMeasurement {
+    pub(crate) outcome: DaemonPerformanceOutcome,
     pub(crate) catalog_entry_count: Option<usize>,
-    pub(crate) download_detail: Option<SupervisorDownloadMeasurementDetail>,
+    pub(crate) download_detail: Option<DaemonDownloadMeasurementDetail>,
 }
 
-impl SupervisorPerformanceMeasurement {
+impl DaemonPerformanceMeasurement {
     pub(crate) fn validated_disk_preflight(
         is_success: bool,
         huggingface_id: &str,
@@ -87,7 +86,7 @@ impl SupervisorPerformanceMeasurement {
             is_success,
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::DiskPreflight {
+            DaemonDownloadOperationDetail::DiskPreflight {
                 required_bytes,
                 available_bytes,
             },
@@ -105,7 +104,7 @@ impl SupervisorPerformanceMeasurement {
             is_success,
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::ManifestFetch {
+            DaemonDownloadOperationDetail::ManifestFetch {
                 manifest_file_count,
                 manifest_total_bytes,
             },
@@ -122,7 +121,7 @@ impl SupervisorPerformanceMeasurement {
             is_success,
             huggingface_id,
             revision,
-            SupervisorDownloadOperationDetail::ExecutablePreflight {
+            DaemonDownloadOperationDetail::ExecutablePreflight {
                 manifest_file_count,
             },
         )
@@ -132,16 +131,16 @@ impl SupervisorPerformanceMeasurement {
         is_success: bool,
         huggingface_id: &str,
         revision: &str,
-        operation_detail: SupervisorDownloadOperationDetail,
+        operation_detail: DaemonDownloadOperationDetail,
     ) -> Self {
         Self {
             outcome: if is_success {
-                SupervisorPerformanceOutcome::Success
+                DaemonPerformanceOutcome::Success
             } else {
-                SupervisorPerformanceOutcome::Failure
+                DaemonPerformanceOutcome::Failure
             },
             catalog_entry_count: None,
-            download_detail: Some(SupervisorDownloadMeasurementDetail::validated(
+            download_detail: Some(DaemonDownloadMeasurementDetail::validated(
                 huggingface_id,
                 revision,
                 operation_detail,
@@ -151,34 +150,34 @@ impl SupervisorPerformanceMeasurement {
 
     #[must_use]
     pub const fn success() -> Self {
-        Self::with_outcome(SupervisorPerformanceOutcome::Success)
+        Self::with_outcome(DaemonPerformanceOutcome::Success)
     }
 
     #[must_use]
     pub const fn failure() -> Self {
-        Self::with_outcome(SupervisorPerformanceOutcome::Failure)
+        Self::with_outcome(DaemonPerformanceOutcome::Failure)
     }
 
     #[must_use]
     pub const fn paused() -> Self {
-        Self::with_outcome(SupervisorPerformanceOutcome::Paused)
+        Self::with_outcome(DaemonPerformanceOutcome::Paused)
     }
 
     #[must_use]
     pub const fn cancelled() -> Self {
-        Self::with_outcome(SupervisorPerformanceOutcome::Cancelled)
+        Self::with_outcome(DaemonPerformanceOutcome::Cancelled)
     }
 
     #[must_use]
     pub const fn successful_catalog_load(catalog_entry_count: usize) -> Self {
         Self {
-            outcome: SupervisorPerformanceOutcome::Success,
+            outcome: DaemonPerformanceOutcome::Success,
             catalog_entry_count: Some(catalog_entry_count),
             download_detail: None,
         }
     }
 
-    const fn with_outcome(outcome: SupervisorPerformanceOutcome) -> Self {
+    const fn with_outcome(outcome: DaemonPerformanceOutcome) -> Self {
         Self {
             outcome,
             catalog_entry_count: None,
@@ -187,18 +186,18 @@ impl SupervisorPerformanceMeasurement {
     }
 }
 
-struct SupervisorPerformanceAttributionSink {
+struct DaemonPerformanceAttributionSink {
     writer: Mutex<Box<dyn Write + Send>>,
-    unix_epoch_millis: Arc<SupervisorPerformanceClock>,
+    unix_epoch_millis: Arc<DaemonPerformanceClock>,
 }
 
 /// Cloneable append-only log whose disabled state owns neither a writer nor a clock.
 #[derive(Clone)]
-pub struct SupervisorPerformanceAttributionLog {
-    enabled_sink: Option<Arc<SupervisorPerformanceAttributionSink>>,
+pub struct DaemonPerformanceAttributionLog {
+    enabled_sink: Option<Arc<DaemonPerformanceAttributionSink>>,
 }
 
-impl SupervisorPerformanceAttributionLog {
+impl DaemonPerformanceAttributionLog {
     /// Creates a no-overhead log for tests and application variants without diagnostics.
     #[must_use]
     pub const fn disabled() -> Self {
@@ -212,7 +211,7 @@ impl SupervisorPerformanceAttributionLog {
         let attribution_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_directory.join(SUPERVISOR_PERFORMANCE_ATTRIBUTION_FILE_NAME))?;
+            .open(log_directory.join(DAEMON_PERFORMANCE_ATTRIBUTION_FILE_NAME))?;
         Ok(Self::enabled(
             BufWriter::new(attribution_file),
             Arc::new(current_unix_epoch_millis),
@@ -247,9 +246,9 @@ impl SupervisorPerformanceAttributionLog {
     /// Measures an operation result and appends one flushed JSON record when enabled.
     pub fn measure_operation<OperationOutput>(
         &self,
-        operation: SupervisorPerformanceOperation,
+        operation: DaemonPerformanceOperation,
         measured_operation: impl FnOnce() -> OperationOutput,
-        describe_measurement: impl FnOnce(&OperationOutput) -> SupervisorPerformanceMeasurement,
+        describe_measurement: impl FnOnce(&OperationOutput) -> DaemonPerformanceMeasurement,
     ) -> io::Result<OperationOutput> {
         let Some(enabled_sink) = &self.enabled_sink else {
             return Ok(measured_operation());
@@ -271,9 +270,9 @@ impl SupervisorPerformanceAttributionLog {
     /// The operation future runs without owning the synchronous writer lock.
     pub async fn measure_async_operation<OperationOutput, OperationFuture>(
         &self,
-        operation: SupervisorPerformanceOperation,
+        operation: DaemonPerformanceOperation,
         measured_operation: impl FnOnce() -> OperationFuture,
-        describe_measurement: impl FnOnce(&OperationOutput) -> SupervisorPerformanceMeasurement,
+        describe_measurement: impl FnOnce(&OperationOutput) -> DaemonPerformanceMeasurement,
     ) -> io::Result<OperationOutput>
     where
         OperationFuture: Future<Output = OperationOutput>,
@@ -300,9 +299,9 @@ impl SupervisorPerformanceAttributionLog {
     /// Measures request-path work without allowing diagnostic failures to alter its output.
     pub async fn measure_async_operation_best_effort<OperationOutput, OperationFuture>(
         &self,
-        operation: SupervisorPerformanceOperation,
+        operation: DaemonPerformanceOperation,
         measured_operation: impl FnOnce() -> OperationFuture,
-        describe_measurement: impl FnOnce(&OperationOutput) -> SupervisorPerformanceMeasurement,
+        describe_measurement: impl FnOnce(&OperationOutput) -> DaemonPerformanceMeasurement,
     ) -> OperationOutput
     where
         OperationFuture: Future<Output = OperationOutput>,
@@ -316,7 +315,7 @@ impl SupervisorPerformanceAttributionLog {
                 tracing::warn!(
                     operation = operation.as_str(),
                     error = %attribution_error,
-                    "supervisor performance attribution could not start"
+                    "daemon performance attribution could not start"
                 );
                 return measured_operation().await;
             }
@@ -338,7 +337,7 @@ impl SupervisorPerformanceAttributionLog {
             tracing::warn!(
                 operation = operation.as_str(),
                 error = %attribution_error,
-                "supervisor performance attribution could not finish"
+                "daemon performance attribution could not finish"
             );
         }
         operation_output
@@ -347,9 +346,9 @@ impl SupervisorPerformanceAttributionLog {
     /// Runs synchronous disk or filesystem work away from the asynchronous executor.
     pub async fn measure_blocking_operation<OperationOutput>(
         &self,
-        operation: SupervisorPerformanceOperation,
+        operation: DaemonPerformanceOperation,
         measured_operation: impl FnOnce() -> OperationOutput + Send + 'static,
-        describe_measurement: impl FnOnce(&OperationOutput) -> SupervisorPerformanceMeasurement,
+        describe_measurement: impl FnOnce(&OperationOutput) -> DaemonPerformanceMeasurement,
     ) -> io::Result<OperationOutput>
     where
         OperationOutput: Send + 'static,
@@ -380,11 +379,11 @@ impl SupervisorPerformanceAttributionLog {
 
     async fn record_async_measurement(
         &self,
-        enabled_sink: Arc<SupervisorPerformanceAttributionSink>,
-        operation: SupervisorPerformanceOperation,
+        enabled_sink: Arc<DaemonPerformanceAttributionSink>,
+        operation: DaemonPerformanceOperation,
         started_at_unix_millis: u64,
         started_at: Instant,
-        measurement: SupervisorPerformanceMeasurement,
+        measurement: DaemonPerformanceMeasurement,
     ) -> io::Result<()> {
         let elapsed_nanoseconds =
             u64::try_from(started_at.elapsed().as_nanos()).map_err(io::Error::other)?;
@@ -406,10 +405,10 @@ impl SupervisorPerformanceAttributionLog {
 
     fn enabled(
         writer: impl Write + Send + 'static,
-        unix_epoch_millis: Arc<SupervisorPerformanceClock>,
+        unix_epoch_millis: Arc<DaemonPerformanceClock>,
     ) -> Self {
         Self {
-            enabled_sink: Some(Arc::new(SupervisorPerformanceAttributionSink {
+            enabled_sink: Some(Arc::new(DaemonPerformanceAttributionSink {
                 writer: Mutex::new(Box::new(writer)),
                 unix_epoch_millis,
             })),
@@ -417,11 +416,11 @@ impl SupervisorPerformanceAttributionLog {
     }
 
     fn finish_measurement(
-        enabled_sink: &SupervisorPerformanceAttributionSink,
-        operation: SupervisorPerformanceOperation,
+        enabled_sink: &DaemonPerformanceAttributionSink,
+        operation: DaemonPerformanceOperation,
         started_at_unix_millis: u64,
         started_at: Instant,
-        measurement: SupervisorPerformanceMeasurement,
+        measurement: DaemonPerformanceMeasurement,
     ) -> io::Result<()> {
         let elapsed_nanoseconds =
             u64::try_from(started_at.elapsed().as_nanos()).map_err(io::Error::other)?;
@@ -437,20 +436,20 @@ impl SupervisorPerformanceAttributionLog {
     }
 
     fn record_completed_measurement(
-        enabled_sink: &SupervisorPerformanceAttributionSink,
-        operation: SupervisorPerformanceOperation,
+        enabled_sink: &DaemonPerformanceAttributionSink,
+        operation: DaemonPerformanceOperation,
         started_at_unix_millis: u64,
         ended_at_unix_millis: u64,
         elapsed_nanoseconds: u64,
-        measurement: SupervisorPerformanceMeasurement,
+        measurement: DaemonPerformanceMeasurement,
     ) -> io::Result<()> {
         if !measurement.matches_operation(operation) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "supervisor attribution operation and measurement detail do not match",
+                "daemon attribution operation and measurement detail do not match",
             ));
         }
-        let attribution_record = SupervisorPerformanceAttributionRecord::new(
+        let attribution_record = DaemonPerformanceAttributionRecord::new(
             operation.as_str(),
             started_at_unix_millis,
             ended_at_unix_millis,
@@ -463,8 +462,8 @@ impl SupervisorPerformanceAttributionLog {
     }
 
     fn record(
-        enabled_sink: &SupervisorPerformanceAttributionSink,
-        attribution_record: &SupervisorPerformanceAttributionRecord<'_>,
+        enabled_sink: &DaemonPerformanceAttributionSink,
+        attribution_record: &DaemonPerformanceAttributionRecord<'_>,
     ) -> io::Result<()> {
         // Serialization stays outside the critical section so concurrent operations serialize
         // only the append required to keep each JSON line intact.
@@ -472,7 +471,7 @@ impl SupervisorPerformanceAttributionLog {
         let mut writer = enabled_sink
             .writer
             .lock()
-            .map_err(|_| io::Error::other("supervisor attribution writer lock was poisoned"))?;
+            .map_err(|_| io::Error::other("daemon attribution writer lock was poisoned"))?;
         writer.write_all(&serialized_record)?;
         writer.write_all(b"\n")?;
         writer.flush()
