@@ -7,7 +7,7 @@ use super::{HubManifestFile, HuggingFaceHubError};
 const MAXIMUM_PAGINATION_URL_BYTES: usize = 8_192;
 const DOWNLOAD_JOB_FILE_FIXED_METADATA_ALLOWANCE_BYTES: usize = 256;
 
-pub(super) fn parse_next_link(
+pub(in crate::library) fn parse_next_link(
     link_header: Option<&str>,
 ) -> Result<Option<String>, HuggingFaceHubError> {
     let Some(link_header) = link_header else {
@@ -34,7 +34,7 @@ pub(super) fn parse_next_link(
     Ok(next_url)
 }
 
-pub(super) fn validate_tree_page_url(
+pub(in crate::library) fn validate_tree_page_url(
     page_url: &str,
     expected_tree_url: &str,
 ) -> Result<(), HuggingFaceHubError> {
@@ -54,7 +54,10 @@ pub(super) fn validate_tree_page_url(
     Ok(())
 }
 
-pub(super) fn is_canonical_ascii_path(relative_path: &str, maximum_path_bytes: usize) -> bool {
+pub(in crate::library) fn is_canonical_ascii_path(
+    relative_path: &str,
+    maximum_path_bytes: usize,
+) -> bool {
     !relative_path.is_empty()
         && relative_path.len() <= maximum_path_bytes
         && relative_path.is_ascii()
@@ -67,13 +70,19 @@ pub(super) fn is_canonical_ascii_path(relative_path: &str, maximum_path_bytes: u
             .all(|component| !component.is_empty() && component != "." && component != "..")
 }
 
-pub(super) fn has_ancestor_path(file_paths: &BTreeSet<String>, candidate_path: &str) -> bool {
+pub(in crate::library) fn has_ancestor_path(
+    file_paths: &BTreeSet<String>,
+    candidate_path: &str,
+) -> bool {
     candidate_path
         .match_indices('/')
         .any(|(separator_index, _)| file_paths.contains(&candidate_path[..separator_index]))
 }
 
-pub(super) fn has_descendant_path(all_paths: &BTreeSet<String>, candidate_path: &str) -> bool {
+pub(in crate::library) fn has_descendant_path(
+    all_paths: &BTreeSet<String>,
+    candidate_path: &str,
+) -> bool {
     let descendant_prefix = format!("{candidate_path}/");
     all_paths
         .range(descendant_prefix.clone()..)
@@ -81,7 +90,9 @@ pub(super) fn has_descendant_path(all_paths: &BTreeSet<String>, candidate_path: 
         .is_some_and(|path| path.starts_with(&descendant_prefix))
 }
 
-pub(super) fn estimated_durable_file_metadata_bytes(manifest_file: &HubManifestFile) -> usize {
+pub(in crate::library) fn estimated_durable_file_metadata_bytes(
+    manifest_file: &HubManifestFile,
+) -> usize {
     manifest_file
         .relative_path()
         .len()

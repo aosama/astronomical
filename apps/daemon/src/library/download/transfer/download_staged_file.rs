@@ -7,12 +7,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{
-    DownloadJobStoreError,
-    download_job_store_filesystem::{metadata_without_symlink, synchronize_directory},
+use crate::library::DownloadJobStoreError;
+use crate::library::download::job::download_job_store_filesystem::{
+    metadata_without_symlink, synchronize_directory,
 };
 
-pub(super) fn open_staged_file_for_append(
+pub(in crate::library::download) fn open_staged_file_for_append(
     models_directory: &Path,
     staged_file_path: &Path,
     resume_offset_bytes: u64,
@@ -64,7 +64,7 @@ pub(super) fn open_staged_file_for_append(
     Ok(staged_file)
 }
 
-pub(super) fn create_descendant_directories(
+pub(in crate::library::download) fn create_descendant_directories(
     base_directory: &Path,
     directory_path: &Path,
 ) -> Result<(), DownloadJobStoreError> {

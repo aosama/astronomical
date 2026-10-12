@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::DownloadPathSelection;
+use crate::library::DownloadPathSelection;
 
 // Version 2 is the current closed executable-family set. There are no
 // downstream catalog consumers, so the schema moves forward without
@@ -22,7 +22,7 @@ const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
 const GIT_COMMIT_SHA_HEX_CHARACTER_COUNT: usize = 40;
 const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const BUNDLED_DOWNLOAD_CATALOG_JSON: &str =
-    include_str!("../../../../registry/download_catalog.json");
+    include_str!("../../../../../registry/download_catalog.json");
 
 /// Validated release-bundled entries in authored presentation order.
 #[derive(Clone, Debug, Eq, PartialEq)]

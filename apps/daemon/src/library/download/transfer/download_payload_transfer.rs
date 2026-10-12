@@ -12,17 +12,19 @@ use futures_util::StreamExt;
 use thiserror::Error;
 
 use super::{
-    DownloadJob, DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore,
-    DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
-    HubTransportError,
     download_payload_response::{payload_url, validate_payload_response},
     download_payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler},
     download_payload_transfer_window::{
         ObservedTransferProgress, SegmentOutcome, TransferWindowStop,
     },
-    download_payload_verification::verify_download_job,
-    download_publication_reconciliation::reconcile_publication_intent,
-    download_staged_file::open_staged_file_for_append,
+};
+use crate::library::download::download_publication_reconciliation::reconcile_publication_intent;
+use crate::library::download::transfer::download_payload_verification::verify_download_job;
+use crate::library::download::transfer::download_staged_file::open_staged_file_for_append;
+use crate::library::{
+    DownloadJob, DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore,
+    DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
+    HubTransportError,
 };
 use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
@@ -246,7 +248,7 @@ impl DownloadPayloadTransfer {
     pub(super) async fn transfer_payload_segment(
         &self,
         download_job: &DownloadJob,
-        download_file: &super::DownloadJobFile,
+        download_file: &crate::library::DownloadJobFile,
         payload_segment: &PayloadSegment,
         assembler: std::sync::Arc<SegmentedFileAssembler>,
         updated_at_unix_millis: u64,
@@ -397,7 +399,7 @@ impl DownloadPayloadTransfer {
     pub(super) async fn select_pending_file_durably(
         &self,
         download_job: &mut DownloadJob,
-        pending_file: &super::DownloadJobFile,
+        pending_file: &crate::library::DownloadJobFile,
         updated_at_unix_millis: u64,
         observed_transfer_progress: &ObservedTransferProgress,
     ) -> Result<(), DownloadPayloadTransferError> {
@@ -413,7 +415,7 @@ impl DownloadPayloadTransfer {
     pub(super) async fn record_file_progress_durably(
         &self,
         download_job: &mut DownloadJob,
-        pending_file: &super::DownloadJobFile,
+        pending_file: &crate::library::DownloadJobFile,
         bytes_on_disk: u64,
         updated_at_unix_millis: u64,
     ) -> Result<(), DownloadPayloadTransferError> {
@@ -442,7 +444,7 @@ impl DownloadPayloadTransfer {
             .files()
             .iter()
             .find(|download_file| download_file.relative_path() == relative_path)
-            .map(super::DownloadJobFile::expected_bytes)
+            .map(crate::library::DownloadJobFile::expected_bytes)
             .ok_or(DownloadPayloadTransferError::InvalidJobState)?;
         let models_directory = self.job_store.models_directory().to_path_buf();
         tokio::task::spawn_blocking(move || -> Result<(), DownloadPayloadTransferError> {

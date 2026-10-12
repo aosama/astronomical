@@ -4,7 +4,7 @@ use std::{io, path::Path, path::PathBuf};
 
 use thiserror::Error;
 
-use super::DownloadJob;
+use crate::library::DownloadJob;
 
 const ONE_PERCENT_DIVISOR: u64 = 100;
 

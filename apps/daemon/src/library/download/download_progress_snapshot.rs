@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use super::DownloadJob;
+use crate::library::DownloadJob;
 
 /// Process-local projection of the active download's newest received-byte count.
 #[derive(Clone, Default)]
