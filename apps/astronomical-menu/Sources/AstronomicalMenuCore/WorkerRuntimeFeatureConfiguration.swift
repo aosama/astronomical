@@ -223,6 +223,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let promptCacheCommonPrefixStrideBlocks: UInt32
   let experimentalDecodeStageAttributionEnabled: Bool
   let experimentalPrefillStageAttributionEnabled: Bool
+  let experimentalInMemoryPrefixAdoptionEnabled: Bool
   let experimentalQuantizedKvCacheEnabled: Bool
   let experimentalFusedMoeDecodeEnabled: Bool
 
@@ -237,6 +238,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case promptCacheCommonPrefixStrideBlocks = "prompt_cache_common_prefix_stride_blocks"
     case experimentalDecodeStageAttributionEnabled = "experimental_decode_stage_attribution_enabled"
     case experimentalPrefillStageAttributionEnabled = "experimental_prefill_stage_attribution_enabled"
+    case experimentalInMemoryPrefixAdoptionEnabled = "experimental_in_memory_prefix_adoption_enabled"
     case experimentalQuantizedKvCacheEnabled = "experimental_quantized_kv_cache_enabled"
     case experimentalFusedMoeDecodeEnabled = "experimental_fused_moe_decode_enabled"
   }
@@ -265,6 +267,8 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       Bool.self, forKey: .experimentalDecodeStageAttributionEnabled)
     experimentalPrefillStageAttributionEnabled = try container.decode(
       Bool.self, forKey: .experimentalPrefillStageAttributionEnabled)
+    experimentalInMemoryPrefixAdoptionEnabled = try container.decode(
+      Bool.self, forKey: .experimentalInMemoryPrefixAdoptionEnabled)
     experimentalQuantizedKvCacheEnabled = try container.decode(
       Bool.self, forKey: .experimentalQuantizedKvCacheEnabled)
     experimentalFusedMoeDecodeEnabled = try container.decode(

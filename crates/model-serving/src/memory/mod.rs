@@ -66,11 +66,11 @@ mod vocabulary;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
-    CompleteResidencyRequirements, ContextAdmissionRequirements, RotatingAdmissionError,
-    combined_persistent_growth_bytes, persistent_context_restore_workspace_bytes,
-    request_context_temporary_workspace_bytes, retained_expert_payload_capacity_bytes,
-    rotating_committed_token_count, rotating_prefill_transient_token_count,
-    safe_minimum_active_memory_ceiling_bytes,
+    CompleteResidencyRequirements, ContextAdmissionRequirements, RetainedPrefixRetentionDecision,
+    RetainedPrefixRetentionRequirements, RotatingAdmissionError, combined_persistent_growth_bytes,
+    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
+    retained_expert_payload_capacity_bytes, rotating_committed_token_count,
+    rotating_prefill_transient_token_count, safe_minimum_active_memory_ceiling_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,
     seated_complete_expert_request_temporary_workspace_bytes,
 };

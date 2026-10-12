@@ -24,6 +24,23 @@ pub enum WorkerPersistentPromptCacheMissReason {
     BoundaryStateSnapshotMissing,
 }
 
+/// Whether this request adopted the retained live decoder state instead of
+/// restoring the prefix KV from the disk store (issue #1167). Absent when the
+/// adoption lever is off.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerInMemoryPrefixAdoptionOutcome {
+    /// The live state covered at least the disk-matched prefix: zero disk
+    /// block reads, the append-only state continued directly.
+    Adopted,
+    /// No retained state existed (restart, different conversation, policy drop).
+    NoRetainedState,
+    /// The retained chain diverged from this prompt's chain root.
+    ChainMismatch,
+    /// The retained chain matched less than the disk store; the disk restore served.
+    RetainedStateShorter,
+}
+
 /// Count and byte total for one startup-cleanup reason.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -123,6 +140,9 @@ pub struct WorkerPersistentPromptCacheRequestDiagnostics {
     pub expert_bytes_reclaimed_for_publication: u64,
     /// Expert payload reclaimed to admit cache reconstruction and remaining context.
     pub expert_bytes_reclaimed_for_restore: u64,
+    /// In-memory prefix adoption outcome; absent when the lever is off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_memory_prefix_adoption: Option<WorkerInMemoryPrefixAdoptionOutcome>,
 }
 
 impl WorkerPersistentPromptCacheRequestDiagnostics {

@@ -5,14 +5,18 @@
 //! is restored when the leftover ceiling admits it so a fitting model is not left
 //! streaming. Final telemetry then reports that restored ownership.
 
+use crate::decoder_cache::DecoderCacheState;
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
-    PerformanceOperation,
+    PerformanceOperation, PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
+    RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
 };
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
+use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 
 impl Qwen3_5EngineState {
     pub(super) fn collect_current_mlx_memory_telemetry(
@@ -101,6 +105,12 @@ impl Qwen3_5EngineState {
     ) -> GenerationFinalization {
         let request_id = active_request.request_id;
         let configured_maximum_output_tokens = active_request.maximum_output_tokens;
+        // Retain the completed generation's live state for in-memory prefix
+        // adoption (issue #1167) before the request drops. The memory package
+        // owns the decision; the engine measures facts and enacts it. The
+        // retained KV stays live, so the finalized memory snapshot honestly
+        // reports it as active.
+        self.retained_live_prefix = self.retain_completed_live_prefix(&mut active_request);
         // Attribution must outlive the request because cleanup and the final
         // memory snapshot are part of the user-visible request cost.
         let mut performance_attribution = std::mem::replace(
@@ -128,6 +138,92 @@ impl Qwen3_5EngineState {
             failure_description,
         );
         generation_finalization
+    }
+
+    /// Extracts the completed generation's live decoder state for adoption by
+    /// the next request, or `None` when the retention policy drops it.
+    ///
+    /// The adoptable boundary is the smaller of the prompt's complete
+    /// published-block chain and the live state's verified KV offset — a
+    /// failed or cancelled generation must not retain uninitialized slab
+    /// regions behind its processed offset.
+    fn retain_completed_live_prefix(
+        &mut self,
+        active_request: &mut Qwen3_5EngineRequest,
+    ) -> Option<RetainedLiveDecoderPrefix> {
+        let model_contract = self.persistent_prompt_cache_model_contract.as_ref()?;
+        if !active_request.can_use_persistent_prompt_cache {
+            return None;
+        }
+        let block_token_count = model_contract.block_token_count();
+        let verified_state_offset_tokens = (0..active_request.request_decoder_state.layer_count())
+            .filter_map(|layer_index| {
+                match active_request.request_decoder_state.layer(layer_index) {
+                    Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                        Some(attention.offset_tokens())
+                    }
+                    _ => None,
+                }
+            })
+            .min()?;
+        let verified_state_offset_count =
+            usize::try_from(verified_state_offset_tokens.max(0)).unwrap_or(0);
+        let prompt_complete_block_count = active_request.input_token_ids.len() / block_token_count;
+        let adoptable_block_count = verified_state_offset_count / block_token_count;
+        let adoptable_block_count = adoptable_block_count.min(prompt_complete_block_count);
+        let retention_decision = RetainedPrefixRetentionRequirements {
+            adoption_enabled: self.chunking.experimental_in_memory_prefix_adoption_enabled,
+            adoptable_token_count: adoptable_block_count * block_token_count,
+            retained_state_payload_bytes: active_request.request_decoder_state.payload_byte_count(),
+            effective_mlx_memory_ceiling_bytes: u64::try_from(
+                self.memory_limits.active_memory_limit_bytes(),
+            )
+            .unwrap_or(u64::MAX),
+        }
+        .decide();
+        if retention_decision != RetainedPrefixRetentionDecision::Retain {
+            return None;
+        }
+        let mut complete_block_keys = Vec::with_capacity(adoptable_block_count);
+        let mut parent_block_key: Option<PersistentPromptCacheBlockKey> = None;
+        let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+        for block_index in 0..adoptable_block_count {
+            let block_start = block_index * block_token_count;
+            let block_end = block_start + block_token_count;
+            let block_causal_input = active_request
+                .persistent_prompt_cache_block_causal_inputs
+                .get(block_index)
+                .unwrap_or(&empty_block_causal_input);
+            let block_key = match parent_block_key.as_ref() {
+                Some(parent_block_key) => parent_block_key.for_child_block_with_causal_input(
+                    &active_request.input_token_ids[block_start..block_end],
+                    block_causal_input,
+                ),
+                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
+                    model_contract,
+                    &active_request.input_token_ids[block_start..block_end],
+                    block_causal_input,
+                ),
+            }
+            .ok()?;
+            parent_block_key = Some(block_key.clone());
+            complete_block_keys.push(block_key);
+        }
+        let placeholder_decoder_state =
+            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
+                self.model.as_ref()?.decoder_cache_layout(),
+                self.full_attention_kv_state_growth_tokens,
+            )
+            .ok()?;
+        let decoder_state = std::mem::replace(
+            &mut active_request.request_decoder_state,
+            placeholder_decoder_state,
+        );
+        Some(RetainedLiveDecoderPrefix {
+            decoder_state,
+            complete_block_keys,
+            adoptable_token_count: adoptable_block_count * block_token_count,
+        })
     }
 
     fn collect_generation_finalization(
