@@ -5,8 +5,22 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # One grouped weekly pull request instead of one pull request per crate:
+    # every separate bump has to clear the full CI matrix and the
+    # up-to-date-with-base branch rule on its own, which serializes four
+    # green bumps into hours of waiting.
+    groups:
+      rust-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      github-actions-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
