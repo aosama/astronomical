@@ -6,10 +6,19 @@ publish.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
+# One explicit test target: unit tests live inside src/ (lib test binary) and
+# the verb journeys stay in tests/cli_journeys/ behind tests/hermetic_tests.rs.
+# autotests = false keeps stray .rs files under tests/ from auto-discovering as
+# extra linked test binaries.
+autotests = false
 
 [[bin]]
 name = "astronomical"
 path = "src/main.rs"
+
+[[test]]
+name = "hermetic_tests"
+path = "tests/hermetic_tests.rs"
 
 [lints]
 workspace = true

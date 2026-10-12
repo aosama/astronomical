@@ -29,6 +29,21 @@ pub mod tools;
 pub mod validate_config;
 pub mod validate_config_arguments;
 
+#[cfg(test)]
+mod arguments_tests;
+#[cfg(test)]
+mod instance_tests;
+#[cfg(test)]
+mod model_lifecycle_tests;
+#[cfg(test)]
+mod respond_image_tests;
+#[cfg(test)]
+mod respond_schema_tests;
+#[cfg(test)]
+mod schema_arguments_tests;
+#[cfg(test)]
+mod schema_tests;
+
 pub use arguments::{CliCommand, LaunchArguments, help_text, parse_command};
 pub use daemon_probe::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
 pub use embed::{EmbedDependencies, run_embed};

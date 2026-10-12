@@ -1,6 +1,8 @@
-//! The `astronomical respond --schema` journey: schema validation, file
-//! reading, and the schema reaching the daemon. These tests are split from
-//! `respond_command.rs` to keep that file under the repo's size limit.
+//! The `astronomical respond --schema` daemon journeys: the schema file
+//! reaching the daemon verbatim and the fail-fast ordering before daemon
+//! contact. The pure `--schema` file-reading rules live in
+//! `src/respond_schema_tests.rs`; these journeys are split from
+//! `respond_command.rs` to keep that file under the size limit.
 
 use std::{
     io::Write,
@@ -10,7 +12,6 @@ use std::{
 
 use astronomical_cli::RespondDependencies;
 use astronomical_cli::errors::RespondError;
-use astronomical_ipc_protocol::MAXIMUM_CHAT_SCHEMA_JSON_BYTES;
 use tokio::time::timeout;
 
 use super::stub_daemon;
@@ -116,54 +117,6 @@ async fn should_fail_before_connecting_when_the_schema_file_is_missing() {
         other => panic!("expected a schema read failure, got {other:?}"),
     }
     assert!(stdout.is_empty(), "no answer text should reach stdout");
-
-    let _ = std::fs::remove_dir_all(&test_directory);
-}
-
-/// The shared schema byte bound rejects an oversize schema file before any
-/// daemon contact.
-#[test]
-fn should_reject_an_oversize_schema_file() {
-    use astronomical_cli::respond_schema;
-
-    let test_directory = fresh_test_directory("respond", "schema-oversize");
-    let schema_path = test_directory.join("oversize-schema.json");
-    let oversize_schema_text = format!(
-        "{{\"values\":[\"{}\"]}}",
-        "x".repeat(MAXIMUM_CHAT_SCHEMA_JSON_BYTES)
-    );
-    std::fs::write(&schema_path, oversize_schema_text)
-        .expect("the oversize schema file should be writable");
-
-    match respond_schema::read_schema_input(&schema_path) {
-        Err(RespondError::SchemaTooLarge {
-            actual_bytes,
-            maximum_bytes,
-        }) => {
-            assert!(actual_bytes > MAXIMUM_CHAT_SCHEMA_JSON_BYTES);
-            assert_eq!(maximum_bytes, MAXIMUM_CHAT_SCHEMA_JSON_BYTES);
-        }
-        other => panic!("expected a schema size failure, got {other:?}"),
-    }
-
-    let _ = std::fs::remove_dir_all(&test_directory);
-}
-
-/// A schema file that is not valid UTF-8 text is rejected in the CLI with
-/// the file path named, before any daemon contact.
-#[test]
-fn should_reject_a_non_utf8_schema_file() {
-    use astronomical_cli::respond_schema;
-
-    let test_directory = fresh_test_directory("respond", "schema-utf8");
-    let schema_path = test_directory.join("binary-schema.json");
-    std::fs::write(&schema_path, [0xFF, 0xFE, 0xFC])
-        .expect("the binary schema file should be writable");
-
-    match respond_schema::read_schema_input(&schema_path) {
-        Err(RespondError::SchemaNotUtf8 { path, .. }) => assert_eq!(path, schema_path),
-        other => panic!("expected a UTF-8 failure, got {other:?}"),
-    }
 
     let _ = std::fs::remove_dir_all(&test_directory);
 }
