@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn should_apply_prompt_cache_policy_after_config_file_reload() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let config_home_directory = tempfile::tempdir()
@@ -182,7 +182,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
 #[tokio::test]
 async fn should_not_report_a_mixed_reload_effective_when_only_memory_applied() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let config_home_directory = tempfile::tempdir()

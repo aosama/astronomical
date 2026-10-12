@@ -14,7 +14,7 @@ use crate::common::supervisor;
 
 #[tokio::test]
 async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event() {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the scripted worker fixture path");
     let worker_executor = supervisor::launch_test_executor(worker_executable_path)
         .await

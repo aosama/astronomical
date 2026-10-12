@@ -5,9 +5,9 @@ use super::*;
 #[tokio::test]
 async fn should_reject_mismatched_candidate_without_changing_effective_serving_state() {
     let initial_worker_executable_path =
-        fixture_path("astronomical-supervisor-idle-worker", "idle worker");
+        fixture_path("astronomical-daemon-idle-worker", "idle worker");
     let replacement_worker_executable_path = fixture_path(
-        "astronomical-supervisor-replacement-ready-worker",
+        "astronomical-daemon-replacement-ready-worker",
         "mismatched replacement worker",
     );
     let config_home_directory = tempfile::tempdir()

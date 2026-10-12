@@ -15,7 +15,7 @@ use tokio::time::{Instant, sleep, timeout};
 #[tokio::test]
 async fn should_report_worker_exit_status_and_stderr_when_the_event_stream_closes() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-stderr-probe-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-stderr-probe-worker")
             .expect("Cargo should provide the stderr-probe worker fixture path"),
     );
     let mut worker_process = WorkerProcess::launch_with_timeouts(
@@ -53,7 +53,7 @@ async fn should_report_worker_exit_status_and_stderr_when_the_event_stream_close
 #[tokio::test]
 async fn should_load_the_requested_model_only_after_the_first_generation_request() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temp_dir = tempfile::tempdir().expect("test performance log directory should be created");
@@ -118,7 +118,7 @@ async fn should_load_the_requested_model_only_after_the_first_generation_request
 #[tokio::test]
 async fn should_apply_a_memory_limit_immediately_when_worker_is_idle() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temporary_log_directory =
@@ -162,7 +162,7 @@ async fn should_apply_a_memory_limit_immediately_when_worker_is_idle() {
 #[tokio::test]
 async fn should_contain_a_worker_that_does_not_acknowledge_a_memory_limit_update() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temporary_log_directory =
@@ -205,7 +205,7 @@ async fn should_contain_a_worker_that_does_not_acknowledge_a_memory_limit_update
 #[tokio::test]
 async fn should_remain_available_after_the_first_requested_model_fails_to_load() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temp_dir = tempfile::tempdir().expect("test performance log directory should be created");
@@ -264,7 +264,7 @@ async fn should_remain_available_after_the_first_requested_model_fails_to_load()
 #[tokio::test]
 async fn should_reject_an_oversized_generation_command_without_terminating_the_loaded_worker() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temporary_log_directory =
@@ -325,7 +325,7 @@ async fn should_reject_an_oversized_generation_command_without_terminating_the_l
 #[tokio::test]
 async fn should_reject_an_unmapped_model_without_forwarding_generation_to_the_idle_worker() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temp_dir = tempfile::tempdir().expect("test performance log directory should be created");
@@ -362,7 +362,7 @@ async fn should_reject_an_unmapped_model_without_forwarding_generation_to_the_id
 #[tokio::test]
 async fn should_bound_the_time_waiting_for_a_requested_model_to_load() {
     let worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-supervisor-idle-worker")
+        std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
     );
     let temp_dir = tempfile::tempdir().expect("test performance log directory should be created");

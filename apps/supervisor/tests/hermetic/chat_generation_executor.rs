@@ -435,7 +435,7 @@ async fn should_fail_one_stream_when_the_worker_exits() {
 }
 
 async fn launch_fixture() -> astronomical_supervisor::WorkerHandle {
-    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-supervisor-test-worker")
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = supervisor::launch_test_executor(worker_executable_path)
         .await
