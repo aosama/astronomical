@@ -9,12 +9,23 @@ warnings = "deny"
 [alias]
 # Each alias expands to one plain `cargo test` invocation; read the list to
 # see the exact packages and test binaries it covers.
-# test-hermetic: every package's hermetic_tests binary.
+#
+# Lane vocabulary (issue #1208): "offline" names the property — sealed and
+# deterministic, no real network beyond localhost, no real model artifacts,
+# everything scripted. The offline lane runs each package's offline_tests
+# binary; during the #1208 rename campaign those binaries still carry their
+# historical hermetic_tests name, so both alias sets point at the same lane
+# until the retirement batch.
+# test-hermetic: deprecated alias for test-offline.
+# test-offline: every package's offline (historically hermetic_tests) binary.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
-# test-hermetic-and-rest: both lanes together; run this before committing.
+# test-hermetic-and-rest: deprecated alias for test-offline-and-rest.
+# test-offline-and-rest: both lanes together; run this before committing.
 test-hermetic = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--test", "hermetic_tests"]
+test-offline = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--test", "hermetic_tests"]
 test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-daemon", "--test", "rest_api_tests"]
 test-hermetic-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--test", "hermetic_tests", "--test", "rest_api_tests"]
+test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--test", "hermetic_tests", "--test", "rest_api_tests"]
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —
 # it catches type errors in any crate or test binary (the class of failure
