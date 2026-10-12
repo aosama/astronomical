@@ -97,7 +97,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
         } else {
             None
         };
-        self.model = Some(K2HorizonMoVAModel {
+        let model = K2HorizonMoVAModel {
             runtime,
             config,
             weights,
@@ -105,7 +105,20 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             compiled_elementwise_graphs,
             sorted_expert_reduction_kernel,
             fused_expert_decode_kernels,
-        });
+        };
+        performance_attribution
+            .measure_operation(
+                PerformanceOperation::LoadWarmupForwardSpan,
+                |performance_attribution| {
+                    model.run_load_warmup(
+                        pending.prompt_processing_chunk_tokens as usize,
+                        pending.quantized_kv_cache_enabled,
+                        performance_attribution,
+                    )
+                },
+            )
+            .map_err(super::super::prefill::execution_error)?;
+        self.model = Some(model);
         self.performance_attribution_enabled = pending.performance_attribution_enabled;
         self.performance_attribution_log = pending.performance_attribution_log;
         self.attribution_model_id = Some(pending.attribution_model_id.clone());
