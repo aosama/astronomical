@@ -137,13 +137,3 @@ fn leaf_property_value(schema_property: &SchemaPropertyInput) -> Value {
         None => type_document,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::schema_arguments::SchemaPropertyKind;
-
-    #[test]
-    fn should_map_double_kind_to_json_number() {
-        assert_eq!(SchemaPropertyKind::Double.json_type_name(), "number");
-    }
-}

@@ -1,11 +1,8 @@
-mod arguments;
 mod embed_command;
-mod instance;
 mod launch_opencode;
 mod models_command;
 mod respond_command;
 mod respond_schema;
-mod schema_command;
 mod status_command;
 pub mod stub_daemon;
 mod stub_server;

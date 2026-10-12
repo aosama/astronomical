@@ -1,12 +1,17 @@
+//! Unit tests for `crate::instance`: executable-path instance resolution,
+//! strict channel isolation, and the loopback ports.
+
 use std::path::Path;
 
 use astronomical_config::AstronomicalRuntimeInstance;
+
+use crate::instance;
 
 #[test]
 fn should_treat_the_stable_app_bundle_as_stable_loopback() {
     let executable_path = Path::new("/Applications/Astronomical.app/Contents/MacOS/astronomical");
     assert_eq!(
-        astronomical_cli::runtime_instance_from_executable_path(executable_path),
+        instance::runtime_instance_from_executable_path(executable_path),
         AstronomicalRuntimeInstance::Stable
     );
 }
@@ -16,7 +21,7 @@ fn should_treat_the_development_app_bundle_as_development_loopback() {
     let executable_path =
         Path::new("/tmp/Astronomical Development.app/Contents/MacOS/astronomical");
     assert_eq!(
-        astronomical_cli::runtime_instance_from_executable_path(executable_path),
+        instance::runtime_instance_from_executable_path(executable_path),
         AstronomicalRuntimeInstance::Development
     );
 }
@@ -25,7 +30,7 @@ fn should_treat_the_development_app_bundle_as_development_loopback() {
 fn should_treat_unpackaged_binaries_as_development() {
     let executable_path = Path::new("/tmp/target/debug/astronomical");
     assert_eq!(
-        astronomical_cli::runtime_instance_from_executable_path(executable_path),
+        instance::runtime_instance_from_executable_path(executable_path),
         AstronomicalRuntimeInstance::Development
     );
 }
@@ -47,7 +52,7 @@ fn should_resolve_a_symlink_to_the_bundle_it_points_into() {
         .expect("symlink should be creatable");
 
     assert_eq!(
-        astronomical_cli::runtime_instance_from_executable_path(&installed_link),
+        instance::runtime_instance_from_executable_path(&installed_link),
         AstronomicalRuntimeInstance::Stable
     );
 
@@ -58,7 +63,7 @@ fn should_resolve_a_symlink_to_the_bundle_it_points_into() {
 fn should_keep_falling_back_to_the_given_path_when_it_cannot_be_canonicalized() {
     let executable_path = Path::new("/nonexistent/astronomical");
     assert_eq!(
-        astronomical_cli::runtime_instance_from_executable_path(executable_path),
+        instance::runtime_instance_from_executable_path(executable_path),
         AstronomicalRuntimeInstance::Development
     );
 }
@@ -68,11 +73,11 @@ fn should_talk_only_to_the_binarys_own_instance() {
     // Strict channel isolation: the other channel — notably the Stable daily
     // driver — must never receive this binary's traffic.
     assert_eq!(
-        astronomical_cli::candidate_instances(AstronomicalRuntimeInstance::Stable),
+        instance::candidate_instances(AstronomicalRuntimeInstance::Stable),
         [AstronomicalRuntimeInstance::Stable]
     );
     assert_eq!(
-        astronomical_cli::candidate_instances(AstronomicalRuntimeInstance::Development),
+        instance::candidate_instances(AstronomicalRuntimeInstance::Development),
         [AstronomicalRuntimeInstance::Development]
     );
 }
