@@ -282,7 +282,7 @@ assert_workflow_contract() {
         library_rest_step = steps.find { |step| step["name"] == "Run Library REST contracts" }
         raise "Library REST contracts are missing from required CI" unless library_rest_step
         expected_library_rest_command = [
-          "cargo", "test", "--timings", "-p", "astronomical-supervisor",
+          "cargo", "test", "--timings", "-p", "astronomical-daemon",
           "--test", "rest_api_tests", "library", "--", "--nocapture",
         ]
         raise "Library REST required-CI command changed" unless library_rest_step.fetch("run").include?(expected_library_rest_command.join(" "))

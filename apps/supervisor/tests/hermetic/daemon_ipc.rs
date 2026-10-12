@@ -3,11 +3,11 @@
 
 use std::sync::{Arc, Mutex, RwLock};
 
+use astronomical_daemon::{WorkerHealthSnapshot, WorkerHealthStatus};
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage, DaemonIpcClient,
     DaemonRequest, DaemonResponse, DaemonWorkerStatus,
 };
-use astronomical_supervisor::{WorkerHealthSnapshot, WorkerHealthStatus};
 use tokio::time::timeout;
 
 use crate::common::daemon_ipc::{

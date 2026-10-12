@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use astronomical_supervisor::ChatGenerationExecutor;
+use astronomical_daemon::ChatGenerationExecutor;
 use serde_json::Value;
 
 use super::*;
@@ -201,7 +201,7 @@ fn journey_run_outcome_with_budget_stage(
         },
         measured_budget_exhausted: budget_exhausted_stage.is_some(),
         budget_exhausted_stage,
-        final_health_snapshot: astronomical_supervisor::WorkerHandle::unavailable()
+        final_health_snapshot: astronomical_daemon::WorkerHandle::unavailable()
             .worker_health_snapshot(),
         last_observed_active_request_progress: None,
         logging_directory: logging_directory.to_path_buf(),

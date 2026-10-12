@@ -2,12 +2,12 @@
 
 use std::time::Duration;
 
+use astronomical_daemon::ResolvedRuntimeConfigResolver;
 use astronomical_inference_worker::worker_startup;
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };
-use astronomical_supervisor::ResolvedRuntimeConfigResolver;
 use serial_test::serial;
 use tokio::time::{Instant, timeout};
 

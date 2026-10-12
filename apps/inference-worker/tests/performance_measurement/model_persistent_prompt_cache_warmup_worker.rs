@@ -6,14 +6,14 @@ use std::{
     time::Duration,
 };
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-    WorkerStartupConfiguration,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ActiveRequestProgress, ChatGenerationExecutor, ChatGenerationStreamEvent,
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, RuntimeModelPolicy, WorkerHandle,
     WorkerHealthStatus,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
+    WorkerStartupConfiguration,
 };
 use serde_json::json;
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};

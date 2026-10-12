@@ -1,5 +1,5 @@
+use astronomical_daemon::{ChatGenerationStreamEvent, OpenAiResponsesStreamEncoder};
 use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_supervisor::{ChatGenerationStreamEvent, OpenAiResponsesStreamEncoder};
 
 #[test]
 fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() {

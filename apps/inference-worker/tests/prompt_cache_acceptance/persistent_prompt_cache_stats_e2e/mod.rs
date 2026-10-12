@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     GenerationPerformanceLog, WorkerHandle, build_application_with_discovered_models,
 };
 use tokio::{

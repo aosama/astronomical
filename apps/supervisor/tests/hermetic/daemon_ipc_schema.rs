@@ -152,7 +152,7 @@ async fn should_reject_a_chat_generate_request_with_an_unparseable_schema() {
 /// canonical re-serialization.
 #[test]
 fn should_validate_chat_schema_constraints_directly() {
-    use astronomical_supervisor::daemon_ipc_chat_schema;
+    use astronomical_daemon::daemon_ipc_chat_schema;
 
     let oversize_schema_text = format!("{{\"values\":[\"{}\"]}}", "x".repeat(70_000));
     let oversize_error =

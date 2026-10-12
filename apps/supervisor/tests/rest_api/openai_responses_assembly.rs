@@ -1,5 +1,5 @@
+use astronomical_daemon::{ChatGenerationStreamEvent, OpenAiResponsesCollector};
 use astronomical_ipc_protocol::ChatGenerationCompletionReason;
-use astronomical_supervisor::{ChatGenerationStreamEvent, OpenAiResponsesCollector};
 
 #[test]
 fn should_collect_reasoning_summary_text_and_function_calls_into_one_response() {

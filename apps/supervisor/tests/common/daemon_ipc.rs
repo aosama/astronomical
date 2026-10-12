@@ -17,17 +17,17 @@ use astronomical_config::{
     ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel, LogLevel,
     LoggingConfig, ModelCapabilities, ModelFamily, PromptCacheConfig,
 };
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
-    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand,
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
-};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DaemonIpcGenerationContext,
     DaemonIpcService, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
     ImageGenerationExecutor, ResolvedRuntimeConfig, RuntimeModelGenerationDefaults,
     RuntimeModelPolicy, SupervisorPerformanceAttributionLog, WorkerHealthSnapshot,
     start_daemon_ipc_service,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
+    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use tokio::{sync::mpsc, time::timeout};
 
@@ -57,7 +57,7 @@ pub(crate) fn disabled_supervisor_attribution_log(
 
 pub(crate) fn unavailable_generation_context() -> DaemonIpcGenerationContext {
     DaemonIpcGenerationContext {
-        executor: Arc::new(astronomical_supervisor::WorkerHandle::unavailable()),
+        executor: Arc::new(astronomical_daemon::WorkerHandle::unavailable()),
         reloadable_config: None,
         next_chat_request_id: Arc::new(AtomicU64::new(1)),
         download_catalog: bundled_test_download_catalog(),
@@ -71,9 +71,9 @@ pub(crate) fn unavailable_generation_context() -> DaemonIpcGenerationContext {
 
 /// The bundled release catalog loaded once per call; hermetic tests never run
 /// a download coordinator, so the coordinator field stays `None`.
-pub(crate) fn bundled_test_download_catalog() -> Arc<astronomical_supervisor::DownloadCatalog> {
+pub(crate) fn bundled_test_download_catalog() -> Arc<astronomical_daemon::DownloadCatalog> {
     Arc::new(
-        astronomical_supervisor::DownloadCatalog::load_bundled()
+        astronomical_daemon::DownloadCatalog::load_bundled()
             .expect("the bundled release catalog should load in tests"),
     )
 }

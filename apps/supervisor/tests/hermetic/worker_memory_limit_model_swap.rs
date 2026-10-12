@@ -1,6 +1,6 @@
 //! Proves that live memory policy remains coherent through the next lazy model swap.
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, MlxMemoryLimitUpdateOutcome, WorkerHealthStatus,
 };
 

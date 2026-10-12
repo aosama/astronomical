@@ -155,7 +155,7 @@ because it exercises solid-state-drive streaming.
 The hermetic supervisor tests that pin the stop-first ordering and the four
 failure branches need no real model and no optimized build:
 
-- `cargo test -p astronomical-supervisor --test hermetic_tests worker_memory_demotion -- --test-threads=1`
+- `cargo test -p astronomical-daemon --test hermetic_tests worker_memory_demotion -- --test-threads=1`
 
 ### Prompt-cache acceptance journeys (resident sparse MoE role)
 

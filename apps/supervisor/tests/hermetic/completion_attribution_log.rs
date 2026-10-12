@@ -8,7 +8,7 @@
 
 use std::fs;
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     CompletedToolCall, CompletionArgumentsRecord, CompletionAttributionLog,
     CompletionToolCallRecord,
 };

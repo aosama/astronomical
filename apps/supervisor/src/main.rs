@@ -10,8 +10,7 @@ use std::{
 };
 
 use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
-use astronomical_ipc_protocol::DaemonTransportError;
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog,
     DaemonIpcGenerationContext, DownloadCatalog, DownloadCatalogError, GenerationPerformanceLog,
     ImageGenerationTimeouts, LibraryDownloadCoordinatorError, LibraryModelDiscoveryRefresh,
@@ -20,6 +19,7 @@ use astronomical_supervisor::{
     SupervisorPerformanceOperation, WorkerControlError, WorkerHandle,
     build_application_with_full_control_and_library_download, start_daemon_ipc_service,
 };
+use astronomical_ipc_protocol::DaemonTransportError;
 use thiserror::Error;
 use tokio::{net::TcpListener, signal};
 use tracing_subscriber::{EnvFilter, fmt};
@@ -208,7 +208,7 @@ async fn run_daemon(
     let internal_shutdown_receiver = shutdown_controller.subscribe();
     let download_catalog = Arc::new(download_catalog);
     let hub_transport = Arc::new(
-        astronomical_supervisor::ReqwestHubTransport::production()
+        astronomical_daemon::ReqwestHubTransport::production()
             .map_err(DaemonError::BuildHubTransport)?,
     );
     let discovery_refresh = Arc::new(LibraryModelDiscoveryRefresh::new(
@@ -217,10 +217,10 @@ async fn run_daemon(
         worker_handle.clone(),
     ));
     let library_download_coordinator =
-        Arc::new(astronomical_supervisor::LibraryDownloadCoordinator::new(
+        Arc::new(astronomical_daemon::LibraryDownloadCoordinator::new(
             Arc::clone(&download_catalog),
             instance_paths.models_directory(),
-            Arc::new(astronomical_supervisor::Fs4DiskCapacityQuery),
+            Arc::new(astronomical_daemon::Fs4DiskCapacityQuery),
             hub_transport.clone(),
             hub_transport,
             discovery_refresh,

@@ -180,6 +180,20 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                     .await?;
             }
             WorkerCommand::Generate(generation_command) => {
+                // Finalization precedes completion, matching the real worker's
+                // emission order (engine_backed_worker output.rs) and the
+                // scripted worker fixture: the supervisor's completion handler
+                // takes the active request, so a finalize emitted after it is a
+                // protocol violation that force-terminates the worker mid-test
+                // and races the demotion command against the containment.
+                event_writer
+                    .send_event(&WorkerEvent::GenerationFinalized {
+                        request_id: generation_command.request_id,
+                        expert_memory_mode: Some(ExpertMemoryMode::Hybrid),
+                        mlx_memory_snapshot: None,
+                        expert_residency: None,
+                    })
+                    .await?;
                 event_writer
                     .send_event(&WorkerEvent::Completed {
                         request_id: generation_command.request_id,
@@ -189,14 +203,6 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         cached_token_count: 0,
                         persistent_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
-                    })
-                    .await?;
-                event_writer
-                    .send_event(&WorkerEvent::GenerationFinalized {
-                        request_id: generation_command.request_id,
-                        expert_memory_mode: Some(ExpertMemoryMode::Hybrid),
-                        mlx_memory_snapshot: None,
-                        expert_residency: None,
                     })
                     .await?;
             }

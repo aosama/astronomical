@@ -17,7 +17,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, ShutdownController, WorkerHandle,
     build_application_with_discovered_models, build_application_with_full_control,
     build_development_application_with_reload,

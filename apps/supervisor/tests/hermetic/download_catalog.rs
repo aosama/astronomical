@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DownloadCatalog, DownloadCatalogFamily, SupervisorPerformanceAttributionLog,
     SupervisorPerformanceMeasurement, SupervisorPerformanceOperation,
 };

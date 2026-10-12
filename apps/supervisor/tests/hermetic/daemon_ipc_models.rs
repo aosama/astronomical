@@ -4,10 +4,10 @@
 
 use std::sync::{Arc, RwLock};
 
+use astronomical_daemon::DownloadCatalog;
 use astronomical_ipc_protocol::{
     DaemonIpcClient, DaemonRequest, DaemonResponse, DaemonWorkerStatus,
 };
-use astronomical_supervisor::DownloadCatalog;
 use tokio::time::timeout;
 
 use crate::common::daemon_ipc::{

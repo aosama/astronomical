@@ -1,11 +1,11 @@
 use std::{future::Future, path::PathBuf, pin::Pin};
 
 use astronomical_config::DiscoveredModel;
-use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application, build_application_with_discovered_models,
 };
+use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
@@ -125,7 +125,7 @@ async fn post_chat_and_read_body<GenerationExecutor>(
     expected_status: StatusCode,
 ) -> String
 where
-    GenerationExecutor: ChatGenerationExecutor + astronomical_supervisor::ImageGenerationExecutor,
+    GenerationExecutor: ChatGenerationExecutor + astronomical_daemon::ImageGenerationExecutor,
 {
     let application = build_application(generation_executor);
     let chat_response = application
@@ -178,7 +178,7 @@ impl ChatGenerationExecutor for PanicOnChatStartExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for PanicOnChatStartExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for PanicOnChatStartExecutor {}
 
 impl ChatGenerationExecutor for ReadyChatFailureExecutor {
     fn start_chat_generation(
@@ -203,7 +203,7 @@ impl ChatGenerationExecutor for ReadyChatFailureExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for ReadyChatFailureExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for ReadyChatFailureExecutor {}
 
 impl ChatGenerationExecutor for IdleWorkerCapacityExecutor {
     fn start_chat_generation(
@@ -231,7 +231,7 @@ impl ChatGenerationExecutor for IdleWorkerCapacityExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for IdleWorkerCapacityExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for IdleWorkerCapacityExecutor {}
 
 fn ready_worker_health_snapshot() -> WorkerHealthSnapshot {
     WorkerHealthSnapshot::ready_with_model(

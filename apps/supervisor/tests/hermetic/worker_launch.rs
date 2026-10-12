@@ -1,14 +1,14 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
+    GenerationStartError, MlxMemoryLimitUpdateOutcome, RuntimeModelGenerationDefaults,
+    RuntimeModelPolicy, WorkerHandle, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatImageInput,
     ChatMessage, ChatToolChoice, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, MlxMemoryLimitUpdateOutcome, RuntimeModelGenerationDefaults,
-    RuntimeModelPolicy, WorkerHandle, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
 };
 use tokio::time::{Instant, sleep, timeout};
 

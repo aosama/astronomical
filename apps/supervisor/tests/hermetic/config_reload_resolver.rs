@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use astronomical_supervisor::{ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver};
+use astronomical_daemon::{ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver};
 
 #[test]
 fn should_resolve_reload_config_from_the_config_file() {

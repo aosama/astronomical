@@ -1,10 +1,8 @@
 use std::{fs, time::Duration};
 
+use astronomical_daemon::{ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHealthStatus};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, WorkerHealthStatus,
 };
 use serde_json::Value;
 use tokio::time::{Instant, sleep, timeout};
@@ -83,7 +81,7 @@ async fn should_persist_worker_cache_diagnostics_for_a_completed_user_request() 
     assert!(!performance_log_document.contains("model_directory"));
 }
 
-async fn wait_for_ready_worker(worker_executor: &astronomical_supervisor::WorkerHandle) {
+async fn wait_for_ready_worker(worker_executor: &astronomical_daemon::WorkerHandle) {
     let readiness_deadline = Instant::now() + Duration::from_secs(2);
     while worker_executor.worker_health_snapshot().status != WorkerHealthStatus::Ready {
         assert!(

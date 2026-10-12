@@ -6,17 +6,17 @@
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
+use astronomical_daemon::{
+    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
+    GenerationStartError, ImageGenerationExecutor, RuntimeModelPolicy, WorkerHandle,
+    WorkerHealthStatus,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, ImageGenerationCommand, ImageGenerationSettings, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerLogLevel,
     WorkerModelConfiguration, WorkerStartupConfiguration,
-};
-use astronomical_supervisor::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationPerformanceLog,
-    GenerationStartError, ImageGenerationExecutor, RuntimeModelPolicy, WorkerHandle,
-    WorkerHealthStatus,
 };
 use tokio::time::{Instant, sleep, timeout};
 
@@ -385,7 +385,7 @@ pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
 fn image_runtime_model_policy(model_id: &str, model_directory: &str) -> RuntimeModelPolicy {
     RuntimeModelPolicy {
         model_directory: PathBuf::from(model_directory),
-        generation_defaults: astronomical_supervisor::RuntimeModelGenerationDefaults {
+        generation_defaults: astronomical_daemon::RuntimeModelGenerationDefaults {
             maximum_output_tokens: 0,
             configured_maximum_output_tokens: None,
             temperature_thousandths: None,
@@ -426,7 +426,7 @@ pub(super) fn runtime_model_policy(
 ) -> RuntimeModelPolicy {
     RuntimeModelPolicy {
         model_directory: PathBuf::from(model_directory),
-        generation_defaults: astronomical_supervisor::RuntimeModelGenerationDefaults {
+        generation_defaults: astronomical_daemon::RuntimeModelGenerationDefaults {
             maximum_output_tokens: u16::try_from(maximum_output_tokens).unwrap_or(u16::MAX),
             configured_maximum_output_tokens: None,
             temperature_thousandths: None,

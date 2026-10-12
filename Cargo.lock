@@ -65,16 +65,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-daemon"
+version = "0.2.68"
+dependencies = [
+ "astronomical-config",
+ "astronomical-ipc-protocol",
+ "astronomical-rest-contract",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "fs4",
+ "futures-util",
+ "image",
+ "libc",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http 0.7.1",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "astronomical-inference-worker"
 version = "0.2.68"
 dependencies = [
  "astronomical-config",
+ "astronomical-daemon",
  "astronomical-ipc-protocol",
  "astronomical-mlx-c-rust",
  "astronomical-model-serving",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
- "astronomical-supervisor",
  "axum",
  "base64 0.23.1",
  "futures-util",
@@ -172,35 +201,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "astronomical-supervisor"
-version = "0.2.68"
-dependencies = [
- "astronomical-config",
- "astronomical-ipc-protocol",
- "astronomical-rest-contract",
- "axum",
- "base64 0.23.1",
- "bytes",
- "fs4",
- "futures-util",
- "image",
- "libc",
- "reqwest",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "tempfile",
- "thiserror",
- "tokio",
- "tower",
- "tower-http 0.7.1",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
 ]
 
 [[package]]

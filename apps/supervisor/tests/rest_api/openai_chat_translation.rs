@@ -21,11 +21,9 @@ fn should_lower_a_later_system_message_to_a_chronological_user_update() {
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
         .expect("the chronological system-update request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(904),
-        request,
-    )
-    .expect("a later system message should lower into visible user text");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(904), request)
+            .expect("a later system message should lower into visible user text");
 
     assert_eq!(
         chat_command.messages,
@@ -57,11 +55,9 @@ fn should_escape_chronological_system_update_wrapper_delimiters() {
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
         .expect("the system-update delimiter request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(905),
-        request,
-    )
-    .expect("a later system message should preserve wrapper delimiters as literal text");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(905), request)
+            .expect("a later system message should preserve wrapper delimiters as literal text");
 
     assert_eq!(
         chat_command.messages,
@@ -91,11 +87,9 @@ fn should_translate_captured_opencode_reasoning_effort_into_the_thinking_budget(
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
         .expect("the captured OpenCode title request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(901),
-        request,
-    )
-    .expect("the captured OpenCode effort level should translate into a budget");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(901), request)
+            .expect("the captured OpenCode effort level should translate into a budget");
 
     assert_eq!(
         chat_command,
@@ -141,11 +135,9 @@ fn should_translate_opencode_large_output_budget_to_the_worker() {
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
         .expect("the OpenCode large-output request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(903),
-        request,
-    )
-    .expect("a 20,000-token output budget should reach model-serving admission");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(903), request)
+            .expect("a 20,000-token output budget should reach model-serving admission");
 
     assert_eq!(chat_command.settings.max_output_tokens, 20_000);
 }
@@ -177,11 +169,9 @@ fn should_translate_installed_opencode_bash_tool_description_within_public_rest_
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(&request_json)
         .expect("the representative OpenCode tool request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(902),
-        request,
-    )
-    .expect("tool descriptions within the public REST limit should pass IPC validation");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(902), request)
+            .expect("tool descriptions within the public REST limit should pass IPC validation");
 
     assert_eq!(chat_command.tools.len(), 1);
     assert_eq!(chat_command.tools[0].name, "bash");
@@ -236,11 +226,9 @@ fn should_translate_the_current_opencode_tool_result_wire_shape_without_rest_dto
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
         .expect("the representative current OpenCode request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(900),
-        request,
-    )
-    .expect("the validated REST request should translate to independent IPC DTOs");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(900), request)
+            .expect("the validated REST request should translate to independent IPC DTOs");
 
     assert_eq!(
         chat_command,
@@ -305,11 +293,9 @@ fn should_inject_a_json_instruction_when_response_format_is_json_object() {
     )
     .expect("json_object chat request should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(399),
-        request,
-    )
-    .expect("json_object should translate with a JSON instruction");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(399), request)
+            .expect("json_object should translate with a JSON instruction");
 
     match chat_command.messages.as_slice() {
         [ChatMessage::System { content }, ChatMessage::User { .. }] => {
@@ -330,11 +316,9 @@ fn should_translate_structured_outputs_choice_into_an_ipc_mask() {
     )
     .expect("choice extra body should deserialize");
 
-    let chat_command = astronomical_supervisor::translate_openai_chat_completion_request(
-        RequestId::new(410),
-        request,
-    )
-    .expect("choice extra body should translate to an IPC mask");
+    let chat_command =
+        astronomical_daemon::translate_openai_chat_completion_request(RequestId::new(410), request)
+            .expect("choice extra body should translate to an IPC mask");
 
     assert_eq!(
         chat_command.structured_generation,

@@ -159,7 +159,7 @@ main() {
 #!/usr/bin/env sh
 printf '%s\n' "$*" >> "${FAKE_CARGO_ARGS_LOG:?}"
 if [ "${1:-}" = "metadata" ]; then
-    printf '%s\n' '{"packages":[{"name":"astronomical-supervisor","version":"0.2.0","repository":"https://github.com/example/astronomical"}]}'
+    printf '%s\n' '{"packages":[{"name":"astronomical-daemon","version":"0.2.0","repository":"https://github.com/example/astronomical"}]}'
     exit 0
 fi
 cargo_target_directory="${CARGO_TARGET_DIR:?disposable Cargo target is required}"
@@ -455,12 +455,12 @@ CODESIGN
         print_error "App Store CLI was signed with an entitlements profile"
         exit 1
     }
-    grep -F -- '--features astronomical-supervisor/app-store-state-root' \
+    grep -F -- '--features astronomical-daemon/app-store-state-root' \
         "${SANDBOX_DIRECTORY}/fake-cargo-args.log" >/dev/null || {
         print_error "App Store build did not enable the app-store-state-root feature"
         exit 1
     }
-    stable_cargo_args_count=$(grep -cF -- '--features astronomical-supervisor/app-store-state-root' \
+    stable_cargo_args_count=$(grep -cF -- '--features astronomical-daemon/app-store-state-root' \
         "${SANDBOX_DIRECTORY}/fake-cargo-args.log" || true)
     [ "$stable_cargo_args_count" = "1" ] || {
         print_error "the app-store-state-root feature must be enabled only for the App Store build"

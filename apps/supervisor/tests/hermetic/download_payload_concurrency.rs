@@ -2,7 +2,7 @@
 
 use std::{fs, sync::Arc, time::Duration};
 
-use astronomical_supervisor::{
+use astronomical_daemon::{
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadPayloadTransfer,
     DownloadPayloadTransferOutcome, DownloadTransferControl, HubPayloadRequest, HubPayloadResponse,
     MAXIMUM_CONCURRENT_PAYLOAD_TRANSFERS,
@@ -63,7 +63,7 @@ fn resume_offset_factories(
 }
 
 fn recorded_bytes_on_disk<'a>(
-    download_job: &'a astronomical_supervisor::DownloadJob,
+    download_job: &'a astronomical_daemon::DownloadJob,
     relative_path: &str,
 ) -> u64 {
     download_job
@@ -350,7 +350,7 @@ async fn should_keep_sibling_progress_durable_when_one_concurrent_file_fails() {
         assert!(
             matches!(
                 transfer_error,
-                astronomical_supervisor::DownloadPayloadTransferError::InvalidPayloadLength
+                astronomical_daemon::DownloadPayloadTransferError::InvalidPayloadLength
             ),
             "unexpected error: {transfer_error:?}"
         );

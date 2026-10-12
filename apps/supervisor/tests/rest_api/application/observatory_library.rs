@@ -15,7 +15,7 @@ use crate::common::ScriptedExecutor;
 async fn should_serve_a_labelled_library_destination_at_its_deep_link() {
     timeout(Duration::from_secs(5), async {
         let application =
-            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
+            astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
                 Request::builder()
@@ -81,7 +81,7 @@ fn opening_tag_with_attribute<'a>(html_document: &'a str, attribute: &str) -> &'
 async fn should_serve_the_embedded_library_javascript() {
     timeout(Duration::from_secs(5), async {
         let application =
-            astronomical_supervisor::build_application(ScriptedExecutor::ready(Vec::new()));
+            astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
             .oneshot(
                 Request::builder()

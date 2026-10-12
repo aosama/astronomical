@@ -288,8 +288,8 @@ jobs:
           progress_tail_pid=$!
           trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-hermetic-tests' EXIT
           scripts/ci/ci-step-timing.sh begin compile-hermetic-tests
-          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests
-          cargo test --timings --no-fail-fast --no-run -p astronomical-supervisor --test rest_api_tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test hermetic_tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
         timeout-minutes: 12
       - name: Classify native build result
         id: native-build-result
@@ -315,21 +315,21 @@ jobs:
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-supervisor --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
+          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin rest-library-contracts
           set -o pipefail
-          cargo test --timings -p astronomical-supervisor --test rest_api_tests library -- --nocapture 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-library.log"
+          cargo test --timings -p astronomical-daemon --test rest_api_tests library -- --nocapture 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-library.log"
         timeout-minutes: 2
       - name: Verify menu-facing status wire contract
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-wire-contract' EXIT
           scripts/ci/ci-step-timing.sh begin rest-wire-contract
           set -o pipefail
-          cargo test -p astronomical-supervisor --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
+          cargo test -p astronomical-daemon --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
         timeout-minutes: 2
       # Observatory contracts stay in this required job until branch
       # protection also requires swift-node; then this step can migrate.

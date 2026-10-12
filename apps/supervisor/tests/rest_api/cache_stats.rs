@@ -1,5 +1,5 @@
+use astronomical_daemon::{WorkerHealthSnapshot, WorkerHealthStatus};
 use astronomical_ipc_protocol::{ChatModelCapabilities, WorkerEvent};
-use astronomical_supervisor::{WorkerHealthSnapshot, WorkerHealthStatus};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
@@ -43,7 +43,7 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
     health_snapshot.persistent_prompt_cache_stats =
         Some(POPULATED_PERSISTENT_PROMPT_CACHE_STATS_EVENT.clone());
     let application =
-        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
+        astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -116,7 +116,7 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
 async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
     let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
     let application =
-        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
+        astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -182,7 +182,7 @@ async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
 async fn should_return_200_ok_with_json_content_type_for_cache_stats() {
     let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
     let application =
-        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
+        astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -236,7 +236,7 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
         persistent_prompt_cache_partial_tail_hits: 0,
     });
     let application =
-        astronomical_supervisor::build_application(StatsScriptedExecutor::ready(health_snapshot));
+        astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
     let response = application
         .oneshot(
             Request::builder()
@@ -265,7 +265,7 @@ impl StatsScriptedExecutor {
     }
 }
 
-impl astronomical_supervisor::ChatGenerationExecutor for StatsScriptedExecutor {
+impl astronomical_daemon::ChatGenerationExecutor for StatsScriptedExecutor {
     fn start_chat_generation(
         &self,
         _generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
@@ -273,18 +273,14 @@ impl astronomical_supervisor::ChatGenerationExecutor for StatsScriptedExecutor {
         Box<
             dyn std::future::Future<
                     Output = Result<
-                        tokio::sync::mpsc::Receiver<
-                            astronomical_supervisor::ChatGenerationStreamEvent,
-                        >,
-                        astronomical_supervisor::GenerationStartError,
+                        tokio::sync::mpsc::Receiver<astronomical_daemon::ChatGenerationStreamEvent>,
+                        astronomical_daemon::GenerationStartError,
                     >,
                 > + Send
                 + '_,
         >,
     > {
-        Box::pin(
-            async move { Err(astronomical_supervisor::GenerationStartError::WorkerUnavailable) },
-        )
+        Box::pin(async move { Err(astronomical_daemon::GenerationStartError::WorkerUnavailable) })
     }
 
     fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
@@ -292,4 +288,4 @@ impl astronomical_supervisor::ChatGenerationExecutor for StatsScriptedExecutor {
     }
 }
 
-impl astronomical_supervisor::ImageGenerationExecutor for StatsScriptedExecutor {}
+impl astronomical_daemon::ImageGenerationExecutor for StatsScriptedExecutor {}

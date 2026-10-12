@@ -1,9 +1,9 @@
 use astronomical_config::DiscoveredModel;
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
-use astronomical_supervisor::{
+use astronomical_daemon::{
     ActiveRequestProgress, ChatGenerationStreamEvent, WorkerActivity, build_application,
     build_application_with_discovered_models,
 };
+use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
@@ -178,7 +178,7 @@ async fn should_emit_meaningful_openai_errors_for_each_stream_failure() {
         ),
         (
             ChatGenerationStreamEvent::Error(
-                astronomical_supervisor::ChatGenerationStreamErrorCode::WorkerUnavailable,
+                astronomical_daemon::ChatGenerationStreamErrorCode::WorkerUnavailable,
             ),
             "chat_worker_unavailable",
             "the local worker became unavailable while processing the chat request",
