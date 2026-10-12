@@ -2,85 +2,22 @@
 
 mod application;
 mod application_build_identity;
-mod cache_clear_endpoint;
-mod chat_diagnostics;
-mod chat_generation_executor;
-mod completion_attribution_log;
-mod config_reload;
-mod config_reload_endpoint;
-mod config_reload_response;
-mod config_reveal_endpoint;
-mod configuration_status;
-mod console_assets;
-mod console_render_assets;
-mod daemon_download_attribution;
-mod daemon_ipc;
-mod daemon_ipc_chat;
-pub mod daemon_ipc_chat_schema;
-mod daemon_ipc_embeddings;
-mod daemon_ipc_models;
-mod daemon_performance_attribution;
-mod daemon_performance_measurement;
-mod daemon_performance_record;
-mod embeddings_executor;
-mod generation_performance_log;
-mod image_generation_executor;
+mod config;
+mod console;
+mod http;
 mod instance_lock;
+mod ipc;
 mod library;
-mod library_application;
-mod library_model_discovery_refresh;
-mod maximum_mlx_memory_endpoint;
-mod maximum_mlx_memory_transaction;
-mod openai_chat_completion;
-mod openai_chat_endpoint;
-mod openai_chat_stream;
-mod openai_chat_translation;
-mod openai_embeddings_endpoint;
-mod openai_image_generation_endpoint;
-mod openai_models_endpoint;
-mod openai_responses_assembly;
-mod openai_responses_endpoint;
-mod openai_responses_stream;
-mod openai_responses_translation;
-mod queued_memory_demotion;
-mod queued_memory_reload;
-mod request_generation_defaults;
-mod resolved_configuration_generation;
-mod resolved_model_policy_catalog;
-mod runtime_model_policy;
-mod serving_session_snapshot;
+mod performance;
+mod serving;
 mod shutdown_control;
-mod status_endpoint;
-mod structured_output;
 mod system_telemetry;
 mod worker;
-mod worker_cache_clear;
-mod worker_completion_event;
-mod worker_containment;
-mod worker_control_error;
-mod worker_embeddings_event;
-mod worker_embeddings_request;
-mod worker_event_handler;
-mod worker_generate;
-mod worker_generation_admission;
-mod worker_generation_output;
-mod worker_generation_preparation;
-mod worker_handle;
-mod worker_handle_chat;
-mod worker_handle_image;
-mod worker_health;
-mod worker_idle_drain;
-mod worker_image_event;
-mod worker_image_request;
-mod worker_loop_types;
-mod worker_memory_demotion;
-mod worker_memory_limit;
-mod worker_model_swap;
-mod worker_prefill_progress;
-mod worker_process;
-mod worker_replacement;
-mod worker_startup_runtime;
-mod worker_stderr_tail;
+
+// Re-exported at the crate root because `mod ipc` is private; daemon tests and
+// external consumers reference `astronomical_daemon::daemon_ipc_chat_schema`
+// directly, and this keeps that path stable across the source reorganization.
+pub use ipc::daemon_ipc_chat_schema;
 
 pub use application::{
     build_application, build_application_with_discovered_models,
@@ -89,41 +26,35 @@ pub use application::{
     build_development_application_with_reload,
 };
 pub use application_build_identity::ApplicationBuildIdentity;
-pub use library_application::{
+pub use library::library_application::{
     build_application_with_full_control_and_library_download,
     build_application_with_library_download,
 };
 
-pub use chat_diagnostics::{
+pub use config::config_reload::{
+    ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
+    ResolvedRuntimeConfigResolver,
+};
+pub use config::resolved_configuration_generation::ResolvedConfigurationGeneration;
+pub use config::runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
+pub use http::chat_diagnostics::{
     OpenAiChatRequestDiagnosticSnapshot, OpenAiChatRequestInfoDiagnosticSnapshot,
     build_openai_chat_request_diagnostic_snapshot,
     build_openai_chat_request_info_diagnostic_snapshot,
 };
-pub use chat_generation_executor::{
-    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
-    GenerationStartError,
+pub use http::openai_chat_translation::{
+    OpenAiChatTranslationError, translate_openai_chat_completion_request,
 };
-pub use completion_attribution_log::{
-    CompletedToolCall, CompletionArgumentsRecord, CompletionAttributionLog,
-    CompletionAttributionRecord, CompletionToolCallRecord,
+pub use http::openai_responses_assembly::{OpenAiResponsesAssemblyError, OpenAiResponsesCollector};
+pub use http::openai_responses_stream::{
+    OpenAiResponsesStreamEncoder, OpenAiResponsesStreamEncodingError,
 };
-pub use config_reload::{
-    ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,
-    ResolvedRuntimeConfigResolver,
-};
-pub use daemon_ipc::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
-pub use daemon_performance_attribution::{
-    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
-};
-pub use embeddings_executor::{EmbeddingsExecutionError, EmbeddingsOutput};
-pub use generation_performance_log::{
-    GenerationPerformanceLog, GenerationPerformanceRecord, ImageGenerationPerformanceRecord,
-};
-pub use image_generation_executor::{
-    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
-    ImageGenerationTimeouts,
+pub use http::openai_responses_translation::{
+    OpenAiResponsesTranslationError, translate_openai_responses_request,
 };
 pub use instance_lock::{AstronomicalInstanceLock, AstronomicalInstanceLockError};
+pub use ipc::daemon_ipc::{DaemonIpcGenerationContext, DaemonIpcService, start_daemon_ipc_service};
+pub use library::library_model_discovery_refresh::LibraryModelDiscoveryRefresh;
 pub use library::{
     DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError,
     DownloadCatalogFamily, DownloadDiskCapacityCheck, DownloadDiskPreflight,
@@ -140,28 +71,34 @@ pub use library::{
     MAXIMUM_CONCURRENT_PAYLOAD_TRANSFERS, PAYLOAD_TRANSFER_SEGMENT_BYTES, ReqwestHubTransport,
     ReqwestHubTransportBuildError,
 };
-pub use library_model_discovery_refresh::LibraryModelDiscoveryRefresh;
-pub use openai_chat_translation::{
-    OpenAiChatTranslationError, translate_openai_chat_completion_request,
+pub use performance::completion_attribution_log::{
+    CompletedToolCall, CompletionArgumentsRecord, CompletionAttributionLog,
+    CompletionAttributionRecord, CompletionToolCallRecord,
 };
-pub use openai_responses_assembly::{OpenAiResponsesAssemblyError, OpenAiResponsesCollector};
-pub use openai_responses_stream::{
-    OpenAiResponsesStreamEncoder, OpenAiResponsesStreamEncodingError,
+pub use performance::daemon_performance_attribution::{
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
-pub use openai_responses_translation::{
-    OpenAiResponsesTranslationError, translate_openai_responses_request,
+pub use performance::generation_performance_log::{
+    GenerationPerformanceLog, GenerationPerformanceRecord, ImageGenerationPerformanceRecord,
 };
-pub use resolved_configuration_generation::ResolvedConfigurationGeneration;
-pub use runtime_model_policy::{RuntimeModelGenerationDefaults, RuntimeModelPolicy};
-pub use serving_session_snapshot::ServingSessionSnapshot;
+pub use serving::chat_generation_executor::{
+    ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
+    GenerationStartError,
+};
+pub use serving::embeddings_executor::{EmbeddingsExecutionError, EmbeddingsOutput};
+pub use serving::image_generation_executor::{
+    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
+    ImageGenerationTimeouts,
+};
+pub use serving::serving_session_snapshot::ServingSessionSnapshot;
 pub use shutdown_control::ShutdownController;
 pub use system_telemetry::parse_macos_memory_pressure_level;
-pub use worker_cache_clear::PromptCacheClearOutcome;
-pub use worker_control_error::WorkerControlError;
-pub use worker_handle::{GenerationQueueDepth, WorkerHandle};
-pub use worker_health::{
+pub use worker::worker_cache_clear::PromptCacheClearOutcome;
+pub use worker::worker_control_error::WorkerControlError;
+pub use worker::worker_handle::{GenerationQueueDepth, WorkerHandle};
+pub use worker::worker_health::{
     ActiveRequestProgress, ExpertResidencySnapshot, PendingPromptCacheClear,
     PersistentPromptCacheSummary, WorkerActivity, WorkerHealthSnapshot, WorkerHealthStatus,
 };
-pub use worker_memory_limit::MlxMemoryLimitUpdateOutcome;
-pub use worker_process::{WorkerProcess, WorkerTerminationOutcome};
+pub use worker::worker_memory_limit::MlxMemoryLimitUpdateOutcome;
+pub use worker::worker_process::{WorkerProcess, WorkerTerminationOutcome};
