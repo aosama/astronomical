@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_daemon::{
+use crate::{
     HubHttpRequest, HubHttpResponse, HubTransport, HubTransportError, HubTransportFuture,
     HuggingFaceHub,
 };

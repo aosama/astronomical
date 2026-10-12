@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use astronomical_daemon::{
+use crate::{
     DaemonPerformanceAttributionLog, DiskCapacityQuery, DownloadCatalog, DownloadDiskPreflight,
     DownloadDiskPreflightError, DownloadJobStore, DownloadManifestPreflight,
     DownloadManifestPreflightError, HubHttpRequest, HubHttpResponse, HubTransport,
