@@ -1732,7 +1732,7 @@ Apache License 2.0
 
 Used by:
 - esaxx-rs 0.1.10
-- minijinja 2.24.0
+- minijinja 3.0.0
 - rustls-platform-verifier 0.7.0
 - safetensors 0.8.0
 - spm_precompiled 0.1.4
@@ -3884,9 +3884,8 @@ Used by:
 - linux-raw-sys 0.12.1
 - lock_api 0.4.14
 - log 0.4.33
-- memo-map 0.3.3
 - mime 0.3.17
-- minijinja 2.24.0
+- minijinja 3.0.0
 - num-traits 0.2.19
 - once_cell 1.21.4
 - openssl-probe 0.2.1
@@ -5259,7 +5258,7 @@ Used by:
 - jni-macros 0.22.4
 - jni-sys-macros 0.4.1
 - jni 0.22.4
-- libc 0.2.189
+- libc 0.2.190
 - miniz_oxide 0.8.9
 - monostate-impl 0.1.18
 - monostate 0.1.18
@@ -5820,8 +5819,8 @@ DEALINGS IN THE SOFTWARE.
 MIT License
 
 Used by:
-- serial_test 3.5.0
-- serial_test_derive 3.5.0
+- serial_test 4.0.1
+- serial_test_derive 4.0.1
 
 Copyright (c) 2018 Tom Parker-Shemilt
 
@@ -6419,7 +6418,7 @@ MIT License
 
 Used by:
 - tokio-util 0.7.19
-- tokio 1.53.1
+- tokio 1.53.2
 
 MIT License
 
