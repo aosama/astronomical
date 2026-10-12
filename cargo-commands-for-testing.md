@@ -157,6 +157,27 @@ failure branches need no real model and no optimized build:
 
 - `cargo test -p astronomical-daemon --test hermetic_tests worker_memory_demotion -- --test-threads=1`
 
+### Daemon live-process journeys (real daemon spawning the real worker)
+
+Both journeys spawn the actual `astronomicald` daemon, which discovers and
+spawns the real inference worker from its own directory, so build both binaries
+first (`cargo build --release -p astronomical-daemon -p
+astronomical-inference-worker`). Each is `#[ignore]`d, runs with one test
+thread, and owns its 115-second budget.
+
+- `cargo test --release -p astronomical-daemon --test rest_api_tests rest_api::qwen3_5_chat_schema_ipc_journey::should_serve_one_schema_matching_json_object_over_the_cli_ipc_path -- --ignored --nocapture --exact --test-threads=1`
+  — the CLI `respond --schema` wire contract end to end: the journey sends the
+  exact `ChatGenerate` request the CLI verb sends (raw schema JSON in
+  `schema_json`) over the daemon's IPC socket, through the daemon's schema
+  validation into the worker's logits-masked structured generation, and
+  requires a real model's reply to be one JSON object matching the schema.
+  Needs the installed Qwen3.5-2B-4bit artifact under the configured Development
+  model directories.
+- `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY=<installed snapshots directory> cargo test --release -p astronomical-daemon --test rest_api_tests rest_api::qwen_image_21_http_journey::should_serve_one_qwen_image_over_http_end_to_end -- --ignored --nocapture --exact --test-threads=1`
+  — one 256×256 Qwen-Image-2.1 render over real HTTP through the whole live
+  process tree: discovery advertisement, worker startup, model swap, the native
+  engine, and the REST response contract.
+
 ### Prompt-cache acceptance journeys (resident sparse MoE role)
 
 - `cargo test -p astronomical-model-serving --features direct-mlx --test prompt_cache_acceptance_tests -- --ignored --nocapture --test-threads=1`
