@@ -134,6 +134,29 @@ maximum configured active-memory ceiling.
   — verifies one invisible resident-to-streaming retry retains persistent
   prefix reuse and emits a nonzero retry-attribution interval.
 
+### Live ceiling demotion journeys (stop-first worker restart)
+
+Both journeys lower the public MLX ceiling below the loaded artifact size. The
+resident engine cannot shrink in place, so the supervisor stops and reaps the
+old worker before it launches the replacement, and the streaming engine then
+serves the same conversation. Each journey is `#[serial]`, runs with one test
+thread, uses the Romeo and Juliet fixture with a fixed 2,048-token prefill
+chunk, stays within a 36 GB configured ceiling, and is bounded to 60 seconds
+because it exercises solid-state-drive streaming.
+
+- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::live_ceiling_lowering_rest::should_serve_after_lowering_the_live_ceiling_below_the_artifact_size -- --ignored --nocapture --exact --test-threads=1`
+  — lowers the ceiling on an idle serving session and requires a follow-up
+  request to return generated output under the streaming engine.
+- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::queued_live_ceiling_demotion_rest::should_demote_the_live_ceiling_queued_behind_an_active_generation -- --ignored --nocapture --exact --test-threads=1`
+  — lowers the ceiling while a generation is in flight; the update must queue,
+  the active request must finish normally, and the restart must not begin until
+  that request completes.
+
+The hermetic supervisor tests that pin the stop-first ordering and the four
+failure branches need no real model and no optimized build:
+
+- `cargo test -p astronomical-supervisor --test hermetic_tests worker_memory_demotion -- --test-threads=1`
+
 ### Prompt-cache acceptance journeys (resident sparse MoE role)
 
 - `cargo test -p astronomical-model-serving --features direct-mlx --test prompt_cache_acceptance_tests -- --ignored --nocapture --test-threads=1`
