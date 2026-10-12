@@ -6,9 +6,7 @@ use std::{
     sync::Mutex,
 };
 
-use astronomical_daemon::{
-    DiskCapacityQuery, DownloadDiskPreflight, DownloadDiskPreflightError, DownloadJob,
-};
+use crate::{DiskCapacityQuery, DownloadDiskPreflight, DownloadDiskPreflightError, DownloadJob};
 
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 const SHA256: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

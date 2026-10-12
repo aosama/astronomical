@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use astronomical_daemon::{
+use crate::{
     DownloadJob, DownloadJobError, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
 };
 use tempfile::TempDir;
@@ -143,7 +143,7 @@ fn should_reconcile_paused_and_failed_jobs_without_changing_their_state() {
         if state == "failed" {
             assert_eq!(
                 recovered_job.error_code(),
-                Some(astronomical_daemon::DownloadJobPublicErrorCode::ChecksumMismatch)
+                Some(crate::DownloadJobPublicErrorCode::ChecksumMismatch)
             );
         }
         assert_eq!(
