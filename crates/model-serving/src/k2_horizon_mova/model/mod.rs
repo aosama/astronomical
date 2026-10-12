@@ -10,6 +10,8 @@ mod ops;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod prefill_causality_probe;
 mod quantized_attention;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod router_numerics_parity_probe;
 mod stage_attribution_scope;
 
 pub(crate) use stage_attribution_scope::StageAttributionScope;
