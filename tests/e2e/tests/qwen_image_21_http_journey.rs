@@ -155,8 +155,9 @@ fn write_instance_config(state_directory: &Path, model_root: &str) {
 }
 
 async fn spawn_real_daemon(state_directory: &Path, isolated_home: &Path) -> (Child, SocketAddr) {
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-        .expect("Cargo should provide the astronomicald executable path");
+    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        .to_string_lossy()
+        .into_owned();
     assert_real_worker_binary_exists(&daemon_executable_path);
     let mut daemon_process = Command::new(daemon_executable_path)
         .args(["--instance", "development", "--state-directory"])

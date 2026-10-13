@@ -95,6 +95,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-e2e"
+version = "0.2.69"
+dependencies = [
+ "astronomical-config",
+ "astronomical-daemon",
+ "astronomical-ipc-protocol",
+ "astronomical-rest-contract",
+ "astronomical-test-harness",
+ "base64 0.23.1",
+ "image",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "astronomical-inference-worker"
 version = "0.2.69"
 dependencies = [
@@ -207,6 +223,9 @@ dependencies = [
 [[package]]
 name = "astronomical-test-harness"
 version = "0.2.69"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "atomic-waker"
