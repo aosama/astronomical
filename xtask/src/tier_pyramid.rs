@@ -144,7 +144,15 @@ fn count_e2e_package_tier(repository_root: &Path, acceptance_files: bool) -> usi
         return 0;
     }
     let mut total = 0;
-    for source_file in collect_rs_files(&e2e_tests_directory, false) {
+    for source_file in collect_rs_files(&e2e_tests_directory, true) {
+        let relative_path = source_file
+            .strip_prefix(repository_root)
+            .unwrap_or(&source_file)
+            .to_string_lossy()
+            .replace('\\', "/");
+        if excluded_helper_directory(&relative_path, &["common", "fixtures", "support"]) {
+            continue;
+        }
         let has_real_model_toggle = file_contains_literal(&source_file, "ASTRONOMICAL_REAL_MODEL");
         if has_real_model_toggle != acceptance_files {
             continue;

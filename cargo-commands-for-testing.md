@@ -232,7 +232,7 @@ worker from its own directory — build both binaries first (`cargo build
 --release -p astronomical-daemon -p astronomical-inference-worker`), run one
 test thread, and respect each journey's 115-second budget.
 
-- `ASTRONOMICAL_REAL_MODEL=1 cargo test --release -p astronomical-e2e --test e2e_tests should_serve_one_schema_matching_json_object_over_the_cli_ipc_path -- --nocapture --exact --test-threads=1`
+- `ASTRONOMICAL_REAL_MODEL=1 cargo test --release -p astronomical-e2e --test e2e should_serve_one_schema_matching_json_object_over_the_cli_ipc_path -- --nocapture --exact --test-threads=1`
   — the CLI `respond --schema` wire contract end to end: the journey sends the
   exact `ChatGenerate` request the CLI verb sends (raw schema JSON in
   `schema_json`) over the daemon's IPC socket, through the daemon's schema
@@ -240,7 +240,7 @@ test thread, and respect each journey's 115-second budget.
   requires a real model's reply to be one JSON object matching the schema.
   Needs the installed Qwen3.5-2B-4bit artifact under the configured Development
   model directories.
-- `ASTRONOMICAL_REAL_MODEL=1 ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY=<installed snapshots directory> cargo test --release -p astronomical-e2e --test e2e_tests should_serve_one_qwen_image_over_http_end_to_end -- --nocapture --exact --test-threads=1`
+- `ASTRONOMICAL_REAL_MODEL=1 ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY=<installed snapshots directory> cargo test --release -p astronomical-e2e --test e2e should_serve_one_qwen_image_over_http_end_to_end -- --nocapture --exact --test-threads=1`
   — one 256×256 Qwen-Image-2.1 render over real HTTP through the whole live
   process tree: discovery advertisement, worker startup, model swap, the native
   engine, and the REST response contract.
