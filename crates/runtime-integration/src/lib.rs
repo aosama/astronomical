@@ -24,6 +24,8 @@ mod mlx_runtime;
 #[cfg(feature = "mlx")]
 mod mlx_runtime_device_info;
 mod mlx_runtime_types;
+#[cfg(test)]
+mod mlx_runtime_types_tests;
 #[cfg(feature = "mlx")]
 mod mlx_safetensors;
 #[cfg(feature = "mlx")]
