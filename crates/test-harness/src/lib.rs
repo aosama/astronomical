@@ -16,6 +16,9 @@ pub mod network_denial;
 pub mod timeout;
 pub mod workspace;
 
+#[cfg(feature = "flux-reference-oracle")]
+pub mod flux_reference_oracle;
+
 pub use network_denial::ensure_network_denied;
 pub use timeout::run_with_timeout;
 pub use workspace::workspace_binary;

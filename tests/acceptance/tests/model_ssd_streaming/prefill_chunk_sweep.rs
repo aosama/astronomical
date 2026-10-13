@@ -220,6 +220,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             | WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::MlxMemoryLimitChanged { .. }
             | WorkerEvent::MlxMemoryLimitRejected { .. }
+            | WorkerEvent::MlxMemoryLimitRestartRequired { .. }
             | WorkerEvent::GenerationFinalized { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::PersistentPromptCacheStats { .. }

@@ -22,7 +22,7 @@ use tower::ServiceExt;
 const DELAYED_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 const ROMEO_AND_JULIET: &str = include_str!(
-    "../../../inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[tokio::test]

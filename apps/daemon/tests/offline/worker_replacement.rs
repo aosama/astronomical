@@ -485,7 +485,7 @@ fn chat_command(model_id: &str) -> ChatGenerationCommand {
         model: model_id.to_owned(),
         messages: vec![ChatMessage::User {
             content: include_str!(
-                "../../../inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+                "../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
             )
             .to_owned(),
             images: Vec::new(),
