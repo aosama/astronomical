@@ -45,7 +45,7 @@ async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event
                         minimum_height_pixels: 64,
                         maximum_height_pixels: 1_024,
                         dimension_multiple_pixels: 16,
-                        maximum_steps: 4,
+                        maximum_steps: 64,
                         maximum_guidance_thousandths: 1_000,
                         output_mime_types: vec!["image/png".to_owned()],
                     },

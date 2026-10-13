@@ -32,11 +32,16 @@ HTTP), **acceptance** (env-gated real-model journeys).
 - `cargo test-rest-api` — runs the REST contract and daemon
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
 - `cargo build --bins -p astronomical-daemon && cargo test-e2e` — the root
-  whole-product E2E suite (`tests/e2e`): every journey spawns the real
-  `astronomicald` binary over its real HTTP/IPC surface with fixture worker
-  binaries. The build step is required because `CARGO_BIN_EXE_` covers only
-  same-package binaries; the harness's `workspace_binary` fails loudly with
-  this exact command when a binary is missing.
+  whole-product E2E suite (`tests/e2e`): every journey spawns a daemon
+  binary over its real HTTP/IPC surface. By default the fixture
+  `astronomical-daemon-test-daemon` serves those surfaces with the scripted
+  worker, so the suite needs no model artifacts and runs on any machine;
+  `ASTRONOMICAL_REAL_MODEL=1` flips the journeys to the real `astronomicald`
+  plus the real inference worker and installed artifacts (see the
+  whole-product daemon journeys section below). The build step is required
+  because `CARGO_BIN_EXE_` covers only same-package binaries; the harness's
+  `workspace_binary` fails loudly with this exact command when a binary is
+  missing.
 - `cargo test-offline-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
 - `cargo test -p astronomical-model-serving --test offline_tests qwen3_5_moe_offline -- --test-threads=1`
@@ -183,15 +188,17 @@ failure branches need no real model and no optimized build:
 
 - `cargo test -p astronomical-daemon --test offline_tests worker_memory_demotion -- --test-threads=1`
 
-### Daemon live-process journeys (real daemon spawning the real worker)
+### Whole-product daemon journeys (tests/e2e, fidelity-switchable)
 
-Both journeys spawn the actual `astronomicald` daemon, which discovers and
-spawns the real inference worker from its own directory, so build both binaries
-first (`cargo build --release -p astronomical-daemon -p
-astronomical-inference-worker`). Each is `#[ignore]`d, runs with one test
-thread, and owns its 115-second budget.
+Both journeys run in two fidelities selected by `ASTRONOMICAL_REAL_MODEL=1`
+and live in the `cargo test-e2e` suite: by default they drive the fixture
+daemon and scripted worker (no artifacts), and with the variable set they
+spawn the real `astronomicald`, which discovers and spawns the real inference
+worker from its own directory — build both binaries first (`cargo build
+--release -p astronomical-daemon -p astronomical-inference-worker`), run one
+test thread, and respect each journey's 115-second budget.
 
-- `cargo test --release -p astronomical-daemon --test rest_api_tests rest_api::qwen3_5_chat_schema_ipc_journey::should_serve_one_schema_matching_json_object_over_the_cli_ipc_path -- --ignored --nocapture --exact --test-threads=1`
+- `ASTRONOMICAL_REAL_MODEL=1 cargo test --release -p astronomical-e2e --test e2e_tests should_serve_one_schema_matching_json_object_over_the_cli_ipc_path -- --nocapture --exact --test-threads=1`
   — the CLI `respond --schema` wire contract end to end: the journey sends the
   exact `ChatGenerate` request the CLI verb sends (raw schema JSON in
   `schema_json`) over the daemon's IPC socket, through the daemon's schema
@@ -199,7 +206,7 @@ thread, and owns its 115-second budget.
   requires a real model's reply to be one JSON object matching the schema.
   Needs the installed Qwen3.5-2B-4bit artifact under the configured Development
   model directories.
-- `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY=<installed snapshots directory> cargo test --release -p astronomical-daemon --test rest_api_tests rest_api::qwen_image_21_http_journey::should_serve_one_qwen_image_over_http_end_to_end -- --ignored --nocapture --exact --test-threads=1`
+- `ASTRONOMICAL_REAL_MODEL=1 ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY=<installed snapshots directory> cargo test --release -p astronomical-e2e --test e2e_tests should_serve_one_qwen_image_over_http_end_to_end -- --nocapture --exact --test-threads=1`
   — one 256×256 Qwen-Image-2.1 render over real HTTP through the whole live
   process tree: discovery advertisement, worker startup, model swap, the native
   engine, and the REST response contract.
