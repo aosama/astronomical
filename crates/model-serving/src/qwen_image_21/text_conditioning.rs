@@ -17,7 +17,7 @@
 //!
 //! The actual hidden-state *values* come from `text_encoder`, the GPU slice that consumes these
 //! ids; this module owns the deterministic id/mask structure plus the template rendering that must
-//! byte-match the reference, so it stays CPU-only and hermetically testable.
+//! byte-match the reference, so it stays CPU-only and offline-testable.
 //!
 //! # Scope caveats
 //!

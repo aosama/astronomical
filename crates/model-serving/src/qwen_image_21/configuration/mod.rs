@@ -1,7 +1,7 @@
 //! Typed configuration profiles for the reviewed Qwen-Image-2.1 MLX artifact.
 //!
 //! Each component config is parsed strictly (`deny_unknown_fields`) and pinned to the reviewed
-//! geometry so an engine only ever runs against the package shape the hermetic oracles were
+//! geometry so an engine only ever runs against the package shape the offline oracles were
 //! generated from. One file per component — `pipeline`, `transformer`, `text_encoder`, `vae`,
 //! `scheduler` — and this module owns what they share: the typed rejection, the strict document
 //! parsing, and the reviewed 4-bit affine quantization contract.

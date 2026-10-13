@@ -9,7 +9,7 @@
 //! Status: the transformer's runtime path currently runs the reference's non-cached forward
 //! (`kv_cache = None`), matching the pipeline default here. This module is the verified bookkeeping
 //! for the cached path — it is what `prefix_length` already supplies, and what a cache-carrying
-//! forward would need — so it is hermetically tested and kept, not dead residue. Do not read its
+//! forward would need — so it is tested offline and kept, not dead residue. Do not read its
 //! presence as evidence that the runtime caches prefix keys and values yet.
 //!
 //! The whole scheme rests on one layout fact: the target-image tokens must be the **contiguous
@@ -17,7 +17,7 @@
 //! caches `[0, prefix_len)` as single ranges, which is only correct under that invariant, so
 //! [`cache_is_valid`] checks it (and the `causal_condition` gate the reference requires) before the
 //! runtime relies on it. This module is pure integer/tuple bookkeeping — no runtime dependency — so
-//! it is tested hermetically against the diffusers oracle.
+//! it is tested offline against the diffusers oracle.
 
 /// Which caching mode a cache-carrying transformer forward would run for a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

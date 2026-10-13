@@ -8,7 +8,7 @@
 //!
 //! One deliberate duplication: the family's pure CPU references (`qwen_image_21::norm` for the
 //! zero-centered RMSNorm, `qwen_image_21::rope` for the frequency tables, `qwen_image_21::time`
-//! for the timestep sinusoid) reimplement the same formulas in f64 so hermetic tests can check the
+//! for the timestep sinusoid) reimplement the same formulas in f64 so offline tests can check the
 //! runtime path without a GPU. Keep the pairs in step when either side changes: the runtime side
 //! is the one the artifact sees, the CPU side is the oracle.
 
@@ -158,7 +158,7 @@ pub(in crate::qwen_image_21) fn fp32_rms_norm(
 /// Zero-centered RMSNorm: FP32 chain `x * rrms * (weight + 1)`, then cast.
 ///
 /// The runtime counterpart of `qwen_image_21::norm::zero_center_rms_norm`, which computes the same
-/// formula on the CPU in f64 for hermetic comparison.
+/// formula on the CPU in f64 for offline comparison.
 pub(in crate::qwen_image_21) fn fp32_zero_center_rms_norm(
     runtime: &MlxRuntime,
     input: &MlxArray,

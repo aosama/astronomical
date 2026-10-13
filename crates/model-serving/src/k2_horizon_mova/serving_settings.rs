@@ -1,6 +1,6 @@
 //! Explicit serving settings for one K2 Horizon MoVA engine load.
 //!
-//! The struct stays GPU-free so hermetic tests and non-MLX callers can pin
+//! The struct stays GPU-free so offline tests and non-MLX callers can pin
 //! the served configuration without the direct-MLX feature.
 
 use std::path::PathBuf;

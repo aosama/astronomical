@@ -7,7 +7,7 @@
 //!
 //! This is the highest-risk novel piece relative to FLUX.2 Klein's 4-axis RoPE, so the index
 //! construction and the frequency tables are pure f64/f32 math with no runtime dependency —
-//! the hermetic test compares the output against the diffusers Python reference bit-for-bit.
+//! the offline test compares the output against the diffusers Python reference bit-for-bit.
 
 /// Positive-index table length (diffusers `arange(8192)`).
 const POS_TABLE_LEN: usize = 8192;
@@ -233,7 +233,7 @@ fn build_axis_table(dim: usize, theta: f64) -> AxisTable {
     }
 }
 
-/// Test oracle: expose frequencies for the hermetic test without widening the public API.
+/// Test oracle: expose frequencies for the offline test without widening the public API.
 #[doc(hidden)]
 #[must_use]
 pub fn frequencies_for_tests(

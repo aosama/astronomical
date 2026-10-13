@@ -1,4 +1,4 @@
-//! Shared scaffolding for the daemon IPC hermetic suites: a stub executor
+//! Shared scaffolding for the daemon IPC offline suites: a stub executor
 //! double, service startup, and the per-test instance state directory.
 
 #![allow(dead_code)]
@@ -69,7 +69,7 @@ pub(crate) fn unavailable_generation_context() -> DaemonIpcGenerationContext {
     }
 }
 
-/// The bundled release catalog loaded once per call; hermetic tests never run
+/// The bundled release catalog loaded once per call; offline tests never run
 /// a download coordinator, so the coordinator field stays `None`.
 pub(crate) fn bundled_test_download_catalog() -> Arc<astronomical_daemon::DownloadCatalog> {
     Arc::new(
