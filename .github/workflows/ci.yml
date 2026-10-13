@@ -606,6 +606,18 @@ jobs:
       # disposable, so lifting the gate there is safe.
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Everything that legitimately needs the network happens here, outside
+      # the namespace: the pinned toolchain sync and the dependency download.
+      - name: Sync pinned toolchain
+        run: rustup show
+      - name: Fetch and build the pilot crate tests
+        run: |
+          cargo fetch --locked -p astronomical-config
+          cargo build --locked --tests -p astronomical-config
+      # The namespace run is execution-only: with artifacts warm and --offline
+      # set, cargo never attempts a lookup, so the only thing the missing
+      # network can break is a test opening a socket — the exact physics the
+      # job exists to prove.
       - name: Run pilot crate tests with no network namespace
-        run: unshare -rn cargo test -p astronomical-config --test offline_tests
+        run: unshare -rn cargo test --offline --locked -p astronomical-config --test offline_tests
         timeout-minutes: 8
