@@ -1,0 +1,589 @@
+use astronomical_test_harness::offline_test;
+
+use crate::{
+    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MemoryPhase, MlxRamBudget, MlxRamBudgetMeasurement,
+    MlxRamBudgetModelGeometry, measured_non_expert_forward_growth_bytes,
+    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
+};
+
+fn fable_class_geometry() -> MlxRamBudgetModelGeometry {
+    MlxRamBudgetModelGeometry {
+        model_core_payload_bytes: 2_360_000_000,
+        complete_expert_payload_bytes: 36_238_786_560,
+        largest_complete_expert_layer_bytes: 905_969_664,
+        largest_routed_expert_page_bytes: 28_311_552,
+        sequence_state_bytes_per_token: 0,
+    }
+}
+
+fn unmeasured_prefill_activation_headroom_bytes(geometry: MlxRamBudgetModelGeometry) -> u64 {
+    geometry
+        .largest_complete_expert_layer_bytes
+        .saturating_mul(3)
+}
+
+/// A geometry whose three-layer static floor is small enough that learned
+/// activation evidence dominates the promise, making context-bucket resolution
+/// observable (issue #623 follow-up).
+fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
+    MlxRamBudgetModelGeometry {
+        model_core_payload_bytes: 2_360_000_000,
+        complete_expert_payload_bytes: 36_238_786_560,
+        largest_complete_expert_layer_bytes: 10_000_000,
+        largest_routed_expert_page_bytes: 28_311_552,
+        sequence_state_bytes_per_token: 0,
+    }
+}
+
+offline_test!(
+    should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements,
+    {
+        let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+
+        assert_eq!(BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, 1_000_000_000);
+        assert_eq!(
+            mlx_ram_budget.context_window_reserve_bytes(0),
+            1_000_000_000
+        );
+        assert_eq!(
+            mlx_ram_budget.context_window_reserve_bytes(4_096),
+            1_000_000_000
+        );
+        assert!(!mlx_ram_budget.has_context_window_measurement());
+        assert_eq!(
+            mlx_ram_budget.activation_headroom_bytes(MemoryPhase::Prefill, 4_096),
+            unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()),
+        );
+    }
+);
+
+offline_test!(
+    should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners,
+    {
+        let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+
+        let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 4_096, 0);
+
+        // retained_expert_budget =
+        //   mlx_active_memory_ceiling
+        //   - model_core
+        //   - context_window_reserve
+        //   - activation_headroom
+        //   - complete_layer_stream_slot
+        let expected_activation_headroom_bytes =
+            unmeasured_prefill_activation_headroom_bytes(fable_class_geometry());
+        assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
+        assert_eq!(
+            planned_budget.activation_headroom_bytes,
+            expected_activation_headroom_bytes
+        );
+        assert_eq!(planned_budget.complete_layer_stream_slot_bytes, 905_969_664);
+        assert_eq!(
+            planned_budget.retained_expert_budget_bytes,
+            39_000_000_000
+                - 2_360_000_000
+                - 1_000_000_000
+                - expected_activation_headroom_bytes
+                - 905_969_664
+        );
+    }
+);
+
+offline_test!(
+    should_raise_context_window_reserve_from_measurements_and_never_under_shoot,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 2_048,
+            measured_context_and_activation_bytes: 1_500_000_000,
+            observed_activation_headroom_bytes: 400_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 4_096,
+            measured_context_and_activation_bytes: 2_200_000_000,
+            observed_activation_headroom_bytes: 700_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        assert!(mlx_ram_budget.has_context_window_measurement());
+        let context_window_reserve_for_2048 = mlx_ram_budget.context_window_reserve_bytes(2_048);
+        let context_window_reserve_for_4096 = mlx_ram_budget.context_window_reserve_bytes(4_096);
+        assert!(context_window_reserve_for_2048 >= 1_100_000_000);
+        assert!(context_window_reserve_for_4096 >= context_window_reserve_for_2048);
+        assert!(context_window_reserve_for_4096 >= 1_500_000_000);
+
+        let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 4_096, 0);
+        assert_eq!(
+            planned_budget.activation_headroom_bytes,
+            unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(700_000_000)
+        );
+        // Experts must not be budgeted into the learned context-window / activation reserve.
+        let fixed_non_expert_bytes = planned_budget.model_core_payload_bytes
+            + planned_budget.context_window_reserve_bytes
+            + planned_budget.activation_headroom_bytes
+            + planned_budget.complete_layer_stream_slot_bytes;
+        assert_eq!(
+            planned_budget.retained_expert_budget_bytes,
+            planned_budget
+                .mlx_active_memory_ceiling_bytes
+                .saturating_sub(fixed_non_expert_bytes)
+        );
+    }
+);
+
+offline_test!(
+    should_not_charge_transient_workspace_as_both_context_and_activation,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 7_000,
+            measured_context_and_activation_bytes: 2_100_000_000,
+            observed_activation_headroom_bytes: 2_000_000_000,
+            exact_temporary_workspace_bytes: 100_000_000,
+        });
+
+        let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 7_000, 7_000, 0);
+
+        assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
+        assert_eq!(
+            planned_budget.activation_headroom_bytes,
+            unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(2_000_000_000)
+        );
+    }
+);
+
+offline_test!(
+    should_not_charge_exact_temporary_workspace_as_persistent_context,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 7_000,
+            measured_context_and_activation_bytes: 3_000_000_000,
+            observed_activation_headroom_bytes: 500_000_000,
+            exact_temporary_workspace_bytes: 500_000_000,
+        });
+
+        assert_eq!(
+            mlx_ram_budget.context_window_reserve_bytes(7_000),
+            2_064_000_000
+        );
+    }
+);
+
+offline_test!(
+    should_protect_the_first_decode_with_prefill_activation_evidence,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 7_000,
+            measured_context_and_activation_bytes: 2_000_000_000,
+            observed_activation_headroom_bytes: 1_900_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 7_000, 1, 0);
+
+        // Before decode has its own evidence, retaining experts into prefill-proven
+        // transient space would force immediate reclamation on the first token.
+        assert_eq!(first_decode_plan.activation_headroom_bytes, 1_900_000_000);
+    }
+);
+
+offline_test!(
+    should_use_decode_activation_evidence_after_decode_is_observed,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 7_000,
+            measured_context_and_activation_bytes: 2_000_000_000,
+            observed_activation_headroom_bytes: 1_900_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Decode,
+            context_token_count: 7_000,
+            measured_context_and_activation_bytes: 500_000_000,
+            observed_activation_headroom_bytes: 400_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        let learned_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 7_000, 1, 0);
+
+        assert_eq!(learned_decode_plan.activation_headroom_bytes, 400_000_000);
+    }
+);
+
+offline_test!(
+    should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve,
+    {
+        let mlx_ram_budget = MlxRamBudget::new(38_000_000_000, fable_class_geometry())
+            .expect("positive ceiling should construct");
+        let current_active_memory_bytes = 35_879_800_070;
+        let current_retained_expert_payload_bytes = 33_520_877_568;
+        // Production evidence showed 1.554 GB of context/activation growth followed
+        // by one exact 905,969,664-byte complete-layer allocation.
+        let admitted_forward_reserve_bytes = 2_460_246_024;
+
+        let retained_expert_budget_bytes = mlx_ram_budget
+            .retained_expert_budget_for_admitted_forward(
+                current_active_memory_bytes,
+                current_retained_expert_payload_bytes,
+                admitted_forward_reserve_bytes,
+            );
+
+        assert_eq!(retained_expert_budget_bytes, 33_180_831_474);
+        assert!(retained_expert_budget_bytes < current_retained_expert_payload_bytes);
+        assert_eq!(
+            current_active_memory_bytes
+                .saturating_sub(current_retained_expert_payload_bytes)
+                .saturating_add(retained_expert_budget_bytes)
+                .saturating_add(admitted_forward_reserve_bytes),
+            38_000_000_000,
+        );
+    }
+);
+
+offline_test!(
+    should_project_unmeasured_suffix_tokens_on_top_of_learned_context_reserve,
+    {
+        let mut geometry = fable_class_geometry();
+        geometry.sequence_state_bytes_per_token = 20_000;
+        let mut mlx_ram_budget =
+            MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 10_000,
+            measured_context_and_activation_bytes: 400_000_000,
+            observed_activation_headroom_bytes: 100_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        let reserved_for_measured_bucket = mlx_ram_budget.context_window_reserve_bytes(10_000);
+        let reserved_for_unmeasured_suffix = mlx_ram_budget.context_window_reserve_bytes(26_000);
+
+        assert_eq!(reserved_for_measured_bucket, 1_000_000_000);
+        let highest_measured_token_count = (10_000 / 1_024 + 1) * 1_024;
+        assert_eq!(
+            reserved_for_unmeasured_suffix,
+            reserved_for_measured_bucket
+                .saturating_add((26_000 - highest_measured_token_count) * 20_000)
+        );
+    }
+);
+
+offline_test!(
+    should_exclude_newly_retained_experts_from_context_and_activation_learning,
+    {
+        assert_eq!(
+            measured_non_expert_forward_growth_bytes(
+                2_358_922_508,
+                36_867_500_000,
+                0,
+                33_520_877_568,
+            ),
+            987_699_924,
+        );
+        assert_eq!(
+            measured_non_expert_forward_growth_bytes(3_000, 4_500, 2_000, 2_000),
+            1_500,
+        );
+    }
+);
+
+// Issue #623 follow-up: the prefill activation promise was one grow-only
+// session high-water pooled across every context size, so one large-context
+// request's workspace sized the promise shown to users and the retention
+// ceiling offered to paged experts for every later request. The promise is
+// now resolved per planned operation (issue #644 sharpened the scope: the
+// planned token count is the operation's own size, never the prompt length):
+// highest evidence at or below the operation bucket within the measured span,
+// proportionally projected beyond it, with the static three-layer floor still
+// bounding everything.
+
+offline_test!(
+    should_resolve_the_prefill_activation_promise_from_the_planned_operation_bucket,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 2_048,
+            measured_context_and_activation_bytes: 1_500_000_000,
+            observed_activation_headroom_bytes: 400_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 4_096,
+            measured_context_and_activation_bytes: 2_200_000_000,
+            observed_activation_headroom_bytes: 700_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        let plan_for_2048 = mlx_ram_budget.plan(MemoryPhase::Prefill, 2_048, 2_048, 0);
+        let plan_for_4096 = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 4_096, 0);
+
+        assert_eq!(plan_for_2048.activation_headroom_bytes, 400_000_000);
+        assert_eq!(plan_for_4096.activation_headroom_bytes, 700_000_000);
+    }
+);
+
+offline_test!(
+    should_not_inflate_the_prefill_activation_promise_beyond_measured_evidence,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 4_096,
+            measured_context_and_activation_bytes: 2_200_000_000,
+            observed_activation_headroom_bytes: 700_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        // An operation larger than anything measured must never multiply the
+        // measured observation by a token-count ratio. Every observation embeds
+        // the attended-context factor of the forward that produced it, so scaling
+        // it again by the operation size double-counted context growth and
+        // manufactured ceiling-sized paper reserves that rejected every later
+        // request (measured 2026-10-10: a ~9.9 GB chunk observation scaled 4x,
+        // capped at the whole ceiling, and every follow-up turn rejected until
+        // the model reloaded). The promise resolves from measured evidence at or
+        // below the planned operation scope and stays there; beyond the measured
+        // span the static floor governs until a forward at that scope completes.
+        let plan_for_8192 = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
+
+        assert_eq!(plan_for_8192.activation_headroom_bytes, 700_000_000);
+    }
+);
+
+offline_test!(
+    should_keep_the_prefill_activation_promise_independent_of_the_prompt_context,
+    {
+        // Issue #644 regression: the activation reserve is operation-scoped. The
+        // production failure planned a 50,400-token prompt's activation from a
+        // per-chunk observation, multiplying it ~49x into a reserve several times
+        // the ceiling. The prompt length must size the context reserve only; the
+        // activation reserve must not move with it. The geometry carries real
+        // per-token state bytes so the context reserve can actually grow.
+        let mut geometry = small_layer_geometry();
+        geometry.sequence_state_bytes_per_token = 24_000;
+        let mut mlx_ram_budget =
+            MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 2_048,
+            measured_context_and_activation_bytes: 1_500_000_000,
+            observed_activation_headroom_bytes: 400_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        let plan_for_chunk = mlx_ram_budget.plan(MemoryPhase::Prefill, 50_400, 2_048, 0);
+        let plan_for_small = mlx_ram_budget.plan(MemoryPhase::Prefill, 2_048, 2_048, 0);
+
+        assert_eq!(
+            plan_for_chunk.activation_headroom_bytes, plan_for_small.activation_headroom_bytes,
+            "the activation reserve must not scale with the prompt context"
+        );
+        assert!(
+            plan_for_chunk.context_window_reserve_bytes
+                > plan_for_small.context_window_reserve_bytes,
+            "the context reserve must still grow with the prompt context"
+        );
+    }
+);
+
+offline_test!(
+    should_keep_the_first_decode_protected_by_the_largest_prefill_evidence,
+    {
+        let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 2_048,
+            measured_context_and_activation_bytes: 1_500_000_000,
+            observed_activation_headroom_bytes: 400_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 4_096,
+            measured_context_and_activation_bytes: 2_200_000_000,
+            observed_activation_headroom_bytes: 700_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        // Before decode has its own evidence, the largest prefill observation —
+        // not the smaller bucket the next request happens to plan — protects the
+        // first decode from warm fill occupying transient space.
+        let first_decode_plan = mlx_ram_budget.plan(MemoryPhase::Decode, 2_048, 1, 0);
+
+        assert_eq!(first_decode_plan.activation_headroom_bytes, 700_000_000);
+    }
+);
+
+// Issue #690: the request-admission path composes the generation-context
+// workspace reservation from `activation_headroom_bytes(Prefill,
+// total_context_tokens)` — bypassing the operation-scoped `plan()` that the
+// #644 fix corrected. One successful chunked prefill teaches the budget a
+// chunk-sized activation observation; the next request scales that observation
+// proportionally by total context and admission rejects everything with a
+// paper reserve several times the ceiling (measured 143 GB against a 39 GB
+// ceiling in production). The admission-side composition must resolve the
+// activation reserve at the operation scope exactly like `plan()` does.
+offline_test!(
+    should_keep_the_admission_workspace_activation_reserve_independent_of_the_prompt_context,
+    {
+        // The learned evidence is chunk-shaped (2,048-token prefill chunks), and
+        // the geometry's small layer floor lets learned evidence dominate so the
+        // scaling defect is observable. Real per-token state bytes make the
+        // context reserve distinguishable across the two context sizes.
+        let mut geometry = small_layer_geometry();
+        geometry.sequence_state_bytes_per_token = 24_000;
+        let mut mlx_ram_budget =
+            MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 2_048,
+            measured_context_and_activation_bytes: 1_500_000_000,
+            observed_activation_headroom_bytes: 400_000_000,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        // A follow-up turn of the same conversation: total context grew by a few
+        // hundred tokens, prompt is 18k, and the admission path composes the
+        // workspace from the planned chunk operation bound (2,048-token chunks),
+        // matching the real admission call site.
+        let admission_workspace =
+            mlx_ram_budget.context_admission_workspace_snapshot(38_814, 2_048, 0, 0);
+        let small_request_workspace =
+            mlx_ram_budget.context_admission_workspace_snapshot(2_048, 2_048, 0, 0);
+
+        assert_eq!(
+            admission_workspace.activation_headroom_bytes,
+            small_request_workspace.activation_headroom_bytes,
+            "the admission-side activation reserve must not scale with total context tokens",
+        );
+        // The activation reserve must never exceed the active-memory ceiling:
+        // measured evidence keeps its pinned dominance over the static floor, but
+        // no projection may manufacture a reserve the ceiling could never grant.
+        assert!(
+            admission_workspace.activation_headroom_bytes
+                <= admission_workspace.mlx_active_memory_ceiling_bytes,
+            "the learned activation reserve must never exceed the active-memory ceiling",
+        );
+        // The context reserve must still grow with the prompt context.
+        assert!(
+            admission_workspace.context_window_reserve_bytes
+                > small_request_workspace.context_window_reserve_bytes,
+            "the context reserve must still grow with the prompt context",
+        );
+    }
+);
+
+// A reserve the loaded model can never coexist with is paper by construction:
+// model core bytes cannot be evicted, so activation above ceiling minus model
+// core would project every nonzero live memory above the ceiling and reject
+// every request instead of reaching the reclaim path (issue #690 family,
+// measured 2026-10-10: the previous ceiling-equal cap turned one poisoned
+// observation into permanent rejections because workspace == ceiling makes
+// any current active memory overflow the projection).
+offline_test!(
+    should_cap_the_activation_reserve_below_the_irrevocable_model_core,
+    {
+        let ceiling_bytes = 39_000_000_000_u64;
+        let mut mlx_ram_budget = MlxRamBudget::new(ceiling_bytes, small_layer_geometry())
+            .expect("positive ceiling should construct");
+        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+            phase: MemoryPhase::Prefill,
+            context_token_count: 2_048,
+            measured_context_and_activation_bytes: 1_500_000_000,
+            observed_activation_headroom_bytes: ceiling_bytes * 10,
+            exact_temporary_workspace_bytes: 0,
+        });
+
+        let plan = mlx_ram_budget.plan(MemoryPhase::Prefill, 8_192, 8_192, 0);
+
+        assert_eq!(
+            plan.activation_headroom_bytes,
+            ceiling_bytes - small_layer_geometry().model_core_payload_bytes
+        );
+    }
+);
+
+offline_test!(
+    should_exclude_mandatory_expert_page_streaming_from_the_learned_context_growth,
+    {
+        // Issue #691: the composed context/activation learning sees a peak that
+        // includes mandatory streamed page traffic. With a zero resident delta the
+        // whole stream must leave the residual; the pre-fix formula would charge
+        // it to context and activation.
+        let learned_growth_bytes =
+            measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+                1_000, 1_600, 500, 500, 400,
+            );
+
+        assert_eq!(learned_growth_bytes, 200);
+    }
+);
+
+offline_test!(
+    should_charge_retained_expert_growth_as_one_beyond_baseline_owner_while_streaming,
+    {
+        // Retained (300) and streamed (500) promotion overlap: the peak's expert
+        // component beyond the pre-growth baseline is the larger of the two, so
+        // the residual keeps only the genuine non-expert growth.
+        let learned_growth_bytes =
+            measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+                1_000, 1_700, 1_000, 1_300, 500,
+            );
+
+        assert_eq!(learned_growth_bytes, 200);
+    }
+);
+
+offline_test!(
+    should_match_the_stream_free_contract_when_no_expert_page_stream_occurred,
+    {
+        // Identical measurements to the pre-#691 formula when zero pages streamed:
+        // the pinned #623/#644 contracts must keep holding byte for byte.
+        let learned_growth_bytes =
+            measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+                1_000, 2_600, 400, 900, 0,
+            );
+        let baseline_growth_bytes =
+            measured_non_expert_forward_growth_bytes(1_000, 2_600, 400, 900);
+
+        assert_eq!(learned_growth_bytes, baseline_growth_bytes);
+        assert_eq!(learned_growth_bytes, 1_100);
+    }
+);
+
+offline_test!(
+    should_saturate_context_growth_to_zero_when_stream_evidence_dominates,
+    {
+        // Churn can make stream evidence exceed the whole recorded window; the
+        // budget must clamp instead of wrapping (fail safe, recoverable by design).
+        let learned_growth_bytes =
+            measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
+                1_000, 1_300, 500, 400, 900,
+            );
+
+        assert_eq!(learned_growth_bytes, 0);
+    }
+);

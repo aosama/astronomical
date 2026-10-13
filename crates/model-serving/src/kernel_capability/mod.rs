@@ -20,6 +20,9 @@ pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_weighted_sum_probe;
 
+#[cfg(test)]
+mod kernel_capability_tests;
+
 #[cfg(feature = "direct-mlx")]
 pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
 #[cfg(feature = "direct-mlx")]

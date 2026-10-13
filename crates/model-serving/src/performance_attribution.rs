@@ -4,6 +4,9 @@
 //! and per-event records on inference paths. Disabled reports hold only `None`,
 //! skip clock reads, and execute measured closures directly.
 
+#[cfg(test)]
+mod performance_attribution_tests;
+
 mod catalog;
 mod counter_catalog;
 mod expert_streaming_source;

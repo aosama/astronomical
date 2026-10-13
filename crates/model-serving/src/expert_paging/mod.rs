@@ -9,6 +9,11 @@ mod retained_expert_page_cache;
 pub mod safetensors_header;
 mod source_manifests;
 
+#[cfg(test)]
+mod quantized_expert_page_manifest_tests;
+#[cfg(test)]
+mod route_observation_tests;
+
 pub use expert_cache_statistics::ExpertWeightMemoryCacheStatistics;
 pub use retained_expert_page_cache::{
     RetainedExpertLayerCommit, RetainedExpertLayerCommitDelta, RetainedExpertLayerCommitError,
