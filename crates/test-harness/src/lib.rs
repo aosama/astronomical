@@ -64,12 +64,11 @@ macro_rules! offline_tokio_test {
             .await
             .is_err()
             {
-                panic!(concat!(
+                panic!(
+                    "{} exceeded its {}-second timeout and was aborted",
                     stringify!($name),
-                    " exceeded its ",
-                    stringify!($crate::DEFAULT_TEST_TIMEOUT_SECONDS),
-                    "-second timeout and was aborted"
-                ));
+                    $crate::DEFAULT_TEST_TIMEOUT_SECONDS
+                );
             }
         }
     };
@@ -82,12 +81,11 @@ macro_rules! offline_tokio_test {
             .await
             .is_err()
             {
-                panic!(concat!(
+                panic!(
+                    "{} exceeded its {}-second timeout and was aborted",
                     stringify!($name),
-                    " exceeded its ",
-                    stringify!($timeout_seconds),
-                    "-second timeout and was aborted"
-                ));
+                    $timeout_seconds
+                );
             }
         }
     };
