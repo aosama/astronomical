@@ -11,8 +11,8 @@ version.workspace = true
 autotests = false
 
 [[test]]
-name = "e2e_tests"
-path = "tests/e2e_tests.rs"
+name = "e2e"
+path = "tests/e2e.rs"
 harness = true
 
 [lints]
