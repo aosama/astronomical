@@ -601,6 +601,11 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      # Ubuntu 24.04 gates unprivileged user namespaces behind AppArmor, which
+      # rejects the uid_map write unshare -rn needs; the hosted runner is
+      # disposable, so lifting the gate there is safe.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Run pilot crate tests with no network namespace
         run: unshare -rn cargo test -p astronomical-config --test offline_tests
         timeout-minutes: 8
