@@ -55,10 +55,8 @@ pub(crate) fn perf_worker_environment(
     Arc<HashMap<String, RuntimeModelPolicy>>,
     WorkerStartupConfiguration,
 ) {
-    let production_worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
-            .expect("Cargo should provide the production inference-worker executable path"),
-    );
+    let production_worker_executable_path =
+        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
     let isolated_worker_home =
         tempfile::tempdir().expect("the throughput worker home should be created");
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");

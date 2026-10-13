@@ -13,7 +13,7 @@
 # that target instead of nesting a second one.
 #
 # Direct callers: scripts/test-direct-mlx.sh, scripts/test-mlx-memory-contracts.sh,
-# scripts/accept-prompt-cache-interactions.sh, scripts/internal/build-macos-app.sh.
+# scripts/internal/build-macos-app.sh.
 
 set -eu
 

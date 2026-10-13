@@ -10,7 +10,7 @@ const ORNITH_VOCABULARY_SIZE: u32 = 248_320;
 const ORNITH_MAXIMUM_POSITION_COUNT: u32 = 262_144;
 const SYNTHETIC_MODEL_ID: &str = "synthetic-qwen3.5";
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[test]

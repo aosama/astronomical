@@ -155,8 +155,7 @@ pub(super) fn persistent_prompt_cache_enabled_worker_configuration(
     WorkerStartupConfiguration,
 ) {
     let production_worker_executable_path =
-        std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
-            .expect("Cargo should provide the production inference-worker executable path");
+        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
     let isolated_worker_home =
         tempfile::tempdir().expect("the persistent prompt-cache worker home should be created");
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");

@@ -16,16 +16,18 @@
 #   directories, excluding helper folders (fixtures, support, common).
 # - e2e: test attributes under the root tests/e2e package in files without
 #   the real-model fidelity toggle.
-# - acceptance: test attributes under tests/e2e in files gated by
-#   ASTRONOMICAL_REAL_MODEL — the same journeys at real-model fidelity.
+# - acceptance: test attributes under the root tests/acceptance package,
+#   whose suites load real model artifacts by design, plus test attributes
+#   under tests/e2e in files gated by ASTRONOMICAL_REAL_MODEL — the same
+#   journeys at real-model fidelity.
 
 set -eu
 
 DRIFT_TOLERANCE_PERCENT=5
 BASELINE_RELATIVE_PATH="scripts/ci/tier-pyramid-baseline.json"
 
-UNIT_MACRO_PATTERN='offline_test!\(|offline_tokio_test!\(|offline_tokio_real_clock_test!\('
-TEST_ATTRIBUTE_PATTERN='^#\[test\]$|^#\[tokio::test\]$'
+UNIT_MACRO_PATTERN='offline_test!\(|offline_tokio_test!\(|offline_tokio_real_clock_test!\(|offline_denied_test!\(|offline_denied_tokio_test!\('
+TEST_ATTRIBUTE_PATTERN='^#\[test\]$|^#\[tokio::test'
 
 sum_counts_from_stdin() {
     awk '{ total += $1 } END { print total + 0 }'
@@ -78,6 +80,23 @@ count_e2e_tier() {
     echo "$total"
 }
 
+count_acceptance_package() {
+    repository_root="$1"
+    acceptance_tests_directory="${repository_root}/tests/acceptance/tests"
+    [ -d "$acceptance_tests_directory" ] || {
+        echo 0
+        return
+    }
+    find "$acceptance_tests_directory" -name '*.rs' -type f 2>/dev/null |
+        grep -v '/fixtures/' |
+        grep -v '/support/' |
+        grep -v '/common/' |
+        while read -r source_file; do
+            rg -c "$UNIT_MACRO_PATTERN" "$source_file" 2>/dev/null || true
+            rg -c "$TEST_ATTRIBUTE_PATTERN" "$source_file" 2>/dev/null || true
+        done | sum_counts_from_stdin
+}
+
 print_usage_and_exit() {
     printf 'usage: report-tier-pyramid.sh [--repository-root PATH] [--update-baseline]\n' >&2
     exit 2
@@ -109,7 +128,9 @@ main() {
     unit_count="$(count_unit "$repository_root")"
     integration_count="$(count_integration "$repository_root")"
     e2e_count="$(count_e2e_tier "$repository_root" e2e)"
-    acceptance_count="$(count_e2e_tier "$repository_root" acceptance)"
+    acceptance_count="$(
+        (count_e2e_tier "$repository_root" acceptance; count_acceptance_package "$repository_root") | sum_counts_from_stdin
+    )"
     total_count=$((unit_count + integration_count + e2e_count + acceptance_count))
 
     printf '%s\n' '[tier-pyramid] status=start mode=report'

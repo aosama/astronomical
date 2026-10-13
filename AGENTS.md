@@ -7,7 +7,10 @@
 - MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; direct Cargo invocations must also select one test thread. The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
 
 - All and any tests must have a built-in timeout with a maximum of 120 seconds. Exceptions can be made for performance-endurance tests and/or tests that reproduce out-of-memory (OOM) issues.
-- SSD-paging journeys must have a built-in timeout of 60 seconds. If a journey exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the journey timeout or repeating long model runs.
+
+- SSD-paging e2e tests must have a built-in timeout of 60 seconds. If e2e test exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the e2e test timeout or repeating long model runs.
+
+- Never ever construct e2e tests while setting temperature to 0. It is an e2e testing intent to not specify it at all and let the provider determine the temperature setting for the model you are targeting.
 
 - Astronomical is expected to adapt to any laptop, any RAM size, any GPU wired memory limit. Do not hardwire or optimize the codebase just for this laptop that you are developing in.
 
@@ -37,7 +40,7 @@
 
 - The term "qualification" and all of its variants ("qualify", "qualified", "qualifier", etc.) are prohibited in this repository and in your discourse. Never use these terms in code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies to the user.
 - The term "hermetic" and all of its variants are prohibited and being fully decommissioned (tracked in issue #1208): never use them in new code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies. Where you encounter existing occurrences, remove them and replace with the test-classification vocabulary below, using the most specific applicable term rather than a generic one.
-- Test classification vocabulary (mandatory replacement for "hermetic"): the word that was conflated described a property, not a scope. Say **offline** for the property (sealed and deterministic: no real network beyond localhost, no real model artifacts, no machine state — everything scripted, so the test passes identically on any laptop); say **unit** for in-process logic with fakes; say **integration** for tests crossing a component seam through stubs or fixture binaries (unix-socket IPC, spawned fixture worker processes, real filesystem); say **end-to-end (E2E)** for tests driving the real `astronomicald` binary over its real HTTP surface; say **acceptance** for the env-gated journeys that load real model artifacts. When one test spans several tiers, name the highest seam it crosses.
+- Test classification vocabulary (mandatory replacement for "hermetic"): the word that was conflated described a property, not a scope. Say **offline** for the property (sealed and deterministic: no real network beyond localhost, no real model artifacts, no machine state — everything scripted, so the test passes identically on any laptop); say **unit** for in-process logic with fakes; say **integration** for tests crossing a component seam through stubs or fixture binaries (unix-socket IPC, spawned fixture worker processes, real filesystem); say **end-to-end (E2E)** for tests driving the real `astronomicald` binary over its real HTTP surface; say **acceptance** for the env-gated e2e tests that load real model artifacts. When one test spans several tiers, name the highest seam it crosses.
 
 ## Requirements for Performance Profiling and Attribution
 
@@ -45,7 +48,7 @@
 
 - The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging, and finally token generation. In short, any and all operations involved in actually serving a model request to the end user.
 
-- If you need to run performance attribution to performance profile the code with attribution logging, you can do that through the e2e test cases versus doing it through a fully running development instance. If tests do not exist, you can then create a new test after a careful and comprehensive review of the existing journeys and/or e2e test cases.
+- If you need to run performance attribution to performance profile the code with attribution logging, you can do that through the e2e test cases versus doing it through a fully running development instance. If tests do not exist, you can then create a new test after a careful and comprehensive review of the existing e2e test cases.
 
 ## Test Fixture And Input Text For Real Model Tests
 
@@ -56,7 +59,7 @@
 - Any test case that utilizes an end-to-end model (a real model) should not be configured to allocate, acquire, or reserve more than 36 GB of RAM. Beyond that, macOS goes into resource contention and the test is meaningless. Exceptions can be made for explicit tests after user agreement; memorialize the agreement in code comments with the reasoning for the exception.
 - The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
 
-## Instructions for Performance Throughput Tests Under apps/inference-worker/tests/performance_throughput
+## Instructions for Performance Throughput Tests Under tests/acceptance/tests/performance_throughput
 
 - A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable.
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.

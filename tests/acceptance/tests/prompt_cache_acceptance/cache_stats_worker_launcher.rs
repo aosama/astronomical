@@ -15,10 +15,8 @@ pub(super) fn create_cache_stats_worker_configuration() -> (
         super::persistent_prompt_cache_stats_e2e::model_id(),
     );
     let configured_prompt_cache_maximum_size_gb = configured_prompt_cache_maximum_size_gb();
-    let production_worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
-            .expect("Cargo should provide the production inference-worker executable path"),
-    );
+    let production_worker_executable_path =
+        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
     let isolated_worker_home =
         tempfile::tempdir().expect("the cache-stats worker home should be created");
     let isolated_configuration_directory = isolated_worker_home.path().join(".astronomical-dev");

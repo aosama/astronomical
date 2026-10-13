@@ -1,0 +1,65 @@
+[package]
+name = "astronomical-acceptance"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The acceptance suite is journeys only: test binaries, no library, no units.
+# Every binary needs real model artifacts and an Apple-Silicon GPU, so nothing
+# here is wired into CI; each binary is feature-gated and runs ignored by
+# default under `--ignored` on a laptop that has the artifacts installed.
+autotests = false
+
+[features]
+serving-acceptance = []
+memory-management-acceptance = []
+performance-measurement = []
+performance_throughput = []
+
+[[test]]
+name = "serving_acceptance_tests"
+path = "tests/serving_acceptance_tests.rs"
+
+[[test]]
+name = "prompt_cache_acceptance_tests"
+path = "tests/prompt_cache_acceptance_tests.rs"
+
+[[test]]
+name = "memory_management_acceptance_tests"
+path = "tests/memory_management_acceptance_tests.rs"
+
+[[test]]
+name = "performance_measurement_tests"
+path = "tests/performance_measurement_tests.rs"
+
+[[test]]
+name = "performance_throughput_tests"
+path = "tests/performance_throughput_tests.rs"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+astronomical-config = { path = "../../crates/config" }
+astronomical-daemon = { path = "../../apps/daemon" }
+astronomical-inference-worker = { path = "../../apps/inference-worker" }
+astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
+astronomical-mlx-c-rust = { path = "../../crates/mlx-c-rust" }
+astronomical-rest-contract = { path = "../../crates/rest-contract" }
+astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+astronomical-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle"] }
+axum.workspace = true
+base64.workspace = true
+futures-util.workspace = true
+image.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serial_test.workspace = true
+sha2.workspace = true
+tempfile = "=3.27.0"
+tokenizers.workspace = true
+tokio.workspace = true
