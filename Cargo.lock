@@ -121,6 +121,7 @@ dependencies = [
  "astronomical-model-serving",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
+ "astronomical-test-harness",
  "axum",
  "base64 0.23.1",
  "futures-util",
