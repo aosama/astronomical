@@ -33,12 +33,12 @@ fi
 # the CI notices gate, so prove it fresh here for one local digest comparison.
 printf '%s\n' '[pre-push] status=start check=rust-dependency-notices-digest'
 started_epoch_seconds="$(date +%s)"
-if (cd "${REPOSITORY_ROOT}" && sh scripts/ci/generate-rust-dependency-notices.sh --check); then
+if (cd "${REPOSITORY_ROOT}" && cargo xtask notices --check); then
     elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
     printf '%s\n' "[pre-push] status=success check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}"
     exit 0
 fi
 elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
 printf '%s\n' "[pre-push] status=failed check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}" >&2
-printf '%s\n' '[pre-push] hint=run scripts/ci/generate-rust-dependency-notices.sh and commit the result' >&2
+printf '%s\n' '[pre-push] hint=run cargo xtask notices and commit the result' >&2
 exit 1

@@ -210,7 +210,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end dependency-notices' EXIT
           scripts/ci/ci-step-timing.sh begin dependency-notices
-          if scripts/ci/generate-rust-dependency-notices.sh --check; then
+          if cargo xtask notices --check; then
             printf '%s\n' '[rust-dependency-notices] status=current'
             exit 0
           fi
@@ -221,10 +221,10 @@ jobs:
               # bundles accurate notices; the strict contract stays on human
               # pull requests and the pre-commit verification.
               printf '%s\n' "Automated dependency pull request: refreshing third-party/RUST_DEPENDENCY_NOTICES in place (bots cannot commit the regenerated file)."
-              scripts/ci/generate-rust-dependency-notices.sh
+              cargo xtask notices
               ;;
             pull_request:*)
-              printf '%s\n' "Error: third-party/RUST_DEPENDENCY_NOTICES is stale; run scripts/ci/generate-rust-dependency-notices.sh and commit the result" >&2
+              printf '%s\n' "Error: third-party/RUST_DEPENDENCY_NOTICES is stale; run cargo xtask notices and commit the result" >&2
               exit 1
               ;;
             *)
@@ -234,7 +234,7 @@ jobs:
               # place; the next human commit restores the committed copy
               # through the strict pre-commit verification.
               printf '%s\n' "Default-branch build: refreshing third-party/RUST_DEPENDENCY_NOTICES in place."
-              scripts/ci/generate-rust-dependency-notices.sh
+              cargo xtask notices
               ;;
           esac
         timeout-minutes: 2
@@ -351,7 +351,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end test-tier-pyramid' EXIT
           scripts/ci/ci-step-timing.sh begin test-tier-pyramid
-          scripts/ci/report-tier-pyramid.sh
+          cargo xtask tier-pyramid
         timeout-minutes: 5
       # Observatory contracts stay in this required job until branch
       # protection also requires swift-node; then this step can migrate.
