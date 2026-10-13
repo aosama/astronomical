@@ -32,7 +32,7 @@ pub struct NativeBuildProgress {
 }
 
 impl NativeBuildProgress {
-    // Called by build.rs, which is not part of the hermetic test target that
+    // Called by build.rs, which is not part of the offline test target that
     // includes this module through #[path]; the warning would otherwise fire there.
     #[allow(dead_code)]
     pub fn from_environment() -> Result<Self, String> {
@@ -64,7 +64,7 @@ impl NativeBuildProgress {
         }
     }
 
-    // Test seam: hermetic tests shrink the heartbeat interval so heartbeat
+    // Test seam: offline tests shrink the heartbeat interval so heartbeat
     // contracts run in milliseconds instead of waiting thirty seconds.
     #[allow(dead_code)]
     pub fn with_heartbeat_interval(mut self, heartbeat_interval: Duration) -> Self {

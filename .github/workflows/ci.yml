@@ -275,7 +275,7 @@ jobs:
           esac
           printf '[native-build-prewarm] status=%s\n' "$native_build_status"
         timeout-minutes: 12
-      - name: Compile hermetic tests
+      - name: Compile offline lane tests
         shell: bash
         run: |
           set -euo pipefail
@@ -286,9 +286,9 @@ jobs:
           : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
           tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
           progress_tail_pid=$!
-          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-hermetic-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin compile-hermetic-tests
-          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test hermetic_tests
+          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-offline-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin compile-offline-tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test offline_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
         timeout-minutes: 12
       - name: Classify native build result
@@ -307,15 +307,15 @@ jobs:
             *) printf '%s\n' 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
           esac
           printf '[native-build-result] status=%s\n' "$native_build_status"
-      - name: Run hermetic tests
+      - name: Run offline lane tests
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end hermetic-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin hermetic-tests
+          trap 'scripts/ci/ci-step-timing.sh end offline-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin offline-tests
           # Preserve cargo's exit code through tee so a failing test still fails
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test hermetic_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/hermetic.log"
+          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
         run: |

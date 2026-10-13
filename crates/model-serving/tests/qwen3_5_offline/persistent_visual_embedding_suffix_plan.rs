@@ -3,7 +3,7 @@ use astronomical_model_serving::{
 };
 
 /// The image pad token ID for Qwen3.5-MoE family models.
-/// Used in hermetic tests where no model directory is available.
+/// Used in offline tests where no model directory is available.
 const IMAGE_PAD_TOKEN_ID: u32 = 248_056;
 
 #[test]

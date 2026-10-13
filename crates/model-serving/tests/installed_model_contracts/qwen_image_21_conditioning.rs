@@ -2,7 +2,7 @@
 //! real artifact tokenizer (the `tokenizers` crate reading the artifact's
 //! `processor/tokenizer.json`).
 //!
-//! The hermetic suite (`qwen_image_21_hermetic`) checks the packaging algebra against a
+//! The offline suite (`qwen_image_21_offline`) checks the packaging algebra against a
 //! committed oracle fixture. These ignored journeys run the real tokenizer and prove that
 //! the Rust-rendered templates byte-match the diffusers reference *and* that the artifact
 //! tokenizer encodes the Qwen chat special tokens as single ids. Without the real
