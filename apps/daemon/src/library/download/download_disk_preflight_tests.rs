@@ -1,4 +1,4 @@
-//! Hermetic admission contracts for Library download disk capacity.
+//! Offline admission contracts for Library download disk capacity.
 
 use std::{
     io,

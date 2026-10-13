@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 zero-centered RMSNorm, compared against the diffusers
+//! Offline tests for the Qwen-Image-2.1 zero-centered RMSNorm, compared against the diffusers
 //! reference reimplementation in `norm_fixture.rs`.
 
 use super::norm_fixture::{

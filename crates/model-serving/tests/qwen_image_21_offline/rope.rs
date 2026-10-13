@@ -1,4 +1,4 @@
-//! Hermetic tests for the 3-axis RoPE, compared against the reference frequencies and axis
+//! Offline tests for the 3-axis RoPE, compared against the reference frequencies and axis
 //! indices for the fixed 16-token joint layout.
 
 use astronomical_model_serving::QwenImage21Rope;

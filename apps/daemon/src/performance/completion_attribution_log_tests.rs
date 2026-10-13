@@ -1,4 +1,4 @@
-//! Hermetic coverage for the completion attribution log.
+//! Unit coverage for the completion attribution log.
 //!
 //! The completion attribution log captures what a chat generation emitted —
 //! function names and the arguments JSON — so tool-call argument pollution and

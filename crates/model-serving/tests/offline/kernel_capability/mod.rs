@@ -1,4 +1,4 @@
-//! Hermetic contracts for the per-worker custom-Metal-kernel capability owner.
+//! Offline contracts for the per-worker custom-Metal-kernel capability owner.
 //!
 //! The owner must turn probe outcomes into verdicts, reuse verdicts without
 //! re-probing, and fail closed for families that were never probed. Fake

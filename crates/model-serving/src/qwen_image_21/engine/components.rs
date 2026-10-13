@@ -11,7 +11,7 @@ use crate::{
     qwen_image_21::render_contract::QwenImage21RenderAdvance,
 };
 
-/// Loaded identity supplied by either the native components or a offline lifecycle fake.
+/// Loaded identity supplied by either the native components or an offline lifecycle fake.
 pub struct QwenImage21ComponentLoad {
     pub(super) model_id: String,
     pub(super) revision: String,

@@ -1,4 +1,4 @@
-//! Hermetic contracts for selecting the Qwen-Image-2.1 runtime without loading model artifacts.
+//! Offline contracts for selecting the Qwen-Image-2.1 runtime without loading model artifacts.
 
 use astronomical_config::PromptCacheConfig;
 use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;

@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 sinusoidal timestep embedding, compared against the
+//! Offline tests for the Qwen-Image-2.1 sinusoidal timestep embedding, compared against the
 //! reference frequency table and embeddings for four representative sigmas.
 
 use astronomical_model_serving::SinusoidalTimesteps;

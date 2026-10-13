@@ -1,4 +1,4 @@
-//! Hermetic rejection and comparison coverage for the independent FLUX reference contract.
+//! Offline rejection and comparison coverage for the independent FLUX reference contract.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
