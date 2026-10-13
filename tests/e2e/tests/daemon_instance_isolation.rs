@@ -2,15 +2,16 @@ use std::time::Duration;
 
 use tokio::time::timeout;
 
-use super::daemon_process::{
+use crate::common::daemon::{
     get_endpoint, post_empty_endpoint, spawn_actual_instance_daemon, terminate_daemon,
     write_instance_config,
 };
 
 #[tokio::test]
 async fn should_keep_stable_running_while_development_starts_and_stops_independently() {
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-        .expect("Cargo should provide the astronomicald executable path");
+    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        .to_string_lossy()
+        .into_owned();
     let stable_state_directory = tempfile::tempdir().expect("stable state should be created");
     let development_state_directory =
         tempfile::tempdir().expect("development state should be created");

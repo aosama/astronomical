@@ -6,7 +6,7 @@ use tokio::{process::Command, time::timeout};
 
 use astronomical_daemon::DownloadCatalog;
 
-use super::daemon_process::{
+use crate::common::daemon::{
     get_endpoint, spawn_actual_instance_daemon, terminate_daemon, write_instance_config,
 };
 
@@ -14,8 +14,9 @@ use super::daemon_process::{
 async fn should_serve_the_library_and_discover_instance_models_without_configured_roots() {
     timeout(Duration::from_secs(15), async {
         eprintln!("[library-process] preparing isolated instance");
-        let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-            .expect("Cargo should provide the astronomicald executable path");
+        let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+            .to_string_lossy()
+            .into_owned();
         let instance_state_directory =
             tempfile::tempdir().expect("an isolated instance state should be created");
         write_instance_config(instance_state_directory.path());
@@ -82,8 +83,9 @@ fn http_response_body(http_response: &str) -> &str {
 #[tokio::test]
 async fn should_record_the_startup_catalog_load_when_attribution_is_enabled() {
     timeout(Duration::from_secs(15), async {
-        let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-            .expect("Cargo should provide the astronomicald executable path");
+        let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+            .to_string_lossy()
+            .into_owned();
         let instance_state_directory =
             tempfile::tempdir().expect("an isolated instance state should be created");
         write_instance_config_with_performance_attribution(instance_state_directory.path());
@@ -129,8 +131,9 @@ async fn should_record_the_startup_catalog_load_when_attribution_is_enabled() {
 #[tokio::test]
 async fn should_fail_before_binding_when_the_startup_attribution_file_cannot_open() {
     timeout(Duration::from_secs(10), async {
-        let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-            .expect("Cargo should provide the astronomicald executable path");
+        let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+            .to_string_lossy()
+            .into_owned();
         let instance_state_directory =
             tempfile::tempdir().expect("an isolated instance state should be created");
         write_instance_config_with_performance_attribution(instance_state_directory.path());

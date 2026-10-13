@@ -1,5 +1,5 @@
-//! Shared test harness: deterministic-time and timeout scaffolding for the
-//! repository's offline test tiers.
+//! Shared test harness: deterministic-time and timeout scaffolding, plus
+//! workspace binary resolution, for the repository's test tiers.
 //!
 //! Vocabulary (issue #1208): **offline** names the property — sealed and
 //! deterministic, no real network beyond localhost, no real model artifacts,
@@ -13,8 +13,10 @@
 //! timeout without anyone remembering to write one.
 
 pub mod timeout;
+pub mod workspace;
 
 pub use timeout::run_with_timeout;
+pub use workspace::workspace_binary;
 
 /// Default test timeout in seconds, per the repository testing rules.
 pub const DEFAULT_TEST_TIMEOUT_SECONDS: u64 = 120;

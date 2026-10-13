@@ -1,0 +1,31 @@
+[package]
+name = "astronomical-e2e"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# The E2E suite is journeys only: one test binary, no library, no units.
+autotests = false
+
+[[test]]
+name = "e2e_tests"
+path = "tests/e2e_tests.rs"
+harness = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+astronomical-config = { path = "../../crates/config" }
+astronomical-daemon = { path = "../../apps/daemon" }
+astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-rest-contract = { path = "../../crates/rest-contract" }
+astronomical-test-harness = { path = "../../crates/test-harness" }
+base64.workspace = true
+image.workspace = true
+serde_json.workspace = true
+tempfile = "=3.27.0"
+tokio.workspace = true
