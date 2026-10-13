@@ -16,6 +16,15 @@ HTTP), **acceptance** (env-gated real-model journeys).
 
 - `cargo test-offline` — runs every package's `offline_tests` binary. The
   fast, machine-independent verification lane; safe to run on any host.
+- `cargo test -p astronomical-test-harness` — the harness self-contract:
+  pass propagation, panic propagation, and 120-second timeout abort for
+  `astronomical_test_harness::offline_test!`, the macro every offline test
+  is written with so the timeout rule is enforced by the harness rather
+  than by discipline.
+- `unshare -rn cargo test -p astronomical-config --test offline_tests`
+  — Linux-only physics check (CI "Linux offline sandbox" job): runs the
+  pilot crate's tests inside a user+network namespace where opening any
+  socket fails, proving the offline property instead of promising it.
 - `cargo test -p astronomical-cli` — the CLI verb surface: unit tests live
   beside their source as `*_tests.rs` modules inside `src/`, and the
   offline-lane target runs the stub-daemon/stub-server verb journeys

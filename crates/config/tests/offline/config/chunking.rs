@@ -9,8 +9,7 @@ fn persisted_chunking_object(home_directory: &std::path::Path) -> serde_json::Va
     persisted_config["chunking"].clone()
 }
 
-#[test]
-fn should_resolve_every_user_configured_chunking_boundary() {
+astronomical_test_harness::offline_test!(should_resolve_every_user_configured_chunking_boundary, {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -56,10 +55,9 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
         2
     );
-}
+});
 
-#[test]
-fn should_default_omitted_graph_submission_intervals() {
+astronomical_test_harness::offline_test!(should_default_omitted_graph_submission_intervals, {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -84,45 +82,46 @@ fn should_default_omitted_graph_submission_intervals() {
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         3
     );
-}
+});
 
-#[test]
-fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{
+astronomical_test_harness::offline_test!(
+    should_default_the_decode_levers_off_so_the_measured_fast_path_serves,
+    {
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            r#"{
           "chunking": {}
         }"#,
-    );
+        );
 
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("omitted experimental decode levers should load");
-    let chunking = astronomical_config
-        .chunking()
-        .expect("chunking configuration should resolve");
+        let astronomical_config =
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+                .expect("omitted experimental decode levers should load");
+        let chunking = astronomical_config
+            .chunking()
+            .expect("chunking configuration should resolve");
 
-    assert!(
-        !chunking.experimental_quantized_kv_cache_enabled(),
-        "the 8-bit KV slab measured slower than bfloat16 and must stay opt-in"
-    );
-    assert!(
-        !chunking.experimental_fused_moe_decode_enabled(),
-        "the fused expert decode kernels measured slower than the gathered chain and must stay opt-in"
-    );
-    assert!(
-        !chunking.experimental_decode_stage_attribution_enabled(),
-        "attribution-gated stage evaluations roughly double decode time and must stay diagnostic-only"
-    );
-    assert!(
-        !chunking.experimental_prefill_stage_attribution_enabled(),
-        "attribution-gated stage evaluations must stay diagnostic-only for prefill too"
-    );
-}
+        assert!(
+            !chunking.experimental_quantized_kv_cache_enabled(),
+            "the 8-bit KV slab measured slower than bfloat16 and must stay opt-in"
+        );
+        assert!(
+            !chunking.experimental_fused_moe_decode_enabled(),
+            "the fused expert decode kernels measured slower than the gathered chain and must stay opt-in"
+        );
+        assert!(
+            !chunking.experimental_decode_stage_attribution_enabled(),
+            "attribution-gated stage evaluations roughly double decode time and must stay diagnostic-only"
+        );
+        assert!(
+            !chunking.experimental_prefill_stage_attribution_enabled(),
+            "attribution-gated stage evaluations must stay diagnostic-only for prefill too"
+        );
+    }
+);
 
-#[test]
-fn should_resolve_the_prefill_stage_attribution_opt_in() {
+astronomical_test_harness::offline_test!(should_resolve_the_prefill_stage_attribution_opt_in, {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -149,44 +148,48 @@ fn should_resolve_the_prefill_stage_attribution_opt_in() {
         persisted_chunking["experimental_prefill_stage_attribution_enabled"],
         true
     );
-}
+});
 
-#[test]
-fn should_keep_resident_and_ssd_prefill_graph_intervals_independent() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{
+astronomical_test_harness::offline_test!(
+    should_keep_resident_and_ssd_prefill_graph_intervals_independent,
+    {
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            r#"{
           "chunking": {
             "prefill_graph_submission_layer_interval": 0,
             "experimental_ssd_paging_prefill_graph_submission_layer_interval": 2,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 3
           }
         }"#,
-    );
+        );
 
-    let chunking = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-        .expect("independent graph intervals should load")
-        .chunking()
-        .expect("chunking should resolve");
+        let chunking =
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+                .expect("independent graph intervals should load")
+                .chunking()
+                .expect("chunking should resolve");
 
-    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
-    assert_eq!(
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
-        2
-    );
-    assert_eq!(
-        chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
-        3
-    );
-}
+        assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
+        assert_eq!(
+            chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
+            2
+        );
+        assert_eq!(
+            chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
+            3
+        );
+    }
+);
 
-#[test]
-fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{
+astronomical_test_harness::offline_test!(
+    should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field,
+    {
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            r#"{
           "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 2048,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048,
@@ -194,58 +197,61 @@ fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 3
           }
         }"#,
-    );
+        );
 
-    AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-        .expect("the legacy single prefill interval should load");
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("the legacy single prefill interval should load");
 
-    let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
-    assert_eq!(
-        persisted_chunking["prefill_graph_submission_layer_interval"],
-        0
-    );
-    assert_eq!(
-        persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
-        1
-    );
-    assert_eq!(
-        persisted_chunking["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
-        2_048
-    );
-    assert_eq!(
-        persisted_chunking["experimental_ssd_paging_generation_graph_submission_layer_interval"],
-        3
-    );
-}
+        let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
+        assert_eq!(
+            persisted_chunking["prefill_graph_submission_layer_interval"],
+            0
+        );
+        assert_eq!(
+            persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
+            1
+        );
+        assert_eq!(
+            persisted_chunking["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
+            2_048
+        );
+        assert_eq!(
+            persisted_chunking["experimental_ssd_paging_generation_graph_submission_layer_interval"],
+            3
+        );
+    }
+);
 
-#[test]
-fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
-    for field_name in [
-        "full_attention_key_value_growth_tokens",
-        "prompt_cache_block_tokens",
-        "prompt_cache_common_prefix_stride_blocks",
-    ] {
-        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-        write_config(
-            temporary_home_directory.path(),
-            &format!(
-                r#"{{
+astronomical_test_harness::offline_test!(
+    should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled,
+    {
+        for field_name in [
+            "full_attention_key_value_growth_tokens",
+            "prompt_cache_block_tokens",
+            "prompt_cache_common_prefix_stride_blocks",
+        ] {
+            let temporary_home_directory =
+                tempfile::tempdir().expect("temp home should be created");
+            write_config(
+                temporary_home_directory.path(),
+                &format!(
+                    r#"{{
                   "chunking": {{
                     "{field_name}": 0
                   }}
                 }}"#
-            ),
-        );
+                ),
+            );
 
-        assert!(matches!(
-            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
-            Err(AstronomicalConfigError::InvalidChunkingValue { .. })
-        ));
+            assert!(matches!(
+                AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+                Err(AstronomicalConfigError::InvalidChunkingValue { .. })
+            ));
+        }
     }
-}
+);
 
-#[test]
-fn should_reject_unknown_nested_chunking_fields() {
+astronomical_test_harness::offline_test!(should_reject_unknown_nested_chunking_fields, {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -260,56 +266,60 @@ fn should_reject_unknown_nested_chunking_fields() {
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
         Err(AstronomicalConfigError::ParseConfigFile { .. })
     ));
-}
+});
 
-#[test]
-fn should_reject_full_attention_growth_that_cannot_cross_the_mlx_dimension_boundary() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        &format!(
-            r#"{{
-              "chunking": {{
-                "full_attention_key_value_growth_tokens": {}
-              }}
-            }}"#,
-            u32::MAX
-        ),
-    );
-
-    assert!(matches!(
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
-        Err(AstronomicalConfigError::InvalidChunkingValue {
-            field_name: "chunking.full_attention_key_value_growth_tokens",
-            ..
-        })
-    ));
-}
-
-#[test]
-fn should_reject_retired_graph_submission_layer_interval_fields() {
-    for retired_field_name in ["generation_graph_submission_layer_interval"] {
+astronomical_test_harness::offline_test!(
+    should_reject_full_attention_growth_that_cannot_cross_the_mlx_dimension_boundary,
+    {
         let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
         write_config(
             temporary_home_directory.path(),
             &format!(
                 r#"{{
-                  "chunking": {{
-                    "{retired_field_name}": 1
-                  }}
-                }}"#
+              "chunking": {{
+                "full_attention_key_value_growth_tokens": {}
+              }}
+            }}"#,
+                u32::MAX
             ),
         );
 
         assert!(matches!(
             AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
-            Err(AstronomicalConfigError::ParseConfigFile { .. })
+            Err(AstronomicalConfigError::InvalidChunkingValue {
+                field_name: "chunking.full_attention_key_value_growth_tokens",
+                ..
+            })
         ));
     }
-}
+);
 
-#[test]
-fn should_reject_retired_gated_delta_dispatch_field() {
+astronomical_test_harness::offline_test!(
+    should_reject_retired_graph_submission_layer_interval_fields,
+    {
+        for retired_field_name in ["generation_graph_submission_layer_interval"] {
+            let temporary_home_directory =
+                tempfile::tempdir().expect("temp home should be created");
+            write_config(
+                temporary_home_directory.path(),
+                &format!(
+                    r#"{{
+                  "chunking": {{
+                    "{retired_field_name}": 1
+                  }}
+                }}"#
+                ),
+            );
+
+            assert!(matches!(
+                AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+                Err(AstronomicalConfigError::ParseConfigFile { .. })
+            ));
+        }
+    }
+);
+
+astronomical_test_harness::offline_test!(should_reject_retired_gated_delta_dispatch_field, {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -324,21 +334,24 @@ fn should_reject_retired_gated_delta_dispatch_field() {
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
         Err(AstronomicalConfigError::ParseConfigFile { .. })
     ));
-}
+});
 
-#[test]
-fn should_reject_retired_top_level_prefill_chunking_fields() {
-    for retired_field_document in [
-        r#"{ "prefill_chunck_size_optimizer_enabled": true }"#,
-        r#"{ "fixed_prefill_chunck_tokens": 2048 }"#,
-        r#"{ "optimizer_prefill_chunck_token_candidates": [1024, 2048] }"#,
-    ] {
-        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-        write_config(temporary_home_directory.path(), retired_field_document);
+astronomical_test_harness::offline_test!(
+    should_reject_retired_top_level_prefill_chunking_fields,
+    {
+        for retired_field_document in [
+            r#"{ "prefill_chunck_size_optimizer_enabled": true }"#,
+            r#"{ "fixed_prefill_chunck_tokens": 2048 }"#,
+            r#"{ "optimizer_prefill_chunck_token_candidates": [1024, 2048] }"#,
+        ] {
+            let temporary_home_directory =
+                tempfile::tempdir().expect("temp home should be created");
+            write_config(temporary_home_directory.path(), retired_field_document);
 
-        assert!(matches!(
-            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
-            Err(AstronomicalConfigError::ParseConfigFile { .. })
-        ));
+            assert!(matches!(
+                AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+                Err(AstronomicalConfigError::ParseConfigFile { .. })
+            ));
+        }
     }
-}
+);

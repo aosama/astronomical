@@ -1,0 +1,11 @@
+[package]
+name = "astronomical-test-harness"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true

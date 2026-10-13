@@ -14,8 +14,7 @@ const TEXT_ENCODER_PAYLOAD_BYTES: usize = 11;
 const TRANSFORMER_PAYLOAD_BYTES: usize = 17;
 const VAE_PAYLOAD_BYTES: usize = 23;
 
-#[test]
-fn should_classify_the_reviewed_qwen_image_21_pipeline() {
+astronomical_test_harness::offline_test!(should_classify_the_reviewed_qwen_image_21_pipeline, {
     let pipeline_index = qwen_pipeline_index_json();
 
     assert_eq!(
@@ -23,10 +22,9 @@ fn should_classify_the_reviewed_qwen_image_21_pipeline() {
             .expect("fixture pipeline should parse"),
         Some(ModelFamily::QwenImage21)
     );
-}
+});
 
-#[test]
-fn should_verify_complete_qwen_image_21_profile_evidence() {
+astronomical_test_harness::offline_test!(should_verify_complete_qwen_image_21_profile_evidence, {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let model_directory = temporary_directory.path().join("Local-Qwen-Image-Artifact");
     write_qwen_image_21_artifact(&model_directory);
@@ -48,39 +46,41 @@ fn should_verify_complete_qwen_image_21_profile_evidence() {
     assert_eq!(evidence.capabilities.maximum_dimension_pixels, 1_024);
     assert_eq!(evidence.capabilities.dimension_multiple_pixels, 32);
     assert_eq!(evidence.model_size_bytes, fixture_weight_file_size_bytes());
-}
+});
 
-#[test]
-fn should_advertise_a_verified_qwen_image_2_1_artifact_as_image_generation() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let model_directory = temporary_directory.path().join("Qwen-Image-Artifact");
-    write_qwen_image_21_artifact(&model_directory);
+astronomical_test_harness::offline_test!(
+    should_advertise_a_verified_qwen_image_2_1_artifact_as_image_generation,
+    {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory.path().join("Qwen-Image-Artifact");
+        write_qwen_image_21_artifact(&model_directory);
 
-    let discovered_models =
-        &super::discover_configured_models(&temporary_directory)[0].discovered_models;
-    let discovered_model = discovered_models
-        .iter()
-        .find(|discovered_model| discovered_model.model_family == ModelFamily::QwenImage21)
-        .expect("a verified Qwen-Image-2.1 artifact must appear in the executable model list");
+        let discovered_models =
+            &super::discover_configured_models(&temporary_directory)[0].discovered_models;
+        let discovered_model = discovered_models
+            .iter()
+            .find(|discovered_model| discovered_model.model_family == ModelFamily::QwenImage21)
+            .expect("a verified Qwen-Image-2.1 artifact must appear in the executable model list");
 
-    assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
-    assert_eq!(
-        discovered_model.provider_model_id.as_deref(),
-        Some(PROVIDER_MODEL_ID)
-    );
-    assert_eq!(discovered_model.revision, REVIEWED_REVISION);
-    assert!(
-        matches!(
-            &discovered_model.capabilities,
-            ModelCapabilities::ImageGeneration(capabilities)
-                if capabilities.supports_text_to_image
-        ),
-        "the native text-to-image engine is executable, so discovery advertises the capability"
-    );
-}
+        assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
+        assert_eq!(
+            discovered_model.provider_model_id.as_deref(),
+            Some(PROVIDER_MODEL_ID)
+        );
+        assert_eq!(discovered_model.revision, REVIEWED_REVISION);
+        assert!(
+            matches!(
+                &discovered_model.capabilities,
+                ModelCapabilities::ImageGeneration(capabilities)
+                    if capabilities.supports_text_to_image
+            ),
+            "the native text-to-image engine is executable, so discovery advertises the capability"
+        );
+    }
+);
 
-#[test]
-fn should_report_bounded_path_free_qwen_profile_failures() {
+astronomical_test_harness::offline_test!(should_report_bounded_path_free_qwen_profile_failures, {
     let invalid_cases = [
         (
             InvalidQwenArtifact::WrongPipelineClass,
@@ -134,7 +134,7 @@ fn should_report_bounded_path_free_qwen_profile_failures() {
             "verification errors must not expose local paths"
         );
     }
-}
+});
 
 #[derive(Clone, Copy, Debug)]
 enum InvalidQwenArtifact {
