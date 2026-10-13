@@ -6,7 +6,7 @@
 //! cargo's own job count: a native-specific override wins, then cargo's job
 //! count as the historical default, then the machine's available parallelism.
 
-// Referenced by build.rs, which is not part of the hermetic test target that
+// Referenced by build.rs, which is not part of the offline test target that
 // includes this module through #[path]; the warning would otherwise fire there.
 #[allow(dead_code)]
 pub const NATIVE_BUILD_JOBS_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_JOBS";

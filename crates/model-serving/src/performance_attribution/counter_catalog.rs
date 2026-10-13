@@ -5,8 +5,7 @@
 //! zero-allocation bridge from recording to serialized diagnostics.
 //!
 //! Declaring a counter means appending its variant and listing it once in
-//! `ALL`, then taking `COUNT` from that newest variant. The hermetic catalog
-//! journey in `tests/hermetic/performance_attribution/counter_catalog.rs`
+//! `ALL`, then taking `COUNT` from that newest variant. The  //! journey in `tests/offline/performance_attribution/counter_catalog.rs`
 //! guards the invariant, because a counter outside the reserved storage
 //! panicked the inference worker mid-request instead of failing a build.
 

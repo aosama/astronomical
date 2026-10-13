@@ -4,7 +4,7 @@
 //! The engine in this file is deliberately pure source analysis: it parses
 //! the provisioned extraction-tree headers the way bindgen consumed them and
 //! compares the result against the bridge inventory the build script emits.
-//! No GPU work and no MLX calls run here, so the contract is hermetic and
+//! No GPU work and no MLX calls run here, so the contract is offline and
 //! bounded.
 
 use std::collections::BTreeSet;

@@ -10,7 +10,7 @@
 //! This test builds a fixture tokenizer carrying the same post-processor
 //! declaration, drives the real production `encode_embedding_input`, and
 //! asserts the encoded sequence contains both declared specials and that
-//! pooling exclusion has real tokens to act on. It runs hermetically: no GPU,
+//! pooling exclusion has real tokens to act on. It runs offline: no GPU,
 //! no installed checkpoint, no Python.
 
 use astronomical_model_serving::ModernBertConfiguration;

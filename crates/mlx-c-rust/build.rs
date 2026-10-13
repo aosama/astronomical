@@ -181,7 +181,7 @@ fn resolve_extraction_identity(repository_root: &Path) -> Result<String, Box<dyn
         .arg("--profile")
         .arg("core")
         .arg(repository_root);
-    // Fixture overrides make identity contracts hermetic, but a production
+    // Fixture overrides make identity contracts offline-deterministic, but a production
     // build must always fingerprint the real tracked inputs, mirroring the
     // native identity resolution discipline.
     for override_variable in [

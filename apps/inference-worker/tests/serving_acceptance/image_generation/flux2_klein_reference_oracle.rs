@@ -1,4 +1,4 @@
-//! Independent FLUX RGB oracle contract shared by hermetic and real-model acceptance.
+//! Independent FLUX RGB oracle contract shared by offline and real-model acceptance.
 //!
 //! Set `ASTRONOMICAL_FLUX2_KLEIN_REFERENCE_BUNDLE` to a JSON bundle produced outside
 //! Astronomical by the pinned Black Forest Labs and Diffusers implementations. The bundle

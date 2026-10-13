@@ -89,7 +89,7 @@ pub fn resolve_native_build_identity(
         // tool has no Cargo context, so every caller states the triple it
         // builds for and the identity stays identical in both paths.
         .env("TARGET", target_triple);
-    // Fixture overrides make identity contracts hermetic, but a production
+    // Fixture overrides make identity contracts offline-deterministic, but a production
     // build must always fingerprint the toolchain that CMake actually uses.
     for override_variable in [
         "ASTRONOMICAL_NATIVE_IDENTITY_XCODE",
