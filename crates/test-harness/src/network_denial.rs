@@ -23,14 +23,14 @@ use std::sync::OnceLock;
 static DENIAL_APPLICATION: Once = Once::new();
 static DENIAL_OUTCOME: OnceLock<Result<(), String>> = OnceLock::new();
 
-/// The Seatbelt profile that denies every network-class operation while
-/// leaving everything else the test process needs (files, threads, pipes)
-/// untouched.
-const NETWORK_DENIAL_PROFILE: &str = "(version 1)\n(deny network*)\n";
-
 #[cfg(target_os = "macos")]
 mod seatbelt {
     use std::ffi::{CStr, CString, c_char, c_int, c_void};
+
+    /// The Seatbelt profile that denies every network-class operation while
+    /// leaving everything else the test process needs (files, threads, pipes)
+    /// untouched.
+    const NETWORK_DENIAL_PROFILE: &str = "(version 1)\n(deny network*)\n";
 
     const RTLD_NOW: c_int = 2;
     const SANDBOX_APPLY_FLAGS: u64 = 0;
@@ -68,7 +68,7 @@ mod seatbelt {
             let free_pointer = dlsym(handle, free_symbol.as_ptr());
             let sandbox_init: SandboxInit = std::mem::transmute(init_pointer);
 
-            let profile = CString::new(super::NETWORK_DENIAL_PROFILE).expect("no interior NUL");
+            let profile = CString::new(NETWORK_DENIAL_PROFILE).expect("no interior NUL");
             let mut error_buffer: *mut c_char = std::ptr::null_mut();
             let application_status =
                 sandbox_init(profile.as_ptr(), SANDBOX_APPLY_FLAGS, &mut error_buffer);
