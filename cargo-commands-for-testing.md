@@ -44,6 +44,13 @@ HTTP), **acceptance** (env-gated real-model journeys).
   missing.
 - `cargo test-offline-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
+- `scripts/ci/report-tier-pyramid.sh` — workstream 5 of #1198: count tests per
+  tier (unit / integration / e2e / acceptance), report the pyramid
+  distribution, and fail when a tier drifts more than 5 percentage points from
+  the committed `scripts/ci/tier-pyramid-baseline.json`. Pass
+  `--update-baseline` only inside a reviewed pull request that intends the
+  migration; `scripts/ci/tests/test-report-tier-pyramid-contract.sh` pins the
+  contract.
 - `cargo test -p astronomical-model-serving --test offline_tests qwen3_5_moe_offline -- --test-threads=1`
   — the focused Qwen3.5 sparse-artifact lane for quantization configuration,
   native/affine single- and multi-layer planning, and tensor-profile contracts;
