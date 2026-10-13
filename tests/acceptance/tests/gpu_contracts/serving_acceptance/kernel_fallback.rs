@@ -32,7 +32,7 @@ use tokio::time::timeout;
 use crate::serving_acceptance::support::{IMAGE_PAD_TOKEN_ID, LOCAL_AI_PROMPT_TOKEN_IDS};
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 const FORCED_FALLBACK_MAX_TOKENS: usize = 16;

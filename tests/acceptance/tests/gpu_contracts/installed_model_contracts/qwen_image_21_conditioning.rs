@@ -24,8 +24,9 @@ use tokenizers::Tokenizer;
 
 use crate::common::qwen_image_21;
 
-const ORACLE_FIXTURE_JSON: &str =
-    include_str!("../fixtures/qwen_image_21/conditioning_oracle.json");
+const ORACLE_FIXTURE_JSON: &str = include_str!(
+    "../../../../../crates/model-serving/tests/fixtures/qwen_image_21/conditioning_oracle.json"
+);
 
 /// The Qwen chat special tokens that must each encode to exactly one id in the real tokenizer.
 const SPECIAL_TOKEN_IDS: [(u32, &str); 5] = [

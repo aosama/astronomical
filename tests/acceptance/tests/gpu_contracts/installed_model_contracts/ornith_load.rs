@@ -22,7 +22,7 @@ const ORNITH_ACCEPTANCE_OUTPUT_TOKEN_COUNT: u16 = 8;
 const ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 16;
 const ORNITH_ACCEPTANCE_PROMPT_CHARACTER_COUNT: usize = 1_024;
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 /// Loading a 35-billion-parameter artifact from disk is the repository's

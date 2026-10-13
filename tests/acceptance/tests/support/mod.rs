@@ -37,7 +37,7 @@ pub(crate) mod serving_rest;
 #[allow(dead_code)]
 pub(crate) mod worker_process_observation;
 
-#[path = "../../../../crates/model-serving/tests/common/e2e_test_model_names.rs"]
+#[path = "../gpu_contracts/common/e2e_test_model_names.rs"]
 #[allow(dead_code)]
 mod e2e_test_model_names;
 #[allow(unused_imports)]
