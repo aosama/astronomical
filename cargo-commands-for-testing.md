@@ -5,6 +5,27 @@ surface. Cargo commands are the interface, and every entry explains what it
 runs and why it exists. Real-model journeys are invoked directly with
 `--test-threads=1`; each test owns its timeout and cancellation/cleanup path.
 
+## Cargo aliases (the interface for lanes)
+
+Lanes are driven through `.cargo/config.toml` aliases so the packages,
+features, targets, and the GPU serial rule (`--test-threads=1`) cannot be
+forgotten:
+
+- `cargo test-offline` / `cargo test-rest-api` / `cargo test-e2e` / `cargo test-offline-and-rest` — the CPU lanes (see below for what each covers).
+- `cargo verify` — workspace-wide compile gate before every push.
+- `cargo test-direct-mlx` — the model-serving direct-MLX contract suite plus
+  the runtime-integration MLX-C coverage bridge contract (CPU-only, seconds).
+- `cargo test-mlx-memory` — every native memory-contract phase (model-swap
+  allocator, native probe, MLX-C transitions) in one bounded invocation. The
+  probe binary must exist in the native build store first:
+  `cargo test -p astronomical-runtime-integration --features mlx-memory-contract-probe --no-run`.
+- `cargo test-acceptance` — the whole real-model acceptance package across
+  every feature gate.
+
+Real-model journeys are `#[ignore]`d; the memory and acceptance aliases pass
+`--ignored` for you. A bare `cargo test -p astronomical-acceptance` without
+features runs nothing — aliases are the interface.
+
 ## Offline and REST lanes (CPU only, safe to parallelize)
 
 Lane vocabulary (issue #1208): **offline** is the property — sealed and

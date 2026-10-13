@@ -10,6 +10,14 @@ const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 0;
 #[test]
 #[ignore = "allocates and evaluates real MLX GPU arrays through the Rust MLX-C boundary"]
 fn should_preserve_native_memory_transitions_through_the_mlx_c_boundary() {
+    astronomical_test_harness::run_with_timeout(
+        "should_preserve_native_memory_transitions_through_the_mlx_c_boundary",
+        astronomical_test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
+        run_native_memory_transitions_contract,
+    );
+}
+
+fn run_native_memory_transitions_contract() {
     eprintln!("[mlx-c-memory-contract] status=start phase=runtime_initialization");
     let runtime = crate::common::runtime_test_support::runtime();
     eprintln!("[mlx-c-memory-contract] status=progress phase=clear_baseline_cache");
@@ -140,6 +148,14 @@ fn should_preserve_native_memory_transitions_through_the_mlx_c_boundary() {
 #[test]
 #[ignore = "allocates and rejects real MLX GPU arrays through the Rust MLX-C boundary"]
 fn should_map_new_and_cached_mlx_capacity_rejections_to_typed_errors() {
+    astronomical_test_harness::run_with_timeout(
+        "should_map_new_and_cached_mlx_capacity_rejections_to_typed_errors",
+        astronomical_test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
+        run_typed_capacity_rejections_contract,
+    );
+}
+
+fn run_typed_capacity_rejections_contract() {
     eprintln!("[mlx-c-memory-contract] status=start phase=typed_capacity_rejection");
     let mut high_memory_runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(256 * 1024 * 1024, 256 * 1024 * 1024)
@@ -193,6 +209,14 @@ fn should_map_new_and_cached_mlx_capacity_rejections_to_typed_errors() {
 #[test]
 #[ignore = "constructs a real MLX host-backed array through the Rust MLX-C boundary"]
 fn should_preserve_host_backed_capacity_rejection_error_details() {
+    astronomical_test_harness::run_with_timeout(
+        "should_preserve_host_backed_capacity_rejection_error_details",
+        astronomical_test_harness::DEFAULT_TEST_TIMEOUT_SECONDS,
+        run_host_backed_capacity_rejection_contract,
+    );
+}
+
+fn run_host_backed_capacity_rejection_contract() {
     eprintln!("[mlx-c-memory-contract] status=start phase=host_backed_capacity_rejection");
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
