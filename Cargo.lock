@@ -143,6 +143,7 @@ dependencies = [
 name = "astronomical-ipc-protocol"
 version = "0.2.69"
 dependencies = [
+ "astronomical-test-harness",
  "base64 0.23.1",
  "bytes",
  "crc32fast",
@@ -227,6 +228,7 @@ name = "astronomical-test-harness"
 version = "0.2.69"
 dependencies = [
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

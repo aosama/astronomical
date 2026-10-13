@@ -2,7 +2,9 @@
 //! request and response frames a local `astronomical` CLI process and the
 //! daemon exchange over the instance unix socket.
 
-use astronomical_ipc_protocol::{
+use astronomical_test_harness::offline_test;
+
+use crate::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationSettings,
     ChatMessage, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonRequest,
     DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, decode_daemon_request,
@@ -32,8 +34,7 @@ fn chat_generate_request() -> DaemonRequest {
     }
 }
 
-#[test]
-fn should_round_trip_daemon_requests_through_the_wire_codec() {
+offline_test!(should_round_trip_daemon_requests_through_the_wire_codec, {
     let daemon_requests = [
         DaemonRequest::Handshake,
         DaemonRequest::Status,
@@ -68,10 +69,9 @@ fn should_round_trip_daemon_requests_through_the_wire_codec() {
             "the codec should preserve the daemon request"
         );
     }
-}
+});
 
-#[test]
-fn should_round_trip_daemon_responses_through_the_wire_codec() {
+offline_test!(should_round_trip_daemon_responses_through_the_wire_codec, {
     let daemon_responses = [
         DaemonResponse::HandshakeAccepted {
             protocol_version: 1,
@@ -186,4 +186,4 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             "the codec should preserve the daemon response"
         );
     }
-}
+});

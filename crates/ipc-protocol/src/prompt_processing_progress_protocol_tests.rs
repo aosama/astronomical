@@ -1,4 +1,6 @@
-use astronomical_ipc_protocol::{
+use astronomical_test_harness::offline_tokio_test;
+
+use crate::{
     MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
     WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
 };
@@ -6,8 +8,7 @@ use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
-#[tokio::test]
-async fn should_round_trip_prefill_progress_event() {
+offline_tokio_test!(should_round_trip_prefill_progress_event, {
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(81),
         prompt_processing_phase: WorkerPromptProcessingPhase::Target,
@@ -34,24 +35,26 @@ async fn should_round_trip_prefill_progress_event() {
     };
 
     assert_round_tripped_worker_event(worker_event).await;
-}
+});
 
-#[tokio::test]
-async fn should_round_trip_prefill_progress_before_the_first_completed_forward() {
-    let worker_event = WorkerEvent::PrefillProgress {
-        request_id: RequestId::new(82),
-        prompt_processing_phase: WorkerPromptProcessingPhase::Target,
-        processed_tokens: 0,
-        total_tokens: 4_096,
-        elapsed_millis: 0,
-        forward_prefill_chunk_elapsed_millis: None,
-        completed_prefill_chunk_tokens: None,
-        mlx_memory_snapshot: None,
-        expert_residency: None,
-    };
+offline_tokio_test!(
+    should_round_trip_prefill_progress_before_the_first_completed_forward,
+    {
+        let worker_event = WorkerEvent::PrefillProgress {
+            request_id: RequestId::new(82),
+            prompt_processing_phase: WorkerPromptProcessingPhase::Target,
+            processed_tokens: 0,
+            total_tokens: 4_096,
+            elapsed_millis: 0,
+            forward_prefill_chunk_elapsed_millis: None,
+            completed_prefill_chunk_tokens: None,
+            mlx_memory_snapshot: None,
+            expert_residency: None,
+        };
 
-    assert_round_tripped_worker_event(worker_event).await;
-}
+        assert_round_tripped_worker_event(worker_event).await;
+    }
+);
 
 async fn assert_round_tripped_worker_event(worker_event: WorkerEvent) {
     let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);

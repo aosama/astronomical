@@ -92,3 +92,34 @@ macro_rules! offline_tokio_test {
         }
     };
 }
+
+/// Declares an asynchronous integration test on Tokio's real clock with the
+/// default timeout enforced in real wall-clock time.
+///
+/// Use this only for tests whose subject genuinely requires real elapsed time
+/// alongside real I/O — for example unix-socket transport journeys whose
+/// `tokio::time::timeout` guards wrap real peer reads. A paused clock never
+/// advances on real I/O, so such guards cannot fire there; this macro keeps
+/// the harness-enforced timeout without freezing time. Deterministic bodies
+/// belong in `offline_tokio_test!`, not here.
+#[macro_export]
+macro_rules! offline_tokio_real_clock_test {
+    ($name:ident, $body:block) => {
+        #[tokio::test(flavor = "current_thread")]
+        async fn $name() {
+            if ::tokio::time::timeout(
+                ::std::time::Duration::from_secs($crate::DEFAULT_TEST_TIMEOUT_SECONDS),
+                async { $body },
+            )
+            .await
+            .is_err()
+            {
+                panic!(
+                    "{} exceeded its {}-second timeout and was aborted",
+                    stringify!($name),
+                    $crate::DEFAULT_TEST_TIMEOUT_SECONDS
+                );
+            }
+        }
+    };
+}

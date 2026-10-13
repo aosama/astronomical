@@ -2,23 +2,47 @@
 
 mod base64_bytes;
 mod chat_generation;
+#[cfg(test)]
+mod chat_generation_tests;
 mod chat_generation_validation;
+#[cfg(test)]
+mod chat_generation_validation_limits_tests;
+#[cfg(test)]
+mod chat_generation_validation_tests;
 mod daemon_client;
 mod daemon_listener;
 mod daemon_protocol;
+#[cfg(test)]
+mod daemon_protocol_tests;
 mod daemon_transport_error;
 mod embeddings;
+#[cfg(test)]
+mod embeddings_tests;
 mod image_generation;
+#[cfg(test)]
+mod image_generation_tests;
 mod message_codec;
 mod persistent_prompt_cache_diagnostics;
+#[cfg(test)]
+mod persistent_prompt_cache_diagnostics_tests;
+#[cfg(test)]
+mod prompt_processing_progress_protocol_tests;
 mod protocol_error;
 mod protocol_message;
+#[cfg(test)]
+mod protocol_message_tests;
 mod protocol_reader;
 mod protocol_writer;
 mod worker_chunking_configuration;
+#[cfg(test)]
+mod worker_chunking_configuration_tests;
 mod worker_event_diagnostics;
 mod worker_model_configuration;
+#[cfg(test)]
+mod worker_model_configuration_tests;
 mod worker_startup_configuration;
+#[cfg(test)]
+mod worker_startup_configuration_tests;
 
 pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
