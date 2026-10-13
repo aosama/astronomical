@@ -9,7 +9,10 @@ REPOSITORY_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
 
 printf '%s\n' "[pre-commit] status=start check=staged-source-size root=${REPOSITORY_ROOT}"
 started_epoch_seconds="$(date +%s)"
-if sh "${REPOSITORY_ROOT}/scripts/check-source-size.sh" --staged; then
+# The manifest path pins the build to this checkout's xtask while the
+# source-size staged scan itself follows the invoking repository, so the hook
+# stays faithful in worktrees and other checkouts.
+if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- source-size --staged; then
     elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
     printf '%s\n' "[pre-commit] status=success check=staged-source-size elapsed_seconds=${elapsed_seconds}"
     exit 0

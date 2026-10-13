@@ -1,0 +1,17 @@
+[package]
+name = "xtask"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# Repository tooling: CI reporting and verification glue as typed Rust, driven
+# through `cargo xtask <command>` (see the alias in .cargo/config.toml).
+
+[lints]
+workspace = true
+
+[dependencies]
+sha2.workspace = true

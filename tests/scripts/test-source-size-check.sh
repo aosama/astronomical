@@ -4,9 +4,15 @@ set -eu
 
 readonly MAXIMUM_ELAPSED_SECONDS=120
 REPOSITORY_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)"
-SOURCE_SIZE_CHECKER="${REPOSITORY_ROOT}/scripts/check-source-size.sh"
-PRE_COMMIT_HOOK="${REPOSITORY_ROOT}/.githooks/pre-commit"
+XTASK_MANIFEST="${REPOSITORY_ROOT}/xtask/Cargo.toml"
 TEMPORARY_DIRECTORY=""
+
+# The xtask is built from this checkout's manifest so the scenarios exercise
+# the real tool; the staged scenarios run it inside sandbox repositories,
+# which is exactly the hook's calling convention.
+run_source_size() {
+    cargo run --quiet --manifest-path "${XTASK_MANIFEST}" -p xtask -- source-size "$@"
+}
 
 cleanup() {
     case "${TEMPORARY_DIRECTORY:-}" in
@@ -64,16 +70,20 @@ write_source_file() {
 
 initialize_staged_hook_repository() {
     staged_hook_repository_root="$1"
-    mkdir -p "${staged_hook_repository_root}/scripts" "${staged_hook_repository_root}/.githooks"
+    mkdir -p "${staged_hook_repository_root}/.githooks"
     git -C "${staged_hook_repository_root}" init --quiet
     git -C "${staged_hook_repository_root}" config user.email 'source-size-test@example.invalid'
     git -C "${staged_hook_repository_root}" config user.name 'Source Size Test'
     git -C "${staged_hook_repository_root}" config core.hooksPath .githooks
-    cp "${SOURCE_SIZE_CHECKER}" "${staged_hook_repository_root}/scripts/check-source-size.sh"
-    cp "${PRE_COMMIT_HOOK}" "${staged_hook_repository_root}/.githooks/pre-commit"
-    chmod +x \
-        "${staged_hook_repository_root}/scripts/check-source-size.sh" \
-        "${staged_hook_repository_root}/.githooks/pre-commit"
+    # The sandbox hook mirrors the real pre-commit hook's calling convention:
+    # the xtask builds from the real checkout's manifest while the staged scan
+    # follows this sandbox repository.
+    cat > "${staged_hook_repository_root}/.githooks/pre-commit" <<WRAPPER
+#!/usr/bin/env sh
+set -eu
+cargo run --quiet --manifest-path "${XTASK_MANIFEST}" -p xtask -- source-size --staged
+WRAPPER
+    chmod +x "${staged_hook_repository_root}/.githooks/pre-commit"
 }
 
 run_staged_pre_commit_hook() {
@@ -112,7 +122,7 @@ main() {
         551
 
     printf '%s\n' "[source-size-test] status=progress scenarios=0/12 scenario=warning expected=success ETA_seconds=10"
-    warning_scenario_output="$(sh "${SOURCE_SIZE_CHECKER}" "${warning_root}")"
+    warning_scenario_output="$(run_source_size "${warning_root}")"
     printf '%s\n' "${warning_scenario_output}"
     case "${warning_scenario_output}" in
         *"[source-size] status=warning lines=501 "*) ;;
@@ -122,7 +132,7 @@ main() {
             ;;
     esac
     printf '%s\n' "[source-size-test] status=progress scenarios=1/12 scenario=generated expected=success ETA_seconds=9"
-    generated_scenario_output="$(sh "${SOURCE_SIZE_CHECKER}" "${generated_root}")"
+    generated_scenario_output="$(run_source_size "${generated_root}")"
     printf '%s\n' "${generated_scenario_output}"
     case "${generated_scenario_output}" in
         *"[source-size] status=warning "*|*"[source-size] status=failed lines="*)
@@ -131,17 +141,17 @@ main() {
             ;;
     esac
     printf '%s\n' "[source-size-test] status=progress scenarios=2/12 scenario=misleading-generated-marker expected=failure ETA_seconds=8"
-    if sh "${SOURCE_SIZE_CHECKER}" "${misleading_generated_marker_root}"; then
+    if run_source_size "${misleading_generated_marker_root}"; then
         printf '%s\n' '[source-size-test] status=failed reason=misleading-generated-marker-was-excluded' >&2
         exit 1
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=3/12 scenario=failing expected=failure ETA_seconds=7"
-    if sh "${SOURCE_SIZE_CHECKER}" "${failing_root}"; then
+    if run_source_size "${failing_root}"; then
         printf '%s\n' '[source-size-test] status=failed reason=551-lines-was-accepted' >&2
         exit 1
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=4/12 scenario=missing-final-newline expected=failure ETA_seconds=6"
-    if sh "${SOURCE_SIZE_CHECKER}" "${missing_final_newline_root}"; then
+    if run_source_size "${missing_final_newline_root}"; then
         printf '%s\n' '[source-size-test] status=failed reason=551-lines-without-final-newline-was-accepted' >&2
         exit 1
     fi
