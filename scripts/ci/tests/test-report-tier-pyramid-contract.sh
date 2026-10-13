@@ -75,10 +75,14 @@ EOF
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
-    pyramid_script="${repository_root}/scripts/ci/report-tier-pyramid.sh"
-    [ -x "$pyramid_script" ] || {
-        print_error "scripts/ci/report-tier-pyramid.sh must exist and be executable"
+    xtask_manifest="${repository_root}/xtask/Cargo.toml"
+    [ -f "$xtask_manifest" ] || {
+        print_error "xtask/Cargo.toml must exist for the tier-pyramid tooling"
         exit 1
+    }
+    run_pyramid() {
+        cargo run --quiet --manifest-path "${xtask_manifest}" -p xtask -- \
+            tier-pyramid --repository-root "$1" "${2:-}"
     }
 
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-pyramid-contract.XXXXXX")"
@@ -87,7 +91,7 @@ main() {
     write_unit_fixture "$fixture_root"
 
     printf '%s\n' '[tier-pyramid-contract] case=counts-each-tier-from-the-tree status=start'
-    first_report="$("$pyramid_script" --repository-root "$fixture_root" 2>&1)" || {
+    first_report="$(run_pyramid "$fixture_root" 2>&1)" || {
         print_error "reporting against a fresh fixture tree without a baseline must guide, not fail: $first_report"
         exit 1
     }
@@ -109,7 +113,7 @@ main() {
     }
 
     printf '%s\n' '[tier-pyramid-contract] case=record-baseline-then-pass-within-tolerance status=start'
-    "$pyramid_script" --repository-root "$fixture_root" --update-baseline > /dev/null 2>&1 || {
+    run_pyramid "$fixture_root" --update-baseline > /dev/null 2>&1 || {
         print_error "--update-baseline must record the fixture distribution"
         exit 1
     }
@@ -117,7 +121,7 @@ main() {
         print_error "--update-baseline must write the baseline into scripts/ci/"
         exit 1
     }
-    within_tolerance_report="$("$pyramid_script" --repository-root "$fixture_root" 2>&1)" || {
+    within_tolerance_report="$(run_pyramid "$fixture_root" 2>&1)" || {
         print_error "reporting must pass when no tier drifted from the baseline: $within_tolerance_report"
         exit 1
     }
@@ -132,7 +136,7 @@ offline_test!(fourth_integration_case, {
 });
 EOF
     drift_exit_status=0
-    drift_report="$("$pyramid_script" --repository-root "$fixture_root" 2>&1)" || drift_exit_status=$?
+    drift_report="$(run_pyramid "$fixture_root" 2>&1)" || drift_exit_status=$?
     [ "$drift_exit_status" -ne 0 ] || {
         print_error "reporting must fail when integration grows beyond the tolerance"
         exit 1
@@ -143,8 +147,8 @@ EOF
     }
 
     printf '%s\n' '[tier-pyramid-contract] case=update-baseline-absorbs-the-drift status=start'
-    "$pyramid_script" --repository-root "$fixture_root" --update-baseline > /dev/null 2>&1
-    "$pyramid_script" --repository-root "$fixture_root" > /dev/null 2>&1 || {
+    run_pyramid "$fixture_root" --update-baseline > /dev/null 2>&1
+    run_pyramid "$fixture_root" > /dev/null 2>&1 || {
         print_error "after an explicit baseline update the distribution must pass again"
         exit 1
     }

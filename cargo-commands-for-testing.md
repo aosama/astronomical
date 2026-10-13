@@ -65,7 +65,7 @@ HTTP), **acceptance** (env-gated real-model journeys).
   missing.
 - `cargo test-offline-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
-- `scripts/ci/report-tier-pyramid.sh` — workstream 5 of #1198: count tests per
+- `cargo xtask tier-pyramid` — workstream 5 of #1198: count tests per
   tier (unit / integration / e2e / acceptance), report the pyramid
   distribution, and fail when a tier drifts more than 5 percentage points from
   the committed `scripts/ci/tier-pyramid-baseline.json`. Pass

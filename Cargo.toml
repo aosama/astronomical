@@ -13,6 +13,7 @@ members = [
     "crates/runtime-integration",
     "tests/e2e",
     "tests/acceptance",
+    "xtask",
 ]
 default-members = [
     "crates/mlx-c-rust",
@@ -28,6 +29,7 @@ default-members = [
     "crates/runtime-integration",
     "tests/e2e",
     "tests/acceptance",
+    "xtask",
 ]
 resolver = "3"
 

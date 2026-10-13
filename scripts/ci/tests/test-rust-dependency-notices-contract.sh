@@ -28,7 +28,16 @@ write_executable() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
-    notices_script="${repository_root}/scripts/ci/generate-rust-dependency-notices.sh"
+    cargo_executable="$(command -v cargo)"
+    xtask_manifest="${repository_root}/xtask/Cargo.toml"
+    xtask_binary="${repository_root}/target/debug/xtask"
+    # Build up front with the unrestricted PATH: the missing-cargo-about
+    # scenario later narrows PATH to exactly what the hook-time environment
+    # would see, and the already-built binary is what runs there.
+    "${cargo_executable}" build --quiet --manifest-path "${xtask_manifest}" -p xtask
+    run_notices_check() {
+        "${cargo_executable}" run --quiet --manifest-path "${xtask_manifest}" -p xtask -- notices --check
+    }
     pinned_cargo_about_version="$(tr -d '[:space:]' < "${repository_root}/third-party/cargo-about-version")"
     [ "$pinned_cargo_about_version" = "0.9.2" ] || {
         print_error "third-party/cargo-about-version must pin 0.9.2"
@@ -44,7 +53,7 @@ main() {
 exit 0
 PERL
     missing_output="$(
-        PATH="${fake_command_directory}:/usr/bin:/bin" "$notices_script" --check 2>&1
+        PATH="${fake_command_directory}:/usr/bin:/bin" "${xtask_binary}" notices --check 2>&1
     )" || missing_exit_status=$?
     [ "${missing_exit_status:-0}" -ne 0 ] || {
         print_error "notices generation accepted a PATH without cargo-about"
@@ -70,7 +79,7 @@ fi
 exit 1
 CARGO_ABOUT
     unpinned_output="$(
-        PATH="${fake_command_directory}:${PATH}" "$notices_script" --check 2>&1
+        PATH="${fake_command_directory}:${PATH}" run_notices_check 2>&1
     )" || unpinned_exit_status=$?
     [ "${unpinned_exit_status:-0}" -ne 0 ] || {
         print_error "notices generation accepted cargo-about 0.8.0"

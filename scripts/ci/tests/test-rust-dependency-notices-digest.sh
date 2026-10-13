@@ -38,10 +38,14 @@ write_executable() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
-    notices_script="${repository_root}/scripts/ci/generate-rust-dependency-notices.sh"
+    cargo_executable="$(command -v cargo)"
+    xtask_manifest="${repository_root}/xtask/Cargo.toml"
+    run_notices_check() {
+        "${cargo_executable}" run --quiet --manifest-path "${xtask_manifest}" -p xtask -- notices --check
+    }
     DIGEST_PATH="${repository_root}/third-party/RUST_DEPENDENCY_NOTICES.digest"
     [ -f "$DIGEST_PATH" ] || {
-        print_error "missing ${DIGEST_PATH}; run scripts/ci/generate-rust-dependency-notices.sh"
+        print_error "missing ${DIGEST_PATH}; run cargo xtask notices"
         exit 1
     }
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-notices-digest.XXXXXX")"
@@ -63,7 +67,7 @@ exit 1
 EOF
     : > "$generate_log"
     skip_output="$(
-        PATH="${fake_command_directory}:${PATH}" "$notices_script" --check
+        PATH="${fake_command_directory}:${PATH}" run_notices_check
     )"
     case "$skip_output" in
         *"reason=input-digest"*) ;;
@@ -85,7 +89,7 @@ EOF
         'notices_sha256=0000000000000000000000000000000000000000000000000000000000000000' \
         > "$DIGEST_PATH"
     mismatch_output="$(
-        PATH="${fake_command_directory}:${PATH}" "$notices_script" --check 2>&1
+        PATH="${fake_command_directory}:${PATH}" run_notices_check 2>&1
     )" || mismatch_exit_status=$?
     restore_digest
     DIGEST_BACKUP_PATH=""
