@@ -22,7 +22,7 @@ const CONTINUATION_TOKEN_COUNT: u32 = 8;
 const SINGLE_CHUNK_TOKEN_COUNT: u32 = 256;
 const MULTI_CHUNK_TOKEN_COUNT: u32 = 64;
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 /// The prompt must span at least three multi-chunk-config chunks so two

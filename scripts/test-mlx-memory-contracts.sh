@@ -76,7 +76,7 @@ run_cargo_test_phase() {
 }
 
 run_cargo_test_phase model_swap_allocator \
-    --package astronomical-model-serving \
+    --package astronomical-acceptance \
     --test mlx_memory_contract_tests \
     --features direct-mlx \
     mlx_memory_contract::model_swap_allocator::should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_model \

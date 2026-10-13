@@ -16,7 +16,7 @@ const ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 const CACHE_BLOCK_TOKEN_COUNT: u32 = 2_048;
 const RESTORED_BLOCK_COUNT: usize = 4;
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[tokio::test]

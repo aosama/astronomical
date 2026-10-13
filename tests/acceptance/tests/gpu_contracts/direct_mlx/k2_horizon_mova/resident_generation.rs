@@ -9,7 +9,7 @@ use astronomical_model_serving::{
 };
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[tokio::test]

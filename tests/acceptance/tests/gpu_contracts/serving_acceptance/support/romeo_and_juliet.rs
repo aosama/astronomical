@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{
 use astronomical_model_serving::{Qwen3_5ArtifactValidator, Qwen3_5Tokenizer};
 
 const REPRESENTATIVE_SOURCE_TEXT: &str = include_str!(
-    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
