@@ -1,7 +1,6 @@
 use astronomical_config::AstronomicalConfig;
 
-#[test]
-fn should_disable_completion_attribution_by_default() {
+astronomical_test_harness::offline_test!(should_disable_completion_attribution_by_default, {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     super::write_config(
         temporary_home_directory.path(),
@@ -16,23 +15,25 @@ fn should_disable_completion_attribution_by_default() {
             .expect("config should load");
 
     assert!(!astronomical_config.completion_attribution_enabled());
-}
+});
 
-#[test]
-fn should_enable_completion_attribution_when_explicitly_configured() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    super::write_config(
-        temporary_home_directory.path(),
-        r#"{
+astronomical_test_harness::offline_test!(
+    should_enable_completion_attribution_when_explicitly_configured,
+    {
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+        super::write_config(
+            temporary_home_directory.path(),
+            r#"{
           "$schema":"./astronomical-config.schema.json",
           "schema_version":1,
           "runtime":{"model_directories":[]},
           "diagnostics":{"completion_attribution_enabled":true}
         }"#,
-    );
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("config should load");
+        );
+        let astronomical_config =
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+                .expect("config should load");
 
-    assert!(astronomical_config.completion_attribution_enabled());
-}
+        assert!(astronomical_config.completion_attribution_enabled());
+    }
+);

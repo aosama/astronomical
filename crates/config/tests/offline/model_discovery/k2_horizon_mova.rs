@@ -5,8 +5,7 @@ use astronomical_config::{
     requestable_model_id,
 };
 
-#[test]
-fn should_classify_k2_horizon_mova_without_advertising_it() {
+astronomical_test_harness::offline_test!(should_classify_k2_horizon_mova_without_advertising_it, {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let family_model_directory = temporary_directory
         .path()
@@ -39,25 +38,28 @@ fn should_classify_k2_horizon_mova_without_advertising_it() {
         requestable_model_id(&family_model_directory).as_deref(),
         Some("K2-Horizon-MoVA-Family-Fixture")
     );
-}
+});
 
-#[test]
-fn should_skip_unrelated_model_types_instead_of_classifying_them_as_k2_horizon_mova() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let unrelated_model_directory = temporary_directory.path().join("Unrelated-Family-Fixture");
-    fs::create_dir_all(&unrelated_model_directory)
-        .expect("unrelated model directory should be created");
-    super::write_minimal_model_config(&unrelated_model_directory, "llama", 4_096);
-    super::write_required_model_files(&unrelated_model_directory);
+astronomical_test_harness::offline_test!(
+    should_skip_unrelated_model_types_instead_of_classifying_them_as_k2_horizon_mova,
+    {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let unrelated_model_directory = temporary_directory.path().join("Unrelated-Family-Fixture");
+        fs::create_dir_all(&unrelated_model_directory)
+            .expect("unrelated model directory should be created");
+        super::write_minimal_model_config(&unrelated_model_directory, "llama", 4_096);
+        super::write_required_model_files(&unrelated_model_directory);
 
-    assert_eq!(
-        classify_model_directory(&unrelated_model_directory)
-            .expect("unrelated family classification should complete"),
-        None
-    );
-    assert!(
-        super::discover_configured_models(&temporary_directory)[0]
-            .discovered_models
-            .is_empty()
-    );
-}
+        assert_eq!(
+            classify_model_directory(&unrelated_model_directory)
+                .expect("unrelated family classification should complete"),
+            None
+        );
+        assert!(
+            super::discover_configured_models(&temporary_directory)[0]
+                .discovered_models
+                .is_empty()
+        );
+    }
+);

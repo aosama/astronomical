@@ -9,6 +9,7 @@ members = [
     "crates/model-serving",
     "crates/native-build-tool",
     "crates/rest-contract",
+    "crates/test-harness",
     "crates/runtime-integration",
 ]
 default-members = [
@@ -21,6 +22,7 @@ default-members = [
     "crates/model-serving",
     "crates/native-build-tool",
     "crates/rest-contract",
+    "crates/test-harness",
     "crates/runtime-integration",
 ]
 resolver = "3"

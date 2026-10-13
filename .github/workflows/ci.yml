@@ -583,3 +583,41 @@ jobs:
           scripts/ci/ci-step-timing.sh begin site-link-check
           node scripts/check-site-links.js
         timeout-minutes: 2
+
+  # Physics-enforced offline verification: the harness macro is compile-time
+  # discipline, this job proves it by removing the network entirely. unshare
+  # -rn runs cargo inside a user+network namespace where opening any socket
+  # fails; a test that reaches for the network aborts instead of silently
+  # passing. Not a required check — it is a canary for harness drift.
+  linux-offline-sandbox:
+    name: Linux offline sandbox
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: ${{ always() && needs.detect-changes.result == 'success' }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      # Ubuntu 24.04 gates unprivileged user namespaces behind AppArmor, which
+      # rejects the uid_map write unshare -rn needs; the hosted runner is
+      # disposable, so lifting the gate there is safe.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Everything that legitimately needs the network happens here, outside
+      # the namespace: the pinned toolchain sync and the dependency download.
+      - name: Sync pinned toolchain
+        run: rustup show
+      - name: Fetch and build the pilot crate tests
+        run: |
+          cargo fetch --locked
+          cargo build --locked --tests -p astronomical-config
+      # The namespace run is execution-only: with artifacts warm and --offline
+      # set, cargo never attempts a lookup, so the only thing the missing
+      # network can break is a test opening a socket — the exact physics the
+      # job exists to prove.
+      - name: Run pilot crate tests with no network namespace
+        run: unshare -rn cargo test --offline --locked -p astronomical-config --test offline_tests
+        timeout-minutes: 8
