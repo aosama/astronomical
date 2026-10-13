@@ -147,7 +147,7 @@ as a ceiling effect.
 
 ### Model-serving installed-artifact journeys
 
-- `cargo test -p astronomical-model-serving --features direct-mlx --test serving_acceptance_tests <journey_filter> -- --ignored --test-threads=1`
+- `cargo test -p astronomical-acceptance --features direct-mlx --test installed_model_contracts_tests <journey_filter> -- --ignored --test-threads=1`
   — the installed-artifact acceptance binaries (for example the Qwen-Image-2.1
   journeys gated on `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY`).
 
@@ -226,7 +226,7 @@ test thread, and respect each journey's 115-second budget.
 
 ### Prompt-cache acceptance journeys (resident sparse MoE role)
 
-- `cargo test -p astronomical-model-serving --features direct-mlx --test prompt_cache_acceptance_tests -- --ignored --nocapture --test-threads=1`
+- `cargo test -p astronomical-acceptance --features direct-mlx --test engine_prompt_cache_tests -- --ignored --nocapture --test-threads=1`
   — the whole prompt-cache acceptance surface (cache disabled, cache-miss
   memory, restore peak, parity, block reporting, partial tail reuse, startup
   cleanup attribution, and the three vision journeys). Every one of these
@@ -234,7 +234,7 @@ test thread, and respect each journey's 115-second budget.
   they measure cache behaviour, not expert paging; the whole binary takes about
   three minutes. The one exception is the interaction matrix journey, which
   fails closed unless a cell is selected.
-- `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL=<cell> cargo test --release -p astronomical-acceptance --features serving-acceptance --test prompt_cache_acceptance_tests prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell -- --ignored --nocapture --exact --test-threads=1`
+- `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL=<cell> cargo test --release -p astronomical-acceptance --features direct-mlx --test engine_prompt_cache_tests prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell -- --ignored --nocapture --exact --test-threads=1`
   — runs one storage-transition cell; the cells are `fixed-live-reuse`,
   `fixed-worker-restart`, and `fixed-deleted-while-live`. Run all three.
 - `ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS=4096 cargo test ... prompt_cache_acceptance::engine_prompt_cache::should_restore_exact_cache_parity_for_one_selected_large_prefill_size -- --ignored --nocapture --exact --test-threads=1`
