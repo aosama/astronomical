@@ -19,7 +19,7 @@ fn should_preserve_native_memory_transitions_through_the_mlx_c_boundary() {
 
 fn run_native_memory_transitions_contract() {
     eprintln!("[mlx-c-memory-contract] status=start phase=runtime_initialization");
-    let runtime = crate::common::runtime_test_support::runtime();
+    let runtime = crate::runtime_common::runtime_test_support::runtime();
     eprintln!("[mlx-c-memory-contract] status=progress phase=clear_baseline_cache");
     runtime
         .clear_allocator_cache()
