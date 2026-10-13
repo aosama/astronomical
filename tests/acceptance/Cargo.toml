@@ -19,6 +19,8 @@ serving-acceptance = []
 memory-management-acceptance = []
 performance-measurement = []
 performance_throughput = []
+mlx = []
+mlx-memory-contract-probe = ["mlx"]
 
 [[test]]
 name = "serving_acceptance_tests"
@@ -60,8 +62,36 @@ name = "engine_prompt_cache_tests"
 path = "tests/gpu_contracts/prompt_cache_acceptance_tests.rs"
 required-features = ["direct-mlx"]
 
-[lints]
-workspace = true
+[[test]]
+name = "runtime_direct_mlx_tests"
+path = "tests/gpu_contracts/runtime_mlx/direct_mlx_tests.rs"
+required-features = ["mlx"]
+
+[[test]]
+name = "runtime_mlx_memory_contract_tests"
+path = "tests/gpu_contracts/runtime_mlx/mlx_memory_contract_tests.rs"
+required-features = ["mlx-memory-contract-probe"]
+
+[[test]]
+name = "mlx_runtime_policy_tests"
+path = "tests/gpu_contracts/runtime_mlx/mlx_runtime_policy_tests.rs"
+required-features = ["mlx"]
+
+[[test]]
+name = "mlx_safetensors_writer_memory_policy_tests"
+path = "tests/gpu_contracts/runtime_mlx/mlx_safetensors_writer_memory_policy_tests.rs"
+required-features = ["mlx"]
+
+# The moved runtime-MLX suites build raw MLX-C graph probes, mirroring the
+# unsafe ownership boundary their source crate carries. Workspace lints are
+# restated manually so `unsafe_code` can be relaxed while `unused_must_use`
+# and the clippy set keep their workspace strictness.
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
 
 [dev-dependencies]
 astronomical-config = { path = "../../crates/config" }
