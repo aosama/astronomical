@@ -40,7 +40,7 @@ mod weights {
 }
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 const DIRECT_MLX_TEXT_CONDITIONING_TIMEOUT: Duration = Duration::from_secs(115);
 const REDUCED_LAYER_COUNT: usize = 3;

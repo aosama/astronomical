@@ -443,10 +443,8 @@ assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()
 assert not (repository_root / "scripts/run-ignored-serving-acceptance.sh").exists()
 assert not (repository_root / "scripts/run-performance-throughput.sh").exists()
 assert not (repository_root / "scripts/run-disposable-cargo-journey.sh").exists()
+assert not (repository_root / "scripts/accept-prompt-cache-interactions.sh").exists()
 assert "--foreground" in (repository_root / "scripts/test-direct-mlx.sh").read_text()
-assert "--foreground" in (
-    repository_root / "scripts/accept-prompt-cache-interactions.sh"
-).read_text()
 
 PYTHON
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=success'

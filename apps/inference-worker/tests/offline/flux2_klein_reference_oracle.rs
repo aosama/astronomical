@@ -4,8 +4,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
 use serde_json::{Value, json};
 
-use crate::flux2_klein_reference_oracle;
-use crate::flux2_klein_reference_oracle::{ExpectedFluxReference, FluxReferenceOracle};
+use astronomical_test_harness::flux_reference_oracle;
+use astronomical_test_harness::flux_reference_oracle::{ExpectedFluxReference, FluxReferenceOracle};
 
 const MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const MODEL_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
