@@ -1,7 +1,6 @@
 mod completion_attribution;
 mod config;
 mod model_discovery;
-mod model_identity;
 mod performance_attribution;
 mod retired_memory_policy;
 

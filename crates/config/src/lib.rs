@@ -16,6 +16,8 @@ mod maximum_mlx_memory;
 mod model_discovery;
 mod model_discovery_huggingface_cache;
 mod model_identity;
+#[cfg(test)]
+mod model_identity_tests;
 mod prompt_cache_config;
 mod resolved_model_config;
 
