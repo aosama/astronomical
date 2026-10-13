@@ -14,6 +14,11 @@ mod context_logging;
 mod retained_prefix;
 mod rotating;
 
+#[cfg(test)]
+mod expert_memory_admission_tests;
+#[cfg(test)]
+mod retained_prefix_policy_tests;
+
 pub use allocation::{
     AllocationAdmissionDecision, AllocationAdmissionObservation,
     retained_expert_payload_capacity_bytes,

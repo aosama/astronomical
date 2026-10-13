@@ -17,6 +17,9 @@ mod gathered_projection;
 #[cfg(feature = "direct-mlx")]
 mod weighted_sum;
 
+#[cfg(test)]
+mod sparse_experts_tests;
+
 pub use assignment_permutation::invert_assignment_order;
 #[cfg(feature = "direct-mlx")]
 pub use assignment_sort::{

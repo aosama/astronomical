@@ -25,6 +25,13 @@ mod release;
 mod request_plan;
 mod validation;
 
+#[cfg(test)]
+mod complete_residency_headroom_boundary_tests;
+#[cfg(test)]
+mod expert_residency_policy_tests;
+#[cfg(test)]
+mod phase_aware_expert_residency_tests;
+
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;
 pub use ownership_mode::classify_expert_memory_mode;

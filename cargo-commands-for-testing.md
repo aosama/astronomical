@@ -53,7 +53,7 @@ HTTP), **acceptance** (env-gated real-model journeys).
   shared core, never on each other; resident owns no pager; the transitional
   family re-export module is absent; and attribution contains no streaming-only
   route dependency.
-- `cargo test -p astronomical-model-serving --test offline_tests offline::performance_attribution::measurement::should_record_an_external_operation_interval_only_when_attribution_is_enabled -- --exact --test-threads=1`
+- `cargo test -p astronomical-model-serving --lib performance_attribution::performance_attribution_tests::measurement::should_record_an_external_operation_interval_only_when_attribution_is_enabled -- --exact`
   — verifies that an operation measured outside the request-owning thread is
   recorded against the request report's monotonic start time.
 - `cargo test -p astronomical-model-serving --features direct-mlx --test offline_tests prompt_processing_chunk_sizer -- --test-threads=1`

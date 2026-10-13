@@ -9,6 +9,13 @@ mod mlx_sliding_window_mask;
 mod sliding_window_visibility;
 mod yarn_frequencies;
 
+#[cfg(test)]
+mod rotating_admission_tests;
+#[cfg(test)]
+mod sliding_window_visibility_tests;
+#[cfg(test)]
+mod yarn_frequencies_tests;
+
 #[cfg(feature = "direct-mlx")]
 pub use mlx_sliding_window_mask::build_causal_sliding_window_mask;
 pub use sliding_window_visibility::{
