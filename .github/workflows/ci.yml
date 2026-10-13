@@ -290,6 +290,11 @@ jobs:
           scripts/ci/ci-step-timing.sh begin compile-offline-tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --test offline_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
+          cargo test --timings --no-fail-fast --no-run -p astronomical-e2e --test e2e_tests
+          # The root E2E journeys spawn the real daemon and fixture worker
+          # binaries from outside their package, so they must be built before
+          # the lane runs; workspace_binary fails loudly otherwise.
+          cargo build --locked --bins -p astronomical-daemon
         timeout-minutes: 12
       - name: Classify native build result
         id: native-build-result
@@ -331,6 +336,13 @@ jobs:
           set -o pipefail
           cargo test -p astronomical-daemon --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
         timeout-minutes: 2
+      - name: Run root E2E journeys
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end root-e2e-journeys' EXIT
+          scripts/ci/ci-step-timing.sh begin root-e2e-journeys
+          set -o pipefail
+          cargo test --no-fail-fast -p astronomical-e2e --test e2e_tests 2>&1 | tee "$RUNNER_TEMP/test-logs/root-e2e.log"
+        timeout-minutes: 5
       # Observatory contracts stay in this required job until branch
       # protection also requires swift-node; then this step can migrate.
       - name: Run Observatory contracts

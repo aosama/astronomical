@@ -31,6 +31,12 @@ HTTP), **acceptance** (env-gated real-model journeys).
   under `tests/cli_journeys/`. No daemon, no GPU, no network.
 - `cargo test-rest-api` — runs the REST contract and daemon
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
+- `cargo build --bins -p astronomical-daemon && cargo test-e2e` — the root
+  whole-product E2E suite (`tests/e2e`): every journey spawns the real
+  `astronomicald` binary over its real HTTP/IPC surface with fixture worker
+  binaries. The build step is required because `CARGO_BIN_EXE_` covers only
+  same-package binaries; the harness's `workspace_binary` fails loudly with
+  this exact command when a binary is missing.
 - `cargo test-offline-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
 - `cargo test -p astronomical-model-serving --test offline_tests qwen3_5_moe_offline -- --test-threads=1`

@@ -6,20 +6,22 @@ use tokio::{
     time::{Instant, sleep, timeout},
 };
 
-use super::daemon_process;
+use crate::common::daemon;
 
 const DAEMON_STARTUP_PREFIX: &str = "astronomicald listening on http://";
 const WORKER_STDERR_DIAGNOSTIC: &str = "stderr-probe worker observed visible stderr";
 
 #[tokio::test]
 async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavailable() {
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-        .expect("Cargo should provide the astronomicald executable path");
+    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        .to_string_lossy()
+        .into_owned();
     let worker_executable_path =
-        std::env::var("CARGO_BIN_EXE_astronomical-daemon-stderr-probe-worker")
-            .expect("Cargo should provide the stderr-probe worker fixture path");
+        astronomical_test_harness::workspace_binary("astronomical-daemon-stderr-probe-worker")
+            .to_string_lossy()
+            .into_owned();
     let development_state_directory = tempfile::tempdir().expect("state should be created");
-    daemon_process::write_instance_config(development_state_directory.path());
+    daemon::write_instance_config(development_state_directory.path());
     let synthetic_bundle_executable_directory = development_state_directory.path().join("bin");
     std::fs::create_dir(&synthetic_bundle_executable_directory)
         .expect("the synthetic bundle executable directory should be created");
@@ -62,7 +64,7 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
     assert!(daemon_log_text.contains("worker process exited after closing its event stream"));
     assert!(daemon_log_text.contains("exit code 0"));
     assert!(daemon_log_text.contains(WORKER_STDERR_DIAGNOSTIC));
-    daemon_process::terminate_daemon(&daemon_process);
+    daemon::terminate_daemon(&daemon_process);
     let _daemon_exit_status = daemon_process
         .wait()
         .await
