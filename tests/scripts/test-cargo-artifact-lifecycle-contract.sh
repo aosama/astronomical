@@ -398,26 +398,6 @@ TOML
     assert_lane_root_is_empty "$lane_root"
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=invalid-lane-is-rejected status=success'
 
-    printf '%s\n' '[cargo-artifact-lifecycle-test] case=direct-mlx-journey-is-disposable status=start'
-    fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
-    direct_mlx_target_record="${SANDBOX_DIRECTORY}/direct-mlx-target"
-    mkdir -p "$fake_command_directory"
-    cat > "${fake_command_directory}/cargo" <<'CARGO'
-#!/usr/bin/env sh
-set -eu
-printf '%s\n' "${CARGO_TARGET_DIR:?}" > "${ASTRONOMICAL_TEST_CARGO_TARGET_RECORD:?}"
-mkdir -p "${CARGO_TARGET_DIR}/debug"
-exit 0
-CARGO
-    chmod +x "${fake_command_directory}/cargo"
-    ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
-        ASTRONOMICAL_TEST_CARGO_TARGET_RECORD="$direct_mlx_target_record" \
-        PATH="${fake_command_directory}:${PATH}" \
-        run_subject "$timeout_executable" "${repository_root}/scripts/test-direct-mlx.sh"
-    assert_path_is_absent "$(cat "$direct_mlx_target_record")"
-    assert_lane_root_is_empty "$lane_root"
-    printf '%s\n' '[cargo-artifact-lifecycle-test] case=direct-mlx-journey-is-disposable status=success'
-
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=start'
     ASTRONOMICAL_TEST_REPOSITORY_ROOT="$repository_root" python3 <<'PYTHON'
 import os
@@ -436,15 +416,32 @@ assert profiles["full-debug"]["split-debuginfo"] == "packed"
 
 cargo_configuration = tomllib.loads((repository_root / ".cargo/config.toml").read_text())
 aliases = cargo_configuration["alias"]
-assert set(aliases) == {"test-offline", "test-rest-api", "test-e2e", "test-offline-and-rest", "verify"}
+expected_aliases = {
+    "test-offline",
+    "test-rest-api",
+    "test-e2e",
+    "test-offline-and-rest",
+    "verify",
+    "test-direct-mlx",
+    "test-mlx-memory",
+    "test-acceptance",
+}
+assert set(aliases) == expected_aliases
 assert all(isinstance(alias_command, list) for alias_command in aliases.values())
+# The GPU serial rule must be baked into every acceptance alias: no human can
+# forget `--test-threads=1` when the alias carries it.
+for acceptance_alias in ("test-direct-mlx", "test-mlx-memory", "test-acceptance"):
+    assert "--test-threads=1" in aliases[acceptance_alias], acceptance_alias
+for acceptance_alias in ("test-mlx-memory", "test-acceptance"):
+    assert "--ignored" in aliases[acceptance_alias], acceptance_alias
 
 assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()
 assert not (repository_root / "scripts/run-ignored-serving-acceptance.sh").exists()
 assert not (repository_root / "scripts/run-performance-throughput.sh").exists()
 assert not (repository_root / "scripts/run-disposable-cargo-journey.sh").exists()
 assert not (repository_root / "scripts/accept-prompt-cache-interactions.sh").exists()
-assert "--foreground" in (repository_root / "scripts/test-direct-mlx.sh").read_text()
+assert not (repository_root / "scripts/test-direct-mlx.sh").exists()
+assert not (repository_root / "scripts/test-mlx-memory-contracts.sh").exists()
 
 PYTHON
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=success'
