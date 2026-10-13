@@ -3,7 +3,7 @@
 //! boundary (0.10), arithmetic overflow (0.08), lower later spike (0.05), and
 //! active-memory release between observations (0.02). Probabilities are test-design
 //! estimates rather than measured production frequencies.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
@@ -12,7 +12,7 @@ use crate::{
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
-offline_test!(
+offline_denied_test!(
     should_admit_growth_without_expert_reclamation_when_only_the_recovery_reserve_is_short,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -51,7 +51,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_report_only_the_measured_peak_shortfall_as_required_reclamation,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -86,7 +86,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_a_recovery_projection_overflow, {
+offline_denied_test!(should_reject_a_recovery_projection_overflow, {
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(usize::MAX)
         .expect("the platform maximum should be a valid positive limit");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -113,7 +113,7 @@ offline_test!(should_reject_a_recovery_projection_overflow, {
 // owner whose own chunk needed a fraction of the reserved bytes. The admission
 // reserve must therefore be shaped by the forward being admitted, with the
 // global maximum kept only for a phase that has no evidence at all.
-offline_test!(
+offline_denied_test!(
     should_scale_an_unobserved_shape_reserve_by_its_own_token_count,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
@@ -153,7 +153,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_prefer_exact_context_evidence_over_the_scaled_phase_estimate,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
@@ -199,7 +199,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
@@ -256,7 +256,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_global_maximum_for_a_phase_without_any_evidence,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)

@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     AdaptiveRamGrowthExecutionProfile, CurrentExpertLayerResidency, ExpertLayerGeometry,
@@ -23,7 +23,7 @@ fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
         .collect()
 }
 
-offline_test!(
+offline_denied_test!(
     should_keep_complete_layers_during_prefill_even_when_the_plan_names_a_release,
     {
         let geometries = (0..3)
@@ -68,7 +68,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_seat_complete_layers_on_mandatory_prefill_reads, {
+offline_denied_test!(should_seat_complete_layers_on_mandatory_prefill_reads, {
     assert!(should_commit_mandatory_complete_layer(
         2_048,
         true,
@@ -127,7 +127,7 @@ offline_test!(should_seat_complete_layers_on_mandatory_prefill_reads, {
     assert!(!should_commit_mandatory_routed_page(1, false, None, false));
 });
 
-offline_test!(
+offline_denied_test!(
     should_cap_hot_expert_warm_tables_at_the_layer_expert_count,
     {
         // Issue #514: leftover decode entitlement is the economic cap, applied
@@ -138,7 +138,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_refuse_the_same_prefill_chunk_retry_for_paged_execution,
     {
         let resident_retry = ForwardRecoveryRequirements {
@@ -168,7 +168,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_already_seated_complete_layers_when_leftover_budget_tightens,
     {
         let seated_complete_layer_payload_bytes = 80;
@@ -197,7 +197,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_all_resident_expert_pages_when_learned_budget_tightens_between_requests,
     {
         let resident_complete_and_warm_table_payload_bytes = 100;
@@ -224,7 +224,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftover,
     {
         let geometries = uniform_geometry(3);
@@ -288,7 +288,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_opening_prefill_pin_set_when_later_leftover_wants_more_layers,
     {
         let geometries = uniform_geometry(3);
@@ -335,7 +335,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_opening_prefill_pins_when_later_leftover_is_tighter_without_capacity_failure,
     {
         let geometries = uniform_geometry(3);
@@ -370,7 +370,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_re_pin_a_layer_after_a_prefill_capacity_failure,
     {
         let geometries = uniform_geometry(3);
@@ -402,7 +402,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_prefill_routed_pages_when_generation_handoff_replans,
     {
         let geometries = uniform_geometry(3);

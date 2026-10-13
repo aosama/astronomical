@@ -1,6 +1,6 @@
 //! Request, serialization, and capability contracts for image IPC.
 
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     GeneratedImage, ImageGenerationCommand, ImageGenerationSettings,
@@ -8,7 +8,7 @@ use crate::{
     WorkerModelCapabilitiesValidationError, decode_command, decode_event,
 };
 
-offline_test!(should_serialize_generated_image_bytes_as_base64_json, {
+offline_denied_test!(should_serialize_generated_image_bytes_as_base64_json, {
     let generated_image = GeneratedImage {
         mime_type: "image/png".to_owned(),
         encoded_bytes: super::valid_png_bytes(1, 1),
@@ -26,7 +26,7 @@ offline_test!(should_serialize_generated_image_bytes_as_base64_json, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_invalid_image_generation_commands_and_settings,
     {
         let valid_command = super::valid_image_generation_command();
@@ -143,7 +143,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_whitespace_only_image_inputs_before_worker_execution,
     {
         for (field_name, field_value) in [("model", "  "), ("prompt", "\t\n")] {
@@ -165,7 +165,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_malformed_image_capabilities_at_the_wire_boundary,
     {
         let malformed_capabilities = [

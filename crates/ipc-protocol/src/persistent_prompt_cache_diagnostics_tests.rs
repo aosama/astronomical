@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ChatGenerationCompletionReason, RequestId, WorkerEvent,
@@ -8,7 +8,7 @@ use crate::{
     WorkerPersistentPromptCacheStartupCleanupEvidence, decode_event, encode_event,
 };
 
-offline_test!(
+offline_denied_test!(
     should_round_trip_bounded_persistent_prompt_cache_request_diagnostics_on_completion,
     {
         let completed_event = WorkerEvent::Completed {
@@ -55,7 +55,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_unknown_startup_cleanup_evidence_fields, {
+offline_denied_test!(should_reject_unknown_startup_cleanup_evidence_fields, {
     let serialized_diagnostics = serde_json::json!({
         "lookup_outcome": "miss",
         "block_token_count": 2048,
@@ -91,7 +91,7 @@ offline_test!(should_reject_unknown_startup_cleanup_evidence_fields, {
     );
 });
 
-offline_test!(should_round_trip_null_startup_cleanup_evidence, {
+offline_denied_test!(should_round_trip_null_startup_cleanup_evidence, {
     let serialized_diagnostics = serde_json::json!({
         "lookup_outcome": "miss",
         "block_token_count": 2048,

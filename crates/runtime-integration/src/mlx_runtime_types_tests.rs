@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::mlx_runtime_types::MlxRuntimeError;
 
-offline_test!(
+offline_denied_test!(
     should_classify_only_the_metal_command_buffer_out_of_memory_error_as_recoverable,
     {
         let graphics_processor_out_of_memory_error = MlxRuntimeError::RuntimeOperation {

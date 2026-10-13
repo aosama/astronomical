@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements};
 
-offline_test!(should_retain_an_adoptable_state_when_adoption_is_enabled, {
+offline_denied_test!(should_retain_an_adoptable_state_when_adoption_is_enabled, {
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 20_480,
@@ -16,7 +16,7 @@ offline_test!(should_retain_an_adoptable_state_when_adoption_is_enabled, {
     );
 });
 
-offline_test!(should_drop_the_retained_state_when_adoption_is_disabled, {
+offline_denied_test!(should_drop_the_retained_state_when_adoption_is_disabled, {
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: false,
         adoptable_token_count: 20_480,
@@ -30,7 +30,7 @@ offline_test!(should_drop_the_retained_state_when_adoption_is_disabled, {
     );
 });
 
-offline_test!(should_drop_a_state_with_nothing_adoptable, {
+offline_denied_test!(should_drop_a_state_with_nothing_adoptable, {
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 0,
@@ -44,7 +44,7 @@ offline_test!(should_drop_a_state_with_nothing_adoptable, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_drop_a_state_that_would_pin_more_than_half_the_ceiling,
     {
         let decision = RetainedPrefixRetentionRequirements {

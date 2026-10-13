@@ -1,11 +1,11 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
     DecoderCacheTensorLayout,
 };
 
-offline_test!(
+offline_denied_test!(
     should_accept_a_mixed_architecture_neutral_decoder_cache_layout,
     {
         let decoder_cache_layout = DecoderCacheLayout::new(vec![
@@ -93,7 +93,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot,
     {
         let decoder_cache_layout = DecoderCacheLayout::new(vec![
@@ -144,7 +144,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_derive_the_least_common_persistence_alignment_for_mixed_attention_growth,
     {
         let decoder_cache_layout = DecoderCacheLayout::new(vec![
@@ -190,7 +190,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_persistence_alignment_overflow, {
+offline_denied_test!(should_reject_persistence_alignment_overflow, {
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::append_only_attention(
             DecoderCacheTensorLayout::sequence(
@@ -231,7 +231,7 @@ offline_test!(should_reject_persistence_alignment_overflow, {
     ));
 });
 
-offline_test!(should_reject_duplicate_tensor_roles_across_one_layer, {
+offline_denied_test!(should_reject_duplicate_tensor_roles_across_one_layer, {
     let rejection = DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::composite(vec![
         DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
             "state",
@@ -251,7 +251,7 @@ offline_test!(should_reject_duplicate_tensor_roles_across_one_layer, {
     ));
 });
 
-offline_test!(should_reject_a_sequence_axis_outside_the_tensor_rank, {
+offline_denied_test!(should_reject_a_sequence_axis_outside_the_tensor_rank, {
     let rejection = DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
         DecoderCacheTensorLayout::sequence(
             "attention.keys",

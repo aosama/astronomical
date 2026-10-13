@@ -1,5 +1,5 @@
 //! Offline contracts for the decode route-observation history (#536).
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
@@ -14,7 +14,7 @@ fn observation(input_token_id: u32, route_marker: u16) -> RouteObservationRecord
     }
 }
 
-offline_test!(ring_retains_observations_in_arrival_order, {
+offline_denied_test!(ring_retains_observations_in_arrival_order, {
     let mut ring = RouteObservationRing::new(4);
     for token_id in 0..3_u32 {
         ring.record_observation(observation(token_id, u16::try_from(token_id).unwrap()));
@@ -26,7 +26,7 @@ offline_test!(ring_retains_observations_in_arrival_order, {
     assert_eq!(ring.evicted_observation_count(), 0);
 });
 
-offline_test!(ring_overwrites_oldest_observation_when_full, {
+offline_denied_test!(ring_overwrites_oldest_observation_when_full, {
     let mut ring = RouteObservationRing::new(3);
     for token_id in 0..7_u32 {
         ring.record_observation(observation(token_id, u16::try_from(token_id).unwrap()));
@@ -38,7 +38,7 @@ offline_test!(ring_overwrites_oldest_observation_when_full, {
     assert_eq!(ring.evicted_observation_count(), 4);
 });
 
-offline_test!(ring_preserves_complete_record_contents, {
+offline_denied_test!(ring_preserves_complete_record_contents, {
     let previous_route: ObservedExpertRoute = vec![Some(vec![3, 9]), None, Some(vec![41])];
     let token_route: ObservedExpertRoute = vec![Some(vec![1, 2, 3]), None, Some(vec![7])];
     let record = RouteObservationRecord {
@@ -56,7 +56,7 @@ offline_test!(ring_preserves_complete_record_contents, {
     assert_eq!(retained[1].token_route, token_route);
 });
 
-offline_test!(
+offline_denied_test!(
     single_observation_capacity_still_admits_every_newest_observation,
     {
         let mut ring = RouteObservationRing::new(1);
@@ -69,19 +69,19 @@ offline_test!(
     }
 );
 
-offline_test!(zero_capacity_is_clamped_to_one_so_capture_never_stalls, {
+offline_denied_test!(zero_capacity_is_clamped_to_one_so_capture_never_stalls, {
     let mut ring = RouteObservationRing::new(0);
     ring.record_observation(observation(9, 9));
     assert_eq!(ring.capacity(), 1);
     assert_eq!(ring.observation_count(), 1);
 });
 
-offline_test!(compaction_sorts_and_deduplicates_one_layer_route, {
+offline_denied_test!(compaction_sorts_and_deduplicates_one_layer_route, {
     let compacted = sorted_unique_layer_routed_expert_ids(&[40, 8, 40, 15, 8]);
     assert_eq!(compacted, Some(vec![8_u16, 15, 40]));
 });
 
-offline_test!(
+offline_denied_test!(
     compaction_rejects_identifiers_beyond_the_expert_population,
     {
         let compacted = sorted_unique_layer_routed_expert_ids(&[8, u32::from(u16::MAX) + 1]);
@@ -89,7 +89,7 @@ offline_test!(
     }
 );
 
-offline_test!(compaction_of_an_empty_route_is_an_empty_layer_selection, {
+offline_denied_test!(compaction_of_an_empty_route_is_an_empty_layer_selection, {
     let compacted = sorted_unique_layer_routed_expert_ids(&[]);
     assert_eq!(compacted, Some(Vec::new()));
 });

@@ -1,11 +1,11 @@
-use astronomical_test_harness::offline_tokio_test;
+use astronomical_test_harness::offline_denied_tokio_test;
 
 use crate::{ProtocolReader, ProtocolWriter, WorkerEvent, WorkerRuntimeFeatureConfiguration};
 use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_preserve_generation_and_chunking_configuration_in_acknowledgement,
     {
         use crate::{

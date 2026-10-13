@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use super::*;
 
-offline_test!(
+offline_denied_test!(
     should_measure_previous_token_expert_route_reuse_without_serializing_expert_ids,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();
@@ -55,7 +55,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_measure_expert_route_reuse_independently_for_each_layer,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();
@@ -88,7 +88,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_skip_multi_token_expert_routes_and_disabled_attribution,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();

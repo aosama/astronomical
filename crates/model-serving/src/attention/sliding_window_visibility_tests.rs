@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{sliding_window_position_is_visible, sliding_window_visibility_table};
 
-offline_test!(
+offline_denied_test!(
     should_hide_future_keys_and_keys_outside_the_absolute_window,
     {
         assert!(sliding_window_position_is_visible(10, 10, 4).expect("positive window"));
@@ -12,7 +12,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_build_a_prefix_plus_chunk_visibility_table, {
+offline_denied_test!(should_build_a_prefix_plus_chunk_visibility_table, {
     let visibility_table = sliding_window_visibility_table(6, 4, 0, 10, 4)
         .expect("positive absolute ranges should build a table");
     assert_eq!(
@@ -29,7 +29,7 @@ offline_test!(should_build_a_prefix_plus_chunk_visibility_table, {
     );
 });
 
-offline_test!(should_reject_zero_window_or_token_counts, {
+offline_denied_test!(should_reject_zero_window_or_token_counts, {
     assert!(sliding_window_position_is_visible(1, 0, 0).is_err());
     assert!(sliding_window_visibility_table(0, 0, 0, 1, 4).is_err());
     assert!(sliding_window_visibility_table(0, 1, 0, 0, 4).is_err());

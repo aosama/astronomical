@@ -1,6 +1,6 @@
 //! IPC round-trip and validation coverage for native embeddings commands.
 
-use astronomical_test_harness::{offline_test, offline_tokio_test};
+use astronomical_test_harness::{offline_denied_test, offline_denied_tokio_test};
 
 use crate::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, ProtocolReader,
@@ -10,7 +10,7 @@ use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
-offline_tokio_test!(should_round_trip_one_embeddings_command, {
+offline_denied_tokio_test!(should_round_trip_one_embeddings_command, {
     let worker_command = WorkerCommand::GenerateEmbeddings(EmbeddingsCommand {
         request_id: RequestId::new(80),
         model: "nomicai-modernbert-embed-base-8bit".to_owned(),
@@ -39,7 +39,7 @@ offline_tokio_test!(should_round_trip_one_embeddings_command, {
     );
 });
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_round_trip_embeddings_completed_failed_and_finalized_events,
     {
         let completed_event = WorkerEvent::EmbeddingsCompleted {
@@ -101,7 +101,7 @@ offline_tokio_test!(
     }
 );
 
-offline_test!(should_reject_embeddings_input_above_the_ipc_boundary, {
+offline_denied_test!(should_reject_embeddings_input_above_the_ipc_boundary, {
     let oversized_inputs = vec!["x".repeat(8_193)];
     let embeddings_command = EmbeddingsCommand {
         request_id: RequestId::new(82),
@@ -118,7 +118,7 @@ offline_test!(should_reject_embeddings_input_above_the_ipc_boundary, {
     assert!(validation_error.to_string().contains("8193"));
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_zero_embedding_dimensions_at_the_ipc_boundary,
     {
         let embeddings_command = EmbeddingsCommand {

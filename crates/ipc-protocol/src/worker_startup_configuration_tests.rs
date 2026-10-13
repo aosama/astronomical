@@ -1,6 +1,6 @@
 //! Round-trip contract for the complete worker startup configuration boundary.
 
-use astronomical_test_harness::{offline_test, offline_tokio_test};
+use astronomical_test_harness::{offline_denied_test, offline_denied_tokio_test};
 
 use std::path::PathBuf;
 
@@ -14,7 +14,7 @@ use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
-offline_tokio_test!(should_round_trip_worker_startup_configuration, {
+offline_denied_tokio_test!(should_round_trip_worker_startup_configuration, {
     // Exercise every nested startup owner together so a newly added field cannot
     // silently disappear between the daemon and worker process boundary.
     let worker_command = WorkerCommand::InitializeWorker(WorkerStartupConfiguration {
@@ -46,7 +46,7 @@ offline_tokio_test!(should_round_trip_worker_startup_configuration, {
     );
 });
 
-offline_tokio_test!(should_round_trip_selected_model_policy_on_swap_model, {
+offline_denied_tokio_test!(should_round_trip_selected_model_policy_on_swap_model, {
     let worker_command = WorkerCommand::SwapModel {
         model_directory: "/tmp/fictional-target".to_owned(),
         model_configuration: WorkerModelConfiguration::Autoregressive(
@@ -90,7 +90,7 @@ offline_tokio_test!(should_round_trip_selected_model_policy_on_swap_model, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_serialize_autoregressive_configuration_with_an_explicit_discriminator,
     {
         let model_configuration =
@@ -147,7 +147,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_the_retired_untagged_model_configuration_wire_shape,
     {
         let retired_configuration = serde_json::json!({
@@ -168,7 +168,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_acknowledge_the_exact_tagged_flux_runtime_configuration_without_chat_fields,
     {
         let model_configuration =
@@ -201,7 +201,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_acknowledge_the_exact_tagged_qwen_image_runtime_configuration_without_chat_fields,
     {
         let model_configuration =

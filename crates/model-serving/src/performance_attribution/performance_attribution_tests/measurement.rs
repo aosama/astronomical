@@ -1,16 +1,15 @@
-use astronomical_test_harness::offline_test;
-use astronomical_test_harness::offline_tokio_test;
+use astronomical_test_harness::{offline_denied_test, offline_denied_tokio_test};
 
 use super::*;
 
-offline_test!(should_keep_the_disabled_attribution_handle_pointer_sized, {
+offline_denied_test!(should_keep_the_disabled_attribution_handle_pointer_sized, {
     assert!(
         std::mem::size_of::<PerformanceAttribution>() <= std::mem::size_of::<usize>(),
         "disabled attribution travels through every engine command and must not enlarge the command queue"
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_execute_measured_work_without_recording_when_attribution_is_disabled,
     {
         let mut performance_attribution = PerformanceAttribution::disabled();
@@ -29,7 +28,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_record_an_error_returning_operation, {
+offline_denied_test!(should_record_an_error_returning_operation, {
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     let operation_outcome: Result<(), &'static str> = performance_attribution.measure_operation(
@@ -46,7 +45,7 @@ offline_test!(should_record_an_error_returning_operation, {
     );
 });
 
-offline_test!(should_aggregate_repeated_operation_measurements, {
+offline_denied_test!(should_aggregate_repeated_operation_measurements, {
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_completed_operation(
         PerformanceOperation::PromptTokenization,
@@ -71,7 +70,7 @@ offline_test!(should_aggregate_repeated_operation_measurements, {
     assert_eq!(operation_measurement.last_ended_offset_nanoseconds(), 100);
 });
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_record_an_external_operation_interval_only_when_attribution_is_enabled,
     {
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -114,7 +113,7 @@ offline_tokio_test!(
     }
 );
 
-offline_test!(should_saturate_repeated_operation_elapsed_time, {
+offline_denied_test!(should_saturate_repeated_operation_elapsed_time, {
     let mut performance_attribution = PerformanceAttribution::enabled();
     let maximum_elapsed_duration = std::time::Duration::from_nanos(u64::MAX);
     for _operation_occurrence_index in 0..2 {
@@ -136,7 +135,7 @@ offline_test!(should_saturate_repeated_operation_elapsed_time, {
     );
 });
 
-offline_test!(should_aggregate_performance_counters_with_saturation, {
+offline_denied_test!(should_aggregate_performance_counters_with_saturation, {
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_counter(PerformanceCounter::GeneratedTokenCount, u64::MAX);
     performance_attribution.record_counter(PerformanceCounter::GeneratedTokenCount, 1);
@@ -147,7 +146,7 @@ offline_test!(should_aggregate_performance_counters_with_saturation, {
     );
 });
 
-offline_test!(should_retain_the_largest_maximum_counter_observation, {
+offline_denied_test!(should_retain_the_largest_maximum_counter_observation, {
     let mut performance_attribution = PerformanceAttribution::enabled();
     let maximum_counter = PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds;
     performance_attribution.record_maximum_counter(maximum_counter, 40);

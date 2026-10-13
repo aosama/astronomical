@@ -3,12 +3,12 @@
 //! instead of a generic wrapper, without leaking local paths, and stays
 //! bounded because file names, tensor names, and dtype strings come from
 //! untrusted model directories.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{ArtifactValidationError, Qwen3_5ArtifactValidationError};
 use safetensors::Dtype;
 
-offline_test!(should_name_the_dtype_rule_a_weight_tensor_violates, {
+offline_denied_test!(should_name_the_dtype_rule_a_weight_tensor_violates, {
     let validation_error = ArtifactValidationError::TensorDtypeMismatch {
         tensor_name: "language_model.model.layers.3.linear_attn.out_proj.weight".to_owned(),
         expected_dtype: crate::TensorDtype::UInt32,
@@ -23,7 +23,7 @@ offline_test!(should_name_the_dtype_rule_a_weight_tensor_violates, {
     assert!(public_failure_reason.contains("dtype"));
 });
 
-offline_test!(should_name_the_shape_rule_a_weight_tensor_violates, {
+offline_denied_test!(should_name_the_shape_rule_a_weight_tensor_violates, {
     let validation_error = ArtifactValidationError::TensorShapeMismatch {
         tensor_name: "language_model.model.layers.0.self_attn.q_proj.weight".to_owned(),
         expected_shape: vec![2048, 384],
@@ -38,7 +38,7 @@ offline_test!(should_name_the_shape_rule_a_weight_tensor_violates, {
     assert!(public_failure_reason.contains("shape"));
 });
 
-offline_test!(should_name_the_missing_tensor_and_its_weight_file, {
+offline_denied_test!(should_name_the_missing_tensor_and_its_weight_file, {
     let validation_error = ArtifactValidationError::TensorMissing {
         tensor_name: "language_model.lm_head.scales".to_owned(),
         file_name: "model-00006-of-00006.safetensors".to_owned(),
@@ -50,7 +50,7 @@ offline_test!(should_name_the_missing_tensor_and_its_weight_file, {
     assert!(public_failure_reason.contains("model-00006-of-00006.safetensors"));
 });
 
-offline_test!(should_name_an_unexpected_tensor_without_a_local_path, {
+offline_denied_test!(should_name_an_unexpected_tensor_without_a_local_path, {
     let validation_error = ArtifactValidationError::UnexpectedTensor {
         tensor_name: "language_model.model.layers.0.mystery.weight".to_owned(),
     };
@@ -61,7 +61,7 @@ offline_test!(should_name_an_unexpected_tensor_without_a_local_path, {
     assert!(!public_failure_reason.contains('/'));
 });
 
-offline_test!(should_name_an_unrecognized_dtype_and_its_tensor, {
+offline_denied_test!(should_name_an_unrecognized_dtype_and_its_tensor, {
     let validation_error = ArtifactValidationError::UnknownSafetensorsDtype {
         file_name: "model-00001-of-00006.safetensors".to_owned(),
         tensor_name: "language_model.model.embed_tokens.weight".to_owned(),
@@ -74,7 +74,7 @@ offline_test!(should_name_an_unrecognized_dtype_and_its_tensor, {
     assert!(public_failure_reason.contains("F2X"));
 });
 
-offline_test!(should_name_a_truncated_weight_file, {
+offline_denied_test!(should_name_a_truncated_weight_file, {
     let validation_error = ArtifactValidationError::TruncatedSafetensorsFile {
         file_name: "model-00003-of-00006.safetensors".to_owned(),
         expected_minimum_bytes: 5_000,
@@ -87,7 +87,7 @@ offline_test!(should_name_a_truncated_weight_file, {
     assert!(public_failure_reason.contains("truncated"));
 });
 
-offline_test!(
+offline_denied_test!(
     should_name_a_required_file_that_does_not_match_its_declared_size,
     {
         let validation_error = ArtifactValidationError::RequiredFileSizeMismatch {
@@ -103,7 +103,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_missing_directory_reason_free_of_local_paths,
     {
         let local_model_directory = std::path::PathBuf::from("/private/models/example-model");
@@ -121,7 +121,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_bound_the_public_reason_for_untrusted_tensor_names, {
+offline_denied_test!(should_bound_the_public_reason_for_untrusted_tensor_names, {
     let untrusted_tensor_name = "untrusted-tensor-".repeat(200);
     let validation_error = ArtifactValidationError::UnexpectedTensor {
         tensor_name: untrusted_tensor_name,
@@ -133,7 +133,7 @@ offline_test!(should_bound_the_public_reason_for_untrusted_tensor_names, {
     assert!(public_failure_reason.ends_with('…'));
 });
 
-offline_test!(
+offline_denied_test!(
     should_name_the_safetensors_cause_through_the_qwen_wrapper,
     {
         let validation_error =
@@ -150,7 +150,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_preserve_the_existing_config_family_public_reason_through_the_qwen_wrapper,
     {
         let validation_error = Qwen3_5ArtifactValidationError::Artifact(

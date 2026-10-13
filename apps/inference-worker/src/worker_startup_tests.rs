@@ -1,9 +1,9 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::worker_startup::derive_serving_mlx_memory_ceiling_bytes;
 use crate::worker_startup_error::WorkerStartupError;
 
-offline_test!(
+offline_denied_test!(
     should_reject_working_sets_that_cannot_produce_a_positive_serving_ceiling,
     {
         for recommended_gpu_working_set_bytes in [0, 1_000_000_000, 2 * 1024 * 1024 * 1024] {
@@ -24,7 +24,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_a_working_set_that_produces_a_positive_serving_ceiling,
     {
         assert_eq!(
