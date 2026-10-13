@@ -155,8 +155,9 @@ async fn spawn_real_daemon(
     state_directory: &Path,
     isolated_home: &Path,
 ) -> (Child, tokio::task::JoinHandle<Vec<String>>) {
-    let daemon_executable_path = std::env::var("CARGO_BIN_EXE_astronomicald")
-        .expect("Cargo should provide the astronomicald executable path");
+    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
+        .to_string_lossy()
+        .into_owned();
     let daemon_directory = Path::new(&daemon_executable_path)
         .parent()
         .expect("the daemon executable should have a parent directory");
