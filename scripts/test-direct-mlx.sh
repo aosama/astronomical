@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 
 # Direct-MLX lane: one bounded cargo test invocation for the two feature-gated
-# contract binaries, so unrelated hermetic and model-artifact acceptance
+# contract binaries, so unrelated offline and model-artifact acceptance
 # modules never enter this direct-MLX graph. The same single Cargo invocation
-# also compiles and runs the hermetic MLX-C coverage contract binary, so
+# also compiles and runs the offline MLX-C coverage contract binary, so
 # bridge drift against the pinned headers fails this lane instead of shipping
 # silently; that binary is CPU-only and finishes in seconds, keeping the lane
 # inside its budget.

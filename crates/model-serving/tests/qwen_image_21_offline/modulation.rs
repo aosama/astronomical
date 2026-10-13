@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 target-token labelling and `causal_condition` modulation-row
+//! Offline tests for the Qwen-Image-2.1 target-token labelling and `causal_condition` modulation-row
 //! selection. These are pure integer bookkeeping with no runtime dependency and are checked against the
 //! diffusers reference reimplementation in `modulation_fixture.rs`.
 

@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 KV-cache control logic (prefix length, layout validity, and
+//! Offline tests for the Qwen-Image-2.1 KV-cache control logic (prefix length, layout validity, and
 //! the extract/reuse slice bookkeeping), compared against the diffusers forward slicing arithmetic
 //! in `kv_cache_fixture.rs`.
 

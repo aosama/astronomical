@@ -12,14 +12,10 @@ deterministic, no real network beyond localhost, no real model artifacts,
 everything scripted. Scope words name which seam a test crosses: **unit**
 (in-process, fakes), **integration** (stubs or fixture binaries over IPC,
 filesystem), **end-to-end (E2E)** (the real `astronomicald` binary over real
-HTTP), **acceptance** (env-gated real-model journeys). During the #1208
-rename campaign the offline aliases still run binaries named
-`hermetic_tests`; the alias retirement happens in the campaign's final batch.
+HTTP), **acceptance** (env-gated real-model journeys).
 
-- `cargo test-offline` — runs every package's offline lane (binaries still
-  named `hermetic_tests` until retirement). The fast, machine-independent
-  verification lane; safe to run on any host.
-- `cargo test-hermetic` — deprecated alias for `test-offline`.
+- `cargo test-offline` — runs every package's `offline_tests` binary. The
+  fast, machine-independent verification lane; safe to run on any host.
 - `cargo test -p astronomical-cli` — the CLI verb surface: unit tests live
   beside their source as `*_tests.rs` modules inside `src/`, and the
   offline-lane target runs the stub-daemon/stub-server verb journeys
@@ -28,8 +24,6 @@ rename campaign the offline aliases still run binaries named
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
 - `cargo test-offline-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
-- `cargo test-hermetic-and-rest` — deprecated alias for
-  `test-offline-and-rest`.
 - `cargo test -p astronomical-model-serving --test offline_tests qwen3_5_moe_offline -- --test-threads=1`
   — the focused Qwen3.5 sparse-artifact lane for quantization configuration,
   native/affine single- and multi-layer planning, and tensor-profile contracts;

@@ -1,4 +1,4 @@
-//! Hermetic reproduction of the issue #596 tokenizer gap.
+//! Offline reproduction of the issue #596 tokenizer gap.
 //!
 //! The nomicai-modernbert-embed-base artifact declares a `TemplateProcessing`
 //! post-processor that wraps every input as `[CLS] content [SEP]`, and its

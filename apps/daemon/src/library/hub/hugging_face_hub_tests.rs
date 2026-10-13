@@ -1,4 +1,4 @@
-//! Hermetic contracts for bounded immutable Hugging Face manifest discovery.
+//! Offline contracts for bounded immutable Hugging Face manifest discovery.
 
 use std::{future::Future, time::Duration};
 

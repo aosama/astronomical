@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 text-conditioning packaging pipeline.
+//! Offline tests for the Qwen-Image-2.1 text-conditioning packaging pipeline.
 //!
 //! The oracle fixture (`tests/fixtures/qwen_image_21/conditioning_oracle.json`) records
 //! the raw tokenized template ids + attention masks captured from the real

@@ -151,14 +151,14 @@ To bump a pinned dependency:
    surface itself with the bindgen header provisioning (see the next
    section); header-level differences found there explain almost every
    binding-level difference before any compile runs.
- 5. Run the hermetic lanes, then invoke each real-model acceptance Cargo
+ 5. Run the offline lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
    with the performance-throughput journeys and compare against the recorded
    band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
 7. Update this registry, the repo discovery guide, and
    `docs/performance-optimizations-lessons.md`, then commit after
-   `cargo fmt --all -- --check` and `cargo test-hermetic-and-rest` pass.
+   `cargo fmt --all -- --check` and `cargo test-offline-and-rest` pass.
 
 ## Bindgen headers and the C surface diff
 
@@ -198,7 +198,7 @@ what the build actually staged.
 
 The contract suite in `tests/scripts/test-provision-bindgen-headers-contract.sh`
 covers extraction, patch application, idempotent reuse, self-healing,
-tampered-archive refusal, offline behavior, and verification against hermetic
+tampered-archive refusal, offline behavior, and verification against offline
 store fixtures.
 
 ## Reproducing a native build from scratch
@@ -217,9 +217,9 @@ platform cache. The second configures and compiles the native runtime image
 (static MLX, MLX-C, and the Astronomical bridges) and publishes it to the
 content-addressed native build store. The third links the worker against the
 published store; if the store is empty, the cargo artifact lifecycle builds
-it first. Hermetic verification afterwards needs no network and no model
+it first. Offline verification afterwards needs no network and no model
 weights:
 
 ```bash
-cargo test -p astronomical-runtime-integration --test hermetic_tests
+cargo test -p astronomical-runtime-integration --test offline_tests
 ```

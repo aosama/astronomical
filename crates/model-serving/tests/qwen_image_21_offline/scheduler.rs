@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 flow-matching scheduler (dynamic shift, sigma/timestep
+//! Offline tests for the Qwen-Image-2.1 flow-matching scheduler (dynamic shift, sigma/timestep
 //! schedule with the terminal stretch, and Euler step), compared against the diffusers reference
 //! reimplementation in `scheduler_fixture.rs` (generated from the reviewed artifact's scheduler
 //! config: 256/8192/0.5/0.9, `shift_terminal = 0.02`).

@@ -1,4 +1,4 @@
-//! Hermetic tests for the Qwen-Image-2.1 block-causal attention mask, prefix segmentation, and
+//! Offline tests for the Qwen-Image-2.1 block-causal attention mask, prefix segmentation, and
 //! image-block id construction. These are pure integer bookkeeping with no runtime dependency and
 //! are checked against the diffusers reference reimplementation in `mask_fixture.rs`.
 

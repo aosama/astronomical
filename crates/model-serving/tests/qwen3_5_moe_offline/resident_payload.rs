@@ -1,4 +1,4 @@
-//! Hermetic arithmetic contracts for complete sparse-expert payload admission.
+//! Offline arithmetic contracts for complete sparse-expert payload admission.
 //!
 //! These tests use fictional paths and geometry because admission must be exact
 //! before files are opened or MLX is initialized. Real-artifact acceptance

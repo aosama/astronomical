@@ -6,7 +6,7 @@ use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttribution
 
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinFlowStep, Flux2KleinImageDimensions};
 
-/// Loaded identity supplied by either native components or a offline lifecycle fake.
+/// Loaded identity supplied by either native components or an offline lifecycle fake.
 #[doc(hidden)]
 pub struct Flux2KleinComponentLoad {
     pub(super) model_id: String,

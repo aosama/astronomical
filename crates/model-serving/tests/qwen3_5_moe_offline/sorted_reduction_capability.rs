@@ -1,4 +1,4 @@
-//! Hermetic contracts for the sorted-expert-reduction capability seam.
+//! Offline contracts for the sorted-expert-reduction capability seam.
 //!
 //! Production must take the sorted custom-kernel route only when both the
 //! assignment geometry and the GPU capability allow it. A demoted kernel
