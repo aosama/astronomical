@@ -41,8 +41,7 @@ fn published_base_url_ports(page: &str) -> BTreeSet<u16> {
         .collect()
 }
 
-#[test]
-fn should_publish_the_base_url_of_every_runtime_instance() {
+astronomical_test_harness::offline_test!(should_publish_the_base_url_of_every_runtime_instance, {
     let published_ports = published_base_url_ports(&local_api_page());
     let bound_ports: BTreeSet<u16> = [
         AstronomicalRuntimeInstance::Stable,
@@ -56,4 +55,4 @@ fn should_publish_the_base_url_of_every_runtime_instance() {
         published_ports, bound_ports,
         "the local API page must publish the base URL of every instance the app binds, and no other port"
     );
-}
+});

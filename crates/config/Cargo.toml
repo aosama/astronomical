@@ -19,6 +19,7 @@ thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+astronomical-test-harness = { path = "../test-harness" }
 tempfile = "=3.27.0"
 
 [features]

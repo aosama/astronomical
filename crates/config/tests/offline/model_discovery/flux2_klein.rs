@@ -12,80 +12,90 @@ const CANONICAL_MODEL_ID: &str = "FLUX.2-klein-4B";
 const PROVIDER_MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const REVIEWED_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
 
-#[test]
-fn should_discover_the_reviewed_distilled_bf16_flux2_klein_profile_with_typed_capabilities() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let model_directory = temporary_directory
-        .path()
-        .join("Locally-Renamed-Flux-Artifact");
-    write_executable_flux2_klein_artifact(&model_directory);
+astronomical_test_harness::offline_test!(
+    should_discover_the_reviewed_distilled_bf16_flux2_klein_profile_with_typed_capabilities,
+    {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory
+            .path()
+            .join("Locally-Renamed-Flux-Artifact");
+        write_executable_flux2_klein_artifact(&model_directory);
 
-    let directory_scans = super::discover_configured_models(&temporary_directory);
-    let discovered_model = directory_scans[0]
-        .discovered_models
-        .first()
-        .expect("the reviewed FLUX pipeline should be advertised");
+        let directory_scans = super::discover_configured_models(&temporary_directory);
+        let discovered_model = directory_scans[0]
+            .discovered_models
+            .first()
+            .expect("the reviewed FLUX pipeline should be advertised");
 
-    assert_eq!(directory_scans[0].discovered_models.len(), 1);
-    assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
-    assert_eq!(
-        discovered_model.provider_model_id.as_deref(),
-        Some(PROVIDER_MODEL_ID)
-    );
-    assert_eq!(discovered_model.model_family, ModelFamily::Flux2Klein);
-    assert_eq!(discovered_model.revision, REVIEWED_REVISION);
-    assert_eq!(discovered_model.license, Some(ModelLicense::Apache20));
-    assert!(discovered_model.model_size_bytes > 0);
-    assert_eq!(
-        discovered_model.model_size_bytes,
-        modular_weight_size_from_fixture(&model_directory)
-    );
-    let ModelCapabilities::ImageGeneration(image_capabilities) = &discovered_model.capabilities
-    else {
-        panic!("FLUX discovery must expose image-generation capabilities without token limits");
-    };
-    assert!(image_capabilities.supports_text_to_image);
-    assert!(!image_capabilities.supports_image_editing);
-    assert!(!image_capabilities.supports_multiple_reference_images);
-    assert_eq!(image_capabilities.default_steps, 4);
-    assert_eq!(image_capabilities.minimum_dimension_pixels, 64);
-    assert_eq!(image_capabilities.maximum_dimension_pixels, 1_024);
-    assert_eq!(image_capabilities.dimension_multiple_pixels, 16);
-}
+        assert_eq!(directory_scans[0].discovered_models.len(), 1);
+        assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
+        assert_eq!(
+            discovered_model.provider_model_id.as_deref(),
+            Some(PROVIDER_MODEL_ID)
+        );
+        assert_eq!(discovered_model.model_family, ModelFamily::Flux2Klein);
+        assert_eq!(discovered_model.revision, REVIEWED_REVISION);
+        assert_eq!(discovered_model.license, Some(ModelLicense::Apache20));
+        assert!(discovered_model.model_size_bytes > 0);
+        assert_eq!(
+            discovered_model.model_size_bytes,
+            modular_weight_size_from_fixture(&model_directory)
+        );
+        let ModelCapabilities::ImageGeneration(image_capabilities) = &discovered_model.capabilities
+        else {
+            panic!("FLUX discovery must expose image-generation capabilities without token limits");
+        };
+        assert!(image_capabilities.supports_text_to_image);
+        assert!(!image_capabilities.supports_image_editing);
+        assert!(!image_capabilities.supports_multiple_reference_images);
+        assert_eq!(image_capabilities.default_steps, 4);
+        assert_eq!(image_capabilities.minimum_dimension_pixels, 64);
+        assert_eq!(image_capabilities.maximum_dimension_pixels, 1_024);
+        assert_eq!(image_capabilities.dimension_multiple_pixels, 16);
+    }
+);
 
-#[test]
-fn should_discover_klein_when_the_immutable_revision_is_not_the_catalog_pin() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let model_directory = temporary_directory
-        .path()
-        .join("Locally-Renamed-Flux-Artifact");
-    write_executable_flux2_klein_artifact(&model_directory);
-    invalidate_artifact(&model_directory, InvalidArtifact::WrongRevision);
+astronomical_test_harness::offline_test!(
+    should_discover_klein_when_the_immutable_revision_is_not_the_catalog_pin,
+    {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory
+            .path()
+            .join("Locally-Renamed-Flux-Artifact");
+        write_executable_flux2_klein_artifact(&model_directory);
+        invalidate_artifact(&model_directory, InvalidArtifact::WrongRevision);
 
-    let directory_scans = super::discover_configured_models(&temporary_directory);
-    let discovered_model = directory_scans[0]
-        .discovered_models
-        .first()
-        .expect("a complete Klein pipeline should be advertised regardless of Hub SHA");
+        let directory_scans = super::discover_configured_models(&temporary_directory);
+        let discovered_model = directory_scans[0]
+            .discovered_models
+            .first()
+            .expect("a complete Klein pipeline should be advertised regardless of Hub SHA");
 
-    assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
-    assert_eq!(
-        discovered_model.revision,
-        "0123456789abcdef0123456789abcdef01234567"
-    );
-}
+        assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
+        assert_eq!(
+            discovered_model.revision,
+            "0123456789abcdef0123456789abcdef01234567"
+        );
+    }
+);
 
-#[test]
-fn should_discover_klein_from_library_provenance_without_huggingface_cache_metadata() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let model_directory = temporary_directory
-        .path()
-        .join("black-forest-labs")
-        .join("FLUX.2-klein-4B");
-    write_executable_flux2_klein_artifact(&model_directory);
-    fs::remove_file(model_directory.join(".cache/huggingface/download/model_index.json.metadata"))
+astronomical_test_harness::offline_test!(
+    should_discover_klein_from_library_provenance_without_huggingface_cache_metadata,
+    {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let model_directory = temporary_directory
+            .path()
+            .join("black-forest-labs")
+            .join("FLUX.2-klein-4B");
+        write_executable_flux2_klein_artifact(&model_directory);
+        fs::remove_file(
+            model_directory.join(".cache/huggingface/download/model_index.json.metadata"),
+        )
         .expect("Hugging Face download metadata should be removable");
-    fs::write(
+        fs::write(
         model_directory.join(".astronomical-library-provenance.json"),
         format!(
             "{{\"schema_version\":1,\"provider_model_id\":\"{PROVIDER_MODEL_ID}\",\"revision\":\"{REVIEWED_REVISION}\"}}"
@@ -93,165 +103,184 @@ fn should_discover_klein_from_library_provenance_without_huggingface_cache_metad
     )
     .expect("Library provenance should be written");
 
-    let directory_scans = super::discover_configured_models(&temporary_directory);
-    let discovered_model = directory_scans[0]
-        .discovered_models
-        .first()
-        .expect("a Library-published Klein pipeline should be advertised");
+        let directory_scans = super::discover_configured_models(&temporary_directory);
+        let discovered_model = directory_scans[0]
+            .discovered_models
+            .first()
+            .expect("a Library-published Klein pipeline should be advertised");
 
-    assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
-    assert_eq!(discovered_model.revision, REVIEWED_REVISION);
-    assert_eq!(
-        discovered_model.provider_model_id.as_deref(),
-        Some(PROVIDER_MODEL_ID)
-    );
-}
+        assert_eq!(discovered_model.model_id, CANONICAL_MODEL_ID);
+        assert_eq!(discovered_model.revision, REVIEWED_REVISION);
+        assert_eq!(
+            discovered_model.provider_model_id.as_deref(),
+            Some(PROVIDER_MODEL_ID)
+        );
+    }
+);
 
-#[test]
-fn should_verify_exact_directory_evidence_without_scanning_a_parent_root() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let selected_model_directory = temporary_directory.path().join("selected-model");
-    let unrelated_model_directory = temporary_directory.path().join("unrelated-model");
-    write_executable_flux2_klein_artifact(&selected_model_directory);
-    write_executable_flux2_klein_artifact(&unrelated_model_directory);
-
-    let verified_evidence = verify_flux2_klein_model_directory(&selected_model_directory)
-        .expect("the selected complete directory should verify");
-
-    assert_eq!(verified_evidence.canonical_model_id, CANONICAL_MODEL_ID);
-    assert_eq!(verified_evidence.provider_model_id, PROVIDER_MODEL_ID);
-    assert_eq!(verified_evidence.revision, REVIEWED_REVISION);
-    assert_eq!(verified_evidence.license, ModelLicense::Apache20);
-    assert!(verified_evidence.capabilities.supports_text_to_image);
-    assert!(!verified_evidence.capabilities.supports_image_editing);
-    assert!(
-        !verified_evidence
-            .capabilities
-            .supports_multiple_reference_images
-    );
-
-    fs::remove_file(selected_model_directory.join("vae/diffusion_pytorch_model.safetensors"))
-        .expect("selected component should be removed");
-    assert_eq!(
-        verify_flux2_klein_model_directory(&selected_model_directory),
-        Err(Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component: "vae" })
-    );
-}
-
-#[test]
-fn should_report_bounded_path_free_flux_verification_failures() {
-    for (invalid_artifact, expected_error) in [
-        (
-            InvalidArtifact::MalformedPipeline,
-            Flux2KleinDirectoryVerificationError::InvalidPipelineIndex,
-        ),
-        (
-            InvalidArtifact::WrongLicense,
-            Flux2KleinDirectoryVerificationError::InvalidLicense,
-        ),
-        (
-            InvalidArtifact::EmptyWeightMap,
-            Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex,
-        ),
-        (
-            InvalidArtifact::UnsafeShardPath,
-            Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex,
-        ),
-        (
-            InvalidArtifact::MismatchedTextEncoderTotalSize,
-            Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex,
-        ),
-        (
-            InvalidArtifact::MissingTextEncoderShard,
-            Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile {
-                component: "text encoder",
-            },
-        ),
-    ] {
+astronomical_test_harness::offline_test!(
+    should_verify_exact_directory_evidence_without_scanning_a_parent_root,
+    {
         let temporary_directory =
             tempfile::tempdir().expect("temporary directory should be created");
-        let model_directory = temporary_directory.path().join("Rejected-Flux-Artifact");
-        write_executable_flux2_klein_artifact(&model_directory);
-        invalidate_artifact(&model_directory, invalid_artifact);
+        let selected_model_directory = temporary_directory.path().join("selected-model");
+        let unrelated_model_directory = temporary_directory.path().join("unrelated-model");
+        write_executable_flux2_klein_artifact(&selected_model_directory);
+        write_executable_flux2_klein_artifact(&unrelated_model_directory);
 
-        let verification_error = verify_flux2_klein_model_directory(&model_directory)
-            .expect_err("invalid evidence should retain its typed failure category");
-        assert_eq!(verification_error, expected_error);
+        let verified_evidence = verify_flux2_klein_model_directory(&selected_model_directory)
+            .expect("the selected complete directory should verify");
+
+        assert_eq!(verified_evidence.canonical_model_id, CANONICAL_MODEL_ID);
+        assert_eq!(verified_evidence.provider_model_id, PROVIDER_MODEL_ID);
+        assert_eq!(verified_evidence.revision, REVIEWED_REVISION);
+        assert_eq!(verified_evidence.license, ModelLicense::Apache20);
+        assert!(verified_evidence.capabilities.supports_text_to_image);
+        assert!(!verified_evidence.capabilities.supports_image_editing);
         assert!(
-            !verification_error.to_string().contains(
-                model_directory
-                    .to_str()
-                    .expect("temporary path should be UTF-8")
+            !verified_evidence
+                .capabilities
+                .supports_multiple_reference_images
+        );
+
+        fs::remove_file(selected_model_directory.join("vae/diffusion_pytorch_model.safetensors"))
+            .expect("selected component should be removed");
+        assert_eq!(
+            verify_flux2_klein_model_directory(&selected_model_directory),
+            Err(
+                Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile {
+                    component: "vae"
+                }
             )
         );
     }
-}
+);
 
-#[test]
-fn should_reject_malformed_wrong_profile_license_or_revision_evidence() {
-    for invalid_artifact in [
-        InvalidArtifact::MalformedPipeline,
-        InvalidArtifact::BaseProfile,
-        InvalidArtifact::WrongDtype,
-        InvalidArtifact::WrongLicense,
-        InvalidArtifact::MissingComponent,
-        InvalidArtifact::EmptyWeightMap,
-        InvalidArtifact::UnsafeShardPath,
-        InvalidArtifact::MismatchedTextEncoderTotalSize,
-        InvalidArtifact::MissingTextEncoderShard,
-    ] {
+astronomical_test_harness::offline_test!(
+    should_report_bounded_path_free_flux_verification_failures,
+    {
+        for (invalid_artifact, expected_error) in [
+            (
+                InvalidArtifact::MalformedPipeline,
+                Flux2KleinDirectoryVerificationError::InvalidPipelineIndex,
+            ),
+            (
+                InvalidArtifact::WrongLicense,
+                Flux2KleinDirectoryVerificationError::InvalidLicense,
+            ),
+            (
+                InvalidArtifact::EmptyWeightMap,
+                Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex,
+            ),
+            (
+                InvalidArtifact::UnsafeShardPath,
+                Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex,
+            ),
+            (
+                InvalidArtifact::MismatchedTextEncoderTotalSize,
+                Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex,
+            ),
+            (
+                InvalidArtifact::MissingTextEncoderShard,
+                Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile {
+                    component: "text encoder",
+                },
+            ),
+        ] {
+            let temporary_directory =
+                tempfile::tempdir().expect("temporary directory should be created");
+            let model_directory = temporary_directory.path().join("Rejected-Flux-Artifact");
+            write_executable_flux2_klein_artifact(&model_directory);
+            invalidate_artifact(&model_directory, invalid_artifact);
+
+            let verification_error = verify_flux2_klein_model_directory(&model_directory)
+                .expect_err("invalid evidence should retain its typed failure category");
+            assert_eq!(verification_error, expected_error);
+            assert!(
+                !verification_error.to_string().contains(
+                    model_directory
+                        .to_str()
+                        .expect("temporary path should be UTF-8")
+                )
+            );
+        }
+    }
+);
+
+astronomical_test_harness::offline_test!(
+    should_reject_malformed_wrong_profile_license_or_revision_evidence,
+    {
+        for invalid_artifact in [
+            InvalidArtifact::MalformedPipeline,
+            InvalidArtifact::BaseProfile,
+            InvalidArtifact::WrongDtype,
+            InvalidArtifact::WrongLicense,
+            InvalidArtifact::MissingComponent,
+            InvalidArtifact::EmptyWeightMap,
+            InvalidArtifact::UnsafeShardPath,
+            InvalidArtifact::MismatchedTextEncoderTotalSize,
+            InvalidArtifact::MissingTextEncoderShard,
+        ] {
+            let temporary_directory =
+                tempfile::tempdir().expect("temporary directory should be created");
+            let model_directory = temporary_directory.path().join("Rejected-Flux-Artifact");
+            write_executable_flux2_klein_artifact(&model_directory);
+            invalidate_artifact(&model_directory, invalid_artifact);
+
+            assert!(
+                super::discover_configured_models(&temporary_directory)[0]
+                    .discovered_models
+                    .is_empty(),
+                "discovery must reject {invalid_artifact:?}"
+            );
+        }
+    }
+);
+
+astronomical_test_harness::offline_test!(
+    should_stop_at_a_pipeline_root_instead_of_discovering_nested_component_configs,
+    {
         let temporary_directory =
             tempfile::tempdir().expect("temporary directory should be created");
-        let model_directory = temporary_directory.path().join("Rejected-Flux-Artifact");
-        write_executable_flux2_klein_artifact(&model_directory);
-        invalidate_artifact(&model_directory, invalid_artifact);
+        let pipeline_directory = temporary_directory.path().join("Unsupported-Pipeline");
+        let nested_component_directory = pipeline_directory.join("text_encoder");
+        fs::create_dir_all(&nested_component_directory)
+            .expect("component directory should be created");
+        fs::write(
+            pipeline_directory.join("model_index.json"),
+            r#"{"_class_name":"UnsupportedPipeline"}"#,
+        )
+        .expect("unsupported pipeline index should be written");
+        super::write_minimal_model_config(&nested_component_directory, "qwen3_5", 4_096);
+        super::write_required_model_files(&nested_component_directory);
 
         assert!(
             super::discover_configured_models(&temporary_directory)[0]
                 .discovered_models
-                .is_empty(),
-            "discovery must reject {invalid_artifact:?}"
+                .is_empty()
         );
     }
-}
+);
 
-#[test]
-fn should_stop_at_a_pipeline_root_instead_of_discovering_nested_component_configs() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let pipeline_directory = temporary_directory.path().join("Unsupported-Pipeline");
-    let nested_component_directory = pipeline_directory.join("text_encoder");
-    fs::create_dir_all(&nested_component_directory).expect("component directory should be created");
-    fs::write(
-        pipeline_directory.join("model_index.json"),
-        r#"{"_class_name":"UnsupportedPipeline"}"#,
-    )
-    .expect("unsupported pipeline index should be written");
-    super::write_minimal_model_config(&nested_component_directory, "qwen3_5", 4_096);
-    super::write_required_model_files(&nested_component_directory);
+astronomical_test_harness::offline_test!(
+    should_reject_two_flux_artifacts_that_share_the_canonical_serving_identity,
+    {
+        let temporary_directory =
+            tempfile::tempdir().expect("temporary directory should be created");
+        let first_root = temporary_directory.path().join("first-root");
+        let second_root = temporary_directory.path().join("second-root");
+        write_executable_flux2_klein_artifact(&first_root.join("first-local-name"));
+        write_executable_flux2_klein_artifact(&second_root.join("second-local-name"));
 
-    assert!(
-        super::discover_configured_models(&temporary_directory)[0]
-            .discovered_models
-            .is_empty()
-    );
-}
+        let discovery_error = astronomical_config::discover_models(&[first_root, second_root])
+            .expect_err("duplicate canonical FLUX identities should be rejected");
 
-#[test]
-fn should_reject_two_flux_artifacts_that_share_the_canonical_serving_identity() {
-    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
-    let first_root = temporary_directory.path().join("first-root");
-    let second_root = temporary_directory.path().join("second-root");
-    write_executable_flux2_klein_artifact(&first_root.join("first-local-name"));
-    write_executable_flux2_klein_artifact(&second_root.join("second-local-name"));
-
-    let discovery_error = astronomical_config::discover_models(&[first_root, second_root])
-        .expect_err("duplicate canonical FLUX identities should be rejected");
-
-    assert!(matches!(
-        discovery_error,
-        DiscoveredModelError::DuplicateModelId { model_id, .. } if model_id == CANONICAL_MODEL_ID
-    ));
-}
+        assert!(matches!(
+            discovery_error,
+            DiscoveredModelError::DuplicateModelId { model_id, .. } if model_id == CANONICAL_MODEL_ID
+        ));
+    }
+);
 
 #[derive(Clone, Copy, Debug)]
 enum InvalidArtifact {
