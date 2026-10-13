@@ -1,6 +1,8 @@
 mod error_handling;
 mod initialization;
 mod memory_policy;
+#[cfg(test)]
+mod memory_policy_tests;
 mod metallib;
 mod safetensors;
 
