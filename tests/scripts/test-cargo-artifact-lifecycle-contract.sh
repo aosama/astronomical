@@ -425,6 +425,7 @@ expected_aliases = {
     "test-direct-mlx",
     "test-mlx-memory",
     "test-acceptance",
+    "xtask",
 }
 assert set(aliases) == expected_aliases
 assert all(isinstance(alias_command, list) for alias_command in aliases.values())
@@ -442,6 +443,9 @@ assert not (repository_root / "scripts/run-disposable-cargo-journey.sh").exists(
 assert not (repository_root / "scripts/accept-prompt-cache-interactions.sh").exists()
 assert not (repository_root / "scripts/test-direct-mlx.sh").exists()
 assert not (repository_root / "scripts/test-mlx-memory-contracts.sh").exists()
+assert not (repository_root / "scripts/check-source-size.sh").exists()
+assert not (repository_root / "scripts/ci/report-tier-pyramid.sh").exists()
+assert not (repository_root / "scripts/ci/generate-rust-dependency-notices.sh").exists()
 
 PYTHON
     printf '%s\n' '[cargo-artifact-lifecycle-test] case=profile-and-command-ownership status=success'
