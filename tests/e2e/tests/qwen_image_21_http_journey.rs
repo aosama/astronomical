@@ -1,12 +1,17 @@
-//! Live end-to-end acceptance journey: one Qwen-Image-2.1 image over real HTTP.
+//! Whole-product acceptance journey: one Qwen-Image-2.1 image over real HTTP.
 //!
-//! This ignored journey spawns the actual `astronomicald` daemon (which discovers and spawns the
-//! real inference worker from its own directory), configures it to discover the installed
-//! Qwen-Image-2.1 artifact, and serves one 256×256 request through
-//! `POST /v1/images/generations`. It is the only journey that exercises the whole chain in one
-//! live process tree — discovery advertisement, worker startup, model swap, the native engine,
-//! and the REST response contract — so a green run here means the code actually works, not that
-//! each layer works in isolation.
+//! Driven in two fidelities selected by `ASTRONOMICAL_REAL_MODEL=1`: the real
+//! `astronomicald` daemon (which discovers and spawns the real inference
+//! worker from its own directory), configured to discover the installed
+//! Qwen-Image-2.1 artifact — or, by default, the fixture
+//! `astronomical-daemon-test-daemon` with the scripted worker and an injected
+//! discovered image model, which needs no artifacts so the suite runs on any
+//! machine. Both fidelities serve one 256×256 request through
+//! `POST /v1/images/generations` and assert the same contract. This is the
+//! only journey that exercises the whole chain in one live process tree —
+//! discovery advertisement, worker startup, model swap, the native engine,
+//! and the REST response contract — so a green run here means the code
+//! actually works, not that each layer works in isolation.
 //!
 //! The render runs at 256×256 with the worker profile's default schedule (the reference's 40
 //! steps) so the whole journey fits the bounded 115-second budget on any machine that can hold
@@ -14,8 +19,10 @@
 //! path so a human can inspect it for coherence — pixel-statistics assertions cannot see
 //! garbling that keeps neighbour pixels correlated.
 //!
-//! Prerequisites: the real worker binary must sit next to the daemon binary, so build both
-//! before running (`cargo build -p astronomical-daemon -p astronomical-inference-worker`).
+//! Real-fidelity prerequisites: the real worker binary must sit next to the
+//! daemon binary, so build both before running (`cargo build -p astronomical-daemon
+//! -p astronomical-inference-worker`), and `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY`
+//! must point at the installed artifact snapshots directory.
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -27,6 +34,8 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
 use tokio::time::timeout;
+
+use crate::common::fidelity::ModelFidelity;
 
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const ARTIFACT_ENV: &str = "ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY";
@@ -44,21 +53,19 @@ const MINIMUM_NEIGHBOR_CORRELATION: f64 = 0.5;
 /// Startup (worker spawn + discovery + swap + render) must stay well inside the journey bound.
 const ENDPOINT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory and built daemon+worker binaries; \
-set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
 #[tokio::test]
 async fn should_serve_one_qwen_image_over_http_end_to_end() {
     timeout(JOURNEY_TIMEOUT, async {
-        let model_root = qwen_image_model_root();
+        let fidelity = ModelFidelity::from_environment();
         let state_directory = tempfile::tempdir().expect("state directory should be created");
         let isolated_home = tempfile::tempdir().expect("isolated home should be created");
         write_instance_config(
             state_directory.path(),
-            &model_root.to_string_lossy(),
+            &journey_model_root(fidelity).to_string_lossy(),
         );
 
         let (mut daemon_process, daemon_address) =
-            spawn_real_daemon(state_directory.path(), isolated_home.path()).await;
+            spawn_daemon(state_directory.path(), isolated_home.path(), fidelity).await;
 
         wait_for_model_advertisement(daemon_address).await;
 
@@ -116,6 +123,16 @@ async fn should_serve_one_qwen_image_over_http_end_to_end() {
     .expect("the live HTTP journey should finish within its 115 s budget");
 }
 
+/// The instance config's model scan root per fidelity: the real daemon
+/// discovers the installed artifact through it; the fixture daemon ignores
+/// config.json, so any well-formed root keeps the document byte-identical.
+fn journey_model_root(fidelity: ModelFidelity) -> PathBuf {
+    match fidelity {
+        ModelFidelity::Real => qwen_image_model_root(),
+        ModelFidelity::Scripted => PathBuf::from("fixtures/models/qwen-image-21"),
+    }
+}
+
 /// The `models--org--repo` directory containing the installed snapshot, resolved from the
 /// shared artifact environment variable so no developer path is hardcoded.
 fn qwen_image_model_root() -> PathBuf {
@@ -154,22 +171,58 @@ fn write_instance_config(state_directory: &Path, model_root: &str) {
         .expect("instance config should be written");
 }
 
-async fn spawn_real_daemon(state_directory: &Path, isolated_home: &Path) -> (Child, SocketAddr) {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
-        .to_string_lossy()
-        .into_owned();
-    assert_real_worker_binary_exists(&daemon_executable_path);
-    let mut daemon_process = Command::new(daemon_executable_path)
+/// Spawns the daemon for the journey's fidelity: the real `astronomicald`
+/// (which discovers and spawns its own real worker) or the fixture
+/// `astronomical-daemon-test-daemon` pointed at the scripted worker with one
+/// injected discovered image model. The fixture pair answers the same HTTP
+/// surface with the same startup line.
+async fn spawn_daemon(
+    state_directory: &Path,
+    isolated_home: &Path,
+    fidelity: ModelFidelity,
+) -> (Child, SocketAddr) {
+    let daemon_executable_path = match fidelity {
+        ModelFidelity::Real => {
+            let daemon_executable_path =
+                astronomical_test_harness::workspace_binary("astronomicald")
+                    .to_string_lossy()
+                    .into_owned();
+            assert_real_worker_binary_exists(&daemon_executable_path);
+            daemon_executable_path
+        }
+        ModelFidelity::Scripted => {
+            astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
+                .to_string_lossy()
+                .into_owned()
+        }
+    };
+    let mut daemon_spawn_command = Command::new(daemon_executable_path);
+    daemon_spawn_command
         .args(["--instance", "development", "--state-directory"])
         .arg(state_directory)
         .env("HOME", isolated_home)
         .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
+        .env_remove("ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID")
+        .env_remove("ASTRONOMICAL_TEST_DAEMON_DISCOVERED_IMAGE_MODEL_ID")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    if fidelity == ModelFidelity::Scripted {
+        daemon_spawn_command
+            .env(
+                "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH",
+                astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker"),
+            )
+            .env("ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID", EXPECTED_MODEL_ID)
+            .env(
+                "ASTRONOMICAL_TEST_DAEMON_DISCOVERED_IMAGE_MODEL_ID",
+                EXPECTED_MODEL_ID,
+            );
+    }
+    let mut daemon_process = daemon_spawn_command
         .spawn()
-        .expect("the real daemon process should start");
+        .expect("the daemon process should start");
     let daemon_stdout = daemon_process
         .stdout
         .take()
