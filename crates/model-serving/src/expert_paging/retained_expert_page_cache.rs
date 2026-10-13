@@ -530,3 +530,6 @@ pub fn last_prefill_chunk_demand_weight(
     }
     (earlier_prefill_token_count / last_prefill_chunk_token_count).max(1)
 }
+
+#[cfg(test)]
+mod retained_expert_page_cache_tests;

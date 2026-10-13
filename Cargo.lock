@@ -170,6 +170,7 @@ dependencies = [
  "astronomical-ipc-protocol",
  "astronomical-mlx-c-rust",
  "astronomical-runtime-integration",
+ "astronomical-test-harness",
  "fs4",
  "image",
  "libc",

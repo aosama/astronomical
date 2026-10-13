@@ -64,6 +64,19 @@ mod telemetry;
 mod utilization;
 mod vocabulary;
 
+#[cfg(test)]
+mod adaptive_ram_growth_execution_profile_tests;
+#[cfg(test)]
+mod adaptive_ram_growth_guard_admission_tests;
+#[cfg(test)]
+mod adaptive_ram_growth_guard_reclamation_tests;
+#[cfg(test)]
+mod adaptive_ram_growth_observations_tests;
+#[cfg(test)]
+mod memory_policy_tests;
+#[cfg(test)]
+mod serving_memory_ceiling_tests;
+
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
     CompleteResidencyRequirements, ContextAdmissionRequirements, RetainedPrefixRetentionDecision,
