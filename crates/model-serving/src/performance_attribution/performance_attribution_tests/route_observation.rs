@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::PerformanceAttribution;
 
-offline_test!(
+offline_denied_test!(
     disabled_attribution_does_not_record_a_route_observation_chain,
     {
         let mut performance_attribution = PerformanceAttribution::disabled();
@@ -15,7 +15,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     enabled_attribution_chains_the_previous_observed_route_within_one_request,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();

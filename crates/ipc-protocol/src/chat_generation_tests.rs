@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
@@ -6,7 +6,7 @@ use crate::{
     ChatToolChoice, ChatToolDefinition, RequestId,
 };
 
-offline_test!(
+offline_denied_test!(
     should_serialize_one_structured_chat_generation_command_without_rest_types,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -61,7 +61,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_round_trip_a_typed_context_length_exceeded_failure, {
+offline_denied_test!(should_round_trip_a_typed_context_length_exceeded_failure, {
     let failure_reason = ChatGenerationFailureReason::ContextLengthExceeded {
         actual_total_context_tokens: 262_145,
         maximum_context_tokens: 262_144,
@@ -78,7 +78,7 @@ offline_test!(should_round_trip_a_typed_context_length_exceeded_failure, {
     assert!(serialized_failure.contains("262145"));
 });
 
-offline_test!(
+offline_denied_test!(
     should_round_trip_ready_model_capabilities_with_vision_support,
     {
         let model_capabilities = ChatModelCapabilities {
@@ -101,7 +101,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_round_trip_one_chat_command_with_a_user_message_image,
     {
         let chat_generation_command = ChatGenerationCommand {

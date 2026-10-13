@@ -5,7 +5,7 @@
 //! transients into a permanently over-sized reserve (issue #1108). A ceiling
 //! change therefore clears activation evidence while persistent context-window
 //! evidence survives, because KV bytes per token do not depend on the ceiling.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{MemoryPhase, MlxRamBudget, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry};
 
@@ -19,7 +19,7 @@ fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_forget_learned_activation_evidence_when_the_live_ceiling_changes,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
@@ -80,7 +80,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_learned_activation_evidence_when_the_ceiling_value_is_unchanged,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(19_000_000_000, small_layer_geometry())

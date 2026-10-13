@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ExpertWeightPage, RetainedExpertLayerCommitDelta, RetainedExpertLayerCommitError,
@@ -44,7 +44,7 @@ fn commit_complete_page(
         .outcome
 }
 
-offline_test!(
+offline_denied_test!(
     should_commit_complete_and_partial_pages_with_explicit_classes,
     {
         let mut retained_pages = RetainedExpertPageCache::new(2);
@@ -67,7 +67,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_commit_above_the_ceiling_while_preserving_the_previous_owner,
     {
         let mut retained_pages = RetainedExpertPageCache::new(1);
@@ -86,7 +86,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_replace_a_partial_owner_with_a_complete_mandatory_read,
     {
         let mut retained_pages = RetainedExpertPageCache::new(1);
@@ -109,7 +109,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_preserve_a_useful_partial_owner_when_a_proposed_route_set_differs,
     {
         let mut retained_pages = RetainedExpertPageCache::new(1);
@@ -127,7 +127,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_replace_a_partial_owner_with_a_strict_superset_routed_page,
     {
         let mut retained_pages = RetainedExpertPageCache::new(1);
@@ -146,7 +146,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reclaim_multiple_partial_pages_before_one_complete_page,
     {
         let mut retained_pages = RetainedExpertPageCache::new(3);
@@ -166,7 +166,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_resume_a_request_pressure_cap_without_loading_any_page,
     {
         let mut retained_pages = RetainedExpertPageCache::new(2);
@@ -182,7 +182,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_apply_an_absolute_forward_pressure_cap_and_allow_safe_growth_to_it,
     {
         let mut retained_pages = RetainedExpertPageCache::new(3);
@@ -204,7 +204,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_apply_a_lower_normal_ceiling_with_partial_first_reclamation,
     {
         let mut retained_pages = RetainedExpertPageCache::new(3);
@@ -225,7 +225,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_ignore_invalid_route_identifiers_without_corrupting_demand,
     {
         let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(1);
@@ -240,7 +240,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_start_a_fresh_demand_window_after_topology_planning,
     {
         let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(1);
@@ -257,7 +257,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_scale_last_prefill_chunk_demand_by_earlier_token_density,
     {
         assert_eq!(last_prefill_chunk_demand_weight(6, 3), 2);
@@ -268,7 +268,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_prefer_last_chunk_routes_when_weighted_demand_exceeds_earlier_frequency,
     {
         let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(2);
@@ -287,7 +287,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_raw_frequency_ranking_when_last_chunk_weight_is_one,
     {
         let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(2);
@@ -304,7 +304,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_treat_a_zero_demand_weight_as_one_assignment, {
+offline_denied_test!(should_treat_a_zero_demand_weight_as_one_assignment, {
     let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(2);
     retained_pages.update_maximum_resident_payload_bytes(20);
     retained_pages.set_demand_assignment_weight(0);
@@ -319,7 +319,7 @@ offline_test!(should_treat_a_zero_demand_weight_as_one_assignment, {
     assert_eq!(topology[1].covered_weighted_demand, 2);
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_zero_or_overflowing_payload_accounting_without_mutating_ownership,
     {
         let mut retained_pages = RetainedExpertPageCache::<FakeExpertPage>::new(3);

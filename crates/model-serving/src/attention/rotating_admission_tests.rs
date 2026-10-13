@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
@@ -6,7 +6,7 @@ use crate::{
     rotating_prefill_transient_token_count,
 };
 
-offline_test!(
+offline_denied_test!(
     should_charge_window_plus_chunk_minus_one_for_rotating_prefill,
     {
         for (window_size, chunk_tokens, expected_peak_tokens) in [
@@ -25,12 +25,12 @@ offline_test!(
     }
 );
 
-offline_test!(should_bound_committed_tokens_to_the_window, {
+offline_denied_test!(should_bound_committed_tokens_to_the_window, {
     assert_eq!(rotating_committed_token_count(8, 3), 3);
     assert_eq!(rotating_committed_token_count(8, 40), 8);
 });
 
-offline_test!(should_validate_and_persist_rotating_boundary_geometry, {
+offline_denied_test!(should_validate_and_persist_rotating_boundary_geometry, {
     let zero_window = DecoderCacheLayout::new(vec![rotating_layout(0)]);
     assert_eq!(
         zero_window,
@@ -57,7 +57,7 @@ offline_test!(should_validate_and_persist_rotating_boundary_geometry, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_zero_window_and_overflowing_transient_geometry,
     {
         assert!(rotating_prefill_transient_token_count(0, 4).is_err());

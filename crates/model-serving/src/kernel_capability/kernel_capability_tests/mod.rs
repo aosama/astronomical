@@ -4,7 +4,7 @@
 //! re-probing, and fail closed for families that were never probed. Fake
 //! probes count their invocations so the once-per-worker-process contract is
 //! observable without a GPU.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 mod forced_verdicts;
 
@@ -59,7 +59,7 @@ fn supported_probe_pair(family: CustomMetalKernelFamily) -> (CountingProbe, Arc<
     CountingProbe::supported(family)
 }
 
-offline_test!(
+offline_denied_test!(
     should_probe_every_family_once_and_reuse_verdicts_without_reprobing,
     {
         let (weighted_sum_probe, weighted_sum_invocations) =
@@ -103,7 +103,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_report_a_typed_compilation_reason_without_losing_other_families,
     {
         let (failing_probe, failing_invocations) = CountingProbe::with_outcome(
@@ -139,7 +139,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_distinguish_execution_failures_from_output_mismatches,
     {
         let (execution_probe, _) = CountingProbe::with_outcome(
@@ -178,7 +178,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_fail_closed_for_a_family_that_was_never_probed, {
+offline_denied_test!(should_fail_closed_for_a_family_that_was_never_probed, {
     let (weighted_sum_probe, _) =
         supported_probe_pair(CustomMetalKernelFamily::SortedExpertWeightedSum);
     let mut performance_attribution = PerformanceAttribution::disabled();
@@ -195,7 +195,7 @@ offline_test!(should_fail_closed_for_a_family_that_was_never_probed, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_accept_exact_probe_outputs_and_reject_silent_zero_dispatches,
     {
         let expected_outputs = [133.0, 134.0, 120.0, 121.0];

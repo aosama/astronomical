@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
@@ -10,7 +10,7 @@ use crate::{
     should_retry_fixed_forward_after_expert_reclamation,
 };
 
-offline_test!(should_project_complete_residency_as_replacement, {
+offline_denied_test!(should_project_complete_residency_as_replacement, {
     assert_eq!(
         projected_active_memory_after_complete_expert_replacement(30, 20, 25),
         Ok(35)
@@ -25,7 +25,7 @@ offline_test!(should_project_complete_residency_as_replacement, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_reserve_activation_headroom_before_complete_residency,
     {
         assert_eq!(
@@ -44,7 +44,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reclaim_only_the_expert_bytes_needed_by_a_fixed_forward,
     {
         assert_eq!(
@@ -68,7 +68,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_include_active_transients_in_failed_forward_workspace,
     {
         assert_eq!(
@@ -83,7 +83,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_retry_once_only_after_the_reclamation_target_was_released,
     {
         assert!(should_retry_fixed_forward_after_expert_reclamation(
@@ -98,7 +98,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_choose_the_largest_memory_boundary_deficit, {
+offline_denied_test!(should_choose_the_largest_memory_boundary_deficit, {
     let plan = ExpertReclamationPlan::for_projected_memory(110, 130, 125, 100, 120, 15);
     assert_eq!(plan.required_reclamation_bytes(), 10);
     assert_eq!(plan.reclamation_target_bytes(), 10);
@@ -106,7 +106,7 @@ offline_test!(should_choose_the_largest_memory_boundary_deficit, {
     assert!(plan.can_satisfy_every_memory_boundary());
 });
 
-offline_test!(should_report_unresolved_reclamation_shortfall, {
+offline_denied_test!(should_report_unresolved_reclamation_shortfall, {
     let plan = ExpertReclamationPlan::for_projected_memory(140, 150, 145, 100, 120, 20);
     assert_eq!(plan.required_reclamation_bytes(), 40);
     assert_eq!(plan.reclamation_target_bytes(), 20);
@@ -114,7 +114,7 @@ offline_test!(should_report_unresolved_reclamation_shortfall, {
     assert!(!plan.can_satisfy_every_memory_boundary());
 });
 
-offline_test!(
+offline_denied_test!(
     should_keep_reclaiming_paged_experts_while_peak_still_misses_and_payload_remains,
     {
         let remaining_deficit =
@@ -126,7 +126,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_stop_paged_expert_reclamation_when_a_pass_releases_nothing,
     {
         let remaining_deficit =
@@ -138,7 +138,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_admit_once_stable_and_peak_fit_after_paged_expert_reclamation,
     {
         let fitting = ExpertReclamationPlan::for_projected_memory(90, 110, 110, 100, 120, 50);
