@@ -40,8 +40,8 @@ jobs:
         timeout-minutes: 2
 
   # Keep the job name and its concurrency group in sync with branch
-  # protection: "macOS hermetic verification" is a required status check and
-  # "macos-hermetic-" is how that check is found. Also keep this job's cache
+  # protection: "macOS offline verification" is a required status check and
+  # "macos-offline-" is how that check is found. Also keep this job's cache
   # owner set in scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
   rust-core:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
@@ -50,7 +50,7 @@ jobs:
     # lives in timeout-minutes below, never here, so the identity can't silently
     # drift from reality. Keep it in sync with branch protection (configured outside
     # this repo) if you ever change it.
-    name: macOS hermetic verification
+    name: macOS offline verification
     runs-on: macos-26
     # Job permissions replace the workflow-level set: pruning surplus caches
     # needs actions:write while everything else stays read-only.
@@ -58,7 +58,7 @@ jobs:
       contents: read
       actions: write
     concurrency:
-      group: macos-hermetic-${{ github.event_name }}-${{ github.ref }}
+      group: macos-offline-${{ github.event_name }}-${{ github.ref }}
       # Never cancel an in-flight required check. A cancelled run with this job
       # name blocks merge even when a later run on the same SHA is green.
       cancel-in-progress: false

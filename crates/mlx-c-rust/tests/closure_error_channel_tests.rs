@@ -1,4 +1,4 @@
-//! Hermetic contracts for the payload-closure error channel: the
+//! Offline contracts for the payload-closure error channel: the
 //! thread-local parking lot that carries closure failures from C
 //! trampolines back to the caller's status translation.
 

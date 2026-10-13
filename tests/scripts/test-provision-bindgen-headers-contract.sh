@@ -6,7 +6,7 @@
 # without any network access, and compares extracted MLX-C headers byte for
 # byte against a completed native build's staged headers. Fixture archives,
 # manifests, patches, and a fixture native build store keep every contract
-# hermetic; one contract pins the CMakeLists patch-pipeline parser so a
+# offline; one contract pins the CMakeLists patch-pipeline parser so a
 # restructure fails loudly.
 
 set -eu
