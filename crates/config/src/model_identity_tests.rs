@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::model_identity::near_model_matches;
 
-offline_test!(near_model_matches_survive_partial_typos, {
+offline_denied_test!(near_model_matches_survive_partial_typos, {
     let candidates = &["Qwen3.5-2B-4bit", "Ornith-1.5-35B-6bit", "gpt-oss-20b"];
     assert_eq!(
         near_model_matches("qwen3.5-2b", candidates),
@@ -19,7 +19,7 @@ offline_test!(near_model_matches_survive_partial_typos, {
     assert!(near_model_matches("definitely-not-a-model", candidates).is_empty());
 });
 
-offline_test!(near_model_matches_accepts_owned_candidate_strings, {
+offline_denied_test!(near_model_matches_accepts_owned_candidate_strings, {
     let candidates = vec!["Qwen3.5-2B-4bit".to_owned()];
     assert_eq!(
         near_model_matches("QWEN3.5", &candidates),

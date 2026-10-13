@@ -12,9 +12,11 @@
 //! every test declared through these macros carries the default 120-second
 //! timeout without anyone remembering to write one.
 
+pub mod network_denial;
 pub mod timeout;
 pub mod workspace;
 
+pub use network_denial::ensure_network_denied;
 pub use timeout::run_with_timeout;
 pub use workspace::workspace_binary;
 
@@ -107,6 +109,60 @@ macro_rules! offline_tokio_real_clock_test {
     ($name:ident, $body:block) => {
         #[tokio::test(flavor = "current_thread")]
         async fn $name() {
+            if ::tokio::time::timeout(
+                ::std::time::Duration::from_secs($crate::DEFAULT_TEST_TIMEOUT_SECONDS),
+                async { $body },
+            )
+            .await
+            .is_err()
+            {
+                panic!(
+                    "{} exceeded its {}-second timeout and was aborted",
+                    stringify!($name),
+                    $crate::DEFAULT_TEST_TIMEOUT_SECONDS
+                );
+            }
+        }
+    };
+}
+
+/// Declares a synchronous unit test whose process is denied every network
+/// operation before the body runs, on top of the default harness timeout.
+///
+/// The denial is process-wide and one-way (see [`network_denial`]): the first
+/// denied test in a binary applies it, and every later socket attempt in that
+/// binary fails loudly — including tests that never asked for it. Point only
+/// beside-source unit suites at this macro; integration journeys that
+/// genuinely drive unix-socket transport belong in
+/// `offline_tokio_real_clock_test!`.
+#[macro_export]
+macro_rules! offline_denied_test {
+    ($name:ident, $body:block) => {
+        #[test]
+        fn $name() {
+            $crate::run_with_timeout(
+                stringify!($name),
+                $crate::DEFAULT_TEST_TIMEOUT_SECONDS,
+                || {
+                    $crate::ensure_network_denied().unwrap_or_else(|seatbelt_failure| {
+                        panic!("network denial could not be applied: {seatbelt_failure}")
+                    });
+                    $body
+                },
+            );
+        }
+    };
+}
+
+/// The paused-clock asynchronous counterpart of [`offline_denied_test!`].
+#[macro_export]
+macro_rules! offline_denied_tokio_test {
+    ($name:ident, $body:block) => {
+        #[tokio::test(flavor = "current_thread", start_paused = true)]
+        async fn $name() {
+            $crate::ensure_network_denied().unwrap_or_else(|seatbelt_failure| {
+                panic!("network denial could not be applied: {seatbelt_failure}")
+            });
             if ::tokio::time::timeout(
                 ::std::time::Duration::from_secs($crate::DEFAULT_TEST_TIMEOUT_SECONDS),
                 async { $body },
