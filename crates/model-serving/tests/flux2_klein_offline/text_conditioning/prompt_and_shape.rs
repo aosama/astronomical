@@ -5,7 +5,7 @@ use super::prompt::Flux2KleinPromptRenderer;
 use super::tokenizer::Flux2KleinTokenizer;
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[test]

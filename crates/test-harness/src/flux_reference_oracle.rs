@@ -30,33 +30,32 @@ use image::{GenericImageView, ImageFormat};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-#[path = "flux2_klein_reference_oracle/initial_noise.rs"]
 mod initial_noise;
 
 const REFERENCE_IMPLEMENTATION: &str = "black-forest-labs/diffusers";
 const BFL_SOURCE_REPOSITORY: &str = "https://github.com/black-forest-labs/flux2";
-pub(crate) const BFL_SOURCE_REVISION: &str = "50fe5162777813d869182b139e83b10743caef15";
+pub const BFL_SOURCE_REVISION: &str = "50fe5162777813d869182b139e83b10743caef15";
 const DIFFUSERS_SOURCE_REPOSITORY: &str = "https://github.com/huggingface/diffusers";
-pub(crate) const DIFFUSERS_SOURCE_REVISION: &str = "2f7e0154a9db246e95c9ede43edba7db5b130805";
+pub const DIFFUSERS_SOURCE_REVISION: &str = "2f7e0154a9db246e95c9ede43edba7db5b130805";
 const MAXIMUM_ALLOWED_CHANNEL_ERROR: u8 = 64;
 const MAXIMUM_ALLOWED_MEAN_CHANNEL_ERROR: f64 = 3.0;
 const MAXIMUM_ALLOWED_P99_CHANNEL_ERROR: u8 = 24;
 const MAXIMUM_ALLOWED_P999_CHANNEL_ERROR: u8 = 40;
 
 #[derive(Debug)]
-pub(crate) struct ExpectedFluxReference<'a> {
-    pub(crate) model_id: &'a str,
-    pub(crate) model_revision: &'a str,
-    pub(crate) prompt: &'a str,
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) seed: u64,
-    pub(crate) steps: u32,
-    pub(crate) guidance: f64,
+pub struct ExpectedFluxReference<'a> {
+    pub model_id: &'a str,
+    pub model_revision: &'a str,
+    pub prompt: &'a str,
+    pub width: u32,
+    pub height: u32,
+    pub seed: u64,
+    pub steps: u32,
+    pub guidance: f64,
 }
 
 #[derive(Debug)]
-pub(crate) struct FluxReferenceOracle {
+pub struct FluxReferenceOracle {
     reference_rgb: Vec<u8>,
     maximum_channel_error: u8,
     mean_channel_error: f64,
@@ -64,16 +63,16 @@ pub(crate) struct FluxReferenceOracle {
 }
 
 #[derive(Debug)]
-pub(crate) struct PixelErrorMetrics {
-    pub(crate) maximum_channel_error: u8,
-    pub(crate) mean_channel_error: f64,
-    pub(crate) p99_channel_error: u8,
-    pub(crate) p999_channel_error: u8,
-    pub(crate) channels_above_eight: usize,
+pub struct PixelErrorMetrics {
+    pub maximum_channel_error: u8,
+    pub mean_channel_error: f64,
+    pub p99_channel_error: u8,
+    pub p999_channel_error: u8,
+    pub channels_above_eight: usize,
 }
 
 impl FluxReferenceOracle {
-    pub(crate) fn parse(
+    pub fn parse(
         bundle_bytes: &[u8],
         expected: &ExpectedFluxReference<'_>,
     ) -> Result<Self, String> {
@@ -160,10 +159,7 @@ impl FluxReferenceOracle {
         })
     }
 
-    pub(crate) fn compare_generated_rgb(
-        &self,
-        generated_rgb: &[u8],
-    ) -> Result<PixelErrorMetrics, String> {
+    pub fn compare_generated_rgb(&self, generated_rgb: &[u8]) -> Result<PixelErrorMetrics, String> {
         if generated_rgb.len() != self.reference_rgb.len() {
             return Err(format!(
                 "generated RGB length {} does not match reference RGB length {}",
@@ -191,7 +187,7 @@ impl FluxReferenceOracle {
         Ok(metrics)
     }
 
-    pub(crate) fn verify_initial_noise_sha256(
+    pub fn verify_initial_noise_sha256(
         &self,
         actual_initial_noise_sha256: &str,
     ) -> Result<(), String> {
@@ -205,7 +201,7 @@ impl FluxReferenceOracle {
     }
 }
 
-pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+pub fn sha256_hex(bytes: &[u8]) -> String {
     const LOWERCASE_HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
     let digest = Sha256::digest(bytes);
     let mut digest_hex = String::with_capacity(digest.len() * 2);

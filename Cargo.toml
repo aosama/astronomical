@@ -12,6 +12,7 @@ members = [
     "crates/test-harness",
     "crates/runtime-integration",
     "tests/e2e",
+    "tests/acceptance",
 ]
 default-members = [
     "crates/mlx-c-rust",
@@ -26,6 +27,7 @@ default-members = [
     "crates/test-harness",
     "crates/runtime-integration",
     "tests/e2e",
+    "tests/acceptance",
 ]
 resolver = "3"
 

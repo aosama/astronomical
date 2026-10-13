@@ -31,10 +31,8 @@ pub(crate) struct FluxRestServer {
 pub(crate) async fn launch_flux_rest_server() -> FluxRestServer {
     let isolated_development_home = crate::support::isolated_development_home_from_user_config();
     enable_isolated_acceptance_diagnostics(&isolated_development_home);
-    let production_worker_executable_path = PathBuf::from(
-        std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
-            .expect("Cargo should provide the production inference-worker executable path"),
-    );
+    let production_worker_executable_path =
+        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
     let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_development_home.path().to_path_buf(),
         production_worker_executable_path.clone(),

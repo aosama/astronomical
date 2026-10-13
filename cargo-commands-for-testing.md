@@ -82,18 +82,22 @@ test; do not wrap them in a longer external timeout or run them concurrently.
 
 ### Memory-management acceptance (SSD paging journeys)
 
-- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance -- --ignored --nocapture --test-threads=1`
+All journey commands resolve the real worker binary from the shared target
+directory, so build it once first:
+`cargo build --release -p astronomical-inference-worker`.
+
+- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance_tests --features memory-management-acceptance -- --ignored --nocapture --test-threads=1`
   — the full memory-management journey suite: SSD-paged decode expert reuse,
   expert eviction, complete-residency control, prefill memory progress,
   reverse model swap, and the paging memory-shape experiment.
-- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance model_ssd_streaming::follow_up_admission_paged_moe_rest_journey::should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance_tests --features memory-management-acceptance model_ssd_streaming::follow_up_admission_paged_moe_rest_journey::should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
   — the paged-MoE follow-up admission regression journey: a long first turn
   teaches the RAM budget chunk-shaped activation evidence, and the follow-up
   turn in the same conversation must be admitted, never rejected with
   `generation context exceeds available GPU wired memory`. Resident and SSD
   streaming prefill both use the fixed 2,048-token test span; the journey has a
   60-second timeout and a 36 GB maximum configured memory ceiling.
-- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance_tests --features memory-management-acceptance should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling -- --ignored --nocapture --exact --test-threads=1`
   — the paging memory-shape experiment (default 32 GB cell): samples the
   memory timeline during a 5,000-token Romeo-and-Juliet prefill plus 500
   decode tokens, prints the full performance-attribution segment tables, and
@@ -108,14 +112,16 @@ test; do not wrap them in a longer external timeout or run them concurrently.
 One command per ceiling cell; run each as its own process (MLX memory limits
 are process-global). Each cell has a 60-second test timeout with a 45-second
 serving budget, appends one `memory_ceiling_sweep` record with its `memory_cell`
-evidence to `tests/performance_throughput/throughput-history.jsonl`, and fails
+evidence to
+`tests/acceptance/tests/performance_throughput/throughput-history.jsonl`, and
+fails
 when the serving budget is exhausted so partial evidence remains available.
 Set `MEMORY_SWEEP_CELL_ORDER` to the cell's position in your sweep so records
 carry it; the recommended protocol brackets the sweep with the 32 GB cell
 first and last and interleaves the rest so page-cache warmth cannot masquerade
 as a ceiling effect.
 
-- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::memory_ceiling_sweep::should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput_tests performance_throughput::memory_ceiling_sweep::should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell -- --ignored --nocapture --exact --test-threads=1`
 - The same command with `..._28gb_...`, `..._32gb_...`, `..._35gb_...`,
   `..._38gb_...`, and `..._40gb_...` runs the remaining cells. Each journey
   uses a 2,048-token prefill chunk, a 500-token output target, and a
@@ -127,7 +133,7 @@ as a ceiling effect.
 
 ### Serving throughput (production-faithful rates)
 
-- `cargo test --release -p astronomical-inference-worker --features performance_throughput --test performance_throughput_tests performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput_tests performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture --exact --test-threads=1`
   — resident-model text throughput: 9,000–11,000 Romeo-and-Juliet input
   tokens, 450–550 output tokens, 500-input/50-output warmup, persistent prompt
   cache disabled, 2,048-token prefill chunks, and a 36 GB maximum configured
@@ -147,7 +153,7 @@ as a ceiling effect.
 
 ### Inference-worker serving acceptance (dense-model journeys)
 
-- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::chat::follow_up_turn_admission_rest::should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features serving-acceptance --test serving_acceptance_tests serving_acceptance::chat::follow_up_turn_admission_rest::should_admit_the_follow_up_turn_when_the_ssd_streaming_chunk_is_wider -- --ignored --nocapture --exact --test-threads=1`
   — the small dense Qwen3.5 variant of the follow-up admission regression: a
   wider SSD-streaming chunk is configured while the dense model never pages,
   so the resident mode's own operation scope must govern the activation
@@ -162,13 +168,13 @@ request using a configured sparse artifact. The resident journey is bounded to
 three tests are `#[serial]`, run with one test thread, and enforce a 36 GB
 maximum configured active-memory ceiling.
 
-- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_select_resident_engine_when_artifact_geometry_and_prompt_fit -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_select_resident_engine_when_artifact_geometry_and_prompt_fit -- --ignored --nocapture --exact --test-threads=1`
   — verifies a request selects resident execution when validated artifact
   geometry plus prompt context fit the configured ceiling.
-- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_select_streaming_engine_when_complete_residency_headroom_does_not_fit -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_select_streaming_engine_when_complete_residency_headroom_does_not_fit -- --ignored --nocapture --exact --test-threads=1`
   — verifies a request selects paging when the artifact's complete-residency
   headroom does not fit.
-- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_restore_cached_prefix_after_an_invisible_resident_to_streaming_retry -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::automatic_engine_selection_rest::should_restore_cached_prefix_after_an_invisible_resident_to_streaming_retry -- --ignored --nocapture --exact --test-threads=1`
   — verifies one invisible resident-to-streaming retry retains persistent
   prefix reuse and emits a nonzero retry-attribution interval.
 
@@ -182,10 +188,10 @@ thread, uses the Romeo and Juliet fixture with a fixed 2,048-token prefill
 chunk, stays within a 36 GB configured ceiling, and is bounded to 60 seconds
 because it exercises solid-state-drive streaming.
 
-- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::live_ceiling_lowering_rest::should_serve_after_lowering_the_live_ceiling_below_the_artifact_size -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::live_ceiling_lowering_rest::should_serve_after_lowering_the_live_ceiling_below_the_artifact_size -- --ignored --nocapture --exact --test-threads=1`
   — lowers the ceiling on an idle serving session and requires a follow-up
   request to return generated output under the streaming engine.
-- `cargo test --release -p astronomical-inference-worker --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::queued_live_ceiling_demotion_rest::should_demote_the_live_ceiling_queued_behind_an_active_generation -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --features serving-acceptance --test serving_acceptance_tests serving_acceptance::qwen3_5::queued_live_ceiling_demotion_rest::should_demote_the_live_ceiling_queued_behind_an_active_generation -- --ignored --nocapture --exact --test-threads=1`
   — lowers the ceiling while a generation is in flight; the update must queue,
   the active request must finish normally, and the restart must not begin until
   that request completes.
@@ -228,7 +234,7 @@ test thread, and respect each journey's 115-second budget.
   they measure cache behaviour, not expert paging; the whole binary takes about
   three minutes. The one exception is the interaction matrix journey, which
   fails closed unless a cell is selected.
-- `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL=<cell> cargo test -p astronomical-model-serving --features direct-mlx --test prompt_cache_acceptance_tests prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell -- --ignored --nocapture --exact --test-threads=1`
+- `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL=<cell> cargo test --release -p astronomical-acceptance --features serving-acceptance --test prompt_cache_acceptance_tests prompt_cache_acceptance::cache_interaction_matrix::should_run_selected_pinned_ornith_cache_interaction_matrix_cell -- --ignored --nocapture --exact --test-threads=1`
   — runs one storage-transition cell; the cells are `fixed-live-reuse`,
   `fixed-worker-restart`, and `fixed-deleted-while-live`. Run all three.
 - `ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS=4096 cargo test ... prompt_cache_acceptance::engine_prompt_cache::should_restore_exact_cache_parity_for_one_selected_large_prefill_size -- --ignored --nocapture --exact --test-threads=1`
@@ -237,6 +243,6 @@ test thread, and respect each journey's 115-second budget.
 
 ## Building test binaries without running them
 
-- `cargo test --release -p astronomical-inference-worker --test memory_management_acceptance_tests --features memory-management-acceptance --no-run`
+- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance_tests --features memory-management-acceptance --no-run`
   — compiles the memory acceptance binary and the production worker binary it
   spawns; useful before iterating on one journey.

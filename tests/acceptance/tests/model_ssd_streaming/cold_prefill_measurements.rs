@@ -120,8 +120,7 @@ async fn should_measure_model_ssd_streaming_cold_prefill_at_fifty_thousand_words
 async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCase) {
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
-        std::env::var("CARGO_BIN_EXE_astronomical-inference-worker")
-            .expect("Cargo should provide the production inference-worker executable path");
+        astronomical_test_harness::workspace_binary("astronomical-inference-worker");
     let (isolated_worker_home, worker_executable_path) = isolated_prompt_cache_worker_launcher(
         Path::new(&production_worker_executable_path),
         &configured_model_directory,
