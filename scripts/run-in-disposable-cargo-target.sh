@@ -12,8 +12,9 @@
 # and removed. Called from inside an existing lane target, the command reuses
 # that target instead of nesting a second one.
 #
-# Direct callers: scripts/test-direct-mlx.sh, scripts/test-mlx-memory-contracts.sh,
-# scripts/internal/build-macos-app.sh.
+# Direct callers: scripts/internal/build-macos-app.sh and the lifecycle
+# contract tests. Test lanes no longer route through this runner: the GPU
+# acceptance lanes run through plain cargo aliases (see .cargo/config.toml).
 
 set -eu
 

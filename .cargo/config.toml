@@ -13,8 +13,8 @@ warnings = "deny"
 # Lane vocabulary (issue #1208): "offline" names the property — sealed and
 # deterministic, no real network beyond localhost, no real model artifacts,
 # everything scripted. The offline lane runs each package's offline_tests
-# binary; the historical test-hermetic aliases were retired with the
-# campaign's final batch.
+# binary; the property-named aliases from before the vocabulary campaign
+# were retired with the campaign's final batch.
 # test-offline: every package's offline_tests binary.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
 # test-e2e: the root whole-product journeys (tests/e2e) that spawn the real
@@ -32,3 +32,22 @@ test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", 
 # that only surfaces in CI when skipped) for one local compile instead of a
 # paid GitHub Actions round trip. Run `cargo verify` before every push.
 verify = ["check", "--workspace", "--all-targets"]
+# Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
+# packages, features, targets, and the GPU serial rule (`--test-threads=1`)
+# cannot be forgotten. Acceptance journeys are `#[ignore]`d: they need real
+# model artifacts, an Apple-Silicon host, and run through `--ignored` here.
+# A bare `cargo test -p astronomical-acceptance` without features runs
+# nothing — the aliases are the interface.
+# test-direct-mlx: the model-serving direct-MLX contract suite plus the
+# runtime-integration MLX-C coverage bridge contract (CPU-only, seconds) so
+# bridge drift fails the lane instead of shipping silently.
+test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "astronomical-acceptance/direct-mlx", "-p", "astronomical-runtime-integration", "--features", "astronomical-runtime-integration/mlx", "--test", "direct_mlx_tests", "--test", "mlx_c_coverage_contract_tests", "--", "--test-threads=1"]
+# test-mlx-memory: every native memory-contract phase (model-swap allocator,
+# native probe, MLX-C transitions) in one bounded invocation; the probe
+# binary must exist in the native build store (build it first with
+# `cargo test -p astronomical-runtime-integration --features
+# mlx-memory-contract-probe --no-run`).
+test-mlx-memory = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,mlx-memory-contract-probe", "--test", "mlx_memory_contract_tests", "--test", "runtime_mlx_memory_contract_tests", "--", "--ignored", "--test-threads=1"]
+# test-acceptance: the whole real-model acceptance package (journeys and
+# contracts across every feature gate), still `--test-threads=1`.
+test-acceptance = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,serving-acceptance,memory-management-acceptance,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe", "--tests", "--", "--ignored", "--test-threads=1"]

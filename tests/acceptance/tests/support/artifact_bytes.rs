@@ -53,6 +53,9 @@ pub(crate) fn artifact_directory_regular_file_bytes(model_directory: &Path) -> u
 /// registers the leaf model id; discovery over the `snapshots/<sha>` directory
 /// itself would register the commit hash instead, so every request would fail
 /// with model_not_found even though the worker loads fine.
+/// The package's binaries share this module, and each binary consumes a
+/// subset, so unused-in-this-binary is expected rather than a defect.
+#[allow(dead_code)]
 pub(crate) fn acceptance_model_scan_root(model_directory: &Path) -> PathBuf {
     let cache_entry_directory =
         model_directory
