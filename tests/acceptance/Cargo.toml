@@ -54,7 +54,7 @@ required-features = ["direct-mlx"]
 
 [[test]]
 name = "engine_prompt_cache"
-path = "tests/gpu_contracts/prompt_cache.rs"
+path = "tests/prompt_cache_engine.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
