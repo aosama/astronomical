@@ -19,7 +19,7 @@ use super::engine_prompt_cache::{
 };
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 const TURN_ONE_TAIL_TOKEN_COUNT: usize = 16;
 const TURN_TWO_EXTENSION_TOKEN_COUNT: usize = 16;

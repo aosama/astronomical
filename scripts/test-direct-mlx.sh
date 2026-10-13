@@ -10,8 +10,8 @@
 #
 # Command run (inside a disposable Cargo target owned by the lane):
 #   timeout --foreground -k 5s 120s cargo --verbose test \
-#     -p astronomical-model-serving -p astronomical-runtime-integration \
-#     --features astronomical-model-serving/direct-mlx,astronomical-runtime-integration/mlx \
+#     -p astronomical-acceptance -p astronomical-runtime-integration \
+#     --features astronomical-acceptance/direct-mlx,astronomical-runtime-integration/mlx \
 #     --test direct_mlx_tests --test mlx_c_coverage_contract_tests -- --test-threads=1
 #
 # One test thread keeps mutable environment and allocator-policy tests
@@ -44,9 +44,9 @@ if "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
         --lane direct-mlx -- \
         "$timeout_executable" --foreground -k 5s 120s \
         cargo --verbose test \
-            --package astronomical-model-serving \
+            --package astronomical-acceptance \
             --package astronomical-runtime-integration \
-            --features astronomical-model-serving/direct-mlx,astronomical-runtime-integration/mlx \
+            --features astronomical-acceptance/direct-mlx,astronomical-runtime-integration/mlx \
             --test direct_mlx_tests \
             --test mlx_c_coverage_contract_tests \
             -- \

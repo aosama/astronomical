@@ -14,6 +14,7 @@ version.workspace = true
 autotests = false
 
 [features]
+direct-mlx = []
 serving-acceptance = []
 memory-management-acceptance = []
 performance-measurement = []
@@ -39,6 +40,26 @@ path = "tests/performance_measurement_tests.rs"
 name = "performance_throughput_tests"
 path = "tests/performance_throughput_tests.rs"
 
+[[test]]
+name = "direct_mlx_tests"
+path = "tests/gpu_contracts/direct_mlx_tests.rs"
+required-features = ["direct-mlx"]
+
+[[test]]
+name = "installed_model_contracts_tests"
+path = "tests/gpu_contracts/installed_model_contracts_tests.rs"
+required-features = ["direct-mlx"]
+
+[[test]]
+name = "mlx_memory_contract_tests"
+path = "tests/gpu_contracts/mlx_memory_contract_tests.rs"
+required-features = ["direct-mlx"]
+
+[[test]]
+name = "engine_prompt_cache_tests"
+path = "tests/gpu_contracts/prompt_cache_acceptance_tests.rs"
+required-features = ["direct-mlx"]
+
 [lints]
 workspace = true
 
@@ -61,5 +82,8 @@ serde_json.workspace = true
 serial_test.workspace = true
 sha2.workspace = true
 tempfile = "=3.27.0"
+thiserror.workspace = true
 tokenizers.workspace = true
 tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
