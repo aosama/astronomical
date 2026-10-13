@@ -20,7 +20,10 @@ pub(super) fn image_capabilities() -> ImageGenerationCapabilities {
         minimum_height_pixels: 64,
         maximum_height_pixels: 1_024,
         dimension_multiple_pixels: 16,
-        maximum_steps: 4,
+        // The real worker loop re-checks the admitted request against this
+        // advertisement, so the ceiling must admit the step schedules of the
+        // models journeys inject (the Qwen-Image-2.1 shape defaults to 40).
+        maximum_steps: 64,
         maximum_guidance_thousandths: 1_000,
         output_mime_types: vec!["image/png".to_owned()],
     }
@@ -369,7 +372,18 @@ where
 }
 
 fn valid_png_bytes(width_pixels: u32, height_pixels: u32) -> Vec<u8> {
-    let rgb_bytes = vec![0; width_pixels as usize * height_pixels as usize * 3];
+    // A deterministic horizontal gradient: neighbouring luma correlates
+    // near 1.0, so the scripted fidelity clears the acceptance journey's
+    // spatial-coherence floor, and every pixel is reproducible for a human
+    // inspecting a saved render.
+    let column_count = width_pixels.max(2) as usize - 1;
+    let rgb_bytes: Vec<u8> = (0..height_pixels)
+        .flat_map(|_| 0..width_pixels)
+        .flat_map(|column_index| {
+            let channel = (column_index as usize * 255 / column_count) as u8;
+            [channel, channel, channel]
+        })
+        .collect();
     let mut png_bytes = Vec::new();
     PngEncoder::new_with_quality(
         Cursor::new(&mut png_bytes),

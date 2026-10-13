@@ -1,20 +1,22 @@
-//! Live end-to-end acceptance journey: one `respond --schema`-shaped chat
-//! generation through the daemon's IPC socket with a real model.
+//! Whole-product acceptance journey: one `respond --schema`-shaped chat
+//! generation through the daemon's IPC socket.
 //!
-//! This ignored journey spawns the actual `astronomicald` daemon (which spawns
-//! the real inference worker from its own directory), configures it to discover
-//! the installed Qwen3.5-2B-4bit artifact, and sends one
-//! `DaemonRequest::ChatGenerate` carrying raw `--schema` JSON — the exact
-//! request the CLI's `respond --schema` verb sends — through the daemon's
-//! schema validation into the worker's logits-masked structured generation. It
-//! closes the one link the offline journeys cannot: a real model answering
-//! with a single JSON object that matches the supplied schema, on the CLI's
-//! own request path.
+//! Driven in two fidelities selected by `ASTRONOMICAL_REAL_MODEL=1`: the
+//! real `astronomicald` daemon (which spawns the real inference worker from
+//! its own directory), configured to discover the installed Qwen3.5-2B-4bit
+//! artifact — or, by default, the fixture `astronomical-daemon-test-daemon`
+//! with the scripted worker, which needs no artifacts so the suite runs on
+//! any machine. Both fidelities send one `DaemonRequest::ChatGenerate`
+//! carrying raw `--schema` JSON — the exact request the CLI's `respond
+//! --schema` verb sends — through the daemon's schema validation into
+//! logits-masked structured generation, and both assert the same reply
+//! contract: a single JSON object matching the supplied schema.
 //!
-//! Prerequisites: the real worker binary must sit next to the daemon binary, so
-//! build both before running (`cargo build -p astronomical-daemon
-//! -p astronomical-inference-worker`), and the configured Development model
-//! directories must contain the installed Qwen3.5-2B-4bit artifact.
+//! Real-fidelity prerequisites: the real worker binary must sit next to the
+//! daemon binary, so build both before running (`cargo build
+//! -p astronomical-daemon -p astronomical-inference-worker`), and the
+//! configured Development model directories must contain the installed
+//! Qwen3.5-2B-4bit artifact.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -28,6 +30,8 @@ use astronomical_rest_contract::extract_json_value_from_text;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::timeout;
+
+use crate::common::fidelity::ModelFidelity;
 
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const DAEMON_STARTUP_WAIT: Duration = Duration::from_secs(20);
@@ -49,17 +53,16 @@ const HOUSEHOLD_SCHEMA_JSON: &str = "{\"properties\":{\"household\":{\"type\":\"
 /// A prompt grounded in the repository's mandated Romeo and Juliet source.
 const JOURNEY_PROMPT: &str = "Who speaks the line \"O Romeo, Romeo, wherefore art thou Romeo?\", and which household does that speaker belong to? Reply with the JSON object.";
 
-#[ignore = "requires the built daemon+worker binaries and the installed Qwen3.5-2B-4bit artifact"]
 #[tokio::test]
 async fn should_serve_one_schema_matching_json_object_over_the_cli_ipc_path() {
     timeout(JOURNEY_TIMEOUT, async {
-        let model_directory = installed_chat_model_directory();
+        let fidelity = ModelFidelity::from_environment();
         let state_directory = tempfile::tempdir().expect("state directory should be created");
         let isolated_home = tempfile::tempdir().expect("isolated home should be created");
-        write_instance_config(state_directory.path(), &scan_root(&model_directory));
+        write_instance_config(state_directory.path(), &journey_scan_root(fidelity));
 
         let (mut daemon_process, daemon_diagnostics_tail) =
-            spawn_real_daemon(state_directory.path(), isolated_home.path()).await;
+            spawn_daemon(state_directory.path(), isolated_home.path(), fidelity).await;
         let socket_path = state_directory.path().join("ipc.sock");
         wait_for_ipc_socket(&socket_path).await;
 
@@ -132,6 +135,16 @@ fn installed_chat_model_directory() -> PathBuf {
         })
 }
 
+/// The instance config's model scan root per fidelity: the real daemon
+/// discovers the installed artifact through it; the fixture daemon ignores
+/// config.json, so any well-formed root keeps the document byte-identical.
+fn journey_scan_root(fidelity: ModelFidelity) -> String {
+    match fidelity {
+        ModelFidelity::Real => scan_root(&installed_chat_model_directory()),
+        ModelFidelity::Scripted => "fixtures/models/scripted-chat".to_owned(),
+    }
+}
+
 /// Discovery accepts the parent of the resolved model directory and finds the
 /// artifact under it.
 fn scan_root(model_directory: &Path) -> String {
@@ -142,7 +155,7 @@ fn scan_root(model_directory: &Path) -> String {
         .into_owned()
 }
 
-/// The real daemon resolves configuration from the state directory it is given.
+/// The daemon resolves configuration from the state directory it is given.
 fn write_instance_config(state_directory: &Path, model_root: &str) {
     let configuration_document = format!(
         r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":["{model_root}"]}},"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}}}}"#
@@ -151,34 +164,61 @@ fn write_instance_config(state_directory: &Path, model_root: &str) {
         .expect("instance config should be written");
 }
 
-async fn spawn_real_daemon(
+/// Spawns the daemon for the journey's fidelity: the real `astronomicald`
+/// (which discovers and spawns its own real worker) or the fixture
+/// `astronomical-daemon-test-daemon` pointed at the scripted worker. The
+/// fixture pair answers the same IPC surface with the same startup line.
+async fn spawn_daemon(
     state_directory: &Path,
     isolated_home: &Path,
+    fidelity: ModelFidelity,
 ) -> (Child, tokio::task::JoinHandle<Vec<String>>) {
-    let daemon_executable_path = astronomical_test_harness::workspace_binary("astronomicald")
-        .to_string_lossy()
-        .into_owned();
-    let daemon_directory = Path::new(&daemon_executable_path)
-        .parent()
-        .expect("the daemon executable should have a parent directory");
-    assert!(
-        daemon_directory
-            .join("astronomical-inference-worker")
-            .is_file(),
-        "the real worker binary must exist next to the daemon: build it first with \
-         `cargo build -p astronomical-inference-worker`"
-    );
-    let mut daemon_process = Command::new(daemon_executable_path)
+    let daemon_executable_path = match fidelity {
+        ModelFidelity::Real => {
+            let daemon_executable_path =
+                astronomical_test_harness::workspace_binary("astronomicald")
+                    .to_string_lossy()
+                    .into_owned();
+            let daemon_directory = Path::new(&daemon_executable_path)
+                .parent()
+                .expect("the daemon executable should have a parent directory");
+            assert!(
+                daemon_directory
+                    .join("astronomical-inference-worker")
+                    .is_file(),
+                "the real worker binary must exist next to the daemon: build it first with \
+                 `cargo build -p astronomical-inference-worker`"
+            );
+            daemon_executable_path
+        }
+        ModelFidelity::Scripted => {
+            astronomical_test_harness::workspace_binary("astronomical-daemon-test-daemon")
+                .to_string_lossy()
+                .into_owned()
+        }
+    };
+    let mut daemon_spawn_command = Command::new(daemon_executable_path);
+    daemon_spawn_command
         .args(["--instance", "development", "--state-directory"])
         .arg(state_directory)
         .env("HOME", isolated_home)
         .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
+        .env_remove("ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    if fidelity == ModelFidelity::Scripted {
+        daemon_spawn_command
+            .env(
+                "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH",
+                astronomical_test_harness::workspace_binary("astronomical-daemon-test-worker"),
+            )
+            .env("ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID", CHAT_MODEL_ID);
+    }
+    let mut daemon_process = daemon_spawn_command
         .spawn()
-        .expect("the real daemon process should start");
+        .expect("the daemon process should start");
     // The daemon spawns its worker at boot; a failed boot spawn poisons every
     // later generation request with a fast rejection, so the diagnostics tail
     // is the only way to see why. Keep a bounded tail for the failure path.

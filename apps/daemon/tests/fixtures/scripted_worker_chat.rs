@@ -71,6 +71,42 @@ where
         .await
 }
 
+pub(super) async fn send_structured_json_reply<WriteTransport>(
+    request_id: RequestId,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), astronomical_ipc_protocol::ProtocolError>
+where
+    WriteTransport: tokio::io::AsyncWrite + Unpin,
+{
+    // The scripted fidelity of the root schema journey: the structured
+    // generation arm answers with the schema-conforming object so the
+    // journey's request and assertions stay identical across fidelities.
+    // Grounded in the repository's mandated Romeo and Juliet source.
+    event_writer
+        .send_event(&WorkerEvent::Output {
+            request_id,
+            sequence_number: 0,
+            generated_token_count: 1,
+            outputs: vec![ChatGenerationOutput::Text {
+                text: r#"{"speaker":"Juliet","household":"Capulet"}"#.to_owned(),
+            }],
+            mlx_memory_snapshot: None,
+            expert_residency: None,
+        })
+        .await?;
+    event_writer
+        .send_event(&WorkerEvent::Completed {
+            request_id,
+            prompt_token_count: 2,
+            generated_token_count: 1,
+            reasoning_token_count: 0,
+            cached_token_count: 0,
+            persistent_prompt_cache_diagnostics: None,
+            reason: ChatGenerationCompletionReason::EndOfSequence,
+        })
+        .await
+}
+
 pub(super) async fn send_simple_completion<WriteTransport>(
     request_id: RequestId,
     event_writer: &mut ProtocolWriter<WriteTransport>,
