@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
@@ -6,7 +6,7 @@ use crate::{
     ChatToolDefinition, RequestId,
 };
 
-offline_test!(
+offline_denied_test!(
     should_reject_an_empty_model_id_before_worker_preprocessing,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -35,7 +35,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_accept_a_large_model_id_when_the_ipc_frame_fits, {
+offline_denied_test!(should_accept_a_large_model_id_when_the_ipc_frame_fits, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "m".repeat(257),
@@ -60,7 +60,7 @@ offline_test!(should_accept_a_large_model_id_when_the_ipc_frame_fits, {
         .expect("the IPC frame-size limit should bound model IDs, not a tiny field cap");
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_temperature_above_the_supported_sampling_range,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -92,7 +92,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_a_top_p_above_the_supported_sampling_range, {
+offline_denied_test!(should_reject_a_top_p_above_the_supported_sampling_range, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -121,7 +121,7 @@ offline_test!(should_reject_a_top_p_above_the_supported_sampling_range, {
     );
 });
 
-offline_test!(should_reject_malformed_assistant_tool_call_arguments, {
+offline_denied_test!(should_reject_malformed_assistant_tool_call_arguments, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -158,7 +158,7 @@ offline_test!(should_reject_malformed_assistant_tool_call_arguments, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_object,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -198,7 +198,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_an_empty_declared_tool_name_before_prompt_rendering,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -231,7 +231,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_a_duplicate_assistant_tool_call_id, {
+offline_denied_test!(should_reject_a_duplicate_assistant_tool_call_id, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(61),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -283,7 +283,7 @@ offline_test!(should_reject_a_duplicate_assistant_tool_call_id, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_accept_a_reused_tool_call_id_after_its_previous_result,
     {
         let tool_call = || ChatAssistantToolCall {
@@ -345,7 +345,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_system_message_after_conversation_history_begins,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -379,7 +379,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_tool_result_without_a_prior_assistant_tool_call,
     {
         let chat_generation_command = ChatGenerationCommand {

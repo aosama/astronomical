@@ -1,4 +1,4 @@
-use astronomical_test_harness::{offline_test, offline_tokio_test};
+use astronomical_test_harness::{offline_denied_test, offline_denied_tokio_test};
 
 use crate::{
     ChatGenerationCommand, ChatGenerationOutput, ChatGenerationSettings, ChatMessage,
@@ -14,7 +14,7 @@ use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 const RETIRED_SMALL_FRAME_BYTES: usize = 64 * 1024;
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing,
     {
         let serialized_command = serde_json::json!({
@@ -44,7 +44,7 @@ offline_test!(
     }
 );
 
-offline_tokio_test!(should_round_trip_an_unversioned_chat_command, {
+offline_denied_tokio_test!(should_round_trip_an_unversioned_chat_command, {
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(71),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -81,7 +81,7 @@ offline_tokio_test!(should_round_trip_an_unversioned_chat_command, {
     );
 });
 
-offline_tokio_test!(should_round_trip_expert_memory_mode_change_event, {
+offline_denied_tokio_test!(should_round_trip_expert_memory_mode_change_event, {
     let worker_event = WorkerEvent::ExpertMemoryModeChanged {
         expert_memory_mode: ExpertMemoryMode::Hybrid,
     };
@@ -103,7 +103,7 @@ offline_tokio_test!(should_round_trip_expert_memory_mode_change_event, {
     );
 });
 
-offline_tokio_test!(should_round_trip_generation_preparation_topology, {
+offline_denied_tokio_test!(should_round_trip_generation_preparation_topology, {
     let worker_event = WorkerEvent::GenerationPreparationStarted {
         request_id: RequestId::new(72),
         total_layer_count: 40,
@@ -129,7 +129,7 @@ offline_tokio_test!(should_round_trip_generation_preparation_topology, {
     );
 });
 
-offline_tokio_test!(should_round_trip_idle_worker_mlx_memory_ceiling, {
+offline_denied_tokio_test!(should_round_trip_idle_worker_mlx_memory_ceiling, {
     let worker_event = WorkerEvent::Idle {
         machine_mlx_memory_ceiling_bytes: 40_000_000_000,
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
@@ -153,7 +153,7 @@ offline_tokio_test!(should_round_trip_idle_worker_mlx_memory_ceiling, {
     );
 });
 
-offline_tokio_test!(should_round_trip_update_mlx_memory_limit_command, {
+offline_denied_tokio_test!(should_round_trip_update_mlx_memory_limit_command, {
     let worker_command = WorkerCommand::UpdateMlxMemoryLimit {
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
         configuration_generation: "memory-generation".to_owned(),
@@ -175,7 +175,7 @@ offline_tokio_test!(should_round_trip_update_mlx_memory_limit_command, {
     );
 });
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_round_trip_changed_and_rejected_memory_limit_events,
     {
         let worker_events = [
@@ -217,7 +217,7 @@ offline_tokio_test!(
     }
 );
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_round_trip_the_idle_worker_mlx_memory_sample_command_and_response,
     {
         let worker_command = WorkerCommand::SampleMlxMemory;
@@ -267,7 +267,7 @@ offline_tokio_test!(
     }
 );
 
-offline_tokio_test!(should_send_a_large_chat_command_as_one_bounded_frame, {
+offline_denied_tokio_test!(should_send_a_large_chat_command_as_one_bounded_frame, {
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(73),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -315,7 +315,7 @@ offline_tokio_test!(should_send_a_large_chat_command_as_one_bounded_frame, {
         .expect("the large chat command should fit one bounded frame");
 });
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_round_trip_a_fifty_thousand_word_command_without_material_delay,
     {
         let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
@@ -366,7 +366,7 @@ offline_tokio_test!(
     }
 );
 
-offline_tokio_test!(should_round_trip_one_unified_chat_output_event, {
+offline_denied_tokio_test!(should_round_trip_one_unified_chat_output_event, {
     let worker_event = WorkerEvent::Output {
         request_id: RequestId::new(72),
         sequence_number: 0,
@@ -395,7 +395,7 @@ offline_tokio_test!(should_round_trip_one_unified_chat_output_event, {
     );
 });
 
-offline_tokio_test!(should_round_trip_generation_progress_event, {
+offline_denied_tokio_test!(should_round_trip_generation_progress_event, {
     let worker_event = WorkerEvent::GenerationProgress {
         request_id: RequestId::new(82),
         generated_token_count: 7,
@@ -423,7 +423,7 @@ offline_tokio_test!(should_round_trip_generation_progress_event, {
     );
 });
 
-offline_tokio_test!(should_round_trip_first_decode_completion_event, {
+offline_denied_tokio_test!(should_round_trip_first_decode_completion_event, {
     let worker_event = WorkerEvent::FirstDecodeCompleted {
         request_id: RequestId::new(83),
         elapsed_millis: 1_234,
@@ -446,7 +446,7 @@ offline_tokio_test!(should_round_trip_first_decode_completion_event, {
     );
 });
 
-offline_tokio_test!(should_round_trip_one_persistent_prompt_cache_stats_event, {
+offline_denied_tokio_test!(should_round_trip_one_persistent_prompt_cache_stats_event, {
     let worker_event = WorkerEvent::PersistentPromptCacheStats {
         persistent_prompt_cache_hits: 12,
         persistent_prompt_cache_misses: 3,
@@ -493,7 +493,7 @@ mod prompt_cache_clear_protocol {
     const TEST_TIMEOUT: Duration = Duration::from_secs(5);
     const TEST_TRANSPORT_CAPACITY_BYTES: usize = 16 * 1024;
 
-    offline_tokio_test!(should_round_trip_global_clear_prompt_cache_command, {
+    offline_denied_tokio_test!(should_round_trip_global_clear_prompt_cache_command, {
         run_bounded_test(async {
             let worker_command = WorkerCommand::ClearPromptCache { model_id: None };
             assert_command_round_trip(worker_command).await;
@@ -501,7 +501,7 @@ mod prompt_cache_clear_protocol {
         .await;
     });
 
-    offline_tokio_test!(should_round_trip_scoped_clear_prompt_cache_command, {
+    offline_denied_tokio_test!(should_round_trip_scoped_clear_prompt_cache_command, {
         run_bounded_test(async {
             let worker_command = WorkerCommand::ClearPromptCache {
                 model_id: Some("astronomical/requested-model".to_owned()),
@@ -511,7 +511,7 @@ mod prompt_cache_clear_protocol {
         .await;
     });
 
-    offline_tokio_test!(should_round_trip_prompt_cache_cleared_event, {
+    offline_denied_tokio_test!(should_round_trip_prompt_cache_cleared_event, {
         run_bounded_test(async {
             let worker_event = WorkerEvent::PromptCacheCleared {
                 model_id: Some("astronomical/requested-model".to_owned()),

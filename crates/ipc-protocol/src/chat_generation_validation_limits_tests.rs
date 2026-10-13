@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
@@ -6,7 +6,7 @@ use crate::{
     ChatToolDefinition, MAX_IPC_FRAME_BYTES, RequestId, WorkerCommand,
 };
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_second_tool_result_for_the_same_assistant_tool_call,
     {
         let assistant_tool_call = ChatAssistantToolCall {
@@ -49,7 +49,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_duplicate_declared_tool_names, {
+offline_denied_test!(should_reject_duplicate_declared_tool_names, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(65),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -79,7 +79,7 @@ offline_test!(should_reject_duplicate_declared_tool_names, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_forced_tool_choice_for_an_undeclared_function,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -105,7 +105,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_required_tool_choice_before_prompt_rendering,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -125,7 +125,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_a_declared_forced_tool_choice_before_prompt_rendering,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -151,7 +151,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_a_tool_schema_deeper_than_the_worker_limit, {
+offline_denied_test!(should_reject_a_tool_schema_deeper_than_the_worker_limit, {
     let deeply_nested_schema = (0..33).fold("{}".to_owned(), |nested_schema, _| {
         format!(r#"{{"items":{nested_schema}}}"#)
     });
@@ -167,7 +167,7 @@ offline_test!(should_reject_a_tool_schema_deeper_than_the_worker_limit, {
     ));
 });
 
-offline_test!(should_accept_a_large_tool_schema_when_the_ipc_frame_fits, {
+offline_denied_test!(should_accept_a_large_tool_schema_when_the_ipc_frame_fits, {
     let oversized_schema = format!(r#"{{"description":"{}"}}"#, "x".repeat(32 * 1024));
     let chat_generation_command = support::command_with_tool_schema(68, oversized_schema);
 
@@ -176,7 +176,7 @@ offline_test!(should_accept_a_large_tool_schema_when_the_ipc_frame_fits, {
         .expect("IPC frame bytes should bound tool schemas, not a per-schema byte cap");
 });
 
-offline_test!(
+offline_denied_test!(
     should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits,
     {
         let schema_with_large_description =
@@ -208,7 +208,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_an_empty_chat_history_before_worker_preprocessing,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -228,7 +228,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_large_chat_history_without_worker_message_count_cap,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -252,7 +252,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_many_small_tool_definitions_without_worker_tool_count_cap,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -277,7 +277,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_a_zero_structured_chat_output_token_budget, {
+offline_denied_test!(should_reject_a_zero_structured_chat_output_token_budget, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(71),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -300,7 +300,7 @@ offline_test!(should_reject_a_zero_structured_chat_output_token_budget, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_accept_large_structured_chat_output_budget_for_model_context_admission,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -320,7 +320,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -345,7 +345,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits, {
+offline_denied_test!(should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits, {
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(75),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -383,7 +383,7 @@ offline_test!(should_accept_aggregate_chat_messages_larger_than_the_old_message_
     assert_eq!(chat_generation_command.validate(), Ok(()));
 });
 
-offline_test!(
+offline_denied_test!(
     should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -424,7 +424,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_a_large_tool_description_when_the_ipc_frame_fits,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -447,7 +447,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_a_large_assistant_tool_call_id_when_the_ipc_frame_fits,
     {
         let chat_generation_command = ChatGenerationCommand {
@@ -476,7 +476,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_large_assistant_tool_call_arguments_when_the_ipc_frame_fits,
     {
         let large_arguments_json = format!(r#"{{"payload":"{}"}}"#, "x".repeat(16_665));

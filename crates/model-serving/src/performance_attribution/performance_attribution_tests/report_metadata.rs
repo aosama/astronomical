@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use super::*;
 
-offline_test!(
+offline_denied_test!(
     should_serialize_rejected_generation_outcome_and_failure_description,
     {
         let performance_attribution_json = serialize_generation_report(
@@ -20,7 +20,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_serialize_unobserved_prefill_state_in_model_loading_report,
     {
         let performance_attribution_json = serialize_model_loading_report(
@@ -39,7 +39,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_serialize_prefill_evidence_in_generation_report, {
+offline_denied_test!(should_serialize_prefill_evidence_in_generation_report, {
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -55,7 +55,7 @@ offline_test!(should_serialize_prefill_evidence_in_generation_report, {
     );
 });
 
-offline_test!(should_serialize_process_io_as_an_all_or_unavailable_pair, {
+offline_denied_test!(should_serialize_process_io_as_an_all_or_unavailable_pair, {
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -80,7 +80,7 @@ offline_test!(should_serialize_process_io_as_an_all_or_unavailable_pair, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_finish_cancelled_generation_process_io_from_the_final_sample,
     {
         let initial_process_io =
@@ -102,7 +102,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_cancelled_outcome_independent_from_process_io_availability,
     {
         // A cancelled request must reach the same serialization path as a completed
@@ -132,7 +132,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();

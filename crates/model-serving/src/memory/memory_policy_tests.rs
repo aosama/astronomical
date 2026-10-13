@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     AdaptiveRamGrowthExecutionProfile, AllocationAdmissionDecision, AllocationAdmissionObservation,
@@ -12,7 +12,7 @@ use crate::{
     seated_complete_expert_request_temporary_workspace_bytes,
 };
 
-offline_test!(
+offline_denied_test!(
     should_identify_the_allocation_boundary_and_required_shortfall,
     {
         let observation = AllocationAdmissionObservation::new(900, 0, 125, 1_000);
@@ -27,7 +27,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_plan_demotion_before_installing_a_lower_ceiling, {
+offline_denied_test!(should_plan_demotion_before_installing_a_lower_ceiling, {
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 25_000,
         requested_ceiling_bytes: 23_000,
@@ -48,7 +48,7 @@ offline_test!(should_plan_demotion_before_installing_a_lower_ceiling, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_demote_complete_residency_when_only_the_idle_snapshot_fits,
     {
         let decision = MemoryCeilingChangeRequirements {
@@ -72,7 +72,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_complete_residency_when_idle_memory_and_serving_headroom_fit,
     {
         let decision = MemoryCeilingChangeRequirements {
@@ -96,7 +96,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_preserve_paged_reclamation_when_complete_residency_headroom_is_irrelevant,
     {
         let decision = MemoryCeilingChangeRequirements {
@@ -120,7 +120,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_request_demotion_for_raised_or_unchanged_ceilings,
     {
         let requirements = MemoryCeilingChangeRequirements {
@@ -150,7 +150,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_request_allocator_cleanup_without_confusing_cache_with_active_memory,
     {
         let observation = AllocationAdmissionObservation::new(800, 300, 100, 1_000);
@@ -162,7 +162,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_decide_complete_residency_from_one_replacement_aware_policy,
     {
         let requirements = CompleteResidencyRequirements {
@@ -183,7 +183,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_authorize_only_one_retry_after_required_experts_were_reclaimed,
     {
         let requirements = ForwardRecoveryRequirements {
@@ -216,7 +216,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_admit_decode_when_only_a_temporary_cache_restore_workspace_forced_demotion,
     {
         // A fitting resident model plus a large prompt-cache restore workspace can
@@ -253,7 +253,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_complete_residency_when_cache_restore_overlap_excludes_output_budget,
     {
         // Live agent turn on resident sparse MoE at a 35 GB ceiling: 15,399 prompt tokens,
@@ -323,7 +323,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_take_the_larger_exclusive_request_phase_instead_of_summing_them,
     {
         // Live 33 GB turn: restore 0.32 GB and serving KV 1.67 GB do not coexist.
@@ -354,7 +354,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_admit_seated_complete_experts_at_a_33_gb_ceiling_without_stacked_layer_weight_headroom,
     {
         const CURRENT_ACTIVE_MEMORY_BYTES: usize = 26_488_988_934;
@@ -387,7 +387,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_admit_complete_residency_without_prefill_three_layer_weight_headroom,
     {
         const PROJECTED_RESIDENT_ACTIVE_MEMORY_BYTES: u64 = 28_193_105_290;
@@ -410,7 +410,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_classify_complete_owner_as_resident_and_empty_pager_cache_as_paged,
     {
         assert_eq!(
@@ -432,7 +432,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_ignore_layer_weight_workspace_when_complete_experts_are_already_seated,
     {
         let seated_temporary_workspace_bytes = request_context_temporary_workspace_bytes(
@@ -460,7 +460,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_charge_the_complete_layer_scratch_in_addition_to_the_expert_page_reservation,
     {
         // The admission projection adds `expert_page_reservation_bytes` (the largest

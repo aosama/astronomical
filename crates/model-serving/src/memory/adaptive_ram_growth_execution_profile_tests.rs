@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard};
 
-offline_test!(
+offline_denied_test!(
     should_reserve_transient_headroom_for_unseen_prefill_contexts,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)

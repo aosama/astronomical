@@ -3,7 +3,7 @@
 //! boundary (0.10), arithmetic overflow (0.08), lower later spike (0.05), and
 //! active-memory release between observations (0.02). Probabilities are test-design
 //! estimates rather than measured production frequencies.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
@@ -12,7 +12,7 @@ use crate::{
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
-offline_test!(should_reject_a_zero_active_memory_limit, {
+offline_denied_test!(should_reject_a_zero_active_memory_limit, {
     let guard_creation_error = AdaptiveRamGrowthGuard::new(0)
         .expect_err("a zero-byte active-memory limit cannot admit useful growth");
 
@@ -22,7 +22,7 @@ offline_test!(should_reject_a_zero_active_memory_limit, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_allow_unobserved_growth_when_exact_persistent_bytes_fit_the_limit,
     {
         let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -36,7 +36,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_apply_transient_learning_across_unseen_contexts_for_admission,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -90,7 +90,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_exact_context_evidence_separate_from_phase_admission_maximum,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -136,7 +136,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_stable_memory_at_c_and_reject_one_byte_above_c,
     {
         let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -162,7 +162,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_accept_peak_memory_at_p_and_reject_one_byte_above_p,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -209,7 +209,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_retain_a_final_partial_prefill_tail_as_reusable_evidence,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -239,7 +239,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reject_growth_when_the_peak_projection_exceeds_the_limit,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -264,7 +264,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_an_overflowing_memory_projection, {
+offline_denied_test!(should_reject_an_overflowing_memory_projection, {
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(usize::MAX)
         .expect("the platform maximum should be a valid positive limit");
 
@@ -278,7 +278,7 @@ offline_test!(should_reject_an_overflowing_memory_projection, {
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_preserve_the_highest_transient_observation_after_a_lower_spike,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
@@ -312,7 +312,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_underflow_when_active_memory_falls_without_a_new_allocator_peak,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)

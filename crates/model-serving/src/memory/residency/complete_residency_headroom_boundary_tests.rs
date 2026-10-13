@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
@@ -15,7 +15,7 @@ fn sparse_geometry() -> MlxRamBudgetModelGeometry {
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_return_no_paging_ceiling_when_the_artifact_has_no_headroom_gap,
     {
         let geometry_without_experts = MlxRamBudgetModelGeometry {
@@ -35,7 +35,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_place_the_paging_ceiling_where_static_weights_fit_and_headroom_does_not,
     {
         let required_headroom_bytes = 40;

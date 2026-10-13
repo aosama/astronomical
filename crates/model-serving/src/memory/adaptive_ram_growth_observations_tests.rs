@@ -3,7 +3,7 @@
 //! These tests are separate from projection admission so each test owner stays
 //! readable: this file explains how completed forwards teach reusable transient
 //! evidence, while `adaptive_ram_growth_guard.rs` covers projection boundaries.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
@@ -15,7 +15,7 @@ const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
 const DEFAULT_PREFILL_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::prefill(128, 0, false, AdaptiveRamGrowthExecutionProfile::Resident);
 
-offline_test!(
+offline_denied_test!(
     should_keep_prefill_and_decode_transient_high_water_values_independent,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
@@ -49,7 +49,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_cap_decode_warming_with_decode_evidence_instead_of_the_all_phase_maximum,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
@@ -99,7 +99,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_fall_back_to_the_all_phase_maximum_before_the_phase_has_evidence,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
@@ -127,7 +127,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_record_a_completed_zero_transient_prefill_observation,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
@@ -160,7 +160,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_preserve_adaptive_high_water_observations_when_the_limit_changes,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
@@ -199,7 +199,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_project_exact_temporary_workspace_without_double_counting_learned_residual_growth,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(2_000)
@@ -230,7 +230,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_subtract_stable_expert_growth_twice_from_prefill_headroom,
     {
         let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(40_000)
@@ -256,7 +256,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_live_limit_reduction, {
+offline_denied_test!(should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_live_limit_reduction, {
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(28_000_000_000)
         .expect("the reproduced live MLX limit should create a guard");
 
@@ -281,7 +281,7 @@ offline_test!(should_reserve_a_routed_expert_page_alongside_lazy_persistent_grow
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_exclude_streamed_and_evicted_expert_pages_from_the_learned_prefill_transient,
     {
         // Issue #691: paged prefill promotes expert pages that appear in the MLX
@@ -310,7 +310,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_exclude_only_the_stream_bytes_beyond_the_retained_expert_delta,
     {
         // One forward promotes 500 page bytes and retains 300 of them: the retained
@@ -338,7 +338,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_never_subtract_retained_pages_twice_from_the_learned_transient,
     {
         // Fully retained promotion with zero eviction: peak - stable already
@@ -368,7 +368,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_older_learning_contract_unchanged_without_expert_page_stream_evidence,
     {
         // The pre-#691 method delegates to the same core with zero stream bytes, so
@@ -392,7 +392,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_saturate_to_zero_when_stream_evidence_exceeds_the_whole_residual,
     {
         // Expert churn plus streaming can leave sampled stream bytes larger than

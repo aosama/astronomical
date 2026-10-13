@@ -8,7 +8,7 @@
 //! every later request with `generation context exceeds available GPU wired
 //! memory` until the model reloaded. These tests pin the numbers admission
 //! actually charges so the rejection cascade cannot creep back in.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ContextAdmissionRequirements, MemoryAdmissionDecision, MemoryPhase, MlxRamBudget,
@@ -27,7 +27,7 @@ fn production_failure_geometry() -> MlxRamBudgetModelGeometry {
     }
 }
 
-offline_test!(should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_activation_evidence, {
+offline_denied_test!(should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_activation_evidence, {
     let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -69,7 +69,7 @@ offline_test!(should_reclaim_instead_of_rejecting_the_follow_up_context_after_ch
     );
 });
 
-offline_test!(
+offline_denied_test!(
     should_resolve_the_follow_up_reserve_from_evidence_at_the_operation_scope,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
