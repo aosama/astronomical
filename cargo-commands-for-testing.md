@@ -168,7 +168,7 @@ as a ceiling effect.
 
 ### Model-serving installed-artifact journeys
 
-- `cargo test -p astronomical-acceptance --features direct-mlx --test installed_model_contracts_tests <journey_filter> -- --ignored --test-threads=1`
+- `cargo test -p astronomical-acceptance --features direct-mlx --test installed_model_contracts <journey_filter> -- --ignored --test-threads=1`
   — the installed-artifact acceptance binaries (for example the Qwen-Image-2.1
   journeys gated on `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY`).
 

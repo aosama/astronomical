@@ -43,13 +43,13 @@ name = "performance_throughput"
 path = "tests/performance/throughput.rs"
 
 [[test]]
-name = "direct_mlx_tests"
-path = "tests/gpu_contracts/direct_mlx_tests.rs"
+name = "direct_mlx"
+path = "tests/gpu_contracts/direct_mlx.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
-name = "installed_model_contracts_tests"
-path = "tests/gpu_contracts/installed_model_contracts_tests.rs"
+name = "installed_model_contracts"
+path = "tests/gpu_contracts/installed_model_contracts.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
@@ -58,8 +58,8 @@ path = "tests/gpu_contracts/prompt_cache.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
-name = "runtime_direct_mlx_tests"
-path = "tests/gpu_contracts/runtime_mlx/direct_mlx_tests.rs"
+name = "runtime_direct_mlx"
+path = "tests/gpu_contracts/runtime_mlx/direct_mlx.rs"
 required-features = ["mlx"]
 
 [[test]]
@@ -68,13 +68,13 @@ path = "tests/memory_contracts.rs"
 required-features = ["direct-mlx", "mlx-memory-contract-probe"]
 
 [[test]]
-name = "mlx_runtime_policy_tests"
-path = "tests/gpu_contracts/runtime_mlx/mlx_runtime_policy_tests.rs"
+name = "mlx_runtime_policy"
+path = "tests/gpu_contracts/runtime_mlx/mlx_runtime_policy.rs"
 required-features = ["mlx"]
 
 [[test]]
-name = "mlx_safetensors_writer_memory_policy_tests"
-path = "tests/gpu_contracts/runtime_mlx/mlx_safetensors_writer_memory_policy_tests.rs"
+name = "mlx_safetensors_writer_memory_policy"
+path = "tests/gpu_contracts/runtime_mlx/mlx_safetensors_writer_memory_policy.rs"
 required-features = ["mlx"]
 
 # The moved runtime-MLX suites build raw MLX-C graph probes, mirroring the

@@ -45,7 +45,7 @@ verify = ["check", "--workspace", "--all-targets"]
 # test-direct-mlx: the model-serving direct-MLX contract suite plus the
 # runtime-integration MLX-C coverage bridge contract (CPU-only, seconds) so
 # bridge drift fails the lane instead of shipping silently.
-test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "astronomical-acceptance/direct-mlx", "-p", "astronomical-runtime-integration", "--features", "astronomical-runtime-integration/mlx", "--test", "direct_mlx_tests", "--test", "mlx_c_coverage_contract_tests", "--", "--test-threads=1"]
+test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "astronomical-acceptance/direct-mlx", "-p", "astronomical-runtime-integration", "--features", "astronomical-runtime-integration/mlx", "--test", "direct_mlx", "--test", "mlx_c_coverage_contract_tests", "--", "--test-threads=1"]
 # test-mlx-memory: every native memory-contract phase (model-swap allocator,
 # native probe, MLX-C transitions) in one bounded invocation; the probe
 # binary must exist in the native build store (build it first with
