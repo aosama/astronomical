@@ -16,6 +16,15 @@ mod ram_activation;
 mod ram_geometry;
 mod ram_values;
 
+#[cfg(test)]
+mod geometry_memory_floor_tests;
+#[cfg(test)]
+mod mlx_ram_budget_admission_workspace_tests;
+#[cfg(test)]
+mod mlx_ram_budget_ceiling_adjustment_tests;
+#[cfg(test)]
+mod mlx_ram_budget_tests;
+
 pub use adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError,

@@ -1,45 +1,22 @@
-mod adaptive_ram_growth_execution_profile;
-mod adaptive_ram_growth_guard;
-mod adaptive_ram_growth_observations;
-mod artifact_public_reason;
 mod artifact_validator;
-mod attention;
-mod complete_residency_headroom_boundary;
-mod decode_expert_cache;
-mod decoder_cache;
 mod e2e_test_model_names;
 mod engine_backed_worker;
-mod expert_memory_admission;
-mod expert_residency_policy;
-mod geometry_memory_floor;
-mod kernel_capability;
 mod macos_process_io;
-mod memory_policy;
-mod mlx_ram_budget;
-mod mlx_ram_budget_admission_workspace;
-mod mlx_ram_budget_ceiling_adjustment;
-mod retained_prefix_policy;
+mod performance_attribution_log;
+mod qwen3_5_import_direction;
+mod raw_safetensors_inventory;
+mod required_files;
+mod tensor_inventory;
+
 // The #596 reproduction exercises the feature-gated ModernBERT tokenizer, so it runs in the
 // unified (feature-enabled) lanes exactly like the other gated offline modules.
 #[cfg(feature = "direct-mlx")]
 mod modernbert_tokenizer_gap;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_materialization;
-mod performance_attribution;
-mod phase_aware_expert_residency;
-mod previous_token_prefetch;
-mod quantized_expert_page_manifest;
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_execution_error;
-mod qwen3_5_import_direction;
 #[cfg(feature = "direct-mlx")]
 mod qwen_prompt_processing_chunk_sizer;
 #[cfg(feature = "direct-mlx")]
 mod qwen_resident_prompt_processing_chunk_sizer;
-mod raw_safetensors_inventory;
-mod required_files;
-mod retained_expert_page_cache;
-mod route_observation;
-mod serving_memory_ceiling;
-mod sparse_experts;
-mod tensor_inventory;

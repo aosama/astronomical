@@ -22,6 +22,9 @@ mod rotating_attention_state;
 mod rotating_layout;
 mod storage_geometry;
 
+#[cfg(test)]
+mod decoder_cache_tests;
+
 #[cfg(feature = "direct-mlx")]
 pub use append_only_attention_state::{
     FullAttentionKeyValueState, FullAttentionKeyValueStateAllocationCheckpoint,

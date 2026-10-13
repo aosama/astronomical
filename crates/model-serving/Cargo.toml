@@ -34,7 +34,10 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+astronomical-test-harness = { path = "../test-harness" }
 libc.workspace = true
+# start_paused virtual time for harness offline_tokio_test! bodies.
+tokio = { workspace = true, features = ["test-util"] }
 serial_test.workspace = true
 tempfile = "=3.27.0"
 tracing-subscriber.workspace = true

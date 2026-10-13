@@ -10,6 +10,11 @@ mod previous_token_prefetch;
 mod resident_set;
 mod weight;
 
+#[cfg(test)]
+mod decode_expert_cache_tests;
+#[cfg(test)]
+mod previous_token_prefetch_tests;
+
 pub use cache::DecodeExpertCache;
 pub use previous_token_prefetch::{
     PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity, PreviousTokenPrefetchPlan,

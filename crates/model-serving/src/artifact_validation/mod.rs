@@ -9,6 +9,9 @@ mod types;
 mod validated_artifact;
 mod validated_safetensors_source;
 
+#[cfg(test)]
+mod artifact_public_reason_tests;
+
 pub(crate) use bounded_safetensors::{
     PartialProfileMetadata, validate_bounded_safetensors_with_partial_profiles,
 };
