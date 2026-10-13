@@ -30,23 +30,23 @@ rename campaign the offline aliases still run binaries named
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
 - `cargo test-hermetic-and-rest` — deprecated alias for
   `test-offline-and-rest`.
-- `cargo test -p astronomical-model-serving --test hermetic_tests qwen3_5_moe_hermetic -- --test-threads=1`
+- `cargo test -p astronomical-model-serving --test offline_tests qwen3_5_moe_offline -- --test-threads=1`
   — the focused Qwen3.5 sparse-artifact lane for quantization configuration,
   native/affine single- and multi-layer planning, and tensor-profile contracts;
   it uses no model runtime or installed model files.
-- `cargo test -p astronomical-model-serving --test hermetic_tests qwen3_5_import_direction -- --test-threads=1`
+- `cargo test -p astronomical-model-serving --test offline_tests qwen3_5_import_direction -- --test-threads=1`
   — enforces the Qwen3.5 module dependency direction: both engines depend on
   shared core, never on each other; resident owns no pager; the transitional
   family re-export module is absent; and attribution contains no streaming-only
   route dependency.
-- `cargo test -p astronomical-model-serving --test hermetic_tests hermetic::performance_attribution::measurement::should_record_an_external_operation_interval_only_when_attribution_is_enabled -- --exact --test-threads=1`
+- `cargo test -p astronomical-model-serving --test offline_tests offline::performance_attribution::measurement::should_record_an_external_operation_interval_only_when_attribution_is_enabled -- --exact --test-threads=1`
   — verifies that an operation measured outside the request-owning thread is
   recorded against the request report's monotonic start time.
-- `cargo test -p astronomical-model-serving --features direct-mlx --test hermetic_tests prompt_processing_chunk_sizer -- --test-threads=1`
+- `cargo test -p astronomical-model-serving --features direct-mlx --test offline_tests prompt_processing_chunk_sizer -- --test-threads=1`
   — verifies that resident and streaming execution use separate chunk-sizer
   policies: resident uses fixed chunks, while streaming owns SSD chunk sizing
   and short-tail folding.
-- `cargo test -p astronomical-model-serving --features direct-mlx --test hermetic_tests engine_backed_worker::chat::resident_streaming_retry -- --test-threads=1`
+- `cargo test -p astronomical-model-serving --features direct-mlx --test offline_tests engine_backed_worker::chat::resident_streaming_retry -- --test-threads=1`
   — verifies the private resident-to-streaming request retry, including
   one-shot behavior, pre-output eligibility, preservation of request cache
   identity, and release of the replay request after the first generated token
@@ -169,10 +169,10 @@ because it exercises solid-state-drive streaming.
   the active request must finish normally, and the restart must not begin until
   that request completes.
 
-The hermetic daemon tests that pin the stop-first ordering and the four
+The offline daemon tests that pin the stop-first ordering and the four
 failure branches need no real model and no optimized build:
 
-- `cargo test -p astronomical-daemon --test hermetic_tests worker_memory_demotion -- --test-threads=1`
+- `cargo test -p astronomical-daemon --test offline_tests worker_memory_demotion -- --test-threads=1`
 
 ### Daemon live-process journeys (real daemon spawning the real worker)
 

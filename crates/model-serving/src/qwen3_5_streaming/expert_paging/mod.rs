@@ -2,7 +2,7 @@
 //!
 //! Layer-plan construction reads SafeTensors headers only and is available
 //! without Machine Learning framework for Apple silicon so mixed OptiQ storage
-//! can be proven hermetically. Pagers, pages, and resident caches still need
+//! can be proven offline. Pagers, pages, and resident caches still need
 //! the graphics-processor runtime.
 
 #[cfg(feature = "direct-mlx")]

@@ -1,4 +1,4 @@
-//! Native MLX decoder owners plus hermetic packed-latent and tile geometry contracts.
+//! Native MLX decoder owners plus offline packed-latent and tile geometry contracts.
 
 mod error;
 mod latent_layout;

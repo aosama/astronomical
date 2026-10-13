@@ -10,7 +10,7 @@
 //! capture cost and turnover stay measurable.
 //!
 //! This module is intentionally free of Machine Learning framework types so
-//! the record format and ring contract are provable hermetically.
+//! the record format and ring contract are provable offline.
 
 use std::collections::VecDeque;
 

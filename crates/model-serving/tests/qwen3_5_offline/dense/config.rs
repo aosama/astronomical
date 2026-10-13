@@ -6,7 +6,7 @@ use astronomical_model_serving::{
 use serde_json::json;
 
 use crate::common::qwen3_5;
-use crate::qwen3_5_hermetic::config::support;
+use crate::qwen3_5_offline::config::support;
 
 #[test]
 fn should_classify_the_dense_model_type_as_dense_feed_forward_architecture() {

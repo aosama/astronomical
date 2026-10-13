@@ -4,7 +4,7 @@
 //! block (every condition image and the target image) is internally bidirectional so its tokens
 //! may attend to one another regardless of order. Text tokens are strictly causal. This is the
 //! second-highest-risk novel component after the 3-axis RoPE, so the logic is pure integer
-//! bookkeeping with no runtime dependency and is tested hermetically against the diffusers oracle.
+//! bookkeeping with no runtime dependency and is tested offline against the diffusers oracle.
 //!
 //! Block boundaries come from `image_ids` counts, not from runs of `true` in the pad mask: two
 //! condition images adjacent with no text between them still form separate blocks, otherwise they

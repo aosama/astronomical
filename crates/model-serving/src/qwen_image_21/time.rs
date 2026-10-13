@@ -71,7 +71,7 @@ impl SinusoidalTimesteps {
         embedding
     }
 
-    /// The precomputed frequency table, exposed for hermetic verification against the oracle.
+    /// The precomputed frequency table, exposed for offline verification against the oracle.
     #[doc(hidden)]
     #[must_use]
     pub fn freqs_for_tests(&self) -> &[f64] {

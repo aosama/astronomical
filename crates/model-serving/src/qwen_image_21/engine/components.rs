@@ -1,6 +1,6 @@
 //! Architecture-neutral component contract behind the Qwen-Image-2.1 lifecycle owner.
 //!
-//! The seam keeps the engine's user-journey tests hermetic (a fake components owner drives the
+//! The seam keeps the engine's user-journey tests offline (a fake components owner drives the
 //! full lifecycle without MLX) while production retains one concrete owner. It deliberately has
 //! no `Send` bound because MLX component state is runtime-thread-affine.
 
@@ -11,7 +11,7 @@ use crate::{
     qwen_image_21::render_contract::QwenImage21RenderAdvance,
 };
 
-/// Loaded identity supplied by either the native components or a hermetic lifecycle fake.
+/// Loaded identity supplied by either the native components or a offline lifecycle fake.
 pub struct QwenImage21ComponentLoad {
     pub(super) model_id: String,
     pub(super) revision: String,

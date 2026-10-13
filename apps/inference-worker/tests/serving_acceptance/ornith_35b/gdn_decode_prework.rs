@@ -1,8 +1,7 @@
 //! Fused GDN decode prework A/B measurement, one phase per invocation.
 //!
 //! The fused prework kernel replaces roughly thirteen launch-bound dispatches
-//! per gated-delta layer at decode shapes with one Metal launch. The hermetic
-//! numerics test proves the kernel bit-matches the composed path; this journey
+//! per gated-delta layer at decode shapes with one Metal launch. The offline //! numerics test proves the kernel bit-matches the composed path; this journey
 //! is the measurement half. The worker test binary forbids unsafe code, so the
 //! disengage switch must come from the environment the journey is invoked
 //! under (`ASTRONOMICAL_GDN_DECODE_PREWORK=0`), and this journey reads — never

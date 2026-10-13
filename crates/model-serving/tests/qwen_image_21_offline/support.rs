@@ -1,4 +1,4 @@
-//! Shared fixtures for the Qwen-Image-2.1 hermetic tests.
+//! Shared fixtures for the Qwen-Image-2.1 offline tests.
 
 use serde_json::Value;
 

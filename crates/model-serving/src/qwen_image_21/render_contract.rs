@@ -2,7 +2,7 @@
 //! the boundary sequence a render crosses.
 //!
 //! These types are deliberately free of MLX dependencies so the serving engine, its component
-//! seam, and the hermetic lifecycle tests compile and run without the `direct-mlx` feature —
+//! seam, and the offline lifecycle tests compile and run without the `direct-mlx` feature —
 //! only the pipeline that *executes* a render and its MLX component owner need the runtime.
 //! The synchronous `render` and the serving engine both consume this one contract, so a
 //! journey over either is a proof for both.
@@ -94,7 +94,7 @@ pub enum QwenImage21RenderAdvance {
 
 /// `(x + 1) / 2 · 255` per channel, clamped to bytes, first three channels only.
 // The feature-gated render session performs the conversion; the formula stays in the pure
-// contract so both a journey and a hermetic fake can reach it.
+// contract so both a journey and a offline fake can reach it.
 #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
 pub fn rgba_to_rgb8(rgba_values: &[f32]) -> Vec<u8> {
     let pixel_count = rgba_values.len() / 4;

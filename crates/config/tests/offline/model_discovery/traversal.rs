@@ -2,7 +2,7 @@ use std::fs;
 
 use astronomical_config::{AstronomicalConfig, DiscoveredModelError, ModelDiscoveryDiagnosticCode};
 
-use crate::hermetic;
+use crate::offline;
 
 #[test]
 fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
@@ -14,7 +14,7 @@ fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
     fs::create_dir_all(&exact_model_directory).expect("model directory should be created");
     super::write_minimal_model_config(&exact_model_directory, "qwen3_5_moe", 262_144);
     super::write_required_model_files(&exact_model_directory);
-    hermetic::write_config(
+    offline::write_config(
         temporary_home_directory.path(),
         &serde_json::json!({
             "model_directories": [configured_model_root],

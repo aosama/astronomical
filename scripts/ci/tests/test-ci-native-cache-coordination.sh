@@ -287,17 +287,17 @@ assert_workflow_contract() {
         ]
         raise "Library REST required-CI command changed" unless library_rest_step.fetch("run").include?(expected_library_rest_command.join(" "))
         raise "Library REST contracts exceeded their bounded timeout" unless library_rest_step.fetch("timeout-minutes") <= 2
-        compile_step = steps.find { |step| step["name"] == "Compile hermetic tests" }
-        raise "hermetic compile step is missing from required CI" unless compile_step
+        compile_step = steps.find { |step| step["name"] == "Compile offline lane tests" }
+        raise "offline compile step is missing from required CI" unless compile_step
         compile_command = compile_step.fetch("run")
-        raise "hermetic compile does not use --no-run" unless compile_command.include?("--no-run")
-        raise "hermetic compile omits hermetic_tests" unless compile_command.include?("--test hermetic_tests")
-        raise "hermetic compile omits rest_api_tests" unless compile_command.include?("--test rest_api_tests")
+        raise "offline compile does not use --no-run" unless compile_command.include?("--no-run")
+        raise "offline compile omits offline_tests" unless compile_command.include?("--test offline_tests")
+        raise "offline compile omits rest_api_tests" unless compile_command.include?("--test rest_api_tests")
         identity_step = steps.find { |step| step["id"] == "native-build-identity" }
         raise "native identity step is missing from required CI" unless identity_step
         raise "native build progress file is not exported for CI tailing" unless compile_command.include?("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=")
-        raise "hermetic compile does not tail the native build progress stream" unless compile_command.include?("tail -f \"$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE\"")
-        raise "hermetic compile does not stop the progress tail on exit" unless compile_command.include?("kill \"$progress_tail_pid\"")
+        raise "offline compile does not tail the native build progress stream" unless compile_command.include?("tail -f \"$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE\"")
+        raise "offline compile does not stop the progress tail on exit" unless compile_command.include?("kill \"$progress_tail_pid\"")
         swiftpm_timestamp_step = swift_steps.find { |step| step["name"] == "Keep restored SwiftPM artifacts newer than checkout" }
         raise "SwiftPM timestamp reuse step is missing from required CI" unless swiftpm_timestamp_step
         raise "SwiftPM timestamp reuse is not gated on a cache hit" unless swiftpm_timestamp_step.fetch("if").include?("swiftpm-cache.outputs.cache-hit")

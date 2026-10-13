@@ -1,6 +1,6 @@
 use astronomical_model_serving::Qwen3_5VisionConfig;
 
-use crate::qwen3_5_hermetic::vision_config_test_support::FROZEN_VISION_CONFIG_JSON;
+use crate::qwen3_5_offline::vision_config_test_support::FROZEN_VISION_CONFIG_JSON;
 
 #[test]
 fn should_accept_the_dense_qwen3_5_vision_model_type() {
