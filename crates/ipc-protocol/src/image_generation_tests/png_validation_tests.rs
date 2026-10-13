@@ -1,20 +1,20 @@
 //! Adversarial PNG fixtures for the image-completion wire boundary.
 
+use astronomical_test_harness::offline_test;
+
 use std::{io::Cursor, ops::Range};
 
-use astronomical_ipc_protocol::{
+use crate::{
     GeneratedImage, ImageGenerationCompletionValidationError, ImageGenerationResultMetadata,
     ProtocolError, RequestId, WorkerEvent, decode_event, encode_event,
 };
 use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
 
-#[test]
-fn should_reject_empty_idat_data_at_the_wire_boundary() {
+offline_test!(should_reject_empty_idat_data_at_the_wire_boundary, {
     assert_invalid_png_encoding(png_bytes_from_chunks(1_024, 768, 8, 2, &[]));
-}
+});
 
-#[test]
-fn should_reject_decoded_rgb_bomb_before_allocation() {
+offline_test!(should_reject_decoded_rgb_bomb_before_allocation, {
     let worker_event = image_completion_event(
         png_bytes_from_chunks(16_384, 16_384, 8, 2, &[0]),
         ImageGenerationResultMetadata {
@@ -30,55 +30,57 @@ fn should_reject_decoded_rgb_bomb_before_allocation() {
             ImageGenerationCompletionValidationError::PngDecodeResourceLimit
         ))
     ));
-}
+});
 
-#[test]
-fn should_reject_source_palette_png_even_when_the_decoder_expands_it_to_rgb8() {
-    let mut palette_png = encode_solid_luma_png(1_024, 768);
-    let ihdr_range = png_chunk_range(&palette_png, b"IHDR");
-    palette_png[ihdr_range.start + 17] = 3;
-    rewrite_png_chunk_crc(&mut palette_png, ihdr_range.clone());
-    let idat_start = png_chunk_range(&palette_png, b"IDAT").start;
-    palette_png.splice(idat_start..idat_start, png_chunk_bytes(b"PLTE", &[0, 0, 0]));
+offline_test!(
+    should_reject_source_palette_png_even_when_the_decoder_expands_it_to_rgb8,
+    {
+        let mut palette_png = encode_solid_luma_png(1_024, 768);
+        let ihdr_range = png_chunk_range(&palette_png, b"IHDR");
+        palette_png[ihdr_range.start + 17] = 3;
+        rewrite_png_chunk_crc(&mut palette_png, ihdr_range.clone());
+        let idat_start = png_chunk_range(&palette_png, b"IDAT").start;
+        palette_png.splice(idat_start..idat_start, png_chunk_bytes(b"PLTE", &[0, 0, 0]));
 
-    let worker_event = image_completion_event(palette_png, valid_image_result_metadata());
-    assert!(matches!(
-        decode_event(&encode_event(&worker_event).expect("event should serialize")),
-        Err(ProtocolError::InvalidImageGenerationCompletion(
-            ImageGenerationCompletionValidationError::NonRgb8Png
-        ))
-    ));
-}
+        let worker_event = image_completion_event(palette_png, valid_image_result_metadata());
+        assert!(matches!(
+            decode_event(&encode_event(&worker_event).expect("event should serialize")),
+            Err(ProtocolError::InvalidImageGenerationCompletion(
+                ImageGenerationCompletionValidationError::NonRgb8Png
+            ))
+        ));
+    }
+);
 
-#[test]
-fn should_reject_corrupt_missing_and_trailing_iend_at_the_wire_boundary() {
-    let valid_png = valid_rgb_png(1_024, 768);
-    let iend_range = png_chunk_range(&valid_png, b"IEND");
+offline_test!(
+    should_reject_corrupt_missing_and_trailing_iend_at_the_wire_boundary,
+    {
+        let valid_png = valid_rgb_png(1_024, 768);
+        let iend_range = png_chunk_range(&valid_png, b"IEND");
 
-    let mut corrupt_iend_png = valid_png.clone();
-    corrupt_iend_png[iend_range.end - 1] ^= 0xff;
-    assert_invalid_png_encoding(corrupt_iend_png);
+        let mut corrupt_iend_png = valid_png.clone();
+        corrupt_iend_png[iend_range.end - 1] ^= 0xff;
+        assert_invalid_png_encoding(corrupt_iend_png);
 
-    let mut missing_iend_png = valid_png.clone();
-    missing_iend_png.drain(iend_range.clone());
-    assert_invalid_png_encoding(missing_iend_png);
+        let mut missing_iend_png = valid_png.clone();
+        missing_iend_png.drain(iend_range.clone());
+        assert_invalid_png_encoding(missing_iend_png);
 
-    let mut trailing_iend_png = valid_png;
-    trailing_iend_png.push(0);
-    assert_invalid_png_encoding(trailing_iend_png);
-}
+        let mut trailing_iend_png = valid_png;
+        trailing_iend_png.push(0);
+        assert_invalid_png_encoding(trailing_iend_png);
+    }
+);
 
-#[test]
-fn should_reject_nonzero_length_iend_at_the_wire_boundary() {
+offline_test!(should_reject_nonzero_length_iend_at_the_wire_boundary, {
     let mut png = png_bytes_from_chunks(1_024, 768, 8, 2, &[0]);
     let iend_range = png_chunk_range(&png, b"IEND");
     png.splice(iend_range, png_chunk_bytes(b"IEND", &[0]));
 
     assert_invalid_png_encoding(png);
-}
+});
 
-#[test]
-fn should_reject_malformed_deflate_with_valid_chunk_crcs() {
+offline_test!(should_reject_malformed_deflate_with_valid_chunk_crcs, {
     assert_invalid_png_encoding(png_bytes_from_chunks(
         1_024,
         768,
@@ -86,7 +88,7 @@ fn should_reject_malformed_deflate_with_valid_chunk_crcs() {
         2,
         &[0xde, 0xad, 0xbe, 0xef],
     ));
-}
+});
 
 fn encode_solid_luma_png(width_pixels: u32, height_pixels: u32) -> Vec<u8> {
     let pixel_bytes = vec![0; width_pixels as usize * height_pixels as usize];

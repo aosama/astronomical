@@ -1,6 +1,8 @@
+use astronomical_test_harness::{offline_test, offline_tokio_test};
+
 use std::{io::Cursor, ops::Range};
 
-use astronomical_ipc_protocol::{
+use crate::{
     GeneratedImage, ImageGenerationCommand, ImageGenerationCompletionValidationError,
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata,
     ImageGenerationSettings, ImageGenerationValidationError, MAX_IPC_FRAME_BYTES,
@@ -13,13 +15,12 @@ use image::{
 };
 use tokio::io::duplex;
 
-mod png_validation;
-mod protocol_contracts;
+mod png_validation_tests;
+mod protocol_contracts_tests;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
-#[tokio::test]
-async fn should_round_trip_an_image_generation_journey() {
+offline_tokio_test!(should_round_trip_an_image_generation_journey, {
     let request_id = RequestId::new(501);
     let image_generation_command = ImageGenerationCommand {
         request_id,
@@ -116,48 +117,47 @@ async fn should_round_trip_an_image_generation_journey() {
     }
 
     assert_eq!(image_generation_command.validate(), Ok(()));
-}
+});
 
-#[test]
-fn should_reject_invalid_image_completion_metadata_at_the_wire_boundary() {
-    let worker_event = image_completion_event(
-        valid_png_bytes(1_024, 768),
-        ImageGenerationResultMetadata {
-            guidance_thousandths: 100_001,
-            ..valid_image_result_metadata()
-        },
-    );
+offline_test!(
+    should_reject_invalid_image_completion_metadata_at_the_wire_boundary,
+    {
+        let worker_event = image_completion_event(
+            valid_png_bytes(1_024, 768),
+            ImageGenerationResultMetadata {
+                guidance_thousandths: 100_001,
+                ..valid_image_result_metadata()
+            },
+        );
 
-    assert!(matches!(
-        decode_event(&encode_event(&worker_event).expect("event should serialize")),
-        Err(ProtocolError::InvalidImageGenerationCompletion(
-            ImageGenerationCompletionValidationError::InvalidMetadata(
-                ImageGenerationValidationError::GuidanceOutOfRange { .. }
-            )
-        ))
-    ));
-}
+        assert!(matches!(
+            decode_event(&encode_event(&worker_event).expect("event should serialize")),
+            Err(ProtocolError::InvalidImageGenerationCompletion(
+                ImageGenerationCompletionValidationError::InvalidMetadata(
+                    ImageGenerationValidationError::GuidanceOutOfRange { .. }
+                )
+            ))
+        ));
+    }
+);
 
-#[test]
-fn should_reject_crc_corrupt_png_at_the_wire_boundary() {
+offline_test!(should_reject_crc_corrupt_png_at_the_wire_boundary, {
     let mut crc_corrupt_png = valid_png_bytes(1_024, 768);
     let idat_range = png_chunk_range(&crc_corrupt_png, b"IDAT");
     crc_corrupt_png[idat_range.end - 1] ^= 0xff;
 
     assert_invalid_png_encoding(crc_corrupt_png);
-}
+});
 
-#[test]
-fn should_reject_png_without_idat_at_the_wire_boundary() {
+offline_test!(should_reject_png_without_idat_at_the_wire_boundary, {
     let mut png_without_idat = valid_png_bytes(1_024, 768);
     let idat_range = png_chunk_range(&png_without_idat, b"IDAT");
     png_without_idat.drain(idat_range);
 
     assert_invalid_png_encoding(png_without_idat);
-}
+});
 
-#[test]
-fn should_reject_non_rgb8_png_at_the_wire_boundary() {
+offline_test!(should_reject_non_rgb8_png_at_the_wire_boundary, {
     let rgba_png = encode_solid_png(1_024, 768, ExtendedColorType::Rgba8, 4);
     let worker_event = image_completion_event(rgba_png, valid_image_result_metadata());
 
@@ -167,61 +167,63 @@ fn should_reject_non_rgb8_png_at_the_wire_boundary() {
             ImageGenerationCompletionValidationError::NonRgb8Png
         ))
     ));
-}
+});
 
-#[test]
-fn should_reject_invalid_mime_type_without_echoing_worker_content() {
-    let worker_event = WorkerEvent::ImageGenerationCompleted {
-        request_id: RequestId::new(501),
-        generated_image: GeneratedImage {
-            mime_type: "file:///private/image.png".to_owned(),
-            encoded_bytes: valid_png_bytes(1_024, 768),
-        },
-        result_metadata: valid_image_result_metadata(),
-    };
+offline_test!(
+    should_reject_invalid_mime_type_without_echoing_worker_content,
+    {
+        let worker_event = WorkerEvent::ImageGenerationCompleted {
+            request_id: RequestId::new(501),
+            generated_image: GeneratedImage {
+                mime_type: "file:///private/image.png".to_owned(),
+                encoded_bytes: valid_png_bytes(1_024, 768),
+            },
+            result_metadata: valid_image_result_metadata(),
+        };
 
-    let protocol_error =
-        decode_event(&encode_event(&worker_event).expect("event should serialize"))
-            .expect_err("the MIME type should be rejected");
-    assert!(matches!(
-        &protocol_error,
-        ProtocolError::InvalidImageGenerationCompletion(
-            ImageGenerationCompletionValidationError::InvalidMimeType
-        )
-    ));
-    assert!(!protocol_error.to_string().contains("private"));
-}
+        let protocol_error =
+            decode_event(&encode_event(&worker_event).expect("event should serialize"))
+                .expect_err("the MIME type should be rejected");
+        assert!(matches!(
+            &protocol_error,
+            ProtocolError::InvalidImageGenerationCompletion(
+                ImageGenerationCompletionValidationError::InvalidMimeType
+            )
+        ));
+        assert!(!protocol_error.to_string().contains("private"));
+    }
+);
 
-#[test]
-fn should_reject_oversized_frames_before_png_decoding() {
+offline_test!(should_reject_oversized_frames_before_png_decoding, {
     let oversized_frame = vec![0; MAX_IPC_FRAME_BYTES + 1];
 
     assert!(matches!(
         decode_event(&oversized_frame),
         Err(ProtocolError::IncomingMessageTooLarge { .. })
     ));
-}
+});
 
-#[test]
-fn should_reject_png_dimensions_that_do_not_match_completion_metadata() {
-    let worker_event =
-        image_completion_event(valid_png_bytes(512, 768), valid_image_result_metadata());
+offline_test!(
+    should_reject_png_dimensions_that_do_not_match_completion_metadata,
+    {
+        let worker_event =
+            image_completion_event(valid_png_bytes(512, 768), valid_image_result_metadata());
 
-    assert!(matches!(
-        decode_event(&encode_event(&worker_event).expect("event should serialize")),
-        Err(ProtocolError::InvalidImageGenerationCompletion(
-            ImageGenerationCompletionValidationError::PngDimensionsMismatch {
-                encoded_width_pixels: 512,
-                encoded_height_pixels: 768,
-                metadata_width_pixels: 1_024,
-                metadata_height_pixels: 768,
-            }
-        ))
-    ));
-}
+        assert!(matches!(
+            decode_event(&encode_event(&worker_event).expect("event should serialize")),
+            Err(ProtocolError::InvalidImageGenerationCompletion(
+                ImageGenerationCompletionValidationError::PngDimensionsMismatch {
+                    encoded_width_pixels: 512,
+                    encoded_height_pixels: 768,
+                    metadata_width_pixels: 1_024,
+                    metadata_height_pixels: 768,
+                }
+            ))
+        ));
+    }
+);
 
-#[test]
-fn should_round_trip_every_image_failure_reason() {
+offline_test!(should_round_trip_every_image_failure_reason, {
     let failure_reasons = [
         ImageGenerationFailureReason::invalid_request("width exceeds model capability"),
         ImageGenerationFailureReason::ModelDoesNotSupportImageGeneration,
@@ -244,62 +246,64 @@ fn should_round_trip_every_image_failure_reason() {
             failure_reason
         );
     }
-}
+});
 
-#[test]
-fn should_summarize_image_events_without_image_or_prompt_payloads() {
-    let request_id = RequestId::new(777);
-    let events_and_summaries = [
-        (
-            WorkerEvent::ImageGenerationProgress {
-                request_id,
-                phase: ImageGenerationPhase::Decoding,
-                completed_steps: 28,
-                total_steps: 28,
-                elapsed_millis: 1_700,
-                mlx_memory_snapshot: None,
-            },
-            "image_generation_progress request_id=777",
-        ),
-        (
-            WorkerEvent::ImageGenerationCompleted {
-                request_id,
-                generated_image: GeneratedImage {
-                    mime_type: "image/png".to_owned(),
-                    encoded_bytes: valid_png_bytes(64, 64),
+offline_test!(
+    should_summarize_image_events_without_image_or_prompt_payloads,
+    {
+        let request_id = RequestId::new(777);
+        let events_and_summaries = [
+            (
+                WorkerEvent::ImageGenerationProgress {
+                    request_id,
+                    phase: ImageGenerationPhase::Decoding,
+                    completed_steps: 28,
+                    total_steps: 28,
+                    elapsed_millis: 1_700,
+                    mlx_memory_snapshot: None,
                 },
-                result_metadata: ImageGenerationResultMetadata {
-                    width_pixels: 64,
-                    height_pixels: 64,
-                    steps: 1,
-                    guidance_thousandths: 1_000,
-                    seed: 9,
-                    elapsed_millis: 5,
+                "image_generation_progress request_id=777",
+            ),
+            (
+                WorkerEvent::ImageGenerationCompleted {
+                    request_id,
+                    generated_image: GeneratedImage {
+                        mime_type: "image/png".to_owned(),
+                        encoded_bytes: valid_png_bytes(64, 64),
+                    },
+                    result_metadata: ImageGenerationResultMetadata {
+                        width_pixels: 64,
+                        height_pixels: 64,
+                        steps: 1,
+                        guidance_thousandths: 1_000,
+                        seed: 9,
+                        elapsed_millis: 5,
+                    },
                 },
-            },
-            "image_generation_completed request_id=777",
-        ),
-        (
-            WorkerEvent::ImageGenerationFailed {
-                request_id,
-                reason: ImageGenerationFailureReason::Cancelled,
-            },
-            "image_generation_failed request_id=777",
-        ),
-        (
-            WorkerEvent::ImageGenerationFinalized {
-                request_id,
-                elapsed_millis: 1_725,
-                mlx_memory_snapshot: Some(finalized_image_memory_snapshot()),
-            },
-            "image_generation_finalized request_id=777",
-        ),
-    ];
+                "image_generation_completed request_id=777",
+            ),
+            (
+                WorkerEvent::ImageGenerationFailed {
+                    request_id,
+                    reason: ImageGenerationFailureReason::Cancelled,
+                },
+                "image_generation_failed request_id=777",
+            ),
+            (
+                WorkerEvent::ImageGenerationFinalized {
+                    request_id,
+                    elapsed_millis: 1_725,
+                    mlx_memory_snapshot: Some(finalized_image_memory_snapshot()),
+                },
+                "image_generation_finalized request_id=777",
+            ),
+        ];
 
-    for (worker_event, expected_summary) in events_and_summaries {
-        assert_eq!(worker_event.diagnostic_summary(), expected_summary);
+        for (worker_event, expected_summary) in events_and_summaries {
+            assert_eq!(worker_event.diagnostic_summary(), expected_summary);
+        }
     }
-}
+);
 
 fn finalized_image_memory_snapshot() -> WorkerMlxMemorySnapshot {
     WorkerMlxMemorySnapshot {
