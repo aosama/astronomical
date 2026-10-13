@@ -343,6 +343,16 @@ jobs:
           set -o pipefail
           cargo test --no-fail-fast -p astronomical-e2e --test e2e_tests 2>&1 | tee "$RUNNER_TEMP/test-logs/root-e2e.log"
         timeout-minutes: 5
+      # Workstream 5 of issue #1198: the tier pyramid is a metric. The step
+      # counts tests per tier, reports the distribution, and fails when a tier
+      # drifts beyond tolerance from the committed baseline — the earliest
+      # warning that tests are migrating to the expensive tiers.
+      - name: Report test tier pyramid
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end test-tier-pyramid' EXIT
+          scripts/ci/ci-step-timing.sh begin test-tier-pyramid
+          scripts/ci/report-tier-pyramid.sh
+        timeout-minutes: 5
       # Observatory contracts stay in this required job until branch
       # protection also requires swift-node; then this step can migrate.
       - name: Run Observatory contracts
