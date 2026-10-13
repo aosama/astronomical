@@ -12,7 +12,9 @@
 //! memory, which requires an Apple-Silicon host.
 
 #[cfg(feature = "performance_throughput")]
+#[path = "throughput/mod.rs"]
 mod performance_throughput;
 
 #[cfg(feature = "performance_throughput")]
+#[path = "../support/mod.rs"]
 mod support;

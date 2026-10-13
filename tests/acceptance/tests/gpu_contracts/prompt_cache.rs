@@ -1,4 +1,5 @@
 #[cfg(feature = "direct-mlx")]
 mod common;
 #[cfg(feature = "direct-mlx")]
-mod mlx_memory_contract;
+#[path = "prompt_cache/mod.rs"]
+mod prompt_cache_acceptance;

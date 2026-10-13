@@ -60,7 +60,7 @@ const WARMUP_INPUT_INSTRUCTION: &str =
 /// The Romeo and Juliet source used for the bounded warmup and measured
 /// continuation.
 const ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
+    include_str!("../../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
 
 /// The warmup output cap.
 const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;

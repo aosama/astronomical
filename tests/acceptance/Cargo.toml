@@ -23,24 +23,24 @@ mlx = []
 mlx-memory-contract-probe = ["mlx"]
 
 [[test]]
-name = "serving_acceptance_tests"
-path = "tests/serving_acceptance_tests.rs"
+name = "chat_serving"
+path = "tests/chat_serving.rs"
 
 [[test]]
-name = "prompt_cache_acceptance_tests"
-path = "tests/prompt_cache_acceptance_tests.rs"
+name = "prompt_cache"
+path = "tests/prompt_cache.rs"
 
 [[test]]
-name = "memory_management_acceptance_tests"
-path = "tests/memory_management_acceptance_tests.rs"
+name = "memory_management_acceptance"
+path = "tests/memory_management_acceptance.rs"
 
 [[test]]
-name = "performance_measurement_tests"
-path = "tests/performance_measurement_tests.rs"
+name = "performance_measurement"
+path = "tests/performance/measurement.rs"
 
 [[test]]
-name = "performance_throughput_tests"
-path = "tests/performance_throughput_tests.rs"
+name = "performance_throughput"
+path = "tests/performance/throughput.rs"
 
 [[test]]
 name = "direct_mlx_tests"
@@ -53,13 +53,8 @@ path = "tests/gpu_contracts/installed_model_contracts_tests.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
-name = "mlx_memory_contract_tests"
-path = "tests/gpu_contracts/mlx_memory_contract_tests.rs"
-required-features = ["direct-mlx"]
-
-[[test]]
-name = "engine_prompt_cache_tests"
-path = "tests/gpu_contracts/prompt_cache_acceptance_tests.rs"
+name = "engine_prompt_cache"
+path = "tests/gpu_contracts/prompt_cache.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
@@ -68,9 +63,9 @@ path = "tests/gpu_contracts/runtime_mlx/direct_mlx_tests.rs"
 required-features = ["mlx"]
 
 [[test]]
-name = "runtime_mlx_memory_contract_tests"
-path = "tests/gpu_contracts/runtime_mlx/mlx_memory_contract_tests.rs"
-required-features = ["mlx-memory-contract-probe"]
+name = "memory_contracts"
+path = "tests/memory_contracts.rs"
+required-features = ["direct-mlx", "mlx-memory-contract-probe"]
 
 [[test]]
 name = "mlx_runtime_policy_tests"
