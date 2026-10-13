@@ -612,7 +612,7 @@ jobs:
         run: rustup show
       - name: Fetch and build the pilot crate tests
         run: |
-          cargo fetch --locked -p astronomical-config
+          cargo fetch --locked
           cargo build --locked --tests -p astronomical-config
       # The namespace run is execution-only: with artifacts warm and --offline
       # set, cargo never attempts a lookup, so the only thing the missing
