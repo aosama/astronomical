@@ -7,9 +7,16 @@
 //! treats the daemon as a black-box executable.
 
 mod common;
+
+#[path = "daemon_lifecycle/daemon_instance_isolation.rs"]
 mod daemon_instance_isolation;
+#[path = "daemon_lifecycle/daemon_process.rs"]
 mod daemon_process;
+#[path = "library/library_process.rs"]
 mod library_process;
+#[path = "model_journeys/qwen3_5_chat_schema_ipc_journey.rs"]
 mod qwen3_5_chat_schema_ipc_journey;
+#[path = "model_journeys/qwen_image_21_http_journey.rs"]
 mod qwen_image_21_http_journey;
+#[path = "daemon_lifecycle/worker_failure_diagnostics.rs"]
 mod worker_failure_diagnostics;
