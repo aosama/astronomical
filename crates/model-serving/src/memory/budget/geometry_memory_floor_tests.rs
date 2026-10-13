@@ -1,8 +1,8 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::MlxRamBudgetModelGeometry;
 
-offline_test!(
+offline_denied_test!(
     should_derive_the_geometry_floor_from_core_context_and_one_routed_page,
     {
         let model_geometry = MlxRamBudgetModelGeometry {
@@ -20,7 +20,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_a_dense_model_floor_below_its_core_plus_reserve,
     {
         let dense_model_geometry = MlxRamBudgetModelGeometry {
@@ -38,7 +38,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_ignore_disk_scale_of_fully_paged_experts_in_the_floor,
     {
         // The floor must describe what the NEXT request needs under streaming, not
@@ -59,7 +59,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_saturate_instead_of_overflowing_on_hostile_geometry,
     {
         let saturated_model_geometry = MlxRamBudgetModelGeometry {

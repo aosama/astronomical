@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_tokio_test;
+use astronomical_test_harness::offline_denied_tokio_test;
 
 use crate::{
     MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
@@ -8,7 +8,7 @@ use tokio::io::duplex;
 
 const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
-offline_tokio_test!(should_round_trip_prefill_progress_event, {
+offline_denied_tokio_test!(should_round_trip_prefill_progress_event, {
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(81),
         prompt_processing_phase: WorkerPromptProcessingPhase::Target,
@@ -37,7 +37,7 @@ offline_tokio_test!(should_round_trip_prefill_progress_event, {
     assert_round_tripped_worker_event(worker_event).await;
 });
 
-offline_tokio_test!(
+offline_denied_tokio_test!(
     should_round_trip_prefill_progress_before_the_first_completed_forward,
     {
         let worker_event = WorkerEvent::PrefillProgress {

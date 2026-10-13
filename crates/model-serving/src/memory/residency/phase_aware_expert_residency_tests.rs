@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
@@ -43,7 +43,7 @@ fn complete_residency(layer_index: usize) -> CurrentExpertLayerResidency {
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_target_every_layer_complete_when_the_composed_budget_fits_the_model,
     {
         let plan = plan_expert_residency(MemoryPhase::Prefill, 120, &uniform_geometry(3), &[])
@@ -57,7 +57,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_preserve_existing_complete_layers_before_selecting_new_targets,
     {
         let plan = plan_expert_residency(
@@ -81,7 +81,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_reserve_one_model_derived_routed_page_for_each_incomplete_layer,
     {
         let plan = plan_expert_residency(
@@ -101,7 +101,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_select_additional_complete_layers_by_incremental_payload_then_layer_index,
     {
         let geometries = vec![
@@ -127,7 +127,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_use_low_budget_partial_mode_when_routed_floors_do_not_fit,
     {
         let plan = plan_expert_residency(
@@ -149,7 +149,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_preserve_a_fitting_partial_page_without_exact_set_equality,
     {
         let current_page = partial_residency(1, &[0, 3], 8);
@@ -169,7 +169,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence,
     {
         let plan = plan_expert_residency(MemoryPhase::Decode, 60, &uniform_geometry(3), &[])
@@ -182,7 +182,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_them,
     {
         let plan = plan_expert_residency(
@@ -208,7 +208,7 @@ offline_test!(
 // keep naming them. That is what lets the prefill stream hand each freshly
 // streamed complete layer to retained ownership instead of dropping it and
 // making decode seating read the identical payload again.
-offline_test!(
+offline_denied_test!(
     should_name_every_admissible_complete_layer_after_a_prefill_demotion,
     {
         let layer_geometries = uniform_geometry(3);
@@ -254,7 +254,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_model,
     {
         let layer_geometries = (0..40)
@@ -292,7 +292,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_require_unseated_complete_layers_to_be_loaded_before_decode,
     {
         let plan = plan_expert_residency(
@@ -309,7 +309,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_require_already_preserved_complete_layers_to_be_loaded_again,
     {
         let plan = plan_expert_residency(
@@ -325,7 +325,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_release_low_coverage_partial_pages_before_any_complete_layer,
     {
         let current_residencies = vec![
@@ -345,7 +345,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_release_complete_layers_only_for_the_remaining_exact_deficit,
     {
         let plan = plan_expert_residency(
@@ -364,7 +364,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_fail_closed_for_invalid_geometry_residency_and_overflow,
     {
         let duplicate_residencies = vec![complete_residency(0), complete_residency(0)];
@@ -399,7 +399,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_every_planned_owner_and_reservation_within_the_retained_budget,
     {
         let geometries = uniform_geometry(4);

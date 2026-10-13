@@ -3,7 +3,7 @@
 //! The irreducible unit is one expert. Bytes and pages are accounting and I/O
 //! batching, never ownership. A repeated token route must be a complete hit
 //! against the resident experts, and eviction removes the coldest experts.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{DecodeExpertCache, ResidentExpertWeight};
 
@@ -32,7 +32,7 @@ fn admit_experts(
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_report_no_missing_experts_when_the_route_is_already_resident,
     {
         let mut decode_cache = DecodeExpertCache::new(4);
@@ -46,7 +46,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_evict_the_coldest_experts_instead_of_dropping_the_whole_layer,
     {
         let mut decode_cache = DecodeExpertCache::new(1);
@@ -70,7 +70,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_current_route_when_enforcing_the_decode_ceiling,
     {
         let mut decode_cache = DecodeExpertCache::new(1);

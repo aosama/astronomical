@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use super::*;
 
@@ -10,7 +10,7 @@ use super::*;
 // reserved panicked inside the inference worker while it recorded admission
 // evidence for a resident vision request, so the worker stopped and the user
 // saw "model execution failed inside the local worker" instead of an answer.
-offline_test!(should_record_and_read_back_every_catalogued_counter, {
+offline_denied_test!(should_record_and_read_back_every_catalogued_counter, {
     for performance_counter in PerformanceCounter::ALL {
         let mut performance_attribution = PerformanceAttribution::enabled();
 
@@ -42,7 +42,7 @@ offline_test!(should_record_and_read_back_every_catalogued_counter, {
 
 // Serialized report records are keyed by identifier, so two counters that
 // share one identifier would silently overwrite each other in diagnostics.
-offline_test!(
+offline_denied_test!(
     should_give_every_catalogued_counter_a_unique_report_identifier,
     {
         let mut catalogued_identifiers = std::collections::HashSet::new();
@@ -70,7 +70,7 @@ offline_test!(
 // Report serialization pairs `ALL` with the fixed storage by position, so a
 // catalog entry out of declaration order, or a declaration that never reached
 // `ALL`, makes the report mislabel one value and drop another.
-offline_test!(
+offline_denied_test!(
     should_keep_counter_catalog_positions_aligned_with_report_storage,
     {
         assert_eq!(

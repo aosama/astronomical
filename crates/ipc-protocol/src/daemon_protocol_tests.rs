@@ -2,7 +2,7 @@
 //! request and response frames a local `astronomical` CLI process and the
 //! daemon exchange over the instance unix socket.
 
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationSettings,
@@ -34,7 +34,7 @@ fn chat_generate_request() -> DaemonRequest {
     }
 }
 
-offline_test!(should_round_trip_daemon_requests_through_the_wire_codec, {
+offline_denied_test!(should_round_trip_daemon_requests_through_the_wire_codec, {
     let daemon_requests = [
         DaemonRequest::Handshake,
         DaemonRequest::Status,
@@ -71,7 +71,7 @@ offline_test!(should_round_trip_daemon_requests_through_the_wire_codec, {
     }
 });
 
-offline_test!(should_round_trip_daemon_responses_through_the_wire_codec, {
+offline_denied_test!(should_round_trip_daemon_responses_through_the_wire_codec, {
     let daemon_responses = [
         DaemonResponse::HandshakeAccepted {
             protocol_version: 1,

@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::WorkerChunkingConfiguration;
 
@@ -25,7 +25,7 @@ fn graph_submission_chunking(
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_use_resident_prefill_interval_and_keep_decode_on_one_tape,
     {
         let chunking = graph_submission_chunking(0, 1, 3);
@@ -39,7 +39,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_honor_a_positive_resident_prefill_interval_without_changing_ssd_paging,
     {
         let chunking = graph_submission_chunking(2, 1, 3);
@@ -51,7 +51,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_apply_paged_prefill_and_generation_intervals_while_experts_stream_from_storage,
     {
         let chunking = graph_submission_chunking(0, 1, 3);
@@ -61,7 +61,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_one_lazy_tape_when_ssd_paging_intervals_are_zero,
     {
         let chunking = graph_submission_chunking(0, 0, 0);

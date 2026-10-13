@@ -1,10 +1,10 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     compute_default_rope_frequency_denominators, compute_yarn_rope_frequency_denominators,
 };
 
-offline_test!(
+offline_denied_test!(
     should_keep_high_frequency_yarn_pairs_and_scale_low_frequency_pairs,
     {
         let default_denominators = compute_default_rope_frequency_denominators(500_000.0, 64)
@@ -20,7 +20,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_reject_invalid_rotary_and_yarn_geometry, {
+offline_denied_test!(should_reject_invalid_rotary_and_yarn_geometry, {
     assert!(compute_default_rope_frequency_denominators(10_000.0, 0).is_err());
     assert!(compute_default_rope_frequency_denominators(10_000.0, 7).is_err());
     assert!(compute_yarn_rope_frequency_denominators(500_000.0, 64, 0, 32.0, 32.0, 1.0).is_err());

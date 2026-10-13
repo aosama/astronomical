@@ -1,9 +1,9 @@
 //! Behavioral coverage for chunk-and-layer expert source attribution.
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use super::*;
 
-offline_test!(
+offline_denied_test!(
     should_aggregate_expert_source_plans_by_phase_and_layer_without_expert_ids,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();
@@ -45,7 +45,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_bound_expert_source_summaries_to_one_row_per_phase_and_layer,
     {
         let mut performance_attribution = PerformanceAttribution::enabled();

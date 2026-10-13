@@ -4,11 +4,11 @@ use astronomical_model_serving::{
     ArtifactValidationError, OptiQMetadataError, Qwen3_5ArtifactError,
     Qwen3_5ArtifactValidationError, Qwen3_5ConfigError,
 };
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 
-offline_test!(
+offline_denied_test!(
     should_explain_the_root_model_validation_failure_without_exposing_its_local_path,
     {
         let local_model_directory = PathBuf::from("/private/models/example-optiq-model");
@@ -33,7 +33,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_omit_local_model_paths_from_other_artifact_validation_failures,
     {
         let local_model_directory = PathBuf::from("/private/models/missing-checkpoint");
@@ -54,7 +54,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_explain_safe_model_configuration_validation_failures,
     {
         let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
@@ -71,7 +71,7 @@ offline_test!(
     }
 );
 
-offline_test!(should_explain_visual_tensors_without_a_vision_config, {
+offline_denied_test!(should_explain_visual_tensors_without_a_vision_config, {
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/text-only-qwen"),
         source: Qwen3_5ArtifactValidationError::Qwen3_5ShardIndex(
@@ -85,7 +85,7 @@ offline_test!(should_explain_visual_tensors_without_a_vision_config, {
     );
 });
 
-offline_test!(should_bound_optiq_metadata_failure_reason_length, {
+offline_denied_test!(should_bound_optiq_metadata_failure_reason_length, {
     let untrusted_module_name = "untrusted_module_name_".repeat(64);
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/example-optiq-model"),

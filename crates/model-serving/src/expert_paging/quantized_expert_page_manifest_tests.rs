@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use std::path::PathBuf;
 
@@ -16,7 +16,7 @@ fn retained_page_manifest() -> QuantizedExpertPageManifest {
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_identify_only_routed_experts_missing_from_a_retained_page,
     {
         let retained_page_manifest = retained_page_manifest();
@@ -28,14 +28,14 @@ offline_test!(
     }
 );
 
-offline_test!(should_report_complete_route_coverage_for_a_retained_page, {
+offline_denied_test!(should_report_complete_route_coverage_for_a_retained_page, {
     let retained_page_manifest = retained_page_manifest();
 
     assert!(retained_page_manifest.contains_every_expert(&[1, 3]));
     assert!(!retained_page_manifest.contains_every_expert(&[1, 2, 3]));
 });
 
-offline_test!(should_distinguish_complete_and_partial_expert_pages, {
+offline_denied_test!(should_distinguish_complete_and_partial_expert_pages, {
     let partial_page_manifest = retained_page_manifest();
     let complete_page_manifest = QuantizedExpertPageManifest {
         expert_ids: vec![0, 1, 2],
@@ -48,7 +48,7 @@ offline_test!(should_distinguish_complete_and_partial_expert_pages, {
     assert!(complete_page_manifest.contains_all_experts());
 });
 
-offline_test!(
+offline_denied_test!(
     should_partition_route_assignments_without_duplicate_execution,
     {
         let retained_page_manifest = retained_page_manifest();
@@ -71,7 +71,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_derive_exact_per_expert_and_complete_layer_payload_from_tensor_geometry,
     {
         let tensor_source = |tensor_name: &str, bytes_per_expert: usize| QuantizedTensorSource {

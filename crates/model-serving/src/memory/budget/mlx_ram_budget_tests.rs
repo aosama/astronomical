@@ -1,4 +1,4 @@
-use astronomical_test_harness::offline_test;
+use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MemoryPhase, MlxRamBudget, MlxRamBudgetMeasurement,
@@ -35,7 +35,7 @@ fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
     }
 }
 
-offline_test!(
+offline_denied_test!(
     should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements,
     {
         let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
@@ -58,7 +58,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners,
     {
         let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
@@ -91,7 +91,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_raise_context_window_reserve_from_measurements_and_never_under_shoot,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
@@ -138,7 +138,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_charge_transient_workspace_as_both_context_and_activation,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
@@ -161,7 +161,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_charge_exact_temporary_workspace_as_persistent_context,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
@@ -181,7 +181,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_protect_the_first_decode_with_prefill_activation_evidence,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
@@ -202,7 +202,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_use_decode_activation_evidence_after_decode_is_observed,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
@@ -228,7 +228,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve,
     {
         let mlx_ram_budget = MlxRamBudget::new(38_000_000_000, fable_class_geometry())
@@ -258,7 +258,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_project_unmeasured_suffix_tokens_on_top_of_learned_context_reserve,
     {
         let mut geometry = fable_class_geometry();
@@ -286,7 +286,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_exclude_newly_retained_experts_from_context_and_activation_learning,
     {
         assert_eq!(
@@ -315,7 +315,7 @@ offline_test!(
 // proportionally projected beyond it, with the static three-layer floor still
 // bounding everything.
 
-offline_test!(
+offline_denied_test!(
     should_resolve_the_prefill_activation_promise_from_the_planned_operation_bucket,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
@@ -343,7 +343,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_not_inflate_the_prefill_activation_promise_beyond_measured_evidence,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
@@ -372,7 +372,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_prefill_activation_promise_independent_of_the_prompt_context,
     {
         // Issue #644 regression: the activation reserve is operation-scoped. The
@@ -408,7 +408,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_keep_the_first_decode_protected_by_the_largest_prefill_evidence,
     {
         let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
@@ -446,7 +446,7 @@ offline_test!(
 // paper reserve several times the ceiling (measured 143 GB against a 39 GB
 // ceiling in production). The admission-side composition must resolve the
 // activation reserve at the operation scope exactly like `plan()` does.
-offline_test!(
+offline_denied_test!(
     should_keep_the_admission_workspace_activation_reserve_independent_of_the_prompt_context,
     {
         // The learned evidence is chunk-shaped (2,048-token prefill chunks), and
@@ -503,7 +503,7 @@ offline_test!(
 // measured 2026-10-10: the previous ceiling-equal cap turned one poisoned
 // observation into permanent rejections because workspace == ceiling makes
 // any current active memory overflow the projection).
-offline_test!(
+offline_denied_test!(
     should_cap_the_activation_reserve_below_the_irrevocable_model_core,
     {
         let ceiling_bytes = 39_000_000_000_u64;
@@ -526,7 +526,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_exclude_mandatory_expert_page_streaming_from_the_learned_context_growth,
     {
         // Issue #691: the composed context/activation learning sees a peak that
@@ -542,7 +542,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_charge_retained_expert_growth_as_one_beyond_baseline_owner_while_streaming,
     {
         // Retained (300) and streamed (500) promotion overlap: the peak's expert
@@ -557,7 +557,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_match_the_stream_free_contract_when_no_expert_page_stream_occurred,
     {
         // Identical measurements to the pre-#691 formula when zero pages streamed:
@@ -574,7 +574,7 @@ offline_test!(
     }
 );
 
-offline_test!(
+offline_denied_test!(
     should_saturate_context_growth_to_zero_when_stream_evidence_dominates,
     {
         // Churn can make stream evidence exceed the whole recorded window; the
