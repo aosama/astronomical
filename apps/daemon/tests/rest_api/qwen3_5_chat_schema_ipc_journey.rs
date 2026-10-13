@@ -7,7 +7,7 @@
 //! `DaemonRequest::ChatGenerate` carrying raw `--schema` JSON — the exact
 //! request the CLI's `respond --schema` verb sends — through the daemon's
 //! schema validation into the worker's logits-masked structured generation. It
-//! closes the one link the hermetic journeys cannot: a real model answering
+//! closes the one link the offline journeys cannot: a real model answering
 //! with a single JSON object that matches the supplied schema, on the CLI's
 //! own request path.
 //!

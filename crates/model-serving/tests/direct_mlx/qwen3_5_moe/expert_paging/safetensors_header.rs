@@ -1,4 +1,4 @@
-//! Hermetic tests for safetensors header parsing and validation.
+//! Offline tests for safetensors header parsing and validation.
 //!
 //! These tests create temporary safetensors files and verify that
 //! `parse_safetensors_header` correctly parses, validates, and rejects

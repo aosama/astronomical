@@ -1,4 +1,4 @@
-//! Hermetic contracts for the forced capability-verdict injection seam.
+//! Offline contracts for the forced capability-verdict injection seam.
 //!
 //! CI hardware cannot make a real kernel fail, so the capability owner
 //! accepts forced verdicts through this documented test-only constructor.

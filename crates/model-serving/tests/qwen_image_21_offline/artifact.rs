@@ -1,4 +1,4 @@
-//! Hermetic accept/reject tests for the Qwen-Image-2.1 artifact validator.
+//! Offline accept/reject tests for the Qwen-Image-2.1 artifact validator.
 //!
 //! Every test writes a synthetic wire-shaped package into a temporary directory (sparse
 //! safetensors — headers plus zero-filled payload extents, no 10.5 GB materialized) and checks

@@ -1,4 +1,4 @@
-//! Hermetic contracts for the decode route-observation history (#536).
+//! Offline contracts for the decode route-observation history (#536).
 
 use astronomical_model_serving::{
     ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
