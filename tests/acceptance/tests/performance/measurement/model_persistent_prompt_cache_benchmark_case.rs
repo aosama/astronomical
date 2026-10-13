@@ -1,9 +1,9 @@
 const FIVE_THOUSAND_WORD_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const FIFTY_THOUSAND_WORD_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 const HUNDRED_THOUSAND_WORD_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_100000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_100000_romeo_and_juliet_words.txt");
 
 pub(super) struct PersistentPromptCacheWarmupCase {
     pub(super) benchmark_name: &'static str,

@@ -42,7 +42,7 @@ const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet s
 
 /// The Romeo and Juliet source used for the bounded warmup prompt.
 const WARMUP_ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
+    include_str!("../../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
 
 /// The warmup output cap.
 const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;
@@ -54,7 +54,7 @@ const MEASURED_INPUT_INSTRUCTION: &str =
 /// The ~10,000-token Romeo and Juliet source; with the instruction the full
 /// input is ~10,500 tokens, clearing the >=10,000-token input requirement.
 const MEASURED_ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
+    include_str!("../../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
 
 /// The measured output cap: 500 output tokens (±10% acceptable).
 const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;

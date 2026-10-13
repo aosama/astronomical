@@ -42,12 +42,12 @@ use crate::support;
 
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 const WARMUP_ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
+    include_str!("../../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
 const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;
 const MEASURED_INPUT_INSTRUCTION: &str =
     "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 const MEASURED_ROMEO_AND_JULIET_SOURCE: &str =
-    include_str!("../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
+    include_str!("../../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
 const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
 const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// Leaves 15 seconds inside the 60-second test timeout for cancellation,
