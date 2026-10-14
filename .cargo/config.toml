@@ -29,8 +29,9 @@ test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", 
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
-# xtask native-fingerprint [--source-only] --profile core|core+memory-contract
-# [root]`, `cargo xtask classify-scope`, `cargo xtask bootstrap-native-dependencies
+# xtask native-fingerprint [--source-only] [--explain] --profile
+# core|core+memory-contract [root]`, `cargo xtask classify-scope`,
+# `cargo xtask bootstrap-native-dependencies
 # [--cache-dir ABSOLUTE_PATH] [--verify]`.
 xtask = ["run", "-p", "xtask", "--"]
 # verify: compile the whole workspace across ALL targets (libs, tests,
