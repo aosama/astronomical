@@ -19,7 +19,8 @@ const METAL_QUIESCENCE_WAIT: Duration = Duration::from_secs(5);
 /// store. The acceptance package has no build script of its own, so instead
 /// of the compile-time `ASTRONOMICAL_MLX_MEMORY_CONTRACT_PROBE` that
 /// runtime-integration's build script emits, the probe is located through the
-/// same identity/profile chain the build script uses (fingerprint script →
+/// same identity/profile chain the build script uses (native identity
+/// library →
 /// store entry → `bin/mlx_memory_contract_probe` under the
 /// `core+memory-contract` profile).
 fn resolve_native_probe_executable_path() -> PathBuf {
@@ -30,26 +31,16 @@ fn resolve_native_probe_executable_path() -> PathBuf {
     .join("../..")
     .canonicalize()
     .expect("the repository root should resolve above the acceptance package");
-    let identity_output = Command::new("sh")
-        .arg("-c")
-        .arg(
-            "ASTRONOMICAL_NATIVE_IDENTITY_TARGET=\"${TARGET:-aarch64-apple-darwin}\" \
-             \"$1\" --profile core+memory-contract \"$2\"",
-        )
-        .arg("fingerprint")
-        .arg(repository_root.join("scripts/ci/native-build-cache-fingerprint.sh"))
-        .arg(&repository_root)
-        .output()
-        .expect("the native build fingerprint script should run for the probe");
-    if !identity_output.status.success() {
-        panic!(
-            "the native build fingerprint script failed for the probe: {}",
-            String::from_utf8_lossy(&identity_output.stderr)
-        );
-    }
-    let native_identity = String::from_utf8_lossy(&identity_output.stdout)
-        .trim()
-        .to_owned();
+    let identity_request = astronomical_native_identity::FingerprintRequest {
+        repository_root: &repository_root,
+        profile: astronomical_native_identity::NativeBuildProfile::CoreMemoryContract,
+        scope: astronomical_native_identity::IdentityScope::Full,
+        // The probe inherits the historical environment contract: fixture
+        // overrides flow through the same variables the CI steps define.
+        overrides: astronomical_native_identity::probes::CompatibilityOverrides::from_environment(),
+    };
+    let native_identity = astronomical_native_identity::native_build_identity(&identity_request)
+        .unwrap_or_else(|error| panic!("the native build identity failed for the probe: {error}"));
     let store_root = std::env::var_os("ASTRONOMICAL_NATIVE_BUILD_STORE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {

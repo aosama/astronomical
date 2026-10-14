@@ -47,6 +47,7 @@ dependencies = [
  "astronomical-ipc-protocol",
  "astronomical-mlx-c-rust",
  "astronomical-model-serving",
+ "astronomical-native-identity",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
@@ -189,6 +190,7 @@ dependencies = [
 name = "astronomical-mlx-c-rust"
 version = "0.2.69"
 dependencies = [
+ "astronomical-native-identity",
  "bindgen",
  "thiserror",
 ]
@@ -224,7 +226,16 @@ dependencies = [
 name = "astronomical-native-build-tool"
 version = "0.2.69"
 dependencies = [
+ "astronomical-native-identity",
  "fs4",
+ "sha2",
+]
+
+[[package]]
+name = "astronomical-native-identity"
+version = "0.2.69"
+dependencies = [
+ "astronomical-test-harness",
  "sha2",
 ]
 
@@ -244,6 +255,7 @@ name = "astronomical-runtime-integration"
 version = "0.2.69"
 dependencies = [
  "astronomical-mlx-c-rust",
+ "astronomical-native-identity",
  "astronomical-test-harness",
  "fs4",
  "libc",
@@ -2978,6 +2990,8 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 name = "xtask"
 version = "0.2.69"
 dependencies = [
+ "astronomical-native-identity",
+ "astronomical-test-harness",
  "sha2",
 ]
 

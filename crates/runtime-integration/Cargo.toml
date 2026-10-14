@@ -30,8 +30,10 @@ tracing.workspace = true
 [build-dependencies]
 fs4.workspace = true
 sha2.workspace = true
+astronomical-native-identity = { path = "../native-identity" }
 
 [dev-dependencies]
+astronomical-native-identity = { path = "../native-identity" }
 astronomical-test-harness = { path = "../../crates/test-harness" }
 fs4.workspace = true
 sha2.workspace = true
