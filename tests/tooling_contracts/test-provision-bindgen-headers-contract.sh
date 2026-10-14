@@ -236,8 +236,8 @@ assert_run_fails "a tampered archive" \
     --manifest "$FIXTURE_MANIFEST" \
     --patch-list "$FIXTURE_PATCH_LIST"
 assert_contains "$PROVISION_OUTPUT_FILE" "fails its pinned SHA-256" "a tampered archive must be refused"
-assert_contains "$PROVISION_OUTPUT_FILE" "bootstrap-native-dependencies.sh" \
-    "the tampered-archive error should point at the bootstrap script"
+assert_contains "$PROVISION_OUTPUT_FILE" "cargo xtask bootstrap-native-dependencies" \
+    "the tampered-archive error should point at the bootstrap command"
 [ ! -e "$EXTRACTION_DIRECTORY" ] || {
     print_error "a refused run must not publish an extraction"
     exit 1
@@ -253,8 +253,8 @@ assert_run_fails "a cache missing the pinned archives" \
     --cache-dir "$EMPTY_CACHE_DIRECTORY" \
     --manifest "$FIXTURE_MANIFEST" \
     --patch-list "$FIXTURE_PATCH_LIST"
-assert_contains "$PROVISION_OUTPUT_FILE" "bootstrap-native-dependencies.sh" \
-    "a missing archive should point at the bootstrap script"
+assert_contains "$PROVISION_OUTPUT_FILE" "cargo xtask bootstrap-native-dependencies" \
+    "a missing archive should point at the bootstrap command"
 
 # Contract 6: --verify-headers proves the extracted MLX-C headers are
 # byte-identical to a completed native build's staged headers, and detects a

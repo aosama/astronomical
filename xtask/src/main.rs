@@ -4,6 +4,9 @@
 //! lines and exit codes are kept compatible so local habits, hooks, and CI
 //! steps survive the move unchanged.
 
+mod bootstrap_native_dependencies;
+#[cfg(test)]
+mod bootstrap_native_dependencies_tests;
 mod cache_prune;
 #[cfg(test)]
 mod cache_prune_tests;
@@ -13,6 +16,9 @@ mod classify_scope_tests;
 mod install_verification_tools;
 #[cfg(test)]
 mod install_verification_tools_tests;
+mod native_dependency_manifest;
+#[cfg(test)]
+mod native_dependency_manifest_tests;
 mod native_fingerprint;
 mod notices;
 #[cfg(test)]
@@ -58,9 +64,13 @@ fn main() -> ExitCode {
         Some("install-verification-tools") => run_command(install_verification_tools::run(
             arguments[1..].iter().cloned(),
         )),
+        Some("bootstrap-native-dependencies") => run_command(bootstrap_native_dependencies::run(
+            &repository_root,
+            &arguments[1..],
+        )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR]"
+                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
