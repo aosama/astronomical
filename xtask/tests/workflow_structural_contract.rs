@@ -332,6 +332,15 @@ offline_test!(macos_toolchain_identity_is_pinned_to_a_versioned_xcode, {
             "job {job_id} does not probe the readme primary Xcode path"
         );
         assert!(
+            assert_text.contains("/Contents/Developer/usr/bin/xcodebuild"),
+            "job {job_id} does not probe the canonical xcodebuild path inside the bundle"
+        );
+        assert!(
+            assert_text
+                .contains(r#"resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer""#),
+            "job {job_id} does not export a developer directory, not a bundle path"
+        );
+        assert!(
             assert_text.contains(
                 r#"printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV""#
             ),
