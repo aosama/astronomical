@@ -78,45 +78,24 @@ pub fn resolve_native_build_identity(
     native_build_profile: &str,
     target_triple: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let fingerprint_script_path =
-        repository_root.join("scripts/ci/native-build-cache-fingerprint.sh");
-    let mut identity_command = Command::new(&fingerprint_script_path);
-    identity_command
-        .arg("--profile")
-        .arg(native_build_profile)
-        .arg(repository_root)
-        // Cargo exports TARGET to build scripts; the standalone native-build
-        // tool has no Cargo context, so every caller states the triple it
-        // builds for and the identity stays identical in both paths.
-        .env("TARGET", target_triple);
-    // Fixture overrides make identity contracts offline-deterministic, but a production
-    // build must always fingerprint the toolchain that CMake actually uses.
-    for override_variable in [
-        "ASTRONOMICAL_NATIVE_IDENTITY_XCODE",
-        "ASTRONOMICAL_NATIVE_IDENTITY_SDK",
-        "ASTRONOMICAL_NATIVE_IDENTITY_CLANG",
-        "ASTRONOMICAL_NATIVE_IDENTITY_CMAKE",
-        "ASTRONOMICAL_NATIVE_IDENTITY_RUSTC",
-        "ASTRONOMICAL_NATIVE_IDENTITY_TARGET",
-    ] {
-        identity_command.env_remove(override_variable);
-    }
-    let identity_output = identity_command.output()?;
-    if !identity_output.status.success() {
-        let diagnostic_text = String::from_utf8_lossy(&identity_output.stderr);
-        return Err(format!(
-            "native build identity failed with {}: {}",
-            identity_output.status,
-            diagnostic_text.trim()
-        )
-        .into());
-    }
-    let native_build_identity = String::from_utf8(identity_output.stdout)?;
-    let native_build_identity = native_build_identity.trim().to_owned();
-    if !identity_output.stderr.is_empty() {
-        eprint!("{}", String::from_utf8_lossy(&identity_output.stderr));
-    }
-    Ok(native_build_identity)
+    let profile =
+        astronomical_native_identity::NativeBuildProfile::from_profile_text(native_build_profile)
+            .map_err(|error| error.to_string())?;
+    // Overrides stay absent by construction: a production build must always
+    // fingerprint the toolchain that CMake actually uses. The standalone
+    // native-build tool states its triple here because it has no Cargo
+    // context, and the identity stays identical in both paths.
+    let identity_request = astronomical_native_identity::FingerprintRequest {
+        repository_root,
+        profile,
+        scope: astronomical_native_identity::IdentityScope::Full,
+        overrides: astronomical_native_identity::probes::CompatibilityOverrides {
+            target_triple: Some(target_triple.to_owned()),
+            ..astronomical_native_identity::probes::CompatibilityOverrides::none()
+        },
+    };
+    astronomical_native_identity::native_build_identity(&identity_request)
+        .map_err(|error| format!("native build identity failed: {error}").into())
 }
 
 pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {

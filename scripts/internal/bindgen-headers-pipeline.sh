@@ -208,8 +208,8 @@ resolve_patch_path() {
 # identity the build actually used.
 resolve_source_identity() {
     source_identity="$(
-        "${REPOSITORY_ROOT}/scripts/ci/native-build-cache-fingerprint.sh" \
-            --source-only --profile core "$REPOSITORY_ROOT"
+        cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- \
+            native-fingerprint --source-only --profile core "$REPOSITORY_ROOT"
     )"
     validate_identity_text "$source_identity" "source identity fingerprint"
     printf '%s\n' "$source_identity"
@@ -443,8 +443,8 @@ resolve_built_identity() {
     }
     export TARGET
     built_identity="$(
-        "${REPOSITORY_ROOT}/scripts/ci/native-build-cache-fingerprint.sh" \
-            --profile "$NATIVE_BUILD_PROFILE" "$REPOSITORY_ROOT"
+        cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- \
+            native-fingerprint --profile "$NATIVE_BUILD_PROFILE" "$REPOSITORY_ROOT"
     )"
     validate_identity_text "$built_identity" "built identity fingerprint"
     printf '%s\n' "$built_identity"

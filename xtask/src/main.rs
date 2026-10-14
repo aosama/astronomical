@@ -4,6 +4,10 @@
 //! lines and exit codes are kept compatible so local habits, hooks, and CI
 //! steps survive the move unchanged.
 
+mod classify_scope;
+#[cfg(test)]
+mod classify_scope_tests;
+mod native_fingerprint;
 mod notices;
 mod source_size;
 mod tier_pyramid;
@@ -33,9 +37,13 @@ fn main() -> ExitCode {
             &repository_root,
             arguments.contains(&"--check".to_owned()),
         )),
+        Some("native-fingerprint") => {
+            run_command(native_fingerprint::run(&repository_root, &arguments[1..]))
+        }
+        Some("classify-scope") => run_command(classify_scope::run(&repository_root)),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check]"
+                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope"
             );
             ExitCode::from(2)
         }
