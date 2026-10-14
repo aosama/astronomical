@@ -24,3 +24,7 @@ astronomical-test-harness = { path = "../crates/test-harness" }
 [[test]]
 name = "offline_gh_shim_journeys"
 path = "tests/offline_gh_shim_journeys.rs"
+
+[[test]]
+name = "offline_install_tools_journeys"
+path = "tests/offline_install_tools_journeys.rs"

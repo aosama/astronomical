@@ -207,7 +207,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
           scripts/ci/ci-step-timing.sh begin install-verification-tools
-          scripts/ci/install-verification-tools.sh
+          cargo run --quiet -p xtask -- install-verification-tools
       - name: Verify Rust dependency notices
         env:
           EVENT_NAME: ${{ github.event_name }}
