@@ -2,37 +2,22 @@
 
 use std::{fs, path::PathBuf};
 
-#[cfg(feature = "memory-management-acceptance")]
+#[cfg(feature = "expert-paging")]
 pub(crate) mod acceptance_evidence;
-#[cfg(any(
-    feature = "serving-acceptance",
-    feature = "memory-management-acceptance",
-))]
+#[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 pub(crate) mod artifact_bytes;
-#[cfg(feature = "memory-management-acceptance")]
+#[cfg(feature = "expert-paging")]
 pub(crate) mod attribution_log;
 pub(crate) mod exact_model_prompt;
-#[cfg(any(
-    feature = "serving-acceptance",
-    feature = "memory-management-acceptance",
-))]
+#[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 pub(crate) mod http;
-#[cfg(any(
-    feature = "serving-acceptance",
-    feature = "memory-management-acceptance",
-))]
+#[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 #[allow(dead_code)]
 pub(crate) mod memory_utilization_parity;
-#[cfg(any(
-    feature = "serving-acceptance",
-    feature = "memory-management-acceptance",
-))]
+#[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 #[allow(dead_code)]
 pub(crate) mod openai_client;
-#[cfg(any(
-    feature = "serving-acceptance",
-    feature = "memory-management-acceptance",
-))]
+#[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 #[allow(dead_code)]
 pub(crate) mod serving_rest;
 #[cfg(feature = "serving-acceptance")]

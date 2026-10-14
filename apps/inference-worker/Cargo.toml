@@ -26,7 +26,6 @@ workspace = true
 performance-measurement = []
 performance_throughput = []
 serving-acceptance = []
-memory-management-acceptance = []
 
 [dependencies]
 astronomical-config = { path = "../../crates/config" }
