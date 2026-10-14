@@ -1,7 +1,5 @@
 # Instructions for the Astronomical Project
 
-- Read the north star vision at repo-root/docs/north-star-product-vision.md; everything else must be congruent with it.
-
 - You keep repo-root/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs.
 
 - MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; direct Cargo invocations must also select one test thread. The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
@@ -9,10 +7,6 @@
 - All and any tests must have a built-in timeout with a maximum of 120 seconds. Exceptions can be made for performance-endurance tests and/or tests that reproduce out-of-memory (OOM) issues.
 
 - SSD-paging e2e tests must have a built-in timeout of 60 seconds. If e2e test exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the e2e test timeout or repeating long model runs.
-
-- Never ever construct e2e tests while setting temperature to 0. It is an e2e testing intent to not specify it at all and let the provider determine the temperature setting for the model you are targeting.
-
-- Astronomical is expected to adapt to any laptop, any RAM size, any GPU wired memory limit. Do not hardwire or optimize the codebase just for this laptop that you are developing in.
 
 - Keep full workspace verification and formatting verification only before committing and pushing, when the user asks you to commit. This codebase is slow to format-check, and full workspace test runs take a long time.
 
@@ -33,22 +27,19 @@
 
 ## Code File Length and Memory Measurement Units
 
-- Code files should remain around the 500-line marker, not longer.
 - Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
 
 ## Prohibited Terminology: "qualification" and "hermetic"
 
-- The term "qualification" and all of its variants ("qualify", "qualified", "qualifier", etc.) are prohibited in this repository and in your discourse. Never use these terms in code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies to the user.
-- The term "hermetic" and all of its variants are prohibited and being fully decommissioned (tracked in issue #1208): never use them in new code, comments, tests, scripts, documentation, commit messages, GitHub content, or your replies. Where you encounter existing occurrences, remove them and replace with the test-classification vocabulary below, using the most specific applicable term rather than a generic one.
-- Test classification vocabulary (mandatory replacement for "hermetic"): the word that was conflated described a property, not a scope. Say **offline** for the property (sealed and deterministic: no real network beyond localhost, no real model artifacts, no machine state — everything scripted, so the test passes identically on any laptop); say **unit** for in-process logic with fakes; say **integration** for tests crossing a component seam through stubs or fixture binaries (unix-socket IPC, spawned fixture worker processes, real filesystem); say **end-to-end (E2E)** for tests driving the real `astronomicald` binary over its real HTTP surface; say **acceptance** for the env-gated e2e tests that load real model artifacts. When one test spans several tiers, name the highest seam it crosses.
+- Never use "qualification" or any variant ("qualify", "qualified", etc.) in code, comments, tests, scripts, documentation, commit messages, GitHub content, or replies.
+- "hermetic" is equally banned and being decommissioned (issue #1208). Remove existing occurrences and replace with the most specific term below.
+- Test classification vocabulary: **offline** (a property, not a scope) = sealed and deterministic — no network beyond localhost, no real model artifacts, no machine state, so it passes identically on any laptop; **unit** = in-process logic with fakes; **integration** = crossing a component seam through stubs or fixture binaries (unix-socket IPC, spawned fixture workers, real filesystem); **end-to-end (E2E)** = driving the real `astronomicald` binary over its real HTTP surface; **acceptance** = env-gated e2e tests loading real model artifacts. A test spanning several tiers is named by the highest seam it crosses.
 
 ## Requirements for Performance Profiling and Attribution
 
-- This codebase needs to be performance optimized; to achieve that, all our code, regardless of which part, needs to have performance logging and attribution that can be switched on and off through a config parameter. The performance logging needs to capture start time and end time of each operation. This will allow us to ATTRIBUTE performance issues to specific code parts. Without attribution you will be guessing why we are observing a slowdown, which is a bad state to be in; hence it is imperative that when you are editing code, refactoring, or creating new code, it follows a unified performance logging and attribution pattern.
-
-- The highest priority for performance logging and attribution is the critical path involved in Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging, and finally token generation. In short, any and all operations involved in actually serving a model request to the end user.
-
-- If you need to run performance attribution to performance profile the code with attribution logging, you can do that through the e2e test cases versus doing it through a fully running development instance. If tests do not exist, you can then create a new test after a careful and comprehensive review of the existing e2e test cases.
+- All code must follow the unified performance-logging pattern: per-operation start/end timestamps, switchable on/off through a config parameter. Without attribution, diagnosing a slowdown is guesswork.
+- Highest priority: the request-serving critical path — Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging, and token generation.
+- Profile with attribution through e2e test cases, not a running development instance. If no suitable test exists, create one after a careful review of the existing e2e cases.
 
 ## Test Fixture And Input Text For Real Model Tests
 
@@ -72,7 +63,7 @@
 
 ## Documentation under <repo-root>/docs Writing Conventions
 
-- Markdown authored in the <repo-root>/docs/ directory must be terse, define every acronym verbosely on first use, and have all assumptions eliminated before any file there is edited or written. The docs/performance-optimizations-lessons.md file holds only durable engineering lessons that enhance performance for LLMs, VLMs, and MLX APIs (never raw performance metrics), covering matmuls, MLX kernel differences, MLX-core caching, C++ gotchas, the slowdown from overly precise data types, and MoE expert sorting. New files must not be created in the docs/ directory without the user's explicit agreement, and <repo-root>/docs/ files are exempt from the repository's maximum file-length limit.
+- Markdown in <repo-root>/docs/ must be terse, define every acronym verbosely on first use, and have all assumptions eliminated before any file there is edited or written. docs/performance-optimizations-lessons.md holds only durable engineering lessons that enhance performance for LLMs, VLMs, and MLX APIs (never raw metrics): matmuls, MLX kernel differences, MLX-core caching, C++ gotchas, overly precise data types, and MoE expert sorting. Do not create new files in docs/ without the user's explicit agreement; docs/ files are exempt from the repository's maximum file-length limit.
 
 ## Scripts Folder Conventions
 
