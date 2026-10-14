@@ -5,13 +5,16 @@
 
 use std::path::Path;
 
-use astronomical_native_identity::probes::CompatibilityOverrides;
+use astronomical_native_identity::probes::{
+    CompatibilityOverrides, ProbeValue, compatibility_probe_values,
+};
 use astronomical_native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
 };
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let mut source_only = false;
+    let mut explain = false;
     let mut profile_text: Option<String> = None;
     let mut positional_root: Option<String> = None;
     let mut argument_index = 0;
@@ -19,6 +22,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         let argument = &arguments[argument_index];
         match argument.as_str() {
             "--source-only" => source_only = true,
+            "--explain" => explain = true,
             "--profile" => {
                 let profile_value = arguments.get(argument_index + 1).ok_or(
                     "--profile requires a value: expected core or core+memory-contract".to_owned(),
@@ -52,7 +56,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let effective_root = positional_root
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| repository_root.to_path_buf());
-    let identity = native_build_identity(&FingerprintRequest {
+    let request = FingerprintRequest {
         repository_root: &effective_root,
         profile,
         scope,
@@ -60,14 +64,49 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         // CI-provided target triples flow through the same variables the
         // shell era defined.
         overrides: CompatibilityOverrides::from_environment(),
-    })
-    .map_err(|error| error.to_string())?;
+    };
+    let identity = native_build_identity(&request).map_err(|error| error.to_string())?;
+    if explain {
+        // The identity pass already probed the toolchain; this second capture
+        // is what `--explain` costs (about a second on the hosted runners).
+        // Values are flattened to one line each so a CI log stays greppable:
+        // a native-cache flap is then attributable by reading five lines
+        // instead of diffing runner images.
+        eprintln!("[native-fingerprint] identity={identity}");
+        for probe_entry in
+            compatibility_probe_values(&request).map_err(|error| error.to_string())?
+        {
+            eprintln!(
+                "[native-fingerprint] probe={} source={} value={}",
+                probe_entry.name,
+                probe_source_text(&probe_entry),
+                one_line_text(&probe_entry.value)
+            );
+        }
+    }
     println!("{identity}");
     Ok(())
 }
 
+fn probe_source_text(probe_entry: &ProbeValue) -> &'static str {
+    if probe_entry.from_override {
+        "override"
+    } else {
+        "live"
+    }
+}
+
+fn one_line_text(multi_line_value: &str) -> String {
+    multi_line_value
+        .split('\n')
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
 fn print_usage() {
     eprintln!(
-        "usage: cargo xtask native-fingerprint [--source-only] --profile core|core+memory-contract [repository-root]"
+        "usage: cargo xtask native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract [repository-root]"
     );
 }

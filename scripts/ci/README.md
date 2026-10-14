@@ -18,7 +18,7 @@ verification-tool-installer, and native-dependency-bootstrap tooling moved
 into the `xtask` workspace crate:
 `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask source-size
 [--staged] [root]`, `cargo xtask notices [--check]`, `cargo xtask
-native-fingerprint [--source-only] --profile core|core+memory-contract
+native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract
 [root]`, `cargo xtask classify-scope`, `cargo xtask prune-caches
 [--dry-run] [--repo owner/name]`, `cargo xtask save-sccache
 <primary-cache-key>`, `cargo xtask install-verification-tools [--prefix

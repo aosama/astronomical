@@ -50,11 +50,24 @@ impl CompatibilityOverrides {
     }
 }
 
-/// Assembles the compatibility manifest lines in the fixed order the shell
-/// era established: target, build type, then the five toolchain probes.
-pub fn compatibility_manifest_lines(
+/// One captured toolchain-probe value: the exact bytes that feed the identity
+/// digest, plus whether the value came from an explicit override instead of
+/// the live toolchain. `--explain` surfaces these so an identity flap is
+/// attributable in one log read.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ProbeValue {
+    pub name: &'static str,
+    pub value: String,
+    pub from_override: bool,
+}
+
+/// Captures the compatibility inputs in the fixed order the shell era
+/// established: target, build type, then the five toolchain probes. This is
+/// the single capture path — the identity manifest digests exactly these
+/// values, so an explained value can never diverge from the hashed one.
+pub fn compatibility_probe_values(
     request: &FingerprintRequest<'_>,
-) -> Result<String, NativeIdentityError> {
+) -> Result<Vec<ProbeValue>, NativeIdentityError> {
     let target_triple = request
         .overrides
         .target_triple
@@ -69,49 +82,66 @@ pub fn compatibility_manifest_lines(
         return Err(NativeIdentityError::UnsupportedBuildType(build_type));
     }
 
-    let mut manifest_lines = format!("compatibility\ttarget\t{target_triple}\n");
-    manifest_lines.push_str(&format!("compatibility\tbuild-type\t{build_type}\n"));
+    let mut probe_values = vec![
+        ProbeValue {
+            name: "target",
+            value: target_triple,
+            from_override: true,
+        },
+        ProbeValue {
+            name: "build-type",
+            value: build_type,
+            from_override: true,
+        },
+    ];
+    probe_values.push(whole_output_probe_value(
+        "xcode",
+        request.overrides.xcode.as_deref(),
+        "xcodebuild",
+        &["-version"],
+    )?);
+    probe_values.push(composite_sdk_probe_value(request.overrides.sdk.as_deref())?);
+    probe_values.push(composite_clang_probe_value(
+        request.overrides.clang.as_deref(),
+    )?);
+    probe_values.push(whole_output_probe_value(
+        "cmake",
+        request.overrides.cmake.as_deref(),
+        "cmake",
+        &["--version"],
+    )?);
+    probe_values.push(whole_output_probe_value(
+        "rustc",
+        request.overrides.rustc.as_deref(),
+        "rustc",
+        &["-vV"],
+    )?);
+    Ok(probe_values)
+}
 
-    let probe_names = ["xcode", "sdk", "clang", "cmake", "rustc"];
-    for probe_name in probe_names {
-        let probe_started_at = Instant::now();
-        let probe_digest = match probe_name {
-            "xcode" => override_or_whole_output(
-                request.overrides.xcode.as_deref(),
-                "xcodebuild",
-                &["-version"],
-                "xcode",
-            )?,
-            "sdk" => composite_sdk_identity(request.overrides.sdk.as_deref())?,
-            "clang" => composite_clang_identity(request.overrides.clang.as_deref())?,
-            "cmake" => override_or_whole_output(
-                request.overrides.cmake.as_deref(),
-                "cmake",
-                &["--version"],
-                "cmake",
-            )?,
-            _ => override_or_whole_output(
-                request.overrides.rustc.as_deref(),
-                "rustc",
-                &["-vV"],
-                "rustc",
-            )?,
-        };
-        manifest_lines.push_str(&format!("compatibility\t{probe_name}\t{probe_digest}\n"));
-        eprintln!(
-            "[native-build-cache-fingerprint] probe={probe_name} elapsed_seconds={}",
-            probe_started_at.elapsed().as_secs()
-        );
+/// Assembles the compatibility manifest lines in the fixed order the shell
+/// era established: target, build type, then the five toolchain probes.
+pub fn compatibility_manifest_lines(
+    request: &FingerprintRequest<'_>,
+) -> Result<String, NativeIdentityError> {
+    let mut manifest_lines = String::new();
+    for probe_entry in compatibility_probe_values(request)? {
+        manifest_lines.push_str(&format!(
+            "compatibility\t{}\t{}\n",
+            probe_entry.name,
+            digest_bytes(probe_entry.value.as_bytes())
+        ));
     }
     Ok(manifest_lines)
 }
 
-fn override_or_whole_output(
+fn whole_output_probe_value(
+    probe_name: &'static str,
     override_text: Option<&str>,
     program_name: &str,
     program_arguments: &[&str],
-    probe_name: &str,
-) -> Result<String, NativeIdentityError> {
+) -> Result<ProbeValue, NativeIdentityError> {
+    let probe_started_at = Instant::now();
     let probe_output = match override_text {
         Some(override_value) => format!("{override_value}\n"),
         None => {
@@ -133,10 +163,21 @@ fn override_or_whole_output(
         }
     };
     require_non_empty_probe(probe_name, &probe_output)?;
-    Ok(digest_bytes(probe_output.as_bytes()))
+    eprintln!(
+        "[native-build-cache-fingerprint] probe={probe_name} elapsed_seconds={}",
+        probe_started_at.elapsed().as_secs()
+    );
+    Ok(ProbeValue {
+        name: probe_name,
+        value: probe_output,
+        from_override: override_text.is_some(),
+    })
 }
 
-fn composite_sdk_identity(override_text: Option<&str>) -> Result<String, NativeIdentityError> {
+fn composite_sdk_probe_value(
+    override_text: Option<&str>,
+) -> Result<ProbeValue, NativeIdentityError> {
+    let probe_started_at = Instant::now();
     let probe_output = match override_text {
         Some(override_value) => format!("{override_value}\n"),
         None => {
@@ -154,10 +195,21 @@ fn composite_sdk_identity(override_text: Option<&str>) -> Result<String, NativeI
         }
     };
     require_non_empty_probe("sdk", &probe_output)?;
-    Ok(digest_bytes(probe_output.as_bytes()))
+    eprintln!(
+        "[native-build-cache-fingerprint] probe=sdk elapsed_seconds={}",
+        probe_started_at.elapsed().as_secs()
+    );
+    Ok(ProbeValue {
+        name: "sdk",
+        value: probe_output,
+        from_override: override_text.is_some(),
+    })
 }
 
-fn composite_clang_identity(override_text: Option<&str>) -> Result<String, NativeIdentityError> {
+fn composite_clang_probe_value(
+    override_text: Option<&str>,
+) -> Result<ProbeValue, NativeIdentityError> {
+    let probe_started_at = Instant::now();
     let probe_output = match override_text {
         Some(override_value) => format!("{override_value}\n"),
         None => {
@@ -169,7 +221,15 @@ fn composite_clang_identity(override_text: Option<&str>) -> Result<String, Nativ
         }
     };
     require_non_empty_probe("clang", &probe_output)?;
-    Ok(digest_bytes(probe_output.as_bytes()))
+    eprintln!(
+        "[native-build-cache-fingerprint] probe=clang elapsed_seconds={}",
+        probe_started_at.elapsed().as_secs()
+    );
+    Ok(ProbeValue {
+        name: "clang",
+        value: probe_output,
+        from_override: override_text.is_some(),
+    })
 }
 
 /// Command substitution semantics: trailing newlines are stripped from the
