@@ -5,11 +5,9 @@
 
 use std::path::Path;
 
-use astronomical_native_identity::probes::{
-    CompatibilityOverrides, ProbeValue, compatibility_probe_values,
-};
+use astronomical_native_identity::probes::{CompatibilityOverrides, ProbeValue};
 use astronomical_native_identity::{
-    FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
+    FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity_with_probe_values,
 };
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
@@ -65,21 +63,19 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         // shell era defined.
         overrides: CompatibilityOverrides::from_environment(),
     };
-    let identity = native_build_identity(&request).map_err(|error| error.to_string())?;
+    let (identity, probe_values) =
+        native_build_identity_with_probe_values(&request).map_err(|error| error.to_string())?;
     if explain {
-        // The identity pass already probed the toolchain; this second capture
-        // is what `--explain` costs (about a second on the hosted runners).
-        // Values are flattened to one line each so a CI log stays greppable:
-        // a native-cache flap is then attributable by reading five lines
-        // instead of diffing runner images.
+        // These are the exact values the identity was hashed from — one
+        // capture, no second pass. Values are flattened to one line each so
+        // a CI log stays greppable: a native-cache flap is then attributable
+        // by reading seven lines instead of diffing runner images.
         eprintln!("[native-fingerprint] identity={identity}");
-        for probe_entry in
-            compatibility_probe_values(&request).map_err(|error| error.to_string())?
-        {
+        for probe_entry in &probe_values {
             eprintln!(
                 "[native-fingerprint] probe={} source={} value={}",
                 probe_entry.name,
-                probe_source_text(&probe_entry),
+                probe_source_text(probe_entry),
                 one_line_text(&probe_entry.value)
             );
         }
