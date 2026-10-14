@@ -16,7 +16,7 @@ fn model_id() -> &'static str {
     crate::support::resident_sparse_moe_model_id()
 }
 const SOURCE_DOCUMENT_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
 const SWEEP_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
@@ -37,23 +37,23 @@ fn should_keep_prefill_sweep_fixture_at_exactly_ten_thousand_words() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks 1,024-token model SSD streaming prefill chunks"]
+#[ignore = "loads the Ornith model in-process and benchmarks 1,024-token chunks of SSD-paged prefill"]
 #[serial]
-async fn should_measure_model_ssd_streaming_with_1024_token_prefill_chunks() {
+async fn should_measure_paged_prefill_with_1024_token_chunks() {
     assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(1024).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks 2,048-token model SSD streaming prefill chunks"]
+#[ignore = "loads the Ornith model in-process and benchmarks 2,048-token chunks of SSD-paged prefill"]
 #[serial]
-async fn should_measure_model_ssd_streaming_with_2048_token_prefill_chunks() {
+async fn should_measure_paged_prefill_with_2048_token_chunks() {
     assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(2048).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model in-process and benchmarks 4,096-token model SSD streaming prefill chunks"]
+#[ignore = "loads the Ornith model in-process and benchmarks 4,096-token chunks of SSD-paged prefill"]
 #[serial]
-async fn should_measure_model_ssd_streaming_with_4096_token_prefill_chunks() {
+async fn should_measure_paged_prefill_with_4096_token_chunks() {
     assert_valid_prefill_chunk_sweep_result(run_prefill_chunk_sweep_with_timeout(4096).await);
 }
 

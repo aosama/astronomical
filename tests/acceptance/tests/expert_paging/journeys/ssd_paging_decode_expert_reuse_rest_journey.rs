@@ -21,11 +21,10 @@
 
 use std::{fs, path::Path};
 
-use super::ssd_paging_decode_expert_reuse_journey::support::{
-    assert_predictor_surface_absent, decode_streamed_layer_indices, generation_attribution_counter,
-    generation_attribution_counter_identifiers, generation_attribution_report_count,
-    generation_expert_source_read_bytes, log_status_progress, preserve_memory_utilization_evidence,
-    record_expert_payload_increase,
+use super::ssd_paging_decode_expert_reuse_rest_journey::support::{
+    assert_decode_expert_reuse_attribution, decode_streamed_layer_indices,
+    generation_attribution_report_count, generation_expert_source_read_bytes, log_status_progress,
+    preserve_memory_utilization_evidence, record_expert_payload_increase,
 };
 
 mod support;
@@ -58,7 +57,7 @@ const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and real worker to accept expert-memory management behavior"]
+#[ignore = "launches the production REST server and real worker against the large sparse MoE under a 23 GB ceiling to accept routed-expert reuse from retained RAM during decode"]
 #[serial]
 async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memory_ceiling() {
     timeout(
@@ -149,105 +148,14 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     // Seating complete layers is the preferred reuse. Routed-page hits remain
     // valid when leftover cannot hold a complete-layer foundation.
     stop_real_model_rest_server(real_model_rest_server).await;
-    let retained_route_assignment_hit_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "retained_route_assignment_hit_count",
-    );
-    assert!(
-        final_expert_payload_bytes >= 1_000_000_000 || retained_route_assignment_hit_count > 0,
-        "decode must keep leftover complete layers or reuse retained routed pages; expert_payload_bytes={final_expert_payload_bytes} retained_route_assignment_hit_count={retained_route_assignment_hit_count}"
-    );
-
-    // --- Measured assertion 4b: the routed-reuse branch is live (issue #372) ---
-    // Unseated layers must warm routed experts during decode and serve later
-    // tokens from the hot set instead of re-reading storage every token.
-    let hot_expert_partial_route_hit_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "hot_expert_partial_route_hit_count",
-    );
-    let hot_expert_warm_insert_count =
-        generation_attribution_counter(isolated_worker_home.path(), "hot_expert_warm_insert_count");
-    assert!(
-        hot_expert_partial_route_hit_count > 0 && hot_expert_warm_insert_count > 0,
-        "decode must warm routed experts and reuse them; hot_expert_partial_route_hit_count={hot_expert_partial_route_hit_count} hot_expert_warm_insert_count={hot_expert_warm_insert_count}"
-    );
-
-    // --- Measured assertion 4c: route-coverage classification (issue #373) ---
-    // The all-or-nothing warm-table rule serves a token from RAM only when every
-    // routed expert is warm. These counters classify every decode token so the
-    // mixed-serving opportunity is measured rather than assumed.
-    let hot_expert_route_fully_covered_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "hot_expert_route_fully_covered_count",
-    );
-    let hot_expert_route_partially_covered_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "hot_expert_route_partially_covered_count",
-    );
-    let hot_expert_route_fully_missed_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "hot_expert_route_fully_missed_count",
-    );
-    let hot_expert_route_retained_assignment_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "hot_expert_route_retained_assignment_count",
-    );
-    let hot_expert_route_missing_assignment_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "hot_expert_route_missing_assignment_count",
-    );
-    let hot_expert_mixed_route_count =
-        generation_attribution_counter(isolated_worker_home.path(), "hot_expert_mixed_route_count");
-    let classified_token_count = hot_expert_route_fully_covered_count
-        + hot_expert_route_partially_covered_count
-        + hot_expert_route_fully_missed_count;
-    assert!(
-        classified_token_count > 0,
-        "decode must classify route coverage per token; classified_token_count={classified_token_count}"
-    );
-    assert!(
-        hot_expert_mixed_route_count > 0,
-        "partially covered tokens must be served by the mixed route instead of reading every routed expert from storage; hot_expert_mixed_route_count={hot_expert_mixed_route_count} partially_covered={hot_expert_route_partially_covered_count}"
-    );
-    assert!(
-        hot_expert_route_retained_assignment_count > hot_expert_route_missing_assignment_count,
-        "mixed serving must serve the majority of routed assignments from retained RAM; retained={hot_expert_route_retained_assignment_count} missing={hot_expert_route_missing_assignment_count}"
-    );
-
-    // --- Measured assertion 4d: true-route observation history (issue #536) ---
-    let route_observation_stored_record_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "route_observation_stored_record_count",
-    );
-    let route_observation_captured_layer_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "route_observation_captured_layer_count",
-    );
-    let route_observation_evicted_record_count = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "route_observation_evicted_record_count",
-    );
-    assert!(
-        route_observation_stored_record_count > 0,
-        "paged decode with attribution enabled must capture at least one true route observation; stored={route_observation_stored_record_count}"
-    );
-    assert!(
-        route_observation_captured_layer_count > 0,
-        "captured observations must include at least one sparse layer route; captured_layers={route_observation_captured_layer_count}"
-    );
-
-    // --- Measured assertion 4e: previous-token prefetch survives; predictor surface is retired (#537, #594) ---
     let attribution_home = isolated_worker_home.path();
-    let count = |name: &'static str| generation_attribution_counter(attribution_home, name);
-    let previous_token_prefetch_issue_count = count("previous_token_prefetch_issue_count");
-    let previous_token_prefetch_hit_count = count("previous_token_prefetch_hit_count");
-    let previous_token_prefetch_miss_count = count("previous_token_prefetch_miss_count");
-    let previous_token_prefetch_byte_count = count("previous_token_prefetch_byte_count");
-    let previous_token_prefetch_capacity_drop_count =
-        count("previous_token_prefetch_capacity_drop_count");
-    assert_predictor_surface_absent(
-        &memory_evidence.final_status,
-        &generation_attribution_counter_identifiers(attribution_home),
+    let reuse_counters =
+        assert_decode_expert_reuse_attribution(attribution_home, &memory_evidence.final_status);
+    assert!(
+        final_expert_payload_bytes >= 1_000_000_000
+            || reuse_counters.retained_route_assignment_hit_count > 0,
+        "decode must keep leftover complete layers or reuse retained routed pages; expert_payload_bytes={final_expert_payload_bytes} retained_route_assignment_hit_count={}",
+        reuse_counters.retained_route_assignment_hit_count,
     );
 
     // --- Measured assertion 5: throughput remains portable evidence ---
@@ -263,60 +171,6 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         average_generation_tokens_per_second.is_finite()
             && average_generation_tokens_per_second > 0.0,
         "decode throughput must be a positive finite measurement"
-    );
-
-    // --- Measured assertion 6: the unused ceiling has a named owner (issue #507) ---
-    let memory_ceiling_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_ceiling_bytes",
-    );
-    let memory_active_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_active_bytes",
-    );
-    let memory_unused_headroom_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_unused_headroom_bytes",
-    );
-    let memory_reserved_model_core_slack_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_reserved_model_core_slack_bytes",
-    );
-    let memory_reserved_context_growth_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_reserved_context_growth_bytes",
-    );
-    let memory_reserved_activation_and_workspace_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
-    );
-    let memory_unseated_expert_entitlement_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
-    );
-    let memory_unexplained_headroom_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_unexplained_headroom_bytes",
-    );
-    let memory_owner_overrun_bytes = generation_attribution_counter(
-        isolated_worker_home.path(),
-        "memory_ceiling_utilization_owner_overrun_bytes",
-    );
-    assert!(
-        memory_unused_headroom_bytes > 0,
-        "decode must observe unused headroom to explain; memory_unused_headroom_bytes={memory_unused_headroom_bytes}"
-    );
-    let named_headroom_bytes = memory_reserved_model_core_slack_bytes
-        + memory_reserved_context_growth_bytes
-        + memory_reserved_activation_and_workspace_bytes
-        + memory_unseated_expert_entitlement_bytes;
-    assert!(
-        memory_unexplained_headroom_bytes * 100 <= memory_unused_headroom_bytes,
-        "every unused byte must have a named owner or surface as a small residual; unused={memory_unused_headroom_bytes} named={named_headroom_bytes} unexplained={memory_unexplained_headroom_bytes}"
-    );
-    assert_eq!(
-        memory_unexplained_headroom_bytes, 0,
-        "the utilization identity must close with no residual; unused={memory_unused_headroom_bytes} named={named_headroom_bytes} unexplained={memory_unexplained_headroom_bytes}"
     );
 
     // --- Measured assertion 7: the status document carries the same split the
@@ -356,6 +210,31 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         "exactly one generation attribution report should be written"
     );
 
+    let hot_expert_mixed_route_count = reuse_counters.hot_expert_mixed_route_count;
+    let hot_expert_partial_route_hit_count = reuse_counters.hot_expert_partial_route_hit_count;
+    let hot_expert_route_fully_covered_count = reuse_counters.hot_expert_route_fully_covered_count;
+    let hot_expert_route_fully_missed_count = reuse_counters.hot_expert_route_fully_missed_count;
+    let hot_expert_route_missing_assignment_count =
+        reuse_counters.hot_expert_route_missing_assignment_count;
+    let hot_expert_route_partially_covered_count =
+        reuse_counters.hot_expert_route_partially_covered_count;
+    let hot_expert_route_retained_assignment_count =
+        reuse_counters.hot_expert_route_retained_assignment_count;
+    let hot_expert_warm_insert_count = reuse_counters.hot_expert_warm_insert_count;
+    let previous_token_prefetch_byte_count = reuse_counters.previous_token_prefetch_byte_count;
+    let previous_token_prefetch_capacity_drop_count =
+        reuse_counters.previous_token_prefetch_capacity_drop_count;
+    let previous_token_prefetch_hit_count = reuse_counters.previous_token_prefetch_hit_count;
+    let previous_token_prefetch_issue_count = reuse_counters.previous_token_prefetch_issue_count;
+    let previous_token_prefetch_miss_count = reuse_counters.previous_token_prefetch_miss_count;
+    let retained_route_assignment_hit_count = reuse_counters.retained_route_assignment_hit_count;
+    let route_observation_captured_layer_count =
+        reuse_counters.route_observation_captured_layer_count;
+    let route_observation_evicted_record_count =
+        reuse_counters.route_observation_evicted_record_count;
+    let route_observation_stored_record_count =
+        reuse_counters.route_observation_stored_record_count;
+
     // Diagnostic output: useful for debugging but not asserted.
     let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
     let decode_streamed_layer_indices = decode_streamed_layer_indices(isolated_worker_home.path());
@@ -370,7 +249,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          expert_source_read_gb={:.2} \
          retained_route_hits={retained_route_assignment_hit_count} \
          hot_expert_partial_route_hits={hot_expert_partial_route_hit_count} \
-         hot_expert_warm_insert_count={hot_expert_warm_insert_count} \
+         reuse_counters.hot_expert_warm_insert_count={hot_expert_warm_insert_count} \
          hot_expert_route_fully_covered={hot_expert_route_fully_covered_count} \
          hot_expert_route_partially_covered={hot_expert_route_partially_covered_count} \
          hot_expert_route_fully_missed={hot_expert_route_fully_missed_count} \
@@ -405,15 +284,16 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         final_active_memory_bytes as f64 / 1e9,
         peak_memory_bytes as f64 / 1e9,
         expert_source_read_bytes as f64 / 1e9,
-        memory_ceiling_bytes as f64 / 1e9,
-        memory_active_bytes as f64 / 1e9,
-        memory_unused_headroom_bytes as f64 / 1e9,
-        memory_reserved_model_core_slack_bytes as f64 / 1e9,
-        memory_reserved_context_growth_bytes as f64 / 1e9,
-        memory_reserved_activation_and_workspace_bytes as f64 / 1e9,
-        memory_unseated_expert_entitlement_bytes as f64 / 1e9,
-        memory_unexplained_headroom_bytes as f64 / 1e9,
-        memory_owner_overrun_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_ceiling_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_active_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_unused_headroom_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_reserved_model_core_slack_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_reserved_context_growth_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_reserved_activation_and_workspace_bytes as f64
+            / 1e9,
+        reuse_counters.memory_ceiling_utilization_unseated_expert_entitlement_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_unexplained_headroom_bytes as f64 / 1e9,
+        reuse_counters.memory_ceiling_utilization_owner_overrun_bytes as f64 / 1e9,
         decode_warming_growth_bytes as f64 / 1e9,
         decode_streamed_layer_indices.len(),
         retained_expert_payload_increments,
@@ -425,39 +305,39 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         &[
             (
                 "memory_ceiling_utilization_ceiling_bytes",
-                memory_ceiling_bytes,
+                reuse_counters.memory_ceiling_utilization_ceiling_bytes,
             ),
             (
                 "memory_ceiling_utilization_active_bytes",
-                memory_active_bytes,
+                reuse_counters.memory_ceiling_utilization_active_bytes,
             ),
             (
                 "memory_ceiling_utilization_unused_headroom_bytes",
-                memory_unused_headroom_bytes,
+                reuse_counters.memory_ceiling_utilization_unused_headroom_bytes,
             ),
             (
                 "memory_ceiling_utilization_reserved_model_core_slack_bytes",
-                memory_reserved_model_core_slack_bytes,
+                reuse_counters.memory_ceiling_utilization_reserved_model_core_slack_bytes,
             ),
             (
                 "memory_ceiling_utilization_reserved_context_growth_bytes",
-                memory_reserved_context_growth_bytes,
+                reuse_counters.memory_ceiling_utilization_reserved_context_growth_bytes,
             ),
             (
                 "memory_ceiling_utilization_reserved_activation_and_workspace_bytes",
-                memory_reserved_activation_and_workspace_bytes,
+                reuse_counters.memory_ceiling_utilization_reserved_activation_and_workspace_bytes,
             ),
             (
                 "memory_ceiling_utilization_unseated_expert_entitlement_bytes",
-                memory_unseated_expert_entitlement_bytes,
+                reuse_counters.memory_ceiling_utilization_unseated_expert_entitlement_bytes,
             ),
             (
                 "memory_ceiling_utilization_unexplained_headroom_bytes",
-                memory_unexplained_headroom_bytes,
+                reuse_counters.memory_ceiling_utilization_unexplained_headroom_bytes,
             ),
             (
                 "memory_ceiling_utilization_owner_overrun_bytes",
-                memory_owner_overrun_bytes,
+                reuse_counters.memory_ceiling_utilization_owner_overrun_bytes,
             ),
         ],
     );

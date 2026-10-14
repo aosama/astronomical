@@ -1,6 +1,6 @@
 #[cfg(feature = "performance-measurement")]
-#[path = "../expert_paging/prefill_performance.rs"]
-mod model_ssd_streaming;
+#[path = "paged_prefill/mod.rs"]
+mod paged_prefill;
 #[cfg(feature = "performance-measurement")]
 #[path = "measurement/mod.rs"]
 mod performance_measurement;
