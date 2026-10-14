@@ -7,12 +7,7 @@
 
 mod support;
 
-use std::{
-    fs,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{fs, net::SocketAddr, time::Instant};
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -21,7 +16,7 @@ use tokio::time::{Duration, interval, timeout};
 
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 use crate::support::serving_rest::{
-    SSD_JOURNEY_TIMEOUT, get_json_endpoint, launch_real_model_rest_server, put_json_endpoint,
+    SSD_JOURNEY_TIMEOUT, launch_real_model_rest_server, put_json_endpoint,
     stop_real_model_rest_server,
 };
 use support::{
@@ -157,56 +152,8 @@ async fn run_mid_streaming_raise_settlement() {
     let post_raise_source = ROMEO_AND_JULIET_SOURCE.repeat(POST_RAISE_FRESH_SOURCE_REPEATS);
     let third_user_message =
         format!("Use this additional context without quoting it: {post_raise_source}");
-    let first_reporting_violation = Arc::new(Mutex::new(None::<String>));
-    let sampler_violation = Arc::clone(&first_reporting_violation);
-    let status_sampler = tokio::spawn(async move {
-        let mut sampling_interval = interval(STATUS_CONSISTENCY_SAMPLE_INTERVAL);
-        let mut sample_count = 0_u64;
-        sampling_interval.tick().await;
-        loop {
-            sampling_interval.tick().await;
-            sample_count += 1;
-            let status_document = get_json_endpoint(server_address, "/v1/status").await;
-            let snapshot_expert_payload_bytes =
-                status_document["mlx_memory_snapshot"]["expert_payload_bytes"]
-                    .as_u64()
-                    .unwrap_or(0);
-            let claimed_resident_payload_bytes =
-                status_document["expert_residency"]["resident_expert_payload_bytes"].as_u64();
-            if sample_count % 5 == 0 {
-                eprintln!(
-                    "{LOG_MARKER} phase=status_sample status=progress sample={sample_count} expert_memory_mode={} measured_expert_payload_gb={:.3} claimed_resident_payload_gb={}",
-                    status_document["expert_memory_mode"]
-                        .as_str()
-                        .unwrap_or("unavailable"),
-                    snapshot_expert_payload_bytes as f64 / 1_000_000_000.0,
-                    claimed_resident_payload_bytes
-                        .map(|claimed| format!("{:.3}", claimed as f64 / 1_000_000_000.0))
-                        .unwrap_or_else(|| "none".to_owned()),
-                );
-            }
-            if let Some(claimed) = claimed_resident_payload_bytes {
-                let reporting_gap_bytes = claimed.abs_diff(snapshot_expert_payload_bytes);
-                if reporting_gap_bytes > support::EXPERT_REPORTING_CONSISTENCY_TOLERANCE_BYTES {
-                    let mut violation_slot = sampler_violation
-                        .lock()
-                        .expect("the status consistency violation slot should lock");
-                    if violation_slot.is_none() {
-                        *violation_slot = Some(format!(
-                            "claimed_resident_payload_bytes={claimed} measured_expert_payload_bytes={snapshot_expert_payload_bytes} expert_memory_mode={} snapshot_source={} status={status_document}",
-                            status_document["expert_memory_mode"]
-                                .as_str()
-                                .unwrap_or("unavailable"),
-                            status_document["mlx_memory_snapshot"]["source"]
-                                .as_str()
-                                .unwrap_or("unavailable"),
-                        ));
-                    }
-                    break;
-                }
-            }
-        }
-    });
+    let (status_sampler, first_reporting_violation) =
+        support::spawn_status_consistency_sampler(server_address);
     let third_assistant_response = execute_conversation_request(
         &openai_client,
         json!([

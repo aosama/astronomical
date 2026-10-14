@@ -31,9 +31,9 @@ fn model_id() -> &'static str {
 }
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const CACHE_SCALING_FIXTURE: &str =
-    include_str!("../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
+    include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 struct StreamingMeasurement {
     request_started_at: Instant,
@@ -94,9 +94,9 @@ fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model and benchmarks a 5,000-word summarization request"]
+#[ignore = "loads the Ornith model and benchmarks a 5,000-word paged-prefill summarization request"]
 #[serial]
-async fn should_measure_model_ssd_streaming_summarization_throughput_and_peak_memory() {
+async fn should_measure_paged_prefill_summarization_throughput_and_peak_memory() {
     timeout(
         BENCHMARK_TIMEOUT,
         run_cold_prefill_measurement(five_thousand_word_case()),
@@ -106,9 +106,9 @@ async fn should_measure_model_ssd_streaming_summarization_throughput_and_peak_me
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model and measures cold-cache 50,000-word prefill"]
+#[ignore = "loads the Ornith model and measures 50,000-word cold-cache paged prefill"]
 #[serial]
-async fn should_measure_model_ssd_streaming_cold_prefill_at_fifty_thousand_words() {
+async fn should_measure_paged_prefill_cold_cache_at_fifty_thousand_words() {
     timeout(
         BENCHMARK_TIMEOUT,
         run_cold_prefill_measurement(fifty_thousand_word_case()),

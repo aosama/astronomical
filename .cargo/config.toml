@@ -54,4 +54,4 @@ test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "-
 test-mlx-memory = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,mlx-memory-contract-probe", "--test", "memory_contracts", "--", "--ignored", "--test-threads=1"]
 # test-acceptance: the whole real-model acceptance package (journeys and
 # contracts across every feature gate), still `--test-threads=1`.
-test-acceptance = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,serving-acceptance,memory-management-acceptance,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe", "--tests", "--", "--ignored", "--test-threads=1"]
+test-acceptance = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe", "--tests", "--", "--ignored", "--test-threads=1"]

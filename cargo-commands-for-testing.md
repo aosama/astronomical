@@ -101,24 +101,24 @@ All commands below load large artifacts into wired GPU memory. They are
 `--test-threads=1`. SSD-paging journeys have a 60-second timeout inside each
 test; do not wrap them in a longer external timeout or run them concurrently.
 
-### Memory-management acceptance (SSD paging journeys)
+### Expert-paging acceptance (SSD paging journeys)
 
 All journey commands resolve the real worker binary from the shared target
 directory, so build it once first:
 `cargo build --release -p astronomical-inference-worker`.
 
-- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance --features memory-management-acceptance -- --ignored --nocapture --test-threads=1`
-  — the full memory-management journey suite: SSD-paged decode expert reuse,
-  expert eviction, complete-residency control, prefill memory progress,
+- `cargo test --release -p astronomical-acceptance --test expert_paging --features expert-paging -- --ignored --nocapture --test-threads=1`
+  — the full expert-paging journey suite: SSD-paged decode expert reuse,
+  decode expert retention, complete-residency control, prefill memory progress,
   reverse model swap, and the paging memory-shape experiment.
-- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance --features memory-management-acceptance model_ssd_streaming::follow_up_admission_paged_moe_rest_journey::should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --test expert_paging --features expert-paging journeys::follow_up_admission_paged_moe_rest_journey::should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill -- --ignored --nocapture --exact --test-threads=1`
   — the paged-MoE follow-up admission regression journey: a long first turn
   teaches the RAM budget chunk-shaped activation evidence, and the follow-up
   turn in the same conversation must be admitted, never rejected with
   `generation context exceeds available GPU wired memory`. Resident and SSD
   streaming prefill both use the fixed 2,048-token test span; the journey has a
   60-second timeout and a 36 GB maximum configured memory ceiling.
-- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance --features memory-management-acceptance should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling -- --ignored --nocapture --exact --test-threads=1`
+- `cargo test --release -p astronomical-acceptance --test expert_paging --features expert-paging journeys::large_sparse_moe_paging_memory_shape_rest_journey::should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling -- --ignored --nocapture --exact --test-threads=1`
   — the paging memory-shape experiment (default 32 GB cell): samples the
   memory timeline during a 5,000-token Romeo-and-Juliet prefill plus 500
   decode tokens, prints the full performance-attribution segment tables, and
@@ -264,6 +264,6 @@ test thread, and respect each journey's 115-second budget.
 
 ## Building test binaries without running them
 
-- `cargo test --release -p astronomical-acceptance --test memory_management_acceptance --features memory-management-acceptance --no-run`
-  — compiles the memory acceptance binary and the production worker binary it
+- `cargo test --release -p astronomical-acceptance --test expert_paging --features expert-paging --no-run`
+  — compiles the expert-paging journey binary and the production worker binary it
   spawns; useful before iterating on one journey.

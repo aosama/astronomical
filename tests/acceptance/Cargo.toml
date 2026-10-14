@@ -16,7 +16,7 @@ autotests = false
 [features]
 direct-mlx = []
 serving-acceptance = []
-memory-management-acceptance = []
+expert-paging = []
 performance-measurement = []
 performance_throughput = []
 mlx = []
@@ -31,8 +31,8 @@ name = "prompt_cache"
 path = "tests/prompt_cache.rs"
 
 [[test]]
-name = "memory_management_acceptance"
-path = "tests/memory_management_acceptance.rs"
+name = "expert_paging"
+path = "tests/expert_paging.rs"
 
 [[test]]
 name = "performance_measurement"
