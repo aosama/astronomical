@@ -61,7 +61,7 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 ```sh
 scripts/release/tests/test-release-contracts.sh
 cargo fmt --all -- --check
-cargo test-hermetic-and-rest
+cargo test-offline-and-rest
 ```
 
 6. Inspect `git status`, `git diff`, and `git log --oneline -10`; commit only `Cargo.toml` and `Cargo.lock` with `chore: bump version to ${VERSION}`.
@@ -133,11 +133,11 @@ Publication intentionally leaves the old public appcast active and writes the ne
 ```sh
 scripts/release/accept-sparkle-update.sh
 cargo fmt --all -- --check
-cargo test-hermetic-and-rest
+cargo test-offline-and-rest
 ```
 
 4. Inspect status, diff, and recent log; commit only `site/appcast.xml` with `release: activate v${VERSION} update feed`.
-5. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. This appcast-only change is maintenance work; `Fixes` is reserved for implementation work. Wait for required checks and merge it. The macOS hermetic verification job reports `skipping` rather than `pass`, which is expected for a signed site artifact; the other required checks must still be terminal. The exact heading matters: placing `Refs #N` elsewhere in the body fails the repository validator.
+5. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. This appcast-only change is maintenance work; `Fixes` is reserved for implementation work. Wait for required checks and merge it. The macOS offline verification job reports `skipping` rather than `pass`, which is expected for a signed site artifact; the other required checks must still be terminal. The exact heading matters: placing `Refs #N` elsewhere in the body fails the repository validator.
 6. Synchronize local `main` with the squash-merged remote commit without rebasing. A clean local branch can diverge by one commit after the remote squash merge; fetch `origin/main`, then use a fast-forward or clean reset to the remote branch. Wait for the Pages workflow for the merge commit, and require success.
 7. Download the public `appcast.xml` to a temporary file. Require it to be byte-identical to `target/releases/${TAG}/appcast.xml` and to match the manifest digest. Verify its enclosure URL is reachable and the remote DMG still matches the manifest. Delete temporary files.
 
@@ -168,7 +168,7 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - `accept-sparkle-update.sh` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The script overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `build_sparkle_cli`.
 - Release notes created through `mktemp "${TMPDIR:-/tmp}/name.XXXXXX.md"` can end up with a literal, unreplaced `XXXXXX` in the filename. The file is still valid; use the printed path verbatim everywhere (manifest, `--notes-file`) instead of assuming a clean temp name.
 - The PR issue compliance validator requires the `## Linked issue` section to contain exactly one reference line (`Fixes|Closes|Resolves|Refs #N`). Any prose inside that section fails validation; put narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
-- Expected CI duration for hermetic verification PRs is roughly 7-8 minutes; do not treat a pending job at the 2-3 minute mark as stuck.
+- Expected CI duration for offline verification PRs is roughly 7-8 minutes; do not treat a pending job at the 2-3 minute mark as stuck.
 - `scripts/release/prepare-and-publish.sh` requires signing identity, team ID, and notary profile resolved inside the same shell invocation as the script call; resolving them in an earlier command does not persist.
 - Every version bump stales `third-party/RUST_DEPENDENCY_NOTICES.digest` because the workspace version appears in the generated notices text. Regenerate it in the bump branch itself with `scripts/ci/generate-rust-dependency-notices.sh`; CI fails the bump PR otherwise (hit live in the 0.2.66 release run).
 - Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
@@ -176,7 +176,7 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 ## FAQ
 
 - Why did the Sparkle acceptance fail right after it worked in a previous release? The acceptance script skips `xcodebuild` when a prebuilt `sparkle-cli` exists. A prior release can succeed with the stale binary; the next checkout refresh deletes `build/`, forces the rebuild, and only then exposes the deployment-target incompatibility.
-- Why is the macOS hermetic verification check "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full hermetic run. The remaining required checks must still reach a terminal success state.
+- Why is the macOS offline verification check "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full offline run. The remaining required checks must still reach a terminal success state.
 - Why does the `## Linked issue` section reject my explanation? The repository validator enforces exactly one machine-parsable reference line in that section so release provenance stays auditable. Explanations belong above the heading.
 - Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
-- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-hermetic-and-rest`. The Stable packaging contracts run explicitly through `scripts/release/tests/test-release-contracts.sh` (consolidated back under the release scripts it exercises; it lived at `tests/scripts/release/` in between).
+- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-offline-and-rest`. The Stable packaging contracts run explicitly through `scripts/release/tests/test-release-contracts.sh` (consolidated back under the release scripts it exercises; it lived at `tests/scripts/release/` in between).
