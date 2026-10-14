@@ -271,4 +271,85 @@ mod tests {
             "unseated entitlement must read as recoverable"
         );
     }
+
+    // The resident 25 GB decode-retention cell of issue #1236, byte for byte.
+    // After the repeated cached request, the retained live prefix (issue
+    // #1167) keeps ~153.5 MB of KV active, while the finalized plan protects
+    // only ~27.6 MB of one-decode-step transient work. The budget partitions
+    // the ceiling exactly, so a partitioned identity can only break through a
+    // clamped term: zeroing the live context state charged the retained
+    // prefix to the activation-and-workspace reserve, whose clamp manufactured
+    // a 125,881,648-byte phantom owner overrun. Attributing the retained
+    // state to the context owner closes the identity exactly.
+    #[test]
+    fn should_attribute_retained_live_context_bytes_to_the_context_owner_so_the_finalized_split_closes()
+     {
+        let expert_payload_bytes = 19_595_788_288;
+        let model_core_payload_bytes = 2_568_911_104;
+        let retained_context_payload_bytes = 153_523_590;
+        let decode_activation_reserve_bytes = 11_159_842;
+        let routed_page_slot_bytes = 16_482_100;
+        let decode_transient_reserve_bytes =
+            decode_activation_reserve_bytes + routed_page_slot_bytes;
+        let budget = MlxRamBudgetSnapshot {
+            mlx_active_memory_ceiling_bytes: 25 * GIGABYTE,
+            model_core_payload_bytes,
+            context_window_reserve_bytes: GIGABYTE,
+            activation_headroom_bytes: decode_activation_reserve_bytes,
+            complete_layer_stream_slot_bytes: routed_page_slot_bytes,
+            other_fixed_bytes: 0,
+            retained_expert_budget_bytes: 25 * GIGABYTE
+                - model_core_payload_bytes
+                - GIGABYTE
+                - decode_transient_reserve_bytes,
+        };
+        let active_memory_bytes =
+            expert_payload_bytes + model_core_payload_bytes + retained_context_payload_bytes;
+
+        // The defect shape: the finalized breakdown reported zero context
+        // state, so the retained prefix landed in unattributed active bytes
+        // and overran the transient reserve.
+        let unattributed_breakdown = MlxActiveMemoryBreakdown {
+            expert_payload_bytes,
+            model_core_payload_bytes,
+            context_state_payload_bytes: 0,
+        };
+        let defective =
+            MemoryCeilingUtilization::compose(budget, active_memory_bytes, unattributed_breakdown);
+
+        assert_eq!(
+            defective.reserved_activation_and_workspace_bytes, 0,
+            "the transient reserve must clamp when live context is misattributed"
+        );
+        assert_eq!(defective.owner_overrun_bytes, 125_881_648);
+        assert!(
+            !defective.is_fully_explained(),
+            "the misattributed shape must not read as fully explained"
+        );
+
+        // The corrected shape: the retained prefix is attributed to the
+        // context owner it belongs to, and every byte has a named owner.
+        let attributed_breakdown = MlxActiveMemoryBreakdown {
+            expert_payload_bytes,
+            model_core_payload_bytes,
+            context_state_payload_bytes: retained_context_payload_bytes,
+        };
+        let corrected =
+            MemoryCeilingUtilization::compose(budget, active_memory_bytes, attributed_breakdown);
+
+        assert_eq!(
+            corrected.reserved_context_growth_bytes,
+            GIGABYTE - retained_context_payload_bytes,
+        );
+        assert_eq!(
+            corrected.reserved_activation_and_workspace_bytes, decode_transient_reserve_bytes,
+            "with context attributed, the transient reserve is fully unoccupied"
+        );
+        assert_eq!(corrected.unexplained_headroom_bytes, 0);
+        assert_eq!(corrected.owner_overrun_bytes, 0);
+        assert!(
+            corrected.is_fully_explained(),
+            "attributing live context must close the identity: {corrected:?}"
+        );
+    }
 }
