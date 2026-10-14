@@ -350,7 +350,7 @@ assert_workflow_contract() {
         raise "surplus cache prune step is missing" unless prune_step
         raise "cache prune must run even when earlier steps fail" unless prune_step.fetch("if").include?("!cancelled()")
         raise "cache prune lacks the workflow token" unless prune_step.fetch("env").fetch("GH_TOKEN") == "${{ github.token }}"
-        raise "cache prune does not call the prune script" unless prune_step.fetch("run").include?("prune-ci-caches.sh")
+        raise "cache prune does not call the xtask prune" unless prune_step.fetch("run").include?("prune-caches")
         raise "cache prune exceeded its bounded timeout" unless prune_step.fetch("timeout-minutes") <= 2
         final_save_index = steps.index { |step| step["id"] == "sccache-cache-save" }
         prune_step_index = steps.index { |step| step["name"] == "Prune surplus CI caches" }
