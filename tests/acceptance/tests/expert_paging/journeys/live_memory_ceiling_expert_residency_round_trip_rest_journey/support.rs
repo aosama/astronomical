@@ -368,3 +368,69 @@ pub(super) fn acceptance_evidence_root() -> PathBuf {
 }
 
 pub(super) use crate::support::artifact_bytes::artifact_directory_regular_file_bytes;
+
+pub(super) fn spawn_status_consistency_sampler(
+    server_address: std::net::SocketAddr,
+) -> (
+    tokio::task::JoinHandle<()>,
+    std::sync::Arc<std::sync::Mutex<Option<String>>>,
+) {
+    use std::sync::{Arc, Mutex};
+    use tokio::time::interval;
+
+    use crate::support::serving_rest::get_json_endpoint;
+
+    use super::{LOG_MARKER, STATUS_CONSISTENCY_SAMPLE_INTERVAL};
+
+    let first_reporting_violation = Arc::new(Mutex::new(None::<String>));
+    let sampler_violation = Arc::clone(&first_reporting_violation);
+    let status_sampler = tokio::spawn(async move {
+        let mut sampling_interval = interval(STATUS_CONSISTENCY_SAMPLE_INTERVAL);
+        let mut sample_count = 0_u64;
+        sampling_interval.tick().await;
+        loop {
+            sampling_interval.tick().await;
+            sample_count += 1;
+            let status_document = get_json_endpoint(server_address, "/v1/status").await;
+            let snapshot_expert_payload_bytes =
+                status_document["mlx_memory_snapshot"]["expert_payload_bytes"]
+                    .as_u64()
+                    .unwrap_or(0);
+            let claimed_resident_payload_bytes =
+                status_document["expert_residency"]["resident_expert_payload_bytes"].as_u64();
+            if sample_count % 5 == 0 {
+                eprintln!(
+                    "{LOG_MARKER} phase=status_sample status=progress sample={sample_count} expert_memory_mode={} measured_expert_payload_gb={:.3} claimed_resident_payload_gb={}",
+                    status_document["expert_memory_mode"]
+                        .as_str()
+                        .unwrap_or("unavailable"),
+                    snapshot_expert_payload_bytes as f64 / 1_000_000_000.0,
+                    claimed_resident_payload_bytes
+                        .map(|claimed| format!("{:.3}", claimed as f64 / 1_000_000_000.0))
+                        .unwrap_or_else(|| "none".to_owned()),
+                );
+            }
+            if let Some(claimed) = claimed_resident_payload_bytes {
+                let reporting_gap_bytes = claimed.abs_diff(snapshot_expert_payload_bytes);
+                if reporting_gap_bytes > EXPERT_REPORTING_CONSISTENCY_TOLERANCE_BYTES {
+                    let mut violation_slot = sampler_violation
+                        .lock()
+                        .expect("the status consistency violation slot should lock");
+                    if violation_slot.is_none() {
+                        *violation_slot = Some(format!(
+                            "claimed_resident_payload_bytes={claimed} measured_expert_payload_bytes={snapshot_expert_payload_bytes} expert_memory_mode={} snapshot_source={} status={status_document}",
+                            status_document["expert_memory_mode"]
+                                .as_str()
+                                .unwrap_or("unavailable"),
+                            status_document["mlx_memory_snapshot"]["source"]
+                                .as_str()
+                                .unwrap_or("unavailable"),
+                        ));
+                    }
+                    break;
+                }
+            }
+        }
+    });
+    (status_sampler, first_reporting_violation)
+}

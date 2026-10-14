@@ -1,10 +1,17 @@
-//! User journeys proving decode eviction and retention correctness on the
-//! resident sparse MoE e2e fixture under a memory squeeze.
+//! User journeys proving decode expert retention on the resident sparse MoE
+//! fixture under a 25 GB ceiling that seats the expert payload.
 //!
 //! These journeys exist because expert retention used to collapse during live
 //! decode: a model whose experts fit the ceiling kept generating with a small
 //! expert payload while the graphics processor sat idle waiting on SSD reads.
-//! Each test names one eviction contract and fails on the user-visible symptom.
+//! Every test names the retention contract and fails on the user-visible
+//! symptom (the expert payload collapsing between or during requests).
+//!
+//! Two deliberately removed cells, for the record: a single-request variant
+//! was subsumed by the repeat journey (its first, cold leg is the identical
+//! request on the same model and ceiling, under the same floor), and a 26 GB
+//! seating cell was subsumed by these 25 GB cells, whose per-sample floor is
+//! strictly stronger while seating is monotone in ceiling headroom.
 //!
 //! Acceptance ceilings are evidence cells, not production constants. Production
 //! policy derives capacity from the configured ceiling and model geometry; the
@@ -40,7 +47,7 @@ async fn should_retain_seated_experts_during_a_repeated_cached_request_at_a_25gb
 
 /// Runs the identical request twice. The second request restores the cached
 /// prompt prefix, which is exactly the dev-app flow where retention collapsed:
-/// restoration drops and re-admits expert owners, so eviction correctness must
+/// restoration drops and re-admits expert owners, so retention correctness must
 /// survive the repeat, not only the cold request.
 async fn run_repeated_cached_decode_retention_journey(maximum_mlx_memory_bytes: u64) {
     run_two_request_retention_journey(maximum_mlx_memory_bytes, PROMPT_TOKEN_COUNT).await;
@@ -72,7 +79,7 @@ async fn run_two_request_retention_journey(
     prompt_token_count: usize,
 ) {
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
-    let isolated_worker_home = isolated_eviction_journey_worker_home();
+    let isolated_worker_home = isolated_retention_journey_worker_home();
     write_acceptance_config(
         &isolated_worker_home,
         &model_directory,
@@ -103,11 +110,12 @@ async fn run_two_request_retention_journey(
         "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
     });
     let mut smallest_generating_expert_payload_bytes = u64::MAX;
+    let mut last_average_prefill_tokens_per_second = 0.0_f64;
     let mut final_expert_memory_mode = String::new();
     let mut last_request_status = serde_json::json!({});
     for request_number in 1..=2 {
         eprintln!(
-            "[decode-expert-eviction] status=progress phase=request_send request_number={request_number} model={} prompt_characters={} ceiling_bytes={maximum_mlx_memory_bytes}",
+            "[decode-expert-retention] status=progress phase=request_send request_number={request_number} model={} prompt_characters={} ceiling_bytes={maximum_mlx_memory_bytes}",
             model_id(),
             user_message.len()
         );
@@ -133,16 +141,25 @@ async fn run_two_request_retention_journey(
         );
         smallest_generating_expert_payload_bytes = smallest_generating_expert_payload_bytes
             .min(generation_memory.smallest_generating_expert_payload_bytes);
+        last_average_prefill_tokens_per_second =
+            generation_memory.average_prefill_tokens_per_second;
+        assert!(
+            generation_memory
+                .average_generation_tokens_per_second
+                .is_finite()
+                && generation_memory.average_generation_tokens_per_second > 0.0,
+            "request {request_number} decode throughput must be a positive finite measurement: {generation_memory:?}"
+        );
         final_expert_memory_mode = generation_memory.final_expert_memory_mode.clone();
         last_request_status = generation_memory.final_status;
         eprintln!(
-            "[decode-expert-eviction] status=progress phase=request_complete request_number={request_number} smallest_generating_expert_payload_gb={:.2} average_generation_tokens_per_second={:.2}",
+            "[decode-expert-retention] status=progress phase=request_complete request_number={request_number} smallest_generating_expert_payload_gb={:.2} average_generation_tokens_per_second={:.2}",
             generation_memory.smallest_generating_expert_payload_bytes as f64 / 1e9,
             generation_memory.average_generation_tokens_per_second,
         );
     }
     crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
-        "decode-expert-eviction",
+        "decode-expert-retention",
         &isolated_worker_home,
         &last_request_status,
     );
@@ -150,12 +167,13 @@ async fn run_two_request_retention_journey(
     preserve_journey_evidence(&isolated_worker_home, prompt_token_count);
     assert!(
         smallest_generating_expert_payload_bytes >= MINIMUM_GENERATION_EXPERT_PAYLOAD_BYTES,
-        "live decode must retain seated experts across cold and cached-repeat requests; the expert payload collapsing between requests is the eviction defect this journey pins: smallest={smallest_generating_expert_payload_bytes}"
+        "live decode must retain seated experts across cold and cached-repeat requests; the expert payload collapsing between requests is the unwanted-eviction defect this journey pins: smallest={smallest_generating_expert_payload_bytes}"
     );
     eprintln!(
-        "[decode-expert-eviction] status=success phase=repeat_complete model={} ceiling_bytes={maximum_mlx_memory_bytes} smallest_generating_expert_payload_gb={:.2} final_expert_memory_mode={final_expert_memory_mode}",
+        "[decode-expert-retention] status=success phase=repeat_complete model={} ceiling_bytes={maximum_mlx_memory_bytes} smallest_generating_expert_payload_gb={:.2} average_prefill_tokens_per_second={:.2} final_expert_memory_mode={final_expert_memory_mode}",
         model_id(),
         smallest_generating_expert_payload_bytes as f64 / 1e9,
+        last_average_prefill_tokens_per_second,
     );
 }
 
@@ -183,110 +201,10 @@ const JOURNEY_DEADLINE: Duration = Duration::from_secs(60);
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches Ornith-1.5-35B-A3B-OptiQ-4bit under a 25 GB ceiling and proves live decode keeps its seated experts"]
-#[serial]
-async fn should_retain_seated_experts_during_live_decode_at_a_25gb_ceiling() {
-    tokio::time::timeout(
-        JOURNEY_DEADLINE,
-        run_decode_retention_journey(DECODE_RETENTION_MLX_MEMORY_BYTES),
-    )
-    .await
-    .expect("the 25 GB decode-retention SSD journey must finish within 60 seconds");
-}
-
-async fn run_decode_retention_journey(maximum_mlx_memory_bytes: u64) {
-    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
-    let isolated_worker_home = isolated_eviction_journey_worker_home();
-    write_acceptance_config(
-        &isolated_worker_home,
-        &model_directory,
-        maximum_mlx_memory_bytes,
-    );
-    let user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
-        &model_directory,
-        ROMEO_AND_JULIET_SOURCE,
-        "Summarize Romeo and Juliet in one concise paragraph. Include the central conflict, major decisions, and tragic outcome.",
-        PROMPT_TOKEN_COUNT,
-    );
-    let real_model_rest_server = launch_real_model_rest_server(
-        model_id(),
-        model_directory,
-        &isolated_worker_home,
-        maximum_mlx_memory_bytes,
-    )
-    .await;
-    let server_address = real_model_rest_server.server_address;
-    let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
-    let completion_request = json!({
-        "model": model_id(),
-        "messages": [{"role": "user", "content": user_message}],
-        "stream": true,
-        "stream_options": {"include_usage": true},
-        "max_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
-        "temperature": 1,
-        "thinking_budget": THINKING_BUDGET_TOKEN_COUNT,
-    });
-    eprintln!(
-        "[decode-expert-eviction] status=progress phase=request_send model={} prompt_characters={} ceiling_bytes={maximum_mlx_memory_bytes}",
-        model_id(),
-        user_message.len()
-    );
-    let streamed_completion: ChatCompletionStream = timeout(
-        Duration::from_secs(60),
-        openai_client.create_streaming_chat_completion(&completion_request),
-    )
-    .await
-    .expect("the decode-retention REST request must be accepted within 60 seconds")
-    .expect("the decode-retention REST request should start");
-    let (completed_stream, generation_memory) = tokio::join!(
-        consume_completed_stream(streamed_completion),
-        observe_generation_expert_payload(server_address),
-    );
-    crate::support::memory_utilization_parity::assert_and_preserve_status_memory_ceiling_utilization(
-        "decode-expert-eviction",
-        &isolated_worker_home,
-        &generation_memory.final_status,
-    );
-    stop_real_model_rest_server(real_model_rest_server).await;
-    assert!(!completed_stream.model_text.is_empty());
-    assert!(matches!(
-        completed_stream.finish_reason.as_deref(),
-        Some("stop" | "length")
-    ));
-    assert!(
-        generation_memory.saw_generating_activity,
-        "the request must reach live decode: {generation_memory:?}"
-    );
-    assert!(
-        generation_memory.smallest_generating_expert_payload_bytes
-            >= MINIMUM_GENERATION_EXPERT_PAYLOAD_BYTES,
-        "live decode must retain seated experts under the configured ceiling; the expert payload collapsing to a few GB while decode streams from SSD is the eviction defect this journey pins: {generation_memory:?}"
-    );
-    assert!(
-        generation_memory
-            .average_generation_tokens_per_second
-            .is_finite()
-            && generation_memory.average_generation_tokens_per_second > 0.0,
-        "decode throughput must be a positive finite measurement: {generation_memory:?}"
-    );
-    eprintln!(
-        "[decode-expert-eviction] status=success model={} ceiling_bytes={maximum_mlx_memory_bytes} expert_memory_mode={} smallest_generating_expert_payload_gb={:.2} largest_generating_expert_payload_gb={:.2} average_prefill_tokens_per_second={:.2} average_generation_tokens_per_second={:.2} output_characters={}",
-        model_id(),
-        generation_memory.final_expert_memory_mode,
-        generation_memory.smallest_generating_expert_payload_bytes as f64 / 1e9,
-        generation_memory.largest_generating_expert_payload_bytes as f64 / 1e9,
-        generation_memory.average_prefill_tokens_per_second,
-        generation_memory.average_generation_tokens_per_second,
-        completed_stream.model_text.len(),
-    );
-}
-
 #[derive(Debug)]
 struct GenerationMemoryEvidence {
     saw_generating_activity: bool,
     smallest_generating_expert_payload_bytes: u64,
-    largest_generating_expert_payload_bytes: u64,
     final_expert_memory_mode: String,
     average_prefill_tokens_per_second: f64,
     average_generation_tokens_per_second: f64,
@@ -299,7 +217,6 @@ async fn observe_generation_expert_payload(server_address: SocketAddr) -> Genera
     let mut saw_active_request = false;
     let mut saw_generating_activity = false;
     let mut smallest_generating_expert_payload_bytes = u64::MAX;
-    let mut largest_generating_expert_payload_bytes = 0_u64;
     let mut last_status_log_at = Instant::now() - STATUS_LOG_INTERVAL;
     let mut final_status = json!({});
     loop {
@@ -313,7 +230,7 @@ async fn observe_generation_expert_payload(server_address: SocketAddr) -> Genera
             .unwrap_or(0);
         if last_status_log_at.elapsed() >= STATUS_LOG_INTERVAL {
             eprintln!(
-                "[decode-expert-eviction] status=progress activity={activity} expert_memory_mode={expert_memory_mode} expert_payload_bytes={expert_payload_bytes}"
+                "[decode-expert-retention] status=progress activity={activity} expert_memory_mode={expert_memory_mode} expert_payload_bytes={expert_payload_bytes}"
             );
             last_status_log_at = Instant::now();
         }
@@ -324,8 +241,6 @@ async fn observe_generation_expert_payload(server_address: SocketAddr) -> Genera
             saw_generating_activity = true;
             smallest_generating_expert_payload_bytes =
                 smallest_generating_expert_payload_bytes.min(expert_payload_bytes);
-            largest_generating_expert_payload_bytes =
-                largest_generating_expert_payload_bytes.max(expert_payload_bytes);
         }
         if !saw_active_request && request_started_at.elapsed() >= REQUEST_MUST_BECOME_ACTIVE_WITHIN
         {
@@ -357,7 +272,6 @@ async fn observe_generation_expert_payload(server_address: SocketAddr) -> Genera
         } else {
             smallest_generating_expert_payload_bytes
         },
-        largest_generating_expert_payload_bytes,
         final_expert_memory_mode: final_status["expert_memory_mode"]
             .as_str()
             .unwrap_or("unavailable")
@@ -388,7 +302,7 @@ async fn consume_completed_stream(
         let stream_chunk = match stream_item {
             Ok(stream_chunk) => stream_chunk,
             Err(stream_error) => {
-                eprintln!("[decode-expert-eviction] status=stream_error error={stream_error}");
+                eprintln!("[decode-expert-retention] status=stream_error error={stream_error}");
                 break;
             }
         };
@@ -417,7 +331,7 @@ fn write_acceptance_config(
 ) {
     let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
-        .expect("the decode-eviction configuration directory should be created");
+        .expect("the decode-retention configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
         "maximum_mlx_memory_gb": maximum_mlx_memory_bytes / 1_000_000_000,
@@ -436,18 +350,18 @@ fn write_acceptance_config(
     fs::write(
         configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&configuration_document)
-            .expect("the decode-eviction configuration should serialize"),
+            .expect("the decode-retention configuration should serialize"),
     )
-    .expect("the decode-eviction configuration should be written");
+    .expect("the decode-retention configuration should be written");
 }
 
-fn isolated_eviction_journey_worker_home() -> PathBuf {
-    let worker_home = std::env::temp_dir().join("astronomical-decode-expert-eviction-e2e");
+fn isolated_retention_journey_worker_home() -> PathBuf {
+    let worker_home = std::env::temp_dir().join("astronomical-decode-expert-retention-e2e");
     let _ = fs::remove_dir_all(&worker_home);
-    fs::create_dir_all(&worker_home).expect("the decode-eviction worker home should be created");
+    fs::create_dir_all(&worker_home).expect("the decode-retention worker home should be created");
     worker_home
         .canonicalize()
-        .expect("the decode-eviction worker home should canonicalize")
+        .expect("the decode-retention worker home should canonicalize")
 }
 
 /// Copies worker tracing and attribution evidence out of the disposable home so
@@ -459,7 +373,7 @@ fn preserve_journey_evidence(isolated_worker_home: &Path, prompt_token_count: us
         .unwrap_or_default();
     let evidence_directory = std::env::current_dir()
         .expect("the journey should resolve its working directory")
-        .join("target/acceptance-evidence/decode-expert-eviction")
+        .join("target/acceptance-evidence/decode-expert-retention")
         .join(format!("{unix_millis}-{prompt_token_count}"));
     fs::create_dir_all(&evidence_directory)
         .expect("the acceptance evidence directory should be created");

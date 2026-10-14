@@ -1,9 +1,16 @@
-//! User journey proving leftover complete expert layers stay in RAM after a squeeze.
+//! User journey proving leftover complete expert layers stay seated in RAM
+//! when the ceiling sits below the expert payload itself.
 //!
-//! The resident sparse MoE e2e fixture can hold every expert at 35 GB. This 26 GB cell is just
-//! under that complete-owner idle snapshot, so the request cannot keep the atomic
-//! complete blob. Leftover RAM can still hold tens of gigabytes of complete layers.
-//! Generating with Experts 0.00 GB is the failure this journey exists to catch.
+//! The resident sparse MoE fixture carries roughly 20.5 GB of experts; this
+//! 20 GB cell is below that payload, so complete residency is impossible and
+//! decode must run from whatever complete layers the leftover RAM can seat.
+//! Generating with Experts 0.00 GB is the failure this journey exists to
+//! catch, asserted on every observed generating sample.
+//!
+//! A 26 GB cell that sat just under the complete-owner idle snapshot was
+//! removed: the 25 GB decode-retention cells in this suite hold the same
+//! regime under a strictly stronger per-sample floor, and seating is monotone
+//! in ceiling headroom.
 //!
 //! Acceptance ceilings are evidence cells, not production constants.
 
@@ -26,8 +33,7 @@ use crate::support::serving_rest::{
 fn model_id() -> &'static str {
     crate::support::resident_sparse_moe_model_id()
 }
-const LEFTOVER_SEATING_MLX_MEMORY_BYTES: u64 = 26_000_000_000;
-const ORNITH_4BIT_DECODE_RETENTION_MLX_MEMORY_BYTES: u64 = 20_000_000_000;
+const LEFTOVER_SEATING_MLX_MEMORY_BYTES: u64 = 20_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 4_096;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 128;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 64;
@@ -40,29 +46,15 @@ const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and real worker to accept leftover complete-layer seating after a memory squeeze"]
+#[ignore = "launches the resident sparse Ornith model under a 20 GB ceiling below its expert payload and proves decode keeps leftover experts seated"]
 #[serial]
-async fn should_keep_leftover_complete_expert_layers_in_ram_during_squeezed_generation() {
+async fn should_keep_leftover_expert_layers_seated_when_the_ceiling_is_below_the_expert_payload() {
     timeout(
         JOURNEY_DEADLINE,
         run_leftover_complete_layer_seating_rest_journey(LEFTOVER_SEATING_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the leftover complete-layer seating SSD journey must finish within 60 seconds");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches Ornith-1.5-35B-A3B-OptiQ-4bit under a 20 GB ceiling and proves decode keeps leftover experts"]
-#[serial]
-async fn should_keep_decode_experts_for_ornith_4bit_under_a_20gb_ceiling() {
-    timeout(
-        JOURNEY_DEADLINE,
-        run_leftover_complete_layer_seating_rest_journey(
-            ORNITH_4BIT_DECODE_RETENTION_MLX_MEMORY_BYTES,
-        ),
-    )
-    .await
-    .expect("the Ornith 4-bit 20 GB SSD decode-retention journey must finish within 60 seconds");
+    .expect("the below-payload leftover-seating SSD journey must finish within 60 seconds");
 }
 
 async fn run_leftover_complete_layer_seating_rest_journey(maximum_mlx_memory_bytes: u64) {
