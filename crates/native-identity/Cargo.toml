@@ -1,0 +1,27 @@
+[package]
+name = "astronomical-native-identity"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# Native build identity policy shared by the Cargo build scripts (as a
+# build-dependency), the standalone native-build tool, and `cargo xtask
+# native-fingerprint` (issue #1250). Pure logic: no native code, no network.
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+sha2.workspace = true
+
+[dev-dependencies]
+astronomical-test-harness = { path = "../test-harness" }
+
+[[test]]
+name = "offline_tests"
+path = "tests/offline/source_identity.rs"
+

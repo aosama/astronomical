@@ -34,11 +34,11 @@ create_fingerprint_fixture() {
     fixture_root="$1"
     mkdir -p \
         "${fixture_root}/crates/runtime-integration/native" \
+        "${fixture_root}/crates/native-identity/src" \
         "${fixture_root}/third-party/pins" \
-        "${fixture_root}/third-party/patches" \
-        "${fixture_root}/scripts/ci"
-    cp "${repository_root}/scripts/ci/native-build-cache-fingerprint.sh" \
-        "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh"
+        "${fixture_root}/third-party/patches"
+    printf '%s\n' 'pub fn identity_policy() {}' \
+        > "${fixture_root}/crates/native-identity/src/lib.rs"
     printf '%s\n' '[workspace]' 'version = "1.0.0"' > "${fixture_root}/Cargo.toml"
     printf '%s\n' 'version = 4' > "${fixture_root}/Cargo.lock"
     printf '%s\n' '[toolchain]' > "${fixture_root}/rust-toolchain.toml"
@@ -69,14 +69,14 @@ full_fingerprint() {
     ASTRONOMICAL_NATIVE_IDENTITY_RUSTC='rustc 1.97.1 stable aarch64-apple-darwin' \
     ASTRONOMICAL_NATIVE_IDENTITY_TARGET="$target_identity" \
     ASTRONOMICAL_NATIVE_BUILD_TYPE='Release' \
-        "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh" \
-        --profile "$native_profile" "$fixture_root"
+        cargo run --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask -- \
+            native-fingerprint --profile "$native_profile" "$fixture_root"
 }
 
 source_fingerprint() {
     fixture_root="$1"
-    "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh" \
-        --source-only --profile core "$fixture_root"
+    cargo run --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask -- \
+        native-fingerprint --source-only --profile core "$fixture_root"
 }
 
 assert_fingerprint_shape() {
@@ -135,8 +135,8 @@ create_change_scope_fixture() {
     mkdir -p \
         "${change_scope_repository}/.github/workflows" \
         "${change_scope_repository}/crates/model-serving/src" \
+        "${change_scope_repository}/crates/native-identity/src" \
         "${change_scope_repository}/crates/runtime-integration/native" \
-        "${change_scope_repository}/scripts/ci" \
         "${change_scope_repository}/third-party/pins" \
         "${change_scope_repository}/third-party/patches"
     printf '%s\n' '# Project' > "${change_scope_repository}/README.md"
@@ -157,8 +157,8 @@ create_change_scope_fixture() {
         "${change_scope_repository}/crates/runtime-integration/native-build-store-schema-version"
     printf '%s\n' 'project(runtime)' > \
         "${change_scope_repository}/crates/runtime-integration/native/CMakeLists.txt"
-    printf '%s\n' '#!/usr/bin/env sh' > \
-        "${change_scope_repository}/scripts/ci/native-build-cache-fingerprint.sh"
+    printf '%s\n' 'pub fn identity_policy() {}' > \
+        "${change_scope_repository}/crates/native-identity/src/lib.rs"
     printf '%s\n' 'set(MLX_VERSION 1)' > \
         "${change_scope_repository}/third-party/native-dependency-manifest.cmake"
     printf '%s\n' 'set(MLX_PIN 1)' > "${change_scope_repository}/third-party/pins/mlx.cmake"
@@ -186,8 +186,8 @@ assert_change_scope() {
     PUSH_BEFORE_SHA="$base_sha" \
     CURRENT_SHA="$head_sha" \
     GITHUB_OUTPUT="$output_file" \
-    REPOSITORY_ROOT="$change_scope_repository" \
-        "${repository_root}/scripts/ci/classify-ci-change-scope.sh"
+        cargo run --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask -- \
+            --repository-root "$change_scope_repository" classify-scope
 
     actual_code_changed=""
     actual_native_inputs_changed=""
@@ -239,8 +239,8 @@ assert_workflow_contract() {
         raise "macOS authority output is missing" unless detection_outputs.key?("macos_verification_required")
         classification_step = detection_job.fetch("steps").find { |step| step["id"] == "classify" }
         raise "change-scope classifier step is missing" unless classification_step
-        raise "change-scope policy is not script-owned" unless classification_step.fetch("run").include?("classify-ci-change-scope.sh")
-        raise "classifier job still computes unused native identity" if detection_job.fetch("steps").any? { |step| step["run"]&.include?("native-build-cache-fingerprint.sh") }
+        raise "change-scope policy is not xtask-owned" unless classification_step.fetch("run").include?("classify-scope")
+        raise "classifier job still computes unused native identity" if detection_job.fetch("steps").any? { |step| step["run"]&.include?("native-fingerprint") }
         verification_job = workflow.fetch("jobs").fetch("rust-core")
         swift_node_job = workflow.fetch("jobs").fetch("swift-node")
         static_job = workflow.fetch("jobs").fetch("static")
@@ -399,7 +399,7 @@ main() {
         print_error "test-ci-native-cache-coordination.sh does not accept arguments"
         exit 2
     fi
-    for required_command in git mktemp ruby shasum; do
+    for required_command in cargo git mktemp ruby; do
         require_command "$required_command"
     done
 
@@ -444,8 +444,8 @@ main() {
     printf '%s\n' '2' > \
         "${change_scope_fixture_root}/crates/runtime-integration/native-build-store-schema-version"
     store_schema_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" store-schema)"
-    printf '%s\n' '#!/usr/bin/env sh' '# updated identity policy' > \
-        "${change_scope_fixture_root}/scripts/ci/native-build-cache-fingerprint.sh"
+    printf '%s\n' 'pub fn updated_identity_policy() {}' > \
+        "${change_scope_fixture_root}/crates/native-identity/src/lib.rs"
     fingerprint_policy_scope_sha="$(commit_change_scope_fixture "$change_scope_fixture_root" fingerprint-policy)"
     printf '%s\n' 'set(MLX_VERSION 2)' > \
         "${change_scope_fixture_root}/third-party/native-dependency-manifest.cmake"
@@ -552,8 +552,8 @@ main() {
         ASTRONOMICAL_NATIVE_IDENTITY_RUSTC='rustc 1.97.1 stable aarch64-apple-darwin' \
         ASTRONOMICAL_NATIVE_IDENTITY_TARGET='aarch64-apple-darwin' \
         ASTRONOMICAL_NATIVE_BUILD_TYPE='Debug' \
-        "${fixture_root}/scripts/ci/native-build-cache-fingerprint.sh" \
-        --profile core "$fixture_root" >/dev/null 2>&1
+        cargo run --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask -- \
+            native-fingerprint --profile core "$fixture_root" >/dev/null 2>&1
     then
         print_error "an unsupported native build type was accepted"
         exit 1
