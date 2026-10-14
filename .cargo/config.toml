@@ -52,6 +52,13 @@ test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "-
 # `cargo test -p astronomical-runtime-integration --features
 # mlx-memory-contract-probe --no-run`).
 test-mlx-memory = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,mlx-memory-contract-probe", "--test", "memory_contracts", "--", "--ignored", "--test-threads=1"]
+# check-mlx-memory-contract: compile-only drift gate for the feature world
+# above. The lane sits off every routine graph (and off `cargo verify`, which
+# never enables the feature), so API moves under it are caught here in
+# seconds instead of silently drifting. The probe-profile CMake build can be
+# streamed live first with
+# `scripts/ci/prewarm-native-build.sh --profile core+memory-contract`.
+check-mlx-memory-contract = ["check", "-p", "astronomical-runtime-integration", "--features", "mlx-memory-contract-probe", "--all-targets"]
 # test-acceptance: the whole real-model acceptance package (journeys and
 # contracts across every feature gate), still `--test-threads=1`.
 test-acceptance = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe", "--tests", "--", "--ignored", "--test-threads=1"]

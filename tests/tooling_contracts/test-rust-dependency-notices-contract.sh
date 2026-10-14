@@ -27,7 +27,7 @@ write_executable() {
 }
 
 main() {
-    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
+    repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
     cargo_executable="$(command -v cargo)"
     xtask_manifest="${repository_root}/xtask/Cargo.toml"
     xtask_binary="${repository_root}/target/debug/xtask"
