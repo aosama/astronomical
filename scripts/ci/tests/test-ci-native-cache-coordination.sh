@@ -402,6 +402,10 @@ main() {
     for required_command in cargo git mktemp ruby; do
         require_command "$required_command"
     done
+    # On CI this journey runs after the identity step has exported
+    # RUSTC_WRAPPER=sccache but before sccache is installed: the fixture
+    # compiles are tiny, so drop the wrapper instead of depending on it.
+    unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER 2>/dev/null || true
 
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
     SANDBOX_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/astronomical-ci-native-cache.XXXXXX")"
