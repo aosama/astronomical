@@ -4,42 +4,37 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.69</title>
-            <pubDate>Mon, 12 Oct 2026 06:50:43 -0400</pubDate>
-            <sparkle:version>1165</sparkle:version>
-            <sparkle:shortVersionString>0.2.69</sparkle:shortVersionString>
+            <title>0.2.70</title>
+            <pubDate>Wed, 14 Oct 2026 19:17:00 -0400</pubDate>
+            <sparkle:version>1309</sparkle:version>
+            <sparkle:shortVersionString>0.2.70</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.69
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.70
 
-This release makes multi-turn conversations faster and improves first-request latency after a model load.
+## Fixed
 
-## Faster multi-turn conversations
+- Pinned the IPC frame item type for tokio-util 0.7.20 (#1192), preventing frame handling issues when the dependency resolves to 0.7.20.
+- Attributed the retained live prompt prefix to the context owner in the finalized split (#1236), so prompt-cache accounting and eviction decisions reflect the true owner.
 
-Continuing a conversation no longer re-reads the previous turn's attention state from the on-disk prompt cache. The engine now retains the completed generation's state in memory — bounded by a retention policy tied to the memory ceiling — and adopts it directly on the next turn of the same conversation. The retained state is byte-identical to what the disk restore produced, so responses are unchanged; the eliminated re-read cost grows with conversation length and is largest when the disk cache is cold. Enabled by default for the resident and K2 Horizon MoVA serving families, with a status-surface diagnostic that reports whether each turn was served from memory or from disk.
+## Internal engineering
 
-## Faster first request after model load
-
-The K2 Horizon MoVA serving family now warms its forward path once at load — compiling the decode path and touching the hot buffers — so the measured one-time warm-up cost moves from your first prompt into the load step.
-
-## Optional per-stage prompt attribution
-
-A new opt-in configuration flag splits prompt-processing time by stage (attention versus other compute) on supported families, and the status surface now reports richer prompt-cache diagnostics, making slow prompts attributable to specific stages.
-
-## Clarity renames
-
-The background service package is now `astronomical-daemon`, and the command-line app is `astronomical-cli`. Configuration files, on-disk state, and daily workflows are unaffected.
+- Migrated CI automation from shell scripts into the Rust `xtask` workspace crate.
+- Consolidated the acceptance tier under `tests/acceptance` and moved unit tests beside their source across all crates.
+- Retired the legacy test-classification vocabulary from CI, scripts, and documentation.
+- Added a credential-resolving signed-release front door for release preparation.
 
 ## Compatibility
 
-- No breaking configuration changes; existing configuration loads as before.
-- Conversations, model caches, and on-disk state are preserved across the update.
-- Distributed as a signed and notarized DMG for Apple silicon (macOS 14.0 and above) with a signed Sparkle update feed; the published artifacts are digest-verified against the reviewed release manifest.
+- macOS 14.0 or later, Apple silicon (arm64).
+- No configuration schema changes; existing state and settings are preserved on upgrade.
+
+This release is distributed as a signed and notarized DMG. The update arrives through the public GitHub release and the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.69/Astronomical-0.2.69-macOS-arm64.dmg" length="19013456" type="application/octet-stream" sparkle:edSignature="/rZjkihz3xSQt4BOfpbucJsjgYdEN4AEeeqt/YLPxfDFrpB0rWoeph3Z6/dtwnEjly6sLbrQIl0k8h3l3snVDQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.70/Astronomical-0.2.70-macOS-arm64.dmg" length="19017743" type="application/octet-stream" sparkle:edSignature="X/QvgO1+p+0qvtBZVWHXcDYOzXw5NsyweDYoFxhcuVmafgL8h/d1v9UBLH12eYmenP7RGc0CBqb1OsRyRdw6CQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: mAkMLhL6nARO4MKLqccGgFd1DU7DM0RP0dgKPefnQauGml57ouND+ItfnWtNxZ/VUvINnWWzpxly1//wpgP4AA==
-length: 3279
+edSignature: n6csw8KG98sJ4EKnJkDhEDS5U+wG2fJY6QRicahoI1WbXryGKQ8EMuHcH1NT27WXUMx5eHkJZ/f7KKg09owXCQ==
+length: 2273
 -->
