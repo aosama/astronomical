@@ -10,6 +10,9 @@ mod cache_prune_tests;
 mod classify_scope;
 #[cfg(test)]
 mod classify_scope_tests;
+mod install_verification_tools;
+#[cfg(test)]
+mod install_verification_tools_tests;
 mod native_fingerprint;
 mod notices;
 #[cfg(test)]
@@ -18,6 +21,8 @@ mod source_size;
 mod tier_pyramid;
 
 mod sccache_save;
+
+pub(crate) use resolve_repository_root as workspace_root_from_manifest_directory;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -50,9 +55,12 @@ fn main() -> ExitCode {
         Some("classify-scope") => run_command(classify_scope::run(&repository_root)),
         Some("prune-caches") => run_command(cache_prune::run(arguments[1..].iter().cloned())),
         Some("save-sccache") => run_command(sccache_save::run(&arguments[1..])),
+        Some("install-verification-tools") => run_command(install_verification_tools::run(
+            arguments[1..].iter().cloned(),
+        )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key>"
+                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR]"
             );
             ExitCode::from(2)
         }
