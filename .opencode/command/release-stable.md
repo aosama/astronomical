@@ -17,7 +17,7 @@ Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PA
 - Never manually edit `site/appcast.xml`; it is a signed generated artifact.
 - Never move or replace a pushed release tag. Fix forward with a new patch version.
 - Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `validate-dmg.sh`, and installation and launch of the fictional fixture under `target/` by `accept-sparkle-update.sh`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
-- Every test must use its built-in timeout of at most 120 seconds. The notarization operation is not a test and uses the release script's 1,200-second bound.
+- Every test must use its built-in timeout of at most 120 seconds. The notarization operation is not a test and uses the release script's 180-second default, overridable through `NOTARIZATION_TIMEOUT_SECONDS`.
 - Keep commands live and unfiltered. Never pipe long-running commands through `head`, `tail`, or another buffering filter.
 
 ## Credential map
@@ -54,7 +54,7 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 
 1. Create branch `release/v${VERSION}`.
 2. Change only `[workspace.package].version` in `Cargo.toml` to `$VERSION`.
-3. Run `cargo update --workspace`; verify `Cargo.lock` changes only Astronomical workspace package versions.
+3. Run `cargo update --workspace`; verify `Cargo.lock` changes only Astronomical workspace package versions. Then run `cargo xtask notices` and keep the regenerated `third-party/RUST_DEPENDENCY_NOTICES.digest`; the root `Cargo.toml` is one of the digest's recorded inputs, so CI's `cargo xtask notices --check` fails the pull request until the digest is committed.
 4. Create `RELEASE_NOTES_FILE` with `mktemp "${TMPDIR:-/tmp}/astronomical-${TAG}-notes.XXXXXX.md"`, record the resulting path, and write concise public release notes there. Repeat that literal path in later tool calls because shell variables may not persist between calls. Include only changes proven by `PREVIOUS_TAG..HEAD`, compatibility, preserved user state, and the signed/notarized distribution statement. Keep this path out of public content.
 5. Run, in order:
 
@@ -64,7 +64,7 @@ cargo fmt --all -- --check
 cargo test-offline-and-rest
 ```
 
-6. Inspect `git status`, `git diff`, and `git log --oneline -10`; commit only `Cargo.toml` and `Cargo.lock` with `chore: bump version to ${VERSION}`.
+6. Inspect `git status`, `git diff`, and `git log --oneline -10`; commit only `Cargo.toml`, `Cargo.lock`, and the regenerated `third-party/RUST_DEPENDENCY_NOTICES.digest` with `chore: bump version to ${VERSION}`.
 7. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. Wait for required checks, merge it, switch to `main`, pull with `--ff-only`, and verify local `HEAD`, `refs/remotes/origin/main`, and GitHub `main` are identical.
 
 ## 3. Preflight and prepare locally
@@ -167,16 +167,16 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 
 - `accept-sparkle-update.sh` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The script overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `build_sparkle_cli`.
 - Release notes created through `mktemp "${TMPDIR:-/tmp}/name.XXXXXX.md"` can end up with a literal, unreplaced `XXXXXX` in the filename. The file is still valid; use the printed path verbatim everywhere (manifest, `--notes-file`) instead of assuming a clean temp name.
-- The PR issue compliance validator requires the `## Linked issue` section to contain exactly one reference line (`Fixes|Closes|Resolves|Refs #N`). Any prose inside that section fails validation; put narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
+- The PR issue compliance validator searches only the `## Linked issue` section once the heading exists: the section must carry at least one canonical reference (`Fixes|Closes|Resolves|Refs #N`; grouped forms like `Refs #N and #M` are accepted), and every `#N` inside it must use a canonical keyword — a bare `#N` in prose fails. Keep narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
 - Expected CI duration for offline verification PRs is roughly 7-8 minutes; do not treat a pending job at the 2-3 minute mark as stuck.
 - `scripts/release/prepare-and-publish.sh` requires signing identity, team ID, and notary profile resolved inside the same shell invocation as the script call; resolving them in an earlier command does not persist.
-- Every version bump stales `third-party/RUST_DEPENDENCY_NOTICES.digest` because the workspace version appears in the generated notices text. Regenerate it in the bump branch itself with `scripts/ci/generate-rust-dependency-notices.sh`; CI fails the bump PR otherwise (hit live in the 0.2.66 release run).
+- Every version bump stales `third-party/RUST_DEPENDENCY_NOTICES.digest` because the root `Cargo.toml` is one of the digest's recorded inputs; the notices text itself is unchanged by a version bump. Regenerate the digest in the bump branch itself with `cargo xtask notices`; CI's `cargo xtask notices --check` fails the bump PR otherwise (hit live in the 0.2.66 release run).
 - Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
 
 ## FAQ
 
 - Why did the Sparkle acceptance fail right after it worked in a previous release? The acceptance script skips `xcodebuild` when a prebuilt `sparkle-cli` exists. A prior release can succeed with the stale binary; the next checkout refresh deletes `build/`, forces the rebuild, and only then exposes the deployment-target incompatibility.
 - Why is the macOS offline verification check "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full offline run. The remaining required checks must still reach a terminal success state.
-- Why does the `## Linked issue` section reject my explanation? The repository validator enforces exactly one machine-parsable reference line in that section so release provenance stays auditable. Explanations belong above the heading.
+- Why does the `## Linked issue` section reject my body? Every `#N` inside the section must carry a canonical keyword (`Fixes|Closes|Resolves|Refs`); a bare `#N` buried in prose fails so release provenance stays auditable. Keyword-free narrative is accepted; keep it above the heading.
 - Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
 - Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-offline-and-rest`. The Stable packaging contracts run explicitly through `scripts/release/tests/test-release-contracts.sh` (consolidated back under the release scripts it exercises; it lived at `tests/scripts/release/` in between).
