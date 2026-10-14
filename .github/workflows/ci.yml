@@ -113,11 +113,11 @@ jobs:
           set -euo pipefail
           pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
           resolved_developer_dir=""
-          for developer_dir_candidate in \
+          for xcode_bundle_candidate in \
             "/Applications/Xcode_${pinned_xcode_version}.app" \
             "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
-            if [ -x "$developer_dir_candidate/usr/bin/xcodebuild" ]; then
-              resolved_developer_dir="$developer_dir_candidate"
+            if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
+              resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
               break
             fi
           done
@@ -128,6 +128,7 @@ jobs:
             printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
             exit 1
           fi
+          export DEVELOPER_DIR="$resolved_developer_dir"
           printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
           printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
             "$resolved_developer_dir" "$pinned_xcode_version"
@@ -566,11 +567,11 @@ jobs:
           set -euo pipefail
           pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
           resolved_developer_dir=""
-          for developer_dir_candidate in \
+          for xcode_bundle_candidate in \
             "/Applications/Xcode_${pinned_xcode_version}.app" \
             "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
-            if [ -x "$developer_dir_candidate/usr/bin/xcodebuild" ]; then
-              resolved_developer_dir="$developer_dir_candidate"
+            if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
+              resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
               break
             fi
           done
@@ -581,6 +582,7 @@ jobs:
             printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
             exit 1
           fi
+          export DEVELOPER_DIR="$resolved_developer_dir"
           printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
           printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
             "$resolved_developer_dir" "$pinned_xcode_version"
