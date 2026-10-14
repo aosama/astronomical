@@ -2,7 +2,7 @@
 
 # Proves scripts/ci/prune-ci-caches.sh keeps the newest cache per family and ref
 # class, keeps zero non-default-ref sccache entries because sccache saves are
-# default-branch-only, deletes sccache entries above the decimal 0.55 GB family
+# default-branch-only, deletes sccache entries above the decimal 0.45 GB family
 # ceiling even when they are the newest, never applies the sccache ceiling to
 # other families, tolerates delete failures, and deletes nothing in dry-run
 # mode, using a gh shim so the contract never touches real GitHub state.
@@ -52,16 +52,16 @@ cat >"$FIXTURE_REPO_JSON" <<'JSON'
 JSON
 
 # Two sccache generations on main (one stale) and one on a pull-request ref.
-# All three sit under the decimal 0.55 GB ceiling, so the count policy decides:
+# All three sit under the decimal 0.45 GB ceiling, so the count policy decides:
 # the stale main entry is surplus and the pull-request copy is deleted because
 # sccache keeps zero non-default-ref entries. One native-build trio on main
 # (one stale beyond the keep-two policy) and one swiftpm cache that must
 # survive untouched.
 cat >"$FIXTURE_CACHES_JSON" <<'JSON'
 {"actions_caches": [
-  {"id": 101, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/heads/main", "created_at": "2026-09-29T03:23:17Z", "size_in_bytes": 530000000},
-  {"id": 102, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockB", "ref": "refs/heads/main", "created_at": "2026-09-28T22:02:06Z", "size_in_bytes": 500000000},
-  {"id": 103, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/pull/851/merge", "created_at": "2026-09-29T03:16:40Z", "size_in_bytes": 470000000},
+  {"id": 101, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/heads/main", "created_at": "2026-09-29T03:23:17Z", "size_in_bytes": 430000000},
+  {"id": 102, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockB", "ref": "refs/heads/main", "created_at": "2026-09-28T22:02:06Z", "size_in_bytes": 400000000},
+  {"id": 103, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainA-lockA", "ref": "refs/pull/851/merge", "created_at": "2026-09-29T03:16:40Z", "size_in_bytes": 370000000},
   {"id": 201, "key": "astronomical-v2-native-build-macOS-ARM64-identityNew", "ref": "refs/heads/main", "created_at": "2026-09-29T02:56:59Z", "size_in_bytes": 6087355},
   {"id": 202, "key": "astronomical-v2-native-build-macOS-ARM64-identityMid", "ref": "refs/heads/main", "created_at": "2026-09-28T20:00:00Z", "size_in_bytes": 6080000},
   {"id": 203, "key": "astronomical-v2-native-build-macOS-ARM64-identityOld", "ref": "refs/heads/main", "created_at": "2026-09-27T20:00:00Z", "size_in_bytes": 6080000},
@@ -71,13 +71,13 @@ JSON
 
 # The oversize fixture pins the size-ceiling policy: a 1.5 GB newest sccache
 # entry on main and its 1.5 GB pull-request copy must both be deleted as
-# oversize, the newest main entry at exactly decimal 0.55 GB must survive at the
+# oversize, the newest main entry at exactly decimal 0.45 GB must survive at the
 # inclusive ceiling boundary, and a 6 GB native-build entry must survive
 # because the ceiling is family-scoped to sccache.
 cat >"$FIXTURE_OVERSIZED_CACHES_JSON" <<'JSON'
 {"actions_caches": [
   {"id": 111, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainZ-lockZ", "ref": "refs/heads/main", "created_at": "2026-09-30T03:23:17Z", "size_in_bytes": 1500000000},
-  {"id": 112, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainZ-lockY", "ref": "refs/heads/main", "created_at": "2026-09-29T03:23:17Z", "size_in_bytes": 550000000},
+  {"id": 112, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainZ-lockY", "ref": "refs/heads/main", "created_at": "2026-09-29T03:23:17Z", "size_in_bytes": 450000000},
   {"id": 113, "key": "astronomical-v2-sccache-macOS-ARM64-toolchainZ-lockZ", "ref": "refs/pull/900/merge", "created_at": "2026-09-30T03:16:40Z", "size_in_bytes": 1500000001},
   {"id": 401, "key": "astronomical-v2-native-build-macOS-ARM64-identityBig", "ref": "refs/heads/main", "created_at": "2026-09-30T03:23:17Z", "size_in_bytes": 6000000000}
 ]}
@@ -142,6 +142,33 @@ assert_deletions_match() {
 
 shellcheck "${repository_root}/scripts/ci/prune-ci-caches.sh"
 
+# Invariant guard: the workflow's sccache write-time cap, decoded from its
+# binary multiple, must sit strictly below the prune ceiling's decimal bytes.
+# If the two values drift apart (one bumped without the other), every
+# at-cap generation would be archived past the ceiling and deleted right
+# after being saved, or saves would flap forever — so fail here instead.
+cap_spec="$(sed -n 's/.*printf .SCCACHE_CACHE_SIZE=%s\\n. "\([0-9]\{1,\}\)\([KMGT]\)".*/\1\2/p' "${repository_root}/.github/workflows/ci.yml")"
+case "$cap_spec" in
+    ''|*[!0-9KMGT]*) print_error "could not read the sccache cap from .github/workflows/ci.yml"; exit 1 ;;
+esac
+cap_number="${cap_spec%[KMGT]}"
+cap_suffix="${cap_spec#"$cap_number"}"
+case "$cap_suffix" in
+    K) cap_multiplier=1024 ;;
+    M) cap_multiplier=$((1024 * 1024)) ;;
+    G) cap_multiplier=$((1024 * 1024 * 1024)) ;;
+    T) cap_multiplier=$((1024 * 1024 * 1024 * 1024)) ;;
+esac
+cap_binary_bytes=$((cap_number * cap_multiplier))
+prune_ceiling_bytes="$(sed -n 's/^SCCACHE_MAX_ENTRY_BYTES=\([0-9]\{1,\}\)$/\1/p' "${repository_root}/scripts/ci/prune-ci-caches.sh")"
+case "$prune_ceiling_bytes" in
+    ''|*[!0-9]*) print_error "could not read SCCACHE_MAX_ENTRY_BYTES from prune-ci-caches.sh"; exit 1 ;;
+esac
+if [ "$cap_binary_bytes" -ge "$prune_ceiling_bytes" ]; then
+    print_error "the sccache cap (${cap_spec} = ${cap_binary_bytes} bytes) must stay below the prune ceiling (${prune_ceiling_bytes} bytes)"
+    exit 1
+fi
+
 # Contract 1: default run keeps the newest sccache on main, keeps the two
 # newest native-build entries, and deletes the stale main sccache, the
 # pull-request sccache copy (zero non-default-ref entries kept), and the
@@ -184,7 +211,7 @@ fi
 
 # Contract 4: an oversized sccache generation is deleted even when it is the
 # newest on main, its oversized pull-request copy is deleted too, the newest
-# main entry at exactly decimal 0.55 GB survives at the inclusive ceiling
+# main entry at exactly decimal 0.45 GB survives at the inclusive ceiling
 # boundary, and the sccache ceiling never reaches the native-build family.
 PRUNE_CACHES_FIXTURE="$FIXTURE_OVERSIZED_CACHES_JSON" run_prune ""
 unset PRUNE_CACHES_FIXTURE
