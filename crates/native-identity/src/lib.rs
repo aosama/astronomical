@@ -11,6 +11,8 @@ pub mod probes;
 
 #[cfg(test)]
 mod lib_tests;
+#[cfg(test)]
+mod probes_tests;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
