@@ -255,7 +255,7 @@ extract_and_patch_archive() {
 
     if ! sha256_matches "$archive_path" "$expected_archive_sha256"; then
         print_error "$dependency_description archive is missing or fails its pinned SHA-256: $archive_path"
-        print_error "run scripts/ci/bootstrap-native-dependencies.sh to provision the verified cache"
+        print_error "run cargo xtask bootstrap-native-dependencies to provision the verified cache"
         exit 1
     fi
 
