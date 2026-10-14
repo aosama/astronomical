@@ -151,6 +151,17 @@ impl std::fmt::Display for NativeIdentityError {
 pub fn native_build_identity(
     request: &FingerprintRequest<'_>,
 ) -> Result<String, NativeIdentityError> {
+    native_build_identity_with_probe_values(request).map(|(identity, _)| identity)
+}
+
+/// Single-pass identity: captures the toolchain probes once, composes and
+/// hashes the manifest from that capture, and returns the values alongside
+/// the digest so `--explain` can log exactly the hashed inputs. The two-pass
+/// shape this replaces hashed one capture and logged another, which left a
+/// blind spot where an identity flap could never be explained from the log.
+pub fn native_build_identity_with_probe_values(
+    request: &FingerprintRequest<'_>,
+) -> Result<(String, Vec<probes::ProbeValue>), NativeIdentityError> {
     let started_at = std::time::Instant::now();
     eprintln!(
         "[native-build-cache-fingerprint] status=start source_only={} profile={}",
@@ -176,9 +187,13 @@ pub fn native_build_identity(
         ));
     }
 
-    if request.scope == IdentityScope::Full {
-        manifest.push_str(&probes::compatibility_manifest_lines(request)?);
-    }
+    let probe_values = if request.scope == IdentityScope::Full {
+        let captured_values = probes::compatibility_probe_values(request)?;
+        manifest.push_str(&probes::manifest_lines_from_probe_values(&captured_values));
+        captured_values
+    } else {
+        Vec::new()
+    };
 
     let identity_digest = digest_bytes(manifest.as_bytes());
     validate_identity_digest(&identity_digest)?;
@@ -186,12 +201,16 @@ pub fn native_build_identity(
         "[native-build-cache-fingerprint] status=success elapsed_seconds={}",
         started_at.elapsed().as_secs()
     );
-    Ok(identity_digest)
+    Ok((identity_digest, probe_values))
 }
 
-/// Enumerates tracked (committed plus untracked-but-not-ignored) files under
-/// the source-identity pathspecs, byte-sorted like `LC_ALL=C sort` so the
-/// manifest order is stable across machines.
+/// Enumerates the committed files under the source-identity pathspecs,
+/// byte-sorted like `LC_ALL=C sort` so the manifest order is stable across
+/// machines. Tracked-only is deliberate: hosted CI checkouts are always
+/// clean, so this changes nothing there, and the native CMakeLists
+/// references its sources explicitly (no GLOB), so an unreferenced scratch
+/// file on a developer machine is not a build input and must not churn the
+/// machine-wide store key.
 pub fn enumerate_tracked_source_paths(
     repository_root: &Path,
 ) -> Result<Vec<PathBuf>, NativeIdentityError> {
@@ -199,13 +218,7 @@ pub fn enumerate_tracked_source_paths(
     git_enumeration
         .arg("-C")
         .arg(repository_root)
-        .args([
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-        ])
+        .args(["ls-files", "--cached", "--"])
         .args(SOURCE_IDENTITY_PATHSPECS);
     let git_output = git_enumeration
         .output()
