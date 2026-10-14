@@ -150,7 +150,7 @@ jobs:
             # at startup. sccache parses the value as a binary multiple, so
             # 400M budgets 0.419 decimal GB of tracked entries: enough headroom
             # below the decimal 0.45 GB entry ceiling enforced by
-            # scripts/ci/save-sccache-cache.sh and scripts/ci/prune-ci-caches.sh
+            # cargo xtask save-sccache and cargo xtask prune-caches
             # that the trimmed directory plus cache-archive overhead stays
             # within budget.
             printf 'SCCACHE_CACHE_SIZE=%s\n' "400M"
@@ -416,7 +416,7 @@ jobs:
         if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/save-sccache-cache.sh "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}"
+        run: cargo run --quiet -p xtask -- save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}"
         timeout-minutes: 2
       - name: Save sccache-cache
         id: sccache-cache-save
@@ -448,7 +448,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end prune-ci-caches' EXIT
           scripts/ci/ci-step-timing.sh begin prune-ci-caches
-          scripts/ci/prune-ci-caches.sh
+          cargo run --quiet -p xtask -- prune-caches
         timeout-minutes: 2
       - name: Upload Cargo timing report
         if: always()
