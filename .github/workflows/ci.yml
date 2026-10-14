@@ -202,9 +202,13 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin ci-cache-contracts
-          # The workflow structural contract is typed Rust; the slimmed shell
-          # contract owns only the restoration-reporter classification.
+          # This step runs before sccache is installed, so cargo must not try
+          # to exec the not-yet-existing wrapper binary; these small crates
+          # compile from the restored cargo-downloads registry in well under
+          # the step budget.
+          unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo test --locked -p xtask --test workflow_structural_contract
+          cargo test --locked -p xtask --test workflow_cache_owner_contract
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
       - name: Prepare durable test-log directory
