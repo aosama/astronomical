@@ -290,6 +290,47 @@ offline_test!(every_timed_step_pairs_its_begin_and_end_calls, {
     );
 });
 
+// The macOS toolchain pin contract: one workflow-level DEVELOPER_DIR keeps
+// the xcodebuild/xcrun/swift identity inputs stable across runner-image
+// rollouts, so the native-build and SwiftPM caches stay valid until the pin
+// is bumped deliberately. The assert step makes a stale pin fail the job
+// instead of silently falling back to the image's moving default.
+offline_test!(
+    macos_toolchain_identity_is_pinned_to_a_versioned_developer_dir,
+    {
+        let workflow = workflow_contract();
+        let workflow_env = workflow
+            .get("env")
+            .expect("workflow-level env block is missing");
+        let developer_dir = required_text(workflow_env, "DEVELOPER_DIR", "workflow env");
+        assert!(
+            developer_dir.starts_with("/Applications/Xcode_") && developer_dir.ends_with(".app"),
+            "DEVELOPER_DIR pin must use a versioned Xcode path, got {developer_dir}"
+        );
+        assert!(
+            !developer_dir.ends_with("/Xcode.app"),
+            "DEVELOPER_DIR pin must not alias the moving Xcode.app default"
+        );
+        for job_id in ["rust-core", "swift-node"] {
+            let job_steps = steps_of(required_job(&workflow, job_id), job_id);
+            let assert_step = find_step_by_name(&job_steps, "Assert pinned Xcode toolchain");
+            let assert_text = run_text_of(assert_step, "pinned-xcode");
+            assert!(
+                assert_text.contains(r#"[ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]"#),
+                "job {job_id} does not verify the pinned developer directory exists"
+            );
+            assert!(
+                assert_text.contains("exit 1"),
+                "job {job_id} does not fail loudly when the pinned Xcode is missing"
+            );
+            assert!(
+                assert_text.contains("xcodebuild -version"),
+                "job {job_id} does not log the pinned toolchain version"
+            );
+        }
+    }
+);
+
 offline_test!(macos_jobs_publish_the_timing_summary_even_when_failing, {
     let workflow = workflow_contract();
     for job_id in ["rust-core", "swift-node"] {
