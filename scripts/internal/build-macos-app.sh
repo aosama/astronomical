@@ -284,7 +284,7 @@ main() {
     # ── Phase 2: Verify native dependencies ───────────────────────────────
 
     start_phase 2 "verify native MLX dependencies"
-    "${repository_root}/scripts/ci/bootstrap-native-dependencies.sh" --verify
+    (CDPATH='' cd -- "${repository_root}" && cargo xtask bootstrap-native-dependencies --verify)
     finish_phase "success"
 
     # ── Phase 3: Build release binaries ──────────────────────────────────

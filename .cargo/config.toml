@@ -30,7 +30,8 @@ test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", 
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
 # xtask native-fingerprint [--source-only] --profile core|core+memory-contract
-# [root]`, `cargo xtask classify-scope`.
+# [root]`, `cargo xtask classify-scope`, `cargo xtask bootstrap-native-dependencies
+# [--cache-dir ABSOLUTE_PATH] [--verify]`.
 xtask = ["run", "-p", "xtask", "--"]
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —

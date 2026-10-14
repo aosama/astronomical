@@ -150,7 +150,7 @@ jobs:
             # at startup. sccache parses the value as a binary multiple, so
             # 400M budgets 0.419 decimal GB of tracked entries: enough headroom
             # below the decimal 0.45 GB entry ceiling enforced by
-            # scripts/ci/save-sccache-cache.sh and scripts/ci/prune-ci-caches.sh
+            # cargo xtask save-sccache and cargo xtask prune-caches
             # that the trimmed directory plus cache-archive overhead stays
             # within budget.
             printf 'SCCACHE_CACHE_SIZE=%s\n' "400M"
@@ -199,7 +199,17 @@ jobs:
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: Verify CI native cache contracts
-        run: scripts/ci/tests/test-ci-native-cache-coordination.sh
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin ci-cache-contracts
+          # This step runs before sccache is installed, so cargo must not try
+          # to exec the not-yet-existing wrapper binary; these small crates
+          # compile from the restored cargo-downloads registry in well under
+          # the step budget.
+          unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+          cargo test --locked -p xtask --test workflow_structural_contract
+          cargo test --locked -p xtask --test workflow_cache_owner_contract
+          scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
@@ -207,7 +217,11 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
           scripts/ci/ci-step-timing.sh begin install-verification-tools
-          scripts/ci/install-verification-tools.sh
+          # This step installs sccache, so the xtask compile must not run
+          # through the wrapper exported by the identity step: the wrapper
+          # binary does not exist yet.
+          unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+          cargo run --quiet -p xtask -- install-verification-tools
       - name: Verify Rust dependency notices
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -248,7 +262,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end provision-native-dependencies' EXIT
           scripts/ci/ci-step-timing.sh begin provision-native-dependencies
-          scripts/ci/bootstrap-native-dependencies.sh
+          cargo xtask bootstrap-native-dependencies
       - name: Set maximum parallel build jobs
         run: |
           printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
@@ -416,7 +430,7 @@ jobs:
         if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/save-sccache-cache.sh "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}"
+        run: cargo run --quiet -p xtask -- save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}"
         timeout-minutes: 2
       - name: Save sccache-cache
         id: sccache-cache-save
@@ -448,7 +462,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end prune-ci-caches' EXIT
           scripts/ci/ci-step-timing.sh begin prune-ci-caches
-          scripts/ci/prune-ci-caches.sh
+          cargo run --quiet -p xtask -- prune-caches
         timeout-minutes: 2
       - name: Upload Cargo timing report
         if: always()
