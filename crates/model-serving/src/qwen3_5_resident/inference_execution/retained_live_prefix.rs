@@ -9,6 +9,25 @@
 use crate::persistent_cache::PersistentPromptCacheBlockKey;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 
+use super::Qwen3_5EngineState;
+
+impl Qwen3_5EngineState {
+    /// Payload bytes of the decoder state that stays live across requests.
+    ///
+    /// After a completed generation the retained live prefix (issue #1167)
+    /// keeps its KV arrays resident so the next turn can adopt them. Those
+    /// bytes are active in every MLX measurement taken between requests, and
+    /// the finalized ceiling-utilization split must charge them to the
+    /// context owner; leaving them unattributed charges them against the
+    /// one-decode-step activation reserve, whose clamp manufactures a
+    /// phantom owner overrun (issue #1236).
+    pub(super) fn live_retained_context_state_payload_bytes(&self) -> u64 {
+        self.retained_live_prefix
+            .as_ref()
+            .map_or(0, |prefix| prefix.decoder_state.payload_byte_count())
+    }
+}
+
 /// The retained live state of the last completed generation.
 pub(in crate::qwen3_5_resident) struct RetainedLiveDecoderPrefix {
     /// The live decoder state at generation end. Append-only layers hold KV
