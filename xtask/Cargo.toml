@@ -14,4 +14,8 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+astronomical-native-identity = { path = "../crates/native-identity" }
 sha2.workspace = true
+
+[dev-dependencies]
+astronomical-test-harness = { path = "../crates/test-harness" }

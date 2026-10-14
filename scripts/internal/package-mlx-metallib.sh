@@ -22,12 +22,7 @@ resolve_packaged_mlx_metallib_source() {
             return 1
             ;;
     esac
-    fingerprint_script="${repository_root}/scripts/ci/native-build-cache-fingerprint.sh"
-    [ -x "$fingerprint_script" ] || {
-        print_error "native identity script is unavailable: ${fingerprint_script}"
-        return 1
-    }
-    native_identity="$(TARGET="$native_target_triple" "$fingerprint_script" --profile core "$repository_root")" || return 1
+    native_identity="$(TARGET="$native_target_triple" cargo run --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask -- native-fingerprint --profile core "$repository_root")" || return 1
     case "$native_identity" in
         ''|*[!0-9a-f]*)
             print_error "native build identity must be lowercase hexadecimal"
