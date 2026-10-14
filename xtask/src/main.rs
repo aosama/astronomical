@@ -4,13 +4,20 @@
 //! lines and exit codes are kept compatible so local habits, hooks, and CI
 //! steps survive the move unchanged.
 
+mod cache_prune;
+#[cfg(test)]
+mod cache_prune_tests;
 mod classify_scope;
 #[cfg(test)]
 mod classify_scope_tests;
 mod native_fingerprint;
 mod notices;
+#[cfg(test)]
+mod sccache_save_tests;
 mod source_size;
 mod tier_pyramid;
+
+mod sccache_save;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -41,9 +48,11 @@ fn main() -> ExitCode {
             run_command(native_fingerprint::run(&repository_root, &arguments[1..]))
         }
         Some("classify-scope") => run_command(classify_scope::run(&repository_root)),
+        Some("prune-caches") => run_command(cache_prune::run(arguments[1..].iter().cloned())),
+        Some("save-sccache") => run_command(sccache_save::run(&arguments[1..])),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope"
+                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] --profile core|core+memory-contract [root] | classify-scope | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key>"
             );
             ExitCode::from(2)
         }

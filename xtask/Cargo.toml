@@ -9,6 +9,7 @@ version.workspace = true
 
 # Repository tooling: CI reporting and verification glue as typed Rust, driven
 # through `cargo xtask <command>` (see the alias in .cargo/config.toml).
+autotests = false
 
 [lints]
 workspace = true
@@ -19,3 +20,7 @@ sha2.workspace = true
 
 [dev-dependencies]
 astronomical-test-harness = { path = "../crates/test-harness" }
+
+[[test]]
+name = "offline_gh_shim_journeys"
+path = "tests/offline_gh_shim_journeys.rs"
