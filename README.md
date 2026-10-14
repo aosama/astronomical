@@ -120,7 +120,7 @@ Required tools:
 
 Provision the pinned, checksum-verified native dependencies:
 
-    scripts/ci/bootstrap-native-dependencies.sh
+    cargo xtask bootstrap-native-dependencies
 
 Build and validate the Development app without replacing or stopping Stable:
 

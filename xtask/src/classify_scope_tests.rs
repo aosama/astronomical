@@ -30,7 +30,9 @@ offline_test!(
         assert!(is_static_only_path(".github/assets/banner.png"));
         assert!(is_static_only_path(".github/workflows/pages.yml"));
         assert!(!is_static_only_path(".github/workflows/ci.yml"));
-        assert!(!is_static_only_path("scripts/ci/prune-ci-caches.sh"));
+        assert!(!is_static_only_path(
+            "scripts/ci/test-macos-menu-contracts.sh"
+        ));
         assert!(!is_static_only_path("docs/readme.txt"));
     }
 );

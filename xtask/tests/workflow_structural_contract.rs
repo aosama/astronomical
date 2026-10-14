@@ -1,0 +1,319 @@
+//! The workflow structural contract, as typed Rust: parses
+//! `.github/workflows/ci.yml` and pins the required check's triggers,
+//! fail-closed macOS authority, bounded timeouts, offline-lane compile
+//! contract, and attributable timing. Cache-ownership structure lives in the
+//! companion `workflow_cache_owner_contract` test; both replace the
+//! Ruby-in-shell section of
+//! `scripts/ci/tests/test-ci-native-cache-coordination.sh` (issue #1250).
+
+mod contract_support;
+
+use astronomical_test_harness::offline_test;
+use contract_support::{
+    EXPECTED_LIBRARY_REST_COMMAND, EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP,
+    EXPECTED_OBSERVATORY_COMMAND, EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id,
+    find_step_by_name, required_bool, required_field, required_job, required_text, required_u64,
+    run_text_of, steps_of, triggers_of, workflow_contract,
+};
+use serde_yaml::Value;
+
+offline_test!(workflow_triggers_keep_the_classification_surface_open, {
+    let workflow = workflow_contract();
+    let triggers = triggers_of(&workflow);
+    assert!(
+        triggers.get("pull_request").is_some(),
+        "pull-request verification trigger is missing"
+    );
+    assert!(
+        triggers.get("workflow_dispatch").is_some(),
+        "manual verification trigger is missing"
+    );
+    let push_trigger = required_field(triggers, "push", "the workflow triggers");
+    let push_branches: Vec<&str> = required_field(push_trigger, "branches", "the push trigger")
+        .as_sequence()
+        .expect("push branches must be a sequence")
+        .iter()
+        .map(|branch| branch.as_str().expect("push branches must be strings"))
+        .collect();
+    assert_eq!(
+        push_branches,
+        ["main"],
+        "main classification trigger changed"
+    );
+    assert!(
+        push_trigger.get("paths").is_none() && push_trigger.get("paths-ignore").is_none(),
+        "push trigger must not hide classifier runs with path filters"
+    );
+    assert!(
+        workflow.get("concurrency").is_none(),
+        "classifier-only runs must not wait behind macOS work"
+    );
+});
+
+offline_test!(detect_changes_outputs_drive_the_authority, {
+    let workflow = workflow_contract();
+    let detection_job = required_job(&workflow, "detect-changes");
+    let detection_outputs = required_field(detection_job, "outputs", "job detect-changes");
+    assert!(
+        detection_outputs.get("native_inputs_changed").is_some(),
+        "native change output is missing"
+    );
+    assert!(
+        detection_outputs
+            .get("macos_verification_required")
+            .is_some(),
+        "macOS authority output is missing"
+    );
+    let detection_steps = steps_of(detection_job, "detect-changes");
+    let classification_step = find_step_by_id(&detection_steps, "classify");
+    assert!(
+        run_text_of(classification_step, "classify").contains("classify-scope"),
+        "change-scope policy is not xtask-owned"
+    );
+    assert!(
+        detection_steps.iter().all(|step| step
+            .get("run")
+            .and_then(Value::as_str)
+            .map(|run_text| !run_text.contains("native-fingerprint"))
+            .unwrap_or(true)),
+        "classifier job still computes unused native identity"
+    );
+});
+
+offline_test!(
+    required_jobs_keep_names_timeouts_and_fail_closed_authority,
+    {
+        let workflow = workflow_contract();
+        let verification_job = required_job(&workflow, "rust-core");
+        let swift_node_job = required_job(&workflow, "swift-node");
+        let static_job = required_job(&workflow, "static");
+        assert_eq!(
+            required_text(verification_job, "name", "job rust-core"),
+            "macOS offline verification",
+            "required check name changed"
+        );
+        assert_eq!(
+            required_u64(verification_job, "timeout-minutes", "job rust-core"),
+            15,
+            "required check exceeded its hard cap"
+        );
+        assert_eq!(
+            required_u64(swift_node_job, "timeout-minutes", "job swift-node"),
+            12,
+            "swift-node exceeded its hard cap"
+        );
+        assert_eq!(
+            required_text(verification_job, "if", "job rust-core"),
+            EXPECTED_MACOS_AUTHORITY,
+            "macOS authority does not fail closed"
+        );
+        assert_eq!(
+            required_text(swift_node_job, "if", "job swift-node"),
+            EXPECTED_MACOS_AUTHORITY,
+            "swift-node authority does not fail closed"
+        );
+        let verification_concurrency =
+            required_field(verification_job, "concurrency", "job rust-core");
+        assert_eq!(
+            required_text(verification_concurrency, "group", "rust-core concurrency"),
+            EXPECTED_MACOS_CONCURRENCY_GROUP,
+            "macOS concurrency is not event-and-ref scoped"
+        );
+        assert!(
+            !required_bool(
+                verification_concurrency,
+                "cancel-in-progress",
+                "rust-core concurrency"
+            ),
+            "required macOS verification must not cancel in-flight runs"
+        );
+        let swift_concurrency = required_field(swift_node_job, "concurrency", "job swift-node");
+        assert_eq!(
+            required_text(swift_concurrency, "group", "swift-node concurrency"),
+            EXPECTED_SWIFT_CONCURRENCY_GROUP,
+            "swift-node concurrency is not event-and-ref scoped"
+        );
+        assert!(
+            !required_bool(
+                swift_concurrency,
+                "cancel-in-progress",
+                "swift-node concurrency"
+            ),
+            "swift-node must not cancel in-flight runs"
+        );
+        assert!(
+            required_text(static_job, "if", "job static")
+                .contains("needs.detect-changes.result =="),
+            "static checks must require successful classification"
+        );
+    }
+);
+
+offline_test!(required_check_steps_keep_their_bounded_contracts, {
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+
+    let classification_guard = find_step_by_name(
+        &verification_steps,
+        "Require successful change classification",
+    );
+    assert!(
+        required_text(classification_guard, "if", "classification guard")
+            .contains("detect-changes.result != 'success'"),
+        "classification guard condition changed"
+    );
+    assert!(
+        run_text_of(classification_guard, "classification-guard").contains("exit 1"),
+        "classification guard does not fail the required check"
+    );
+
+    let observatory_step = find_step_by_name(&verification_steps, "Run Observatory contracts");
+    // The required-CI command tees to a durable log for rerun-safe debugging,
+    // so assert the test invocation is present rather than the exact shell
+    // wrapper, which would couple the guard to log plumbing.
+    assert!(
+        run_text_of(observatory_step, "observatory").contains(EXPECTED_OBSERVATORY_COMMAND),
+        "Observatory required-CI command changed"
+    );
+    assert!(
+        required_u64(observatory_step, "timeout-minutes", "Observatory contracts") <= 2,
+        "Observatory contracts exceeded their bounded timeout"
+    );
+
+    let library_rest_step = find_step_by_name(&verification_steps, "Run Library REST contracts");
+    assert!(
+        run_text_of(library_rest_step, "library-rest").contains(EXPECTED_LIBRARY_REST_COMMAND),
+        "Library REST required-CI command changed"
+    );
+    assert!(
+        required_u64(
+            library_rest_step,
+            "timeout-minutes",
+            "Library REST contracts"
+        ) <= 2,
+        "Library REST contracts exceeded their bounded timeout"
+    );
+
+    let compile_step = find_step_by_name(&verification_steps, "Compile offline lane tests");
+    let compile_command = run_text_of(compile_step, "compile-offline");
+    assert!(
+        compile_command.contains("--no-run"),
+        "offline compile does not use --no-run"
+    );
+    assert!(
+        compile_command.contains("--test offline_tests"),
+        "offline compile omits offline_tests"
+    );
+    assert!(
+        compile_command.contains("--test rest_api_tests"),
+        "offline compile omits rest_api_tests"
+    );
+    assert!(
+        compile_command.contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
+        "native build progress file is not exported for CI tailing"
+    );
+    assert!(
+        compile_command.contains(r#"tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE""#),
+        "offline compile does not tail the native build progress stream"
+    );
+    assert!(
+        compile_command.contains(r#"kill "$progress_tail_pid""#),
+        "offline compile does not stop the progress tail on exit"
+    );
+    find_step_by_id(&verification_steps, "native-build-identity");
+
+    let swiftpm_timestamp_step = find_step_by_name(
+        &swift_steps,
+        "Keep restored SwiftPM artifacts newer than checkout",
+    );
+    assert!(
+        required_text(swiftpm_timestamp_step, "if", "SwiftPM timestamp step")
+            .contains("swiftpm-cache.outputs.cache-hit"),
+        "SwiftPM timestamp reuse is not gated on a cache hit"
+    );
+    assert!(
+        run_text_of(swiftpm_timestamp_step, "swiftpm-timestamp").contains("touch -c"),
+        "SwiftPM timestamp reuse does not touch restored artifacts"
+    );
+});
+
+/// Collects one job's timed steps and asserts the begin call lives in the
+/// same run text, mirroring the shell contract's
+/// `ci-step-timing.sh end ([a-z0-9-]+)` extraction.
+fn assert_timed_steps_pair_begin_and_end(job_steps: &[&Value], job_id: &str) -> usize {
+    let mut timed_step_count: usize = 0;
+    for step in job_steps {
+        let Some(run_text) = step.get("run").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(segment_marker) = run_text.find("ci-step-timing.sh end ") else {
+            continue;
+        };
+        let segment_start = segment_marker + "ci-step-timing.sh end ".len();
+        let end_segment: String = run_text[segment_start..]
+            .chars()
+            .take_while(|character| {
+                character.is_ascii_lowercase() || character.is_ascii_digit() || *character == '-'
+            })
+            .collect();
+        let step_name = step
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("<unnamed>");
+        assert!(
+            !end_segment.is_empty(),
+            "timed step {step_name} in {job_id} does not name its end segment"
+        );
+        assert!(
+            run_text.contains(&format!("ci-step-timing.sh begin {end_segment}")),
+            "timed step {step_name} ends {end_segment} without a begin call"
+        );
+        timed_step_count += 1;
+    }
+    timed_step_count
+}
+
+offline_test!(every_timed_step_pairs_its_begin_and_end_calls, {
+    let workflow = workflow_contract();
+    let mut total_timed_steps: usize = 0;
+    for (job_id, job) in [
+        ("rust-core", required_job(&workflow, "rust-core")),
+        ("swift-node", required_job(&workflow, "swift-node")),
+        ("static", required_job(&workflow, "static")),
+    ] {
+        total_timed_steps += assert_timed_steps_pair_begin_and_end(&steps_of(job, job_id), job_id);
+    }
+    assert!(
+        total_timed_steps > 0,
+        "workflow has no timed steps to attribute"
+    );
+});
+
+offline_test!(macos_jobs_publish_the_timing_summary_even_when_failing, {
+    let workflow = workflow_contract();
+    for job_id in ["rust-core", "swift-node"] {
+        let job = required_job(&workflow, job_id);
+        let job_name = required_text(job, "name", &format!("job {job_id}"));
+        let publish_steps: Vec<&Value> = steps_of(job, job_id)
+            .into_iter()
+            .filter(|step| {
+                step.get("run")
+                    .and_then(Value::as_str)
+                    .map(|run_text| run_text.contains("publish-ci-timing-summary.sh"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert!(
+            !publish_steps.is_empty(),
+            "macOS job {job_name} never publishes the step timing summary"
+        );
+        for publish_step in publish_steps {
+            assert_eq!(
+                required_text(publish_step, "if", "timing summary step"),
+                "always()",
+                "step timing summary must publish even for failed runs"
+            );
+        }
+    }
+});
