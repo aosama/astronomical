@@ -124,15 +124,23 @@ pub fn compatibility_probe_values(
 pub fn compatibility_manifest_lines(
     request: &FingerprintRequest<'_>,
 ) -> Result<String, NativeIdentityError> {
+    let probe_values = compatibility_probe_values(request)?;
+    Ok(manifest_lines_from_probe_values(&probe_values))
+}
+
+/// Folds already-captured probe values into the manifest lines. This is the
+/// only place probe values become manifest lines, so the hashed bytes and
+/// the `--explain` bytes share one composition by construction.
+pub fn manifest_lines_from_probe_values(probe_values: &[ProbeValue]) -> String {
     let mut manifest_lines = String::new();
-    for probe_entry in compatibility_probe_values(request)? {
+    for probe_entry in probe_values {
         manifest_lines.push_str(&format!(
             "compatibility\t{}\t{}\n",
             probe_entry.name,
             digest_bytes(probe_entry.value.as_bytes())
         ));
     }
-    Ok(manifest_lines)
+    manifest_lines
 }
 
 fn whole_output_probe_value(

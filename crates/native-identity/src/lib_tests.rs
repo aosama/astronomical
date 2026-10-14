@@ -4,6 +4,7 @@ use crate::probes::CompatibilityOverrides;
 use crate::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, NativeIdentityError,
     SOURCE_IDENTITY_PATHSPECS, digest_bytes, enumerate_tracked_source_paths, native_build_identity,
+    native_build_identity_with_probe_values,
 };
 
 /// `CARGO_MANIFEST_DIR` is `<workspace-root>/crates/native-identity`; the
@@ -159,4 +160,81 @@ offline_test!(enumeration_fails_loudly_outside_a_git_worktree, {
         failure,
         Err(NativeIdentityError::GitEnumeration(_))
     ));
+});
+
+offline_test!(enumeration_ignores_untracked_files_under_covered_paths, {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "astronomical-native-identity-untracked-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(fixture_root.join("crates/native-identity/src")).unwrap();
+    let git = |arguments: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&fixture_root)
+            .args([
+                "-c",
+                "user.email=fixture@example.invalid",
+                "-c",
+                "user.name=fixture",
+            ])
+            .args(arguments)
+            .output()
+            .unwrap()
+    };
+    assert!(git(&["init", "--quiet"]).status.success());
+    std::fs::write(
+        fixture_root.join("crates/native-identity/src/lib.rs"),
+        "committed identity source\n",
+    )
+    .unwrap();
+    assert!(git(&["add", "."]).status.success());
+    assert!(
+        git(&["commit", "--quiet", "-m", "fixture"])
+            .status
+            .success()
+    );
+
+    let committed_enumeration = enumerate_tracked_source_paths(&fixture_root).unwrap();
+    std::fs::write(
+        fixture_root.join("crates/native-identity/src/scratch_file.rs"),
+        "untracked scratch that must not churn the identity\n",
+    )
+    .unwrap();
+    let enumeration_with_scratch = enumerate_tracked_source_paths(&fixture_root).unwrap();
+    assert_eq!(
+        committed_enumeration, enumeration_with_scratch,
+        "an untracked scratch file under a covered path must not enter the identity"
+    );
+
+    std::fs::remove_dir_all(&fixture_root).unwrap();
+});
+
+offline_test!(single_pass_identity_matches_native_build_identity, {
+    let repository_root = workspace_root_from_manifest_directory();
+    let request = FingerprintRequest {
+        repository_root: &repository_root,
+        profile: NativeBuildProfile::Core,
+        scope: IdentityScope::Full,
+        overrides: CompatibilityOverrides {
+            xcode: Some("Xcode 26.0".to_owned()),
+            sdk: Some("version=15.4\nbuild=24A123".to_owned()),
+            clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
+            cmake: Some("cmake version 4.2.1".to_owned()),
+            rustc: Some("rustc 1.97.1".to_owned()),
+            target_triple: Some("aarch64-apple-darwin".to_owned()),
+            build_type: None,
+        },
+    };
+    let (identity, probe_values) = native_build_identity_with_probe_values(&request).unwrap();
+    assert_eq!(
+        identity,
+        native_build_identity(&request).unwrap(),
+        "the single-pass entry point must hash identically to the CLI face"
+    );
+    assert_eq!(probe_values.len(), 7);
 });
