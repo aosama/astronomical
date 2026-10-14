@@ -96,26 +96,26 @@ CARGO_ABOUT
 
     printf '%s\n' '[rust-dependency-notices-contract] case=ci-installs-only-the-pinned-version status=start'
     workflow_path="${repository_root}/.github/workflows/ci.yml"
-    installer_path="${repository_root}/scripts/ci/install-verification-tools.sh"
-    grep -F 'scripts/ci/install-verification-tools.sh' "$workflow_path" >/dev/null || {
+    installer_module_path="${repository_root}/xtask/src/install_verification_tools.rs"
+    grep -F 'install-verification-tools' "$workflow_path" >/dev/null || {
         print_error "CI does not install verification tools through the pinned-archive installer"
         exit 1
     }
-    grep -F 'third-party/cargo-about-version' "$installer_path" >/dev/null || {
+    grep -F 'third-party/cargo-about-version' "$installer_module_path" >/dev/null || {
         print_error "CI installer does not read third-party/cargo-about-version"
         exit 1
     }
-    grep -F 'Astronomical requires cargo-about' "$installer_path" >/dev/null || {
+    grep -F 'Astronomical requires cargo-about' "$installer_module_path" >/dev/null || {
         print_error "CI does not fail closed when installed cargo-about drifts"
         exit 1
     }
-    if grep -E 'brew install|cargo install' "$installer_path" >/dev/null; then
+    if grep -E 'brew install|cargo install' "$installer_module_path" >/dev/null; then
         print_error "CI installer still compiles or brews verification tools"
         exit 1
     fi
     printf '%s\n' '[rust-dependency-notices-contract] case=ci-installs-only-the-pinned-version status=success'
     printf '%s\n' '[verification-tools-contract] status=start'
-    "${repository_root}/scripts/ci/tests/test-install-verification-tools.sh"
+    cargo test --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask --test offline_install_tools_journeys
     printf '%s\n' '[rust-dependency-notices-digest] status=start'
     "${repository_root}/scripts/ci/tests/test-rust-dependency-notices-digest.sh"
     printf '%s\n' '[rust-dependency-notices-contract] status=success'

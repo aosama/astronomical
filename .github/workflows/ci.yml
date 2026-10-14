@@ -207,7 +207,11 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
           scripts/ci/ci-step-timing.sh begin install-verification-tools
-          scripts/ci/install-verification-tools.sh
+          # This step installs sccache, so the xtask compile must not run
+          # through the wrapper exported by the identity step: the wrapper
+          # binary does not exist yet.
+          unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+          cargo run --quiet -p xtask -- install-verification-tools
       - name: Verify Rust dependency notices
         env:
           EVENT_NAME: ${{ github.event_name }}
