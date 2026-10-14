@@ -131,12 +131,12 @@ jobs:
             # the cache cannot grow past the cap while compiling. The cap must
             # exist before the first server start because sccache reads it once
             # at startup. sccache parses the value as a binary multiple, so
-            # 500M budgets 0.524 decimal GB of tracked entries: enough headroom
-            # below the decimal 0.55 GB entry ceiling enforced by
+            # 400M budgets 0.419 decimal GB of tracked entries: enough headroom
+            # below the decimal 0.45 GB entry ceiling enforced by
             # scripts/ci/save-sccache-cache.sh and scripts/ci/prune-ci-caches.sh
             # that the trimmed directory plus cache-archive overhead stays
             # within budget.
-            printf 'SCCACHE_CACHE_SIZE=%s\n' "500M"
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "400M"
             # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
           } >> "$GITHUB_ENV"
           printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"
