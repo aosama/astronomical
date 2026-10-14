@@ -5284,6 +5284,7 @@ Used by:
 - serde_json 1.0.151
 - serde_path_to_error 0.1.20
 - serde_urlencoded 0.7.1
+- serde_yaml 0.9.34+deprecated
 - shlex 2.0.1
 - simdutf8 0.1.5
 - syn 2.0.119
@@ -6476,6 +6477,7 @@ SOFTWARE.
 MIT License
 
 Used by:
+- unsafe-libyaml 0.2.11
 - zmij 1.0.23
 
 Permission is hereby granted, free of charge, to any

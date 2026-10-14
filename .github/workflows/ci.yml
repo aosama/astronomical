@@ -199,7 +199,13 @@ jobs:
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: Verify CI native cache contracts
-        run: scripts/ci/tests/test-ci-native-cache-coordination.sh
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin ci-cache-contracts
+          # The workflow structural contract is typed Rust; the slimmed shell
+          # contract owns only the restoration-reporter classification.
+          cargo test --locked -p xtask --test workflow_structural_contract
+          scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
@@ -252,7 +258,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end provision-native-dependencies' EXIT
           scripts/ci/ci-step-timing.sh begin provision-native-dependencies
-          scripts/ci/bootstrap-native-dependencies.sh
+          cargo xtask bootstrap-native-dependencies
       - name: Set maximum parallel build jobs
         run: |
           printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
