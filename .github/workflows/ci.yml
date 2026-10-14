@@ -11,18 +11,24 @@ permissions:
   contents: read
 
 env:
-  # Pin the macOS toolchain directory so the native-build and Swift toolchain
+  # Pin the macOS toolchain VERSION so the native-build and Swift toolchain
   # identities stop moving whenever GitHub rolls the runner image: xcodebuild,
-  # xcrun (sdk and clang probes), and swift all honor DEVELOPER_DIR, so the
-  # identities change only when this pin is bumped deliberately. Keep the
-  # versioned path (never Xcode.app, which is the moving default symlink).
-  # Bump procedure: pick a version from the current image readme's Xcode
-  # table, update this one value, and expect exactly one deliberate native
-  # and SwiftPM cache rebuild; the assert step fails the job loudly once the
-  # image no longer ships the pinned version, forcing that bump to be
-  # intentional instead of a surprise five-minute native rebuild. Linux jobs
-  # inherit the variable and simply never read it.
-  DEVELOPER_DIR: /Applications/Xcode_26.6.app
+  # xcrun (the sdk and clang probes), and swift all honor DEVELOPER_DIR, and
+  # the assert step resolves this version to an installed Xcode and exports
+  # DEVELOPER_DIR for every later step of both macOS jobs. The resolution
+  # accepts the readme's primary and alias layout (Xcode_<v>.app and
+  # Xcode_<v>.0.app) because the deployed alias layout has drifted from the
+  # readme's primary column (live in the 0.2.70-era rollout); the identity
+  # probes hash toolchain outputs, not paths, so either alias yields the same
+  # identity and the mixed fleet converges on one cache key. Bump procedure:
+  # pick a version from the current image readme's Xcode table, update this
+  # one value, and expect exactly one deliberate native and SwiftPM cache
+  # rebuild; the assert step fails the job loudly — printing the image's
+  # installed Xcode inventory — once the image no longer ships the pinned
+  # version, forcing that bump to be intentional instead of a surprise
+  # five-minute native rebuild. Linux jobs inherit the variable and simply
+  # never read it.
+  ASTRONOMICAL_PINNED_XCODE_VERSION: "26.6"
 
 jobs:
   detect-changes:
@@ -105,12 +111,26 @@ jobs:
       - name: Assert pinned Xcode toolchain
         run: |
           set -euo pipefail
-          if [ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]; then
-            printf '%s\n' "Error: the pinned developer directory is missing from this runner image: $DEVELOPER_DIR" >&2
-            printf '%s\n' 'Error: pick a version from the current image readme Xcode table and update the workflow-level DEVELOPER_DIR pin.' >&2
+          pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
+          resolved_developer_dir=""
+          for developer_dir_candidate in \
+            "/Applications/Xcode_${pinned_xcode_version}.app" \
+            "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
+            if [ -x "$developer_dir_candidate/usr/bin/xcodebuild" ]; then
+              resolved_developer_dir="$developer_dir_candidate"
+              break
+            fi
+          done
+          if [ -z "$resolved_developer_dir" ]; then
+            printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
+            printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
             exit 1
           fi
-          printf '[pinned-xcode] status=verified developer_dir=%s\n' "$DEVELOPER_DIR"
+          printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
+          printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
+            "$resolved_developer_dir" "$pinned_xcode_version"
           xcodebuild -version
           pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
           printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
@@ -544,12 +564,26 @@ jobs:
       - name: Assert pinned Xcode toolchain
         run: |
           set -euo pipefail
-          if [ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]; then
-            printf '%s\n' "Error: the pinned developer directory is missing from this runner image: $DEVELOPER_DIR" >&2
-            printf '%s\n' 'Error: pick a version from the current image readme Xcode table and update the workflow-level DEVELOPER_DIR pin.' >&2
+          pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
+          resolved_developer_dir=""
+          for developer_dir_candidate in \
+            "/Applications/Xcode_${pinned_xcode_version}.app" \
+            "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
+            if [ -x "$developer_dir_candidate/usr/bin/xcodebuild" ]; then
+              resolved_developer_dir="$developer_dir_candidate"
+              break
+            fi
+          done
+          if [ -z "$resolved_developer_dir" ]; then
+            printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
+            printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
             exit 1
           fi
-          printf '[pinned-xcode] status=verified developer_dir=%s\n' "$DEVELOPER_DIR"
+          printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
+          printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
+            "$resolved_developer_dir" "$pinned_xcode_version"
           xcodebuild -version
           pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
           printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
