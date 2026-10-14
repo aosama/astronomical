@@ -10,6 +10,56 @@ use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel, WorkerRun
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
 
+/// Emits paired timing boundaries for one model-swap phase only when the
+/// factory has performance attribution enabled, mirroring the prompt-cache
+/// clear attribution log. The two phases are the worker-level envelope around
+/// the engine's own finer-grained attribution segments: factory creation
+/// (model-family classification, artifact validation, tokenizer
+/// initialization, engine selection and construction) and the engine load
+/// (runtime initialization, safetensors mapping, tensor binding).
+struct ModelSwapPhasePerformanceLog {
+    operation: &'static str,
+    model_id: Option<String>,
+    started_at: Option<std::time::Instant>,
+}
+
+impl ModelSwapPhasePerformanceLog {
+    fn start(is_enabled: bool, operation: &'static str, model_id: &str) -> Self {
+        if !is_enabled {
+            return Self {
+                operation,
+                model_id: None,
+                started_at: None,
+            };
+        }
+        tracing::info!(
+            operation,
+            phase = "start",
+            model_id,
+            "performance attribution operation started"
+        );
+        Self {
+            operation,
+            model_id: Some(model_id.to_owned()),
+            started_at: Some(std::time::Instant::now()),
+        }
+    }
+}
+
+impl Drop for ModelSwapPhasePerformanceLog {
+    fn drop(&mut self) {
+        if let Some(started_at) = self.started_at {
+            tracing::info!(
+                operation = self.operation,
+                phase = "end",
+                elapsed_millis = started_at.elapsed().as_millis(),
+                model_id = self.model_id.as_deref(),
+                "performance attribution operation completed"
+            );
+        }
+    }
+}
+
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
 where
@@ -33,19 +83,27 @@ where
                 model_load_failure_reason: "model swapping is unavailable".to_owned(),
             });
         };
+        let performance_attribution_enabled = model_factory.performance_attribution_enabled();
         tracing::info!(
             model_directory,
             model_id = model_configuration.model_id(),
             "starting model swap"
         );
-        let factory_runtime = model_factory
-            .create(model_directory, model_configuration.clone())
-            .await
-            .map_err(
-                |model_load_failure_reason| WorkerRuntimeError::ModelSwapFailed {
-                    model_load_failure_reason,
-                },
-            )?;
+        let factory_runtime = {
+            let _factory_create_attribution = ModelSwapPhasePerformanceLog::start(
+                performance_attribution_enabled,
+                "model_swap_factory_create",
+                model_configuration.model_id(),
+            );
+            model_factory
+                .create(model_directory, model_configuration.clone())
+                .await
+                .map_err(
+                    |model_load_failure_reason| WorkerRuntimeError::ModelSwapFailed {
+                        model_load_failure_reason,
+                    },
+                )?
+        };
 
         if !factory_runtime_matches_configuration(&factory_runtime, &model_configuration) {
             return Err(WorkerRuntimeError::ModelSwapFailed {
@@ -62,31 +120,37 @@ where
             model_swapped_event,
             minimum_mlx_memory_ceiling_bytes,
             runtime_configuration,
-        ) = match factory_runtime {
-            ModelFactoryRuntime::Autoregressive { processor, engine } => {
-                let mut replacement_model = LoadedModel { processor, engine };
-                let engine_load_result = replacement_model.engine.load().await.map_err(|engine_error| {
+        ) = {
+            let _engine_load_attribution = ModelSwapPhasePerformanceLog::start(
+                performance_attribution_enabled,
+                "model_swap_engine_load",
+                model_configuration.model_id(),
+            );
+            match factory_runtime {
+                ModelFactoryRuntime::Autoregressive { processor, engine } => {
+                    let mut replacement_model = LoadedModel { processor, engine };
+                    let engine_load_result = replacement_model.engine.load().await.map_err(|engine_error| {
                         tracing::error!(model_directory, error = %engine_error, "model engine load failed after swap creation");
                         WorkerRuntimeError::ModelSwapFailed {
                             model_load_failure_reason: "model engine initialization failed".to_owned(),
                         }
                     })?;
-                let minimum = engine_load_result.minimum_mlx_memory_ceiling_bytes();
-                let event = model_swapped_from_ready_event(
-                    replacement_model.processor.ready_event(),
-                    engine_load_result.expert_memory_mode(),
-                    minimum,
-                )?;
-                let runtime_configuration = model_configuration.runtime_configuration();
-                (
-                    LoadedRuntime::Autoregressive(replacement_model),
-                    event,
-                    minimum,
-                    runtime_configuration,
-                )
-            }
-            ModelFactoryRuntime::Image(mut image_engine) => {
-                let image_load_result = image_engine.load().map_err(|failure_reason| {
+                    let minimum = engine_load_result.minimum_mlx_memory_ceiling_bytes();
+                    let event = model_swapped_from_ready_event(
+                        replacement_model.processor.ready_event(),
+                        engine_load_result.expert_memory_mode(),
+                        minimum,
+                    )?;
+                    let runtime_configuration = model_configuration.runtime_configuration();
+                    (
+                        LoadedRuntime::Autoregressive(replacement_model),
+                        event,
+                        minimum,
+                        runtime_configuration,
+                    )
+                }
+                ModelFactoryRuntime::Image(mut image_engine) => {
+                    let image_load_result = image_engine.load().map_err(|failure_reason| {
                         tracing::error!(model_directory, reason = ?failure_reason, "image engine load failed after swap creation");
                         WorkerRuntimeError::ModelSwapFailed {
                             model_load_failure_reason: bounded_image_engine_load_failure(
@@ -94,30 +158,30 @@ where
                             ),
                         }
                     })?;
-                if image_load_result.model_id() != model_configuration.model_id() {
-                    return Err(WorkerRuntimeError::ModelSwapFailed {
-                        model_load_failure_reason:
-                            "loaded image identity does not match the selected model".to_owned(),
-                    });
+                    if image_load_result.model_id() != model_configuration.model_id() {
+                        return Err(WorkerRuntimeError::ModelSwapFailed {
+                            model_load_failure_reason:
+                                "loaded image identity does not match the selected model".to_owned(),
+                        });
+                    }
+                    let minimum = image_load_result.minimum_mlx_memory_ceiling_bytes();
+                    let event = WorkerEvent::ModelSwapped {
+                        model_id: image_load_result.model_id().to_owned(),
+                        capabilities: WorkerModelCapabilities::image_generation(
+                            image_load_result.capabilities().clone(),
+                        ),
+                        expert_memory_mode: None,
+                        minimum_mlx_memory_ceiling_bytes: minimum,
+                    };
+                    (
+                        LoadedRuntime::Image(image_engine),
+                        event,
+                        minimum,
+                        model_configuration.runtime_configuration(),
+                    )
                 }
-                let minimum = image_load_result.minimum_mlx_memory_ceiling_bytes();
-                let event = WorkerEvent::ModelSwapped {
-                    model_id: image_load_result.model_id().to_owned(),
-                    capabilities: WorkerModelCapabilities::image_generation(
-                        image_load_result.capabilities().clone(),
-                    ),
-                    expert_memory_mode: None,
-                    minimum_mlx_memory_ceiling_bytes: minimum,
-                };
-                (
-                    LoadedRuntime::Image(image_engine),
-                    event,
-                    minimum,
-                    model_configuration.runtime_configuration(),
-                )
-            }
-            ModelFactoryRuntime::Embeddings(mut embedding_engine) => {
-                let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
+                ModelFactoryRuntime::Embeddings(mut embedding_engine) => {
+                    let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
                     tracing::error!(model_directory, reason = ?failure_reason, "embedding engine load failed after swap creation");
                     WorkerRuntimeError::ModelSwapFailed {
                         model_load_failure_reason: bounded_embedding_engine_load_failure(
@@ -125,27 +189,29 @@ where
                         ),
                     }
                 })?;
-                if embedding_load_result.model_id() != model_configuration.model_id() {
-                    return Err(WorkerRuntimeError::ModelSwapFailed {
-                        model_load_failure_reason:
-                            "loaded embedding identity does not match the selected model".to_owned(),
-                    });
+                    if embedding_load_result.model_id() != model_configuration.model_id() {
+                        return Err(WorkerRuntimeError::ModelSwapFailed {
+                            model_load_failure_reason:
+                                "loaded embedding identity does not match the selected model"
+                                    .to_owned(),
+                        });
+                    }
+                    let minimum = embedding_load_result.minimum_mlx_memory_ceiling_bytes();
+                    let event = WorkerEvent::ModelSwapped {
+                        model_id: embedding_load_result.model_id().to_owned(),
+                        capabilities: WorkerModelCapabilities::embeddings(
+                            *embedding_load_result.capabilities(),
+                        ),
+                        expert_memory_mode: None,
+                        minimum_mlx_memory_ceiling_bytes: minimum,
+                    };
+                    (
+                        LoadedRuntime::Embeddings(embedding_engine),
+                        event,
+                        minimum,
+                        model_configuration.runtime_configuration(),
+                    )
                 }
-                let minimum = embedding_load_result.minimum_mlx_memory_ceiling_bytes();
-                let event = WorkerEvent::ModelSwapped {
-                    model_id: embedding_load_result.model_id().to_owned(),
-                    capabilities: WorkerModelCapabilities::embeddings(
-                        *embedding_load_result.capabilities(),
-                    ),
-                    expert_memory_mode: None,
-                    minimum_mlx_memory_ceiling_bytes: minimum,
-                };
-                (
-                    LoadedRuntime::Embeddings(embedding_engine),
-                    event,
-                    minimum,
-                    model_configuration.runtime_configuration(),
-                )
             }
         };
 
