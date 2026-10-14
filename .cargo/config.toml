@@ -28,7 +28,9 @@ test-e2e = ["test", "--no-fail-fast", "-p", "astronomical-e2e", "--test", "e2e"]
 test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--test", "offline_tests", "--test", "rest_api_tests"]
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
-# source-size [--staged] [root]`, `cargo xtask notices [--check]`.
+# source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
+# xtask native-fingerprint [--source-only] --profile core|core+memory-contract
+# [root]`, `cargo xtask classify-scope`.
 xtask = ["run", "-p", "xtask", "--"]
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —

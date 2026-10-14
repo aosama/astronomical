@@ -124,7 +124,10 @@ fn emit_native_source_rerun_contracts(
         native_source_directory.join("CMakeLists.txt"),
         native_source_directory.join("apply_patch_if_needed.cmake"),
         native_source_directory.join("tests/mlx_memory_contract_probe.cpp"),
-        manifest_directory.join("../../scripts/ci/native-build-cache-fingerprint.sh"),
+        // The identity policy's own sources: an edit to the pathspec policy
+        // or manifest assembly must re-run the build script so the store
+        // lookup uses the new identity.
+        manifest_directory.join("../native-identity/src"),
         manifest_directory.join("../../third-party/native-dependency-manifest.cmake"),
         manifest_directory.join("../../third-party/pins"),
         manifest_directory.join("../../third-party/patches"),

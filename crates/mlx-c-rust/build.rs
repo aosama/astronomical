@@ -12,7 +12,6 @@ use std::{
     env,
     error::Error,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 const NATIVE_DEPENDENCY_CACHE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
@@ -173,48 +172,17 @@ fn resolve_headers_root(repository_root: &Path) -> Result<PathBuf, Box<dyn Error
 }
 
 fn resolve_extraction_identity(repository_root: &Path) -> Result<String, Box<dyn Error>> {
-    let fingerprint_script_path =
-        repository_root.join("scripts/ci/native-build-cache-fingerprint.sh");
-    let mut identity_command = Command::new(&fingerprint_script_path);
-    identity_command
-        .arg("--source-only")
-        .arg("--profile")
-        .arg("core")
-        .arg(repository_root);
-    // Fixture overrides make identity contracts offline-deterministic, but a production
-    // build must always fingerprint the real tracked inputs, mirroring the
+    // Source-only and override-free by construction: the bindgen header
+    // extraction identity depends only on tracked inputs, mirroring the
     // native identity resolution discipline.
-    for override_variable in [
-        "ASTRONOMICAL_NATIVE_IDENTITY_XCODE",
-        "ASTRONOMICAL_NATIVE_IDENTITY_SDK",
-        "ASTRONOMICAL_NATIVE_IDENTITY_CLANG",
-        "ASTRONOMICAL_NATIVE_IDENTITY_CMAKE",
-        "ASTRONOMICAL_NATIVE_IDENTITY_RUSTC",
-        "ASTRONOMICAL_NATIVE_IDENTITY_TARGET",
-    ] {
-        identity_command.env_remove(override_variable);
-    }
-    let identity_output = identity_command.output()?;
-    if !identity_output.status.success() {
-        return Err(format!(
-            "native source identity fingerprint failed: {}",
-            String::from_utf8_lossy(&identity_output.stderr)
-        )
-        .into());
-    }
-    let identity = String::from_utf8(identity_output.stdout)?;
-    let identity = identity.trim();
-    if identity.len() != 64
-        || !identity
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
-    {
-        return Err(format!(
-            "native source identity fingerprint returned an invalid identity: {identity}"
-        )
-        .into());
-    }
-    Ok(identity.to_owned())
+    let identity_request = astronomical_native_identity::FingerprintRequest {
+        repository_root,
+        profile: astronomical_native_identity::NativeBuildProfile::Core,
+        scope: astronomical_native_identity::IdentityScope::SourceOnly,
+        overrides: astronomical_native_identity::probes::CompatibilityOverrides::none(),
+    };
+    astronomical_native_identity::native_build_identity(&identity_request)
+        .map_err(|error| format!("native source identity fingerprint failed: {error}").into())
 }
 
 fn native_dependency_cache_directory() -> Result<PathBuf, Box<dyn Error>> {

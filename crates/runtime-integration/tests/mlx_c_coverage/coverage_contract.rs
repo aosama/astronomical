@@ -5,7 +5,6 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::process::Command;
 
 use crate::mlx_c_coverage::coverage_engine::{
     BridgeInventory, Exclusions, HeaderSurface, coverage_gaps, parse_header_surface,
@@ -31,35 +30,15 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
         .join("../..")
         .canonicalize()
         .map_err(|error| format!("repository root resolution failed: {error}"))?;
-    let mut identity_command =
-        Command::new(repository_root.join("scripts/ci/native-build-cache-fingerprint.sh"));
-    identity_command
-        .arg("--source-only")
-        .arg("--profile")
-        .arg("core")
-        .arg(&repository_root);
-    for override_variable in [
-        "ASTRONOMICAL_NATIVE_IDENTITY_XCODE",
-        "ASTRONOMICAL_NATIVE_IDENTITY_SDK",
-        "ASTRONOMICAL_NATIVE_IDENTITY_CLANG",
-        "ASTRONOMICAL_NATIVE_IDENTITY_CMAKE",
-        "ASTRONOMICAL_NATIVE_IDENTITY_RUSTC",
-        "ASTRONOMICAL_NATIVE_IDENTITY_TARGET",
-    ] {
-        identity_command.env_remove(override_variable);
-    }
-    let identity_output = identity_command
-        .output()
-        .map_err(|error| format!("native identity fingerprint failed to run: {error}"))?;
-    if !identity_output.status.success() {
-        return Err(format!(
-            "native identity fingerprint failed: {}",
-            String::from_utf8_lossy(&identity_output.stderr)
-        ));
-    }
-    let identity = String::from_utf8_lossy(&identity_output.stdout)
-        .trim()
-        .to_owned();
+    // Override-free by construction, mirroring the build script discipline.
+    let identity_request = astronomical_native_identity::FingerprintRequest {
+        repository_root: &repository_root,
+        profile: astronomical_native_identity::NativeBuildProfile::Core,
+        scope: astronomical_native_identity::IdentityScope::SourceOnly,
+        overrides: astronomical_native_identity::probes::CompatibilityOverrides::none(),
+    };
+    let identity = astronomical_native_identity::native_build_identity(&identity_request)
+        .map_err(|error| format!("native identity fingerprint failed: {error}"))?;
     let cache_directory = std::env::var_os("ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
