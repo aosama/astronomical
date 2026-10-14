@@ -10,6 +10,20 @@ on:
 permissions:
   contents: read
 
+env:
+  # Pin the macOS toolchain directory so the native-build and Swift toolchain
+  # identities stop moving whenever GitHub rolls the runner image: xcodebuild,
+  # xcrun (sdk and clang probes), and swift all honor DEVELOPER_DIR, so the
+  # identities change only when this pin is bumped deliberately. Keep the
+  # versioned path (never Xcode.app, which is the moving default symlink).
+  # Bump procedure: pick a version from the current image readme's Xcode
+  # table, update this one value, and expect exactly one deliberate native
+  # and SwiftPM cache rebuild; the assert step fails the job loudly once the
+  # image no longer ships the pinned version, forcing that bump to be
+  # intentional instead of a surprise five-minute native rebuild. Linux jobs
+  # inherit the variable and simply never read it.
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app
+
 jobs:
   detect-changes:
     name: Classify changed files
@@ -88,6 +102,18 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Assert pinned Xcode toolchain
+        run: |
+          set -euo pipefail
+          if [ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]; then
+            printf '%s\n' "Error: the pinned developer directory is missing from this runner image: $DEVELOPER_DIR" >&2
+            printf '%s\n' 'Error: pick a version from the current image readme Xcode table and update the workflow-level DEVELOPER_DIR pin.' >&2
+            exit 1
+          fi
+          printf '[pinned-xcode] status=verified developer_dir=%s\n' "$DEVELOPER_DIR"
+          xcodebuild -version
+          pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
       # The Swift toolchain identity is resolved in swift-node instead: this
       # job no longer compiles Swift, and GitHub Actions does not share
       # GITHUB_ENV across jobs.
@@ -515,6 +541,18 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Assert pinned Xcode toolchain
+        run: |
+          set -euo pipefail
+          if [ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]; then
+            printf '%s\n' "Error: the pinned developer directory is missing from this runner image: $DEVELOPER_DIR" >&2
+            printf '%s\n' 'Error: pick a version from the current image readme Xcode table and update the workflow-level DEVELOPER_DIR pin.' >&2
+            exit 1
+          fi
+          printf '[pinned-xcode] status=verified developer_dir=%s\n' "$DEVELOPER_DIR"
+          xcodebuild -version
+          pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
       - name: Resolve Swift toolchain identity
         id: swift-toolchain-identity
         shell: bash
