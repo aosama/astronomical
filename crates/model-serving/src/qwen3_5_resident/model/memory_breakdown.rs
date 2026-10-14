@@ -24,14 +24,25 @@ impl Qwen3_5ResidentModel {
         )
     }
 
+    /// Composes the ownership view of a finalized MLX active-memory measurement.
+    ///
+    /// `live_context_state_payload_bytes` carries the payload of decoder state
+    /// still live at the measured instant — after a request that is the
+    /// retained live prefix (issue #1167). Attributing those bytes to the
+    /// context owner keeps the published ceiling-utilization split honest
+    /// (issue #1236): reporting zero context state charged the retained
+    /// prefix against the activation-and-workspace reserve, a one-decode-step
+    /// transient reserve far narrower than the retained state, and the clamp
+    /// surfaced the excess as a phantom owner overrun.
     #[must_use]
     pub(crate) fn finalized_active_memory_breakdown(
         &self,
         mlx_active_memory_bytes: u64,
+        live_context_state_payload_bytes: u64,
         additional_model_core_payload_bytes: u64,
     ) -> MlxActiveMemoryBreakdown {
         self.active_memory_breakdown_with_context_state_payload_bytes(
-            0,
+            live_context_state_payload_bytes,
             mlx_active_memory_bytes,
             additional_model_core_payload_bytes,
         )
