@@ -19,6 +19,13 @@ forgotten:
   allocator, native probe, MLX-C transitions) in one bounded invocation. The
   probe binary must exist in the native build store first:
   `cargo test -p astronomical-runtime-integration --features mlx-memory-contract-probe --no-run`.
+- `cargo check-mlx-memory-contract` — the compile-only drift gate for that
+  feature lane: the lane sits off every routine graph, so API moves under its
+  feature world are caught by this check instead of by `cargo verify` (which
+  never enables the feature). The journeys themselves stay behind `#[ignore]`
+  and run through `cargo test-mlx-memory`; the probe-profile CMake build can
+  be streamed live first with
+  `scripts/ci/prewarm-native-build.sh --profile core+memory-contract`.
 - `cargo test-acceptance` — the whole real-model acceptance package across
   every feature gate.
 
