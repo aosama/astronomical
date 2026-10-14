@@ -162,6 +162,12 @@ if [ "${1:-}" = "metadata" ]; then
     printf '%s\n' '{"packages":[{"name":"astronomical-daemon","version":"0.2.0","repository":"https://github.com/example/astronomical"}]}'
     exit 0
 fi
+if [ "${1:-}" = "xtask" ]; then
+    # The native-dependency verification runs through the xtask port; it
+    # never builds a --target binary, so it only needs to succeed and land
+    # in the args log.
+    exit 0
+fi
 cargo_target_directory="${CARGO_TARGET_DIR:?disposable Cargo target is required}"
 printf '%s\n' "$cargo_target_directory" > "${FAKE_CARGO_TARGET_RECORD:?}"
 target_triple=""
@@ -290,7 +296,6 @@ printf '%s\n' "$*" >> "${FAKE_CODESIGN_LOG:?}"
 exit 0
 CODESIGN
     chmod +x "${fake_command_directory}/codesign"
-    write_successful_command "${sandbox_scripts_directory}/ci/bootstrap-native-dependencies.sh"
     # The builder pre-warms the machine-wide native build store before cargo;
     # the sandbox must not touch the real store, so the prewarm is stubbed.
     write_successful_command "${sandbox_scripts_directory}/ci/prewarm-native-build.sh"
@@ -464,6 +469,13 @@ CODESIGN
         "${SANDBOX_DIRECTORY}/fake-cargo-args.log" || true)
     [ "$stable_cargo_args_count" = "1" ] || {
         print_error "the app-store-state-root feature must be enabled only for the App Store build"
+        exit 1
+    }
+    # The builder verifies the native dependency archive cache through the
+    # xtask port; the fake cargo log must show the call survived the move.
+    grep -F 'bootstrap-native-dependencies --verify' \
+        "${SANDBOX_DIRECTORY}/fake-cargo-args.log" >/dev/null || {
+        print_error "the builder did not verify the native dependency archives through xtask"
         exit 1
     }
     app_store_cargo_target="$(cat "$app_store_cargo_target_record")"
