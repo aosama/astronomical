@@ -154,6 +154,16 @@ as a ceiling effect.
 
 ### Serving throughput (production-faithful rates)
 
+- `cargo test --release -p astronomical-acceptance --features performance-measurement --test performance_measurement performance_measurement::model_load_to_prefill::should_measure_model_load_to_prefill_start_latency -- --ignored --nocapture --exact --test-threads=1`
+  — load-to-prefill-start latency, reporting exactly one metric: the headline
+  `load_to_prefill_elapsed_millis` spans request acceptance (which triggers the
+  model swap/load) through the arrival of the first `PrefillProgress` event
+  with `processed_tokens: 0, elapsed_millis: 0` — the worker's
+  prefill-phase-start boundary, emitted before any blocking prefill model
+  work — so prefill execution is excluded. Resolves the model through the
+  `resident_sparse_moe` role; no SSD prompt cache; 2,048-token prefill chunks;
+  115-second journey budget.
+
 - `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --nocapture --exact --test-threads=1`
   — resident-model text throughput: 9,000–11,000 Romeo-and-Juliet input
   tokens, 450–550 output tokens, 500-input/50-output warmup, persistent prompt

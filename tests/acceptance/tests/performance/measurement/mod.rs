@@ -1,4 +1,6 @@
 #[cfg(feature = "performance-measurement")]
+mod model_load_to_prefill;
+#[cfg(feature = "performance-measurement")]
 mod model_persistent_prompt_cache_benchmark_case;
 #[cfg(feature = "performance-measurement")]
 mod model_persistent_prompt_cache_warmup;
