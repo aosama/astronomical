@@ -32,6 +32,8 @@ impl Qwen3_5EngineState {
         if self.active_request.is_some() {
             return Err(InferenceEngineError::EngineBusy);
         }
+        let live_retained_context_state_payload_bytes =
+            self.live_retained_context_state_payload_bytes();
         let Some(model) = self.model.as_mut() else {
             return Err(super::fatal_engine_error(
                 "cannot update the MLX memory ceiling before the model is loaded",
@@ -74,8 +76,11 @@ impl Qwen3_5EngineState {
         let peak_memory_bytes =
             u64::try_from(mlx_memory_snapshot_after_adjustment.peak_memory_bytes())
                 .map_err(|_| super::fatal_engine_error("MLX peak memory exceeds the u64 range"))?;
-        let active_memory_breakdown =
-            model.finalized_active_memory_breakdown(active_memory_bytes, 0);
+        let active_memory_breakdown = model.finalized_active_memory_breakdown(
+            active_memory_bytes,
+            live_retained_context_state_payload_bytes,
+            0,
+        );
         // One claim serves both the telemetry and the adjustment event, derived
         // from the breakdown of this exact snapshot so neither publication can
         // straddle a promotion or demote (issue #337).
