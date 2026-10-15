@@ -200,6 +200,7 @@ async fn spawn_daemon(
         }
     };
     let mut daemon_spawn_command = Command::new(daemon_executable_path);
+    crate::common::daemon::seal_daemon_from_machine_graphics_state(&mut daemon_spawn_command);
     daemon_spawn_command
         .args(["--instance", "development", "--state-directory"])
         .arg(state_directory)
