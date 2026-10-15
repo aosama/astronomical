@@ -51,6 +51,12 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     pub(super) random_state: Option<MlxArray>,
     pub(super) request_id: RequestId,
     pub(super) sampling_strategy: Qwen3_5SamplingStrategy,
+    /// Resolved repetition penalty in thousandths; 1,000 is the neutral identity.
+    pub(super) repetition_penalty_thousandths: u16,
+    /// Sorted unique ids the penalty dampens: prompt ids plus every generated
+    /// token committed so far. Empty while the penalty is neutral so the
+    /// sampling graph stays dispatch-free.
+    pub(super) penalized_token_ids: Vec<u32>,
     /// Pre-uploaded visual embeddings for image prompts; `None` for text-only.
     pub(super) visual_embeddings: Option<MlxArray>,
     /// How many visual embeddings earlier prefill chunks have already consumed.
@@ -140,6 +146,17 @@ impl Qwen3_5EngineRequest {
         self.maximum_successful_prefill_chunk_tokens = Some(successful_prefill_chunk_token_count);
     }
 
+    /// Records one generated token in the penalty history, keeping it sorted and unique.
+    ///
+    /// Only requests with an active penalty call this, so the common path never
+    /// pays the sorted-insert cost.
+    pub(super) fn observe_penalized_token_id(&mut self, generated_token_id: u32) {
+        if let Err(insertion_index) = self.penalized_token_ids.binary_search(&generated_token_id) {
+            self.penalized_token_ids
+                .insert(insertion_index, generated_token_id);
+        }
+    }
+
     pub(crate) fn measure_operation_with_request<OperationOutput>(
         &mut self,
         performance_operation: PerformanceOperation,
@@ -172,6 +189,21 @@ impl Qwen3_5EngineRequest {
     ) -> Result<MlxArray, InferenceEngineError> {
         let sampling_strategy = self.sampling_strategy;
         let mut sampling_random_state = self.random_state.take();
+        // The penalty transforms raw logits before the structured mask and the
+        // sampling strategy, matching the HF reference ordering; a neutral
+        // penalty returns None and keeps the sampling graph unchanged.
+        let penalized_logits = self.performance_attribution.measure_operation(
+            PerformanceOperation::RepetitionPenaltyLogitTransform,
+            |_performance_attribution| {
+                crate::gpu_token_sampling::apply_repetition_penalty(
+                    &model.runtime,
+                    logits,
+                    &self.penalized_token_ids,
+                    self.repetition_penalty_thousandths,
+                )
+            },
+        )?;
+        let logits = penalized_logits.as_ref().unwrap_or(logits);
         let outside_thinking = !self.is_inside_thinking() && !self.is_forcing_thinking_transition();
         let masked_logits = if outside_thinking
             && let Some(structured_generation) = self.structured_generation.as_mut()

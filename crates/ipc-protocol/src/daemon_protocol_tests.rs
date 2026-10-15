@@ -27,6 +27,7 @@ fn chat_generate_request() -> DaemonRequest {
             max_output_tokens: 128,
             temperature_thousandths: None,
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: None,
         },

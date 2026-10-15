@@ -47,6 +47,7 @@ offline_denied_test!(
                 max_output_tokens: 512,
                 temperature_thousandths: Some(600),
                 top_p_thousandths: Some(950),
+                repetition_penalty_thousandths: Some(1_100),
                 seed: Some(7),
                 thinking_budget: None,
             },
@@ -56,7 +57,7 @@ offline_denied_test!(
         assert_eq!(
             serde_json::to_string(&chat_generation_command)
                 .expect("the structured chat payload should serialize"),
-            r#"{"request_id":44,"model":"astronomical/fake-mixture-of-experts","messages":[{"role":"system","content":"You are a coding assistant."},{"role":"assistant","content":null,"reasoning_content":"I should inspect the repository.","tool_calls":[{"id":"call_1","function":{"name":"glob","arguments_json":"{\"pattern\":\"src/**/*.rs\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"src/lib.rs"},{"role":"user","content":"Summarize the source files.","images":[]}],"tools":[{"name":"glob","description":"List matching files.","parameters_json":"{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\"}}}"}],"tool_choice":{"kind":"auto"},"settings":{"max_output_tokens":512,"temperature_thousandths":600,"top_p_thousandths":950,"seed":7,"thinking_budget":null}}"#
+            r#"{"request_id":44,"model":"astronomical/fake-mixture-of-experts","messages":[{"role":"system","content":"You are a coding assistant."},{"role":"assistant","content":null,"reasoning_content":"I should inspect the repository.","tool_calls":[{"id":"call_1","function":{"name":"glob","arguments_json":"{\"pattern\":\"src/**/*.rs\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"src/lib.rs"},{"role":"user","content":"Summarize the source files.","images":[]}],"tools":[{"name":"glob","description":"List matching files.","parameters_json":"{\"type\":\"object\",\"properties\":{\"pattern\":{\"type\":\"string\"}}}"}],"tool_choice":{"kind":"auto"},"settings":{"max_output_tokens":512,"temperature_thousandths":600,"top_p_thousandths":950,"repetition_penalty_thousandths":1100,"seed":7,"thinking_budget":null}}"#
         );
     }
 );
@@ -120,6 +121,7 @@ offline_denied_test!(
                 max_output_tokens: 16,
                 temperature_thousandths: None,
                 top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
                 seed: None,
                 thinking_budget: None,
             },
@@ -145,3 +147,16 @@ offline_denied_test!(
         assert_eq!(user_message[0].decoded_bytes, vec![0x89, 0x50, 0x4E, 0x47]);
     }
 );
+
+offline_denied_test!(should_default_an_omitted_repetition_penalty_to_neutral, {
+    let serialized_chat_generation_command = r#"{"request_id":9,"model":"astronomical/fake-mixture-of-experts","messages":[{"role":"user","content":"Summarize the source files."}],"tools":[],"tool_choice":{"kind":"auto"},"settings":{"max_output_tokens":64,"temperature_thousandths":600,"top_p_thousandths":950,"seed":null,"thinking_budget":null}}"#;
+
+    let deserialized_command: ChatGenerationCommand =
+        serde_json::from_str(serialized_chat_generation_command)
+            .expect("a settings payload without a repetition penalty should deserialize");
+
+    assert_eq!(
+        deserialized_command.settings.repetition_penalty_thousandths, None,
+        "an omitted penalty must resolve through the ladder, never invent a non-neutral one"
+    );
+});

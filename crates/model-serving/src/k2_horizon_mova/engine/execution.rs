@@ -85,12 +85,30 @@ pub(in crate::k2_horizon_mova) struct K2HorizonMoVAActiveGeneration {
     pub(super) random_state: MlxArray,
     pub(super) next_input_token_ids: Vec<u32>,
     pub(super) generated_count: u32,
+    /// Sorted unique ids the repetition penalty dampens: prompt ids plus every
+    /// generated token committed so far. Empty while the penalty is neutral so
+    /// the sampling graph stays dispatch-free.
+    pub(super) penalized_token_ids: Vec<u32>,
     pub(super) request: K2HorizonMoVAInferenceRequest,
     pub(super) prefill_started_at: Instant,
     pub(super) performance_attribution: PerformanceAttribution,
     pub(super) last_published_block_key: Option<PersistentPromptCacheBlockKey>,
     pub(super) cached_token_count: u32,
     pub(super) thinking_budget: K2HorizonMoVAThinkingBudgetState,
+}
+
+impl K2HorizonMoVAActiveGeneration {
+    /// Records one generated token in the penalty history, keeping it sorted
+    /// and unique. Neutral-penalty requests never call this.
+    pub(super) fn observe_penalized_token_id(&mut self, generated_token_id: u32) {
+        if self.request.repetition_penalty_thousandths() != 1_000
+            && let Err(insertion_index) =
+                self.penalized_token_ids.binary_search(&generated_token_id)
+        {
+            self.penalized_token_ids
+                .insert(insertion_index, generated_token_id);
+        }
+    }
 }
 
 impl K2HorizonMoVAInferenceExecution {

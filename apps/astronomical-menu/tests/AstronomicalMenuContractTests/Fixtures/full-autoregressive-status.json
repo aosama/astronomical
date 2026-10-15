@@ -91,6 +91,11 @@
         "default": null,
         "effective": null
       },
+      "repetition_penalty": {
+        "configured": null,
+        "default": null,
+        "effective": null
+      },
       "top_p": {
         "configured": null,
         "default": null,

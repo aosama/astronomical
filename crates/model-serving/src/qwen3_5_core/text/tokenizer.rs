@@ -455,6 +455,15 @@ impl Qwen3_5Tokenizer {
             chat_generation_command.settings.seed,
         )
         .with_image_pad_token_id(self.image_pad_token_id())
+        // The config layer fills this request omission before it ever reaches
+        // the worker, so the artifact-authored value here is the last default
+        // in the ladder: request > config > artifact > neutral 1.0.
+        .with_repetition_penalty_thousandths(
+            chat_generation_command
+                .settings
+                .repetition_penalty_thousandths
+                .unwrap_or(self.model_sampler_config.repetition_penalty_thousandths),
+        )
         .with_thinking_configuration(
             enable_thinking,
             effective_thinking_allowance,

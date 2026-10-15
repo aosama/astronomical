@@ -64,6 +64,9 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
             max_output_tokens: maximum_output_tokens,
             temperature_thousandths: translate_thousandths(temperature, "temperature")?,
             top_p_thousandths: translate_thousandths(top_p, "top_p")?,
+            // The OpenAI chat surface does not expose a repetition penalty in
+            // this change; the model's configured default always applies.
+            repetition_penalty_thousandths: None,
             seed,
             thinking_budget,
         },

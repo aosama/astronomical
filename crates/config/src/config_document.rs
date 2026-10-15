@@ -178,6 +178,8 @@ pub(crate) struct GenerationDefaultsConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) repetition_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) maximum_output_tokens: Option<u32>,
 }
 
@@ -220,6 +222,26 @@ impl GenerationDefaultsConfigFile {
             return Err(invalid_model_value(
                 model_id,
                 "generation_defaults.top_p",
+                "must be representable in thousandths",
+            ));
+        }
+        if self
+            .repetition_penalty
+            .is_some_and(|repetition_penalty| !(1.0..=2.0).contains(&repetition_penalty))
+        {
+            return Err(invalid_model_value(
+                model_id,
+                "generation_defaults.repetition_penalty",
+                "must be between 1 and 2; values below 1 would reward repetition",
+            ));
+        }
+        if self
+            .repetition_penalty
+            .is_some_and(|repetition_penalty| !is_representable_in_thousandths(repetition_penalty))
+        {
+            return Err(invalid_model_value(
+                model_id,
+                "generation_defaults.repetition_penalty",
                 "must be representable in thousandths",
             ));
         }

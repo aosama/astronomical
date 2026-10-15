@@ -536,6 +536,7 @@ mod support {
             max_output_tokens: 512,
             temperature_thousandths: Some(600),
             top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
             seed: Some(7),
             thinking_budget: None,
         }

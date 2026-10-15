@@ -15,3 +15,5 @@ pub(crate) mod runtime_model_policy;
 mod config_reload_resolver_tests;
 #[cfg(test)]
 mod config_reload_tests;
+#[cfg(test)]
+mod request_generation_defaults_tests;

@@ -31,6 +31,8 @@ pub use processor::{
 pub use prompt::{Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt};
 pub use request_output::{Qwen3_5RequestOutput, Qwen3_5RequestOutputError};
 #[cfg(feature = "direct-mlx")]
+pub use sampler::qwen3_5_apply_repetition_penalty;
+#[cfg(feature = "direct-mlx")]
 pub use sampler::qwen3_5_apply_top_p_mask;
 pub use sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
 #[cfg(feature = "direct-mlx")]

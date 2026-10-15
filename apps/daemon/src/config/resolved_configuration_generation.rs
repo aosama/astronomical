@@ -59,6 +59,12 @@ impl ResolvedConfigurationGeneration {
                 &mut generation_digest,
                 model_policy.generation_defaults.top_p_thousandths,
             );
+            update_optional_number(
+                &mut generation_digest,
+                model_policy
+                    .generation_defaults
+                    .repetition_penalty_thousandths,
+            );
             let worker_policy_bytes = serde_json::to_vec(&model_policy.worker_model_configuration)?;
             update_bytes(&mut generation_digest, &worker_policy_bytes);
         }

@@ -171,3 +171,82 @@ fn sampled_residual_token_counts(
     }
     emission_counts
 }
+
+#[tokio::test]
+async fn should_keep_logits_unchanged_for_a_neutral_repetition_penalty() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = MlxRuntime::initialize(
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the sampler test memory limits should be valid"),
+    )
+    .expect("the direct MLX runtime should initialize");
+    let candidate_logits = [-1.5_f32, 0.25, 2.0, -0.5, 0.0];
+    let logit_array = runtime
+        .array_from_f32(&candidate_logits, &[1, 1, 5])
+        .expect("the candidate logits should be valid");
+
+    let penalized_logits = astronomical_model_serving::qwen3_5_apply_repetition_penalty(
+        &runtime,
+        &logit_array,
+        &[1, 3],
+        1_000,
+    )
+    .expect("the neutral penalty should not fail");
+
+    assert!(
+        penalized_logits.is_none(),
+        "a neutral penalty must skip every GPU dispatch and keep the sampling graph unchanged"
+    );
+}
+
+#[tokio::test]
+async fn should_scale_seen_token_logits_by_the_repetition_penalty() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = MlxRuntime::initialize(
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the sampler test memory limits should be valid"),
+    )
+    .expect("the direct MLX runtime should initialize");
+    let candidate_logits = [-1.5_f32, 0.25, 2.0, -0.5, 0.0];
+    let logit_array = runtime
+        .array_from_f32(&candidate_logits, &[1, 1, 5])
+        .expect("the candidate logits should be valid");
+    let repetition_penalty = 1.2_f32;
+
+    // Seen tokens 1 (positive logit) and 3 (negative logit) exercise both
+    // transform branches; unseen tokens 0, 2, and 4 must stay exact.
+    let penalized_logits = astronomical_model_serving::qwen3_5_apply_repetition_penalty(
+        &runtime,
+        &logit_array,
+        &[1, 3],
+        1_200,
+    )
+    .expect("the penalty should build a valid MLX graph")
+    .expect("an active penalty with a non-empty history must transform the logits");
+    let penalized_logit_values = penalized_logits
+        .to_vec_f32()
+        .expect("the penalized logits should evaluate as float32");
+
+    let expected_penalized_logits = [
+        candidate_logits[0],
+        candidate_logits[1] / repetition_penalty,
+        candidate_logits[2],
+        candidate_logits[3] * repetition_penalty,
+        candidate_logits[4],
+    ];
+    for (penalized_logit, expected_penalized_logit) in penalized_logit_values
+        .iter()
+        .zip(expected_penalized_logits.iter())
+    {
+        assert!(
+            (penalized_logit - expected_penalized_logit).abs() < 1e-6,
+            "penalized logit {penalized_logit} must equal {expected_penalized_logit}"
+        );
+    }
+}

@@ -244,6 +244,14 @@
           "description": "Nucleus-sampling probability used only when a request omits top_p.",
           "x-astronomical-apply-mode": "next-request"
         },
+        "repetition_penalty": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2,
+          "multipleOf": 0.001,
+          "description": "Multiplicative repetition penalty applied to the logits of tokens already present in the request context, used only when a request omits a penalty. 1 disables the penalty.",
+          "x-astronomical-apply-mode": "next-request"
+        },
         "maximum_output_tokens": {
           "type": "integer",
           "minimum": 1,
