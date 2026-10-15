@@ -4,37 +4,37 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.70</title>
-            <pubDate>Wed, 14 Oct 2026 19:17:00 -0400</pubDate>
-            <sparkle:version>1309</sparkle:version>
-            <sparkle:shortVersionString>0.2.70</sparkle:shortVersionString>
+            <title>0.2.71</title>
+            <pubDate>Thu, 15 Oct 2026 11:18:35 -0400</pubDate>
+            <sparkle:version>1345</sparkle:version>
+            <sparkle:shortVersionString>0.2.71</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.70
+            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.71
 
 ## Fixed
 
-- Pinned the IPC frame item type for tokio-util 0.7.20 (#1192), preventing frame handling issues when the dependency resolves to 0.7.20.
-- Attributed the retained live prompt prefix to the context owner in the finalized split (#1236), so prompt-cache accounting and eviction decisions reflect the true owner.
+- Paged prefill no longer stalls at zero progress on large sparse models. Expert-layer seating now respects the composed memory budget, capacity recovery releases whole expert tables in a single cycle, and every prompt-processing attempt is logged. A workload that previously stalled silently for 91 seconds now completes prefill in about 7 seconds.
+- The effective memory ceiling is now proven against the operating system's graphics-memory wired policy at worker startup. Under the default policy the ceiling is composed conservatively, the machine verifies it by wiring it, and any clamp is logged and reported. Decode throughput no longer collapses when a configured ceiling exceeds what the machine can actually wire.
+- Image attachments advertised as WebP now decode through the WebP path instead of failing.
 
-## Internal engineering
+## Added
 
-- Migrated CI automation from shell scripts into the Rust `xtask` workspace crate.
-- Consolidated the acceptance tier under `tests/acceptance` and moved unit tests beside their source across all crates.
-- Retired the legacy test-classification vocabulary from CI, scripts, and documentation.
-- Added a credential-resolving signed-release front door for release preparation.
+- `repetition_penalty` joins the per-model generation defaults. Models can ship their tested default, and an explicit request value still takes precedence.
 
 ## Compatibility
 
-- macOS 14.0 or later, Apple silicon (arm64).
-- No configuration schema changes; existing state and settings are preserved on upgrade.
+- Configuration, prompt caches, and the local API remain compatible with 0.2.70. No migration is required, and existing user state is preserved.
+- Effective memory ceilings can be lower than in 0.2.70 when the operating system cannot support the previously composed ceiling; the startup log states the verified value.
 
-This release is distributed as a signed and notarized DMG. The update arrives through the public GitHub release and the signed Sparkle update feed.
+## Distribution
+
+- The app is Developer ID signed, notarized by Apple, and stapled. The DMG and the Sparkle update feed are signed, and the published bytes are digest-verified against the release manifest before the feed activates.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.70/Astronomical-0.2.70-macOS-arm64.dmg" length="19017743" type="application/octet-stream" sparkle:edSignature="X/QvgO1+p+0qvtBZVWHXcDYOzXw5NsyweDYoFxhcuVmafgL8h/d1v9UBLH12eYmenP7RGc0CBqb1OsRyRdw6CQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.71/Astronomical-0.2.71-macOS-arm64.dmg" length="19151509" type="application/octet-stream" sparkle:edSignature="xcCrYtsRFcBeI3sxQEZiRXRHBFOEzJmNh+k1ZZTtxGyyMrMA+AR6hX70QyXazDk2frjAicRatcxXq8q6QA7/Dw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: n6csw8KG98sJ4EKnJkDhEDS5U+wG2fJY6QRicahoI1WbXryGKQ8EMuHcH1NT27WXUMx5eHkJZ/f7KKg09owXCQ==
-length: 2273
+edSignature: W07tU/Qd2g0omNyOfwKrtaYzuDFZQoHVKwZM1aBYenm2IKoaUNN/gbQtzwxlcn5WUoV0CbXAhLK62edMr9OxCg==
+length: 2811
 -->
