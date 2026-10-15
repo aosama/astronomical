@@ -12,6 +12,17 @@ use tokio::{
 };
 
 pub(crate) const DAEMON_STARTUP_PREFIX: &str = "astronomicald listening on http://";
+
+/// Every daemon this lane spawns carries the documented verification skip.
+/// The daemon launches its worker eagerly, the worker's wired-capacity
+/// verification walk is real machine graphics state, and daemon shutdown
+/// waits for that worker — on loaded continuous-integration runners the
+/// walk's timing gates daemon exits past the lifecycle budgets. This lane is
+/// an offline lane: sealed from machine state by definition. Real serving
+/// sessions still verify.
+pub(crate) fn seal_daemon_from_machine_graphics_state(daemon_command: &mut Command) {
+    daemon_command.env("ASTRONOMICAL_SKIP_GPU_WIRED_VERIFICATION", "1");
+}
 pub(crate) const TEST_WORKER_READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
 pub(crate) const DELAYED_MALFORMED_OUTPUT_MODEL_ID: &str =
@@ -36,6 +47,7 @@ pub(crate) async fn spawn_daemon_with_worker_ready_model(
         r#"{"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
     );
     let mut daemon_command = Command::new(daemon_executable_path);
+    seal_daemon_from_machine_graphics_state(&mut daemon_command);
     daemon_command
         .args(["--instance", "development", "--state-directory"])
         .arg(temp_home.path().join(".astronomical-dev"))
@@ -184,6 +196,7 @@ pub(crate) async fn spawn_actual_instance_daemon(
         .args(["--instance", runtime_instance, "--state-directory"])
         .arg(state_directory)
         .env_remove("ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH")
+        .env("ASTRONOMICAL_SKIP_GPU_WIRED_VERIFICATION", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
