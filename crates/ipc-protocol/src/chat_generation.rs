@@ -134,6 +134,11 @@ pub struct ChatGenerationSettings {
     pub temperature_thousandths: Option<u16>,
     /// Optional nucleus-sampling threshold in thousandths.
     pub top_p_thousandths: Option<u16>,
+    /// Optional repetition penalty in thousandths. 1,000 (1.0) is the neutral
+    /// identity; the daemon resolves the config-versus-artifact default before
+    /// the worker ever sees the request.
+    #[serde(default)]
+    pub repetition_penalty_thousandths: Option<u16>,
     /// Optional deterministic sampler seed.
     pub seed: Option<u64>,
     /// Maximum tokens the model may spend inside the thinking block before

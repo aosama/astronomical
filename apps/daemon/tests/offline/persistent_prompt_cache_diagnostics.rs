@@ -106,6 +106,7 @@ fn cache_diagnostics_command() -> ChatGenerationCommand {
             max_output_tokens: 16,
             temperature_thousandths: None,
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: None,
         },

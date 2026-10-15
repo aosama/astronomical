@@ -484,3 +484,85 @@ pub(crate) fn add_token_logit_bias(
         .map_err(sampling_runtime_error)?;
     runtime.add(logits, &bias).map_err(sampling_runtime_error)
 }
+
+/// Applies the repetition penalty to one raw logits row before temperature,
+/// top-k, and top-p, matching the HF reference processor ordering.
+///
+/// Every token id in `penalized_token_ids` (sorted, unique) has its logit
+/// divided by the penalty when positive and multiplied by it when negative.
+/// A neutral penalty of 1,000 thousandths or an empty history returns `None`
+/// without issuing any GPU dispatch, so models without a penalty keep their
+/// exact sampling graph and seeded determinism.
+pub fn apply_repetition_penalty(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    penalized_token_ids: &[u32],
+    repetition_penalty_thousandths: u16,
+) -> Result<Option<MlxArray>, InferenceEngineError> {
+    if repetition_penalty_thousandths == 1_000 || penalized_token_ids.is_empty() {
+        return Ok(None);
+    }
+    if repetition_penalty_thousandths < 1_000 {
+        return Err(sampling_failure(
+            "repetition penalty below 1.0 would reward repetition instead of dampening it",
+        ));
+    }
+    if repetition_penalty_thousandths > 2_000 {
+        return Err(sampling_failure(
+            "repetition penalty above 2.0 exceeds the validated configuration range",
+        ));
+    }
+    let seen_token_count = i32::try_from(penalized_token_ids.len())
+        .map_err(|_| sampling_failure("penalized token history exceeds the MLX shape range"))?;
+    let mut seen_indices_i32 = Vec::with_capacity(penalized_token_ids.len());
+    for token_id in penalized_token_ids {
+        let seen_index_i32 = i32::try_from(*token_id)
+            .map_err(|_| sampling_failure("penalized token id exceeds the MLX index range"))?;
+        seen_indices_i32.push(seen_index_i32);
+    }
+    let seen_indices = runtime
+        .array_from_i32(&seen_indices_i32, &[1, 1, seen_token_count])
+        .map_err(sampling_runtime_error)?;
+    let gathered_logits = runtime
+        .take_along_axis(logits, &seen_indices, -1)
+        .map_err(sampling_runtime_error)?;
+
+    // One scale per seen token: positive logits scale by 1/penalty, negative
+    // ones by the penalty itself, so a single multiply applies the transform.
+    let repetition_penalty = f32::from(repetition_penalty_thousandths) / 1_000.0;
+    let zero_scalar = runtime
+        .array_from_f32(&[0.0], &[])
+        .map_err(sampling_runtime_error)?;
+    let zero_broadcast = runtime
+        .broadcast_to(&zero_scalar, &[1, 1, seen_token_count])
+        .map_err(sampling_runtime_error)?;
+    let positive_logit_mask = runtime
+        .greater(&gathered_logits, &zero_broadcast)
+        .map_err(sampling_runtime_error)?;
+    let inverse_penalty_scalar = runtime
+        .array_from_f32(&[1.0 / repetition_penalty], &[])
+        .map_err(sampling_runtime_error)?;
+    let inverse_penalty_broadcast = runtime
+        .broadcast_to(&inverse_penalty_scalar, &[1, 1, seen_token_count])
+        .map_err(sampling_runtime_error)?;
+    let penalty_scalar = runtime
+        .array_from_f32(&[repetition_penalty], &[])
+        .map_err(sampling_runtime_error)?;
+    let penalty_broadcast = runtime
+        .broadcast_to(&penalty_scalar, &[1, 1, seen_token_count])
+        .map_err(sampling_runtime_error)?;
+    let seen_logit_scale = runtime
+        .where_select(
+            &positive_logit_mask,
+            &inverse_penalty_broadcast,
+            &penalty_broadcast,
+        )
+        .map_err(sampling_runtime_error)?;
+    let transformed_seen_logits = runtime
+        .multiply(&gathered_logits, &seen_logit_scale)
+        .map_err(sampling_runtime_error)?;
+    runtime
+        .put_along_axis(logits, &seen_indices, &transformed_seen_logits, -1)
+        .map_err(sampling_runtime_error)
+        .map(Some)
+}

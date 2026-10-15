@@ -228,6 +228,7 @@ fn generation_defaults(
         configured_maximum_output_tokens: Some(maximum_output_tokens),
         temperature_thousandths: Some(temperature_thousandths),
         top_p_thousandths: Some(top_p_thousandths),
+        repetition_penalty_thousandths: None,
     }
 }
 

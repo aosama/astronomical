@@ -12,6 +12,7 @@ pub struct RuntimeModelGenerationDefaults {
     pub configured_maximum_output_tokens: Option<u16>,
     pub temperature_thousandths: Option<u16>,
     pub top_p_thousandths: Option<u16>,
+    pub repetition_penalty_thousandths: Option<u16>,
 }
 
 /// One canonical requestable model's directory and fully resolved execution policy.
@@ -39,6 +40,9 @@ pub(crate) fn runtime_model_generation_defaults(
             .map(sampling_parameter_thousandths),
         top_p_thousandths: resolved_model_config
             .top_p()
+            .map(sampling_parameter_thousandths),
+        repetition_penalty_thousandths: resolved_model_config
+            .repetition_penalty()
             .map(sampling_parameter_thousandths),
     }
 }

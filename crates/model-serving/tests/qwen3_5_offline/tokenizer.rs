@@ -115,6 +115,7 @@ fn should_prepare_a_zero_budget_chat_to_generate_outside_the_thinking_block() {
             max_output_tokens: 8,
             temperature_thousandths: Some(1_000),
             top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: Some(0),
         },

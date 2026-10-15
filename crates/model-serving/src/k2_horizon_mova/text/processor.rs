@@ -19,6 +19,7 @@ use super::{
 
 const DEFAULT_TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 const DEFAULT_TOP_P_THOUSANDTHS: u16 = 950;
+const DEFAULT_REPETITION_PENALTY_THOUSANDTHS: u16 = 1_000;
 
 /// Family processor used by EngineBackedWorker.
 #[derive(Clone, Debug)]
@@ -139,6 +140,12 @@ impl ModelGenerationProcessor for K2HorizonMoVAGenerationProcessor {
                 thinking_budget,
                 self.tokenizer.think_close_token_ids().to_vec(),
                 self.tokenizer.natural_reasoning_end_token_ids().to_vec(),
+            )
+            .with_repetition_penalty_thousandths(
+                chat_generation_command
+                    .settings
+                    .repetition_penalty_thousandths
+                    .unwrap_or(DEFAULT_REPETITION_PENALTY_THOUSANDTHS),
             ),
             K2HorizonMoVARequestOutput::new_with_declared_tool_names(
                 &self.tokenizer,

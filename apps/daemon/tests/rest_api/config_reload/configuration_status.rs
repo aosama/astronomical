@@ -32,6 +32,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
                 configured_maximum_output_tokens: Some(1_024),
                 temperature_thousandths: Some(700),
                 top_p_thousandths: Some(900),
+                repetition_penalty_thousandths: None,
             },
             configured_maximum_context_tokens: Some(16_384),
             default_maximum_context_tokens: 32_768,

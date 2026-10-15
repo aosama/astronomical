@@ -542,6 +542,7 @@ fn chat_command(model: &str, request_id: u64) -> ChatGenerationCommand {
             max_output_tokens: 1,
             temperature_thousandths: None,
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: None,
         },
