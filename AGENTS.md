@@ -1,7 +1,5 @@
 # Instructions for the Astronomical Project
 
-- Keep <repo-root>/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs. <repo-root>/docs/performance-optimizations-lessons.md holds only durable engineering lessons that enhance performance for LLMs, VLMs, and MLX APIs (never raw metrics): matmuls, MLX kernel differences, MLX-core caching, C++ gotchas, overly precise data types, and MoE expert sorting.
-
 - Keep full workspace verification and formatting verification only before committing and pushing, when the user asks you to commit. This codebase is slow to format-check, and full workspace test runs take a long time.
 
 - Run cargo fmt or similar commands only before committing; that is, when the user asks you to commit, run cargo fmt.
@@ -43,14 +41,22 @@
 
 - The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
 
-## Instructions for Performance Throughput Tests
+## Performance Related
+
+### Performance Lessons
+
+- Keep <repo-root>/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs. 
+
+- <repo-root>/docs/performance-optimizations-lessons.md holds only durable engineering lessons that enhance performance for LLMs, VLMs, and MLX APIs (never raw metrics): matmuls, MLX kernel differences, MLX-core caching, C++ gotchas, overly precise data types, and MoE expert sorting.
+
+### Instructions for Performance Throughput Tests
 
 - A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable.
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
 
-## Instructions for Performance Profiling and Attribution
+### Instructions for Performance Profiling and Attribution
 
 - All code must follow the unified performance-logging pattern: per-operation start/end timestamps, switchable on/off through a config parameter. Without attribution, diagnosing a slowdown is guesswork.
 - Highest priority: the request-serving critical path — Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging, and token generation.
