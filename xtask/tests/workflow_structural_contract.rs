@@ -290,6 +290,77 @@ offline_test!(every_timed_step_pairs_its_begin_and_end_calls, {
     );
 });
 
+// The macOS toolchain pin contract: one workflow-level Xcode version keeps
+// the xcodebuild/xcrun/swift identity inputs stable across runner-image
+// rollouts, so the native-build and SwiftPM caches stay valid until the pin
+// is bumped deliberately. Each macOS job resolves the version to an
+// installed Xcode and exports DEVELOPER_DIR for every later step; the
+// resolution step makes a stale pin fail the job — printing the image's
+// installed Xcode inventory — instead of silently falling back to the
+// image's moving default.
+offline_test!(macos_toolchain_identity_is_pinned_to_a_versioned_xcode, {
+    let workflow = workflow_contract();
+    let workflow_env = workflow
+        .get("env")
+        .expect("workflow-level env block is missing");
+    let pinned_xcode_version = required_text(
+        workflow_env,
+        "ASTRONOMICAL_PINNED_XCODE_VERSION",
+        "workflow env",
+    );
+    assert!(
+        !pinned_xcode_version.is_empty()
+            && pinned_xcode_version
+                .chars()
+                .all(|character| character.is_ascii_digit() || character == '.'),
+        "the Xcode pin must be a bare version like 26.6, got {pinned_xcode_version}"
+    );
+    assert!(
+        workflow_env.get("DEVELOPER_DIR").is_none(),
+        "DEVELOPER_DIR must be resolved per job from the version pin, not frozen as a workflow path"
+    );
+    for job_id in ["rust-core", "swift-node"] {
+        let job_steps = steps_of(required_job(&workflow, job_id), job_id);
+        let assert_step = find_step_by_name(&job_steps, "Assert pinned Xcode toolchain");
+        let assert_text = run_text_of(assert_step, "pinned-xcode");
+        assert!(
+            assert_text.contains(r#"$ASTRONOMICAL_PINNED_XCODE_VERSION"#),
+            "job {job_id} does not resolve the workflow-level Xcode version pin"
+        );
+        assert!(
+            assert_text.contains(r#""/Applications/Xcode_${pinned_xcode_version}.app""#),
+            "job {job_id} does not probe the readme primary Xcode path"
+        );
+        assert!(
+            assert_text.contains("/Contents/Developer/usr/bin/xcodebuild"),
+            "job {job_id} does not probe the canonical xcodebuild path inside the bundle"
+        );
+        assert!(
+            assert_text
+                .contains(r#"resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer""#),
+            "job {job_id} does not export a developer directory, not a bundle path"
+        );
+        assert!(
+            assert_text.contains(
+                r#"printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV""#
+            ),
+            "job {job_id} does not export the resolved developer directory"
+        );
+        assert!(
+            assert_text.contains("exit 1"),
+            "job {job_id} does not fail loudly when the pinned Xcode is missing"
+        );
+        assert!(
+            assert_text.contains(r#"ls -d /Applications/Xcode*.app"#),
+            "job {job_id} does not print the installed Xcode inventory on failure"
+        );
+        assert!(
+            assert_text.contains("xcodebuild -version"),
+            "job {job_id} does not log the pinned toolchain version"
+        );
+    }
+});
+
 offline_test!(macos_jobs_publish_the_timing_summary_even_when_failing, {
     let workflow = workflow_contract();
     for job_id in ["rust-core", "swift-node"] {
