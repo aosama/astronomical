@@ -32,7 +32,7 @@ astronomical_test_harness::offline_test!(
             astronomical_config
                 .maximum_mlx_memory_bytes()
                 .expect("memory ceiling should resolve"),
-            Some(32_000_000_000)
+            Some(34_359_738_368)
         );
     }
 );

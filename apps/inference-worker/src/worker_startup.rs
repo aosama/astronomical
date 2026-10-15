@@ -3,37 +3,51 @@ use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
-use astronomical_model_serving::{
-    effective_mlx_serving_memory_ceiling_bytes, recommended_gpu_serving_memory_ceiling_bytes,
-};
+use astronomical_mlx_c_rust::set_wired_limit;
+use astronomical_model_serving::effective_mlx_memory_ceiling_bytes;
+use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::model_family_factory::{InferenceWorker, ModelFamilyFactory};
-use crate::worker_startup_gpu_memory::sample_gpu_memory_limits;
-use crate::worker_startup_gpu_verification::{
-    SKIP_VERIFICATION_ENVIRONMENT_VARIABLE, WiredCapacityVerification,
-    verify_effective_gpu_wired_capacity,
-};
 
 const PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME: &str = "performance-attribution.jsonl";
+const WIRED_CLAIM_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_MLX_WIRED_CLAIM";
 
 pub use crate::worker_startup_error::{WorkerProcessError, WorkerStartupError};
-pub use crate::worker_startup_gpu_memory::{
-    GpuWiredMemoryLimitSetting, derive_mlx_memory_limits_from_gpu_wired_limit,
-    parse_iogpu_wired_limit_setting, sample_iogpu_wired_limit_bytes,
-};
+pub use crate::worker_startup_gpu_memory::machine_mlx_memory_ceiling_bytes;
 pub use crate::worker_startup_logging::initialize_tracing;
 
-/// Rejects a zero serving envelope before it reaches the process-wide MLX memory limit.
-pub fn derive_serving_mlx_memory_ceiling_bytes(
-    recommended_gpu_working_set_bytes: u64,
-) -> Result<u64, WorkerStartupError> {
-    let serving_mlx_memory_ceiling_bytes =
-        recommended_gpu_serving_memory_ceiling_bytes(recommended_gpu_working_set_bytes);
-    if serving_mlx_memory_ceiling_bytes == 0 {
-        return Err(WorkerStartupError::RecommendedGpuWorkingSetTooSmall);
+/// Experimental, opt-in through `ASTRONOMICAL_MLX_WIRED_CLAIM=1`: claims
+/// Metal wired residency up to the system recommendation — the mlx-lm
+/// large-model pattern — so that under memory pressure the operating system
+/// pages other processes instead of the loaded model's weights. The API
+/// rejects claims above the recommendation and needs no elevation. The
+/// claim lives for the worker process lifetime (the kernel releases it on
+/// exit); if the experiment proves out, the product shape is the narrower
+/// generation-window pattern mlx-lm uses.
+fn claim_wired_residency_when_requested() {
+    if !std::env::var_os(WIRED_CLAIM_ENVIRONMENT_VARIABLE)
+        .is_some_and(|claim_value| claim_value == "1")
+    {
+        return;
     }
-    Ok(serving_mlx_memory_ceiling_bytes)
+    match maximum_recommended_gpu_working_set_size_bytes() {
+        Ok(recommended_working_set_bytes) => match set_wired_limit(recommended_working_set_bytes) {
+            Ok(previous_wired_limit_bytes) => tracing::info!(
+                claimed_wired_limit_bytes = recommended_working_set_bytes,
+                previous_wired_limit_bytes,
+                "claimed Metal wired residency for the worker lifetime"
+            ),
+            Err(claim_error) => tracing::warn!(
+                error = %claim_error,
+                "wired-residency claim failed; serving continues unprotected"
+            ),
+        },
+        Err(recommendation_error) => tracing::warn!(
+            error = %recommendation_error,
+            "could not read the recommended working set; wired claim skipped"
+        ),
+    }
 }
 
 /// Starts an idle worker that loads a supported model only after an explicit
@@ -97,34 +111,20 @@ where
             .global_prompt_cache_maximum_size_bytes,
         loaded_model: None,
     };
-    let sampled_gpu_memory_limits = sample_gpu_memory_limits()
+    let machine_mlx_memory_ceiling_bytes = machine_mlx_memory_ceiling_bytes()
         .await
         .map_err(WorkerProcessError::Startup)?;
-    let machine_mlx_memory_ceiling_bytes =
-        sampled_gpu_memory_limits.machine_mlx_memory_ceiling_bytes;
     let machine_mlx_memory_ceiling_bytes_u64 = u64::try_from(machine_mlx_memory_ceiling_bytes)
         .map_err(|_| {
-            WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+            WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
                 description: "machine MLX memory ceiling exceeds the u64 range",
             })
         })?;
-    let recommended_gpu_working_set_bytes = u64::try_from(
-        sampled_gpu_memory_limits.recommended_gpu_working_set_bytes,
-    )
-    .map_err(|_| {
-        WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
-            description: "recommended GPU working set exceeds the u64 range",
-        })
-    })?;
-    let serving_mlx_memory_ceiling_bytes =
-        derive_serving_mlx_memory_ceiling_bytes(recommended_gpu_working_set_bytes)
-            .map_err(WorkerProcessError::Startup)?;
     let configured_maximum_mlx_memory_bytes =
         worker_startup_configuration.configured_maximum_mlx_memory_bytes;
-    let effective_mlx_memory_ceiling_bytes_u64 = effective_mlx_serving_memory_ceiling_bytes(
+    let effective_mlx_memory_ceiling_bytes_u64 = effective_mlx_memory_ceiling_bytes(
         configured_maximum_mlx_memory_bytes,
         machine_mlx_memory_ceiling_bytes_u64,
-        serving_mlx_memory_ceiling_bytes,
     );
     if let Some(configured_maximum_mlx_memory_bytes) = configured_maximum_mlx_memory_bytes
         && configured_maximum_mlx_memory_bytes > effective_mlx_memory_ceiling_bytes_u64
@@ -132,72 +132,30 @@ where
         tracing::warn!(
             configured_maximum_mlx_memory_bytes,
             machine_mlx_memory_ceiling_bytes,
-            serving_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
-            "configured MLX memory ceiling exceeds a machine or serving bound and was clamped to the effective ceiling"
+            "configured MLX memory ceiling exceeds the machine bound and was clamped to the effective ceiling"
         );
     }
     let effective_mlx_memory_ceiling_bytes =
         usize::try_from(effective_mlx_memory_ceiling_bytes_u64).map_err(|_| {
-            WorkerProcessError::Startup(WorkerStartupError::InvalidGpuWiredMemoryLimit {
+            WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
                 description: "effective MLX memory ceiling exceeds the platform integer range",
             })
         })?;
-    // The composed ceiling is an assumption until the machine proves it: under
-    // the default kernel wired policy the enforced boundary is invisible to
-    // every query, so the worker wires the promised ceiling once and clamps to
-    // the last healthy step when the operating system answers with a crawl.
-    // Acceptance cells that deliberately serve beyond the boundary skip this
-    // through an explicit environment variable.
-    let mut effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
-    let skip_wired_capacity_verification = std::env::var_os(SKIP_VERIFICATION_ENVIRONMENT_VARIABLE)
-        .is_some_and(|skip_value| skip_value == "1");
-    if skip_wired_capacity_verification {
-        tracing::warn!(
-            effective_mlx_memory_ceiling_bytes,
-            environment_variable = SKIP_VERIFICATION_ENVIRONMENT_VARIABLE,
-            "skipping GPU wired-capacity verification for deliberate over-boundary testing"
-        );
-    } else {
-        match verify_effective_gpu_wired_capacity(effective_mlx_memory_ceiling_bytes)
-            .await
-            .map_err(WorkerProcessError::Startup)?
-        {
-            WiredCapacityVerification::Verified { wired_bytes } => {
-                tracing::info!(
-                    effective_mlx_memory_ceiling_bytes,
-                    wired_bytes,
-                    "GPU wired-capacity verification confirmed the effective ceiling"
-                );
-            }
-            WiredCapacityVerification::ClampedToLastHealthyStep { wired_bytes } => {
-                tracing::warn!(
-                    requested_effective_mlx_memory_ceiling_bytes =
-                        effective_mlx_memory_ceiling_bytes,
-                    verified_effective_mlx_memory_ceiling_bytes = wired_bytes,
-                    "GPU wired-capacity verification clamped the effective ceiling to the last healthy wiring step"
-                );
-                effective_mlx_memory_ceiling_bytes = wired_bytes;
-            }
-        }
-    }
+    claim_wired_residency_when_requested();
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
         machine_mlx_memory_ceiling_bytes,
-        recommended_gpu_working_set_bytes,
-        serving_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
         persistent_prompt_cache_enabled,
         configuration_generation = %worker_startup_configuration.configuration_generation,
         "starting idle inference worker"
     );
-    let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
-        derive_mlx_memory_limits_from_gpu_wired_limit(effective_mlx_memory_ceiling_bytes);
     let model_factory = ModelFamilyFactory::new(
-        active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
+        effective_mlx_memory_ceiling_bytes,
+        effective_mlx_memory_ceiling_bytes,
         prompt_cache_config,
         performance_attribution_enabled,
         performance_attribution_log_path,
@@ -209,7 +167,6 @@ where
             machine_mlx_memory_ceiling_bytes_u64,
             effective_mlx_memory_ceiling_bytes_u64,
         )
-        .with_serving_mlx_memory_ceiling(serving_mlx_memory_ceiling_bytes)
         .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
     engine_worker
         .run_with_protocol(command_reader, event_writer)

@@ -4,10 +4,11 @@ use thiserror::Error;
 
 /// Memory controls applied inside one MLX worker process.
 ///
-/// These values do not alter macOS's privileged `iogpu.wired_limit_mb` sysctl.
-/// The active-memory value is reused as the process residency-set limit because
-/// worker startup already resolved it against the machine's system-wide ceiling.
-/// The allocator-cache value independently controls reclaimable allocation reuse.
+/// These values change no kernel setting; both are process-local MLX
+/// guidance. The active-memory value is reused as the process residency-set
+/// limit because worker startup already resolved it against the machine
+/// ceiling. The allocator-cache value independently controls reclaimable
+/// allocation reuse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxMemoryLimits {
     pub(crate) active_memory_limit_bytes: usize,

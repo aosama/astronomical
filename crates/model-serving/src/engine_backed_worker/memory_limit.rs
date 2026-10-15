@@ -9,7 +9,7 @@ use super::support;
 use super::support::{ModelFactory, WorkerRuntimeError};
 use crate::{
     ImageGenerationEngine, InferenceEngine, InferenceEngineError, ModelGenerationProcessor,
-    effective_mlx_serving_memory_ceiling_bytes,
+    effective_mlx_memory_ceiling_bytes,
 };
 
 use super::{EngineBackedWorker, LoadedRuntime};
@@ -43,20 +43,10 @@ where
                 )
                 .await;
         }
-        let effective_requested_mlx_memory_ceiling_bytes =
-            effective_mlx_serving_memory_ceiling_bytes(
-                Some(requested_mlx_memory_ceiling_bytes),
-                self.machine_mlx_memory_ceiling_bytes,
-                self.serving_mlx_memory_ceiling_bytes,
-            );
-        if effective_requested_mlx_memory_ceiling_bytes < requested_mlx_memory_ceiling_bytes {
-            tracing::warn!(
-                configured_maximum_mlx_memory_bytes = requested_mlx_memory_ceiling_bytes,
-                serving_mlx_memory_ceiling_bytes = self.serving_mlx_memory_ceiling_bytes,
-                effective_mlx_memory_ceiling_bytes = effective_requested_mlx_memory_ceiling_bytes,
-                "configured MLX memory ceiling exceeds the serving envelope and was clamped"
-            );
-        }
+        let effective_requested_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes(
+            Some(requested_mlx_memory_ceiling_bytes),
+            self.machine_mlx_memory_ceiling_bytes,
+        );
         let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
             let Some(model_factory) = self.model_factory.as_mut() else {
                 return self

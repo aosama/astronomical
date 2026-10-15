@@ -22,7 +22,7 @@
     "prompt_cache": {
       "capacity_bytes": {
         "configured": null,
-        "default": 50000000000,
+        "default": 53687091200,
         "effective": 0
       },
       "enabled": {

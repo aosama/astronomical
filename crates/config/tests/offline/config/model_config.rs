@@ -47,7 +47,7 @@ astronomical_test_harness::offline_test!(
             astronomical_config
                 .maximum_mlx_memory_bytes()
                 .expect("memory ceiling should resolve"),
-            Some(16_000_000_000)
+            Some(17_179_869_184)
         );
         assert!(!astronomical_config.persistent_prompt_cache_enabled());
         assert_eq!(
@@ -55,7 +55,7 @@ astronomical_test_harness::offline_test!(
                 .prompt_cache()
                 .expect("prompt cache should resolve")
                 .global_prompt_cache_maximum_size_bytes(),
-            20_000_000_000
+            21_474_836_480
         );
         assert!(astronomical_config.performance_attribution_enabled());
         assert_eq!(

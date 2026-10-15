@@ -41,14 +41,14 @@ offline_denied_test!(
         let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
             .expect("positive ceiling should construct");
 
-        assert_eq!(BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, 1_000_000_000);
+        assert_eq!(BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, 1_073_741_824);
         assert_eq!(
             mlx_ram_budget.context_window_reserve_bytes(0),
-            1_000_000_000
+            1_073_741_824
         );
         assert_eq!(
             mlx_ram_budget.context_window_reserve_bytes(4_096),
-            1_000_000_000
+            1_073_741_824
         );
         assert!(!mlx_ram_budget.has_context_window_measurement());
         assert_eq!(
@@ -74,7 +74,7 @@ offline_denied_test!(
         //   - complete_layer_stream_slot
         let expected_activation_headroom_bytes =
             unmeasured_prefill_activation_headroom_bytes(fable_class_geometry());
-        assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
+        assert_eq!(planned_budget.context_window_reserve_bytes, 1_073_741_824);
         assert_eq!(
             planned_budget.activation_headroom_bytes,
             expected_activation_headroom_bytes
@@ -84,7 +84,7 @@ offline_denied_test!(
             planned_budget.retained_expert_budget_bytes,
             39_000_000_000
                 - 2_360_000_000
-                - 1_000_000_000
+                - 1_073_741_824
                 - expected_activation_headroom_bytes
                 - 905_969_664
         );
@@ -153,7 +153,7 @@ offline_denied_test!(
 
         let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 7_000, 7_000, 0);
 
-        assert_eq!(planned_budget.context_window_reserve_bytes, 1_000_000_000);
+        assert_eq!(planned_budget.context_window_reserve_bytes, 1_073_741_824);
         assert_eq!(
             planned_budget.activation_headroom_bytes,
             unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(2_000_000_000)
@@ -276,7 +276,7 @@ offline_denied_test!(
         let reserved_for_measured_bucket = mlx_ram_budget.context_window_reserve_bytes(10_000);
         let reserved_for_unmeasured_suffix = mlx_ram_budget.context_window_reserve_bytes(26_000);
 
-        assert_eq!(reserved_for_measured_bucket, 1_000_000_000);
+        assert_eq!(reserved_for_measured_bucket, 1_073_741_824);
         let highest_measured_token_count = (10_000 / 1_024 + 1) * 1_024;
         assert_eq!(
             reserved_for_unmeasured_suffix,

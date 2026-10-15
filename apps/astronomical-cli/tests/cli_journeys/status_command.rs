@@ -129,7 +129,7 @@ async fn should_report_an_unavailable_worker() {
 }
 
 #[tokio::test]
-async fn should_report_an_active_download_with_decimal_gigabytes() {
+async fn should_report_an_active_download_with_marketed_gigabytes() {
     let test_directory = test_support::fresh_test_directory("status", "downloading");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
@@ -157,8 +157,9 @@ async fn should_report_an_active_download_with_decimal_gigabytes() {
     status_outcome.expect("the status journey should complete against the stub daemon");
     let rendered_stdout = String::from_utf8_lossy(&stdout);
     assert!(
-        rendered_stdout.contains("download: test/downloading-model — downloading 0.5 GB / 2 GB"),
-        "an active job should render its state and decimal GB: {rendered_stdout:?}"
+        rendered_stdout
+            .contains("download: test/downloading-model — downloading 0.47 GB / 1.86 GB"),
+        "an active job should render its state and marketed GB: {rendered_stdout:?}"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);

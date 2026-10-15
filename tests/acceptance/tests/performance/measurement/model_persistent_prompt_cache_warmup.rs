@@ -51,9 +51,9 @@ async fn run_persistent_prompt_cache_warmup_e2e(
     persistent_prompt_cache_warmup_case: PersistentPromptCacheWarmupCase,
 ) {
     let benchmark_started_at = Instant::now();
-    let maximum_gpu_wired_memory_bytes = worker_startup::sample_iogpu_wired_limit_bytes()
+    let machine_mlx_memory_ceiling_bytes = worker_startup::machine_mlx_memory_ceiling_bytes()
         .await
-        .expect("the machine GPU wired-memory limit should be available");
+        .expect("the machine MLX memory ceiling should be available");
     let source_document =
         static_source_document(persistent_prompt_cache_warmup_case.source_document);
     let configured_model_directory = configured_model_directory_from_user_config();
@@ -132,7 +132,7 @@ async fn run_persistent_prompt_cache_warmup_e2e(
 
     let metrics_report = benchmark_report(
         &persistent_prompt_cache_warmup_case,
-        maximum_gpu_wired_memory_bytes,
+        machine_mlx_memory_ceiling_bytes,
         saved_persistent_prompt_cache_disk_usage.block_count,
         saved_persistent_prompt_cache_disk_usage.byte_count,
         &cold_worker_pass,
@@ -178,7 +178,7 @@ fn assert_persistent_prompt_cache_warmup(
 
 fn benchmark_report(
     persistent_prompt_cache_warmup_case: &PersistentPromptCacheWarmupCase,
-    maximum_gpu_wired_memory_bytes: usize,
+    machine_mlx_memory_ceiling_bytes: usize,
     saved_persistent_prompt_cache_block_count: usize,
     saved_persistent_prompt_cache_byte_count: u64,
     cold_worker_pass: &WorkerPassMeasurement,
@@ -215,7 +215,7 @@ fn benchmark_report(
         "model": model_id(),
         "benchmark": persistent_prompt_cache_warmup_case.benchmark_name,
         "source_words": persistent_prompt_cache_warmup_case.source_word_count,
-        "gpu_wired_limit_bytes": maximum_gpu_wired_memory_bytes,
+        "machine_mlx_memory_ceiling_bytes": machine_mlx_memory_ceiling_bytes,
         "persistent_prompt_cache": {
             "observed_block_size_tokens": observed_block_token_count,
             "saved_block_count": saved_persistent_prompt_cache_block_count,

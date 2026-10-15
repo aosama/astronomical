@@ -264,8 +264,8 @@ async fn should_download_a_missing_model_before_streaming() {
     );
     let rendered_stderr = String::from_utf8_lossy(&stderr);
     assert!(
-        rendered_stderr.contains("1 GB / 2 GB"),
-        "the live progress should report decimal GB to stderr: {rendered_stderr:?}"
+        rendered_stderr.contains("0.93 GB / 1.86 GB"),
+        "the live progress should report marketed GB to stderr: {rendered_stderr:?}"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);

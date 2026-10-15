@@ -130,7 +130,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             huggingfaceId: "astronomical-test/example-qwen",
             displayName: "First",
             family: "qwen3_5",
-            approximateSize: "1.50 GB",
+            approximateSize: "1.40 GB",
             approximateSizeBytes: 1_500_000_000,
             readyOnThisMac: false,
             destinationDirectory: null,
@@ -152,7 +152,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             huggingfaceId: "astronomical-test/example-k2",
             displayName: "Second",
             family: "k2_horizon_mova",
-            approximateSize: "2.00 GB",
+            approximateSize: "1.86 GB",
             approximateSizeBytes: 2_000_000_000,
             readyOnThisMac: false,
             destinationDirectory: null,
@@ -196,7 +196,7 @@ test("presents progress and only the controls valid for each durable download st
 
     assert.equal(
         vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
-        "Downloading 25% · 7.50 GB of 30.00 GB"
+        "Downloading 25% · 6.98 GB of 27.94 GB"
     );
     assert.deepEqual(
         JSON.parse(JSON.stringify(vm.runInContext(

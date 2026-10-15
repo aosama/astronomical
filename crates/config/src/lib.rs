@@ -66,7 +66,13 @@ pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConf
 use config_document::UserConfigFile;
 
 pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
-const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_000_000_000;
+/// User-facing gigabyte settings use the convention Apple uses to market the
+/// machine: 1 GB = 1,073,741,824 bytes (2³⁰).
+const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_073_741_824;
+/// The default prompt-cache capacity in bytes, derived from the same
+/// marketed-gigabyte conversion the configuration resolution uses.
+pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 =
+    DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB * BYTES_PER_CONFIGURED_GIGABYTE;
 const DEFAULT_RETAINED_LOG_FILES: usize = 7;
 
 /// User-level Astronomical runtime configuration loaded inside one isolated instance.

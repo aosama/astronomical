@@ -513,6 +513,11 @@ main() {
         finish_phase "skipped"
     fi
 
+    if [ "$APPLICATION_CHANNEL" = "development" ] && pgrep -f "astronomicald --instance development" > /dev/null 2>&1; then
+        printf '%s\n' "note: a development daemon from this build is still running on http://127.0.0.1:6733."
+        printf '%s\n' "manage it with: scripts/development/astronomical-dev-instance.sh status|stop|restart"
+    fi
+
     # ── Summary ──────────────────────────────────────────────────────────
 
     script_finish_seconds="$(date +%s)"
