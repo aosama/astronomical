@@ -276,6 +276,7 @@ fn prepared_chat_token_count(
                     top_p_thousandths: Some(top_p_thousandths),
                     seed: None,
                     thinking_budget: Some(THINKING_BUDGET_TOKEN_COUNT),
+                    repetition_penalty_thousandths: None,
                 },
                 structured_generation: None,
             },
