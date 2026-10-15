@@ -37,7 +37,9 @@ pub(crate) const VERIFICATION_MAX_PROBE_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub(crate) const VERIFICATION_STEP_LATENCY_BUDGET: Duration = Duration::from_millis(2_000);
 /// The whole verification must stay bounded even on large ceilings.
 pub(crate) const VERIFICATION_TOTAL_BUDGET: Duration = Duration::from_secs(20);
-/// Skipping is reserved for deliberate over-boundary acceptance testing.
+/// Skipping is reserved for deliberate over-boundary acceptance testing and
+/// for offline tests that spawn the production worker: offline tests are
+/// sealed from machine state by definition, and the walk is machine state.
 pub(crate) const SKIP_VERIFICATION_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_SKIP_GPU_WIRED_VERIFICATION";
 

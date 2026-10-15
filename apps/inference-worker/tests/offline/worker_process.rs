@@ -81,6 +81,13 @@ async fn should_start_the_production_worker_from_an_ipc_startup_configuration() 
     .load()
     .expect("the daemon-side worker configuration should resolve");
     let mut worker_process = Command::new(worker_executable_path)
+        // Offline tests are sealed from machine state by definition, and the
+        // startup wired-capacity verification walks the real GPU — on a loaded
+        // continuous-integration runner its first probe can even exceed the
+        // latency budget and fail startup outright. This test exercises the
+        // IPC startup contract, not graphics-memory probing, so the worker
+        // skips the walk through the documented environment override.
+        .env("ASTRONOMICAL_SKIP_GPU_WIRED_VERIFICATION", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
