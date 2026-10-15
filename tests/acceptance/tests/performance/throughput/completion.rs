@@ -70,6 +70,7 @@ pub(crate) async fn drive_completion(
             max_output_tokens: output_tokens,
             temperature_thousandths: Some(temperature_thousandths),
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: None,
         },

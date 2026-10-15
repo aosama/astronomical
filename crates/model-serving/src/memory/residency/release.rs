@@ -25,6 +25,7 @@ pub const fn should_enact_planned_expert_release(
         }
         ExpertLayerResidencyTarget::PreserveComplete
         | ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        | ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
         | ExpertLayerResidencyTarget::PreservePartial
         | ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
         | ExpertLayerResidencyTarget::StreamOperationLocal => false,

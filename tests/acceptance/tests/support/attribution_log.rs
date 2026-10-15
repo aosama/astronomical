@@ -5,6 +5,10 @@ use std::path::Path;
 
 /// Sums one named counter across every generation attribution report in the
 /// isolated worker home's performance-attribution log.
+// Shared support surface: the binaries that compile this module do not all
+// invoke every reader, so the dead-code lint is suppressed like the rest of
+// the shared acceptance support.
+#[allow(dead_code)]
 pub(crate) fn generation_attribution_counter(
     isolated_worker_home: &Path,
     counter_identifier: &str,
