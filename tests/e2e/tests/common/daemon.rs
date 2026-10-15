@@ -269,9 +269,13 @@ pub(crate) fn write_raw_config(home_directory: &Path, config_json: &str) {
 }
 
 pub(crate) fn write_instance_config(state_directory: &Path) {
+    // The eager startup worker composes a machine-scale ceiling when no
+    // ceiling is configured, and its wired-capacity verification walk gates
+    // daemon shutdown; a small pinned ceiling keeps parallel lifecycle
+    // assertions inside their exit budgets on every machine.
     std::fs::write(
         state_directory.join("config.json"),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"maximum_mlx_memory_gb":2},"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
     )
     .expect("instance config should be written");
 }

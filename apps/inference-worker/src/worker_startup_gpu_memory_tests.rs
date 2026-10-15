@@ -4,7 +4,10 @@ use crate::worker_startup_gpu_memory::{
     GpuWiredMemoryLimitSetting, default_policy_wired_boundary_bytes,
     parse_iogpu_wired_limit_setting,
 };
-use crate::worker_startup_gpu_verification::{VerificationStepVerdict, verification_step_verdict};
+use crate::worker_startup_gpu_verification::{
+    VERIFICATION_MAX_PROBE_BYTES, VERIFICATION_STEP_BYTES, VerificationStepVerdict,
+    next_verification_probe_bytes, verification_step_verdict,
+};
 use std::time::Duration;
 
 offline_denied_test!(should_parse_a_gpu_wired_limit_as_bytes, {
@@ -86,6 +89,42 @@ offline_denied_test!(
             ),
             VerificationStepVerdict::BoundaryHit,
             "the operating-system crawl signature is a step beyond budget"
+        );
+    }
+);
+
+offline_denied_test!(
+    should_grow_verification_probes_geometrically_up_to_the_cap,
+    {
+        let half_gigabyte = 512 * 1024 * 1024;
+        let one_gigabyte = 1_024 * 1024 * 1024;
+        let two_gigabytes = 2 * one_gigabyte;
+        let thirty_gigabytes = 30 * 1_000_000_000;
+
+        assert_eq!(
+            next_verification_probe_bytes(VERIFICATION_STEP_BYTES, thirty_gigabytes),
+            one_gigabyte,
+            "the first probe doubles the step granularity"
+        );
+        assert_eq!(
+            next_verification_probe_bytes(one_gigabyte, thirty_gigabytes),
+            two_gigabytes,
+            "growth doubles until the cap"
+        );
+        assert_eq!(
+            next_verification_probe_bytes(two_gigabytes, thirty_gigabytes),
+            VERIFICATION_MAX_PROBE_BYTES,
+            "growth stops at the probe cap so a throttled machine can never stall an unbounded probe"
+        );
+        assert_eq!(
+            next_verification_probe_bytes(two_gigabytes, one_gigabyte + half_gigabyte),
+            one_gigabyte + half_gigabyte,
+            "the final probe never overshoots the remaining distance"
+        );
+        assert_eq!(
+            next_verification_probe_bytes(usize::MAX / 2, thirty_gigabytes),
+            VERIFICATION_MAX_PROBE_BYTES,
+            "doubling saturates instead of overflowing"
         );
     }
 );
