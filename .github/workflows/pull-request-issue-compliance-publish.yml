@@ -20,7 +20,7 @@ on:
         type: number
 
 permissions:
-  checks: write
+  statuses: write
   contents: read
   issues: read
   pull-requests: read
@@ -87,20 +87,23 @@ jobs:
               repo: context.repo.repo,
               pull_number: pullRequestNumber,
             });
+            // Commit statuses are independent of Actions check-suite selection:
+            // a body-edit collector must not supersede the published result.
+            async function publishComplianceStatus(state, description) {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: pullRequest.head.sha,
+                context: "PR issue compliance",
+                state,
+                description,
+                target_url: `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              });
+            }
+
             try {
               if (isAutomatedPullRequest(pullRequest.user?.login)) {
-                await github.rest.checks.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  head_sha: pullRequest.head.sha,
-                  name: "PR issue compliance",
-                  status: "completed",
-                  conclusion: "success",
-                  output: {
-                    title: "Automated pull request: issue linkage not required",
-                    summary: `Bot account ${pullRequest.user.login} cannot author issue-linked bodies; the provenance contract is enforced on human pull requests.`,
-                  },
-                });
+                await publishComplianceStatus("success", "Automated pull request: issue linkage not required");
                 core.info(
                   `[pr-issue-compliance] status=success reason=automated_pull_request author=${pullRequest.user.login}`,
                 );
@@ -120,36 +123,12 @@ jobs:
                 },
               });
 
-              await github.rest.checks.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head_sha: pullRequest.head.sha,
-                name: "PR issue compliance",
-                status: "completed",
-                conclusion: "success",
-                output: {
-                  title: `Pull request links issue #${compliance.issueNumber}`,
-                  summary: compliance.linkedIssues
-                    .map((linked) => `${linked.relationship} [#${linked.issueNumber}](${linked.issueUrl})`)
-                    .join(", "),
-                },
-              });
+              await publishComplianceStatus("success", `Pull request links issue #${compliance.issueNumber}`);
               core.info(
                 `[pr-issue-compliance] status=success issues=${compliance.linkedIssues.map((linked) => linked.issueNumber).join(",")}`,
               );
             } catch (error) {
-              await github.rest.checks.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head_sha: pullRequest.head.sha,
-                name: "PR issue compliance",
-                status: "completed",
-                conclusion: "failure",
-                output: {
-                  title: "Link the pull request to an existing issue",
-                  summary: error.message,
-                },
-              });
+              await publishComplianceStatus("failure", "Link the pull request to an existing issue; see workflow log");
               core.setFailed(error.message);
             } finally {
               core.info(

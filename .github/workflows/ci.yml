@@ -59,7 +59,7 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
         run: cargo run --quiet -p xtask -- classify-scope
       - name: Run pull request policy contracts
-        run: node --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js
+        run: node --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js .github/scripts/pull-request-issue-compliance-publish.test.js
         timeout-minutes: 2
 
   # Keep the job name and its concurrency group in sync with branch
