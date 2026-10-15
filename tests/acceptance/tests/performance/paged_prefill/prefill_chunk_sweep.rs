@@ -163,6 +163,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             max_output_tokens: MAXIMUM_SUMMARY_TOKENS,
             temperature_thousandths: None,
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: Some(256),
         },

@@ -204,6 +204,7 @@ async fn run_single_measured_request(
                 max_output_tokens: MAXIMUM_OUTPUT_TOKENS,
                 temperature_thousandths: None,
                 top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
                 seed: None,
                 thinking_budget: Some(0),
             },

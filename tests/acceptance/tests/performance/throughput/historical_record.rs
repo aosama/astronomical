@@ -17,7 +17,16 @@ use serde_json::Value;
 
 use crate::performance_throughput::machine_specs::MachineSpecs;
 
-const DEFAULT_HISTORY_RELATIVE_PATH: &str = "tests/performance_throughput/throughput-history.jsonl";
+/// Repo-root-relative path of the source-controlled throughput history.
+///
+/// Cargo test processes run from the workspace root, so this relative path
+/// resolves to the ledger that travels with the code. It must stay in sync
+/// with the file's actual location under
+/// `tests/acceptance/tests/performance/throughput/`; the Oct-13 test-tree
+/// reorganization moved that file and left this constant stale, forking new
+/// measurements into an untracked sibling until the drift was noticed.
+const DEFAULT_HISTORY_RELATIVE_PATH: &str =
+    "tests/acceptance/tests/performance/throughput/throughput-history.jsonl";
 const HISTORY_ENV_VAR: &str = "ASTRONOMICAL_PERF_HISTORY";
 const GIT_COMMIT_ENV_VAR: &str = "ASTRONOMICAL_PERF_COMMIT";
 

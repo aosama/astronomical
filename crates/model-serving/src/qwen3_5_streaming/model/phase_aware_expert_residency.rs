@@ -19,6 +19,37 @@ impl Qwen3_5StreamingModel {
         }
     }
 
+    /// Scales demand recorded by subsequent forwards until restored or cleared.
+    pub(crate) fn set_expert_demand_assignment_weight_for_residency(&self, assignment_weight: u64) {
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            retained_experts
+                .borrow_mut()
+                .set_demand_assignment_weight(assignment_weight);
+        }
+    }
+
+    /// Refreshes the residency plan for direct-MLX performance probes.
+    ///
+    /// Production calls this at request open (Prefill) and at the decode
+    /// handoff; a model-layer probe must run the same publication or the
+    /// retained cache keeps a zero ceiling and nothing the probe observes
+    /// matches serving behavior.
+    #[doc(hidden)]
+    pub fn refresh_phase_aware_expert_residency_plan_for_tests(
+        &self,
+        phase: crate::MemoryPhase,
+        context_token_count: u64,
+        operation_token_count: u64,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        self.refresh_phase_aware_expert_residency_plan(
+            phase,
+            context_token_count,
+            operation_token_count,
+            performance_attribution,
+        )
+    }
+
     /// Clears an optional optimization target so execution safely streams misses.
     pub(crate) fn clear_phase_aware_expert_residency_plan(&self) {
         *self.active_expert_residency_plan.borrow_mut() = None;
