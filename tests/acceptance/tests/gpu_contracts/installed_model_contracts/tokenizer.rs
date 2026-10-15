@@ -114,6 +114,7 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
             top_p_thousandths: Some(950),
             seed: Some(7),
             thinking_budget: Some(256),
+            repetition_penalty_thousandths: None,
         },
         structured_generation: None,
     };
@@ -170,6 +171,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
             top_p_thousandths: Some(950),
             seed: None,
             thinking_budget: Some(0),
+            repetition_penalty_thousandths: None,
         },
         structured_generation: None,
     };

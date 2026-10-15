@@ -37,6 +37,15 @@ impl RetainedExpertCache {
         self.demand_assignment_weight = 1;
     }
 
+    /// Raises or restores the per-assignment demand multiplier.
+    ///
+    /// The request's final prefill chunk records under
+    /// `last_prefill_chunk_demand_weight` so prompt-tail routes keep decode
+    /// relevant coverage in the handoff residency plan.
+    pub fn set_demand_assignment_weight(&mut self, assignment_weight: u64) {
+        self.demand_assignment_weight = assignment_weight.max(1);
+    }
+
     pub fn record_disk_load(&mut self, expert_count: usize, batch_count: usize) {
         self.disk_page_load_count = self
             .disk_page_load_count

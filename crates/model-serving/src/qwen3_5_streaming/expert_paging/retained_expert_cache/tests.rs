@@ -6,6 +6,7 @@ use super::*;
 use crate::memory::RetainedExpertPageClass;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use serial_test::serial;
 
 pub(super) const WARM_SLOT_COUNT: usize = 8;
 pub(super) const EXPERT_CAPACITY: usize = 16;
@@ -200,6 +201,46 @@ fn should_keep_the_stream_operation_local_when_the_budget_refuses_the_warm_table
         .expect("a budget-refused flush should stay graceful");
     assert_eq!(written_count, 0);
     assert!(cache.topology_snapshot(EXPERT_CAPACITY).is_empty());
+}
+
+#[test]
+#[serial]
+fn should_scale_final_prefill_chunk_demand_above_earlier_prompt_frequency() {
+    let runtime = test_runtime();
+    let mut cache = RetainedExpertCache::new(2);
+    // Production ceilings are set by the residency plan refresh; the tests
+    // set a generous ceiling except the budget-refusal case.
+    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    let weights = streamed_weights(&runtime);
+    for (layer_index, expert_ids) in [(0, &[7, 9][..]), (1, &[3, 5][..])] {
+        cache
+            .queue_pending_routed_expert_insert(layer_index, expert_ids, &weights, WARM_SLOT_COUNT)
+            .expect("the warm insert should queue");
+    }
+    cache
+        .flush_pending_inserts(&runtime)
+        .expect("the warm flush should succeed");
+
+    // Five earlier-prompt routes at plain weight; three final-chunk routes
+    // recorded under the token-density boost.
+    cache.record_expert_demand(0, EXPERT_CAPACITY, &[7, 7, 7, 7, 7]);
+    cache.set_demand_assignment_weight(2);
+    cache.record_expert_demand(1, EXPERT_CAPACITY, &[3, 3, 3]);
+    let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
+    assert_eq!(snapshot[0].covered_weighted_demand, 5);
+    assert_eq!(snapshot[1].covered_weighted_demand, 6);
+
+    // A zero weight must not discard assignments; it floors at one.
+    cache.set_demand_assignment_weight(0);
+    cache.record_expert_demand(1, EXPERT_CAPACITY, &[3]);
+    let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
+    assert_eq!(snapshot[1].covered_weighted_demand, 7);
+
+    // A cleared window restores the plain assignment weight.
+    cache.clear_expert_demand();
+    cache.record_expert_demand(0, EXPERT_CAPACITY, &[7]);
+    let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
+    assert_eq!(snapshot[0].covered_weighted_demand, 1);
 }
 
 #[test]

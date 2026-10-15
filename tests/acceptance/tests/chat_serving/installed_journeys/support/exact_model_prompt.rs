@@ -42,6 +42,7 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids_for_model(
             top_p_thousandths: None,
             seed: None,
             thinking_budget: Some(256),
+            repetition_penalty_thousandths: None,
         },
         structured_generation: None,
     };

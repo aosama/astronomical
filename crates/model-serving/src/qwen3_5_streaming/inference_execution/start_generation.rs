@@ -347,6 +347,7 @@ impl Qwen3_5EngineState {
                 persistent_prompt_cache_diagnostics: persistent_prompt_cache_diagnostics.clone(),
                 force_next_prefill_capacity_rejection_for_tests: false,
                 generation_residency_preparation_attempted: false,
+                has_opened_expert_demand_window: false,
                 first_decode_forward_elapsed_millis: None,
                 generation_preparation_announced: false,
                 structured_generation: inference_request.take_structured_generation(),
