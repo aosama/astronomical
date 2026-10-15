@@ -141,7 +141,7 @@ One command per ceiling cell; run each as its own process (MLX memory limits
 are process-global). Each cell has a 60-second test timeout with a 45-second
 serving budget, appends one `memory_ceiling_sweep` record with its `memory_cell`
 evidence to
-`tests/acceptance/tests/performance_throughput/throughput-history.jsonl`, and
+`tests/acceptance/tests/performance/throughput/throughput-history.jsonl`, and
 fails
 when the serving budget is exhausted so partial evidence remains available.
 Set `MEMORY_SWEEP_CELL_ORDER` to the cell's position in your sweep so records

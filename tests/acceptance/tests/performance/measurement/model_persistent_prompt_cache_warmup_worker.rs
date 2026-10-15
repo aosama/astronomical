@@ -295,6 +295,7 @@ async fn measure_worker_summarization(
                 max_output_tokens: persistent_prompt_cache_warmup_case.maximum_output_tokens,
                 temperature_thousandths: None,
                 top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
                 seed: None,
                 thinking_budget: Some(256),
             },

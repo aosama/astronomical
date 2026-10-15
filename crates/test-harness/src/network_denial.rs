@@ -27,10 +27,15 @@ static DENIAL_OUTCOME: OnceLock<Result<(), String>> = OnceLock::new();
 mod seatbelt {
     use std::ffi::{CStr, CString, c_char, c_int, c_void};
 
-    /// The Seatbelt profile that denies every network-class operation while
-    /// leaving everything else the test process needs (files, threads, pipes)
-    /// untouched.
-    const NETWORK_DENIAL_PROFILE: &str = "(version 1)\n(deny network*)\n";
+    /// The Seatbelt profile denies every network operation by name and allows
+    /// the rest of the process by default. A bare `(deny network*)` profile
+    /// compiles as default-deny on macOS: the denial works, but every later
+    /// test in the same binary loses filesystem, IOKit (Metal device access),
+    /// and mach services, so any MLX-initializing test running after one
+    /// denied test fails. Naming the network operations keeps the denial loud
+    /// while leaving the rest of the process untouched. Evaluation is
+    /// first-match, so the named denies win over `(allow default)`.
+    const NETWORK_DENIAL_PROFILE: &str = "(version 1)\n(deny network-outbound)\n(deny network-inbound)\n(deny network-bind)\n(allow default)\n";
 
     const RTLD_NOW: c_int = 2;
     const SANDBOX_APPLY_FLAGS: u64 = 0;

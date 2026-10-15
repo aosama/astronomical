@@ -50,6 +50,7 @@ pub(crate) fn prepare_romeo_and_juliet_three_paragraph_summary_prompt(
                         top_p_thousandths: Some(1_000),
                         seed: None,
                         thinking_budget: None,
+                        repetition_penalty_thousandths: None,
                     },
                     structured_generation: None,
                 },

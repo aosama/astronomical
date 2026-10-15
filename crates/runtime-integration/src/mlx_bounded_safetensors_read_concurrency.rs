@@ -14,13 +14,22 @@ use std::{
 
 use crate::PositionalFileReadMetrics;
 
-// MLX's path reader uses this threshold and four readers. Matching that boundary
-// avoids thread setup for routed expert pages while retaining large-layer parallelism.
+// MLX's path reader uses this threshold and four readers. Matching the threshold
+// boundary avoids thread setup for routed expert pages while retaining
+// large-layer parallelism.
 const PARALLEL_READ_MINIMUM_BYTES: usize = 1 << 25;
-const MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT: usize = 4;
+// Measured on Apple Silicon (M5 Pro, direct-MLX streaming probes): four
+// concurrent positional reads cap unpressured expert streaming at roughly
+// 14 GB/s while sixteen reach roughly 23 GB/s, and under seated-expert memory
+// pressure the extra permits overlap OS-stalled reads, cutting a paged
+// prefill chunk's wall time by about a fifth. Physical SSDs have far deeper
+// queues than four, so the process-wide default is sixteen; the environment
+// override below still bounds it for constrained machines.
+const MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT: usize = 16;
 // SSDs differ widely in queue depth, so the process cap is an adaptation
 // parameter, not a constant: `ASTRONOMICAL_POSITIONAL_READ_PARALLELISM`
-// overrides it within a bounded range; the default stays the MLX-matching 4.
+// overrides it within a bounded range; the default stays at the measured
+// sixteen-permit ceiling above.
 const POSITIONAL_READ_PARALLELISM_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_POSITIONAL_READ_PARALLELISM";
 const POSITIONAL_READ_PARALLELISM_OVERRIDE_CEILING: usize = 32;

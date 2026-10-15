@@ -158,6 +158,27 @@ impl Qwen3_5StreamingModel {
         )
     }
 
+    /// Executes one attributed prompt chunk for direct-MLX performance probes.
+    ///
+    /// The caller supplies its own attribution so a probe can isolate one
+    /// chunk's expert-streaming operations and positional reads from every
+    /// other chunk of the same request.
+    #[doc(hidden)]
+    pub fn prefill_chunk_with_attribution_for_tests(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        self.prefill_chunk_with_performance_attribution(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
+    }
+
     /// Executes one prompt or decode chunk and materializes final logits plus all layer state.
     pub fn forward_chunk(
         &self,

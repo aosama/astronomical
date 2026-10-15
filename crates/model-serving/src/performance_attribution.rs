@@ -161,7 +161,7 @@ impl PerformanceAttribution {
     }
 
     #[cfg(feature = "direct-mlx")]
-    pub(crate) fn positional_file_read_metrics(
+    pub fn positional_file_read_metrics(
         &self,
     ) -> Option<Arc<astronomical_runtime_integration::PositionalFileReadMetrics>> {
         self.enabled_attribution
