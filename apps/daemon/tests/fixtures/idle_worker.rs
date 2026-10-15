@@ -261,7 +261,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 if effective_mlx_memory_ceiling_bytes == 30_000_000_000 {
                     continue;
                 }
-                if effective_mlx_memory_ceiling_bytes == 31_000_000_000 {
+                if effective_mlx_memory_ceiling_bytes == 31 * 1_073_741_824 {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     event_writer
                         .send_event(&WorkerEvent::MlxMemoryLimitRejected {

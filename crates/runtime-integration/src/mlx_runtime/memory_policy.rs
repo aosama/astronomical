@@ -133,8 +133,9 @@ pub(super) fn configure_runtime_memory_limits(
 /// set while Metal command buffers use unretained references. On affected macOS
 /// releases, that removal can panic IOGPU with a prepare-count underflow.
 ///
-/// Neither control runs `sysctl` or changes `iogpu.wired_limit_mb`. Rollback
-/// preserves the previous process policy if the allocator-cache control fails.
+/// Neither control changes any kernel setting; both are process-local MLX
+/// guidance. Rollback preserves the previous process policy if the
+/// allocator-cache control fails.
 fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
     let previous_memory_limit_bytes =
         set_memory_limit(memory_limits.active_memory_limit_bytes).map_err(MlxRuntimeError::from)?;

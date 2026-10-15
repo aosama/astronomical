@@ -23,13 +23,13 @@ pub struct MachineSpecs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_memory_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gpu_wired_memory_bytes: Option<u64>,
+    pub machine_mlx_memory_ceiling_bytes: Option<u64>,
 }
 
 impl MachineSpecs {
-    /// Captures the host specifications asynchronously. The GPU wired-memory
-    /// ceiling is sampled from the machine via sysctl, so the capture cannot
-    /// be synchronous.
+    /// Captures the host specifications asynchronously. The machine MLX
+    /// memory ceiling is sampled from the physical RAM size, so the capture
+    /// cannot be synchronous.
     pub async fn capture() -> Self {
         let cpu_cores = std::thread::available_parallelism()
             .map(|count| count.get() as u32)
@@ -38,9 +38,9 @@ impl MachineSpecs {
         let total_memory_bytes = run_sysctl("hw.memsize")
             .await
             .and_then(|value| value.trim().parse::<u64>().ok());
-        let gpu_wired_memory_bytes = timeout(
+        let machine_mlx_memory_ceiling_bytes = timeout(
             SYSCTL_SAMPLE_TIMEOUT,
-            worker_startup::sample_iogpu_wired_limit_bytes(),
+            worker_startup::machine_mlx_memory_ceiling_bytes(),
         )
         .await
         .ok()
@@ -52,7 +52,7 @@ impl MachineSpecs {
             cpu_cores,
             cpu_model,
             total_memory_bytes,
-            gpu_wired_memory_bytes,
+            machine_mlx_memory_ceiling_bytes,
         }
     }
 }

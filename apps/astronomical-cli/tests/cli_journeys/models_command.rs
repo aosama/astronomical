@@ -292,8 +292,8 @@ async fn should_download_a_missing_model_with_live_progress() {
         "the download journey should announce availability on stderr: {rendered_stderr:?}"
     );
     assert!(
-        rendered_stderr.contains("0.5 GB / 2 GB"),
-        "the live progress should report decimal GB: {rendered_stderr:?}"
+        rendered_stderr.contains("0.47 GB / 1.86 GB"),
+        "the live progress should report marketed GB: {rendered_stderr:?}"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);

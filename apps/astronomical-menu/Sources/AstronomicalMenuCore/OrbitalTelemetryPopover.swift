@@ -209,15 +209,15 @@ struct OrbitalTelemetryPopover: View {
 
   @ViewBuilder
   private func maximumMlxMemoryControl(_ statusDocument: DaemonStatusDocument) -> some View {
-    if telemetryStore.minimumWholeDecimalGigabytes <= telemetryStore.maximumWholeDecimalGigabytes,
-      telemetryStore.maximumWholeDecimalGigabytes > 0
+    if telemetryStore.minimumWholeGigabytes <= telemetryStore.maximumWholeGigabytes,
+      telemetryStore.maximumWholeGigabytes > 0
     {
       VStack(alignment: .leading, spacing: 6) {
         Text("Maximum model RAM").foregroundStyle(.secondary)
         HStack {
           Stepper(
             value: $telemetryStore.editableMaximumMlxMemoryGigabytes,
-            in: telemetryStore.minimumWholeDecimalGigabytes...telemetryStore.maximumWholeDecimalGigabytes
+            in: telemetryStore.minimumWholeGigabytes...telemetryStore.maximumWholeGigabytes
           ) {
             Text("\(telemetryStore.editableMaximumMlxMemoryGigabytes) GB")
               .font(PopoverTypography.monospacedBody)
@@ -226,10 +226,10 @@ struct OrbitalTelemetryPopover: View {
           Button("Use Mac Maximum", action: telemetryStore.restoreMacMaximumMlxMemoryLimit)
         }
         Text(
-          "Effective \(decimalGigabyteValueText(byteCount: statusDocument.mlxMemoryCeilingBytes)) of \(decimalGigabyteValueText(byteCount: statusDocument.machineMlxMemoryCeilingBytes))"
+          "Effective \(gigabyteValueText(byteCount: statusDocument.mlxMemoryCeilingBytes)) of \(gigabyteValueText(byteCount: statusDocument.machineMlxMemoryCeilingBytes))"
         ).font(.caption).foregroundStyle(.secondary)
         if let pendingMlxMemoryCeilingBytes = statusDocument.pendingMlxMemoryCeilingBytes {
-          Text("Pending \(decimalGigabyteValueText(byteCount: pendingMlxMemoryCeilingBytes))")
+          Text("Pending \(gigabyteValueText(byteCount: pendingMlxMemoryCeilingBytes))")
             .font(.caption).foregroundStyle(.orange)
         }
         if let mlxMemoryLimitError = statusDocument.mlxMemoryLimitError {

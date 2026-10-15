@@ -158,8 +158,8 @@ fn scan_root(model_directory: &Path) -> String {
 /// The daemon resolves configuration from the state directory it is given.
 fn write_instance_config(state_directory: &Path, model_root: &str) {
     // The fixture model is tiny, so a small explicit ceiling keeps the
-    // parallel lane's workers from paying machine-scale wired-capacity
-    // verification walks that starve sibling daemon lifecycle assertions.
+    // parallel lane's workers small enough that sibling daemon lifecycle
+    // assertions keep their exit budgets.
     let configuration_document = format!(
         r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":["{model_root}"],"maximum_mlx_memory_gb":2}},"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}}}}"#
     );
@@ -201,7 +201,6 @@ async fn spawn_daemon(
         }
     };
     let mut daemon_spawn_command = Command::new(daemon_executable_path);
-    crate::common::daemon::seal_daemon_from_machine_graphics_state(&mut daemon_spawn_command);
     daemon_spawn_command
         .args(["--instance", "development", "--state-directory"])
         .arg(state_directory)

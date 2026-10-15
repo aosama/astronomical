@@ -127,7 +127,11 @@ pub(crate) async fn status_check(State(application_state): State<ApplicationStat
             .as_ref()
             .and_then(|configured_config| configured_config.read().ok())
             .and_then(|resolved_config| resolved_config.maximum_mlx_memory_bytes)
-            .map(|maximum_mlx_memory_bytes| maximum_mlx_memory_bytes / 1_000_000_000)
+            .map(|maximum_mlx_memory_bytes| {
+                // The user-facing gigabyte is the one Apple prints on the box
+                // (AGENTS.md): 2³⁰ bytes.
+                maximum_mlx_memory_bytes / 1_073_741_824
+            })
     );
     status_json["serving_session"] = serde_json::json!({
         "completed_request_count": worker_health_snapshot.serving_session.completed_request_count,

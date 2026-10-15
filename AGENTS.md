@@ -19,7 +19,7 @@
 
 ## Code File Length and Memory Measurement Units
 
-- Any end-user-facing file-size or memory value must use decimal SI gigabytes: 1 GB = 1,000,000,000 bytes. Do not show binary GiB values under a GB label.
+- Any end-user-facing file-size or memory value must use the gigabyte convention Apple uses to market the machine: 1 GB = 1,073,741,824 bytes (2³⁰). A machine with 51,539,607,552 bytes of RAM is presented as 48 GB, exactly as the purchase sticker reads; its model ceiling is (48 − 8) = 40 GB. Never present decimal SI gigabytes (10⁹ bytes) to end users. Internal storage and wire formats remain raw bytes; only display rendering and whole-GB user inputs convert, always with 2³⁰.
 
 ## Prohibited Terminology: "qualification" and "hermetic"
 

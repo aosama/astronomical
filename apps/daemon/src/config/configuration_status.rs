@@ -373,9 +373,7 @@ fn prompt_cache_summary(
         capacity_bytes: ConfigurationValue {
             configured: configured
                 .and_then(|config| config.configured_prompt_cache_maximum_size_bytes),
-            default: Some(
-                astronomical_config::DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB * 1_000_000_000,
-            ),
+            default: Some(astronomical_config::DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_BYTES),
             effective: effective.map(|configuration| configuration.prompt_cache_maximum_size_bytes),
         },
     }

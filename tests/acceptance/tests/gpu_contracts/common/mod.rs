@@ -14,9 +14,7 @@ use std::time::Duration;
 #[cfg(feature = "direct-mlx")]
 use astronomical_config::AstronomicalConfig;
 #[cfg(feature = "direct-mlx")]
-use astronomical_runtime_integration::{
-    MlxMemoryLimits, maximum_recommended_gpu_working_set_size_bytes,
-};
+use astronomical_runtime_integration::MlxMemoryLimits;
 #[cfg(feature = "direct-mlx")]
 use tokio::sync::{Mutex, MutexGuard};
 #[cfg(feature = "direct-mlx")]
@@ -152,12 +150,6 @@ static DIRECT_MLX_TEST_LOCK: Mutex<()> = Mutex::const_new(());
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-const BYTES_PER_MEBIBYTE: usize = 1024 * 1024;
-#[cfg(feature = "direct-mlx")]
-#[allow(dead_code)]
-const IOGPU_WIRED_LIMIT_SYSCTL_KEY: &str = "iogpu.wired_limit_mb";
-#[cfg(feature = "direct-mlx")]
-#[allow(dead_code)]
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
@@ -279,7 +271,7 @@ async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
     let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
     sysctl_command
         .arg("-n")
-        .arg(IOGPU_WIRED_LIMIT_SYSCTL_KEY)
+        .arg("hw.memsize")
         .kill_on_drop(true);
     let sysctl_output = timeout(
         MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT,
@@ -288,32 +280,26 @@ async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
     .await
     .unwrap_or_else(|_| {
         panic!(
-            "sampling {IOGPU_WIRED_LIMIT_SYSCTL_KEY} should finish within {} seconds",
+            "sampling the physical memory size should finish within {} seconds",
             MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT.as_secs()
         )
     })
     .unwrap_or_else(|sample_error| {
-        panic!("should sample {IOGPU_WIRED_LIMIT_SYSCTL_KEY}: {sample_error}")
+        panic!("should sample the physical memory size: {sample_error}")
     });
     assert!(
         sysctl_output.status.success(),
-        "sysctl should read {IOGPU_WIRED_LIMIT_SYSCTL_KEY} successfully"
+        "sysctl should read the physical memory size successfully"
     );
-    let wired_limit_mebibytes_text = String::from_utf8_lossy(&sysctl_output.stdout);
-    let wired_limit_mebibytes = wired_limit_mebibytes_text
+    let physical_ram_bytes: u64 = String::from_utf8_lossy(&sysctl_output.stdout)
         .trim()
-        .parse::<usize>()
+        .parse()
         .unwrap_or_else(|parse_error| {
-            panic!("{IOGPU_WIRED_LIMIT_SYSCTL_KEY} should be an unsigned integer: {parse_error}")
+            panic!("hw.memsize should be an unsigned integer: {parse_error}")
         });
-    if wired_limit_mebibytes == 0 {
-        maximum_recommended_gpu_working_set_size_bytes()
-            .expect("MLX should expose the default GPU wired-memory working set")
-    } else {
-        wired_limit_mebibytes
-            .checked_mul(BYTES_PER_MEBIBYTE)
-            .expect("the GPU wired-memory limit should fit in usize bytes")
-    }
+    astronomical_model_serving::machine_ceiling_from_physical_ram_bytes(physical_ram_bytes)
+        .try_into()
+        .expect("the machine MLX memory ceiling should fit in usize bytes")
 }
 
 #[cfg(feature = "direct-mlx")]
