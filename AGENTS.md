@@ -12,7 +12,7 @@
 
 ## Never Kill the Running Stable Instance
 
-- While developing this codebase, never kill, stop, terminate, or force-quit the running Stable instance: the `astronomicald` daemon on `127.0.0.1:6732`, the `~/Applications/Astronomical.app`, or any process bound to the Stable state directory `~/.astronomical`. Stable is the user's live daily driver and its process lifecycle is owned by macOS LaunchAgents, not by this repository.
+- While developing this codebase, never kill, stop, terminate, or force-quit the running Stable instance: the `astronomicald` daemon on `127.0.0.1:6732`, the `~/Applications/Astronomical.app`, or any process bound to the Stable state directory `~/.astronomical`.
 
 ## There are No Downstream Consumers or Dependencies
 
@@ -64,6 +64,6 @@
 
 - Markdown in <repo-root>/docs/ must be terse, define every acronym verbosely on first use, and have all assumptions eliminated before any file there is edited or written. Do not create new files in docs/ without the user's explicit agreement; docs/ files are exempt from the repository's maximum file-length limit.
 
-## Scripts Folder Conventions
+## Release Scripts Folder
 
 - All **Release releated scripts** must live are under "<repo-root>/scripts/release" , they will help you through the release process.
