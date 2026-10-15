@@ -334,6 +334,7 @@ async fn send_chat_generate_with_schema(
                 max_output_tokens: MAXIMUM_OUTPUT_TOKEN_COUNT as u16,
                 temperature_thousandths: None,
                 top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
                 seed: None,
                 thinking_budget: Some(THINKING_TOKEN_BUDGET as u16),
             },

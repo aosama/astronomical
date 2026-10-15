@@ -180,6 +180,7 @@ fn apply_ipc_generation_defaults(
         maximum_output_tokens: generation_settings.max_output_tokens != 0,
         temperature: generation_settings.temperature_thousandths.is_some(),
         top_p: generation_settings.top_p_thousandths.is_some(),
+        repetition_penalty: generation_settings.repetition_penalty_thousandths.is_some(),
     };
     apply_generation_defaults(
         generation_context.reloadable_config.as_ref(),

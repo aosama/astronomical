@@ -5,6 +5,7 @@ use crate::gpu_token_sampling;
 
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 
+pub use crate::gpu_token_sampling::apply_repetition_penalty as qwen3_5_apply_repetition_penalty;
 pub use crate::gpu_token_sampling::apply_top_p_mask as qwen3_5_apply_top_p_mask;
 
 pub(crate) fn random_state_for_seed(

@@ -129,11 +129,15 @@ pub(super) fn synchronize_generated_token_id(
     active_request: &mut Qwen3_5EngineRequest,
     generated_token: &MlxArray,
 ) -> Result<u32, InferenceEngineError> {
-    active_request
+    let synchronized_token_id = active_request
         .performance_attribution
         .measure_operation(
             PerformanceOperation::GeneratedTokenItemSynchronizationWait,
             |_performance_attribution| generated_token.item_u32(),
         )
-        .map_err(qwen3_5_runtime_error)
+        .map_err(qwen3_5_runtime_error)?;
+    if active_request.repetition_penalty_thousandths != 1_000 {
+        active_request.observe_penalized_token_id(synchronized_token_id);
+    }
+    Ok(synchronized_token_id)
 }

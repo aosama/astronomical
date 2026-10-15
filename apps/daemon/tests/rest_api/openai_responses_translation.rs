@@ -36,6 +36,7 @@ fn should_translate_string_input_into_one_user_chat_message() {
                 max_output_tokens: 512,
                 temperature_thousandths: Some(600),
                 top_p_thousandths: Some(950),
+                repetition_penalty_thousandths: None,
                 seed: None,
                 thinking_budget: None,
             },

@@ -18,6 +18,7 @@ pub(crate) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationComm
             max_output_tokens: 2,
             temperature_thousandths: Some(600),
             top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
             seed: Some(seed),
             thinking_budget: None,
         },

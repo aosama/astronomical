@@ -15,6 +15,7 @@ pub struct Qwen3_5InferenceRequest {
     max_output_tokens: u16,
     request_id: RequestId,
     sampling_strategy: Qwen3_5SamplingStrategy,
+    repetition_penalty_thousandths: u16,
     generation_starts_inside_thinking_block: bool,
     thinking_budget: Option<u16>,
     forced_thinking_transition_token_ids: Vec<u32>,
@@ -111,12 +112,47 @@ impl Qwen3_5InferenceRequest {
             max_output_tokens,
             request_id,
             sampling_strategy,
+            repetition_penalty_thousandths: 1_000,
             generation_starts_inside_thinking_block: true,
             thinking_budget: None,
             forced_thinking_transition_token_ids: Vec::new(),
             natural_reasoning_end_token_ids: Vec::new(),
             performance_attribution: PerformanceAttribution::disabled(),
             structured_generation: None,
+        }
+    }
+
+    /// Overrides the repetition penalty resolved for this request.
+    ///
+    /// The neutral 1,000-thousandths default keeps every existing constructor
+    /// behavior-identical; the model wrapper sets the ladder-resolved value.
+    #[must_use]
+    pub const fn with_repetition_penalty_thousandths(
+        mut self,
+        repetition_penalty_thousandths: u16,
+    ) -> Self {
+        self.repetition_penalty_thousandths = repetition_penalty_thousandths;
+        self
+    }
+
+    /// Returns the repetition penalty in thousandths; 1,000 is the neutral identity.
+    #[must_use]
+    pub const fn repetition_penalty_thousandths(&self) -> u16 {
+        self.repetition_penalty_thousandths
+    }
+
+    /// Sorted unique starting penalty history: the prompt ids, populated only
+    /// when this request carries an active repetition penalty so neutral
+    /// requests keep an empty history and a dispatch-free sampling graph.
+    #[must_use]
+    pub fn initial_penalized_token_ids(&self) -> Vec<u32> {
+        if self.repetition_penalty_thousandths == 1_000 {
+            Vec::new()
+        } else {
+            let mut sorted_unique_ids = self.input_token_ids.clone();
+            sorted_unique_ids.sort_unstable();
+            sorted_unique_ids.dedup();
+            sorted_unique_ids
         }
     }
 

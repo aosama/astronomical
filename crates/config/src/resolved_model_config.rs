@@ -15,6 +15,7 @@ pub struct ResolvedModelConfig {
     configured_maximum_output_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
+    repetition_penalty: Option<f32>,
     chunking: ChunkingConfig,
     configured_chunking_fields: ConfiguredChunkingFields,
 }
@@ -71,6 +72,8 @@ impl ResolvedModelConfig {
             configured_maximum_output_tokens,
             temperature: generation_defaults.and_then(|defaults| defaults.temperature),
             top_p: generation_defaults.and_then(|defaults| defaults.top_p),
+            repetition_penalty: generation_defaults
+                .and_then(|defaults| defaults.repetition_penalty),
             chunking: ChunkingConfig::resolve(&effective_chunking)?,
             configured_chunking_fields: effective_chunking.configured_fields(),
         })
@@ -109,6 +112,15 @@ impl ResolvedModelConfig {
     #[must_use]
     pub const fn top_p(&self) -> Option<f32> {
         self.top_p
+    }
+
+    /// Returns the configured repetition penalty without inventing a default.
+    ///
+    /// `None` means neither the configuration nor the model artifact speaks,
+    /// and the sampler keeps its neutral identity penalty of 1.0.
+    #[must_use]
+    pub const fn repetition_penalty(&self) -> Option<f32> {
+        self.repetition_penalty
     }
 
     /// Returns the complete chunking policy after global and model inheritance.

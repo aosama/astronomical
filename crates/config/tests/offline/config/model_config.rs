@@ -192,6 +192,9 @@ astronomical_test_harness::offline_test!(
             r#"{"generation_defaults":{"temperature":0.0001}}"#,
             r#"{"generation_defaults":{"top_p":1.1}}"#,
             r#"{"generation_defaults":{"top_p":0.0001}}"#,
+            r#"{"generation_defaults":{"repetition_penalty":0.9}}"#,
+            r#"{"generation_defaults":{"repetition_penalty":2.1}}"#,
+            r#"{"generation_defaults":{"repetition_penalty":1.0001}}"#,
             r#"{"generation_defaults":{"maximum_output_tokens":0}}"#,
             r#"{"generation_defaults":{"maximum_output_tokens":65536}}"#,
             r#"{"limits":{"maximum_context_tokens":0}}"#,
@@ -255,3 +258,52 @@ astronomical_test_harness::offline_test!(should_reject_duplicate_keys_at_every_o
         ));
     }
 });
+
+astronomical_test_harness::offline_test!(
+    should_resolve_the_repetition_penalty_generation_default_with_boundaries,
+    {
+        for (configured_repetition_penalty, expected_repetition_penalty) in
+            [("1", Some(1.0)), ("1.05", Some(1.05)), ("2", Some(2.0))]
+        {
+            let temporary_home_directory =
+                tempfile::tempdir().expect("temporary home should be created");
+            write_config(
+                temporary_home_directory.path(),
+                &format!(
+                    r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":[]}},"models":{{"target":{{"generation_defaults":{{"repetition_penalty":{configured_repetition_penalty}}}}}}}}}"#
+                ),
+            );
+
+            let astronomical_config =
+                AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+                    .expect("the repetition penalty config should load");
+            let model_config = astronomical_config
+                .resolved_model_config("target", 65_536)
+                .expect("the model policy should resolve");
+
+            assert_eq!(
+                model_config.repetition_penalty(),
+                expected_repetition_penalty,
+                "repetition penalty {configured_repetition_penalty} should resolve"
+            );
+        }
+
+        let temporary_home_directory =
+            tempfile::tempdir().expect("temporary home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"target":{}}}"#,
+        );
+        let astronomical_config =
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+                .expect("the penalty-free config should load");
+        let model_config = astronomical_config
+            .resolved_model_config("target", 65_536)
+            .expect("the model policy should resolve");
+        assert_eq!(
+            model_config.repetition_penalty(),
+            None,
+            "an absent penalty must stay absent so the sampler keeps its neutral identity"
+        );
+    }
+);

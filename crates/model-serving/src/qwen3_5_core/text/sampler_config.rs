@@ -11,6 +11,9 @@ pub struct Qwen3_5SamplerConfig {
     pub temperature_thousandths: u16,
     /// The model's default nucleus-sampling probability expressed in thousandths.
     pub top_p_thousandths: u16,
+    /// The model's default repetition penalty expressed in thousandths.
+    /// 1,000 (1.0) is the neutral identity that dampens nothing.
+    pub repetition_penalty_thousandths: u16,
     /// The model top-k value for sampling. Must match the value used
     /// during model training and evaluation.
     pub model_top_k: i32,
@@ -33,11 +36,34 @@ pub fn discover_sampler_config(generation_config_bytes: Option<&[u8]>) -> Qwen3_
             u16::MAX,
         ),
         top_p_thousandths: decimal_thousandths(model_generation_configuration.top_p, 950, 1, 1_000),
+        // The neutral fallback keeps every artifact without an authored penalty
+        // sampling exactly as before; the config layer may still override it.
+        repetition_penalty_thousandths: repetition_penalty_thousandths(
+            model_generation_configuration.repetition_penalty,
+        ),
         model_top_k: model_generation_configuration
             .top_k
             .filter(|configured_top_k| *configured_top_k > 0)
             .unwrap_or(20),
     }
+}
+
+/// Resolves an artifact-authored repetition penalty into thousandths.
+///
+/// Valid penalties span [1.0, 2.0]: below 1.0 rewards repetition, and values
+/// beyond 2.0 are pathological. Anything absent, malformed, or out of range
+/// falls back to the neutral identity so one bad artifact field cannot change
+/// the sampling distribution.
+fn repetition_penalty_thousandths(configured_repetition_penalty: Option<f64>) -> u16 {
+    configured_repetition_penalty
+        .filter(|repetition_penalty| {
+            repetition_penalty.is_finite() && (1.0..=2.0).contains(repetition_penalty)
+        })
+        .and_then(|repetition_penalty| {
+            let scaled_thousandths = (repetition_penalty * 1_000.0).round();
+            u16::try_from(scaled_thousandths as i64).ok()
+        })
+        .unwrap_or(1_000)
 }
 
 fn decimal_thousandths(
@@ -67,4 +93,6 @@ struct GenerationConfig {
     temperature: Option<f64>,
     #[serde(default)]
     top_p: Option<f64>,
+    #[serde(default)]
+    repetition_penalty: Option<f64>,
 }

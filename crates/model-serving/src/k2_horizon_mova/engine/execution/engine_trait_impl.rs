@@ -295,6 +295,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
         }
         let mut remaining_prompt_token_ids = prompt_token_ids.clone();
         remaining_prompt_token_ids.drain(..cached_token_count as usize);
+        let penalized_token_ids = inference_request.initial_penalized_token_ids();
         let thinking_budget = K2HorizonMoVAThinkingBudgetState::new(
             inference_request.thinking_budget(),
             inference_request
@@ -315,6 +316,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
             random_state,
             next_input_token_ids: Vec::new(),
             generated_count: 0,
+            penalized_token_ids,
             request: inference_request,
             prefill_started_at: Instant::now(),
             performance_attribution,
@@ -433,6 +435,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
                                 model.sample_token(
                                     &logits,
                                     &active.request,
+                                    &active.penalized_token_ids,
                                     &mut active.random_state,
                                 )
                             },
@@ -449,6 +452,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
                     active.remaining_output_tokens =
                         active.remaining_output_tokens.saturating_sub(1);
                     active.generated_count = active.generated_count.saturating_add(1);
+                    active.observe_penalized_token_id(next_token);
                     active.next_input_token_ids = if active.remaining_output_tokens == 0
                         || model.config.eos_token_ids().contains(&next_token)
                     {

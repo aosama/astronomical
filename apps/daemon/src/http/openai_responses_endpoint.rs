@@ -89,6 +89,7 @@ pub(crate) async fn create_response(
             maximum_output_tokens: request_parts.requested_maximum_output_tokens.is_some(),
             temperature: request_parts.temperature.is_some(),
             top_p: request_parts.top_p.is_some(),
+            repetition_penalty: false,
         };
     let request_id =
         match application::allocate_chat_request_id(&application_state.next_chat_request_id) {

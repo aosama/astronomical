@@ -10,6 +10,7 @@ pub(crate) struct RequestGenerationSettingsPresence {
     pub maximum_output_tokens: bool,
     pub temperature: bool,
     pub top_p: bool,
+    pub repetition_penalty: bool,
 }
 
 /// Applies one canonical model's live request defaults without overriding client values.
@@ -38,5 +39,10 @@ pub(crate) fn apply_generation_defaults(
     }
     if !settings_presence.top_p {
         generation_settings.top_p_thousandths = model_policy.generation_defaults.top_p_thousandths;
+    }
+    if !settings_presence.repetition_penalty {
+        generation_settings.repetition_penalty_thousandths = model_policy
+            .generation_defaults
+            .repetition_penalty_thousandths;
     }
 }
