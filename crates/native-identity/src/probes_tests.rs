@@ -103,3 +103,49 @@ offline_test!(probe_value_shapes_stay_single_line_flattenable, {
         );
     }
 });
+
+offline_test!(cmake_patch_versions_share_one_identity, {
+    // Runner images roll CMake patch releases (observed 4.4.3 then 4.4.4 a few
+    // hours apart); patch releases do not change codegen, so they must not
+    // rotate the native build identity and force a cold rebuild per rollout.
+    let cmake_4_4_3 = super::probes::coarsened_cmake_version_line_for_tests("cmake version 4.4.3")
+        .expect("the 4.4.3 version line should coarsen");
+    let cmake_4_4_4 = super::probes::coarsened_cmake_version_line_for_tests("cmake version 4.4.4")
+        .expect("the 4.4.4 version line should coarsen");
+
+    assert_eq!(cmake_4_4_3, "version=4.4");
+    assert_eq!(
+        cmake_4_4_3, cmake_4_4_4,
+        "a runner-image CMake patch rollout must not change the native build identity"
+    );
+
+    let cmake_4_5 = super::probes::coarsened_cmake_version_line_for_tests("cmake version 4.5.0")
+        .expect("the 4.5.0 version line should coarsen");
+    assert_eq!(cmake_4_5, "version=4.5");
+    assert_ne!(
+        cmake_4_4_3, cmake_4_5,
+        "a minor release still rotates the identity"
+    );
+});
+
+offline_test!(cmake_probe_drops_the_vendor_banner_and_extra_lines, {
+    let whole_cmake_output = "cmake version 4.4.3\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\n";
+    let coarsened_line = super::probes::coarsened_cmake_version_line_for_tests(whole_cmake_output)
+        .expect("the full version banner should coarsen");
+
+    assert_eq!(
+        coarsened_line, "version=4.4",
+        "only the major.minor version line may enter the identity manifest"
+    );
+});
+
+offline_test!(cmake_probe_fails_loudly_on_an_unrecognized_version_line, {
+    for unrecognized_output in ["", "some other tool 1.2.3", "cmake version"] {
+        let coarsening_outcome =
+            super::probes::coarsened_cmake_version_line_for_tests(unrecognized_output);
+        assert!(
+            coarsening_outcome.is_err(),
+            "unrecognized cmake output {unrecognized_output:?} must fail the probe instead of hashing an unstable value"
+        );
+    }
+});
