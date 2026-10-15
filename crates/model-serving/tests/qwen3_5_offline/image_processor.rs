@@ -125,11 +125,79 @@ fn should_hash_the_exact_encoded_image_bytes() {
     );
 }
 
-fn encode_solid_rgb_png(rgb_pixel: [u8; 3], width_pixels: u32, height_pixels: u32) -> Vec<u8> {
+#[test]
+fn should_round_trip_a_webp_encoding_through_the_vision_processor() {
+    let image_processor = qwen3_5_moe::frozen_ornith_1_0_image_processor();
+    let encoded_webp_bytes = encode_solid_rgb([128, 64, 32], 32, 32, ImageFormat::WebP);
+
+    let processed_webp_image = image_processor
+        .process_image_bytes(&encoded_webp_bytes)
+        .expect("a WebP attachment should decode and preprocess");
+
+    let encoded_png_bytes = encode_solid_rgb([128, 64, 32], 32, 32, ImageFormat::Png);
+    let processed_png_image = image_processor
+        .process_image_bytes(&encoded_png_bytes)
+        .expect("the PNG counterpart should decode and preprocess");
+
+    assert_eq!(
+        processed_webp_image.image_grid,
+        Qwen3_5ImageGrid {
+            temporal_patch_count: 1,
+            height_patch_count: 16,
+            width_patch_count: 16,
+        }
+    );
+    assert_eq!(processed_webp_image.resized_height_pixels, 256);
+    assert_eq!(processed_webp_image.resized_width_pixels, 256);
+    assert_eq!(
+        processed_webp_image.pixel_values, processed_png_image.pixel_values,
+        "lossless WebP and PNG encodings of the same pixels should preprocess identically"
+    );
+}
+
+#[test]
+fn should_decode_every_format_the_cli_advertises() {
+    let image_processor = qwen3_5_moe::frozen_ornith_1_0_image_processor();
+    // Mirrors SUPPORTED_IMAGE_FORMATS in apps/astronomical-cli/src/respond_image.rs:
+    // every extension the CLI `--image` surface advertises must decode here, so
+    // the advertised surface and the decoder capability cannot drift apart.
+    let advertised_formats = [
+        ("png", ImageFormat::Png),
+        ("jpg", ImageFormat::Jpeg),
+        ("jpeg", ImageFormat::Jpeg),
+        ("webp", ImageFormat::WebP),
+    ];
+
+    for (advertised_extension, encoded_format) in advertised_formats {
+        let encoded_bytes = encode_solid_rgb([200, 100, 50], 32, 32, encoded_format);
+        let processed_image = image_processor
+            .process_image_bytes(&encoded_bytes)
+            .unwrap_or_else(|processing_error| {
+                panic!(
+                    "the advertised .{advertised_extension} attachment format should decode: {processing_error}"
+                )
+            });
+        assert_eq!(
+            processed_image.image_grid.width_patch_count, 16,
+            "the advertised .{advertised_extension} attachment should preprocess"
+        );
+    }
+}
+
+fn encode_solid_rgb(
+    rgb_pixel: [u8; 3],
+    width_pixels: u32,
+    height_pixels: u32,
+    encoded_format: ImageFormat,
+) -> Vec<u8> {
     let solid_rgb_image = ImageBuffer::from_pixel(width_pixels, height_pixels, Rgb(rgb_pixel));
-    let mut encoded_png_bytes = Vec::new();
+    let mut encoded_image_bytes = Vec::new();
     DynamicImage::ImageRgb8(solid_rgb_image)
-        .write_to(&mut Cursor::new(&mut encoded_png_bytes), ImageFormat::Png)
-        .expect("test PNG encoding should succeed");
-    encoded_png_bytes
+        .write_to(&mut Cursor::new(&mut encoded_image_bytes), encoded_format)
+        .expect("test image encoding should succeed");
+    encoded_image_bytes
+}
+
+fn encode_solid_rgb_png(rgb_pixel: [u8; 3], width_pixels: u32, height_pixels: u32) -> Vec<u8> {
+    encode_solid_rgb(rgb_pixel, width_pixels, height_pixels, ImageFormat::Png)
 }
