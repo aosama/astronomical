@@ -34,6 +34,12 @@ pub enum WorkerStartupError {
     ReadMlxRecommendedGpuWorkingSet(#[source] MlxRuntimeError),
     #[error("MLX recommended GPU working set cannot produce a positive serving memory ceiling")]
     RecommendedGpuWorkingSetTooSmall,
+    #[error("failed to initialize the MLX runtime for wired-capacity verification: {0}")]
+    InitializeVerificationRuntime(#[source] MlxRuntimeError),
+    #[error("invalid GPU wired-capacity verification geometry: {description}")]
+    InvalidGpuWiredCapacityVerificationGeometry { description: &'static str },
+    #[error("GPU wired-capacity verification could not wire even one step")]
+    GpuWiredCapacityVerificationFloor,
 }
 
 /// Bounds family-owned model failure detail before it crosses the worker boundary.

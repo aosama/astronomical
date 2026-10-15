@@ -157,8 +157,11 @@ fn scan_root(model_directory: &Path) -> String {
 
 /// The daemon resolves configuration from the state directory it is given.
 fn write_instance_config(state_directory: &Path, model_root: &str) {
+    // The fixture model is tiny, so a small explicit ceiling keeps the
+    // parallel lane's workers from paying machine-scale wired-capacity
+    // verification walks that starve sibling daemon lifecycle assertions.
     let configuration_document = format!(
-        r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":["{model_root}"]}},"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}}}}"#
+        r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":["{model_root}"],"maximum_mlx_memory_gb":2}},"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}}}}"#
     );
     std::fs::write(state_directory.join("config.json"), configuration_document)
         .expect("instance config should be written");

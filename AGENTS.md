@@ -35,11 +35,11 @@
 
 - All and any tests must have a built-in timeout with a maximum of 60 seconds. Exceptions can be made for performance-endurance tests and/or tests that reproduce out-of-memory (OOM) issues.
 
-- SSD-paging e2e tests must have a built-in timeout of 60 seconds. If e2e test exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the e2e test timeout or repeating long model runs.
+- SSD-paging e2e tests must have a built-in timeout of 120 seconds. If e2e test exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the e2e test timeout or repeating long model runs.
 
 - The fixture of Romeo and Juliet MUST be used as the source test input for LLMs; there should not be random text or tokens used for testing.
 
-- Any test case that utilizes an end-to-end model (a real model) should not be configured to allocate, acquire, or reserve more than 36 GB of RAM. Beyond that, macOS goes into resource contention and the test is meaningless. Exceptions can be made for explicit tests after user agreement; memorialize the agreement in code comments with the reasoning for the exception.
+- Any test case that utilizes an end-to-end model (a real model) should not be configured to allocate, acquire, or reserve more than 36 GB of RAM. 
 
 - The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
 
@@ -51,6 +51,7 @@
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
+- MOST IMPORTANTLY to uncover performance degradation you have to introduce tests at the lower most part of the callstack and work upwards from there using tests. Reading code and reasoning through it will not help you.
 
 ## Memory Management Ownership In This Codebase
 

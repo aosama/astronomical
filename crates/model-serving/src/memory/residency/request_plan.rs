@@ -21,6 +21,12 @@ pub enum RequestExpertLayerRole {
     /// read already paid the whole-layer cost, so discarding it would make
     /// every later chunk re-stream the same bytes from SSD.
     Streamed,
+    /// A capacity recovery evicted this layer's retention. It must stream
+    /// operation-local for the rest of the request: re-admitting what a
+    /// recovery just released lets every later attempt re-seat, re-fail, and
+    /// re-evict the same table — the thrash loop behind the 2026-10-15
+    /// paged-prefill stall (issue #1278).
+    DemotedByCapacityFailure,
 }
 
 /// Request-scoped expert contract. Family crates enact it; they do not replan it.
@@ -61,8 +67,10 @@ impl RequestExpertResidency {
 
     /// Drops pinned complete layers from the tail until `required_reclamation_bytes` is covered.
     ///
-    /// Those layers become streamed for the rest of Prefill. A later leftover
-    /// plan must not pin them again.
+    /// Those layers are demoted beyond re-admission for the rest of Prefill: a
+    /// later leftover plan must neither pin them again nor admit them on read,
+    /// because the bytes a recovery reclaimed return to the exact pressure
+    /// that evicted them the moment a retry re-seats the layer.
     #[must_use]
     pub fn shrink_after_capacity_failure(
         &self,
@@ -85,7 +93,7 @@ impl RequestExpertResidency {
                 .get(layer_index)
                 .map(|geometry| geometry.complete_layer_payload_bytes)
                 .unwrap_or(0);
-            layer_roles[layer_index] = RequestExpertLayerRole::Streamed;
+            layer_roles[layer_index] = RequestExpertLayerRole::DemotedByCapacityFailure;
             remaining_reclamation_bytes =
                 remaining_reclamation_bytes.saturating_sub(complete_layer_payload_bytes);
         }
@@ -93,11 +101,18 @@ impl RequestExpertResidency {
     }
 
     /// Rewrites a leftover Prefill plan so it cannot promote or release against this contract.
+    ///
+    /// Streamed-role layers keep what a mandatory read materialized only while
+    /// the composed leftover budget still has room after every pinned layer's
+    /// claim; a streamed layer the budget cannot hold resolves to
+    /// operation-local streaming so the plan never authorizes an adoption
+    /// offer it budgets zero bytes for (issue #1278).
     #[must_use]
     pub fn stabilize_prefill_plan(
         &self,
         mut candidate_plan: ExpertResidencyPlan,
         current_residencies: &[CurrentExpertLayerResidency],
+        layer_geometries: &[ExpertLayerGeometry],
     ) -> ExpertResidencyPlan {
         let mut layer_is_currently_complete = vec![false; self.layer_roles.len()];
         for current_residency in current_residencies {
@@ -113,38 +128,66 @@ impl RequestExpertResidency {
                 ExpertLayerResidencyTarget::StreamOperationLocal,
             );
         }
+        // The stream-admission headroom is what remains of the composed
+        // ceiling after every pinned layer's claim: each pin, seated or not,
+        // reserves its full complete payload, because a seated pin's table
+        // holds exactly that payload and an unseated pin claims it on
+        // promotion. Spent sequentially in layer order, the headroom
+        // reproduces the cache's own first-insert admission against the same
+        // ceiling.
+        let mut stream_admission_headroom_bytes = candidate_plan.retained_expert_ceiling_bytes;
         let mut expected_preserved_bytes = 0_u64;
         let mut maximum_new_retained_bytes = 0_u64;
+        for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
+            if *layer_role != RequestExpertLayerRole::PinnedComplete {
+                continue;
+            }
+            let pinned_complete_claim_bytes = layer_geometries
+                .get(layer_index)
+                .map(|geometry| geometry.complete_layer_payload_bytes)
+                .unwrap_or(0);
+            stream_admission_headroom_bytes =
+                stream_admission_headroom_bytes.saturating_sub(pinned_complete_claim_bytes);
+            if layer_is_currently_complete[layer_index]
+                && let Some(current_residency) = current_residencies
+                    .iter()
+                    .find(|residency| residency.layer_index == layer_index)
+            {
+                expected_preserved_bytes =
+                    expected_preserved_bytes.saturating_add(current_residency.payload_bytes);
+            }
+        }
         for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
             let layer_target = match *layer_role {
                 RequestExpertLayerRole::PinnedComplete
                     if layer_is_currently_complete[layer_index] =>
                 {
-                    if let Some(current_residency) = current_residencies
-                        .iter()
-                        .find(|residency| residency.layer_index == layer_index)
-                    {
-                        expected_preserved_bytes = expected_preserved_bytes
-                            .saturating_add(current_residency.payload_bytes);
-                    }
                     ExpertLayerResidencyTarget::PreserveComplete
                 }
                 RequestExpertLayerRole::PinnedComplete => {
-                    maximum_new_retained_bytes = maximum_new_retained_bytes.saturating_add(
-                        current_residencies
-                            .iter()
-                            .find(|residency| residency.layer_index == layer_index)
-                            .map(|residency| residency.payload_bytes)
-                            .unwrap_or(0),
-                    );
                     ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
                 }
                 RequestExpertLayerRole::Streamed => {
-                    // A streamed layer's mandatory read pays the complete-layer
-                    // cost the moment the chunk routes nearly every expert, so
-                    // keeping what was read is pure reuse; budget admission
-                    // still refuses an adoption the leftover cannot hold.
-                    ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+                    let complete_layer_payload_bytes = layer_geometries
+                        .get(layer_index)
+                        .map(|geometry| geometry.complete_layer_payload_bytes)
+                        .unwrap_or(u64::MAX);
+                    if complete_layer_payload_bytes <= stream_admission_headroom_bytes {
+                        stream_admission_headroom_bytes = stream_admission_headroom_bytes
+                            .saturating_sub(complete_layer_payload_bytes);
+                        maximum_new_retained_bytes =
+                            maximum_new_retained_bytes.saturating_add(complete_layer_payload_bytes);
+                        // A streamed layer's mandatory read pays the complete-layer
+                        // cost the moment the chunk routes nearly every expert, so
+                        // keeping what was read is pure reuse while the leftover
+                        // budget admits the payload.
+                        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+                    } else {
+                        ExpertLayerResidencyTarget::StreamOperationLocal
+                    }
+                }
+                RequestExpertLayerRole::DemotedByCapacityFailure => {
+                    ExpertLayerResidencyTarget::StreamOperationLocal
                 }
             };
             candidate_plan.layer_targets[layer_index] = layer_target;
@@ -223,8 +266,11 @@ pub fn publish_request_stable_residency_plan(
                     layer_geometries,
                 );
             }
-            let stabilized_plan =
-                request_residency.stabilize_prefill_plan(candidate_plan, current_residencies);
+            let stabilized_plan = request_residency.stabilize_prefill_plan(
+                candidate_plan,
+                current_residencies,
+                layer_geometries,
+            );
             (Some(request_residency), stabilized_plan)
         }
         MemoryPhase::GenerationPreparation | MemoryPhase::Decode | MemoryPhase::Idle => {

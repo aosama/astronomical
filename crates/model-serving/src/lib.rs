@@ -197,6 +197,7 @@ pub use memory::{
     seated_complete_expert_request_temporary_workspace_bytes,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
     should_enact_planned_expert_release, should_retry_fixed_forward_after_expert_reclamation,
+    whole_table_reclamation_target_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
