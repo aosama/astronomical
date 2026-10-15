@@ -14,7 +14,7 @@
 
 - While developing this codebase, never kill, stop, terminate, or force-quit the running Stable instance: the `astronomicald` daemon on `127.0.0.1:6732`, the `~/Applications/Astronomical.app`, or any process bound to the Stable state directory `~/.astronomical`.
 
-## There are No Downstream Consumers or Dependencies
+## There are No RESTAPI/IPC/Unix Socket Downstream Consumers
 
 - There are no downstream consumers or other dependent applications — hence no need for deprecation or compatibility shims or any other techniques.
 - There is no requirement for backward compatibility for the REST API surface. There are no downstream consumers of these surfaces, so REST API backward compatibility is not a constraint.
