@@ -106,6 +106,11 @@ pub enum ExpertLayerResidencyTarget {
     /// The layer's complete retention yields by exactly the computed deficit,
     /// leaving the rest of the layer retained.
     ReleaseCompleteForExactDeficit,
+    /// The layer is streamed for this operation, but a mandatory multi-token
+    /// read already materialized the complete payload: keep it when the
+    /// retained budget admits it instead of re-reading identical bytes next
+    /// chunk. Budget admission remains the only refusal path.
+    AdmitCompleteOnMandatoryRead,
 }
 
 /// One deterministic topology plan that never commands eager source reads.

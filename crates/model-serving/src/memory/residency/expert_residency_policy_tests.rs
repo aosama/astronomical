@@ -79,6 +79,13 @@ offline_denied_test!(should_seat_complete_layers_on_mandatory_prefill_reads, {
         true,
         Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead),
     ));
+    // Streamed-role layers admit too: the mandatory read already paid the
+    // complete-layer cost, and keeping it is reuse rather than pinning.
+    assert!(should_commit_mandatory_complete_layer(
+        2_048,
+        true,
+        Some(ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead),
+    ));
     assert!(!should_commit_mandatory_complete_layer(
         2_048,
         true,
@@ -313,7 +320,7 @@ offline_denied_test!(
         );
         assert_eq!(
             opened_plan.layer_targets[2],
-            ExpertLayerResidencyTarget::StreamOperationLocal
+            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
         );
 
         let richer_candidate = plan_expert_residency(MemoryPhase::Prefill, 120, &geometries, &[])
@@ -330,7 +337,7 @@ offline_denied_test!(
         assert_eq!(continued_plan.complete_layer_targets, vec![0, 1]);
         assert_eq!(
             continued_plan.layer_targets[2],
-            ExpertLayerResidencyTarget::StreamOperationLocal
+            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
         );
     }
 );
@@ -397,7 +404,10 @@ offline_denied_test!(
         assert_eq!(published_plan.complete_layer_targets, vec![0]);
         assert_eq!(
             published_plan.layer_targets[1],
-            ExpertLayerResidencyTarget::StreamOperationLocal
+            // Capacity failure drops the layer from the pin set but it keeps
+            // admit-on-read: re-pinning is forbidden, keeping what a mandatory
+            // read already materialized is not pinning.
+            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
         );
     }
 );

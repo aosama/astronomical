@@ -116,6 +116,7 @@ async fn attribute_paged_prefill_chunks() {
 
     let mut total_positional_read_bytes = 0_u64;
     let mut total_streamed_payload_bytes = 0_u64;
+    let mut first_chunk_seated_bytes = 0_u64;
     let final_prompt_token_index = prompt_token_ids.len() - 1;
     let mut chunk_index = 0_usize;
     for chunk_start in (0..final_prompt_token_index).step_by(PREFILL_CHUNK_TOKENS) {
@@ -149,6 +150,9 @@ async fn attribute_paged_prefill_chunks() {
         let seated_payload_bytes = chunk_attribution.counter_value(
             PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
         );
+        if chunk_index == 1 {
+            first_chunk_seated_bytes = seated_payload_bytes;
+        }
         let full_hit_assignments =
             chunk_attribution.counter_value(PerformanceCounter::RetainedRouteAssignmentHitCount);
         let (read_calls, read_bytes, read_elapsed_ns) = chunk_attribution
@@ -225,6 +229,21 @@ async fn attribute_paged_prefill_chunks() {
         total_streamed_payload_bytes as f64 / 1e9,
         total_positional_read_bytes as f64 / 1e9,
         complete_expert_payload_bytes as f64 / 1e9,
+    );
+    // Chunk-to-chunk retention: chunk one seats what the composed leftover
+    // ceiling admits; later chunks must stream only the unseated remainder,
+    // never the seated fraction again. The bound is computed from the
+    // observed chunk-one seating so the assertion tracks the machine's
+    // actual budget rather than a hardcoded fraction.
+    let expected_total_bytes = complete_expert_payload_bytes
+        + (complete_expert_payload_bytes
+            - first_chunk_seated_bytes.min(complete_expert_payload_bytes));
+    let expected_multiplier =
+        expected_total_bytes as f64 / complete_expert_payload_bytes.max(1) as f64;
+    assert!(
+        restream_multiplier < expected_multiplier + 0.05,
+        "paged prefill must not re-stream seated layers: multiplier {restream_multiplier:.2} \
+         reached or exceeded a full payload per chunk (ceiling {expected_multiplier:.2})"
     );
 }
 

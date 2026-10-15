@@ -10,7 +10,10 @@
 ///
 /// Prefill does this for multi-token chunks. Decode must do it too after an
 /// atomic complete-owner demote, or leftover budget never becomes resident RAM
-/// and every generate token streams from SSD.
+/// and every generate token streams from SSD. Streamed-role layers admit too:
+/// a multi-token chunk routes nearly every expert, so the mandatory read
+/// already paid the complete-layer cost and discarding it would re-stream the
+/// same bytes every later chunk. Budget admission remains the only refusal.
 #[must_use]
 pub const fn should_commit_mandatory_complete_layer(
     _route_token_count: i32,
@@ -20,7 +23,10 @@ pub const fn should_commit_mandatory_complete_layer(
     production_default_paging
         && matches!(
             residency_target,
-            Some(super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead)
+            Some(
+                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            )
         )
 }
 
