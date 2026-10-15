@@ -10,6 +10,10 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::model_family_factory::{InferenceWorker, ModelFamilyFactory};
 use crate::worker_startup_gpu_memory::sample_gpu_memory_limits;
+use crate::worker_startup_gpu_verification::{
+    SKIP_VERIFICATION_ENVIRONMENT_VARIABLE, WiredCapacityVerification,
+    verify_effective_gpu_wired_capacity,
+};
 
 const PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME: &str = "performance-attribution.jsonl";
 
@@ -123,13 +127,14 @@ where
         serving_mlx_memory_ceiling_bytes,
     );
     if let Some(configured_maximum_mlx_memory_bytes) = configured_maximum_mlx_memory_bytes
-        && configured_maximum_mlx_memory_bytes > serving_mlx_memory_ceiling_bytes
+        && configured_maximum_mlx_memory_bytes > effective_mlx_memory_ceiling_bytes_u64
     {
         tracing::warn!(
             configured_maximum_mlx_memory_bytes,
+            machine_mlx_memory_ceiling_bytes,
             serving_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
-            "configured MLX memory ceiling exceeds the serving envelope and was clamped"
+            "configured MLX memory ceiling exceeds a machine or serving bound and was clamped to the effective ceiling"
         );
     }
     let effective_mlx_memory_ceiling_bytes =
@@ -138,6 +143,44 @@ where
                 description: "effective MLX memory ceiling exceeds the platform integer range",
             })
         })?;
+    // The composed ceiling is an assumption until the machine proves it: under
+    // the default kernel wired policy the enforced boundary is invisible to
+    // every query, so the worker wires the promised ceiling once and clamps to
+    // the last healthy step when the operating system answers with a crawl.
+    // Acceptance cells that deliberately serve beyond the boundary skip this
+    // through an explicit environment variable.
+    let mut effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
+    let skip_wired_capacity_verification = std::env::var_os(SKIP_VERIFICATION_ENVIRONMENT_VARIABLE)
+        .is_some_and(|skip_value| skip_value == "1");
+    if skip_wired_capacity_verification {
+        tracing::warn!(
+            effective_mlx_memory_ceiling_bytes,
+            environment_variable = SKIP_VERIFICATION_ENVIRONMENT_VARIABLE,
+            "skipping GPU wired-capacity verification for deliberate over-boundary testing"
+        );
+    } else {
+        match verify_effective_gpu_wired_capacity(effective_mlx_memory_ceiling_bytes)
+            .await
+            .map_err(WorkerProcessError::Startup)?
+        {
+            WiredCapacityVerification::Verified { wired_bytes } => {
+                tracing::info!(
+                    effective_mlx_memory_ceiling_bytes,
+                    wired_bytes,
+                    "GPU wired-capacity verification confirmed the effective ceiling"
+                );
+            }
+            WiredCapacityVerification::ClampedToLastHealthyStep { wired_bytes } => {
+                tracing::warn!(
+                    requested_effective_mlx_memory_ceiling_bytes =
+                        effective_mlx_memory_ceiling_bytes,
+                    verified_effective_mlx_memory_ceiling_bytes = wired_bytes,
+                    "GPU wired-capacity verification clamped the effective ceiling to the last healthy wiring step"
+                );
+                effective_mlx_memory_ceiling_bytes = wired_bytes;
+            }
+        }
+    }
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,

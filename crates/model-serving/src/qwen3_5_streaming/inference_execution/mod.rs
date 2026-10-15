@@ -28,6 +28,8 @@ mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
+#[cfg(test)]
+mod prompt_processing_chunk_sizer_tests;
 mod request_memory_release;
 mod start_generation;
 mod terminal_prefill_seed;

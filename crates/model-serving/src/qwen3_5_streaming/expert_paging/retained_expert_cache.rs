@@ -24,10 +24,10 @@ mod reclamation;
 mod slot_writes;
 
 #[cfg(all(test, feature = "direct-mlx"))]
-mod memory_behavior;
+mod memory_behavior_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
-mod tests;
+mod retained_expert_cache_tests;
 
 /// Warm-table coverage of one decode token's routed experts.
 #[derive(Debug, Eq, PartialEq)]

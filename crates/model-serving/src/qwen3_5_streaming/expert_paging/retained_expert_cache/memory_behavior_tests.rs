@@ -2,7 +2,7 @@
 //! invariants that survive growth and eviction cycles, and the MLX graph-pin
 //! guarantees of the warm-table write paths.
 
-use super::tests::{
+use super::retained_expert_cache_tests::{
     EXPERT_CAPACITY, STREAMED_PER_EXPERT_PAYLOAD_BYTES, WARM_SLOT_COUNT,
     streamed_weights_for_expert_count, test_runtime,
 };

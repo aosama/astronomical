@@ -117,7 +117,7 @@ pub use reclamation::{
     fixed_forward_workspace_after_allocation_failure, next_paged_expert_reclamation_step,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes,
-    should_retry_fixed_forward_after_expert_reclamation,
+    should_retry_fixed_forward_after_expert_reclamation, whole_table_reclamation_target_bytes,
 };
 pub use recovery::{ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements};
 pub use residency::{
