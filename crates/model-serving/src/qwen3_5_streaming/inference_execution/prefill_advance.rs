@@ -22,7 +22,7 @@ use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
-    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
+    last_prefill_chunk_demand_weight, persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 
@@ -127,9 +127,34 @@ impl Qwen3_5EngineState {
             );
         let mut has_retried_current_prefill_chunk_after_reclamation = false;
         let mut has_observed_prefill_capacity_constraint = false;
+        let mut has_failed_current_prefill_chunk_attempt = false;
         let (prefill_end, prompt_prefill_chunk_outcome) = loop {
+            // One demand-evidence window per request's prefill: earlier chunks
+            // record at weight one and the final chunk records boosted, so the
+            // prefill-to-decode handoff ranks prompt-tail routes by token
+            // density instead of raw assignment count. A failed attempt
+            // discards its partial evidence so the retry starts clean.
+            if !active_request.has_opened_expert_demand_window
+                || has_failed_current_prefill_chunk_attempt
+            {
+                if let Some(model) = self.model.as_ref() {
+                    model.clear_expert_demand_for_residency();
+                }
+                active_request.has_opened_expert_demand_window = true;
+            }
+            let this_attempt_token_count =
+                attempted_prefill_chunk_token_count.min(prefill_end_exclusive - prefill_start);
+            let demand_assignment_weight =
+                if prefill_start + this_attempt_token_count >= prefill_end_exclusive {
+                    last_prefill_chunk_demand_weight(
+                        u64::try_from(prefill_start).unwrap_or(u64::MAX),
+                        u64::try_from(this_attempt_token_count).unwrap_or(u64::MAX),
+                    )
+                } else {
+                    1
+                };
             if let Some(model) = self.model.as_ref() {
-                model.clear_expert_demand_for_residency();
+                model.set_expert_demand_assignment_weight_for_residency(demand_assignment_weight);
             }
             let prefill_end = prefill_start
                 .checked_add(attempted_prefill_chunk_token_count)
@@ -142,6 +167,7 @@ impl Qwen3_5EngineState {
                     return Err(generation_error);
                 }
                 Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
+                    has_failed_current_prefill_chunk_attempt = true;
                     if let Some(smaller_executable_chunk_size_tokens) =
                         Qwen3_5StreamingPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
                             attempted_prefill_chunk_token_count,
@@ -175,6 +201,7 @@ impl Qwen3_5EngineState {
                     allowed_active_memory_bytes,
                     prefill_request_checkpoint,
                 }) => {
+                    has_failed_current_prefill_chunk_attempt = true;
                     let should_retry_same_prefill_chunk = self
                         .recover_fixed_prefill_chunk_after_active_memory_limit(
                             request_id,
@@ -212,6 +239,7 @@ impl Qwen3_5EngineState {
                     reason,
                     prefill_request_checkpoint,
                 }) => {
+                    has_failed_current_prefill_chunk_attempt = true;
                     let should_retry_same_prefill_chunk = self
                         .recover_fixed_prefill_chunk_after_graphics_processor_exhaustion(
                             request_id,
@@ -245,6 +273,11 @@ impl Qwen3_5EngineState {
                 }
             }
         };
+        // Decode records its own route demand at plain assignment weight; the
+        // boost belongs to the final prefill chunk's evidence only.
+        if let Some(model) = self.model.as_ref() {
+            model.set_expert_demand_assignment_weight_for_residency(1);
+        }
         let active_memory_bytes_before_growth =
             prompt_prefill_chunk_outcome.active_memory_bytes_before_growth;
         let retained_expert_payload_bytes_before_growth =

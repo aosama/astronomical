@@ -35,6 +35,7 @@ pub(super) fn representative_long_generation_prompt_token_ids(
                         top_p_thousandths: None,
                         seed: None,
                         thinking_budget: Some(256),
+                        repetition_penalty_thousandths: None,
                     },
                     structured_generation: None,
                 },

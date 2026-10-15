@@ -77,6 +77,7 @@ async fn run_romeo_continuation() {
                     top_p_thousandths: None,
                     seed: None,
                     thinking_budget: None,
+                    repetition_penalty_thousandths: None,
                 },
                 structured_generation: None,
             },

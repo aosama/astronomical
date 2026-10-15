@@ -16,7 +16,10 @@ use crate::memory::MemoryPhase;
 pub enum RequestExpertLayerRole {
     /// Keep or promote the complete layer until the request ends or shrinks.
     PinnedComplete,
-    /// Read when a forward needs it. Never promote during this Prefill.
+    /// Read when a forward needs it and keep what was read when leftover RAM
+    /// admits the payload. Never planned into the pin set, but a mandatory
+    /// read already paid the whole-layer cost, so discarding it would make
+    /// every later chunk re-stream the same bytes from SSD.
     Streamed,
 }
 
@@ -137,7 +140,11 @@ impl RequestExpertResidency {
                     ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
                 }
                 RequestExpertLayerRole::Streamed => {
-                    ExpertLayerResidencyTarget::StreamOperationLocal
+                    // A streamed layer's mandatory read pays the complete-layer
+                    // cost the moment the chunk routes nearly every expert, so
+                    // keeping what was read is pure reuse; budget admission
+                    // still refuses an adoption the leftover cannot hold.
+                    ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
                 }
             };
             candidate_plan.layer_targets[layer_index] = layer_target;

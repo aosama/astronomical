@@ -268,6 +268,7 @@ fn representative_visual_request_with_optional_later_image(
                         top_p_thousandths: None,
                         seed: Some(VISUAL_ACCEPTANCE_SAMPLING_SEED),
                         thinking_budget: None,
+                        repetition_penalty_thousandths: None,
                     },
                     structured_generation: None,
                 },
