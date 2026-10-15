@@ -60,8 +60,8 @@ Patches apply in the order declared by the `PATCH_COMMAND` list in
 `apply_patch_if_needed.cmake`, which fails the configure loudly when a patch
 no longer applies to the pinned archive. Every patch below is reviewed at
 each pin bump and retired the moment the pinned upstream tree contains the
-equivalent behavior; decisions and evidence are recorded in
-`docs/performance-optimizations-lessons.md`.
+equivalent behavior; each patch's rationale and evidence are
+recorded inline in this registry below.
 
 MLX patches (`mlx-0.32.3-*.patch`):
 
@@ -156,9 +156,9 @@ To bump a pinned dependency:
 6. Prove performance parity for the `resident_sparse_moe` registry model
    with the performance-throughput journeys and compare against the recorded
    band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
-7. Update this registry, the repo discovery guide, and
-   `docs/performance-optimizations-lessons.md`, then commit after
-   `cargo fmt --all -- --check` and `cargo test-offline-and-rest` pass.
+7. Update this registry and the repo discovery guide, then commit
+   after `cargo fmt --all -- --check` and
+   `cargo test-offline-and-rest` pass.
 
 ## Bindgen headers and the C surface diff
 
