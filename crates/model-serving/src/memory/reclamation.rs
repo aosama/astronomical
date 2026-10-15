@@ -143,6 +143,32 @@ pub fn should_retry_fixed_forward_after_expert_reclamation(
             >= u64::try_from(expert_reclamation_target_bytes).unwrap_or(u64::MAX)
 }
 
+/// Rounds a fixed-forward reclamation target up to whole-table granularity.
+///
+/// The retained cache releases complete expert tables, so a byte-exact
+/// deficit leaves the next attempt's headroom dependent on where table
+/// boundaries fall. Rounding up guarantees one eviction cycle frees at
+/// least the deficit with whole tables and keeps the floored-ceiling
+/// arithmetic aligned to the same granularity. Zero stays zero, and a zero
+/// granularity (no sparse tables) returns the deficit unchanged.
+#[must_use]
+pub const fn whole_table_reclamation_target_bytes(
+    required_reclamation_bytes: usize,
+    complete_table_payload_bytes: usize,
+) -> usize {
+    if complete_table_payload_bytes == 0 {
+        return required_reclamation_bytes;
+    }
+    let whole_table_count = required_reclamation_bytes / complete_table_payload_bytes;
+    if required_reclamation_bytes % complete_table_payload_bytes == 0 {
+        return required_reclamation_bytes;
+    }
+    match (whole_table_count + 1).checked_mul(complete_table_payload_bytes) {
+        Some(rounded_up_bytes) => rounded_up_bytes,
+        None => usize::MAX,
+    }
+}
+
 /// Exact expert-retention reclamation required by one request operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExpertReclamationPlan {

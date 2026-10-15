@@ -320,7 +320,11 @@ offline_denied_test!(
         );
         assert_eq!(
             opened_plan.layer_targets[2],
-            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            // The pinned claims (two unseated complete layers, 80 bytes) leave
+            // 20 bytes of the composed leftover; a 40-byte complete page can
+            // never seat there, so the layer must resolve to operation-local
+            // streaming instead of an authorized offer the budget refuses.
+            ExpertLayerResidencyTarget::StreamOperationLocal
         );
 
         let richer_candidate = plan_expert_residency(MemoryPhase::Prefill, 120, &geometries, &[])
@@ -337,6 +341,9 @@ offline_denied_test!(
         assert_eq!(continued_plan.complete_layer_targets, vec![0, 1]);
         assert_eq!(
             continued_plan.layer_targets[2],
+            // The richer leftover holds the pinned claims plus one complete
+            // page (80 + 40 = 120), so the streamed layer keeps admit-on-read
+            // exactly while the composed budget can seat it.
             ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
         );
     }
@@ -387,7 +394,7 @@ offline_denied_test!(
         let shrunk_residency = opened_residency.shrink_after_capacity_failure(40, &geometries);
         assert_eq!(
             shrunk_residency.layer_role(1),
-            Some(RequestExpertLayerRole::Streamed)
+            Some(RequestExpertLayerRole::DemotedByCapacityFailure)
         );
 
         let richer_candidate = plan_expert_residency(MemoryPhase::Prefill, 120, &geometries, &[])
@@ -404,10 +411,12 @@ offline_denied_test!(
         assert_eq!(published_plan.complete_layer_targets, vec![0]);
         assert_eq!(
             published_plan.layer_targets[1],
-            // Capacity failure drops the layer from the pin set but it keeps
-            // admit-on-read: re-pinning is forbidden, keeping what a mandatory
-            // read already materialized is not pinning.
-            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            // A capacity-evicted layer never re-seats within the request: the
+            // bytes a recovery reclaimed return to the exact pressure that
+            // evicted them the moment a retry re-admits the layer (issue
+            // #1278), so the layer streams operation-local until the request
+            // ends.
+            ExpertLayerResidencyTarget::StreamOperationLocal
         );
     }
 );

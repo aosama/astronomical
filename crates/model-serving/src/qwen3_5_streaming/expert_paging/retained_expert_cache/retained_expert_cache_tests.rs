@@ -406,6 +406,133 @@ fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
     );
 }
 
+/// Incident reproduction (2026-10-15 paged-prefill stall), cache level: with
+/// the ceiling set to the composed budget, complete-layer adoption offers
+/// stop exactly at the budget — the cache's own admission arithmetic is sound.
+/// Oversubscription therefore cannot originate in `try_adopt_complete_layer`;
+/// it can only arrive through a ceiling raised above the composed budget.
+#[test]
+fn should_seat_at_most_the_composed_ceiling_and_refuse_every_further_complete_layer() {
+    let runtime = test_runtime();
+    let sparse_layer_count = 8_usize;
+    let mut cache = RetainedExpertCache::new(sparse_layer_count);
+    // Five tables of 768 bytes each: the composed-budget analogue of the
+    // incident's 33 affordable layers out of 38.
+    let affordable_complete_layer_count = 5_u64;
+    let complete_layer_payload_bytes =
+        u64::try_from(EXPERT_CAPACITY).unwrap_or(0) * STREAMED_PER_EXPERT_PAYLOAD_BYTES;
+    let composed_ceiling_bytes = affordable_complete_layer_count * complete_layer_payload_bytes;
+    cache.update_maximum_resident_payload_bytes(composed_ceiling_bytes);
+    let complete_expert_ids: Vec<usize> = (0..EXPERT_CAPACITY).collect();
+
+    let mut seated_layer_indexes = Vec::new();
+    for layer_index in 0..sparse_layer_count {
+        let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
+        let seated = cache
+            .try_adopt_complete_layer(
+                &runtime,
+                layer_index,
+                &complete_expert_ids,
+                &complete_weights,
+            )
+            .expect("a complete-layer adoption offer must not fail");
+        if seated {
+            seated_layer_indexes.push(layer_index);
+        }
+    }
+
+    assert_eq!(seated_layer_indexes, (0..5).collect::<Vec<_>>());
+    assert_eq!(
+        cache.statistics().resident_payload_byte_count,
+        composed_ceiling_bytes,
+        "resident payload must stop exactly at the composed ceiling"
+    );
+}
+
+/// Incident reproduction, cache level: a sub-table pressure target evicts
+/// exactly one whole table, and the evicted layer is then unseatable under
+/// both documented ceilings — the pressure override and the budget-refresh
+/// floor — so every later forward re-pays its complete-page SSD read. This is
+/// the steady state the incident's halving loop executed for 69 seconds.
+#[test]
+fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
+    let runtime = test_runtime();
+    let sparse_layer_count = 8_usize;
+    let mut cache = RetainedExpertCache::new(sparse_layer_count);
+    let complete_layer_payload_bytes =
+        u64::try_from(EXPERT_CAPACITY).unwrap_or(0) * STREAMED_PER_EXPERT_PAYLOAD_BYTES;
+    let composed_ceiling_bytes = 5 * complete_layer_payload_bytes;
+    cache.update_maximum_resident_payload_bytes(composed_ceiling_bytes);
+    let complete_expert_ids: Vec<usize> = (0..EXPERT_CAPACITY).collect();
+    for layer_index in 0..5_usize {
+        let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
+        assert!(
+            cache
+                .try_adopt_complete_layer(
+                    &runtime,
+                    layer_index,
+                    &complete_expert_ids,
+                    &complete_weights,
+                )
+                .expect("the first five adoptions must seat")
+        );
+    }
+
+    // The incident's recovery demanded 64,597,002 bytes while the smallest
+    // eviction granularity was an 855,638,016-byte table; the scaled analogue
+    // is a one-expert target against a 768-byte table.
+    let sub_table_target_bytes = STREAMED_PER_EXPERT_PAYLOAD_BYTES;
+    let released = cache.limit_for_request_pressure(sub_table_target_bytes);
+    assert!(
+        released,
+        "the pressure pass must release at least one table"
+    );
+    assert_eq!(
+        cache.statistics().resident_payload_byte_count,
+        4 * complete_layer_payload_bytes,
+        "exactly one whole table left despite a one-expert target"
+    );
+
+    // The evicted layer re-offers on every later forward; both ceilings
+    // refuse it, so its complete page is re-read from SSD each attempt.
+    let evicted_layer_index = 0_usize;
+    let reoffered_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
+    assert!(
+        !cache
+            .try_adopt_complete_layer(
+                &runtime,
+                evicted_layer_index,
+                &complete_expert_ids,
+                &reoffered_weights,
+            )
+            .expect("re-adoption under the pressure override must not fail")
+    );
+
+    // The next plan publication floors the ceiling at the post-eviction
+    // payload (the incident's 31,658,606,592-byte floor against a
+    // 28,974,982,400-byte composed budget).
+    let floored_ceiling_bytes = crate::retained_resident_ceiling_after_budget_refresh(
+        2 * complete_layer_payload_bytes,
+        cache.statistics().resident_payload_byte_count,
+    );
+    cache.update_maximum_resident_payload_bytes(floored_ceiling_bytes);
+    assert!(
+        !cache
+            .try_adopt_complete_layer(
+                &runtime,
+                evicted_layer_index,
+                &complete_expert_ids,
+                &reoffered_weights,
+            )
+            .expect("re-adoption under the floored ceiling must not fail")
+    );
+    assert_eq!(
+        cache.statistics().resident_payload_byte_count,
+        4 * complete_layer_payload_bytes,
+        "the evicted layer never returns to the cache"
+    );
+}
+
 /// Issue #955 classification boundary: the complete-layer floors and the
 /// pressure reclamation paths treat a warm table that grew to hold every
 /// expert of its layer as a pinned complete layer, while strictly partial

@@ -21,7 +21,7 @@ use astronomical_ipc_protocol::RequestId;
 use crate::qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure;
 use crate::{
     AdaptiveRamGrowthExecutionProfile, ForwardRecoveryPolicy, InferenceEngineError,
-    PerformanceCounter, PerformanceOperation,
+    PerformanceCounter, PerformanceOperation, whole_table_reclamation_target_bytes,
 };
 
 use super::engine_request::{Qwen3_5EngineRequest, Qwen3_5PrefillRequestCheckpoint};
@@ -75,6 +75,10 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let expert_reclamation_target_bytes = whole_table_reclamation_target_bytes(
+            expert_reclamation_target_bytes,
+            complete_table_eviction_granularity_bytes(model),
+        );
         let active_memory_bytes_after_reclamation = reclaim_and_sample_active_memory(
             model,
             expert_reclamation_target_bytes,
@@ -164,6 +168,10 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let expert_reclamation_target_bytes = whole_table_reclamation_target_bytes(
+            expert_reclamation_target_bytes,
+            complete_table_eviction_granularity_bytes(model),
+        );
         let active_memory_bytes_after_reclamation = reclaim_and_sample_active_memory(
             model,
             expert_reclamation_target_bytes,
@@ -266,6 +274,22 @@ fn retained_expert_payload_bytes(model: &crate::qwen3_5_streaming::model::Qwen3_
             .resident_payload_byte_count,
     )
     .unwrap_or(usize::MAX)
+}
+
+/// Largest complete expert table the cache can release: the eviction
+/// granularity every reclamation target rounds up to.
+fn complete_table_eviction_granularity_bytes(
+    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
+) -> usize {
+    let largest_complete_table_bytes = model.expert_pager.as_ref().map_or(0, |expert_pager| {
+        expert_pager
+            .layer_plans()
+            .iter()
+            .filter_map(|layer_plan| layer_plan.complete_expert_payload_byte_count().ok())
+            .max()
+            .unwrap_or(0)
+    });
+    usize::try_from(largest_complete_table_bytes).unwrap_or(usize::MAX)
 }
 
 fn reclaim_and_sample_active_memory(

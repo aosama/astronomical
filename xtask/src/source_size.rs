@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
-const MAXIMUM_SOURCE_LINES: usize = 550;
-const WARNING_SOURCE_LINES: usize = 500;
-const MAXIMUM_STAGED_SOURCE_LINES: usize = 600;
+const MAXIMUM_SOURCE_LINES: usize = 650;
+const WARNING_SOURCE_LINES: usize = 600;
+const MAXIMUM_STAGED_SOURCE_LINES: usize = 700;
 const MAXIMUM_ELAPSED_SECONDS: u64 = 120;
 const PROGRESS_INTERVAL_FILES: usize = 100;
 

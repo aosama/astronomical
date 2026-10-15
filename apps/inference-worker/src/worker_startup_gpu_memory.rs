@@ -23,6 +23,21 @@ pub(crate) struct SampledGpuMemoryLimits {
     pub(crate) recommended_gpu_working_set_bytes: usize,
 }
 
+/// The fraction of the recommended working set the default kernel wired policy
+/// allows on large-memory machines (issue #1279).
+///
+/// With `iogpu.wired_limit_mb` at its zero sentinel, macOS enforces a wired
+/// boundary in the documented 66–75%-of-memory band that no query exposes,
+/// while the MLX recommended working set reports a much larger figure (on the
+/// captured 48 GB machine: ~95%). Composing the machine ceiling from the
+/// recommendation admits ceilings the operating system silently throttles:
+/// decode throughput collapsed 6.5x with active memory pinned at ~75% of the
+/// recommendation. The 75% upper edge of the documented band is the honest
+/// default-policy estimate; startup wiring verification clamps it further on
+/// machines where the enforced boundary sits lower.
+pub const DEFAULT_POLICY_WIRED_WORKING_SET_FRACTION: u64 = 3;
+pub const DEFAULT_POLICY_WIRED_WORKING_SET_DENOMINATOR: u64 = 4;
+
 /// Parses the machine GPU wired-memory sysctl setting.
 pub fn parse_iogpu_wired_limit_setting(
     wired_limit_mebibytes_text: &str,
@@ -49,6 +64,17 @@ pub fn parse_iogpu_wired_limit_setting(
     Ok(GpuWiredMemoryLimitSetting::ExplicitLimitBytes(
         explicit_limit_bytes,
     ))
+}
+
+/// The default-policy estimate of the enforced wired boundary.
+#[must_use]
+pub fn default_policy_wired_boundary_bytes(recommended_gpu_working_set_bytes: usize) -> usize {
+    let bounded_working_set_bytes = recommended_gpu_working_set_bytes as u128
+        * DEFAULT_POLICY_WIRED_WORKING_SET_FRACTION as u128;
+    usize::try_from(
+        bounded_working_set_bytes / DEFAULT_POLICY_WIRED_WORKING_SET_DENOMINATOR as u128,
+    )
+    .unwrap_or(usize::MAX)
 }
 
 /// Derives equal MLX active-memory and allocator-cache limits from the system ceiling.
@@ -90,7 +116,12 @@ pub(crate) async fn sample_gpu_memory_limits() -> Result<SampledGpuMemoryLimits,
         GpuWiredMemoryLimitSetting::ExplicitLimitBytes(explicit_limit_bytes) => {
             explicit_limit_bytes
         }
-        GpuWiredMemoryLimitSetting::SystemDefaultPolicy => recommended_gpu_working_set_bytes,
+        // The default policy's enforced wired boundary is not queryable and is
+        // materially below the recommendation; estimate it from the documented
+        // band and let startup verification prove or clamp the result.
+        GpuWiredMemoryLimitSetting::SystemDefaultPolicy => {
+            default_policy_wired_boundary_bytes(recommended_gpu_working_set_bytes)
+        }
     };
     Ok(SampledGpuMemoryLimits {
         machine_mlx_memory_ceiling_bytes,

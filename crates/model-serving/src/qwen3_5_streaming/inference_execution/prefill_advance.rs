@@ -128,7 +128,21 @@ impl Qwen3_5EngineState {
         let mut has_retried_current_prefill_chunk_after_reclamation = false;
         let mut has_observed_prefill_capacity_constraint = false;
         let mut has_failed_current_prefill_chunk_attempt = false;
+        let mut prefill_chunk_attempt_index = 0_u32;
         let (prefill_end, prompt_prefill_chunk_outcome) = loop {
+            // Every attempt boundary must be visible at INFO: a capacity
+            // failure inside a halved attempt re-pays complete-layer SSD
+            // reads for many seconds with no other log line, which made the
+            // 2026-10-15 stall invisible between recovery warnings.
+            prefill_chunk_attempt_index += 1;
+            tracing::info!(
+                request_id = request_id.value(),
+                prefill_start,
+                prefill_chunk_attempt_index,
+                attempted_prefill_chunk_token_count,
+                has_retried_current_prefill_chunk_after_reclamation,
+                "executing prompt-prefill chunk attempt"
+            );
             // One demand-evidence window per request's prefill: earlier chunks
             // record at weight one and the final chunk records boosted, so the
             // prefill-to-decode handoff ranks prompt-tail routes by token
@@ -175,6 +189,7 @@ impl Qwen3_5EngineState {
                     {
                         tracing::warn!(
                             request_id = request_id.value(),
+                            prefill_chunk_attempt_index,
                             attempted_prefill_chunk_token_count,
                             smaller_executable_chunk_size_tokens,
                             reason = %reason,
@@ -225,6 +240,13 @@ impl Qwen3_5EngineState {
                                 attempted_prefill_chunk_token_count,
                             )
                         {
+                            tracing::warn!(
+                                request_id = request_id.value(),
+                                prefill_chunk_attempt_index,
+                                attempted_prefill_chunk_token_count,
+                                smaller_executable_chunk_size_tokens,
+                                "active-memory-limit recovery halved the executable prefill chunk after expert reclamation"
+                            );
                             attempted_prefill_chunk_token_count =
                                 smaller_executable_chunk_size_tokens;
                             has_retried_current_prefill_chunk_after_reclamation = false;
@@ -261,6 +283,13 @@ impl Qwen3_5EngineState {
                                 attempted_prefill_chunk_token_count,
                             )
                         {
+                            tracing::warn!(
+                                request_id = request_id.value(),
+                                prefill_chunk_attempt_index,
+                                attempted_prefill_chunk_token_count,
+                                smaller_executable_chunk_size_tokens,
+                                "graphics-processor exhaustion recovery halved the executable prefill chunk after expert reclamation"
+                            );
                             attempted_prefill_chunk_token_count =
                                 smaller_executable_chunk_size_tokens;
                             has_retried_current_prefill_chunk_after_reclamation = false;

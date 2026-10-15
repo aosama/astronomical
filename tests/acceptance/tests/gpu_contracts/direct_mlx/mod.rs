@@ -1,5 +1,6 @@
 mod attention;
 mod flux2_klein;
+mod gpu_wired_ceiling_probe;
 mod k2_horizon_mova;
 mod kernel_capability;
 mod persistent_prompt_cache_block_topology;
