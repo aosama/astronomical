@@ -9,7 +9,9 @@ use crate::config_file::{
 use crate::duplicate_key_json;
 use crate::legacy_config_migration;
 
-const BYTES_PER_DECIMAL_GIGABYTE: u64 = 1_000_000_000;
+/// End-user-facing gigabyte settings use the convention Apple uses to market
+/// the machine: 1 GB = 1,073,741,824 bytes (2³⁰).
+const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
 
 /// Converts a positive decimal SI gigabyte setting to exact bytes.
 pub fn maximum_mlx_memory_gb_to_bytes(
@@ -21,7 +23,7 @@ pub fn maximum_mlx_memory_gb_to_bytes(
         });
     }
     maximum_mlx_memory_gb
-        .checked_mul(BYTES_PER_DECIMAL_GIGABYTE)
+        .checked_mul(BYTES_PER_MARKETED_GIGABYTE)
         .ok_or(AstronomicalConfigError::InvalidMaximumMlxMemoryGb {
             description: "maximum MLX memory exceeds the byte range",
         })

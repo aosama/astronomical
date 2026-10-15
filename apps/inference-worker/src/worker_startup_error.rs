@@ -2,7 +2,6 @@ use std::io;
 
 use astronomical_ipc_protocol::ProtocolError;
 use astronomical_model_serving::WorkerRuntimeError;
-use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 
 pub(crate) const MAXIMUM_PUBLIC_MODEL_LOAD_FAILURE_REASON_CHARACTER_COUNT: usize = 512;
@@ -22,24 +21,14 @@ pub enum WorkerProcessError {
 pub enum WorkerStartupError {
     #[error("failed to initialize worker tracing: {description}")]
     InitializeTracing { description: String },
-    #[error("invalid iogpu.wired_limit_mb value: {description}")]
-    InvalidGpuWiredMemoryLimit { description: &'static str },
-    #[error("failed to sample iogpu.wired_limit_mb: {0}")]
-    SampleGpuWiredMemoryLimit(#[source] io::Error),
-    #[error("sampling iogpu.wired_limit_mb timed out")]
-    GpuWiredMemoryLimitSampleTimedOut,
-    #[error("sysctl could not read iogpu.wired_limit_mb")]
-    GpuWiredMemoryLimitSampleFailed,
-    #[error("failed to read MLX recommended GPU working set: {0}")]
-    ReadMlxRecommendedGpuWorkingSet(#[source] MlxRuntimeError),
-    #[error("MLX recommended GPU working set cannot produce a positive serving memory ceiling")]
-    RecommendedGpuWorkingSetTooSmall,
-    #[error("failed to initialize the MLX runtime for wired-capacity verification: {0}")]
-    InitializeVerificationRuntime(#[source] MlxRuntimeError),
-    #[error("invalid GPU wired-capacity verification geometry: {description}")]
-    InvalidGpuWiredCapacityVerificationGeometry { description: &'static str },
-    #[error("GPU wired-capacity verification could not wire even one step")]
-    GpuWiredCapacityVerificationFloor,
+    #[error("failed to sample hw.memsize: {0}")]
+    SamplePhysicalMemorySize(#[source] io::Error),
+    #[error("sampling hw.memsize timed out")]
+    PhysicalMemorySizeSampleTimedOut,
+    #[error("sysctl could not read hw.memsize")]
+    PhysicalMemorySizeSampleFailed,
+    #[error("invalid physical memory size: {description}")]
+    InvalidPhysicalMemorySize { description: &'static str },
 }
 
 /// Bounds family-owned model failure detail before it crosses the worker boundary.

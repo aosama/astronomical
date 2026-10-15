@@ -203,14 +203,15 @@ final class StatusPresentationContractTests: XCTestCase {
     )
   }
 
-  func test_should_render_memory_using_decimal_gigabytes() {
-    XCTAssertEqual(decimalGigabyteText(byteCount: 0), "Not measured")
-    XCTAssertEqual(decimalGigabyteText(byteCount: 1_000_000_000), "1.00 GB")
-    XCTAssertEqual(decimalGigabyteText(byteCount: 1_073_741_824), "1.07 GB")
-    XCTAssertEqual(decimalGigabyteText(byteCount: 20_710_000_000), "20.71 GB")
+  func test_should_render_memory_using_the_apple_marketing_gigabyte() {
+    XCTAssertEqual(gigabyteText(byteCount: 0), "Not measured")
+    // 1 GB on screen is 2³⁰ bytes — the unit Apple prints on the box.
+    XCTAssertEqual(gigabyteText(byteCount: 1_073_741_824), "1.00 GB")
+    XCTAssertEqual(gigabyteText(byteCount: 1_000_000_000), "0.93 GB")
+    XCTAssertEqual(gigabyteText(byteCount: 22_253_813_590), "20.73 GB")
     // The real `iogpu.wired_limit_mb=38912` value is 40_802_189_312 bytes.
-    XCTAssertEqual(decimalGigabyteText(byteCount: 40_802_189_312), "40.80 GB")
-    XCTAssertEqual(decimalGigabyteValueText(byteCount: 0), "0.00 GB")
+    XCTAssertEqual(gigabyteText(byteCount: 40_802_189_312), "38.00 GB")
+    XCTAssertEqual(gigabyteValueText(byteCount: 0), "0.00 GB")
   }
 
   func test_should_render_generation_rate_for_an_active_generation() throws {
@@ -230,9 +231,9 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s")
     XCTAssertEqual(statusDocument.progressCompletedUnitCount, 27)
     XCTAssertEqual(statusDocument.progressTotalUnitCount, 512)
-    XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "40.00 GB")
+    XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "37.25 GB")
     XCTAssertEqual(statusDocument.sessionTitle, "4 requests · 27 tok/s avg")
-    XCTAssertEqual(statusDocument.modelDiskSizeTitle, "18.42 GB")
+    XCTAssertEqual(statusDocument.modelDiskSizeTitle, "17.15 GB")
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.expertPayloadByteCount, 5_000_000_000)
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount, 2_000_000_000)
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.availableByteCount, 28_000_000_000)
@@ -264,7 +265,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.progressCompletedUnitCount, 2)
     XCTAssertEqual(statusDocument.progressTotalUnitCount, 4)
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Fully in memory")
-    XCTAssertEqual(statusDocument.modelDiskSizeTitle, "4.20 GB")
+    XCTAssertEqual(statusDocument.modelDiskSizeTitle, "3.91 GB")
   }
 
   func test_should_keep_post_denoising_image_work_active_without_claiming_completion() throws {
@@ -383,7 +384,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.progressCompletedUnitCount, 0)
     XCTAssertEqual(statusDocument.progressTotalUnitCount, 1)
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Not loaded")
-    XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "40.00 GB")
+    XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "37.25 GB")
   }
 
   func test_should_present_only_prompt_work_remaining_after_cache_restoration() throws {

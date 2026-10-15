@@ -11,7 +11,6 @@ pub struct EngineBackedWorker<
         Option<LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine>>,
     pub(crate) model_factory: Option<Factory>,
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
-    pub(crate) serving_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
     pub(crate) minimum_mlx_memory_ceiling_bytes: u64,
     pub(crate) worker_runtime_feature_configuration:

@@ -93,7 +93,7 @@ struct MlxMemoryBreakdownBar: View {
         Text("MLX memory").foregroundStyle(.secondary)
         Spacer()
         Text(
-          "\(decimalGigabyteText(byteCount: activeByteCount)) / \(decimalGigabyteText(byteCount: limitByteCount))"
+          "\(gigabyteText(byteCount: activeByteCount)) / \(gigabyteText(byteCount: limitByteCount))"
         ).font(PopoverTypography.monospacedBody)
       }
       Text(sourceTitle).font(.caption).foregroundStyle(.secondary)
@@ -239,7 +239,7 @@ struct MlxMemoryBreakdownBar: View {
           .padding(12)
       }
       Spacer()
-      Text(decimalGigabyteValueText(byteCount: byteCount)).font(PopoverTypography.monospacedBody)
+      Text(gigabyteValueText(byteCount: byteCount)).font(PopoverTypography.monospacedBody)
     }
   }
 

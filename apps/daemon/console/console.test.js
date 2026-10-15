@@ -222,13 +222,13 @@ test("renders a path-safe duplicate-model warning with its reveal control", () =
     assert.equal(messageElement.textContent.includes("private-root-marker"), false);
 });
 
-test("computes whole decimal gigabyte bounds from exact status bytes", () => {
+test("computes whole gigabyte bounds from exact status bytes", () => {
     const scriptContext = createConsoleContext();
     const bounds = vm.runInContext(
-        "wholeDecimalGigabyteBounds({ minimum_mlx_memory_ceiling_bytes: 32000000001, machine_mlx_memory_ceiling_bytes: 40999999999 })",
+        "wholeGigabyteBounds({ minimum_mlx_memory_ceiling_bytes: 34359738369, machine_mlx_memory_ceiling_bytes: 44080218931 })",
         scriptContext
     );
-    assert.deepEqual(JSON.parse(JSON.stringify(bounds)), { minimumGigabytes: 1, maximumGigabytes: 40 });
+    assert.deepEqual(JSON.parse(JSON.stringify(bounds)), { minimumGigabytes: 1, maximumGigabytes: 41 });
 });
 
 test("reports the loaded-model floor as status information, not a bound", () => {
@@ -249,11 +249,11 @@ test("reports the loaded-model floor as status information, not a bound", () => 
     });
 
     assert.equal(inputElement.min, "1");
-    assert.equal(inputElement.max, "48");
+    assert.equal(inputElement.max, "45");
     assert.equal(inputElement.value, "20");
     assert.equal(
         statusElement.textContent,
-        "Effective 20.00 GB of 48.96 GB · Loaded model floor 19.51 GB"
+        "Effective 18.63 GB of 45.60 GB · Loaded model floor 18.17 GB"
     );
 });
 
@@ -444,7 +444,7 @@ test("renders shared prompt-cache statistics", () => {
     assert.equal(cachePanelElements.get("compact-cache-disk-fill").style.width, "50.0%");
     assert.equal(
         cachePanelElements.get("compact-cache-disk-label").textContent,
-        "0.50 GB / 1.00 GB"
+        "0.47 GB / 0.93 GB"
     );
 });
 

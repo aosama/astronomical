@@ -220,9 +220,9 @@ fn assert_fictional_model_is_structurally_discoverable(instance_state_directory:
 }
 
 fn write_instance_config_with_performance_attribution(state_directory: &Path) {
-    // The small pinned ceiling keeps the eager startup worker's
-    // wired-capacity verification walk from stretching daemon shutdown past
-    // the lifecycle assertion budget when this test runs in the parallel lane.
+    // The small pinned ceiling keeps the eager startup worker tiny when this
+    // test runs in the parallel lane, so daemon shutdown stays inside the
+    // lifecycle assertion budget.
     std::fs::write(
         state_directory.join("config.json"),
         r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"maximum_mlx_memory_gb":2},"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048},"diagnostics":{"performance_attribution_enabled":true}}"#,

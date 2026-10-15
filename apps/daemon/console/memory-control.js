@@ -1,19 +1,19 @@
 const MAXIMUM_MLX_MEMORY_URL = "/v1/config/maximum-mlx-memory";
-const DECIMAL_GIGABYTE_BYTES = 1e9;
+const MARKETED_GIGABYTE_BYTES = 1073741824;
 let maximumMlxMemoryEditIsActive = false;
 
-function wholeDecimalGigabyteBounds(statusDocument) {
+function wholeGigabyteBounds(statusDocument) {
     const machineBytes = statusDocument.machine_mlx_memory_ceiling_bytes || 0;
     return {
         minimumGigabytes: 1,
-        maximumGigabytes: Math.floor(machineBytes / DECIMAL_GIGABYTE_BYTES)
+        maximumGigabytes: Math.floor(machineBytes / MARKETED_GIGABYTE_BYTES)
     };
 }
 
 function renderMemoryLimitControl(statusDocument) {
     const input = document.getElementById("maximum-mlx-memory-gb");
     if (!input) { return; }
-    const bounds = wholeDecimalGigabyteBounds(statusDocument);
+    const bounds = wholeGigabyteBounds(statusDocument);
     input.min = String(bounds.minimumGigabytes);
     input.max = String(bounds.maximumGigabytes);
     input.disabled = bounds.minimumGigabytes > bounds.maximumGigabytes;
@@ -47,7 +47,7 @@ function wireMemoryLimitControl() {
         const requestedGigabytes = Number(input.value);
         const bounds = { minimumGigabytes: Number(input.min), maximumGigabytes: Number(input.max) };
         if (!Number.isInteger(requestedGigabytes) || requestedGigabytes < bounds.minimumGigabytes || requestedGigabytes > bounds.maximumGigabytes) {
-            showControlFeedback("Choose a whole decimal GB value within the reported bounds.", "error");
+            showControlFeedback("Choose a whole GB value within the reported bounds.", "error");
             return;
         }
         await updateMaximumMlxMemory(requestedGigabytes);

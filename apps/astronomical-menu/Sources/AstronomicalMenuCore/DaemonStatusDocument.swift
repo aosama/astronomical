@@ -252,7 +252,7 @@ struct DaemonStatusDocument: Codable, Equatable {
     mlxMemoryCeilingBytes: 0, servingSession: .empty
   )
 
-  var mlxMemoryLimitTitle: String { decimalGigabyteText(byteCount: mlxMemoryCeilingBytes) }
+  var mlxMemoryLimitTitle: String { gigabyteText(byteCount: mlxMemoryCeilingBytes) }
   var mlxMemoryActiveBytes: UInt64 { mlxMemorySnapshot?.activeMemoryBytes ?? 0 }
   var mlxMemorySourceTitle: String {
     switch mlxMemorySnapshot?.source {
@@ -383,11 +383,12 @@ func promptReusePercentageText(
   return String(format: "%.1f%%", Double(reusedPercentageTenths) / 10)
 }
 
-func decimalGigabyteText(byteCount: UInt64) -> String {
+func gigabyteText(byteCount: UInt64) -> String {
   guard byteCount > 0 else { return "Not measured" }
-  return decimalGigabyteValueText(byteCount: byteCount)
+  return gigabyteValueText(byteCount: byteCount)
 }
 
-func decimalGigabyteValueText(byteCount: UInt64) -> String {
-  String(format: "%.2f GB", Double(byteCount) / 1_000_000_000)
+func gigabyteValueText(byteCount: UInt64) -> String {
+  // The user-facing gigabyte is the one Apple prints on the box: 2³⁰ bytes.
+  String(format: "%.2f GB", Double(byteCount) / 1_073_741_824)
 }

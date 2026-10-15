@@ -131,7 +131,7 @@ pub use residency::{
     should_commit_mandatory_routed_page, should_enact_planned_expert_release,
 };
 pub use serving_ceiling::{
-    effective_mlx_serving_memory_ceiling_bytes, recommended_gpu_serving_memory_ceiling_bytes,
+    effective_mlx_memory_ceiling_bytes, machine_ceiling_from_physical_ram_bytes,
 };
 pub use telemetry::{MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 pub use utilization::MemoryCeilingUtilization;

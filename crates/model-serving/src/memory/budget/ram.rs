@@ -45,8 +45,9 @@ use std::collections::BTreeMap;
 use crate::memory;
 use crate::memory::MemoryPhase;
 
-/// Bootstrap context-window reserve before any live measurement exists (1 GB SI).
-pub const BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES: u64 = 1_000_000_000;
+/// Bootstrap context-window reserve before any live measurement exists
+/// (1 GB on the user-facing sticker scale, 2³⁰ bytes).
+pub const BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES: u64 = 1_073_741_824;
 
 /// Coarse token buckets used for high-water context-window learning.
 pub(crate) const CONTEXT_TOKEN_BUCKET_WIDTH: u64 = 1_024;

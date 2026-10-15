@@ -56,7 +56,7 @@ astronomical_test_harness::offline_test!(
             persisted_config
                 .maximum_mlx_memory_bytes()
                 .expect("the memory ceiling should survive the update"),
-            Some(32_000_000_000)
+            Some(34_359_738_368)
         );
     }
 );

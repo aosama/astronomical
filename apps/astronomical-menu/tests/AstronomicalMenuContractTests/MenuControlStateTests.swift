@@ -289,7 +289,7 @@ private struct RestartAcknowledgedButStatusUnconfirmedDaemonClient: DaemonClient
       expertMemoryMode: nil,
       workerRuntimeFeatureConfigurationApplied: false,
       workerRuntimeFeatureConfiguration: acknowledgedFeatureConfiguration,
-      mlxMemoryCeilingBytes: 32_000_000_000,
+      mlxMemoryCeilingBytes: 34_359_738_368,
       servingSession: .empty
     )
   }
@@ -324,7 +324,7 @@ private struct RestartAcknowledgedAndStatusConfirmedDaemonClient: DaemonClient {
       expertMemoryMode: nil,
       workerRuntimeFeatureConfigurationApplied: true,
       workerRuntimeFeatureConfiguration: appliedFeatureConfiguration,
-      mlxMemoryCeilingBytes: 32_000_000_000,
+      mlxMemoryCeilingBytes: 34_359_738_368,
       servingSession: .empty
     )
   }
@@ -368,7 +368,7 @@ private actor OverlappingRestartConfirmationDaemonClient: DaemonClient {
       expertMemoryMode: nil,
       workerRuntimeFeatureConfigurationApplied: currentStatusRequestCount > 1,
       workerRuntimeFeatureConfiguration: appliedFeatureConfiguration,
-      mlxMemoryCeilingBytes: 32_000_000_000,
+      mlxMemoryCeilingBytes: 34_359_738_368,
       servingSession: .empty
     )
   }
@@ -397,7 +397,7 @@ private actor OverlappingRestartConfirmationDaemonClient: DaemonClient {
 
 private struct SuccessfulMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
   func fetchStatus() async throws -> DaemonStatusDocument {
-    maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
+    maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 34_359_738_368)
   }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
@@ -418,11 +418,11 @@ private actor QueuedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
 
   func fetchStatus() async throws -> DaemonStatusDocument {
     if maximumMlxMemoryUpdateHasTakenEffect {
-      return maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
+      return maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 34_359_738_368)
     }
     return maximumMlxMemoryStatusDocument(
       effectiveMlxMemoryCeilingBytes: 30_000_000_000,
-      pendingMlxMemoryCeilingBytes: 32_000_000_000,
+      pendingMlxMemoryCeilingBytes: 34_359_738_368,
       activity: "generating"
     )
   }
@@ -467,7 +467,7 @@ private struct RejectedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
 
 private struct DelayedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
   func fetchStatus() async throws -> DaemonStatusDocument {
-    maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 32_000_000_000)
+    maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 34_359_738_368)
   }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
