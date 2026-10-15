@@ -227,9 +227,13 @@ jobs:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           # Key on native build identity alone so the same identity restores
           # across runs and PR refs instead of missing on every new run_id.
+          # Deliberately no restore-keys fallback: saved keys end at the
+          # identity, so a shorter prefix could only match a *different*
+          # identity's entry, which the build store rejects before rebuilding
+          # anyway — a fallback would just waste the download. Scope rules do
+          # the rest: each PR reads its own scope first, then the default
+          # branch's, so a main-run save serves every later pull request.
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
-          restore-keys: |
-            astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}-
       - name: Restore sccache-cache
         id: sccache-cache
         uses: ./.github/actions/astronomical-cache
