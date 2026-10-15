@@ -161,7 +161,7 @@ Run the macOS menu contracts:
 
     scripts/ci/test-macos-menu-contracts.sh
 
-Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts. See the [repository discovery guide](repo-discovery-guide-for-agents.md) for the maintained command map.
+Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts.
 
 ## Contributing
 
