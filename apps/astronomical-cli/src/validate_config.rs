@@ -227,11 +227,12 @@ fn rendered_model_id_list(configured_model_ids: &[String]) -> String {
     }
 }
 
-/// Renders a byte count as decimal SI gigabytes (1 GB = 1,000,000,000 bytes),
-/// truncated to one tenth so the value never overstates available memory.
+/// Renders a byte count in the gigabyte convention Apple uses to market the
+/// machine (1 GB = 1,073,741,824 bytes), truncated to one tenth so the value
+/// never overstates available memory.
 fn rendered_maximum_mlx_memory(maximum_mlx_memory_bytes: Option<u64>) -> String {
-    const BYTES_PER_GIGABYTE: u64 = 1_000_000_000;
-    const TENTHS_PER_GIGABYTE: u64 = 100_000_000;
+    const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
+    const TENTHS_PER_GIGABYTE: u64 = 107_374_182;
     match maximum_mlx_memory_bytes {
         None => "not set".to_owned(),
         Some(total_bytes) => {

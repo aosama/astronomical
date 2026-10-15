@@ -11,12 +11,12 @@ const MAXIMUM_RECOMMENDED_WORKING_SET_SIZE_DEVICE_INFO_KEY: &[u8] =
 
 /// Reads Metal's effective recommended GPU working-set size through MLX-C.
 ///
-/// MLX-C exposes a generic device-information map. The
-/// `max_recommended_working_set_size` entry originates from Metal's device
-/// recommendation and is measured in bytes. It is not a hardcoded model or
-/// laptop value, and reading it does not change either the macOS sysctl or the
-/// MLX process residency set. Worker startup uses it only when
-/// `iogpu.wired_limit_mb` reports the zero-valued default-policy sentinel.
+/// Diagnostic surface only: nothing in the memory policy consumes the
+/// recommendation — the machine ceiling is physical RAM minus the
+/// operating-system reserve, resolved by the worker. Probes and
+/// measurements use this number to report what the device advertises,
+/// which is not a hardcoded model or laptop value, and reading it changes
+/// neither kernel settings nor the MLX process residency set.
 pub fn maximum_recommended_gpu_working_set_size_bytes() -> Result<usize, MlxRuntimeError> {
     astronomical_mlx_c_rust::install_non_terminating_error_handler();
     let metallib_path = configured_metallib_path()?;

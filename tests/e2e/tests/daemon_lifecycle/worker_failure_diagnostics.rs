@@ -33,7 +33,6 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
     std::fs::copy(worker_executable_path, bundled_worker_path)
         .expect("the stderr-probe worker should be copied into the synthetic bundle");
     let mut daemon_command = Command::new(bundled_daemon_path);
-    daemon::seal_daemon_from_machine_graphics_state(&mut daemon_command);
     let mut daemon_process = daemon_command
         .args(["--instance", "development", "--state-directory"])
         .arg(development_state_directory.path())

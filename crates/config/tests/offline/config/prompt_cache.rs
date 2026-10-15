@@ -16,7 +16,7 @@ astronomical_test_harness::offline_test!(
                 .expect("prompt cache should resolve"),
             PromptCacheConfig::new(
                 temporary_home_directory.path().join(".astronomical/cache"),
-                50_000_000_000,
+                53_687_091_200,
             )
         );
         assert!(astronomical_config.persistent_prompt_cache_enabled());

@@ -297,7 +297,8 @@ async function pollCacheStats() {
 }
 
 function formatGigabytes(bytes) {
-    return (bytes / 1e9).toFixed(2) + " GB";
+    // The user-facing gigabyte is the one Apple prints on the box: 2³⁰ bytes.
+    return (bytes / 1073741824).toFixed(2) + " GB";
 }
 
 function pushSparklineSample(hitRate) {

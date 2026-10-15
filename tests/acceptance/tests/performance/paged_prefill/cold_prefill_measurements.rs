@@ -125,9 +125,9 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         Path::new(&production_worker_executable_path),
         &configured_model_directory,
     );
-    let maximum_gpu_wired_memory_bytes = worker_startup::sample_iogpu_wired_limit_bytes()
+    let machine_mlx_memory_ceiling_bytes = worker_startup::machine_mlx_memory_ceiling_bytes()
         .await
-        .expect("the machine GPU wired-memory limit should be available");
+        .expect("the machine MLX memory ceiling should be available");
 
     eprintln!("[performance-measurement] launching the model-artifact Ornith worker");
     let performance_log_directory = isolated_worker_home.path().join("logs");
@@ -220,7 +220,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         "cached_tokens": streaming_measurement.cached_token_count,
         "generation_seconds": generation_duration.as_secs_f64(),
         "generation_tokens_per_second": generation_tokens_per_second,
-        "gpu_wired_limit_bytes": maximum_gpu_wired_memory_bytes,
+        "machine_mlx_memory_ceiling_bytes": machine_mlx_memory_ceiling_bytes,
         "max_output_tokens": measurement_case.maximum_output_tokens,
         "maximum_prefill_mlx_active_memory_bytes": streaming_measurement.maximum_prefill_mlx_active_memory_bytes,
         "maximum_prefill_mlx_allocator_cache_memory_bytes": streaming_measurement.maximum_prefill_mlx_allocator_cache_memory_bytes,

@@ -94,7 +94,7 @@ extension DaemonStatusDocument {
   }
 
   var modelDiskSizeTitle: String {
-    readyModelSizeBytes.map(decimalGigabyteText) ?? "Not measured"
+    readyModelSizeBytes.map(gigabyteText) ?? "Not measured"
   }
 
   var progressTitle: String {

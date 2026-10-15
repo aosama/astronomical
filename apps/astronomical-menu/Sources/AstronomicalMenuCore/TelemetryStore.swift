@@ -119,7 +119,7 @@ final class TelemetryStore: ObservableObject {
       let refreshedStatusDocument = await refresh()
       guard controlActionFeedbackGeneration == successFeedbackGeneration else { return }
       editableMaximumMlxMemoryGigabytes = refreshedStatusDocument.configuredMaximumMlxMemoryGigabytes
-        ?? maximumWholeDecimalGigabytes(for: refreshedStatusDocument)
+        ?? maximumWholeGigabytes(for: refreshedStatusDocument)
     } catch {
       guard controlActionFeedbackGeneration == memoryUpdateFeedbackGeneration else { return }
       pendingMaximumMlxMemoryCeilingBytes = nil
@@ -279,7 +279,7 @@ final class TelemetryStore: ObservableObject {
     statusDocument = nextStatusDocument
     if !popoverIsVisible {
       editableMaximumMlxMemoryGigabytes = nextStatusDocument.configuredMaximumMlxMemoryGigabytes
-        ?? maximumWholeDecimalGigabytes
+        ?? maximumWholeGigabytes
     }
     onMenuBarTitleChanged?(nextStatusDocument.menuBarTitle)
     resolveMaximumMlxMemoryFeedbackIfReady()
@@ -330,22 +330,22 @@ final class TelemetryStore: ObservableObject {
       return statusDocument.machineMlxMemoryCeilingBytes
     }
     let (requestedMlxMemoryCeilingBytes, overflowOccurred) =
-      maximumMlxMemoryGigabytes.multipliedReportingOverflow(by: 1_000_000_000)
+      maximumMlxMemoryGigabytes.multipliedReportingOverflow(by: 1_073_741_824)
     return overflowOccurred ? nil : requestedMlxMemoryCeilingBytes
   }
 
-  var minimumWholeDecimalGigabytes: UInt64 {
-    (statusDocument.minimumMlxMemoryCeilingBytes + 999_999_999) / 1_000_000_000
+  var minimumWholeGigabytes: UInt64 {
+    (statusDocument.minimumMlxMemoryCeilingBytes + 1_073_741_823) / 1_073_741_824
   }
 
-  var maximumWholeDecimalGigabytes: UInt64 {
-    maximumWholeDecimalGigabytes(for: statusDocument)
+  var maximumWholeGigabytes: UInt64 {
+    maximumWholeGigabytes(for: statusDocument)
   }
 
-  private func maximumWholeDecimalGigabytes(
+  private func maximumWholeGigabytes(
     for statusDocument: DaemonStatusDocument
   ) -> UInt64 {
-    statusDocument.machineMlxMemoryCeilingBytes / 1_000_000_000
+    statusDocument.machineMlxMemoryCeilingBytes / 1_073_741_824
   }
 
   private func controlActionErrorMessage(_ controlActionError: Error) -> String {

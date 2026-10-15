@@ -298,7 +298,8 @@ function isRenderableLibraryCatalogEntry(catalogEntry) {
 }
 
 function formatLibrarySizeGigabytes(approximateSizeBytes) {
-    return (approximateSizeBytes / 1_000_000_000).toFixed(2) + " GB";
+    // The user-facing gigabyte is the one Apple prints on the box: 2³⁰ bytes.
+    return (approximateSizeBytes / 1073741824).toFixed(2) + " GB";
 }
 
 function libraryDestinationPath(catalogRow) {
@@ -400,8 +401,8 @@ function recordLibraryProgressMeasurement(activeDownload, sampledAtMillis = Date
 }
 
 function formatLibraryRate(bytesPerSecond) {
-    if (bytesPerSecond >= 1_000_000_000) {
-        return (bytesPerSecond / 1_000_000_000).toFixed(1) + " GB/s";
+    if (bytesPerSecond >= 1073741824) {
+        return (bytesPerSecond / 1073741824).toFixed(1) + " GB/s";
     }
     if (bytesPerSecond >= 1_000_000) {
         return (bytesPerSecond / 1_000_000).toFixed(1) + " MB/s";
