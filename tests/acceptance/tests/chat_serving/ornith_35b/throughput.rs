@@ -3,7 +3,7 @@
 //! This journey is the measurement half of the paired A/B that gates a
 //! pinned-MLX bump: run it unchanged on the old pin and the new pin, then
 //! compare the printed medians. The method follows the documented previous
-//! bump recipe in docs/performance-optimizations-lessons.md: one warmup
+//! bump recipe: one warmup
 //! completion absorbs the model load plus the first-use JIT kernel
 //! compilation (its prefill sits an order of magnitude low and must never
 //! enter the comparison), then seven cache-warm completions over the

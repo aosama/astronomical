@@ -29,7 +29,9 @@
 
 ## Testing Instructions For Astronomical
 
-- MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; direct Cargo invocations must also select one test thread. The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
+- Running unit tests or offline tests in parallel is desired.
+
+- MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
 
 - All and any tests must have a built-in timeout with a maximum of 60 seconds. Exceptions can be made for performance-endurance tests and/or tests that reproduce out-of-memory (OOM) issues.
 
@@ -43,12 +45,6 @@
 
 ## Performance Related
 
-### Performance Lessons
-
-- Keep <repo-root>/docs/performance-optimizations-lessons.md updated with lessons learnt about performance relevant to LLMs, VLMs and MLX APIs. 
-
-- <repo-root>/docs/performance-optimizations-lessons.md holds only durable engineering lessons that enhance performance for LLMs, VLMs, and MLX APIs (never raw metrics): matmuls, MLX kernel differences, MLX-core caching, C++ gotchas, overly precise data types, and MoE expert sorting.
-
 ### Instructions for Performance Throughput Tests
 
 - A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable.
@@ -56,19 +52,9 @@
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
 
-### Instructions for Performance Profiling and Attribution
-
-- All code must follow the unified performance-logging pattern: per-operation start/end timestamps, switchable on/off through a config parameter. Without attribution, diagnosing a slowdown is guesswork.
-- Highest priority: the request-serving critical path — Model Loading from disk, Prompt Processing, Tokenization, Disk Cache, Expert Paging, and token generation.
-- Profile with attribution through e2e test cases, not a running development instance. If no suitable test exists, create one after a careful review of the existing e2e cases.
-
 ## Memory Management Ownership In This Codebase
 
 - The package under <repo-root>/crates/model-serving/src/memory must be where all memory management code is located. Including but not limited to policies, decisions, streaming and any other memory related calculations.
-
-## Documentation under <repo-root>/docs Writing Conventions
-
-- Markdown in <repo-root>/docs/ must be terse, define every acronym verbosely on first use, and have all assumptions eliminated before any file there is edited or written. Do not create new files in docs/ without the user's explicit agreement; docs/ files are exempt from the repository's maximum file-length limit.
 
 ## Release Scripts Folder
 
