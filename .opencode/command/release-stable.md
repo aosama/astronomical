@@ -10,7 +10,7 @@ Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PA
 
 ## Non-negotiable rules
 
-- Work from the repository root and follow `AGENTS.md` and `repo-discovery-guide-for-agents.md`.
+- Work from the repository root and follow `AGENTS.md`.
 - Never use chat history, chat-memex, memory, or guesswork for credential names.
 - Never commit or place credential values, local paths, Keychain output, or machine logs in GitHub content or the final report. Do not suppress authoritative release-script output merely because it contains local operator paths.
 - Use only `scripts/release/prepare-and-publish.sh` to prepare or publish distribution artifacts.
