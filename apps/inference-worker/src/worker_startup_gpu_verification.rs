@@ -7,9 +7,11 @@
 //! set can be unreachable in practice. The incident signature is silent:
 //! active memory plateaus at the boundary while decode throughput collapses,
 //! with no application-level memory event. Before the worker promises a
-//! ceiling it therefore wires the memory in steps, measures per-step latency,
-//! and clamps the effective ceiling to the last healthy step when the
-//! boundary answers with a crawl instead of an error.
+//! ceiling it therefore wires the memory in geometrically growing probes,
+//! measures per-probe latency, refines in step-granular probes once a probe
+//! signals the boundary, and clamps the effective ceiling to the last healthy
+//! wired byte count when the boundary answers with a crawl instead of an
+//! error.
 //!
 //! An explicit environment override skips verification for acceptance cells
 //! that deliberately serve beyond the boundary to exercise SSD streaming.
@@ -20,7 +22,16 @@ use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 /// Wiring granularity: one complete expert table of a large sparse artifact.
+/// Also the clamp refinement granularity: after a slow probe signals the
+/// boundary, only this-sized steps continue, so a clamp lands within one
+/// expert table of the true boundary.
 pub(crate) const VERIFICATION_STEP_BYTES: usize = 512 * 1024 * 1024;
+/// Largest single probe: geometric growth doubles probe sizes from the step
+/// granularity up to this cap. The cap bounds every probe on a throttled
+/// machine (a crawl manifests as one slow probe of at most this size, never
+/// an unbounded stall), and it stays inside the element-count range of one
+/// bfloat16 array.
+pub(crate) const VERIFICATION_MAX_PROBE_BYTES: usize = 2 * 1024 * 1024 * 1024;
 /// A healthy step wires in tens of milliseconds; thirty times that is the
 /// boundary's crawl signature, not slow hardware.
 pub(crate) const VERIFICATION_STEP_LATENCY_BUDGET: Duration = Duration::from_millis(2_000);
@@ -63,6 +74,26 @@ pub(crate) fn verification_step_verdict(
     }
 }
 
+/// Next probe size for the geometric walk: doubles from the step granularity
+/// up to the probe cap, and never overshoots the remaining distance.
+/// Performance lesson from the 2026-10-15 verification rollout: a fixed
+/// 512 MiB linear walk costs one allocate-and-synchronize round trip per
+/// step — 94 round trips on a 48 GB machine, and every parallel test worker
+/// paid machine-scale walks that starved sibling processes. Geometric probes
+/// verify the same total bytes with a logarithmic number of round trips
+/// while every probe stays bounded by the cap.
+#[must_use]
+pub(crate) fn next_verification_probe_bytes(
+    previous_probe_bytes: usize,
+    remaining_bytes: usize,
+) -> usize {
+    let doubled_probe_bytes = previous_probe_bytes.saturating_mul(2);
+    let capped_probe_bytes = doubled_probe_bytes
+        .min(VERIFICATION_MAX_PROBE_BYTES)
+        .max(VERIFICATION_STEP_BYTES);
+    capped_probe_bytes.min(remaining_bytes)
+}
+
 /// Wires `candidate_ceiling_bytes` of graphics memory in steps and reports the
 /// highest healthy wired byte count.
 ///
@@ -83,16 +114,18 @@ pub(crate) async fn verify_effective_gpu_wired_capacity(
     )
     .map_err(crate::worker_startup_error::WorkerStartupError::InitializeVerificationRuntime)?;
     let verification_started_at = Instant::now();
-    let step_element_count = i32::try_from(VERIFICATION_STEP_BYTES / 2).map_err(|_| {
-        crate::worker_startup_error::WorkerStartupError::InvalidGpuWiredCapacityVerificationGeometry {
-            description: "one verification step exceeds the i32 element range",
-        }
-    })?;
     let mut held_arrays: Vec<MlxArray> = Vec::new();
     let mut wired_bytes = 0_usize;
     let mut slowest_healthy_step = Duration::ZERO;
     let mut outcome = WiredCapacityVerification::Verified { wired_bytes: 0 };
     let mut floor_reached = false;
+    // The walk runs two phases: geometric probes (doubling to the cap) while
+    // every probe stays healthy, then — only after a slow probe signals the
+    // boundary — 512 MiB refinement steps so the clamp lands within one
+    // expert table of the true boundary instead of on the coarse geometric
+    // grid.
+    let mut previous_probe_bytes = VERIFICATION_STEP_BYTES;
+    let mut boundary_hit = false;
     while wired_bytes + VERIFICATION_STEP_BYTES <= candidate_ceiling_bytes {
         if verification_started_at.elapsed() > VERIFICATION_TOTAL_BUDGET {
             tracing::warn!(
@@ -103,8 +136,21 @@ pub(crate) async fn verify_effective_gpu_wired_capacity(
             outcome = WiredCapacityVerification::ClampedToLastHealthyStep { wired_bytes };
             break;
         }
+        let probe_bytes = if boundary_hit {
+            VERIFICATION_STEP_BYTES
+        } else {
+            next_verification_probe_bytes(
+                previous_probe_bytes,
+                candidate_ceiling_bytes - wired_bytes,
+            )
+        };
+        let probe_element_count = i32::try_from(probe_bytes / 2).map_err(|_| {
+            crate::worker_startup_error::WorkerStartupError::InvalidGpuWiredCapacityVerificationGeometry {
+                description: "one verification probe exceeds the i32 element range",
+            }
+        })?;
         let step_started_at = Instant::now();
-        let step_allocation = match runtime.zeros(&[1, step_element_count], MlxDtype::BFloat16) {
+        let step_allocation = match runtime.zeros(&[1, probe_element_count], MlxDtype::BFloat16) {
             Ok(step_allocation) => step_allocation,
             Err(allocation_error) => {
                 tracing::warn!(
@@ -138,12 +184,20 @@ pub(crate) async fn verify_effective_gpu_wired_capacity(
             outcome = WiredCapacityVerification::ClampedToLastHealthyStep { wired_bytes };
             if wired_bytes == 0 {
                 floor_reached = true;
+                break;
             }
-            break;
+            if boundary_hit {
+                // A second slow probe during refinement means the boundary is
+                // confirmed between two adjacent step-granular points.
+                break;
+            }
+            boundary_hit = true;
+            continue;
         }
         slowest_healthy_step = slowest_healthy_step.max(step_elapsed);
         held_arrays.push(step_allocation);
-        wired_bytes += VERIFICATION_STEP_BYTES;
+        wired_bytes += probe_bytes;
+        previous_probe_bytes = probe_bytes;
         outcome = WiredCapacityVerification::Verified { wired_bytes };
     }
     drop(held_arrays);
