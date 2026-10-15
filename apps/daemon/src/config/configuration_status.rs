@@ -50,6 +50,7 @@ struct ReadyModelConfigurationSummary {
     maximum_output_default_tokens: ConfigurationValue<u32>,
     temperature: ConfigurationValue<f64>,
     top_p: ConfigurationValue<f64>,
+    repetition_penalty: ConfigurationValue<f64>,
     chunking: ChunkingConfigurationSummary,
 }
 
@@ -209,6 +210,12 @@ fn ready_model_summary(
         top_p: sampling_value(
             configured_policy.and_then(|policy| policy.generation_defaults.top_p_thousandths),
             resolved_policy.and_then(|policy| policy.generation_defaults.top_p_thousandths),
+        ),
+        repetition_penalty: sampling_value(
+            configured_policy
+                .and_then(|policy| policy.generation_defaults.repetition_penalty_thousandths),
+            resolved_policy
+                .and_then(|policy| policy.generation_defaults.repetition_penalty_thousandths),
         ),
         chunking: chunking_summary(configured_policy, effective_model),
     })

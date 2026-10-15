@@ -332,6 +332,8 @@ impl Qwen3_5EngineState {
                 random_state,
                 request_id: inference_request.request_id(),
                 sampling_strategy,
+                repetition_penalty_thousandths: inference_request.repetition_penalty_thousandths(),
+                penalized_token_ids: inference_request.initial_penalized_token_ids(),
                 visual_embeddings,
                 consumed_visual_embedding_count: 0,
                 has_visual_inputs: has_precomputed_visual_embeddings || has_processed_visual_images,

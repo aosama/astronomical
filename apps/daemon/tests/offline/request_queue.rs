@@ -278,6 +278,7 @@ fn command_with_request_id(model_id: &str, request_id_value: u64) -> ChatGenerat
             max_output_tokens: 16,
             temperature_thousandths: None,
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: None,
         },

@@ -152,8 +152,22 @@ impl K2HorizonMoVAModel {
         &self,
         logits: &MlxArray,
         request: &K2HorizonMoVAInferenceRequest,
+        penalized_token_ids: &[u32],
         random_state: &mut MlxArray,
     ) -> Result<u32, K2HorizonMoVAExecutionError> {
+        // The penalty transforms raw logits before temperature, top-p, and the
+        // categorical draw, matching the HF reference ordering; a neutral
+        // penalty returns None and keeps the sampling graph unchanged.
+        let penalized_logits = gpu_token_sampling::apply_repetition_penalty(
+            &self.runtime,
+            logits,
+            penalized_token_ids,
+            request.repetition_penalty_thousandths(),
+        )
+        .map_err(|error| K2HorizonMoVAExecutionError::InvalidExecution {
+            description: format!("{error}"),
+        })?;
+        let logits = penalized_logits.as_ref().unwrap_or(logits);
         let sampled = gpu_token_sampling::build_sampled_token(
             &self.runtime,
             logits,

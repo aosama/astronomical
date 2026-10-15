@@ -36,3 +36,45 @@ fn should_preserve_a_model_declared_zero_temperature() {
     assert_eq!(model_sampler_configuration.top_p_thousandths, 900);
     assert_eq!(model_sampler_configuration.model_top_k, 40);
 }
+
+#[test]
+fn should_use_the_model_declared_repetition_penalty() {
+    let model_generation_configuration =
+        br#"{"temperature": 0.6, "top_p": 0.95, "top_k": 20, "repetition_penalty": 1.05}"#;
+
+    let model_sampler_configuration =
+        astronomical_model_serving::discover_sampler_config(Some(model_generation_configuration));
+
+    assert_eq!(
+        model_sampler_configuration.repetition_penalty_thousandths,
+        1_050
+    );
+}
+
+#[test]
+fn should_fall_back_to_the_neutral_repetition_penalty_without_an_artifact_value() {
+    let model_sampler_configuration = astronomical_model_serving::discover_sampler_config(None);
+
+    assert_eq!(
+        model_sampler_configuration.repetition_penalty_thousandths, 1_000,
+        "an absent artifact penalty must stay neutral so seeded sampling is unchanged"
+    );
+}
+
+#[test]
+fn should_fall_back_to_the_neutral_repetition_penalty_for_out_of_range_artifact_values() {
+    for invalid_repetition_penalty in ["0.9", "2.5", "-1"] {
+        let model_generation_configuration = format!(
+            r#"{{"temperature": 0.6, "top_p": 0.95, "top_k": 20, "repetition_penalty": {invalid_repetition_penalty}}}"#
+        );
+
+        let model_sampler_configuration = astronomical_model_serving::discover_sampler_config(
+            Some(model_generation_configuration.as_bytes()),
+        );
+
+        assert_eq!(
+            model_sampler_configuration.repetition_penalty_thousandths, 1_000,
+            "artifact penalty {invalid_repetition_penalty} must not change the sampling distribution"
+        );
+    }
+}

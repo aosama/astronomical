@@ -78,6 +78,9 @@ pub(crate) fn translate_openai_responses_request_parts(
                 "temperature",
             )?,
             top_p_thousandths: translate_thousandths(request_parts.top_p, "top_p")?,
+            // The OpenAI responses surface does not expose a repetition penalty
+            // in this change; the model's configured default always applies.
+            repetition_penalty_thousandths: None,
             seed: None,
             // Thinking-enabled Qwen otherwise spends max_output_tokens inside reasoning
             // and never emits the JSON object structured output asked for.

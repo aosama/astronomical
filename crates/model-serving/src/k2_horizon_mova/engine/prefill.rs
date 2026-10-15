@@ -98,13 +98,19 @@ pub(super) fn prefill_next_chunk(
             .logits_for_last_token(&hidden_states)
             .map_err(execution_error)?;
         let first_token = model
-            .sample_token(&logits, &active.request, &mut active.random_state)
+            .sample_token(
+                &logits,
+                &active.request,
+                &active.penalized_token_ids,
+                &mut active.random_state,
+            )
             .map_err(execution_error)?;
         tracing::info!(
             first_token_sample_elapsed_millis =
                 u64::try_from(sample_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
             "K2 Horizon MoVA sampled the first token after prefill"
         );
+        active.observe_penalized_token_id(first_token);
         active.next_input_token_ids = vec![first_token];
     }
     Ok(GeneratedToken::PrefillProgress {

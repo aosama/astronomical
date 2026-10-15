@@ -352,6 +352,8 @@ pub use qwen3_5_core::model_math::gdn_decode_prework_kernel::{
 pub use qwen3_5_core::model_math::weights::Qwen3_5Weights;
 pub use qwen3_5_core::route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::text::qwen3_5_apply_repetition_penalty;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::text::qwen3_5_apply_top_p_mask;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::vision::{

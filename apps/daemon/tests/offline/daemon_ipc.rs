@@ -402,6 +402,7 @@ async fn should_fill_zero_max_output_tokens_from_the_worker_capabilities() {
             max_output_tokens: 0,
             temperature_thousandths: None,
             top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
             seed: None,
             thinking_budget: None,
         },
