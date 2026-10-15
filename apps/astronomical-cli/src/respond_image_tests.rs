@@ -33,6 +33,53 @@ fn should_map_a_jpeg_extension_in_both_spellings_to_the_jpeg_mime_type() {
 }
 
 #[test]
+fn should_map_a_webp_extension_to_the_webp_mime_type() {
+    assert_eq!(
+        respond_image::mime_for_extension(Path::new("snapshot.webp")),
+        Some("image/webp")
+    );
+}
+
+#[test]
+fn should_advertise_exactly_the_formats_the_decode_stack_honors() {
+    // The vision image processor in crates/model-serving decodes every format
+    // listed here; its `should_decode_every_format_the_cli_advertises` test
+    // pins the same set from the decode side. Change both together.
+    assert_eq!(
+        respond_image::supported_image_extensions(),
+        "png, jpg, jpeg, webp"
+    );
+    assert_eq!(
+        respond_image::mime_for_extension(Path::new("a.png")),
+        Some("image/png")
+    );
+    assert_eq!(
+        respond_image::mime_for_extension(Path::new("a.jpg")),
+        Some("image/jpeg")
+    );
+    assert_eq!(
+        respond_image::mime_for_extension(Path::new("a.jpeg")),
+        Some("image/jpeg")
+    );
+    assert_eq!(
+        respond_image::mime_for_extension(Path::new("a.webp")),
+        Some("image/webp")
+    );
+}
+
+#[test]
+fn should_advertise_the_image_help_extensions_matching_the_supported_set() {
+    // The `--image` help line must advertise exactly the extensions the
+    // extension-to-MIME mapping accepts, so the printed surface cannot
+    // drift from what `read_image_input` enforces.
+    let advertised_help_extensions = format!("({})", respond_image::supported_image_extensions());
+    assert!(
+        crate::arguments::help_text().contains(&advertised_help_extensions),
+        "the --image help line should advertise {advertised_help_extensions}"
+    );
+}
+
+#[test]
 fn should_reject_an_unsupported_extension() {
     assert_eq!(
         respond_image::mime_for_extension(Path::new("memo.txt")),
