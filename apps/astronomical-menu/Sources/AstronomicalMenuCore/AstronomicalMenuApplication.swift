@@ -126,6 +126,13 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
 
   private func showTelemetryPopover() {
     guard let statusButton = statusItem?.button, let telemetryPopover else { return }
+    // Without this the very first click dismisses the transient popover before
+    // it is visible: macOS treats the click gesture as outside the popover the
+    // moment this app is not the active app, which it is when you click the
+    // menu-bar icon from another foreground app. The welcome and chat windows
+    // both activate first; this keeps the tap-to-dismiss behaviour intact while
+    // making the first click reliably stick (issue: menu vanishes on first open).
+    NSApp.activate(ignoringOtherApps: true)
     statusItem?.length = menuBarStatusItemLength(
       popoverIsShown: true, currentButtonWidth: statusButton.bounds.width)
     telemetryPopover.show(
