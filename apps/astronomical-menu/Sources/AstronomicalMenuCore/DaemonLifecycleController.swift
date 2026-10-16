@@ -64,9 +64,11 @@ final class OwnedDaemonProcess {
   }
 }
 
-func launchOwnedDaemonProcess(executableURL: URL, arguments: [String] = []) throws
-  -> OwnedDaemonProcess
-{
+func launchOwnedDaemonProcess(
+  executableURL: URL,
+  arguments: [String] = [],
+  stderrCapturePath: String? = nil
+) throws -> OwnedDaemonProcess {
   var spawnAttributes: posix_spawnattr_t?
   var spawnFileActions: posix_spawn_file_actions_t?
   guard posix_spawnattr_init(&spawnAttributes) == 0,
@@ -78,12 +80,26 @@ func launchOwnedDaemonProcess(executableURL: URL, arguments: [String] = []) thro
     posix_spawnattr_destroy(&spawnAttributes)
     posix_spawn_file_actions_destroy(&spawnFileActions)
   }
+  // The daemon explains pre-logging exits (lock conflicts, configuration
+  // failures) only through stderr. Discarding that stream made every early
+  // death invisible to this controller, so stderr is captured to a file in
+  // the instance state directory and replayed into the operator diagnostic.
+  let stderrOpenSucceeded: Bool
+  if let stderrCapturePath {
+    stderrOpenSucceeded = posix_spawn_file_actions_addopen(
+      &spawnFileActions, STDERR_FILENO, stderrCapturePath,
+      O_WRONLY | O_CREAT | O_APPEND, 0o644) == 0
+  } else {
+    stderrOpenSucceeded = posix_spawn_file_actions_addopen(
+      &spawnFileActions, STDERR_FILENO, "/dev/null", O_WRONLY, 0) == 0
+  }
   guard posix_spawnattr_setflags(&spawnAttributes, Int16(POSIX_SPAWN_SETPGROUP)) == 0,
     posix_spawnattr_setpgroup(&spawnAttributes, 0) == 0,
     posix_spawn_file_actions_addopen(&spawnFileActions, STDIN_FILENO, "/dev/null", O_RDONLY, 0)
       == 0,
     posix_spawn_file_actions_addopen(&spawnFileActions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
-      == 0
+      == 0,
+    stderrOpenSucceeded
   else {
     throw DaemonLifecycleError.cannotConfigureProcessSpawn
   }
@@ -118,25 +134,57 @@ enum DaemonLifecycleError: LocalizedError {
   case bundledDaemonUnavailable
   case unownedDaemonDidNotStop
   case existingDaemonNotReady(String)
-  case daemonExitedBeforeReady(String)
+  case daemonExitedBeforeReady(String, String?)
   case readinessTimedOut(String)
 
   var errorDescription: String? {
     switch self {
     case .cannotInitializeProcessSpawn, .cannotConfigureProcessSpawn, .cannotLaunchDaemon:
-      "The bundled server could not be started; retry or reinstall Astronomical"
+      return "The bundled server could not be started; retry or reinstall Astronomical"
     case .bundledDaemonUnavailable:
-      "The bundled server executable is unavailable"
+      return "The bundled server executable is unavailable"
     case .unownedDaemonDidNotStop:
-      "The existing server did not stop; quit it and retry"
+      return "The existing server did not stop; quit it and retry"
     case let .existingDaemonNotReady(configurationFileLabel):
-      "A server is running but is not ready with the effective configuration. Check or reveal \(configurationFileLabel), then retry"
-    case let .daemonExitedBeforeReady(configurationFileLabel):
-      "The server exited before becoming ready. Correct or reveal \(configurationFileLabel), then retry"
+      return "A server is running but is not ready with the effective configuration. Check or reveal \(configurationFileLabel), then retry"
+    case let .daemonExitedBeforeReady(configurationFileLabel, failureExplanation):
+      var description =
+        "The server exited before becoming ready. Correct or reveal \(configurationFileLabel), then retry"
+      if let failureExplanation, !failureExplanation.isEmpty {
+        description += ". \(failureExplanation)"
+      }
+      return description
     case let .readinessTimedOut(configurationFileLabel):
-      "The server did not become ready in time. Check or reveal \(configurationFileLabel), then retry"
+      return "The server did not become ready in time. Check or reveal \(configurationFileLabel), then retry"
     }
   }
+}
+
+/// Detects the daemon's lock-conflict exit in a captured explanation so the
+/// restart path can retry a residual race instead of surfacing it.
+func lockConflictIsIndicated(by explanation: String?) -> Bool {
+  explanation?.contains("already running") == true
+}
+
+/// Probes whether the daemon instance flock is free, i.e. no daemon process
+/// is alive holding the state directory. Kept as a free function so restart
+/// recovery is unit-testable without spawning anything.
+func instanceLockIsFree(lockPath: String) -> Bool {
+  let lockFileDescriptor = open(lockPath, O_RDWR)
+  guard lockFileDescriptor >= 0 else { return true }
+  defer { close(lockFileDescriptor) }
+  if flock(lockFileDescriptor, LOCK_EX | LOCK_NB) == 0 {
+    flock(lockFileDescriptor, LOCK_UN)
+    return true
+  }
+  return false
+}
+
+/// Menu-side mirror of the daemon's `last-startup-failure.json` payload.
+struct StartupFailureSnapshot: Decodable {
+  let stage: String
+  let message: String
+  let context: String?
 }
 
 @MainActor
@@ -152,6 +200,7 @@ final class DaemonLifecycleController {
   private let configuredDaemonExecutableURL: URL?
   private let configuredDaemonArguments: [String]?
   private var ownedDaemonProcess: OwnedDaemonProcess?
+  private let injectedOwnershipRecordURL: URL?
   private(set) var ownsDaemon = false
 
   init(
@@ -178,6 +227,7 @@ final class DaemonLifecycleController {
     ownershipStore = DaemonOwnershipStore(
       ownershipRecordURL: ownershipRecordURL ?? applicationIdentity.daemonOwnershipURL()
     )
+    injectedOwnershipRecordURL = ownershipRecordURL
   }
 
   func startDaemonIfNeeded() async throws {
@@ -218,10 +268,27 @@ final class DaemonLifecycleController {
     else {
       throw DaemonLifecycleError.bundledDaemonUnavailable
     }
-    try startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
-    try throwIfOwnedDaemonExited()
-    try await waitForExpectedInstanceReadiness()
-    return "Server restarted"
+    // The previous daemon stops answering /health while it is still tearing
+    // down GPU memory; its instance flock survives until process exit. A
+    // spawn during that window dies on the lock, so wait for the lock first.
+    await waitForInstanceLockRelease(timeout: .seconds(5))
+    // A residual race (another supervisor respawning, lock holder discovered
+    // late) is retried briefly instead of red-bannering immediately.
+    for spawnAttemptIndex in 1...3 {
+      do {
+        try startOwnedDaemon(menuExecutableURL: menuExecutableURL, daemonExecutableURL: daemonExecutableURL)
+        try throwIfOwnedDaemonExited()
+        try await waitForExpectedInstanceReadiness()
+        return "Server restarted"
+      } catch let lifecycleError as DaemonLifecycleError {
+        guard case .daemonExitedBeforeReady = lifecycleError,
+          spawnAttemptIndex < 3,
+          lockConflictIsIndicated(by: capturedStartupFailureExplanation())
+        else { throw lifecycleError }
+        try? await Task.sleep(for: .milliseconds(300))
+      }
+    }
+    throw DaemonLifecycleError.readinessTimedOut(applicationIdentity.expectedConfigurationFile)
   }
 
   func stopOwnedDaemon() {
@@ -241,9 +308,11 @@ final class DaemonLifecycleController {
   }
 
   private func startOwnedDaemon(menuExecutableURL: URL, daemonExecutableURL: URL) throws {
+    prepareDaemonStderrCapture()
     let daemonProcess = try launchOwnedDaemonProcess(
       executableURL: daemonExecutableURL,
-      arguments: configuredDaemonArguments ?? applicationIdentity.daemonArguments
+      arguments: configuredDaemonArguments ?? applicationIdentity.daemonArguments,
+      stderrCapturePath: daemonStderrCapturePath
     )
     let ownershipRecord = DaemonOwnershipRecord(
       menuProcessIdentifier: getpid(),
@@ -286,7 +355,8 @@ final class DaemonLifecycleController {
     guard ownedDaemonProcess?.reapIfExited() == true else { return }
     clearOwnedDaemonState()
     throw DaemonLifecycleError.daemonExitedBeforeReady(
-      applicationIdentity.expectedConfigurationFile)
+      applicationIdentity.expectedConfigurationFile,
+      capturedStartupFailureExplanation())
   }
 
   private func reapOwnedDaemonWithin(_ gracePeriod: Duration) -> Bool {
@@ -326,6 +396,82 @@ final class DaemonLifecycleController {
       while !ownedDaemonProcess.reapIfExited() { await Task.yield() }
     }
     clearOwnedDaemonState()
+  }
+
+  /// The state directory this controller actually operates on. Tests inject
+  /// an ownership record inside a temporary directory; deriving the state
+  /// root from it keeps lock probes and stderr captures off the operator's
+  /// real home during unit runs.
+  private func effectiveStateDirectoryURL() -> URL {
+    if let injectedOwnershipRecordURL {
+      return injectedOwnershipRecordURL.deletingLastPathComponent()
+    }
+    return applicationIdentity.stateDirectoryURL()
+  }
+
+  private var daemonStderrCapturePath: String {
+    effectiveStateDirectoryURL()
+      .appendingPathComponent("logs", isDirectory: true)
+      .appendingPathComponent("daemon-spawn-stderr.log")
+      .path
+  }
+
+  private func prepareDaemonStderrCapture() {
+    try? FileManager.default.createDirectory(
+      at: effectiveStateDirectoryURL().appendingPathComponent("logs", isDirectory: true),
+      withIntermediateDirectories: true)
+    // Each spawn starts from a clean capture so the tail we replay always
+    // belongs to the attempt that just died.
+    FileManager.default.createFile(atPath: daemonStderrCapturePath, contents: nil)
+  }
+
+  /// Waits until the daemon instance flock is free, i.e. the previous
+  /// process fully exited and released the state directory for a respawn.
+  private func waitForInstanceLockRelease(timeout: Duration) async {
+    let instanceLockPath = effectiveStateDirectoryURL()
+      .appendingPathComponent("instance.lock").path
+    let lockDeadline = ContinuousClock().now.advanced(by: timeout)
+    while ContinuousClock().now < lockDeadline {
+      if instanceLockIsFree(lockPath: instanceLockPath) { return }
+      try? await Task.sleep(for: .milliseconds(50))
+    }
+  }
+
+  /// Composes the operator-facing failure story from the two durable homes
+  /// the daemon keeps: its captured stderr and the startup-failure record.
+  func capturedStartupFailureExplanation() -> String? {
+    var explanationFragments: [String] = []
+    if let stderrTail = capturedDaemonStderrTail() {
+      explanationFragments.append("server said: \(stderrTail)")
+    }
+    if let failureRecordSummary = lastStartupFailureRecordSummary() {
+      explanationFragments.append(failureRecordSummary)
+    }
+    return explanationFragments.isEmpty ? nil : explanationFragments.joined(separator: " — ")
+  }
+
+  private func capturedDaemonStderrTail() -> String? {
+    guard let stderrBytes = FileManager.default.contents(atPath: daemonStderrCapturePath),
+      !stderrBytes.isEmpty
+    else { return nil }
+    let significantSuffix = stderrBytes.count > 300
+      ? stderrBytes.suffix(300) : stderrBytes[...]
+    return String(data: significantSuffix, encoding: .utf8)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func lastStartupFailureRecordSummary() -> String? {
+    let recordURL = effectiveStateDirectoryURL()
+      .appendingPathComponent("last-startup-failure.json")
+    guard let recordBytes = FileManager.default.contents(atPath: recordURL.path),
+      let failureRecord = try? JSONDecoder().decode(
+        StartupFailureSnapshot.self, from: recordBytes)
+    else { return nil }
+    var summary = "last start failed [\(failureRecord.stage)]: \(failureRecord.message)"
+    if let failureContext = failureRecord.context {
+      summary += " (holder: \(failureContext))"
+    }
+    return summary
   }
 
   private func clearOwnedDaemonState() {

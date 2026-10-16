@@ -27,6 +27,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 const WORKER_MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
 mod daemon_arguments;
+use astronomical_daemon::startup_failure;
 use daemon_arguments::{DaemonArguments, DaemonCommand};
 
 #[tokio::main]
@@ -66,6 +67,14 @@ async fn main() -> ExitCode {
         match AstronomicalInstanceLock::acquire(&instance_paths.instance_lock_file_path()) {
             Ok(instance_lock) => instance_lock,
             Err(lock_error) => {
+                // The menu spawns this process with stderr discarded, so the
+                // lock conflict must survive on disk for the UI to explain it.
+                startup_failure::record_startup_failure(
+                    instance_paths.state_directory(),
+                    startup_failure::StartupFailureStage::InstanceLock,
+                    &lock_error,
+                    startup_failure::read_instance_lock_holder(instance_paths.state_directory()),
+                );
                 eprintln!("astronomicald startup failed: {lock_error}");
                 return ExitCode::FAILURE;
             }
@@ -73,6 +82,12 @@ async fn main() -> ExitCode {
     let user_config = match AstronomicalConfig::load_from_instance_paths(instance_paths.clone()) {
         Ok(user_config) => user_config,
         Err(configuration_error) => {
+            startup_failure::record_startup_failure(
+                instance_paths.state_directory(),
+                startup_failure::StartupFailureStage::Configuration,
+                &configuration_error,
+                None,
+            );
             eprintln!("astronomicald configuration failed: {configuration_error}");
             return ExitCode::FAILURE;
         }
@@ -80,6 +95,12 @@ async fn main() -> ExitCode {
     let _logging_guard = match initialize_tracing(&user_config) {
         Ok(logging_guard) => logging_guard,
         Err(initialization_error) => {
+            startup_failure::record_startup_failure(
+                instance_paths.state_directory(),
+                startup_failure::StartupFailureStage::LoggingInitialization,
+                &initialization_error,
+                None,
+            );
             eprintln!("astronomicald logging initialization failed: {initialization_error}");
             return ExitCode::FAILURE;
         }

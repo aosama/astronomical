@@ -69,7 +69,7 @@ final class DaemonControlTests: XCTestCase {
       try await daemonLifecycleController.startDaemonIfNeeded()
       XCTFail("An exited daemon must not be reported as ready")
     } catch let lifecycleError as DaemonLifecycleError {
-      guard case let .daemonExitedBeforeReady(configurationFileLabel) = lifecycleError else {
+      guard case let .daemonExitedBeforeReady(configurationFileLabel, _) = lifecycleError else {
         return XCTFail("Expected an early-exit error, received \(lifecycleError)")
       }
       XCTAssertEqual(configurationFileLabel, "~/.astronomical/config.json")
@@ -235,7 +235,7 @@ final class DaemonControlTests: XCTestCase {
       try await daemonLifecycleController.startDaemonIfNeeded()
       XCTFail("An exited daemon must not be reported as ready")
     } catch let lifecycleError as DaemonLifecycleError {
-      guard case let .daemonExitedBeforeReady(configurationFileLabel) = lifecycleError else {
+      guard case let .daemonExitedBeforeReady(configurationFileLabel, _) = lifecycleError else {
         return XCTFail("Expected an early-exit error, received \(lifecycleError)")
       }
       XCTAssertEqual(configurationFileLabel, "~/.astronomical/config.json")
@@ -265,7 +265,7 @@ final class DaemonControlTests: XCTestCase {
         try await daemonLifecycleController.startDaemonIfNeeded()
         XCTFail("An exited daemon must identify its own configuration")
       } catch let lifecycleError as DaemonLifecycleError {
-        guard case let .daemonExitedBeforeReady(configurationFileLabel) = lifecycleError else {
+        guard case let .daemonExitedBeforeReady(configurationFileLabel, _) = lifecycleError else {
           return XCTFail("Expected an early-exit error, received \(lifecycleError)")
         }
         XCTAssertEqual(configurationFileLabel, expectedConfigurationLabel)

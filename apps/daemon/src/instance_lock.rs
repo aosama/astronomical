@@ -1,4 +1,5 @@
 use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -33,9 +34,17 @@ impl AstronomicalInstanceLock {
                 source,
             })?;
         match fs4::FileExt::try_lock(&locked_file) {
-            Ok(()) => Ok(Self {
-                _locked_file: locked_file,
-            }),
+            Ok(()) => {
+                // A lock conflict cannot name its holder from the flock alone,
+                // so the winner records its pid for the loser's failure report.
+                // Best-effort: the lock is the flock, not this content.
+                let holder_note = format!("pid={} instance=astronomicald", std::process::id());
+                let _ = (&locked_file).set_len(0);
+                let _ = (&locked_file).write_all(holder_note.as_bytes());
+                Ok(Self {
+                    _locked_file: locked_file,
+                })
+            }
             Err(TryLockError::WouldBlock) => Err(AstronomicalInstanceLockError::AlreadyRunning),
             Err(TryLockError::Error(source)) => {
                 Err(AstronomicalInstanceLockError::AcquireLock { source })
