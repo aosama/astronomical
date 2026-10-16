@@ -33,6 +33,10 @@ mod expert_residency_policy_tests;
 mod paged_prefill_seat_oversubscription_tests;
 #[cfg(test)]
 mod phase_aware_expert_residency_tests;
+#[cfg(test)]
+mod planner_boundary_tests;
+#[cfg(test)]
+mod request_plan_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;

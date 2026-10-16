@@ -57,6 +57,6 @@ pub(crate) use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embeddin
 #[cfg(feature = "direct-mlx")]
 pub use forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use resident_model::Qwen3_5ResidentModel;
+pub use resident_model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use resident_model::Qwen3_5ResidentModel as Qwen3_5Model;

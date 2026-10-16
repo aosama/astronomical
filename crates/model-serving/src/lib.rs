@@ -175,6 +175,7 @@ pub use memory::{
     PreviousTokenPrefetchPlan, RamBudgetGeometryError, RequestExpertLayerRole,
     RequestExpertResidency, ResidentExpertWeight, RetainedExpertPageClass,
     RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements, RotatingAdmissionError,
+    VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
     classify_expert_memory_mode, combined_persistent_growth_bytes,
     complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
@@ -365,7 +366,7 @@ pub use qwen3_5_core::vision::{
 pub use qwen3_5_resident::maximum_resident_gate_up_fusion_transient_payload_bytes;
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
-    Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
+    Qwen3_5ResidentEngine, Qwen3_5ResidentModel, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5ResidentPromptProcessingChunkSizerError,
 };
 #[cfg(feature = "direct-mlx")]

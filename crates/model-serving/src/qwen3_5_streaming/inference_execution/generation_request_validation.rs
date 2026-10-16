@@ -4,14 +4,16 @@
 //! `start_generation` read as a lifecycle while this owner explains why malformed
 //! or impossible token ranges are rejected before touching MLX state.
 
-use crate::{InferenceEngineError, Qwen3_5InferenceRequest};
+use crate::{
+    InferenceEngineError, Qwen3_5InferenceRequest, bounded_output_reservation_token_count,
+};
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_core::text;
 use crate::qwen3_5_streaming::model::memory_admission;
 
 impl Qwen3_5EngineState {
-    pub(super) fn validate_generation_request_and_resolve_total_context(
+    pub(super) fn validate_generation_request_and_resolve_reserved_context(
         &self,
         inference_request: &Qwen3_5InferenceRequest,
     ) -> Result<usize, InferenceEngineError> {
@@ -90,14 +92,26 @@ impl Qwen3_5EngineState {
                 "request exceeds the configured context limit; serving anyway because it fits the model artifact context window"
             );
         }
+        // The memory reservation covers the thinking allowance plus a visible-answer
+        // reserve, never the caller's full output budget: a 65,535-token budget with a
+        // 16,384-token thinking allowance pinned ~1.3 GB of KV that never materialized
+        // and forced a per-turn warm-expert reclaim in long agent conversations
+        // (2026-10-16 incident). Beyond-reserve output grows lazily under the
+        // per-step growth guard. Position limits above stay on the true total.
+        let output_reservation_token_count = bounded_output_reservation_token_count(
+            maximum_output_token_count,
+            thinking_budget_token_count,
+        );
+        let reserved_context_tokens = prompt_token_count + output_reservation_token_count;
         tracing::info!(
             prompt_token_count,
             maximum_output_token_count,
             thinking_budget_token_count,
             total_context_token_count = total_context_tokens,
+            reserved_context_token_count = reserved_context_tokens,
             maximum_position_count = self.maximum_position_count,
             "resolved generation context token reservation"
         );
-        Ok(total_context_tokens)
+        Ok(reserved_context_tokens)
     }
 }
