@@ -16,3 +16,5 @@ mod worker_startup_gpu_memory;
 #[cfg(test)]
 mod worker_startup_gpu_memory_tests;
 mod worker_startup_logging;
+#[cfg(test)]
+mod worker_startup_wired_claim_tests;

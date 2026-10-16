@@ -16,6 +16,20 @@ offline_denied_test!(should_retain_an_adoptable_state_when_adoption_is_enabled, 
     );
 });
 
+offline_denied_test!(should_retain_a_state_of_exactly_half_the_ceiling, {
+    let decision = RetainedPrefixRetentionRequirements {
+        adoption_enabled: true,
+        adoptable_token_count: 98_304,
+        retained_state_payload_bytes: 18_000_000_000,
+        effective_mlx_memory_ceiling_bytes: 36_000_000_000,
+    }
+    .decide();
+    assert!(
+        matches!(decision, RetainedPrefixRetentionDecision::Retain),
+        "exactly half the ceiling is the documented retention boundary and must retain"
+    );
+});
+
 offline_denied_test!(should_drop_the_retained_state_when_adoption_is_disabled, {
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: false,
@@ -57,6 +71,23 @@ offline_denied_test!(
         assert!(
             matches!(decision, RetainedPrefixRetentionDecision::Drop),
             "a retained state above half the ceiling would starve an unrelated next conversation"
+        );
+    }
+);
+
+offline_denied_test!(
+    should_not_wrap_when_the_state_payload_doubles_past_the_word,
+    {
+        let decision = RetainedPrefixRetentionRequirements {
+            adoption_enabled: true,
+            adoptable_token_count: 98_304,
+            retained_state_payload_bytes: u64::MAX / 2 + 1,
+            effective_mlx_memory_ceiling_bytes: 36_000_000_000,
+        }
+        .decide();
+        assert!(
+            matches!(decision, RetainedPrefixRetentionDecision::Drop),
+            "a state larger than half of any representable ceiling must drop, not wrap to a retain"
         );
     }
 );

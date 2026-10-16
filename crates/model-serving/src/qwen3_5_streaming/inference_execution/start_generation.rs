@@ -33,8 +33,8 @@ impl Qwen3_5EngineState {
             );
             return Err(InferenceEngineError::EngineBusy);
         }
-        let total_context_tokens =
-            self.validate_generation_request_and_resolve_total_context(&inference_request)?;
+        let reserved_context_tokens =
+            self.validate_generation_request_and_resolve_reserved_context(&inference_request)?;
         let mut natural_reasoning_end_token_ids =
             inference_request.natural_reasoning_end_token_ids().to_vec();
         if !natural_reasoning_end_token_ids.contains(&self.think_end_token_id) {
@@ -64,7 +64,7 @@ impl Qwen3_5EngineState {
         self.admit_initial_generation_context_or_record_rejection(
             request_id,
             configured_maximum_output_tokens,
-            total_context_tokens,
+            reserved_context_tokens,
             inference_request.input_token_ids().len(),
             self.persistent_prompt_cache.is_some() && !inference_request.has_visual_embeddings(),
             &mut performance_attribution,
@@ -210,7 +210,7 @@ impl Qwen3_5EngineState {
                             persistent_prompt_cache,
                             &prompt_token_ids,
                             &persistent_prompt_cache_block_causal_inputs,
-                            total_context_tokens,
+                            reserved_context_tokens,
                             &mut request_decoder_state,
                             &mut performance_attribution,
                         )
