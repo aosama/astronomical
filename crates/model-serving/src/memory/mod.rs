@@ -75,12 +75,15 @@ mod adaptive_ram_growth_observations_tests;
 #[cfg(test)]
 mod memory_policy_tests;
 #[cfg(test)]
+mod reclamation_boundary_tests;
+#[cfg(test)]
 mod serving_memory_ceiling_tests;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
     CompleteResidencyRequirements, ContextAdmissionRequirements, RetainedPrefixRetentionDecision,
-    RetainedPrefixRetentionRequirements, RotatingAdmissionError, combined_persistent_growth_bytes,
+    RetainedPrefixRetentionRequirements, RotatingAdmissionError, VISIBLE_ANSWER_RESERVE_TOKENS,
+    bounded_output_reservation_token_count, combined_persistent_growth_bytes,
     persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
     retained_expert_payload_capacity_bytes, rotating_committed_token_count,
     rotating_prefill_transient_token_count, safe_minimum_active_memory_ceiling_bytes,

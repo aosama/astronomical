@@ -17,18 +17,39 @@ pub use crate::worker_startup_error::{WorkerProcessError, WorkerStartupError};
 pub use crate::worker_startup_gpu_memory::machine_mlx_memory_ceiling_bytes;
 pub use crate::worker_startup_logging::initialize_tracing;
 
-/// Experimental, opt-in through `ASTRONOMICAL_MLX_WIRED_CLAIM=1`: claims
-/// Metal wired residency up to the system recommendation — the mlx-lm
-/// large-model pattern — so that under memory pressure the operating system
-/// pages other processes instead of the loaded model's weights. The API
-/// rejects claims above the recommendation and needs no elevation. The
-/// claim lives for the worker process lifetime (the kernel releases it on
-/// exit); if the experiment proves out, the product shape is the narrower
-/// generation-window pattern mlx-lm uses.
-fn claim_wired_residency_when_requested() {
-    if !std::env::var_os(WIRED_CLAIM_ENVIRONMENT_VARIABLE)
-        .is_some_and(|claim_value| claim_value == "1")
-    {
+/// Decides whether the worker claims Metal wired residency at startup.
+///
+/// The claim is on by default: Astronomical is this machine's primary
+/// model-serving process, and an unclaimed resident model loses every
+/// memory fight. Measured twice on 2026-10-16 with a 34 GB unwired resident
+/// model on a busy 48 GB machine (compressor holding ~25 GB, swap full,
+/// kernel pressure level 2): the kernel's default wiring heuristic had
+/// wired only ~3.8 GB of the model's pages, macOS compressed the rest, and
+/// the first prefill after load faulted the whole working set back from
+/// disk — 52.9 s for a 64-token chunk and 42.8 s for a 558-token chunk.
+/// With the claim raised to the kernel's own recommended working set, MLX
+/// allocations become pageable-no-more and under pressure macOS pages the
+/// neighbors instead of the model. Explicit `ASTRONOMICAL_MLX_WIRED_CLAIM=0`
+/// is the escape hatch for machines or workflows that must keep serving
+/// without a wired pool; any other value (including unset) keeps the claim.
+pub(crate) fn wired_residency_claim_is_enabled(
+    environment_override: Option<&std::ffi::OsStr>,
+) -> bool {
+    environment_override.is_none_or(|claim_value| claim_value != "0")
+}
+
+/// Claims Metal wired residency up to the system recommendation for the
+/// worker lifetime — the mlx-lm large-model pattern — so that under memory
+/// pressure the operating system pages other processes instead of the
+/// loaded model's weights. The API rejects claims above the recommendation
+/// and needs no elevation; the kernel releases the claim when the worker
+/// exits. A failed claim never blocks serving: the worker continues
+/// unprotected and says so in the log.
+fn claim_wired_residency_by_default() {
+    if !wired_residency_claim_is_enabled(
+        std::env::var_os(WIRED_CLAIM_ENVIRONMENT_VARIABLE).as_deref(),
+    ) {
+        tracing::info!("wired-residency claim disabled by environment; serving unprotected");
         return;
     }
     match maximum_recommended_gpu_working_set_size_bytes() {
@@ -142,7 +163,7 @@ where
                 description: "effective MLX memory ceiling exceeds the platform integer range",
             })
         })?;
-    claim_wired_residency_when_requested();
+    claim_wired_residency_by_default();
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
