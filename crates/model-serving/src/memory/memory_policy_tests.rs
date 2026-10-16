@@ -433,29 +433,44 @@ offline_denied_test!(
 );
 
 offline_denied_test!(
-    should_ignore_layer_weight_workspace_when_complete_experts_are_already_seated,
+    should_include_chunk_activation_workspace_when_complete_experts_are_already_seated,
+    // Seated experts do not pre-pay the chunk transient: the resident
+    // reserve carries the chunk-scoped activation workspace on top of the
+    // publication workspace, or a prompt admitted near the ceiling drives
+    // its live footprint across the wired budget and the GPU fails the
+    // command buffer fatally (issue #1297, measured 2026-10-16).
     {
+        const PUBLICATION_WORKSPACE_BYTES: usize = 3_407_872;
+        const RESTORE_OVERLAP_WORKSPACE_BYTES: usize = 323_399_680;
+        const PREFILL_ACTIVATION_WORKSPACE_BYTES: usize = 4_831_838_208;
         let seated_temporary_workspace_bytes = request_context_temporary_workspace_bytes(
             true,
             1_665_556_480,
-            323_399_680,
-            3_407_872,
-            4_831_838_208,
+            RESTORE_OVERLAP_WORKSPACE_BYTES,
+            PUBLICATION_WORKSPACE_BYTES,
+            PREFILL_ACTIVATION_WORKSPACE_BYTES,
         )
         .expect("seated workspace should fit usize");
         let paged_temporary_workspace_bytes = request_context_temporary_workspace_bytes(
             false,
             1_665_556_480,
-            323_399_680,
-            3_407_872,
-            4_831_838_208,
+            RESTORE_OVERLAP_WORKSPACE_BYTES,
+            PUBLICATION_WORKSPACE_BYTES,
+            PREFILL_ACTIVATION_WORKSPACE_BYTES,
         )
         .expect("paged workspace should fit usize");
 
-        assert_eq!(seated_temporary_workspace_bytes, 3_407_872);
+        // Restore overlap is fully covered by context growth here, so the
+        // seated reserve is publication plus the chunk activation workspace.
+        assert_eq!(
+            seated_temporary_workspace_bytes,
+            PUBLICATION_WORKSPACE_BYTES + PREFILL_ACTIVATION_WORKSPACE_BYTES
+        );
         assert_eq!(
             paged_temporary_workspace_bytes,
-            3_407_872 + 323_399_680 + 4_831_838_208
+            PUBLICATION_WORKSPACE_BYTES
+                + RESTORE_OVERLAP_WORKSPACE_BYTES
+                + PREFILL_ACTIVATION_WORKSPACE_BYTES
         );
     }
 );

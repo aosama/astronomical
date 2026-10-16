@@ -63,42 +63,47 @@ impl Qwen3_5EngineState {
                 .as_ref()
                 .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let complete_experts_are_resident = model.resident_expert_weights.is_some();
-            // Layer-weight activation heuristics and the SSD stream slot already
-            // live inside the seated active snapshot. Adding them again stacks
-            // exclusive paper peaks on top of RAM that is already allocated.
-            if complete_experts_are_resident {
-                (0, true)
-            } else {
-                let ram_budget = model.mlx_ram_budget();
-                // The activation reserve belongs to one forward, so it is
-                // sized by the planned chunk bound, never the total context
-                // length. Sizing it from the context multiplied a chunk-shaped
-                // learned observation into a reserve several times the
-                // ceiling and rejected every later request (issue #690); the
-                // planned chunk size is the same operation scope `plan()`
-                // already resolves (issue #644). The bound follows the
-                // residency mode that will actually run: each mode's forwards
-                // record activation evidence at that mode's own operation
-                // scope, so resolving one mode's promise at the other mode's
-                // scope inflated the reserve by the chunk ratio (measured
-                // 2026-10-10).
-                let planned_prefill_operation_token_count = u64::try_from(
-                    self.prompt_processing_chunk_sizer
-                        .prompt_processing_operation_bound_tokens(),
-                )
-                .unwrap_or(u64::MAX);
-                let prefill_activation_workspace_bytes =
-                    usize::try_from(ram_budget.activation_headroom_bytes(
-                        MemoryPhase::Prefill,
-                        planned_prefill_operation_token_count,
-                    ))
-                    .map_err(|_| {
-                        memory_admission::invalid_request_error(
-                            "prefill activation workspace exceeds the platform range",
-                        )
-                    })?;
-                (prefill_activation_workspace_bytes, false)
-            }
+            let ram_budget = model.mlx_ram_budget();
+            // The activation reserve belongs to one forward, so it is sized
+            // by the planned chunk bound, never the total context length.
+            // Sizing it from the context multiplied a chunk-shaped learned
+            // observation into a reserve several times the ceiling and
+            // rejected every later request (issue #690); the planned chunk
+            // size is the same operation scope `plan()` already resolves
+            // (issue #644), and each mode's own forwards record evidence at
+            // that mode's operation scope, so the learned budget follows the
+            // mode that actually runs (measured 2026-10-10).
+            //
+            // Resident forwards reserve it exactly like paged forwards:
+            // the seated expert snapshot does not pre-pay the chunk's
+            // transient activation working set. Measured 2026-10-16 with
+            // the 8-bit resident shape under a wired budget (issue #1297):
+            // 2048-token chunks transiently held 2.0-2.27 GB that a
+            // zero-workspace projection never saw, so a long prompt
+            // admitted near the ceiling drove its live footprint across the
+            // wired budget and the GPU failed the command buffer fatally.
+            // The honest reserve sends such projections down the demote
+            // path (partial release or fork to the streaming family)
+            // instead of into a fatal execution window.
+            let planned_prefill_operation_token_count = u64::try_from(
+                self.prompt_processing_chunk_sizer
+                    .prompt_processing_operation_bound_tokens(),
+            )
+            .unwrap_or(u64::MAX);
+            let prefill_activation_workspace_bytes =
+                usize::try_from(ram_budget.activation_headroom_bytes(
+                    MemoryPhase::Prefill,
+                    planned_prefill_operation_token_count,
+                ))
+                .map_err(|_| {
+                    memory_admission::invalid_request_error(
+                        "prefill activation workspace exceeds the platform range",
+                    )
+                })?;
+            (
+                prefill_activation_workspace_bytes,
+                complete_experts_are_resident,
+            )
         };
         let temporary_workspace_reservation_bytes = request_context_temporary_workspace_bytes(
             complete_experts_are_resident,
