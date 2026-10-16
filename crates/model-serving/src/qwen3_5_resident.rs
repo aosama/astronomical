@@ -18,4 +18,5 @@ pub use inference_execution::{
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5ResidentPromptProcessingChunkSizerError,
 };
-pub(crate) use model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
+pub(crate) use model::Qwen3_5ExecutionError;
+pub use model::Qwen3_5ResidentModel;

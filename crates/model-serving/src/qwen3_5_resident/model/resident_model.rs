@@ -45,6 +45,52 @@ impl Qwen3_5ResidentModel {
         astronomical_ipc_protocol::ExpertMemoryMode::Resident
     }
 
+    /// Creates an empty per-request decoder state whose per-layer cache
+    /// dtypes match this model's loaded weights, exactly as production
+    /// generation does.
+    ///
+    /// Direct-MLX probes drive raw forwards without the engine's request
+    /// plumbing; this constructor keeps their decoder state identical to
+    /// production. The public config-only constructor instead assumes
+    /// BFloat16 caches, which can diverge from a loaded artifact's dtypes
+    /// and would quietly measure a different graph than the one serving.
+    #[cfg(feature = "direct-mlx")]
+    pub fn empty_request_decoder_state_matching_loaded_weights(
+        &self,
+        full_attention_kv_state_growth_tokens: i32,
+    ) -> Result<RequestDecoderStateStack, astronomical_runtime_integration::MlxRuntimeError> {
+        let decoder_cache_layout = self.base.decoder_cache_layout().clone();
+        RequestDecoderStateStack::
+            empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &decoder_cache_layout,
+                full_attention_kv_state_growth_tokens,
+            )
+    }
+
+    /// Materializes dense target weights and the complete resident expert
+    /// payload in the exact order production model loading uses.
+    ///
+    /// Direct-MLX probes need the same weight residency the daemon serves
+    /// with: `load` alone binds shared metadata without evaluating the
+    /// payload, so the first forward would fail with a missing resident
+    /// expert tensor. The allocator-cache drain between the two stages
+    /// mirrors production so transient load buffers cannot outlive the
+    /// materialization the same way they must not in serving.
+    #[cfg(feature = "direct-mlx")]
+    pub fn materialize_complete_weights_matching_production(
+        &mut self,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        self.materialize_target_weights()?;
+        self.runtime()
+            .synchronize_gpu_stream_and_clear_allocator_cache()?;
+        if !self.expert_layer_plans.is_empty() {
+            let resident_expert_weights =
+                Qwen3_5ResidentExpertWeights::load(self.runtime(), &self.expert_layer_plans, None)?;
+            self.resident_expert_weights = Some(resident_expert_weights);
+        }
+        Ok(())
+    }
+
     pub(crate) fn expert_residency_telemetry_for_breakdown(
         &self,
         active_memory_breakdown: &crate::MlxActiveMemoryBreakdown,

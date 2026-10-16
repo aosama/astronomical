@@ -15,6 +15,8 @@ mod retained_prefix;
 mod rotating;
 
 #[cfg(test)]
+mod context_boundary_tests;
+#[cfg(test)]
 mod expert_memory_admission_tests;
 #[cfg(test)]
 mod retained_prefix_policy_tests;
@@ -25,7 +27,8 @@ pub use allocation::{
 };
 pub use complete_residency::{CompleteResidencyDecision, CompleteResidencyRequirements};
 pub use context::{
-    ContextAdmissionRequirements, combined_persistent_growth_bytes,
+    ContextAdmissionRequirements, VISIBLE_ANSWER_RESERVE_TOKENS,
+    bounded_output_reservation_token_count, combined_persistent_growth_bytes,
     persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
     safe_minimum_active_memory_ceiling_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,

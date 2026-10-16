@@ -11,6 +11,8 @@ mod resident_set;
 mod weight;
 
 #[cfg(test)]
+mod decode_expert_cache_boundary_tests;
+#[cfg(test)]
 mod decode_expert_cache_tests;
 #[cfg(test)]
 mod previous_token_prefetch_tests;

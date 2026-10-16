@@ -41,7 +41,12 @@ impl RetainedPrefixRetentionRequirements {
         if !self.adoption_enabled || self.adoptable_token_count == 0 {
             return RetainedPrefixRetentionDecision::Drop;
         }
-        if self.retained_state_payload_bytes * 2 > self.effective_mlx_memory_ceiling_bytes {
+        // saturating_mul keeps a corrupted or hostile payload measurement from
+        // wrapping past half the ceiling and reading as retainable in release
+        // builds (it panicked in debug builds instead).
+        if self.retained_state_payload_bytes.saturating_mul(2)
+            > self.effective_mlx_memory_ceiling_bytes
+        {
             return RetainedPrefixRetentionDecision::Drop;
         }
         RetainedPrefixRetentionDecision::Retain

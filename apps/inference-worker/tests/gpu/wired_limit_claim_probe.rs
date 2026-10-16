@@ -6,13 +6,18 @@
 //! macOS 27, `iogpu.wired_limit_mb=0`, idle) the default policy wired past
 //! the full product target of 42,949,672,960 bytes (the 40 GB on the
 //! sticker scale) with every probe healthy (23–215 ms) — past the kernel's
-//! own recommendation. Performance lesson recorded: the practical wall on
-//! this machine is available RAM minus what the operating system needs,
-//! not a fixed fraction. A wired-limit claim is therefore not merely
-//! unnecessary here — the kernel caps claims at the recommendation, below
-//! what the default policy already wires, so claiming would shrink the
-//! boundary. The claim fallback in this probe exists for machines where
-//! the default policy genuinely crawls below the recommendation.
+//! own recommendation. Performance lesson recorded twice since: the idle
+//! default is a heuristic, not a guarantee. On 2026-10-16, with a 34 GB
+//! resident model loaded on the same machine under real neighbor load
+//! (compressor holding ~25 GB, swap full, pressure level 2), the default
+//! heuristic had wired only ~3.8 GB — macOS compressed the model's own
+//! weights and the first prefill after load faulted them back at 43–53 s
+//! per small chunk. The worker therefore claims wired residency up to the
+//! kernel recommendation by default (`worker_startup`), which is
+//! deterministic where the idle heuristic is not; this probe remains the
+//! measured boundary walk for both policies. The claim fallback in this
+//! probe exists for machines where the default policy genuinely crawls
+//! below the recommendation.
 //!
 //! Probe semantics mirror the production startup walk so both agree on
 //! what a boundary is: geometric probes (512 MiB step granularity, 2 GiB

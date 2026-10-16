@@ -1,6 +1,6 @@
 # Instructions for the Astronomical Project
 
-- Keep full workspace verification and formatting verification only before committing and pushing, when the user asks you to commit. This codebase is slow to format-check, and full workspace test runs take a long time.
+- Keep full workspace verification and formatting verification only before committing and pushing, when the user asks you to commit.
 
 - Run cargo fmt or similar commands only before committing; that is, when the user asks you to commit, run cargo fmt.
 
@@ -8,16 +8,12 @@
 
 - Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.
 
-## Never Kill the Running Stable Instance
-
-- While developing this codebase, never kill, stop, terminate, or force-quit the running Stable instance: the `astronomicald` daemon on `127.0.0.1:6732`, the `~/Applications/Astronomical.app`, or any process bound to the Stable state directory `~/.astronomical`.
-
 ## There are No RESTAPI/IPC/Unix Socket Downstream Consumers
 
 - There are no downstream consumers or other dependent applications — hence no need for deprecation or compatibility shims or any other techniques.
 - There is no requirement for backward compatibility for the REST API surface. There are no downstream consumers of these surfaces, so REST API backward compatibility is not a constraint.
 
-## Code File Length and Memory Measurement Units
+## Memory Measurement Units
 
 - Any end-user-facing file-size or memory value must use the gigabyte convention Apple uses to market the machine: 1 GB = 1,073,741,824 bytes (2³⁰). A machine with 51,539,607,552 bytes of RAM is presented as 48 GB, exactly as the purchase sticker reads; its model ceiling is (48 − 8) = 40 GB. Never present decimal SI gigabytes (10⁹ bytes) to end users. Internal storage and wire formats remain raw bytes; only display rendering and whole-GB user inputs convert, always with 2³⁰.
 
@@ -39,8 +35,6 @@
 
 - The fixture of Romeo and Juliet MUST be used as the source test input for LLMs; there should not be random text or tokens used for testing.
 
-- Any test case that utilizes an end-to-end model (a real model) should not be configured to allocate, acquire, or reserve more than 36 GB of RAM. 
-
 - The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
 
 ## Performance Related
@@ -51,7 +45,7 @@
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
-- MOST IMPORTANTLY to uncover performance degradation you have to introduce tests at the lower most part of the callstack and work upwards from there using tests. Reading code and reasoning through it will not help you.
+- MOST IMPORTANTLY performance tests must start at the lower most part of the callstack and more tests upwards through the call stack.
 
 ## Memory Management Ownership In This Codebase
 
