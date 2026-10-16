@@ -6,7 +6,11 @@
 //! from the kernel and no device recommendation participate in the bound,
 //! so the daemon, the worker, and the menu share a single source of truth.
 //! Measured evidence that a healthy machine wires this full ceiling lives
-//! in `tests/gpu/wired_limit_claim_probe.rs`.
+//! in `tests/gpu/wired_limit_claim_probe.rs`. On machines where Metal's
+//! recommended working set sits below this ceiling, the worker's wired
+//! claim is capped at the recommendation and the effective serving ceiling
+//! is clamped to that budget — the ceiling stays the upper bound while the
+//! wire budget decides what is actually servable without paging the model.
 
 use std::time::Duration;
 

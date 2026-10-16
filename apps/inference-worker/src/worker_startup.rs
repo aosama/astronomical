@@ -4,6 +4,7 @@ use astronomical_ipc_protocol::{
     WorkerStartupConfiguration,
 };
 use astronomical_mlx_c_rust::set_wired_limit;
+use astronomical_model_serving::effective_mlx_memory_ceiling_after_wired_claim;
 use astronomical_model_serving::effective_mlx_memory_ceiling_bytes;
 use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -38,36 +39,70 @@ pub(crate) fn wired_residency_claim_is_enabled(
     environment_override.is_none_or(|claim_value| claim_value != "0")
 }
 
-/// Claims Metal wired residency up to the system recommendation for the
-/// worker lifetime — the mlx-lm large-model pattern — so that under memory
-/// pressure the operating system pages other processes instead of the
-/// loaded model's weights. The API rejects claims above the recommendation
-/// and needs no elevation; the kernel releases the claim when the worker
-/// exits. A failed claim never blocks serving: the worker continues
-/// unprotected and says so in the log.
-fn claim_wired_residency_by_default() {
+/// The largest wired-residency budget MLX will grant for a serving ceiling.
+///
+/// MLX rejects claims above Metal's recommended working set (its
+/// `set_wired_limit` throws `invalid_argument` above the recommendation),
+/// so the recommendation is the absolute wiring ceiling even on machines
+/// where the memory ceiling sits higher. Claiming only what the engine will
+/// also plan against keeps the wired budget and the serving ceiling in
+/// lockstep: a budget below the ceiling is exactly the 2026-10-16 fatal
+/// gap (issue #1297), where admission planned up to the 42,949,672,960-byte
+/// machine ceiling while the driver could keep only 40,000,028,672 bytes
+/// GPU-resident.
+pub(crate) fn wired_residency_claim_budget_bytes(
+    serving_ceiling_bytes: usize,
+    recommended_working_set_bytes: usize,
+) -> usize {
+    serving_ceiling_bytes.min(recommended_working_set_bytes)
+}
+
+/// Claims Metal wired residency for the worker lifetime up to the serving
+/// ceiling, capped at the system recommendation — the mlx-lm large-model
+/// pattern — so that under memory pressure the operating system pages other
+/// processes instead of the loaded model's weights. Returns the granted
+/// budget the engine must clamp its ceiling to, or `None` when serving
+/// continues without a wired pool (claim disabled, recommendation
+/// unreadable, or the claim rejected). A failed claim never blocks
+/// serving: with no wired budget the allocations stay pageable, so the
+/// ceiling keeps its original value; the kernel releases the claim when
+/// the worker exits.
+fn claim_wired_residency_up_to(serving_ceiling_bytes: usize) -> Option<usize> {
     if !wired_residency_claim_is_enabled(
         std::env::var_os(WIRED_CLAIM_ENVIRONMENT_VARIABLE).as_deref(),
     ) {
         tracing::info!("wired-residency claim disabled by environment; serving unprotected");
-        return;
+        return None;
     }
-    match maximum_recommended_gpu_working_set_size_bytes() {
-        Ok(recommended_working_set_bytes) => match set_wired_limit(recommended_working_set_bytes) {
-            Ok(previous_wired_limit_bytes) => tracing::info!(
-                claimed_wired_limit_bytes = recommended_working_set_bytes,
+    let recommended_working_set_bytes = match maximum_recommended_gpu_working_set_size_bytes() {
+        Ok(recommended_working_set_bytes) => recommended_working_set_bytes,
+        Err(recommendation_error) => {
+            tracing::warn!(
+                error = %recommendation_error,
+                "could not read the recommended working set; wired claim skipped"
+            );
+            return None;
+        }
+    };
+    let claim_budget_bytes =
+        wired_residency_claim_budget_bytes(serving_ceiling_bytes, recommended_working_set_bytes);
+    match set_wired_limit(claim_budget_bytes) {
+        Ok(previous_wired_limit_bytes) => {
+            tracing::info!(
+                claimed_wired_limit_bytes = claim_budget_bytes,
                 previous_wired_limit_bytes,
+                serving_ceiling_bytes,
                 "claimed Metal wired residency for the worker lifetime"
-            ),
-            Err(claim_error) => tracing::warn!(
+            );
+            Some(claim_budget_bytes)
+        }
+        Err(claim_error) => {
+            tracing::warn!(
                 error = %claim_error,
                 "wired-residency claim failed; serving continues unprotected"
-            ),
-        },
-        Err(recommendation_error) => tracing::warn!(
-            error = %recommendation_error,
-            "could not read the recommended working set; wired claim skipped"
-        ),
+            );
+            None
+        }
     }
 }
 
@@ -163,7 +198,28 @@ where
                 description: "effective MLX memory ceiling exceeds the platform integer range",
             })
         })?;
-    claim_wired_residency_by_default();
+    let claimed_wired_residency_budget_bytes =
+        claim_wired_residency_up_to(effective_mlx_memory_ceiling_bytes);
+    let effective_ceiling_before_wired_claim_bytes = effective_mlx_memory_ceiling_bytes_u64;
+    let effective_mlx_memory_ceiling_bytes_u64 = effective_mlx_memory_ceiling_after_wired_claim(
+        effective_mlx_memory_ceiling_bytes_u64,
+        claimed_wired_residency_budget_bytes
+            .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
+    );
+    if effective_mlx_memory_ceiling_bytes_u64 < effective_ceiling_before_wired_claim_bytes {
+        tracing::warn!(
+            effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
+            claimed_wired_residency_budget_bytes,
+            machine_mlx_memory_ceiling_bytes,
+            "serving ceiling clamped to the wired-residency budget the driver can honor"
+        );
+    }
+    let effective_mlx_memory_ceiling_bytes =
+        usize::try_from(effective_mlx_memory_ceiling_bytes_u64).map_err(|_| {
+            WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
+                description: "effective MLX memory ceiling exceeds the platform integer range",
+            })
+        })?;
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,

@@ -35,7 +35,9 @@ pub const fn machine_ceiling_from_physical_ram_bytes(physical_ram_bytes: u64) ->
     }
 }
 
-/// Resolves the effective ceiling under the configured and machine limits.
+/**
+ * Resolves the effective ceiling under the configured and machine limits.
+ */
 #[must_use]
 pub const fn effective_mlx_memory_ceiling_bytes(
     configured_mlx_memory_ceiling_bytes: Option<u64>,
@@ -48,5 +50,37 @@ pub const fn effective_mlx_memory_ceiling_bytes(
             configured_mlx_memory_ceiling_bytes
         }
         _ => machine_mlx_memory_ceiling_bytes,
+    }
+}
+
+/// Resolves the effective ceiling the engine may plan against once the
+/// worker's wired-residency budget is known.
+///
+/// The wired budget is the only hard GPU-side bound, and it can sit below
+/// the machine ceiling: MLX refuses wired claims above Metal's
+/// recommended working set, and on a 48 GB machine that recommendation
+/// (40,000,028,672 bytes) lands ~2.9 GB under the ceiling
+/// (42,949,672,960 bytes). Serving with the higher ceiling while the wired
+/// budget stayed lower admitted a 130,538-token prefill whose working set
+/// could not be made GPU-resident: the driver failed the command buffer
+/// with `kIOGPUCommandBufferCallbackErrorOutOfMemory` and the worker exited
+/// (measured 2026-10-16 on stable 0.2.73, issue #1297). Whenever a wired
+/// budget exists the engine must plan against the smaller of the two
+/// bounds, because the residency planner keeps its activation headroom
+/// inside the ceiling it is handed — a truthful ceiling keeps that headroom
+/// real. `None` means serving without a wired pool (claim disabled or
+/// failed), where pages stay swappable and the ceiling stands unchanged.
+#[must_use]
+pub const fn effective_mlx_memory_ceiling_after_wired_claim(
+    effective_mlx_memory_ceiling_bytes: u64,
+    claimed_wired_residency_budget_bytes: Option<u64>,
+) -> u64 {
+    match claimed_wired_residency_budget_bytes {
+        Some(claimed_wired_residency_budget_bytes)
+            if claimed_wired_residency_budget_bytes < effective_mlx_memory_ceiling_bytes =>
+        {
+            claimed_wired_residency_budget_bytes
+        }
+        _ => effective_mlx_memory_ceiling_bytes,
     }
 }

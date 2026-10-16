@@ -4,6 +4,7 @@ use std::ffi::OsStr;
 
 use astronomical_test_harness::offline_denied_test;
 
+use crate::worker_startup::wired_residency_claim_budget_bytes;
 use crate::worker_startup::wired_residency_claim_is_enabled;
 
 offline_denied_test!(
@@ -27,3 +28,23 @@ offline_denied_test!(
     // seconds per chunk.
     { assert!(wired_residency_claim_is_enabled(Some(OsStr::new("yes")))) }
 );
+
+offline_denied_test!(should_cap_the_wire_claim_at_the_recommended_working_set, {
+    // MLX rejects wired claims above Metal's recommendation, so a machine
+    // ceiling above the recommendation claims only the recommendation —
+    // the 48 GB incident shape (issue #1297).
+    assert_eq!(
+        wired_residency_claim_budget_bytes(42_949_672_960, 40_000_028_672),
+        40_000_028_672
+    );
+});
+
+offline_denied_test!(should_claim_the_full_ceiling_below_the_recommendation, {
+    // A configured ceiling below the recommendation is claimed as-is: the
+    // engine never plans above the budget, so the budget never needs to
+    // exceed the ceiling.
+    assert_eq!(
+        wired_residency_claim_budget_bytes(38_654_705_664, 40_000_028_672),
+        38_654_705_664
+    );
+});
