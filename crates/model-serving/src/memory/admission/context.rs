@@ -155,18 +155,27 @@ pub fn request_context_temporary_workspace_bytes(
     context_growth_bytes: usize,
     restore_overlap_workspace_bytes: usize,
     publication_workspace_bytes: usize,
-    paged_prefill_activation_workspace_bytes: usize,
+    prefill_activation_workspace_bytes: usize,
 ) -> Option<usize> {
     if complete_experts_are_resident {
+        // Seated experts do not pre-pay the chunk transient: every resident
+        // prefill forward still allocates its activation working set on top
+        // of the seated snapshot, so the chunk-scoped reserve rides along in
+        // both modes. Measured 2026-10-16 on the 8-bit resident shape under
+        // a wired budget (issue #1297): 2048-token chunks transiently held
+        // 2.0-2.27 GB that a zero-workspace projection never saw, so a long
+        // prompt admitted near the ceiling drove its live footprint across
+        // the wired budget and the GPU failed the command buffer fatally.
         seated_complete_expert_request_temporary_workspace_bytes(
             context_growth_bytes,
             restore_overlap_workspace_bytes,
             publication_workspace_bytes,
-        )
+        )?
+        .checked_add(prefill_activation_workspace_bytes)
     } else {
         publication_workspace_bytes
             .checked_add(restore_overlap_workspace_bytes)?
-            .checked_add(paged_prefill_activation_workspace_bytes)
+            .checked_add(prefill_activation_workspace_bytes)
     }
 }
 
