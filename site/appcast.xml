@@ -4,36 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.73</title>
-            <pubDate>Fri, 16 Oct 2026 11:40:54 -0400</pubDate>
-            <sparkle:version>1353</sparkle:version>
-            <sparkle:shortVersionString>0.2.73</sparkle:shortVersionString>
+            <title>0.2.74</title>
+            <pubDate>Fri, 16 Oct 2026 13:27:10 -0400</pubDate>
+            <sparkle:version>1359</sparkle:version>
+            <sparkle:shortVersionString>0.2.74</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.73
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.74
 
 ## Fixed
 
-- Models stay fast on busy machines. The engine now locks model memory into physical RAM by default, so macOS pages other applications instead of the loaded model under memory pressure. First answers after loading a large model no longer stall for tens of seconds, and generation keeps its normal speed while browsers, editors, and background services compete for memory. Set `ASTRONOMICAL_MLX_WIRED_CLAIM=0` to keep model memory swappable instead.
-- Long conversations no longer slow down turn after turn. Memory reservations now cover the thinking allowance plus a visible-answer reserve instead of the full maximum output a client may request, so warm model state is no longer discarded between turns of long agent conversations.
-- Hardened retained-conversation-state accounting against an overflow that could produce a wrong retention decision.
-
-## Improved
-
-- Expanded regression coverage for memory admission, reclamation, and residency planning, plus a new low-level performance probe for localizing model serving speed.
+- Very long conversations no longer crash the engine on Macs with 48 GB of RAM or more. A conversation grown past roughly one hundred thousand tokens could fail with a native out-of-memory and leave the model unavailable until the app was restarted; the engine now plans strictly within the memory the graphics driver can keep locked for the GPU, and oversized conversations degrade gracefully — part of the model streams — instead of the engine stopping.
+- Serving memory now adapts to the machine: when the graphics driver's lockable budget is below the configured memory ceiling, plans are made against the lockable budget. Machines already configured inside the lockable budget are unaffected.
 
 ## Compatibility
 
-- No configuration changes; existing installs upgrade in place and keep their models and state. Model output semantics and precision are unchanged.
+- No configuration changes; existing installs upgrade in place and keep their models and state. Model output semantics and precision are unchanged. The `ASTRONOMICAL_MLX_WIRED_CLAIM=0` escape hatch still keeps model memory pageable for workflows that need it.
 
 ## Distribution
 
 - This release is signed with a Developer ID identity, notarized by Apple, and stapled. The disk image and the automatic-update feed are signed, and their SHA-256 digests are recorded in the release manifest before publication.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.73/Astronomical-0.2.73-macOS-arm64.dmg" length="19153110" type="application/octet-stream" sparkle:edSignature="Fum/CzNIBjWy6xsZ1hpKnowEWrHM65fW5+bLomy2ZfK3/eLCeJVMTPC34GbYh57rmfs4SGqWeUfuqOpiaQQXCQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.74/Astronomical-0.2.74-macOS-arm64.dmg" length="19148227" type="application/octet-stream" sparkle:edSignature="ddBazzv96rDSqJ7Si5OfV+qd8/ilbpmvmch3hFRTArXEV+t1Zc7/ziHJY0k5aVaU7n520d+7t2/7yg8yRB3iAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: kQb/omFKq82gfNZxsxdiuVTPha4yIaYYsNNh1zxT6uuBlbMmPbXX3jIlciO2161MQjROiitTwWBZTRmN4VB2Cg==
-length: 2703
+edSignature: KN2mQNSmLouOB+rYZnQeMd5t/xxB0ALVlpBn2+rOTeNd3+g579uLDMJUc51ruPrKrYAge131UNSGrT1Xs2NoBg==
+length: 2488
 -->
