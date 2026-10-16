@@ -17,6 +17,7 @@ where
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
+            wired_residency_budget_bytes: None,
             worker_runtime_feature_configuration: None,
             selected_model: None,
         }
@@ -46,6 +47,7 @@ where
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
+            wired_residency_budget_bytes: None,
             worker_runtime_feature_configuration: None,
             selected_model: None,
         }
@@ -70,9 +72,21 @@ where
             machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
+            wired_residency_budget_bytes: None,
             worker_runtime_feature_configuration: None,
             selected_model: None,
         }
+    }
+
+    /// Records the wired-residency budget granted at worker startup so the
+    /// daemon's status surface can name the operating-system bound.
+    #[must_use]
+    pub fn with_wired_residency_budget_bytes(
+        mut self,
+        wired_residency_budget_bytes: Option<u64>,
+    ) -> Self {
+        self.wired_residency_budget_bytes = wired_residency_budget_bytes;
+        self
     }
 
     /// Attaches the worker-startup feature policy that must be acknowledged to the daemon.

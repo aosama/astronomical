@@ -33,6 +33,7 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
+            wired_residency_budget_bytes: None,
         }
     );
     assert_eq!(model_factory_call_count.load(Ordering::SeqCst), 0);
@@ -264,6 +265,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
             machine_mlx_memory_ceiling_bytes: 0,
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
+            wired_residency_budget_bytes: None,
         }
     );
     daemon_writer

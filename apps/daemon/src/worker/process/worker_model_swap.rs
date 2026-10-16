@@ -68,15 +68,17 @@ pub(in crate::worker) async fn wait_for_model_swap(
                                     worker_health_snapshot.machine_mlx_memory_ceiling_bytes,
                                     worker_health_snapshot.mlx_memory_ceiling_bytes,
                                     worker_health_snapshot.minimum_mlx_memory_ceiling_bytes,
+                                    worker_health_snapshot.wired_residency_budget_bytes,
                                 )
                             })
-                            .unwrap_or((0, 0, 1));
+                            .unwrap_or((0, 0, 1, None));
                         worker_health::publish_health(
                             health_snapshot,
                             WorkerHealthSnapshot::ready_without_model_with_memory_limits(
                                 mlx_memory_ceilings.0,
                                 mlx_memory_ceilings.1,
                                 mlx_memory_ceilings.2,
+                                mlx_memory_ceilings.3,
                             ),
                         );
                     }

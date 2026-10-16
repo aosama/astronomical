@@ -240,6 +240,12 @@ pub struct WorkerHealthSnapshot {
     pub latest_mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     /// Immutable maximum reported by the worker's macOS/MLX startup probe.
     pub machine_mlx_memory_ceiling_bytes: u64,
+    /// GPU memory macOS granted the worker as a wired pool, when a wired
+    /// claim was granted. `None` means pageable serving. The effective
+    /// ceiling never exceeds this budget, so the status surface can name the
+    /// operating-system bound whenever it clamps the configured ceiling
+    /// (issue #1282).
+    pub wired_residency_budget_bytes: Option<u64>,
     /// Safe idle lower bound reported by the loaded model or idle worker.
     pub minimum_mlx_memory_ceiling_bytes: u64,
     /// Latest accepted limit queued until the active generation finalizes.
@@ -276,6 +282,7 @@ impl WorkerHealthSnapshot {
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes: 0,
+            wired_residency_budget_bytes: None,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
@@ -300,6 +307,8 @@ impl WorkerHealthSnapshot {
             previous_health_snapshot.mlx_memory_ceiling_bytes;
         replacement_health_snapshot.machine_mlx_memory_ceiling_bytes =
             previous_health_snapshot.machine_mlx_memory_ceiling_bytes;
+        replacement_health_snapshot.wired_residency_budget_bytes =
+            previous_health_snapshot.wired_residency_budget_bytes;
         replacement_health_snapshot.minimum_mlx_memory_ceiling_bytes =
             minimum_mlx_memory_ceiling_bytes;
         replacement_health_snapshot.pending_prompt_cache_clear =
@@ -321,6 +330,7 @@ impl WorkerHealthSnapshot {
             mlx_memory_ceiling_bytes,
             mlx_memory_ceiling_bytes,
             1,
+            None,
         )
     }
 
@@ -329,6 +339,7 @@ impl WorkerHealthSnapshot {
         machine_mlx_memory_ceiling_bytes: u64,
         mlx_memory_ceiling_bytes: u64,
         minimum_mlx_memory_ceiling_bytes: u64,
+        wired_residency_budget_bytes: Option<u64>,
     ) -> Self {
         Self {
             status: WorkerHealthStatus::Ready,
@@ -342,6 +353,7 @@ impl WorkerHealthSnapshot {
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes,
+            wired_residency_budget_bytes,
             minimum_mlx_memory_ceiling_bytes,
             pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
@@ -368,6 +380,7 @@ impl WorkerHealthSnapshot {
             persistent_prompt_cache_stats: None,
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes: 0,
+            wired_residency_budget_bytes: None,
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,

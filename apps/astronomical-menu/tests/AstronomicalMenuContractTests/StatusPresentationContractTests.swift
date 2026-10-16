@@ -17,6 +17,44 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(usageBarFillFraction(.nan), 0)
   }
 
+  func test_should_name_the_operating_system_gpu_lock_only_while_it_clamps() throws {
+    // The 48 GB incident shape: a wired budget below the machine ceiling must
+    // present itself, and sessions the operating system does not clamp must
+    // show nothing at all (issue #1282).
+    let clampedStatusDocument = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"idle","machine_mlx_memory_ceiling_bytes":42949672960,"mlx_memory_ceiling_bytes":40000028672,"wired_residency_budget_bytes":40000028672,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":0,"target_reused_prompt_work_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
+        """.utf8)
+    )
+
+    XCTAssertEqual(clampedStatusDocument.clampedWiredResidencyBudgetBytes, 40_000_028_672)
+    XCTAssertEqual(clampedStatusDocument.wiredResidencyLimitTitle, "37.25 GB")
+
+    let unclampedStatusDocument = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"idle","machine_mlx_memory_ceiling_bytes":42949672960,"mlx_memory_ceiling_bytes":42949672960,"wired_residency_budget_bytes":42949672960,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":0,"target_reused_prompt_work_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
+        """.utf8)
+    )
+
+    XCTAssertNil(unclampedStatusDocument.clampedWiredResidencyBudgetBytes)
+    XCTAssertNil(unclampedStatusDocument.wiredResidencyLimitTitle)
+
+    let pageableStatusDocument = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"idle","machine_mlx_memory_ceiling_bytes":42949672960,"mlx_memory_ceiling_bytes":42949672960,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"target_prompt_work_token_count":0,"target_reused_prompt_work_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
+        """.utf8)
+    )
+
+    XCTAssertNil(pageableStatusDocument.wiredResidencyBudgetBytes)
+    XCTAssertNil(pageableStatusDocument.wiredResidencyLimitTitle)
+  }
+
   func test_should_present_target_prompt_cache_reuse() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
