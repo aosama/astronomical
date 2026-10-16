@@ -1,6 +1,6 @@
 use astronomical_test_harness::offline_denied_test;
 
-use crate::effective_mlx_memory_ceiling_bytes;
+use crate::{effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes};
 
 offline_denied_test!(
     should_limit_the_effective_ceiling_by_the_configured_and_machine_bounds,
@@ -39,5 +39,37 @@ offline_denied_test!(
             42_949_672_960
         );
         assert_eq!(effective_mlx_memory_ceiling_bytes(None, 0), 0);
+    }
+);
+
+offline_denied_test!(should_clamp_the_ceiling_to_a_smaller_wired_budget, {
+    // The 48 GB incident shape (issue #1297): Metal recommends
+    // 40,000,028,672 wired bytes against a 42,949,672,960-byte machine
+    // ceiling; the engine must plan against the recommendation, not the
+    // ceiling, or long prefills grow into wiring the driver refuses.
+    assert_eq!(
+        effective_mlx_memory_ceiling_after_wired_claim(42_949_672_960, Some(40_000_028_672)),
+        40_000_028_672
+    );
+});
+
+offline_denied_test!(
+    should_keep_the_ceiling_when_the_wired_budget_is_absent_or_larger,
+    {
+        // A budget at or above the ceiling means the wiring can cover every
+        // plan the engine can compose, and no budget at all means pageable
+        // serving where the ceiling is the only bound.
+        assert_eq!(
+            effective_mlx_memory_ceiling_after_wired_claim(42_949_672_960, None),
+            42_949_672_960
+        );
+        assert_eq!(
+            effective_mlx_memory_ceiling_after_wired_claim(38_654_705_664, Some(40_000_028_672)),
+            38_654_705_664
+        );
+        assert_eq!(
+            effective_mlx_memory_ceiling_after_wired_claim(42_949_672_960, Some(42_949_672_960)),
+            42_949_672_960
+        );
     }
 );
