@@ -85,6 +85,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
             machine_mlx_memory_ceiling_bytes: 40_000_000_000,
             effective_mlx_memory_ceiling_bytes: configured_effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
+            wired_residency_budget_bytes: None,
         })
         .await?;
     if let Some(runtime_configuration) = acknowledged_runtime_configuration.as_ref() {

@@ -183,6 +183,12 @@ pub enum WorkerEvent {
         effective_mlx_memory_ceiling_bytes: u64,
         /// Positive no-model MLX minimum in bytes.
         minimum_mlx_memory_ceiling_bytes: u64,
+        /// GPU memory macOS lets this worker keep wired, when a wired claim
+        /// was granted at startup. `None` means pageable serving with no
+        /// wired pool. The effective ceiling never exceeds this budget, so
+        /// status consumers can name the operating-system bound whenever it
+        /// clamps the configured ceiling (issue #1282).
+        wired_residency_budget_bytes: Option<u64>,
     },
     /// Delivers an explicitly requested idle or model-load MLX observation.
     ///

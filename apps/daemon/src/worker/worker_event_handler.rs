@@ -95,6 +95,7 @@ pub(super) fn handle_worker_event(
             machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
+            wired_residency_budget_bytes,
         } => {
             if *is_ready || active_request.is_some() {
                 return Err(protocol_violation("duplicate worker idle event"));
@@ -107,6 +108,7 @@ pub(super) fn handle_worker_event(
                     machine_mlx_memory_ceiling_bytes,
                     effective_mlx_memory_ceiling_bytes,
                     minimum_mlx_memory_ceiling_bytes,
+                    wired_residency_budget_bytes,
                 ),
             );
         }

@@ -115,6 +115,8 @@ pub(crate) async fn status_check(State(application_state): State<ApplicationStat
         serde_json::json!(worker_health_snapshot.mlx_memory_ceiling_bytes);
     status_json["machine_mlx_memory_ceiling_bytes"] =
         serde_json::json!(worker_health_snapshot.machine_mlx_memory_ceiling_bytes);
+    status_json["wired_residency_budget_bytes"] =
+        serde_json::json!(worker_health_snapshot.wired_residency_budget_bytes);
     status_json["minimum_mlx_memory_ceiling_bytes"] =
         serde_json::json!(worker_health_snapshot.minimum_mlx_memory_ceiling_bytes);
     status_json["pending_mlx_memory_ceiling_bytes"] =
