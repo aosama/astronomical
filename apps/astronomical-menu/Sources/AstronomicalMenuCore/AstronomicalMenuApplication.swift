@@ -116,7 +116,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     daemonMaintenanceTask?.cancel()
     daemonMaintenanceTask = nil
     telemetryStore.stopPolling()
-    daemonLifecycleController.stopOwnedDaemon()
+    daemonLifecycleController.stopChannelDaemonOnApplicationQuit()
   }
 
   @objc private func toggleTelemetryPopover() {
