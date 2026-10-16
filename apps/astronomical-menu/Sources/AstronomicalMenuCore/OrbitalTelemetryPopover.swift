@@ -228,6 +228,14 @@ struct OrbitalTelemetryPopover: View {
         Text(
           "Effective \(gigabyteValueText(byteCount: statusDocument.mlxMemoryCeilingBytes)) of \(gigabyteValueText(byteCount: statusDocument.machineMlxMemoryCeilingBytes))"
         ).font(.caption).foregroundStyle(.secondary)
+        if let wiredResidencyLimitTitle = statusDocument.wiredResidencyLimitTitle {
+          Text(
+            "macOS lets Astronomical lock up to \(wiredResidencyLimitTitle) of GPU memory on this Mac"
+          )
+          .font(.caption).foregroundStyle(.orange)
+          .accessibilityLabel(
+            "Operating-system GPU memory lock limit: \(wiredResidencyLimitTitle)")
+        }
         if let pendingMlxMemoryCeilingBytes = statusDocument.pendingMlxMemoryCeilingBytes {
           Text("Pending \(gigabyteValueText(byteCount: pendingMlxMemoryCeilingBytes))")
             .font(.caption).foregroundStyle(.orange)

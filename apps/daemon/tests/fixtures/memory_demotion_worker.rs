@@ -119,6 +119,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
             machine_mlx_memory_ceiling_bytes: MACHINE_MEMORY_CEILING_BYTES,
             effective_mlx_memory_ceiling_bytes: effective_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: MINIMUM_MEMORY_CEILING_BYTES,
+            wired_residency_budget_bytes: None,
         })
         .await?;
 

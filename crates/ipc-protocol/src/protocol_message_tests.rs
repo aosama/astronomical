@@ -135,6 +135,7 @@ offline_denied_tokio_test!(should_round_trip_idle_worker_mlx_memory_ceiling, {
         machine_mlx_memory_ceiling_bytes: 40_000_000_000,
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
         minimum_mlx_memory_ceiling_bytes: 1,
+        wired_residency_budget_bytes: Some(32_000_000_000),
     };
     let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut worker_writer = ProtocolWriter::new(worker_transport);
