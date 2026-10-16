@@ -4,31 +4,34 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.74</title>
-            <pubDate>Fri, 16 Oct 2026 13:27:10 -0400</pubDate>
-            <sparkle:version>1359</sparkle:version>
-            <sparkle:shortVersionString>0.2.74</sparkle:shortVersionString>
+            <title>0.2.75</title>
+            <pubDate>Fri, 16 Oct 2026 18:11:22 -0400</pubDate>
+            <sparkle:version>1366</sparkle:version>
+            <sparkle:shortVersionString>0.2.75</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.74
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.75
 
 ## Fixed
 
-- Very long conversations no longer crash the engine on Macs with 48 GB of RAM or more. A conversation grown past roughly one hundred thousand tokens could fail with a native out-of-memory and leave the model unavailable until the app was restarted; the engine now plans strictly within the memory the graphics driver can keep locked for the GPU, and oversized conversations degrade gracefully — part of the model streams — instead of the engine stopping.
-- Serving memory now adapts to the machine: when the graphics driver's lockable budget is below the configured memory ceiling, plans are made against the lockable budget. Machines already configured inside the lockable budget are unaffected.
+- **Restart server now recovers by itself and explains failures.** Restarting the server could leave it dead with a generic banner when the fresh server process raced the previous one's shutdown and lost the instance lock. The menu now waits for the previous server to release the lock, retries the respawn, captures the server's startup output, and shows the server's own explanation in the banner when a start truly fails. Failed early startup is also recorded under the instance state directory (`logs/startup-failures.log`, `last-startup-failure.json`), and the running server writes its process id into the instance lock file so lock conflicts can be attributed.
+
+## Improved
+
+- **The memory panel names the macOS GPU lock limit.** The MLX memory panel now shows the wired-residency budget macOS actually grants the GPU. When the configured maximum model RAM exceeds that lock limit, the panel draws the limit as its own line and caps the stepper at it, so on-screen numbers match what the GPU can really reserve.
 
 ## Compatibility
 
-- No configuration changes; existing installs upgrade in place and keep their models and state. Model output semantics and precision are unchanged. The `ASTRONOMICAL_MLX_WIRED_CLAIM=0` escape hatch still keeps model memory pageable for workflows that need it.
+- No configuration changes; existing state directories, models, and client workflows keep working. The new startup-failure files are created on demand inside the instance state directory.
 
 ## Distribution
 
-- This release is signed with a Developer ID identity, notarized by Apple, and stapled. The disk image and the automatic-update feed are signed, and their SHA-256 digests are recorded in the release manifest before publication.
+- Signed with the Developer ID Application identity, notarized, and stapled. The Sparkle appcast and enclosure are signed by the release tooling; existing installs receive the update through the normal Sparkle channel.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.74/Astronomical-0.2.74-macOS-arm64.dmg" length="19148227" type="application/octet-stream" sparkle:edSignature="ddBazzv96rDSqJ7Si5OfV+qd8/ilbpmvmch3hFRTArXEV+t1Zc7/ziHJY0k5aVaU7n520d+7t2/7yg8yRB3iAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.75/Astronomical-0.2.75-macOS-arm64.dmg" length="19213218" type="application/octet-stream" sparkle:edSignature="WQ8DBvjWA/GxTPTv6Z4mXdG9NttXLbB9vozbb6AHQX7y5fhRtAtOaS8peZQ21zrue1ut3vtkxCskhENEHRZ3Bw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: KN2mQNSmLouOB+rYZnQeMd5t/xxB0ALVlpBn2+rOTeNd3+g579uLDMJUc51ruPrKrYAge131UNSGrT1Xs2NoBg==
-length: 2488
+edSignature: 261F3n0c+AKcEc8JTEs48mczowQOHl6+1ey+NW01/EyUXAgAYYy2K9hjOf9iM6dF+zlgrFIH4Uk7TxZua0xYBA==
+length: 2724
 -->
