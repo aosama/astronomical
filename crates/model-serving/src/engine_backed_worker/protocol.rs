@@ -137,6 +137,7 @@ where
                         machine_mlx_memory_ceiling_bytes: self.machine_mlx_memory_ceiling_bytes,
                         effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
                         minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
+                        wired_residency_budget_bytes: self.wired_residency_budget_bytes,
                     })
                     .await?;
                 if let Some(worker_runtime_feature_configuration) =

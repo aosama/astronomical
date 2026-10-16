@@ -94,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 machine_mlx_memory_ceiling_bytes: 40_000_000_000,
                 effective_mlx_memory_ceiling_bytes: 40_000_000_000,
                 minimum_mlx_memory_ceiling_bytes: 1,
+                wired_residency_budget_bytes: None,
             })
             .await?;
     }

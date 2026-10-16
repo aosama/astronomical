@@ -179,10 +179,12 @@ fn publish_recovery_acknowledgement(
             machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
+            wired_residency_budget_bytes,
         } => WorkerHealthSnapshot::ready_without_model_with_memory_limits(
             machine_mlx_memory_ceiling_bytes,
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
+            wired_residency_budget_bytes,
         ),
         WorkerEvent::Ready {
             model_id,

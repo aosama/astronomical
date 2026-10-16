@@ -244,6 +244,10 @@ where
             machine_mlx_memory_ceiling_bytes_u64,
             effective_mlx_memory_ceiling_bytes_u64,
         )
+        .with_wired_residency_budget_bytes(
+            claimed_wired_residency_budget_bytes
+                .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
+        )
         .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
     engine_worker
         .run_with_protocol(command_reader, event_writer)

@@ -110,6 +110,7 @@ async fn should_start_the_production_worker_from_an_ipc_startup_configuration() 
         machine_mlx_memory_ceiling_bytes,
         effective_mlx_memory_ceiling_bytes,
         minimum_mlx_memory_ceiling_bytes,
+        wired_residency_budget_bytes: _,
     }) = startup_event
     else {
         panic!("the production worker should report an idle startup event");

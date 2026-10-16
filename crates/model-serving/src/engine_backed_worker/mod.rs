@@ -13,6 +13,10 @@ pub struct EngineBackedWorker<
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
     pub(crate) minimum_mlx_memory_ceiling_bytes: u64,
+    /// GPU memory macOS granted this worker as a wired pool; `None` when
+    /// serving is pageable. Reported in the idle event so the daemon can
+    /// name the operating-system bound whenever it clamps the ceiling.
+    pub(crate) wired_residency_budget_bytes: Option<u64>,
     pub(crate) worker_runtime_feature_configuration:
         Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
     pub(crate) selected_model: Option<support::SelectedModel>,

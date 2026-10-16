@@ -114,6 +114,7 @@
   "expert_memory_mode": null,
   "expert_residency": null,
   "machine_mlx_memory_ceiling_bytes": 0,
+  "wired_residency_budget_bytes": null,
   "minimum_mlx_memory_ceiling_bytes": 1,
   "mlx_memory_ceiling_bytes": 0,
   "mlx_memory_limit_error": null,
