@@ -4,34 +4,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.75</title>
-            <pubDate>Fri, 16 Oct 2026 18:11:22 -0400</pubDate>
-            <sparkle:version>1366</sparkle:version>
-            <sparkle:shortVersionString>0.2.75</sparkle:shortVersionString>
+            <title>0.2.76</title>
+            <pubDate>Fri, 16 Oct 2026 19:21:57 -0400</pubDate>
+            <sparkle:version>1375</sparkle:version>
+            <sparkle:shortVersionString>0.2.76</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.75
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.76
 
-## Fixed
+## Changes
 
-- **Restart server now recovers by itself and explains failures.** Restarting the server could leave it dead with a generic banner when the fresh server process raced the previous one's shutdown and lost the instance lock. The menu now waits for the previous server to release the lock, retries the respawn, captures the server's startup output, and shows the server's own explanation in the banner when a start truly fails. Failed early startup is also recorded under the instance state directory (`logs/startup-failures.log`, `last-startup-failure.json`), and the running server writes its process id into the instance lock file so lock conflicts can be attributed.
-
-## Improved
-
-- **The memory panel names the macOS GPU lock limit.** The MLX memory panel now shows the wired-residency budget macOS actually grants the GPU. When the configured maximum model RAM exceeds that lock limit, the panel draws the limit as its own line and caps the stepper at it, so on-screen numbers match what the GPU can really reserve.
+- The menu bar icon now opens the telemetry panel on the first click and keeps
+  it open, no matter which application was in front before the click.
+- Quitting the Astronomical menu application now also stops the local server
+  and its inference worker, including when the server was started before the
+  menu application was launched, so no Astronomical background processes for
+  that instance outlive Quit.
 
 ## Compatibility
 
-- No configuration changes; existing state directories, models, and client workflows keep working. The new startup-failure files are created on demand inside the instance state directory.
+- macOS 14 (Sonoma) or later on Apple silicon.
+- Existing configuration, model locations, and prompt-cache state are
+  preserved; no migration is required.
 
 ## Distribution
 
-- Signed with the Developer ID Application identity, notarized, and stapled. The Sparkle appcast and enclosure are signed by the release tooling; existing installs receive the update through the normal Sparkle channel.
+This release is signed with a Developer ID Application certificate,
+notarized with Apple, and delivered as a stapled disk image. The published
+disk image matches the release manifest's SHA-256 digest, and updates arrive
+through the signed Sparkle appcast feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.75/Astronomical-0.2.75-macOS-arm64.dmg" length="19213218" type="application/octet-stream" sparkle:edSignature="WQ8DBvjWA/GxTPTv6Z4mXdG9NttXLbB9vozbb6AHQX7y5fhRtAtOaS8peZQ21zrue1ut3vtkxCskhENEHRZ3Bw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.76/Astronomical-0.2.76-macOS-arm64.dmg" length="19223842" type="application/octet-stream" sparkle:edSignature="xovRFN8Dt+/8gPXm3NPE/f/H4C0+fAmj8ARjbftwU8Q9B5YYPjLQdSX81CmCPkt7VLQ/+hWV7DinEhfbX3HUCw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 261F3n0c+AKcEc8JTEs48mczowQOHl6+1ey+NW01/EyUXAgAYYy2K9hjOf9iM6dF+zlgrFIH4Uk7TxZua0xYBA==
-length: 2724
+edSignature: yqncR4ti5x/6Nduej3vYL97XD2lHjtMQlR+lm5r6YuForaWEHhKH1O4TqzoNldG4IqLjj/VHyZwphBKSsl6EDA==
+length: 2127
 -->
