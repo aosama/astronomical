@@ -4,38 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.72</title>
-            <pubDate>Thu, 15 Oct 2026 20:00:46 -0400</pubDate>
-            <sparkle:version>1349</sparkle:version>
-            <sparkle:shortVersionString>0.2.72</sparkle:shortVersionString>
+            <title>0.2.73</title>
+            <pubDate>Fri, 16 Oct 2026 11:40:54 -0400</pubDate>
+            <sparkle:version>1353</sparkle:version>
+            <sparkle:shortVersionString>0.2.73</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.72
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.73
 
-## What's new
+## Fixed
 
-**A model memory ceiling you control.** Astronomical now caps how much of your machine's memory models may use at a value you can set, instead of an opaque heuristic.
+- Models stay fast on busy machines. The engine now locks model memory into physical RAM by default, so macOS pages other applications instead of the loaded model under memory pressure. First answers after loading a large model no longer stall for tens of seconds, and generation keeps its normal speed while browsers, editors, and background services compete for memory. Set `ASTRONOMICAL_MLX_WIRED_CLAIM=0` to keep model memory swappable instead.
+- Long conversations no longer slow down turn after turn. Memory reservations now cover the thinking allowance plus a visible-answer reserve instead of the full maximum output a client may request, so warm model state is no longer discarded between turns of long agent conversations.
+- Hardened retained-conversation-state accounting against an overflow that could produce a wrong retention decision.
 
-- Out of the box, the ceiling is the total RAM minus 8 GB (the same gigabyte scale Apple uses to market the machine). This is what most users get with no configuration.
-- You may set any whole-GB value to dedicate a precise slice of RAM to models. Set it back to the default by removing the setting.
-- Every memory value you see — the model selector, the daemon status screen, the menu, the CLI, and the configuration file — now uses the same convention, so the numbers match the purchase sticker.
+## Improved
+
+- Expanded regression coverage for memory admission, reclamation, and residency planning, plus a new low-level performance probe for localizing model serving speed.
 
 ## Compatibility
 
-- Existing configuration remains valid. The new setting is optional, and no migration is required.
-
-## Preserved state
-
-- All your saved models, settings, and prompt cache are preserved.
+- No configuration changes; existing installs upgrade in place and keep their models and state. Model output semantics and precision are unchanged.
 
 ## Distribution
 
-- Astronomical 0.2.72 is code-signed and notarized by Astronomical. The download is published to the public GitHub release for tag v0.2.72, and its digest is recorded in the release manifest so you can verify what you downloaded.
+- This release is signed with a Developer ID identity, notarized by Apple, and stapled. The disk image and the automatic-update feed are signed, and their SHA-256 digests are recorded in the release manifest before publication.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.72/Astronomical-0.2.72-macOS-arm64.dmg" length="19150334" type="application/octet-stream" sparkle:edSignature="It8tAEt/eKEl/IaA1fcDscqnNQjOsxJW/ZRw16mcDV0h1E3Yd1Zu8PdnqByhjRvOGtYQEK7eM7MVSNcdxxMXBw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.73/Astronomical-0.2.73-macOS-arm64.dmg" length="19153110" type="application/octet-stream" sparkle:edSignature="Fum/CzNIBjWy6xsZ1hpKnowEWrHM65fW5+bLomy2ZfK3/eLCeJVMTPC34GbYh57rmfs4SGqWeUfuqOpiaQQXCQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: nJK8RuMQySCl93yjJN6t978ipVrg1ZJzMpYs6Mr4hougInNwHEFIYHrtBNR0GPw3sCBUtS2UjbRw9rQJmXktDA==
-length: 2390
+edSignature: kQb/omFKq82gfNZxsxdiuVTPha4yIaYYsNNh1zxT6uuBlbMmPbXX3jIlciO2161MQjROiitTwWBZTRmN4VB2Cg==
+length: 2703
 -->
