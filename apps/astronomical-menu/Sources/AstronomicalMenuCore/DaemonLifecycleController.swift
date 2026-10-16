@@ -425,14 +425,80 @@ final class DaemonLifecycleController {
     FileManager.default.createFile(atPath: daemonStderrCapturePath, contents: nil)
   }
 
+  /// Stops the channel daemon at application-quit time: an owned daemon
+  /// through the process-group teardown, and a healthy-but-unowned daemon
+  /// (started outside this menu process, for example by a development build
+  /// script) through a verified single-process termination. Quit is the last
+  /// moment anything can stop a daemon the menu bar app was left controlling,
+  /// so a daemon whose executable matches this bundle is stopped either way;
+  /// a process that is not this bundle's daemon is never signalled.
+  func stopChannelDaemonOnApplicationQuit() {
+    if ownsDaemon {
+      stopOwnedDaemon()
+      return
+    }
+    guard let daemonExecutableURL = bundledDaemonExecutableURL(),
+      let lockHolderProcessIdentifier = instanceLockHolderProcessIdentifier(),
+      processMatches(
+        processIdentifier: lockHolderProcessIdentifier,
+        executablePath: daemonExecutableURL.path,
+        processGroupIdentifier: nil)
+    else { return }
+    terminateVerifiedDaemonProcess(processIdentifier: lockHolderProcessIdentifier)
+  }
+
+  /// Single-process termination for a daemon this menu process did not spawn.
+  /// A script-started daemon shares the spawning script's process group, so a
+  /// group kill here could reach unrelated processes; only the verified daemon
+  /// pid is signalled. The daemon treats SIGTERM as its graceful shutdown, so
+  /// the normal path lets it tear itself and its worker down. If SIGKILL is
+  /// needed, the daemon dies before its runtime can reap the worker, so
+  /// orphaned worker processes carrying this bundle's worker executable are
+  /// reaped afterwards.
+  private func terminateVerifiedDaemonProcess(processIdentifier: pid_t) {
+    _ = kill(processIdentifier, SIGTERM)
+    let shutdownDeadline = ContinuousClock.now + daemonShutdownTimeout
+    while ContinuousClock.now < shutdownDeadline, processIsAlive(processIdentifier) {
+      usleep(50_000)
+    }
+    guard processIsAlive(processIdentifier) else { return }
+    _ = kill(processIdentifier, SIGKILL)
+    let killDeadline = ContinuousClock.now + daemonShutdownTimeout
+    while ContinuousClock.now < killDeadline, processIsAlive(processIdentifier) {
+      usleep(50_000)
+    }
+    reapOrphanedWorkerProcesses()
+  }
+
+  private func reapOrphanedWorkerProcesses() {
+    guard let bundledWorkerExecutablePath else { return }
+    for orphanedWorkerProcessIdentifier
+    in orphanedProcessIdentifiers(matchingExecutablePath: bundledWorkerExecutablePath) {
+      _ = kill(orphanedWorkerProcessIdentifier, SIGKILL)
+    }
+  }
+
+  private var bundledWorkerExecutablePath: String? {
+    guard let daemonExecutableURL = bundledDaemonExecutableURL() else { return nil }
+    return daemonExecutableURL.deletingLastPathComponent()
+      .appendingPathComponent("astronomical-inference-worker").path
+  }
+
+  private func instanceLockHolderProcessIdentifier() -> pid_t? {
+    daemonProcessIdentifierFromInstanceLockNote(
+      try? String(contentsOf: instanceLockURL, encoding: .utf8))
+  }
+
+  private var instanceLockURL: URL {
+    effectiveStateDirectoryURL().appendingPathComponent("instance.lock")
+  }
+
   /// Waits until the daemon instance flock is free, i.e. the previous
   /// process fully exited and released the state directory for a respawn.
   private func waitForInstanceLockRelease(timeout: Duration) async {
-    let instanceLockPath = effectiveStateDirectoryURL()
-      .appendingPathComponent("instance.lock").path
     let lockDeadline = ContinuousClock().now.advanced(by: timeout)
     while ContinuousClock().now < lockDeadline {
-      if instanceLockIsFree(lockPath: instanceLockPath) { return }
+      if instanceLockIsFree(lockPath: instanceLockURL.path) { return }
       try? await Task.sleep(for: .milliseconds(50))
     }
   }
@@ -533,6 +599,10 @@ final class DaemonLifecycleController {
         data: standardOutput.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
     else { return false }
     let descriptionFields = processDescription.split(whereSeparator: { $0.isWhitespace })
+    // comm is the tail, not the third token: bundle paths like
+    // "Astronomical Development.app" contain spaces, so splitting on
+    // whitespace breaks the executable path across fields and every
+    // Development-channel match would silently fail.
     guard descriptionFields.count >= 3,
       let observedProcessGroupIdentifier = Int32(descriptionFields[0]),
       !descriptionFields[1].hasPrefix("Z")
@@ -540,7 +610,8 @@ final class DaemonLifecycleController {
     if let processGroupIdentifier, processGroupIdentifier != observedProcessGroupIdentifier {
       return false
     }
-    return String(descriptionFields[2]) == executablePath
+    let observedExecutablePath = descriptionFields.dropFirst(2).joined(separator: " ")
+    return observedExecutablePath == executablePath
   }
 
   private func terminateProcessGroup(processIdentifier: Int32) {
