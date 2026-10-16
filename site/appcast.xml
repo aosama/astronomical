@@ -4,37 +4,38 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.71</title>
-            <pubDate>Thu, 15 Oct 2026 11:18:35 -0400</pubDate>
-            <sparkle:version>1345</sparkle:version>
-            <sparkle:shortVersionString>0.2.71</sparkle:shortVersionString>
+            <title>0.2.72</title>
+            <pubDate>Thu, 15 Oct 2026 20:00:46 -0400</pubDate>
+            <sparkle:version>1349</sparkle:version>
+            <sparkle:shortVersionString>0.2.72</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[Astronomical 0.2.71
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.72
 
-## Fixed
+## What's new
 
-- Paged prefill no longer stalls at zero progress on large sparse models. Expert-layer seating now respects the composed memory budget, capacity recovery releases whole expert tables in a single cycle, and every prompt-processing attempt is logged. A workload that previously stalled silently for 91 seconds now completes prefill in about 7 seconds.
-- The effective memory ceiling is now proven against the operating system's graphics-memory wired policy at worker startup. Under the default policy the ceiling is composed conservatively, the machine verifies it by wiring it, and any clamp is logged and reported. Decode throughput no longer collapses when a configured ceiling exceeds what the machine can actually wire.
-- Image attachments advertised as WebP now decode through the WebP path instead of failing.
+**A model memory ceiling you control.** Astronomical now caps how much of your machine's memory models may use at a value you can set, instead of an opaque heuristic.
 
-## Added
-
-- `repetition_penalty` joins the per-model generation defaults. Models can ship their tested default, and an explicit request value still takes precedence.
+- Out of the box, the ceiling is the total RAM minus 8 GB (the same gigabyte scale Apple uses to market the machine). This is what most users get with no configuration.
+- You may set any whole-GB value to dedicate a precise slice of RAM to models. Set it back to the default by removing the setting.
+- Every memory value you see — the model selector, the daemon status screen, the menu, the CLI, and the configuration file — now uses the same convention, so the numbers match the purchase sticker.
 
 ## Compatibility
 
-- Configuration, prompt caches, and the local API remain compatible with 0.2.70. No migration is required, and existing user state is preserved.
-- Effective memory ceilings can be lower than in 0.2.70 when the operating system cannot support the previously composed ceiling; the startup log states the verified value.
+- Existing configuration remains valid. The new setting is optional, and no migration is required.
+
+## Preserved state
+
+- All your saved models, settings, and prompt cache are preserved.
 
 ## Distribution
 
-- The app is Developer ID signed, notarized by Apple, and stapled. The DMG and the Sparkle update feed are signed, and the published bytes are digest-verified against the release manifest before the feed activates.
+- Astronomical 0.2.72 is code-signed and notarized by Astronomical. The download is published to the public GitHub release for tag v0.2.72, and its digest is recorded in the release manifest so you can verify what you downloaded.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.71/Astronomical-0.2.71-macOS-arm64.dmg" length="19151509" type="application/octet-stream" sparkle:edSignature="xcCrYtsRFcBeI3sxQEZiRXRHBFOEzJmNh+k1ZZTtxGyyMrMA+AR6hX70QyXazDk2frjAicRatcxXq8q6QA7/Dw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.72/Astronomical-0.2.72-macOS-arm64.dmg" length="19150334" type="application/octet-stream" sparkle:edSignature="It8tAEt/eKEl/IaA1fcDscqnNQjOsxJW/ZRw16mcDV0h1E3Yd1Zu8PdnqByhjRvOGtYQEK7eM7MVSNcdxxMXBw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: W07tU/Qd2g0omNyOfwKrtaYzuDFZQoHVKwZM1aBYenm2IKoaUNN/gbQtzwxlcn5WUoV0CbXAhLK62edMr9OxCg==
-length: 2811
+edSignature: nJK8RuMQySCl93yjJN6t978ipVrg1ZJzMpYs6Mr4hougInNwHEFIYHrtBNR0GPw3sCBUtS2UjbRw9rQJmXktDA==
+length: 2390
 -->
