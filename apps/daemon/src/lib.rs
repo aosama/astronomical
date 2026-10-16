@@ -11,6 +11,7 @@ mod library;
 mod performance;
 mod serving;
 mod shutdown_control;
+pub mod startup_failure;
 mod system_telemetry;
 mod worker;
 
