@@ -1,5 +1,14 @@
-use super::*;
-
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
+    ChatToolChoice, ChatToolDefinition, ProtocolReader, ProtocolWriter, RequestId,
+    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerEvent,
+    WorkerModelConfiguration,
+};
+use astronomical_model_serving::{PreparedInferenceRequest, WorkerRuntimeError};
+use std::time::Duration;
+use tokio::io::AsyncWrite;
+use tokio::task::JoinHandle;
+use tokio::time::timeout;
 pub(crate) fn chat_command(request_number: u64, seed: u64) -> ChatGenerationCommand {
     ChatGenerationCommand {
         request_id: RequestId::new(request_number),
@@ -94,4 +103,20 @@ pub(super) async fn close_worker_transport<WriteTransport>(
             .expect("the worker task should not panic")
             .is_ok()
     );
+}
+
+pub(crate) struct ScriptedInferenceRequest {
+    prompt_token_count: usize,
+}
+
+impl ScriptedInferenceRequest {
+    pub(super) const fn new(prompt_token_count: usize) -> Self {
+        Self { prompt_token_count }
+    }
+}
+
+impl PreparedInferenceRequest for ScriptedInferenceRequest {
+    fn prompt_token_count(&self) -> usize {
+        self.prompt_token_count
+    }
 }

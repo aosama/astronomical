@@ -1,7 +1,10 @@
 //! Scripted lazy-model factories shared by engine-backed worker lifecycle tests.
 
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
-use super::*;
+use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerModelConfiguration};
+use astronomical_model_serving::{MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 pub(super) struct LazyScriptedModelFactory {
     pub(super) model_factory_call_count: Arc<AtomicUsize>,

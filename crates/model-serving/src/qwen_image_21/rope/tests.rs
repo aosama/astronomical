@@ -11,8 +11,7 @@ use crate::qwen_image_21::oracle_test_support::{
 
 /// Reference complex frequencies plus the frame/height/width index table, derived from the
 /// diffusers QwenImage21Rope implementation for `test_img_shapes` / `test_image_pad_mask`.
-const ROPE_ORACLE_JSON: &str =
-    include_str!("../../../tests/fixtures/qwen_image_21/rope_oracle.json");
+const ROPE_ORACLE_JSON: &str = astronomical_test_harness::fixtures::QWEN_IMAGE_21_ROPE_ORACLE_JSON;
 
 fn rope_oracle() -> Value {
     oracle_document(ROPE_ORACLE_JSON)
