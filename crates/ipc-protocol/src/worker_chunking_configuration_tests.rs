@@ -1,5 +1,3 @@
-use astronomical_test_harness::offline_denied_test;
-
 use crate::WorkerChunkingConfiguration;
 
 /// Builds resident and SSD-paged intervals used by the user journey.
@@ -25,48 +23,52 @@ fn graph_submission_chunking(
     }
 }
 
-offline_denied_test!(
-    should_use_resident_prefill_interval_and_keep_decode_on_one_tape,
-    {
-        let chunking = graph_submission_chunking(0, 1, 3);
+#[test]
+fn should_use_resident_prefill_interval_and_keep_decode_on_one_tape() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 0);
-        assert_eq!(chunking.graph_submission_layer_interval(1, false), 0);
-        assert_eq!(
-            crate::graph_submission_layer_interval(2_048, false, 0, 1, 3),
-            0
-        );
-    }
-);
+    let chunking = graph_submission_chunking(0, 1, 3);
 
-offline_denied_test!(
-    should_honor_a_positive_resident_prefill_interval_without_changing_ssd_paging,
-    {
-        let chunking = graph_submission_chunking(2, 1, 3);
+    assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 0);
+    assert_eq!(chunking.graph_submission_layer_interval(1, false), 0);
+    assert_eq!(
+        crate::graph_submission_layer_interval(2_048, false, 0, 1, 3),
+        0
+    );
+}
 
-        assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 2);
-        assert_eq!(chunking.graph_submission_layer_interval(1, false), 0);
-        assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 1);
-        assert_eq!(chunking.graph_submission_layer_interval(1, true), 3);
-    }
-);
+#[test]
+fn should_honor_a_positive_resident_prefill_interval_without_changing_ssd_paging() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_apply_paged_prefill_and_generation_intervals_while_experts_stream_from_storage,
-    {
-        let chunking = graph_submission_chunking(0, 1, 3);
+    let chunking = graph_submission_chunking(2, 1, 3);
 
-        assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 1);
-        assert_eq!(chunking.graph_submission_layer_interval(1, true), 3);
-    }
-);
+    assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 2);
+    assert_eq!(chunking.graph_submission_layer_interval(1, false), 0);
+    assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 1);
+    assert_eq!(chunking.graph_submission_layer_interval(1, true), 3);
+}
 
-offline_denied_test!(
-    should_keep_one_lazy_tape_when_ssd_paging_intervals_are_zero,
-    {
-        let chunking = graph_submission_chunking(0, 0, 0);
+#[test]
+fn should_apply_paged_prefill_and_generation_intervals_while_experts_stream_from_storage() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 0);
-        assert_eq!(chunking.graph_submission_layer_interval(1, true), 0);
-    }
-);
+    let chunking = graph_submission_chunking(0, 1, 3);
+
+    assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 1);
+    assert_eq!(chunking.graph_submission_layer_interval(1, true), 3);
+}
+
+#[test]
+fn should_keep_one_lazy_tape_when_ssd_paging_intervals_are_zero() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let chunking = graph_submission_chunking(0, 0, 0);
+
+    assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 0);
+    assert_eq!(chunking.graph_submission_layer_interval(1, true), 0);
+}

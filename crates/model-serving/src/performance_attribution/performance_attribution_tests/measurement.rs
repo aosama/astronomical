@@ -1,34 +1,41 @@
-use astronomical_test_harness::{offline_denied_test, offline_denied_tokio_test};
-
 use super::*;
 
-offline_denied_test!(should_keep_the_disabled_attribution_handle_pointer_sized, {
+#[test]
+fn should_keep_the_disabled_attribution_handle_pointer_sized() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     assert!(
         std::mem::size_of::<PerformanceAttribution>() <= std::mem::size_of::<usize>(),
         "disabled attribution travels through every engine command and must not enlarge the command queue"
     );
-});
+}
 
-offline_denied_test!(
-    should_execute_measured_work_without_recording_when_attribution_is_disabled,
-    {
-        let mut performance_attribution = PerformanceAttribution::disabled();
+#[test]
+fn should_execute_measured_work_without_recording_when_attribution_is_disabled() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        let operation_output = performance_attribution.measure_operation(
-            PerformanceOperation::PromptTokenization,
-            |_performance_attribution| 42_u32,
-        );
+    let mut performance_attribution = PerformanceAttribution::disabled();
 
-        assert_eq!(operation_output, 42);
-        assert!(
-            performance_attribution
-                .operation_measurement(PerformanceOperation::PromptTokenization)
-                .is_none()
-        );
-    }
-);
+    let operation_output = performance_attribution.measure_operation(
+        PerformanceOperation::PromptTokenization,
+        |_performance_attribution| 42_u32,
+    );
 
-offline_denied_test!(should_record_an_error_returning_operation, {
+    assert_eq!(operation_output, 42);
+    assert!(
+        performance_attribution
+            .operation_measurement(PerformanceOperation::PromptTokenization)
+            .is_none()
+    );
+}
+
+#[test]
+fn should_record_an_error_returning_operation() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     let operation_outcome: Result<(), &'static str> = performance_attribution.measure_operation(
@@ -43,9 +50,13 @@ offline_denied_test!(should_record_an_error_returning_operation, {
             .map(|operation_measurement| operation_measurement.occurrence_count()),
         Some(1)
     );
-});
+}
 
-offline_denied_test!(should_aggregate_repeated_operation_measurements, {
+#[test]
+fn should_aggregate_repeated_operation_measurements() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_completed_operation(
         PerformanceOperation::PromptTokenization,
@@ -68,52 +79,56 @@ offline_denied_test!(should_aggregate_repeated_operation_measurements, {
     assert_eq!(operation_measurement.maximum_elapsed_nanoseconds(), 50);
     assert_eq!(operation_measurement.first_started_offset_nanoseconds(), 5);
     assert_eq!(operation_measurement.last_ended_offset_nanoseconds(), 100);
-});
+}
 
-offline_denied_tokio_test!(
-    should_record_an_external_operation_interval_only_when_attribution_is_enabled,
-    {
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            let operation_started_at =
-                std::time::Instant::now() + std::time::Duration::from_secs(1);
-            let operation_ended_at = operation_started_at + std::time::Duration::from_millis(7);
-            let mut enabled_attribution = PerformanceAttribution::enabled();
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn should_record_an_external_operation_interval_only_when_attribution_is_enabled() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-            enabled_attribution.record_operation_interval(
-                PerformanceOperation::ResidentToStreamingRetry,
-                operation_started_at,
-                operation_ended_at,
-            );
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let operation_started_at = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        let operation_ended_at = operation_started_at + std::time::Duration::from_millis(7);
+        let mut enabled_attribution = PerformanceAttribution::enabled();
 
-            let operation_measurement = enabled_attribution
+        enabled_attribution.record_operation_interval(
+            PerformanceOperation::ResidentToStreamingRetry,
+            operation_started_at,
+            operation_ended_at,
+        );
+
+        let operation_measurement = enabled_attribution
+            .operation_measurement(PerformanceOperation::ResidentToStreamingRetry)
+            .expect("the external retry interval should be attributed");
+        assert_eq!(operation_measurement.occurrence_count(), 1);
+        assert_eq!(operation_measurement.total_elapsed_nanoseconds(), 7_000_000);
+        assert!(operation_measurement.first_started_offset_nanoseconds() > 0);
+        assert!(
+            operation_measurement.last_ended_offset_nanoseconds()
+                > operation_measurement.first_started_offset_nanoseconds()
+        );
+
+        let mut disabled_attribution = PerformanceAttribution::disabled();
+        disabled_attribution.record_operation_interval(
+            PerformanceOperation::ResidentToStreamingRetry,
+            operation_started_at,
+            operation_ended_at,
+        );
+        assert!(
+            disabled_attribution
                 .operation_measurement(PerformanceOperation::ResidentToStreamingRetry)
-                .expect("the external retry interval should be attributed");
-            assert_eq!(operation_measurement.occurrence_count(), 1);
-            assert_eq!(operation_measurement.total_elapsed_nanoseconds(), 7_000_000);
-            assert!(operation_measurement.first_started_offset_nanoseconds() > 0);
-            assert!(
-                operation_measurement.last_ended_offset_nanoseconds()
-                    > operation_measurement.first_started_offset_nanoseconds()
-            );
+                .is_none()
+        );
+    })
+    .await
+    .expect("external operation attribution should finish within five seconds");
+}
 
-            let mut disabled_attribution = PerformanceAttribution::disabled();
-            disabled_attribution.record_operation_interval(
-                PerformanceOperation::ResidentToStreamingRetry,
-                operation_started_at,
-                operation_ended_at,
-            );
-            assert!(
-                disabled_attribution
-                    .operation_measurement(PerformanceOperation::ResidentToStreamingRetry)
-                    .is_none()
-            );
-        })
-        .await
-        .expect("external operation attribution should finish within five seconds");
-    }
-);
+#[test]
+fn should_saturate_repeated_operation_elapsed_time() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(should_saturate_repeated_operation_elapsed_time, {
     let mut performance_attribution = PerformanceAttribution::enabled();
     let maximum_elapsed_duration = std::time::Duration::from_nanos(u64::MAX);
     for _operation_occurrence_index in 0..2 {
@@ -133,9 +148,13 @@ offline_denied_test!(should_saturate_repeated_operation_elapsed_time, {
         operation_measurement.maximum_elapsed_nanoseconds(),
         u64::MAX
     );
-});
+}
 
-offline_denied_test!(should_aggregate_performance_counters_with_saturation, {
+#[test]
+fn should_aggregate_performance_counters_with_saturation() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_counter(PerformanceCounter::GeneratedTokenCount, u64::MAX);
     performance_attribution.record_counter(PerformanceCounter::GeneratedTokenCount, 1);
@@ -144,9 +163,13 @@ offline_denied_test!(should_aggregate_performance_counters_with_saturation, {
         performance_attribution.counter_value(PerformanceCounter::GeneratedTokenCount),
         u64::MAX
     );
-});
+}
 
-offline_denied_test!(should_retain_the_largest_maximum_counter_observation, {
+#[test]
+fn should_retain_the_largest_maximum_counter_observation() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let mut performance_attribution = PerformanceAttribution::enabled();
     let maximum_counter = PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds;
     performance_attribution.record_maximum_counter(maximum_counter, 40);
@@ -154,4 +177,4 @@ offline_denied_test!(should_retain_the_largest_maximum_counter_observation, {
     performance_attribution.record_maximum_counter(maximum_counter, 80);
 
     assert_eq!(performance_attribution.counter_value(maximum_counter), 80);
-});
+}

@@ -7,7 +7,6 @@ use astronomical_native_identity::probes::CompatibilityOverrides;
 use astronomical_native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
 };
-use astronomical_test_harness::offline_test;
 
 fn repository_root() -> std::path::PathBuf {
     // CARGO_MANIFEST_DIR is <workspace-root>/crates/native-identity; the
@@ -19,7 +18,8 @@ fn repository_root() -> std::path::PathBuf {
         .to_path_buf()
 }
 
-offline_test!(source_only_identity_is_stable_and_self_covering, {
+#[test]
+fn source_only_identity_is_stable_and_self_covering() {
     let repository_root = repository_root();
     let first_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
@@ -42,9 +42,10 @@ offline_test!(source_only_identity_is_stable_and_self_covering, {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
     );
-});
+}
 
-offline_test!(profile_choice_changes_the_identity, {
+#[test]
+fn profile_choice_changes_the_identity() {
     let repository_root = repository_root();
     let core_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
@@ -61,4 +62,4 @@ offline_test!(profile_choice_changes_the_identity, {
     })
     .unwrap();
     assert_ne!(core_identity, memory_contract_identity);
-});
+}

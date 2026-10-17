@@ -1,0 +1,11 @@
+;; The macOS counterpart of the Linux offline-sandbox job (issue #1333): the
+;; whole offline lane runs with every network operation denied while file and
+;; process access stay allowed. sandbox-exec is deprecated by Apple but
+;; remains the only runner-level mechanism on hosted macOS; this profile is
+;; repository-owned so any loosening is reviewable in diffs.
+(version 1)
+(allow default)
+(deny network*)
+(deny network-outbound)
+(deny network-inbound)
+(deny system-socket)

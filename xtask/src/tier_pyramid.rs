@@ -16,31 +16,17 @@ use std::path::{Path, PathBuf};
 const DRIFT_TOLERANCE_PERCENT: i64 = 5;
 const BASELINE_RELATIVE_PATH: &str = "scripts/ci/tier-pyramid-baseline.json";
 
-const UNIT_MACRO_LITERALS: [&str; 5] = [
-    "offline_test!(",
-    "offline_tokio_test!(",
-    "offline_tokio_real_clock_test!(",
-    "offline_denied_test!(",
-    "offline_denied_tokio_test!(",
-];
-
 fn is_test_attribute_line(line: &str) -> bool {
     line == "#[test]" || line.starts_with("#[tokio::test")
 }
 
-fn count_matching_lines(source_file: &Path, macros: bool, attributes: bool) -> usize {
+fn count_matching_lines(source_file: &Path) -> usize {
     let Ok(source_text) = fs::read_to_string(source_file) else {
         return 0;
     };
     source_text
         .lines()
-        .filter(|line| {
-            (macros
-                && UNIT_MACRO_LITERALS
-                    .iter()
-                    .any(|literal| line.contains(literal)))
-                || (attributes && is_test_attribute_line(line))
-        })
+        .filter(|line| is_test_attribute_line(line))
         .count()
 }
 
@@ -75,7 +61,7 @@ fn count_unit_tier(repository_root: &Path) -> usize {
     let mut total = 0;
     for package_root in glob_package_source_roots(repository_root) {
         for source_file in collect_rs_files(&package_root, true) {
-            total += count_matching_lines(&source_file, true, false);
+            total += count_matching_lines(&source_file);
         }
     }
     total
@@ -126,7 +112,7 @@ fn count_integration_tier(repository_root: &Path) -> usize {
             {
                 continue;
             }
-            total += count_matching_lines(&source_file, true, true);
+            total += count_matching_lines(&source_file);
         }
     }
     total
@@ -157,7 +143,7 @@ fn count_e2e_package_tier(repository_root: &Path, acceptance_files: bool) -> usi
         if has_real_model_toggle != acceptance_files {
             continue;
         }
-        total += count_matching_lines(&source_file, false, true);
+        total += count_matching_lines(&source_file);
     }
     total
 }
@@ -177,7 +163,7 @@ fn count_acceptance_package_tier(repository_root: &Path) -> usize {
         if excluded_helper_directory(&relative_path, &["fixtures", "support", "common"]) {
             continue;
         }
-        total += count_matching_lines(&source_file, true, true);
+        total += count_matching_lines(&source_file);
     }
     total
 }

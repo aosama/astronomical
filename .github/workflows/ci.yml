@@ -395,6 +395,16 @@ jobs:
           set -o pipefail
           cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
         timeout-minutes: 2
+      # Physics proof for the lane's no-network property (issue #1333): the
+      # same binaries re-run under a repository-owned seatbelt profile that
+      # denies every network operation. Binaries are warm from the step above,
+      # so this costs only execution time; a socket attempt aborts loudly.
+      - name: Re-run offline lane tests under the network-denying seatbelt
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end offline-tests-seatbelt' EXIT
+          scripts/ci/ci-step-timing.sh begin offline-tests-seatbelt
+          sandbox-exec -f scripts/ci/offline-sandbox.sb cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline-seatbelt.log"
+        timeout-minutes: 4
       - name: Run Library REST contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
@@ -706,11 +716,12 @@ jobs:
           node scripts/check-site-links.js
         timeout-minutes: 2
 
-  # Physics-enforced offline verification: the harness macro is compile-time
-  # discipline, this job proves it by removing the network entirely. unshare
-  # -rn runs cargo inside a user+network namespace where opening any socket
-  # fails; a test that reaches for the network aborts instead of silently
-  # passing. Not a required check — it is a canary for harness drift.
+  # Physics-enforced offline verification: the offline lane's tests are plain
+  # Book-style functions (issue #1333), so the lane's no-network property is
+  # proven by removing the network entirely. unshare -rn runs cargo inside a
+  # user+network namespace where opening any socket fails; a test that reaches
+  # for the network aborts instead of silently passing. Not a required check —
+  # it is a canary for harness drift.
   linux-offline-sandbox:
     name: Linux offline sandbox
     runs-on: ubuntu-24.04
@@ -732,14 +743,19 @@ jobs:
       # the namespace: the pinned toolchain sync and the dependency download.
       - name: Sync pinned toolchain
         run: rustup show
-      - name: Fetch and build the pilot crate tests
+      # The Linux-buildable subset only: runtime-integration's build script
+      # probes the xcode identity and mlx-c-rust needs the native dependency
+      # cache, so the macOS-first crates cannot compile on this runner. The
+      # macOS sandbox job below owns the full lane.
+      - name: Fetch and build the Linux-buildable offline crates
         run: |
           cargo fetch --locked
-          cargo build --locked --tests -p astronomical-config
+          cargo test --locked --no-run -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
       # The namespace run is execution-only: with artifacts warm and --offline
       # set, cargo never attempts a lookup, so the only thing the missing
       # network can break is a test opening a socket — the exact physics the
       # job exists to prove.
-      - name: Run pilot crate tests with no network namespace
-        run: unshare -rn cargo test --offline --locked -p astronomical-config --test offline_tests
+      - name: Run the Linux-buildable offline crates with no network namespace
+        run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
         timeout-minutes: 8
+

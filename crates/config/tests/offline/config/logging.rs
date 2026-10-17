@@ -1,6 +1,7 @@
 use super::*;
 
-astronomical_test_harness::offline_test!(should_load_trace_logging_with_bounded_retention, {
+#[test]
+fn should_load_trace_logging_with_bounded_retention() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
@@ -22,9 +23,10 @@ astronomical_test_harness::offline_test!(should_load_trace_logging_with_bounded_
             3,
         )
     );
-});
+}
 
-astronomical_test_harness::offline_test!(should_reject_zero_retained_log_files, {
+#[test]
+fn should_reject_zero_retained_log_files() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temp_home.path(),
@@ -35,4 +37,4 @@ astronomical_test_harness::offline_test!(should_reject_zero_retained_log_files, 
         AstronomicalConfig::load_from_home_directory(temp_home.path()),
         Err(AstronomicalConfigError::InvalidRetainedLogFileCount)
     ));
-});
+}

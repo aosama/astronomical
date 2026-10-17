@@ -4,7 +4,6 @@
 //! the real CMake pins are unreachable (issue #1250).
 
 use astronomical_native_identity::digest_bytes;
-use astronomical_test_harness::offline_test;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -177,7 +176,8 @@ fn command_text(output: &std::process::Output) -> String {
     )
 }
 
-offline_test!(verify_only_provisions_from_a_warm_cache, {
+#[test]
+fn verify_only_provisions_from_a_warm_cache() {
     let sandbox = BootstrapSandbox::install();
     sandbox.seed_full_warm_cache();
     // The cmake shim is the only command on PATH: verify-only must reach
@@ -203,9 +203,10 @@ offline_test!(verify_only_provisions_from_a_warm_cache, {
             archive_path.display()
         );
     }
-});
+}
 
-offline_test!(verify_only_refuses_a_tampered_archive, {
+#[test]
+fn verify_only_refuses_a_tampered_archive() {
     let sandbox = BootstrapSandbox::install();
     let pinned_digests = sandbox.seed_full_warm_cache();
     sandbox.seed_archive(2, true);
@@ -221,9 +222,10 @@ offline_test!(verify_only_refuses_a_tampered_archive, {
         stderr_text.contains("missing or invalid"),
         "the refusal should name the invalid archive: {stderr_text}"
     );
-});
+}
 
-offline_test!(verify_only_refuses_a_missing_archive, {
+#[test]
+fn verify_only_refuses_a_missing_archive() {
     let sandbox = BootstrapSandbox::install();
     sandbox.write_cmake_shim(&BootstrapSandbox::pinned_digests());
     let output = sandbox.run_xtask(&["--verify"]);
@@ -234,9 +236,10 @@ offline_test!(verify_only_refuses_a_missing_archive, {
     );
     let stderr_text = String::from_utf8_lossy(&output.stderr);
     assert!(stderr_text.contains("missing or invalid"));
-});
+}
 
-offline_test!(download_verifies_and_installs_archives_atomically, {
+#[test]
+fn download_verifies_and_installs_archives_atomically() {
     let sandbox = BootstrapSandbox::install();
     sandbox.write_cmake_shim(&BootstrapSandbox::downloaded_payload_digests());
     sandbox.write_curl_shim();
@@ -282,9 +285,10 @@ offline_test!(download_verifies_and_installs_archives_atomically, {
         leftover_staging_files.is_empty(),
         "download staging files must not survive the run"
     );
-});
+}
 
-offline_test!(download_refuses_an_insufficient_free_space_cache, {
+#[test]
+fn download_refuses_an_insufficient_free_space_cache() {
     let sandbox = BootstrapSandbox::install();
     // The free-space gate fires before the manifest read, so df alone is
     // enough to reach the refusal.
@@ -300,9 +304,10 @@ offline_test!(download_refuses_an_insufficient_free_space_cache, {
         stderr_text.contains("needs at least 2147483648 free bytes"),
         "the refusal should name the free-space requirement: {stderr_text}"
     );
-});
+}
 
-offline_test!(download_refuses_an_archive_that_fails_its_pinned_digest, {
+#[test]
+fn download_refuses_an_archive_that_fails_its_pinned_digest() {
     // The manifest pins the fixture archives' digests while the curl shim
     // serves different bytes: the run must fail at the digest check, install
     // nothing, and leave no staging file behind.
@@ -330,9 +335,10 @@ offline_test!(download_refuses_an_archive_that_fails_its_pinned_digest, {
         published_files.is_empty(),
         "a refused download must not publish any archive"
     );
-});
+}
 
-offline_test!(manifest_url_scheme_is_validated_before_any_download, {
+#[test]
+fn manifest_url_scheme_is_validated_before_any_download() {
     // The journey proves the manifest policy holds end to end: a shimmed
     // manifest with an http:// URL fails before any download starts.
     let sandbox = BootstrapSandbox::install();
@@ -352,4 +358,4 @@ offline_test!(manifest_url_scheme_is_validated_before_any_download, {
     );
     let stderr_text = String::from_utf8_lossy(&output.stderr);
     assert!(stderr_text.contains("HTTPS archive URL"));
-});
+}

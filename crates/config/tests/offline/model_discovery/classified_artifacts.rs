@@ -2,49 +2,46 @@ use std::fs;
 
 use astronomical_config::ModelFamily;
 
-astronomical_test_harness::offline_test!(
-    should_find_local_and_hugging_face_classified_artifacts_without_advertising_execution,
-    {
-        let configured_root = tempfile::tempdir().expect("the test should create a root");
-        let local_model = configured_root
-            .path()
-            .join("example-org")
-            .join("Qwen35-Test");
-        fs::create_dir_all(local_model.join(".cache/huggingface/download"))
-            .expect("the local model directory should be created");
-        super::write_minimal_model_config(&local_model, "qwen3_5", 4_096);
-        fs::write(
-            local_model.join(".cache/huggingface/download/config.json.metadata"),
-            "1111111111111111111111111111111111111111\nfixture-etag\n0\n",
-        )
-        .expect("the local revision metadata should be written");
+#[test]
+fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_execution() {
+    let configured_root = tempfile::tempdir().expect("the test should create a root");
+    let local_model = configured_root
+        .path()
+        .join("example-org")
+        .join("Qwen35-Test");
+    fs::create_dir_all(local_model.join(".cache/huggingface/download"))
+        .expect("the local model directory should be created");
+    super::write_minimal_model_config(&local_model, "qwen3_5", 4_096);
+    fs::write(
+        local_model.join(".cache/huggingface/download/config.json.metadata"),
+        "1111111111111111111111111111111111111111\nfixture-etag\n0\n",
+    )
+    .expect("the local revision metadata should be written");
 
-        let cache_snapshot = configured_root
-            .path()
-            .join("models--example-org--K2Horizon-Test")
-            .join("snapshots")
-            .join("2222222222222222222222222222222222222222");
-        fs::create_dir_all(&cache_snapshot).expect("the cache snapshot should be created");
-        super::write_minimal_model_config(&cache_snapshot, "k2_horizon_mova", 4_096);
+    let cache_snapshot = configured_root
+        .path()
+        .join("models--example-org--K2Horizon-Test")
+        .join("snapshots")
+        .join("2222222222222222222222222222222222222222");
+    fs::create_dir_all(&cache_snapshot).expect("the cache snapshot should be created");
+    super::write_minimal_model_config(&cache_snapshot, "k2_horizon_mova", 4_096);
 
-        let artifacts =
-            astronomical_config::discover_classified_model_artifacts(&[configured_root
-                .path()
-                .to_path_buf()])
-            .expect("classified artifact discovery should complete");
+    let artifacts = astronomical_config::discover_classified_model_artifacts(&[configured_root
+        .path()
+        .to_path_buf()])
+    .expect("classified artifact discovery should complete");
 
-        assert_eq!(artifacts.len(), 2);
-        assert!(artifacts.iter().any(|artifact| {
-            artifact.model_id == "example-org/Qwen35-Test"
-                && artifact.upstream_revision.as_deref()
-                    == Some("1111111111111111111111111111111111111111")
-                && artifact.model_family == ModelFamily::Qwen3_5
-        }));
-        assert!(artifacts.iter().any(|artifact| {
-            artifact.model_id == "example-org/K2Horizon-Test"
-                && artifact.upstream_revision.as_deref()
-                    == Some("2222222222222222222222222222222222222222")
-                && artifact.model_family == ModelFamily::K2HorizonMoVA
-        }));
-    }
-);
+    assert_eq!(artifacts.len(), 2);
+    assert!(artifacts.iter().any(|artifact| {
+        artifact.model_id == "example-org/Qwen35-Test"
+            && artifact.upstream_revision.as_deref()
+                == Some("1111111111111111111111111111111111111111")
+            && artifact.model_family == ModelFamily::Qwen3_5
+    }));
+    assert!(artifacts.iter().any(|artifact| {
+        artifact.model_id == "example-org/K2Horizon-Test"
+            && artifact.upstream_revision.as_deref()
+                == Some("2222222222222222222222222222222222222222")
+            && artifact.model_family == ModelFamily::K2HorizonMoVA
+    }));
+}

@@ -1,42 +1,45 @@
-use astronomical_test_harness::offline_denied_test;
-
 use crate::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationSettings, ChatGenerationValidationError, ChatMessage, ChatToolChoice,
     ChatToolDefinition, RequestId,
 };
 
-offline_denied_test!(
-    should_reject_an_empty_model_id_before_worker_preprocessing,
-    {
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(60),
-            model: String::new(),
-            messages: vec![ChatMessage::User {
-                content: "Inspect the repository.".to_owned(),
-                images: Vec::new(),
-            }],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(600),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
-            },
-            structured_generation: None,
-        };
+#[test]
+fn should_reject_an_empty_model_id_before_worker_preprocessing() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(
-            chat_generation_command.validate(),
-            Err(ChatGenerationValidationError::EmptyModelId)
-        );
-    }
-);
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(60),
+        model: String::new(),
+        messages: vec![ChatMessage::User {
+            content: "Inspect the repository.".to_owned(),
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(600),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
 
-offline_denied_test!(should_accept_a_large_model_id_when_the_ipc_frame_fits, {
+    assert_eq!(
+        chat_generation_command.validate(),
+        Err(ChatGenerationValidationError::EmptyModelId)
+    );
+}
+
+#[test]
+fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "m".repeat(257),
@@ -60,42 +63,47 @@ offline_denied_test!(should_accept_a_large_model_id_when_the_ipc_frame_fits, {
     chat_generation_command
         .validate()
         .expect("the IPC frame-size limit should bound model IDs, not a tiny field cap");
-});
+}
 
-offline_denied_test!(
-    should_reject_a_temperature_above_the_supported_sampling_range,
-    {
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(60),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![ChatMessage::User {
-                content: "Inspect the repository.".to_owned(),
-                images: Vec::new(),
-            }],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(2_001),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
-            },
-            structured_generation: None,
-        };
+#[test]
+fn should_reject_a_temperature_above_the_supported_sampling_range() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(
-            chat_generation_command.validate(),
-            Err(ChatGenerationValidationError::TemperatureOutOfRange {
-                actual_temperature_thousandths: 2_001,
-                maximum_temperature_thousandths: 2_000,
-            })
-        );
-    }
-);
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(60),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![ChatMessage::User {
+            content: "Inspect the repository.".to_owned(),
+            images: Vec::new(),
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(2_001),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
 
-offline_denied_test!(should_reject_a_top_p_above_the_supported_sampling_range, {
+    assert_eq!(
+        chat_generation_command.validate(),
+        Err(ChatGenerationValidationError::TemperatureOutOfRange {
+            actual_temperature_thousandths: 2_001,
+            maximum_temperature_thousandths: 2_000,
+        })
+    );
+}
+
+#[test]
+fn should_reject_a_top_p_above_the_supported_sampling_range() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -123,9 +131,13 @@ offline_denied_test!(should_reject_a_top_p_above_the_supported_sampling_range, {
             maximum_top_p_thousandths: 1_000,
         })
     );
-});
+}
 
-offline_denied_test!(should_reject_malformed_assistant_tool_call_arguments, {
+#[test]
+fn should_reject_malformed_assistant_tool_call_arguments() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -161,84 +173,90 @@ offline_denied_test!(should_reject_malformed_assistant_tool_call_arguments, {
             }
         )
     );
-});
+}
 
-offline_denied_test!(
-    should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_object,
-    {
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(60),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![ChatMessage::Assistant {
-                content: None,
-                reasoning_content: None,
-                tool_calls: vec![ChatAssistantToolCall {
-                    id: "call_1".to_owned(),
-                    function: ChatAssistantToolFunction {
-                        name: "glob".to_owned(),
-                        arguments_json: "[]".to_owned(),
-                    },
-                }],
+#[test]
+fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_object() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(60),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![ChatMessage::Assistant {
+            content: None,
+            reasoning_content: None,
+            tool_calls: vec![ChatAssistantToolCall {
+                id: "call_1".to_owned(),
+                function: ChatAssistantToolFunction {
+                    name: "glob".to_owned(),
+                    arguments_json: "[]".to_owned(),
+                },
             }],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(600),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
-            },
-            structured_generation: None,
-        };
+        }],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(600),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
 
-        assert_eq!(
-            chat_generation_command.validate(),
-            Err(
-                ChatGenerationValidationError::AssistantToolCallArgumentsMustBeObject {
-                    tool_call_id: "call_1".to_owned(),
-                }
-            )
-        );
-    }
-);
+    assert_eq!(
+        chat_generation_command.validate(),
+        Err(
+            ChatGenerationValidationError::AssistantToolCallArgumentsMustBeObject {
+                tool_call_id: "call_1".to_owned(),
+            }
+        )
+    );
+}
 
-offline_denied_test!(
-    should_reject_an_empty_declared_tool_name_before_prompt_rendering,
-    {
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(60),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![ChatMessage::User {
-                content: "Inspect the repository.".to_owned(),
-                images: Vec::new(),
-            }],
-            tools: vec![ChatToolDefinition {
-                name: String::new(),
-                description: None,
-                parameters_json: "{}".to_owned(),
-            }],
-            tool_choice: ChatToolChoice::Auto,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(600),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
-            },
-            structured_generation: None,
-        };
+#[test]
+fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(
-            chat_generation_command.validate(),
-            Err(ChatGenerationValidationError::EmptyToolDefinitionName)
-        );
-    }
-);
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(60),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![ChatMessage::User {
+            content: "Inspect the repository.".to_owned(),
+            images: Vec::new(),
+        }],
+        tools: vec![ChatToolDefinition {
+            name: String::new(),
+            description: None,
+            parameters_json: "{}".to_owned(),
+        }],
+        tool_choice: ChatToolChoice::Auto,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(600),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
 
-offline_denied_test!(should_reject_a_duplicate_assistant_tool_call_id, {
+    assert_eq!(
+        chat_generation_command.validate(),
+        Err(ChatGenerationValidationError::EmptyToolDefinitionName)
+    );
+}
+
+#[test]
+fn should_reject_a_duplicate_assistant_tool_call_id() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(61),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -289,140 +307,143 @@ offline_denied_test!(should_reject_a_duplicate_assistant_tool_call_id, {
             }
         )
     );
-});
+}
 
-offline_denied_test!(
-    should_accept_a_reused_tool_call_id_after_its_previous_result,
-    {
-        let tool_call = || ChatAssistantToolCall {
-            id: "call_chatcmpl-5_0".to_owned(),
-            function: ChatAssistantToolFunction {
-                name: "read".to_owned(),
-                arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
+#[test]
+fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let tool_call = || ChatAssistantToolCall {
+        id: "call_chatcmpl-5_0".to_owned(),
+        function: ChatAssistantToolFunction {
+            name: "read".to_owned(),
+            arguments_json: r#"{"filePath":"README.md"}"#.to_owned(),
+        },
+    };
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(63),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![
+            ChatMessage::User {
+                content: "Read the file.".to_owned(),
+                images: Vec::new(),
             },
-        };
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(63),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![
-                ChatMessage::User {
-                    content: "Read the file.".to_owned(),
-                    images: Vec::new(),
-                },
-                ChatMessage::Assistant {
-                    content: None,
-                    reasoning_content: None,
-                    tool_calls: vec![tool_call()],
-                },
-                ChatMessage::Tool {
-                    tool_call_id: "call_chatcmpl-5_0".to_owned(),
-                    content: "first result".to_owned(),
-                },
-                ChatMessage::Assistant {
-                    content: None,
-                    reasoning_content: None,
-                    tool_calls: vec![tool_call()],
-                },
-                ChatMessage::Tool {
-                    tool_call_id: "call_chatcmpl-5_0".to_owned(),
-                    content: "second result".to_owned(),
-                },
-                ChatMessage::User {
-                    content: "Summarize both results.".to_owned(),
-                    images: Vec::new(),
-                },
-            ],
-            tools: vec![ChatToolDefinition {
-                name: "read".to_owned(),
-                description: None,
-                parameters_json: r#"{"type":"object","properties":{"filePath":{"type":"string"}}}"#
-                    .to_owned(),
-            }],
-            tool_choice: ChatToolChoice::Auto,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: None,
-                top_p_thousandths: None,
-                repetition_penalty_thousandths: None,
-                seed: None,
-                thinking_budget: None,
+            ChatMessage::Assistant {
+                content: None,
+                reasoning_content: None,
+                tool_calls: vec![tool_call()],
             },
-            structured_generation: None,
-        };
-
-        assert_eq!(chat_generation_command.validate(), Ok(()));
-    }
-);
-
-offline_denied_test!(
-    should_reject_a_system_message_after_conversation_history_begins,
-    {
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(62),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![
-                ChatMessage::User {
-                    content: "Inspect the repository.".to_owned(),
-                    images: Vec::new(),
-                },
-                ChatMessage::System {
-                    content: "This placement is invalid.".to_owned(),
-                },
-            ],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(600),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
+            ChatMessage::Tool {
+                tool_call_id: "call_chatcmpl-5_0".to_owned(),
+                content: "first result".to_owned(),
             },
-            structured_generation: None,
-        };
-
-        assert_eq!(
-            chat_generation_command.validate(),
-            Err(ChatGenerationValidationError::SystemMessageMustBeFirst { message_index: 1 })
-        );
-    }
-);
-
-offline_denied_test!(
-    should_reject_a_tool_result_without_a_prior_assistant_tool_call,
-    {
-        let chat_generation_command = ChatGenerationCommand {
-            request_id: RequestId::new(63),
-            model: "astronomical/fake-mixture-of-experts".to_owned(),
-            messages: vec![
-                ChatMessage::User {
-                    content: "Inspect the repository.".to_owned(),
-                    images: Vec::new(),
-                },
-                ChatMessage::Tool {
-                    tool_call_id: "call_missing".to_owned(),
-                    content: "No matching call exists.".to_owned(),
-                },
-            ],
-            tools: Vec::new(),
-            tool_choice: ChatToolChoice::None,
-            settings: ChatGenerationSettings {
-                max_output_tokens: 512,
-                temperature_thousandths: Some(600),
-                top_p_thousandths: Some(950),
-                repetition_penalty_thousandths: None,
-                seed: Some(7),
-                thinking_budget: None,
+            ChatMessage::Assistant {
+                content: None,
+                reasoning_content: None,
+                tool_calls: vec![tool_call()],
             },
-            structured_generation: None,
-        };
+            ChatMessage::Tool {
+                tool_call_id: "call_chatcmpl-5_0".to_owned(),
+                content: "second result".to_owned(),
+            },
+            ChatMessage::User {
+                content: "Summarize both results.".to_owned(),
+                images: Vec::new(),
+            },
+        ],
+        tools: vec![ChatToolDefinition {
+            name: "read".to_owned(),
+            description: None,
+            parameters_json: r#"{"type":"object","properties":{"filePath":{"type":"string"}}}"#
+                .to_owned(),
+        }],
+        tool_choice: ChatToolChoice::Auto,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: None,
+            top_p_thousandths: None,
+            repetition_penalty_thousandths: None,
+            seed: None,
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
 
-        assert_eq!(
-            chat_generation_command.validate(),
-            Err(ChatGenerationValidationError::UnknownToolResultId {
+    assert_eq!(chat_generation_command.validate(), Ok(()));
+}
+
+#[test]
+fn should_reject_a_system_message_after_conversation_history_begins() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(62),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![
+            ChatMessage::User {
+                content: "Inspect the repository.".to_owned(),
+                images: Vec::new(),
+            },
+            ChatMessage::System {
+                content: "This placement is invalid.".to_owned(),
+            },
+        ],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(600),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
+
+    assert_eq!(
+        chat_generation_command.validate(),
+        Err(ChatGenerationValidationError::SystemMessageMustBeFirst { message_index: 1 })
+    );
+}
+
+#[test]
+fn should_reject_a_tool_result_without_a_prior_assistant_tool_call() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let chat_generation_command = ChatGenerationCommand {
+        request_id: RequestId::new(63),
+        model: "astronomical/fake-mixture-of-experts".to_owned(),
+        messages: vec![
+            ChatMessage::User {
+                content: "Inspect the repository.".to_owned(),
+                images: Vec::new(),
+            },
+            ChatMessage::Tool {
                 tool_call_id: "call_missing".to_owned(),
-            })
-        );
-    }
-);
+                content: "No matching call exists.".to_owned(),
+            },
+        ],
+        tools: Vec::new(),
+        tool_choice: ChatToolChoice::None,
+        settings: ChatGenerationSettings {
+            max_output_tokens: 512,
+            temperature_thousandths: Some(600),
+            top_p_thousandths: Some(950),
+            repetition_penalty_thousandths: None,
+            seed: Some(7),
+            thinking_budget: None,
+        },
+        structured_generation: None,
+    };
+
+    assert_eq!(
+        chat_generation_command.validate(),
+        Err(ChatGenerationValidationError::UnknownToolResultId {
+            tool_call_id: "call_missing".to_owned(),
+        })
+    );
+}
