@@ -34,6 +34,7 @@ impl UserConfigFile {
                 model_directories: Vec::new(),
                 maximum_mlx_memory_gb: None,
                 default_model: None,
+                model_download_directory: None,
             },
             prompt_cache: None,
             chunking: Some(ChunkingConfigFile {
@@ -87,6 +88,8 @@ pub(crate) struct RuntimeConfigFile {
     pub(crate) maximum_mlx_memory_gb: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) default_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) model_download_directory: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

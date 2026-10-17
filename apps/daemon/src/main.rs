@@ -237,10 +237,16 @@ async fn run_daemon(
         Arc::clone(&reloadable_config),
         worker_handle.clone(),
     ));
+    // The download coordinator is built once and is not rebuilt on config
+    // reload, so the override only takes effect on the next application start.
+    let models_download_directory = user_config
+        .model_download_directory()
+        .cloned()
+        .unwrap_or_else(|| instance_paths.models_directory());
     let library_download_coordinator =
         Arc::new(astronomical_daemon::LibraryDownloadCoordinator::new(
             Arc::clone(&download_catalog),
-            instance_paths.models_directory(),
+            models_download_directory,
             Arc::new(astronomical_daemon::Fs4DiskCapacityQuery),
             hub_transport.clone(),
             hub_transport,
