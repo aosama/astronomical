@@ -182,3 +182,6 @@ macro_rules! offline_denied_tokio_test {
         }
     };
 }
+
+#[cfg(feature = "test-fixtures")]
+pub mod fixtures;

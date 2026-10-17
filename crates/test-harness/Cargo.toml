@@ -21,6 +21,7 @@ all = { level = "warn", priority = -1 }
 # The FLUX reference-oracle contract is shared by the worker's offline suite
 # and the root acceptance package; only those consumers pay for `image` and
 # friends, keeping every ordinary unit-test binary lean.
+test-fixtures = ["dep:serde_json"]
 flux-reference-oracle = ["dep:base64", "dep:image", "dep:serde_json", "dep:sha2"]
 
 [dependencies]
