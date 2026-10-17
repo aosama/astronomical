@@ -24,6 +24,9 @@ pub(crate) mod worker_image_event;
 pub(crate) mod worker_image_request;
 pub(crate) mod worker_loop_types;
 
+#[cfg(test)]
+mod worker_event_handler_tests;
+
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
