@@ -124,9 +124,55 @@ fn should_reject_a_known_but_unsupported_opencode_option_explicitly() {
     assert_eq!(
         chat_completion_request.validate(),
         Err(OpenAiChatCompletionValidationError::UnsupportedOption {
-            option_name: "store",
+            option_name: "store=true",
         })
     );
+}
+
+#[test]
+fn should_accept_store_false_as_the_protocol_default() {
+    // OpenCode's OpenAI-compatible provider spells out `store: false` on every
+    // chat completion request. The value is the documented protocol default and
+    // describes what this local server does anyway, so rejecting it turned into
+    // a hard failure of every OpenCode conversation against Astronomical.
+    let request_json = r#"
+    {
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [{"role": "user", "content": "Inspect the repository."}],
+        "store": false
+    }
+    "#;
+    let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
+        .expect("store:false should decode");
+
+    chat_completion_request
+        .validate()
+        .expect("store:false is the protocol default and must validate");
+
+    let request_parts = chat_completion_request
+        .into_parts()
+        .expect("store:false must expose validated request parts");
+    assert_eq!(request_parts.model, "astronomical/fake-mixture-of-experts");
+}
+
+/// A lenient client may serialize an absent boolean as an explicit null; like
+/// the sibling optional request fields, null must be treated as omission rather
+/// than rejected with a type error.
+#[test]
+fn should_accept_an_explicit_store_null() {
+    let request_json = r#"
+    {
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [{"role": "user", "content": "Inspect the repository."}],
+        "store": null
+    }
+    "#;
+    let chat_completion_request = serde_json::from_str::<OpenAiChatCompletionRequest>(request_json)
+        .expect("store:null should decode like an omitted store field");
+
+    chat_completion_request
+        .validate()
+        .expect("store:null must validate like an omitted store field");
 }
 
 #[test]
