@@ -1,5 +1,3 @@
-use astronomical_test_harness::offline_denied_test;
-
 use crate::memory::residency::ExpertLayerGeometry;
 use crate::{
     CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError, MemoryPhase,
@@ -43,379 +41,406 @@ fn complete_residency(layer_index: usize) -> CurrentExpertLayerResidency {
     }
 }
 
-offline_denied_test!(
-    should_target_every_layer_complete_when_the_composed_budget_fits_the_model,
-    {
-        let plan = plan_expert_residency(MemoryPhase::Prefill, 120, &uniform_geometry(3), &[])
-            .expect("complete model geometry should fit");
+#[test]
+fn should_target_every_layer_complete_when_the_composed_budget_fits_the_model() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(plan.complete_layer_targets, vec![0, 1, 2]);
-        assert!(plan.layer_targets.iter().all(|target| {
+    let plan = plan_expert_residency(MemoryPhase::Prefill, 120, &uniform_geometry(3), &[])
+        .expect("complete model geometry should fit");
+
+    assert_eq!(plan.complete_layer_targets, vec![0, 1, 2]);
+    assert!(
+        plan.layer_targets.iter().all(|target| {
             *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        }));
-        assert_eq!(plan.maximum_new_retained_bytes, 120);
-    }
-);
+        })
+    );
+    assert_eq!(plan.maximum_new_retained_bytes, 120);
+}
 
-offline_denied_test!(
-    should_preserve_existing_complete_layers_before_selecting_new_targets,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::GenerationPreparation,
-            80,
-            &uniform_geometry(3),
-            &[complete_residency(1)],
-        )
-        .expect("one complete layer plus routed floors should fit");
+#[test]
+fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(plan.complete_layer_targets, vec![1]);
-        assert_eq!(
-            plan.layer_targets[1],
-            ExpertLayerResidencyTarget::PreserveComplete
-        );
-        assert_eq!(
-            plan.layer_targets[0],
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-        );
-        assert_eq!(plan.reserved_routed_overlay_bytes, 0);
-    }
-);
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[complete_residency(1)],
+    )
+    .expect("one complete layer plus routed floors should fit");
 
-offline_denied_test!(
-    should_reserve_one_model_derived_routed_page_for_each_incomplete_layer,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::Decode,
-            80,
-            &uniform_geometry(3),
-            &[complete_residency(0)],
-        )
-        .expect("complete foundation and routed floors should fit");
+    assert_eq!(plan.complete_layer_targets, vec![1]);
+    assert_eq!(
+        plan.layer_targets[1],
+        ExpertLayerResidencyTarget::PreserveComplete
+    );
+    assert_eq!(
+        plan.layer_targets[0],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+    );
+    assert_eq!(plan.reserved_routed_overlay_bytes, 0);
+}
 
-        assert_eq!(plan.complete_layer_targets, vec![0]);
-        assert_eq!(
-            plan.layer_targets[1],
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-        );
-        assert_eq!(plan.reserved_routed_overlay_bytes, 0);
-    }
-);
+#[test]
+fn should_reserve_one_model_derived_routed_page_for_each_incomplete_layer() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_select_additional_complete_layers_by_incremental_payload_then_layer_index,
-    {
-        let geometries = vec![
-            ExpertLayerGeometry {
-                layer_index: 0,
-                complete_layer_payload_bytes: 40,
-                expert_payload_bytes: 10,
-                expert_capacity: 4,
-                experts_per_token: 2,
-            },
-            ExpertLayerGeometry {
-                layer_index: 1,
-                complete_layer_payload_bytes: 80,
-                expert_payload_bytes: 20,
-                expert_capacity: 4,
-                experts_per_token: 2,
-            },
-        ];
-        let plan = plan_expert_residency(MemoryPhase::Prefill, 80, &geometries, &[])
-            .expect("one incremental complete target should fit");
+    let plan = plan_expert_residency(
+        MemoryPhase::Decode,
+        80,
+        &uniform_geometry(3),
+        &[complete_residency(0)],
+    )
+    .expect("complete foundation and routed floors should fit");
 
-        assert_eq!(plan.complete_layer_targets, vec![0]);
-    }
-);
+    assert_eq!(plan.complete_layer_targets, vec![0]);
+    assert_eq!(
+        plan.layer_targets[1],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+    );
+    assert_eq!(plan.reserved_routed_overlay_bytes, 0);
+}
 
-offline_denied_test!(
-    should_use_low_budget_partial_mode_when_routed_floors_do_not_fit,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::Decode,
-            10,
-            &uniform_geometry(3),
-            &[partial_residency(1, &[2], 4)],
-        )
-        .expect("one fitting page should survive low-budget mode");
+#[test]
+fn should_select_additional_complete_layers_by_incremental_payload_then_layer_index() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(
-            plan.layer_targets,
-            vec![
-                ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
-                ExpertLayerResidencyTarget::PreservePartial,
-                ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
-            ]
-        );
-    }
-);
+    let geometries = vec![
+        ExpertLayerGeometry {
+            layer_index: 0,
+            complete_layer_payload_bytes: 40,
+            expert_payload_bytes: 10,
+            expert_capacity: 4,
+            experts_per_token: 2,
+        },
+        ExpertLayerGeometry {
+            layer_index: 1,
+            complete_layer_payload_bytes: 80,
+            expert_payload_bytes: 20,
+            expert_capacity: 4,
+            experts_per_token: 2,
+        },
+    ];
+    let plan = plan_expert_residency(MemoryPhase::Prefill, 80, &geometries, &[])
+        .expect("one incremental complete target should fit");
 
-offline_denied_test!(
-    should_preserve_a_fitting_partial_page_without_exact_set_equality,
-    {
-        let current_page = partial_residency(1, &[0, 3], 8);
-        let plan = plan_expert_residency(
-            MemoryPhase::GenerationPreparation,
-            60,
-            &uniform_geometry(3),
-            &[current_page],
-        )
-        .expect("routed floors should preserve an already useful partial page");
+    assert_eq!(plan.complete_layer_targets, vec![0]);
+}
 
-        assert_eq!(
-            plan.layer_targets[1],
-            ExpertLayerResidencyTarget::PreservePartial
-        );
-        assert_eq!(plan.expected_preserved_bytes, 20);
-    }
-);
+#[test]
+fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence,
-    {
-        let plan = plan_expert_residency(MemoryPhase::Decode, 60, &uniform_geometry(3), &[])
-            .expect("routed floors should fit exactly");
+    let plan = plan_expert_residency(
+        MemoryPhase::Decode,
+        10,
+        &uniform_geometry(3),
+        &[partial_residency(1, &[2], 4)],
+    )
+    .expect("one fitting page should survive low-budget mode");
 
-        assert!(plan.layer_targets.iter().all(|target| {
+    assert_eq!(
+        plan.layer_targets,
+        vec![
+            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+            ExpertLayerResidencyTarget::PreservePartial,
+            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+        ]
+    );
+}
+
+#[test]
+fn should_preserve_a_fitting_partial_page_without_exact_set_equality() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let current_page = partial_residency(1, &[0, 3], 8);
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        60,
+        &uniform_geometry(3),
+        &[current_page],
+    )
+    .expect("routed floors should preserve an already useful partial page");
+
+    assert_eq!(
+        plan.layer_targets[1],
+        ExpertLayerResidencyTarget::PreservePartial
+    );
+    assert_eq!(plan.expected_preserved_bytes, 20);
+}
+
+#[test]
+fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let plan = plan_expert_residency(MemoryPhase::Decode, 60, &uniform_geometry(3), &[])
+        .expect("routed floors should fit exactly");
+
+    assert!(
+        plan.layer_targets.iter().all(|target| {
             *target == ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-        }));
-        assert!(plan.complete_layer_targets.is_empty());
-    }
-);
+        })
+    );
+    assert!(plan.complete_layer_targets.is_empty());
+}
 
-offline_denied_test!(
-    should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_them,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::GenerationPreparation,
-            80,
-            &uniform_geometry(3),
-            &[],
-        )
-        .expect("leftover budget should seat complete layers after an empty demote");
+#[test]
+fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_them() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert!(
-            !plan.complete_layer_targets.is_empty(),
-            "empty post-demote topology must not plan zero complete layers when leftover fits them"
-        );
-        assert!(plan.layer_targets.iter().any(|target| {
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[],
+    )
+    .expect("leftover budget should seat complete layers after an empty demote");
+
+    assert!(
+        !plan.complete_layer_targets.is_empty(),
+        "empty post-demote topology must not plan zero complete layers when leftover fits them"
+    );
+    assert!(
+        plan.layer_targets.iter().any(|target| {
             *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        }));
-    }
-);
+        })
+    );
+}
 
 // Issue #339: a Prefill plan republished after a mid-prefill demotion must name
 // the complete layers its ceiling admits, and the request-stable contract must
 // keep naming them. That is what lets the prefill stream hand each freshly
 // streamed complete layer to retained ownership instead of dropping it and
 // making decode seating read the identical payload again.
-offline_denied_test!(
-    should_name_every_admissible_complete_layer_after_a_prefill_demotion,
-    {
-        let layer_geometries = uniform_geometry(3);
-        let complete_model_payload_bytes = layer_geometries
+#[test]
+fn should_name_every_admissible_complete_layer_after_a_prefill_demotion() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let layer_geometries = uniform_geometry(3);
+    let complete_model_payload_bytes = layer_geometries
+        .iter()
+        .map(|geometry| geometry.complete_layer_payload_bytes)
+        .sum::<u64>();
+    let candidate_plan = plan_expert_residency(
+        MemoryPhase::Prefill,
+        complete_model_payload_bytes,
+        &layer_geometries,
+        &[],
+    )
+    .expect("a Prefill ceiling that fits the complete model must plan every complete layer");
+
+    assert_eq!(candidate_plan.complete_layer_targets, vec![0, 1, 2]);
+    assert!(
+        candidate_plan.layer_targets.iter().all(|target| {
+            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        })
+    );
+
+    let (opened_residency, opened_plan) = publish_request_stable_residency_plan(
+        MemoryPhase::Prefill,
+        None,
+        candidate_plan,
+        &[],
+        0,
+        &layer_geometries,
+    );
+    let opened_residency = opened_residency.expect("Prefill must open a request contract");
+
+    assert_eq!(
+        opened_residency.pinned_complete_layer_indexes(),
+        vec![0, 1, 2]
+    );
+    assert!(
+        opened_plan.layer_targets.iter().all(|target| {
+            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        })
+    );
+    assert!(
+        opened_plan
+            .layer_targets
             .iter()
-            .map(|geometry| geometry.complete_layer_payload_bytes)
-            .sum::<u64>();
-        let candidate_plan = plan_expert_residency(
+            .all(|target| { should_commit_mandatory_complete_layer(2_048, true, Some(*target)) })
+    );
+}
+
+#[test]
+fn should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_model() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let layer_geometries = (0..40)
+        .map(|layer_index| {
+            let complete_layer_payload_bytes =
+                if layer_index == 0 || layer_index == 1 || layer_index == 39 {
+                    1_610_612_736_u64
+                } else {
+                    452_984_832_u64
+                };
+            ExpertLayerGeometry {
+                layer_index,
+                complete_layer_payload_bytes,
+                expert_payload_bytes: complete_layer_payload_bytes / 128,
+                expert_capacity: 128,
+                experts_per_token: 8,
+            }
+        })
+        .collect::<Vec<_>>();
+    let leftover_expert_budget_bytes = 21_051_596_626;
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        leftover_expert_budget_bytes,
+        &layer_geometries,
+        &[],
+    )
+    .expect("a 21 GB leftover should plan a complete-layer foundation");
+
+    assert!(
+        plan.complete_layer_targets.len() >= 30,
+        "planned complete layers={}, leftover={leftover_expert_budget_bytes}",
+        plan.complete_layer_targets.len()
+    );
+    assert!(plan.complete_layer_targets.len() < 40);
+}
+
+#[test]
+fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[],
+    )
+    .expect("leftover budget should name complete layers after an empty demote");
+    let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+
+    assert_eq!(layer_indexes, plan.complete_layer_targets);
+    assert!(!layer_indexes.is_empty());
+}
+
+#[test]
+fn should_not_require_already_preserved_complete_layers_to_be_loaded_again() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let plan = plan_expert_residency(
+        MemoryPhase::GenerationPreparation,
+        80,
+        &uniform_geometry(3),
+        &[complete_residency(1)],
+    )
+    .expect("one preserved complete layer should plan without a seating pass");
+    let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+
+    assert!(!layer_indexes.contains(&1));
+}
+
+#[test]
+fn should_release_low_coverage_partial_pages_before_any_complete_layer() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let current_residencies = vec![
+        partial_residency(0, &[0], 10),
+        partial_residency(1, &[1], 1),
+        complete_residency(2),
+    ];
+    let plan = plan_expert_residency(
+        MemoryPhase::Idle,
+        60,
+        &uniform_geometry(3),
+        &current_residencies,
+    )
+    .expect("current ownership should fit its ceiling");
+
+    assert_eq!(plan.deterministic_release_order, vec![1, 0, 2]);
+}
+
+#[test]
+fn should_release_complete_layers_only_for_the_remaining_exact_deficit() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let plan = plan_expert_residency(
+        MemoryPhase::Prefill,
+        60,
+        &uniform_geometry(3),
+        &[complete_residency(2)],
+    )
+    .expect("routed floors should consume the full ceiling");
+
+    assert!(plan.complete_layer_targets.is_empty());
+    assert_eq!(
+        plan.layer_targets[2],
+        ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
+    );
+}
+
+#[test]
+fn should_fail_closed_for_invalid_geometry_residency_and_overflow() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let duplicate_residencies = vec![complete_residency(0), complete_residency(0)];
+    assert!(matches!(
+        plan_expert_residency(
             MemoryPhase::Prefill,
-            complete_model_payload_bytes,
-            &layer_geometries,
-            &[],
-        )
-        .expect("a Prefill ceiling that fits the complete model must plan every complete layer");
-
-        assert_eq!(candidate_plan.complete_layer_targets, vec![0, 1, 2]);
-        assert!(candidate_plan.layer_targets.iter().all(|target| {
-            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        }));
-
-        let (opened_residency, opened_plan) = publish_request_stable_residency_plan(
-            MemoryPhase::Prefill,
-            None,
-            candidate_plan,
-            &[],
-            0,
-            &layer_geometries,
-        );
-        let opened_residency = opened_residency.expect("Prefill must open a request contract");
-
-        assert_eq!(
-            opened_residency.pinned_complete_layer_indexes(),
-            vec![0, 1, 2]
-        );
-        assert!(opened_plan.layer_targets.iter().all(|target| {
-            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        }));
-        assert!(
-            opened_plan.layer_targets.iter().all(|target| {
-                should_commit_mandatory_complete_layer(2_048, true, Some(*target))
-            })
-        );
-    }
-);
-
-offline_denied_test!(
-    should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_model,
-    {
-        let layer_geometries = (0..40)
-            .map(|layer_index| {
-                let complete_layer_payload_bytes =
-                    if layer_index == 0 || layer_index == 1 || layer_index == 39 {
-                        1_610_612_736_u64
-                    } else {
-                        452_984_832_u64
-                    };
-                ExpertLayerGeometry {
-                    layer_index,
-                    complete_layer_payload_bytes,
-                    expert_payload_bytes: complete_layer_payload_bytes / 128,
-                    expert_capacity: 128,
-                    experts_per_token: 8,
-                }
-            })
-            .collect::<Vec<_>>();
-        let leftover_expert_budget_bytes = 21_051_596_626;
-        let plan = plan_expert_residency(
-            MemoryPhase::GenerationPreparation,
-            leftover_expert_budget_bytes,
-            &layer_geometries,
-            &[],
-        )
-        .expect("a 21 GB leftover should plan a complete-layer foundation");
-
-        assert!(
-            plan.complete_layer_targets.len() >= 30,
-            "planned complete layers={}, leftover={leftover_expert_budget_bytes}",
-            plan.complete_layer_targets.len()
-        );
-        assert!(plan.complete_layer_targets.len() < 40);
-    }
-);
-
-offline_denied_test!(
-    should_require_unseated_complete_layers_to_be_loaded_before_decode,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::GenerationPreparation,
             80,
-            &uniform_geometry(3),
-            &[],
-        )
-        .expect("leftover budget should name complete layers after an empty demote");
-        let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+            &uniform_geometry(2),
+            &duplicate_residencies,
+        ),
+        Err(ExpertResidencyPlanError::DuplicateOrUnorderedCurrentLayer { .. })
+    ));
 
-        assert_eq!(layer_indexes, plan.complete_layer_targets);
-        assert!(!layer_indexes.is_empty());
-    }
-);
+    let mut zero_geometry = uniform_geometry(1);
+    zero_geometry[0].expert_capacity = 0;
+    assert!(matches!(
+        plan_expert_residency(MemoryPhase::Prefill, 0, &zero_geometry, &[],),
+        Err(ExpertResidencyPlanError::ZeroGeometry { .. })
+    ));
 
-offline_denied_test!(
-    should_not_require_already_preserved_complete_layers_to_be_loaded_again,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::GenerationPreparation,
-            80,
-            &uniform_geometry(3),
-            &[complete_residency(1)],
-        )
-        .expect("one preserved complete layer should plan without a seating pass");
-        let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+    let overflowing_geometry = [ExpertLayerGeometry {
+        layer_index: 0,
+        complete_layer_payload_bytes: u64::MAX,
+        expert_payload_bytes: u64::MAX,
+        expert_capacity: 2,
+        experts_per_token: 1,
+    }];
+    assert_eq!(
+        plan_expert_residency(MemoryPhase::Prefill, u64::MAX, &overflowing_geometry, &[],),
+        Err(ExpertResidencyPlanError::ByteCountOverflow)
+    );
+}
 
-        assert!(!layer_indexes.contains(&1));
-    }
-);
+#[test]
+fn should_keep_every_planned_owner_and_reservation_within_the_retained_budget() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_release_low_coverage_partial_pages_before_any_complete_layer,
-    {
-        let current_residencies = vec![
-            partial_residency(0, &[0], 10),
-            partial_residency(1, &[1], 1),
-            complete_residency(2),
-        ];
-        let plan = plan_expert_residency(
-            MemoryPhase::Idle,
-            60,
-            &uniform_geometry(3),
-            &current_residencies,
-        )
-        .expect("current ownership should fit its ceiling");
+    let geometries = uniform_geometry(4);
+    let plan = plan_expert_residency(
+        MemoryPhase::Decode,
+        100,
+        &geometries,
+        &[partial_residency(3, &[0, 2], 12)],
+    )
+    .expect("mixed foundation and overlay should fit");
+    let complete_target_bytes =
+        u64::try_from(plan.complete_layer_targets.len()).unwrap_or(u64::MAX) * 40;
 
-        assert_eq!(plan.deterministic_release_order, vec![1, 0, 2]);
-    }
-);
-
-offline_denied_test!(
-    should_release_complete_layers_only_for_the_remaining_exact_deficit,
-    {
-        let plan = plan_expert_residency(
-            MemoryPhase::Prefill,
-            60,
-            &uniform_geometry(3),
-            &[complete_residency(2)],
-        )
-        .expect("routed floors should consume the full ceiling");
-
-        assert!(plan.complete_layer_targets.is_empty());
-        assert_eq!(
-            plan.layer_targets[2],
-            ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-        );
-    }
-);
-
-offline_denied_test!(
-    should_fail_closed_for_invalid_geometry_residency_and_overflow,
-    {
-        let duplicate_residencies = vec![complete_residency(0), complete_residency(0)];
-        assert!(matches!(
-            plan_expert_residency(
-                MemoryPhase::Prefill,
-                80,
-                &uniform_geometry(2),
-                &duplicate_residencies,
-            ),
-            Err(ExpertResidencyPlanError::DuplicateOrUnorderedCurrentLayer { .. })
-        ));
-
-        let mut zero_geometry = uniform_geometry(1);
-        zero_geometry[0].expert_capacity = 0;
-        assert!(matches!(
-            plan_expert_residency(MemoryPhase::Prefill, 0, &zero_geometry, &[],),
-            Err(ExpertResidencyPlanError::ZeroGeometry { .. })
-        ));
-
-        let overflowing_geometry = [ExpertLayerGeometry {
-            layer_index: 0,
-            complete_layer_payload_bytes: u64::MAX,
-            expert_payload_bytes: u64::MAX,
-            expert_capacity: 2,
-            experts_per_token: 1,
-        }];
-        assert_eq!(
-            plan_expert_residency(MemoryPhase::Prefill, u64::MAX, &overflowing_geometry, &[],),
-            Err(ExpertResidencyPlanError::ByteCountOverflow)
-        );
-    }
-);
-
-offline_denied_test!(
-    should_keep_every_planned_owner_and_reservation_within_the_retained_budget,
-    {
-        let geometries = uniform_geometry(4);
-        let plan = plan_expert_residency(
-            MemoryPhase::Decode,
-            100,
-            &geometries,
-            &[partial_residency(3, &[0, 2], 12)],
-        )
-        .expect("mixed foundation and overlay should fit");
-        let complete_target_bytes =
-            u64::try_from(plan.complete_layer_targets.len()).unwrap_or(u64::MAX) * 40;
-
-        assert!(
-            complete_target_bytes + plan.reserved_routed_overlay_bytes
-                <= plan.retained_expert_ceiling_bytes
-        );
-    }
-);
+    assert!(
+        complete_target_bytes + plan.reserved_routed_overlay_bytes
+            <= plan.retained_expert_ceiling_bytes
+    );
+}

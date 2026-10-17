@@ -3,7 +3,6 @@
 //! The irreducible unit is one expert. Bytes and pages are accounting and I/O
 //! batching, never ownership. A repeated token route must be a complete hit
 //! against the resident experts, and eviction removes the coldest experts.
-use astronomical_test_harness::offline_denied_test;
 
 use crate::{DecodeExpertCache, ResidentExpertWeight};
 
@@ -32,60 +31,63 @@ fn admit_experts(
     }
 }
 
-offline_denied_test!(
-    should_report_no_missing_experts_when_the_route_is_already_resident,
-    {
-        let mut decode_cache = DecodeExpertCache::new(4);
-        admit_experts(&mut decode_cache, 2, &[2, 5, 7]);
-        assert!(decode_cache.contains_every(2, &[2, 5, 7]));
-        let missing_expert_ids = decode_cache.missing(2, &[2, 5]);
-        assert!(
-            missing_expert_ids.is_empty(),
-            "a repeated token route must not reload experts already in the decode cache"
-        );
-    }
-);
+#[test]
+fn should_report_no_missing_experts_when_the_route_is_already_resident() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_evict_the_coldest_experts_instead_of_dropping_the_whole_layer,
-    {
-        let mut decode_cache = DecodeExpertCache::new(1);
-        admit_experts(&mut decode_cache, 0, &[0, 1, 2, 3, 4, 5]);
-        decode_cache.record_demand(0, &[0, 1, 2, 3, 4, 5]);
-        decode_cache.record_demand(0, &[0, 1, 2, 3]);
-        decode_cache.set_ceiling(40);
-        let remaining_expert_ids = decode_cache.resident_ids(0);
-        assert!(
-            remaining_expert_ids.len() < 6,
-            "a tight ceiling must evict some experts"
-        );
-        assert!(
-            !remaining_expert_ids.is_empty(),
-            "eviction must not wipe the whole layer when some experts still fit"
-        );
-        assert!(
-            remaining_expert_ids.contains(&0) && remaining_expert_ids.contains(&1),
-            "hotter experts must survive colder ones"
-        );
-    }
-);
+    let mut decode_cache = DecodeExpertCache::new(4);
+    admit_experts(&mut decode_cache, 2, &[2, 5, 7]);
+    assert!(decode_cache.contains_every(2, &[2, 5, 7]));
+    let missing_expert_ids = decode_cache.missing(2, &[2, 5]);
+    assert!(
+        missing_expert_ids.is_empty(),
+        "a repeated token route must not reload experts already in the decode cache"
+    );
+}
 
-offline_denied_test!(
-    should_keep_the_current_route_when_enforcing_the_decode_ceiling,
-    {
-        let mut decode_cache = DecodeExpertCache::new(1);
-        admit_experts(&mut decode_cache, 0, &[0, 1, 2, 3]);
-        decode_cache.record_demand(0, &[0, 1]);
-        let vacated_slots = decode_cache.enforce_ceiling(&[(0, 2), (0, 3)]);
-        let remaining_expert_ids = decode_cache.resident_ids(0);
-        assert_eq!(vacated_slots, vec![0]);
-        assert!(
-            remaining_expert_ids.contains(&2) && remaining_expert_ids.contains(&3),
-            "the current decode route must survive ceiling enforcement"
-        );
-        assert!(
-            !remaining_expert_ids.contains(&0) && !remaining_expert_ids.contains(&1),
-            "unprotected colder experts must still be eligible for eviction"
-        );
-    }
-);
+#[test]
+fn should_evict_the_coldest_experts_instead_of_dropping_the_whole_layer() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let mut decode_cache = DecodeExpertCache::new(1);
+    admit_experts(&mut decode_cache, 0, &[0, 1, 2, 3, 4, 5]);
+    decode_cache.record_demand(0, &[0, 1, 2, 3, 4, 5]);
+    decode_cache.record_demand(0, &[0, 1, 2, 3]);
+    decode_cache.set_ceiling(40);
+    let remaining_expert_ids = decode_cache.resident_ids(0);
+    assert!(
+        remaining_expert_ids.len() < 6,
+        "a tight ceiling must evict some experts"
+    );
+    assert!(
+        !remaining_expert_ids.is_empty(),
+        "eviction must not wipe the whole layer when some experts still fit"
+    );
+    assert!(
+        remaining_expert_ids.contains(&0) && remaining_expert_ids.contains(&1),
+        "hotter experts must survive colder ones"
+    );
+}
+
+#[test]
+fn should_keep_the_current_route_when_enforcing_the_decode_ceiling() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let mut decode_cache = DecodeExpertCache::new(1);
+    admit_experts(&mut decode_cache, 0, &[0, 1, 2, 3]);
+    decode_cache.record_demand(0, &[0, 1]);
+    let vacated_slots = decode_cache.enforce_ceiling(&[(0, 2), (0, 3)]);
+    let remaining_expert_ids = decode_cache.resident_ids(0);
+    assert_eq!(vacated_slots, vec![0]);
+    assert!(
+        remaining_expert_ids.contains(&2) && remaining_expert_ids.contains(&3),
+        "the current decode route must survive ceiling enforcement"
+    );
+    assert!(
+        !remaining_expert_ids.contains(&0) && !remaining_expert_ids.contains(&1),
+        "unprotected colder experts must still be eligible for eviction"
+    );
+}

@@ -12,9 +12,9 @@
 //! level.
 //!
 //! Denial is deliberately a separate opt-in macro pair
-//! (`offline_denied_test!` / `offline_denied_tokio_test!`) rather than
+//! (an explicit `ensure_network_denied()` call) rather than
 //! implicit in every harness macro: integration journeys that genuinely
-//! exercise real unix-socket transport use `offline_tokio_real_clock_test!`
+//! exercise real unix-socket transport use plain `#[tokio::test]` functions
 //! and must keep their sockets.
 
 use std::sync::Once;

@@ -1,7 +1,6 @@
 //! The harness must obey its own rules: these tests pin the watchdog's
 //! pass, panic-propagation, and timeout-abort behavior with short budgets.
 
-use astronomical_test_harness::offline_tokio_real_clock_test;
 use astronomical_test_harness::run_with_timeout;
 
 #[test]
@@ -49,7 +48,8 @@ fn should_abort_a_hung_body_at_the_timeout() {
     );
 }
 
-offline_tokio_real_clock_test!(real_clock_macro_runs_a_body_on_advancing_time, {
+#[tokio::test(flavor = "current_thread")]
+async fn real_clock_macro_runs_a_body_on_advancing_time() {
     let started_at = std::time::Instant::now();
     tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     let elapsed = started_at.elapsed();
@@ -57,4 +57,4 @@ offline_tokio_real_clock_test!(real_clock_macro_runs_a_body_on_advancing_time, {
         elapsed >= std::time::Duration::from_millis(4),
         "the real-clock macro must not freeze time: elapsed {elapsed:?}"
     );
-});
+}

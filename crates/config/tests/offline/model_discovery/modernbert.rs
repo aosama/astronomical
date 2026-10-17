@@ -37,117 +37,108 @@ fn write_modernbert_model_files(model_directory: &std::path::Path) {
     .expect("safetensors should be written");
 }
 
-astronomical_test_harness::offline_test!(
-    should_discover_an_executable_modernbert_embedding_model,
-    {
-        let temporary_directory =
-            tempfile::tempdir().expect("temporary directory should be created");
-        let model_directory = temporary_directory
-            .path()
-            .join("nomicai-modernbert-embed-base-8bit");
-        fs::create_dir(&model_directory).expect("model directory should be created");
-        write_modernbert_model_files(&model_directory);
+#[test]
+fn should_discover_an_executable_modernbert_embedding_model() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory
+        .path()
+        .join("nomicai-modernbert-embed-base-8bit");
+    fs::create_dir(&model_directory).expect("model directory should be created");
+    write_modernbert_model_files(&model_directory);
 
-        let directory_scans = super::discover_configured_models(&temporary_directory);
-        let discovered_models = directory_scans
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .collect::<Vec<_>>();
+    let directory_scans = super::discover_configured_models(&temporary_directory);
+    let discovered_models = directory_scans
+        .into_iter()
+        .flat_map(|directory_scan| directory_scan.discovered_models)
+        .collect::<Vec<_>>();
 
-        assert_eq!(discovered_models.len(), 1, "ModernBERT must be discovered");
-        let discovered_model = &discovered_models[0];
-        assert_eq!(
-            discovered_model.model_id,
-            "nomicai-modernbert-embed-base-8bit"
-        );
-        assert_eq!(
-            discovered_model.model_family,
-            astronomical_config::ModelFamily::ModernBert
-        );
-        match &discovered_model.capabilities {
-            ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
-                vector_width,
-                max_input_tokens,
-            }) => {
-                assert_eq!(*vector_width, 768);
-                assert_eq!(*max_input_tokens, 8_192);
-            }
-            other_capabilities => {
-                panic!("expected embeddings capability, got {other_capabilities:?}")
-            }
+    assert_eq!(discovered_models.len(), 1, "ModernBERT must be discovered");
+    let discovered_model = &discovered_models[0];
+    assert_eq!(
+        discovered_model.model_id,
+        "nomicai-modernbert-embed-base-8bit"
+    );
+    assert_eq!(
+        discovered_model.model_family,
+        astronomical_config::ModelFamily::ModernBert
+    );
+    match &discovered_model.capabilities {
+        ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
+            vector_width,
+            max_input_tokens,
+        }) => {
+            assert_eq!(*vector_width, 768);
+            assert_eq!(*max_input_tokens, 8_192);
+        }
+        other_capabilities => {
+            panic!("expected embeddings capability, got {other_capabilities:?}")
         }
     }
-);
+}
 
-astronomical_test_harness::offline_test!(
-    should_reject_a_modernbert_model_without_tokenizer_or_weights,
-    {
-        let temporary_directory =
-            tempfile::tempdir().expect("temporary directory should be created");
-        let model_directory = temporary_directory.path().join("modernbert-incomplete");
-        fs::create_dir(&model_directory).expect("model directory should be created");
-        let embedding_config_json = serde_json::json!({
-            "model_type": "modernbert",
-            "hidden_size": 768,
-            "max_position_embeddings": 8_192,
-            "local_attention": 128,
-            "quantization": { "group_size": 64, "bits": 8 },
-        });
-        fs::write(
-            model_directory.join("config.json"),
-            embedding_config_json.to_string(),
-        )
-        .expect("embedding config should be written");
+#[test]
+fn should_reject_a_modernbert_model_without_tokenizer_or_weights() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("modernbert-incomplete");
+    fs::create_dir(&model_directory).expect("model directory should be created");
+    let embedding_config_json = serde_json::json!({
+        "model_type": "modernbert",
+        "hidden_size": 768,
+        "max_position_embeddings": 8_192,
+        "local_attention": 128,
+        "quantization": { "group_size": 64, "bits": 8 },
+    });
+    fs::write(
+        model_directory.join("config.json"),
+        embedding_config_json.to_string(),
+    )
+    .expect("embedding config should be written");
 
-        let directory_scans = super::discover_configured_models(&temporary_directory);
-        let discovered_models = directory_scans
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .collect::<Vec<_>>();
+    let directory_scans = super::discover_configured_models(&temporary_directory);
+    let discovered_models = directory_scans
+        .into_iter()
+        .flat_map(|directory_scan| directory_scan.discovered_models)
+        .collect::<Vec<_>>();
 
-        assert!(
-            discovered_models.is_empty(),
-            "incomplete ModernBERT artifacts must stay undiscoverable"
-        );
-    }
-);
+    assert!(
+        discovered_models.is_empty(),
+        "incomplete ModernBERT artifacts must stay undiscoverable"
+    );
+}
 
-astronomical_test_harness::offline_test!(
-    should_reject_unsupported_modernbert_quantization_widths,
-    {
-        let temporary_directory =
-            tempfile::tempdir().expect("temporary directory should be created");
-        let model_directory = temporary_directory.path().join("modernbert-4bit");
-        fs::create_dir(&model_directory).expect("model directory should be created");
-        let embedding_config_json = serde_json::json!({
-            "model_type": "modernbert",
-            "hidden_size": 768,
-            "max_position_embeddings": 8_192,
-            "local_attention": 128,
-            "quantization": { "group_size": 64, "bits": 4 },
-        });
-        fs::write(
-            model_directory.join("config.json"),
-            embedding_config_json.to_string(),
-        )
-        .expect("embedding config should be written");
-        fs::write(model_directory.join("tokenizer.json"), r#"{"version":1}"#)
-            .expect("tokenizer should be written");
-        fs::write(
-            model_directory.join("model.safetensors"),
-            b"fictional-weights",
-        )
-        .expect("safetensors should be written");
+#[test]
+fn should_reject_unsupported_modernbert_quantization_widths() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("modernbert-4bit");
+    fs::create_dir(&model_directory).expect("model directory should be created");
+    let embedding_config_json = serde_json::json!({
+        "model_type": "modernbert",
+        "hidden_size": 768,
+        "max_position_embeddings": 8_192,
+        "local_attention": 128,
+        "quantization": { "group_size": 64, "bits": 4 },
+    });
+    fs::write(
+        model_directory.join("config.json"),
+        embedding_config_json.to_string(),
+    )
+    .expect("embedding config should be written");
+    fs::write(model_directory.join("tokenizer.json"), r#"{"version":1}"#)
+        .expect("tokenizer should be written");
+    fs::write(
+        model_directory.join("model.safetensors"),
+        b"fictional-weights",
+    )
+    .expect("safetensors should be written");
 
-        let directory_scans = super::discover_configured_models(&temporary_directory);
-        let discovered_models = directory_scans
-            .into_iter()
-            .flat_map(|directory_scan| directory_scan.discovered_models)
-            .collect::<Vec<_>>();
+    let directory_scans = super::discover_configured_models(&temporary_directory);
+    let discovered_models = directory_scans
+        .into_iter()
+        .flat_map(|directory_scan| directory_scan.discovered_models)
+        .collect::<Vec<_>>();
 
-        assert!(
-            discovered_models.is_empty(),
-            "only the reviewed 8-bit profile is executable"
-        );
-    }
-);
+    assert!(
+        discovered_models.is_empty(),
+        "only the reviewed 8-bit profile is executable"
+    );
+}

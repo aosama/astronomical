@@ -4,7 +4,6 @@
 //! unreachable and no unpinned installer path can hide (issue #1250).
 
 use astronomical_native_identity::digest_bytes;
-use astronomical_test_harness::offline_test;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -193,7 +192,8 @@ fn host_target_triple() -> &'static str {
     }
 }
 
-offline_test!(matching_prefix_skips_all_downloads, {
+#[test]
+fn matching_prefix_skips_all_downloads() {
     let sandbox = InstallerSandbox::install();
     let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -212,62 +212,60 @@ offline_test!(matching_prefix_skips_all_downloads, {
         curl_log.trim().is_empty(),
         "matching prefix must not download: {curl_log}"
     );
-});
+}
 
-offline_test!(
-    fresh_prefix_installs_both_pinned_prebuilts_from_their_release_urls,
-    {
-        let sandbox = InstallerSandbox::install();
-        let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(1)
-            .unwrap()
-            .to_path_buf();
-        let cargo_about_version = pinned_version(&repository_root, "cargo-about-version");
-        let sccache_version = pinned_version(&repository_root, "sccache-version");
-        let target = host_target_triple();
-        sandbox.create_release_fixture(
-            &format!("cargo-about-{cargo_about_version}-{target}.tar.gz"),
-            "cargo-about",
-            &format!("cargo-about {cargo_about_version}"),
-        );
-        sandbox.create_release_fixture(
-            &format!("sccache-v{sccache_version}-{target}.tar.gz"),
-            "sccache",
-            &format!("sccache {sccache_version}"),
-        );
+#[test]
+fn fresh_prefix_installs_both_pinned_prebuilts_from_their_release_urls() {
+    let sandbox = InstallerSandbox::install();
+    let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(1)
+        .unwrap()
+        .to_path_buf();
+    let cargo_about_version = pinned_version(&repository_root, "cargo-about-version");
+    let sccache_version = pinned_version(&repository_root, "sccache-version");
+    let target = host_target_triple();
+    sandbox.create_release_fixture(
+        &format!("cargo-about-{cargo_about_version}-{target}.tar.gz"),
+        "cargo-about",
+        &format!("cargo-about {cargo_about_version}"),
+    );
+    sandbox.create_release_fixture(
+        &format!("sccache-v{sccache_version}-{target}.tar.gz"),
+        "sccache",
+        &format!("sccache {sccache_version}"),
+    );
 
-        let installer_run = sandbox.run_installer();
-        assert!(
-            installer_run.status.success(),
-            "installer failed: {}",
-            String::from_utf8_lossy(&installer_run.stderr)
-        );
+    let installer_run = sandbox.run_installer();
+    assert!(
+        installer_run.status.success(),
+        "installer failed: {}",
+        String::from_utf8_lossy(&installer_run.stderr)
+    );
 
-        let installed_cargo_about = sandbox.installed_version("cargo-about");
-        assert_eq!(
-            installed_cargo_about,
-            format!("cargo-about {cargo_about_version}"),
-            "prefix listing: {:?}",
-            std::fs::read_dir(&sandbox.prefix_directory)
-                .map(|entries| entries.flatten().map(|entry| entry.path()))
-                .map(|paths| paths
-                    .map(|path| (
-                        path.clone(),
-                        std::fs::read_to_string(&path).unwrap_or_default()
-                    ))
-                    .collect::<Vec<_>>())
-        );
-        assert_eq!(
-            sandbox.installed_version("sccache"),
-            format!("sccache {sccache_version}")
-        );
-        let curl_log = std::fs::read_to_string(&sandbox.curl_log_path).unwrap();
-        assert!(curl_log.contains(&format!(
-            "github.com/EmbarkStudios/cargo-about/releases/download/{cargo_about_version}/"
-        )));
-        assert!(curl_log.contains(&format!(
-            "github.com/mozilla/sccache/releases/download/v{sccache_version}/"
-        )));
-    }
-);
+    let installed_cargo_about = sandbox.installed_version("cargo-about");
+    assert_eq!(
+        installed_cargo_about,
+        format!("cargo-about {cargo_about_version}"),
+        "prefix listing: {:?}",
+        std::fs::read_dir(&sandbox.prefix_directory)
+            .map(|entries| entries.flatten().map(|entry| entry.path()))
+            .map(|paths| paths
+                .map(|path| (
+                    path.clone(),
+                    std::fs::read_to_string(&path).unwrap_or_default()
+                ))
+                .collect::<Vec<_>>())
+    );
+    assert_eq!(
+        sandbox.installed_version("sccache"),
+        format!("sccache {sccache_version}")
+    );
+    let curl_log = std::fs::read_to_string(&sandbox.curl_log_path).unwrap();
+    assert!(curl_log.contains(&format!(
+        "github.com/EmbarkStudios/cargo-about/releases/download/{cargo_about_version}/"
+    )));
+    assert!(curl_log.contains(&format!(
+        "github.com/mozilla/sccache/releases/download/v{sccache_version}/"
+    )));
+}

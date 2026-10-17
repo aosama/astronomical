@@ -3,7 +3,6 @@
 //! unit tests. The shim never touches real GitHub state, mirroring the shell
 //! contract tests this file replaces (issue #1250).
 
-use astronomical_test_harness::offline_test;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
@@ -95,41 +94,40 @@ fn read_output_map(output_path: &std::path::Path) -> HashMap<String, String> {
         .collect()
 }
 
-offline_test!(
-    prune_deletes_only_surplus_and_oversize_entries_through_gh,
-    {
-        let sandbox_directory =
-            std::env::temp_dir().join(format!("astronomical-prune-journey-{}", std::process::id()));
-        std::fs::create_dir_all(&sandbox_directory).unwrap();
-        let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
+#[test]
+fn prune_deletes_only_surplus_and_oversize_entries_through_gh() {
+    let sandbox_directory =
+        std::env::temp_dir().join(format!("astronomical-prune-journey-{}", std::process::id()));
+    std::fs::create_dir_all(&sandbox_directory).unwrap();
+    let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
 
-        let mut prune_command =
-            shim.command_for_xtask(&["prune-caches", "--repo", "aosama/astronomical"]);
-        let prune_run = prune_command.output().expect("the xtask binary should run");
-        assert!(prune_run.status.success());
+    let mut prune_command =
+        shim.command_for_xtask(&["prune-caches", "--repo", "aosama/astronomical"]);
+    let prune_run = prune_command.output().expect("the xtask binary should run");
+    assert!(prune_run.status.success());
 
-        let prune_log = String::from_utf8_lossy(&prune_run.stderr);
-        // Oversize sccache is deleted with its own reason, and the native-build
-        // family keeps its two newest; the within-budget sccache entry survives.
-        assert!(prune_log.contains("action=deleted reason=oversize cache_id=4"));
-        assert!(prune_log.contains("action=deleted reason=surplus cache_id=1"));
-        assert!(
-            !prune_log.contains("cache_id=5"),
-            "the within-budget sccache entry must stay"
-        );
-        assert!(
-            !prune_log.contains("cache_id=2"),
-            "second-newest native-build entry must stay"
-        );
-        assert!(
-            !prune_log.contains("cache_id=3"),
-            "newest native-build entry must stay"
-        );
-        assert!(prune_log.contains("outcome=pruned deleted=2"));
-    }
-);
+    let prune_log = String::from_utf8_lossy(&prune_run.stderr);
+    // Oversize sccache is deleted with its own reason, and the native-build
+    // family keeps its two newest; the within-budget sccache entry survives.
+    assert!(prune_log.contains("action=deleted reason=oversize cache_id=4"));
+    assert!(prune_log.contains("action=deleted reason=surplus cache_id=1"));
+    assert!(
+        !prune_log.contains("cache_id=5"),
+        "the within-budget sccache entry must stay"
+    );
+    assert!(
+        !prune_log.contains("cache_id=2"),
+        "second-newest native-build entry must stay"
+    );
+    assert!(
+        !prune_log.contains("cache_id=3"),
+        "newest native-build entry must stay"
+    );
+    assert!(prune_log.contains("outcome=pruned deleted=2"));
+}
 
-offline_test!(prune_dry_run_reports_deletions_without_calling_delete, {
+#[test]
+fn prune_dry_run_reports_deletions_without_calling_delete() {
     let sandbox_directory =
         std::env::temp_dir().join(format!("astronomical-prune-dry-{}", std::process::id()));
     std::fs::create_dir_all(&sandbox_directory).unwrap();
@@ -150,9 +148,10 @@ offline_test!(prune_dry_run_reports_deletions_without_calling_delete, {
     let prune_log = String::from_utf8_lossy(&prune_run.stderr);
     assert!(prune_log.contains("action=would-delete"));
     assert!(prune_log.contains("outcome=dry-run deleted=2"));
-});
+}
 
-offline_test!(sccache_save_replaces_a_stored_oversize_entry_and_saves, {
+#[test]
+fn sccache_save_replaces_a_stored_oversize_entry_and_saves() {
     let sandbox_directory = std::env::temp_dir().join(format!(
         "astronomical-sccache-save-journey-{}",
         std::process::id()
@@ -190,46 +189,45 @@ offline_test!(sccache_save_replaces_a_stored_oversize_entry_and_saves, {
     );
     let save_log = String::from_utf8_lossy(&save_run.stderr);
     assert!(save_log.contains("action=deleted-oversize cache_id=4"));
-});
+}
 
-offline_test!(
-    sccache_save_skips_when_a_stored_entry_is_already_within_budget,
-    {
-        let sandbox_directory = std::env::temp_dir().join(format!(
-            "astronomical-sccache-save-skip-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&sandbox_directory).unwrap();
-        let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
-        let sccache_directory = sandbox_directory.join("sccache-dir");
-        std::fs::create_dir_all(&sccache_directory).unwrap();
-        std::fs::write(sccache_directory.join("small"), vec![0u8; 10]).unwrap();
-        let github_output_path = output_path(&sandbox_directory);
-        std::fs::write(&github_output_path, "").unwrap();
+#[test]
+fn sccache_save_skips_when_a_stored_entry_is_already_within_budget() {
+    let sandbox_directory = std::env::temp_dir().join(format!(
+        "astronomical-sccache-save-skip-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&sandbox_directory).unwrap();
+    let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
+    let sccache_directory = sandbox_directory.join("sccache-dir");
+    std::fs::create_dir_all(&sccache_directory).unwrap();
+    std::fs::write(sccache_directory.join("small"), vec![0u8; 10]).unwrap();
+    let github_output_path = output_path(&sandbox_directory);
+    std::fs::write(&github_output_path, "").unwrap();
 
-        // The stored oversize entry belongs to a different primary key, so this
-        // key's stored entry (id 5) is within budget and the save is skipped.
-        let mut save_command =
-            shim.command_for_xtask(&["save-sccache", "astronomical-v2-sccache-macOS-good"]);
-        save_command
-            .env("GITHUB_REPOSITORY", "aosama/astronomical")
-            .env("SCCACHE_DIR", &sccache_directory)
-            .env("GITHUB_OUTPUT", &github_output_path);
-        let save_run = save_command.output().expect("the xtask binary should run");
-        assert!(save_run.status.success());
-        let decisions = read_output_map(&github_output_path);
-        assert_eq!(
-            decisions.get("should_save").map(String::as_str),
-            Some("false")
-        );
-        assert_eq!(
-            decisions.get("decision").map(String::as_str),
-            Some("fresh-entry-within-budget")
-        );
-    }
-);
+    // The stored oversize entry belongs to a different primary key, so this
+    // key's stored entry (id 5) is within budget and the save is skipped.
+    let mut save_command =
+        shim.command_for_xtask(&["save-sccache", "astronomical-v2-sccache-macOS-good"]);
+    save_command
+        .env("GITHUB_REPOSITORY", "aosama/astronomical")
+        .env("SCCACHE_DIR", &sccache_directory)
+        .env("GITHUB_OUTPUT", &github_output_path);
+    let save_run = save_command.output().expect("the xtask binary should run");
+    assert!(save_run.status.success());
+    let decisions = read_output_map(&github_output_path);
+    assert_eq!(
+        decisions.get("should_save").map(String::as_str),
+        Some("false")
+    );
+    assert_eq!(
+        decisions.get("decision").map(String::as_str),
+        Some("fresh-entry-within-budget")
+    );
+}
 
-offline_test!(sccache_save_without_a_listable_cache_degrades_to_skip, {
+#[test]
+fn sccache_save_without_a_listable_cache_degrades_to_skip() {
     let sandbox_directory = std::env::temp_dir().join(format!(
         "astronomical-sccache-save-nolist-{}",
         std::process::id()
@@ -254,4 +252,4 @@ offline_test!(sccache_save_without_a_listable_cache_degrades_to_skip, {
         decisions.get("decision").map(String::as_str),
         Some("cache-list-unavailable")
     );
-});
+}

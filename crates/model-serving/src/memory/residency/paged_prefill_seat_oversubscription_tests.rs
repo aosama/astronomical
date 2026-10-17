@@ -33,8 +33,6 @@
 //!    cache ceiling at the overshoot, and the composed budget never reasserts
 //!    itself for the rest of the request.
 
-use astronomical_test_harness::offline_denied_test;
-
 use crate::memory::residency::ExpertLayerGeometry;
 use crate::{
     AdaptiveRamGrowthExecutionProfile, ExpertLayerResidencyTarget, ForwardRecoveryPolicy,
@@ -84,274 +82,280 @@ fn incident_geometry() -> Vec<ExpertLayerGeometry> {
         .collect()
 }
 
-offline_denied_test!(
-    should_pin_exactly_the_affordable_complete_layers_for_the_incident_geometry,
-    {
-        // The opening plan pins exactly 33 complete layers: the routed floor for all
-        // 38 layers plus 33 incremental complete payloads fits the composed budget,
-        // and a 34th does not. This is the plan the incident session published
-        // (`complete_layer_target_count=33 pinned_complete_layer_count=33`).
-        let plan = plan_expert_residency(
-            MemoryPhase::Prefill,
-            COMPOSED_LEFTOVER_BUDGET_BYTES,
-            &incident_geometry(),
-            &[],
-        )
-        .expect("the incident geometry should plan against the incident budget");
+#[test]
+fn should_pin_exactly_the_affordable_complete_layers_for_the_incident_geometry() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(plan.complete_layer_targets.len(), 33);
+    // The opening plan pins exactly 33 complete layers: the routed floor for all
+    // 38 layers plus 33 incremental complete payloads fits the composed budget,
+    // and a 34th does not. This is the plan the incident session published
+    // (`complete_layer_target_count=33 pinned_complete_layer_count=33`).
+    let plan = plan_expert_residency(
+        MemoryPhase::Prefill,
+        COMPOSED_LEFTOVER_BUDGET_BYTES,
+        &incident_geometry(),
+        &[],
+    )
+    .expect("the incident geometry should plan against the incident budget");
+
+    assert_eq!(plan.complete_layer_targets.len(), 33);
+    assert_eq!(
+        plan.complete_layer_targets,
+        (0..33).collect::<Vec<_>>(),
+        "uniform incremental cost must pin the lowest 33 decoder indexes"
+    );
+    assert_eq!(
+        plan.layer_targets[33],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+    );
+    assert_eq!(
+        plan.layer_targets[37],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+    );
+}
+
+#[test]
+fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // Before the fix (issue #1278), the stabilized request plan mapped every
+    // streamed-role layer to AdmitCompleteOnMandatoryRead while budgeting
+    // zero new retained bytes: the commit gate then authorized complete-layer
+    // adoption offers whose 855,638,016-byte pages the composed budget could
+    // never seat. The plan must resolve a streamed layer to admit-on-read
+    // only while the leftover budget can actually seat its complete page.
+    let opening_plan = plan_expert_residency(
+        MemoryPhase::Prefill,
+        COMPOSED_LEFTOVER_BUDGET_BYTES,
+        &incident_geometry(),
+        &[],
+    )
+    .expect("the incident geometry should plan against the incident budget");
+    let (request_residency, stabilized_plan) = publish_request_stable_residency_plan(
+        MemoryPhase::Prefill,
+        None,
+        opening_plan,
+        &[],
+        0,
+        &incident_geometry(),
+    );
+
+    let request_residency =
+        request_residency.expect("Prefill publication must freeze a request contract");
+    assert_eq!(request_residency.pinned_complete_layer_indexes().len(), 33);
+    for layer_index in 33..SPARSE_LAYER_COUNT {
         assert_eq!(
-            plan.complete_layer_targets,
-            (0..33).collect::<Vec<_>>(),
-            "uniform incremental cost must pin the lowest 33 decoder indexes"
+            stabilized_plan.layer_targets[layer_index],
+            ExpertLayerResidencyTarget::StreamOperationLocal,
+            "streamed-role layer {layer_index} must stream operation-local when the leftover budget cannot seat its page"
         );
-        assert_eq!(
-            plan.layer_targets[33],
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-        );
-        assert_eq!(
-            plan.layer_targets[37],
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
+        assert!(
+            !should_commit_mandatory_complete_layer(
+                39,
+                true,
+                Some(stabilized_plan.layer_targets[layer_index]),
+            ),
+            "the commit gate must refuse layer {layer_index}: 33 pinned claims leave {} bytes, one page is {}",
+            COMPOSED_LEFTOVER_BUDGET_BYTES - 33 * COMPLETE_LAYER_PAYLOAD_BYTES,
+            COMPLETE_LAYER_PAYLOAD_BYTES
         );
     }
-);
 
-offline_denied_test!(
-    should_not_authorize_admission_offers_beyond_the_composed_leftover_budget,
-    {
-        // Before the fix (issue #1278), the stabilized request plan mapped every
-        // streamed-role layer to AdmitCompleteOnMandatoryRead while budgeting
-        // zero new retained bytes: the commit gate then authorized complete-layer
-        // adoption offers whose 855,638,016-byte pages the composed budget could
-        // never seat. The plan must resolve a streamed layer to admit-on-read
-        // only while the leftover budget can actually seat its complete page.
-        let opening_plan = plan_expert_residency(
-            MemoryPhase::Prefill,
-            COMPOSED_LEFTOVER_BUDGET_BYTES,
-            &incident_geometry(),
-            &[],
-        )
-        .expect("the incident geometry should plan against the incident budget");
-        let (request_residency, stabilized_plan) = publish_request_stable_residency_plan(
-            MemoryPhase::Prefill,
-            None,
-            opening_plan,
-            &[],
-            0,
-            &incident_geometry(),
-        );
-
-        let request_residency =
-            request_residency.expect("Prefill publication must freeze a request contract");
-        assert_eq!(request_residency.pinned_complete_layer_indexes().len(), 33);
-        for layer_index in 33..SPARSE_LAYER_COUNT {
-            assert_eq!(
-                stabilized_plan.layer_targets[layer_index],
-                ExpertLayerResidencyTarget::StreamOperationLocal,
-                "streamed-role layer {layer_index} must stream operation-local when the leftover budget cannot seat its page"
-            );
-            assert!(
-                !should_commit_mandatory_complete_layer(
-                    39,
-                    true,
-                    Some(stabilized_plan.layer_targets[layer_index]),
-                ),
-                "the commit gate must refuse layer {layer_index}: 33 pinned claims leave {} bytes, one page is {}",
-                COMPOSED_LEFTOVER_BUDGET_BYTES - 33 * COMPLETE_LAYER_PAYLOAD_BYTES,
-                COMPLETE_LAYER_PAYLOAD_BYTES
-            );
-        }
-
-        // A leftover that holds the pinned claims plus streamed pages keeps
-        // admit-on-read for exactly as many streamed layers as it can seat: the
-        // retention win for already-materialized pages survives the fix where
-        // the budget makes it real.
-        let richer_budget_bytes = 35 * COMPLETE_LAYER_PAYLOAD_BYTES;
-        let richer_opening = plan_expert_residency(
-            MemoryPhase::Prefill,
-            richer_budget_bytes,
-            &incident_geometry(),
-            &[],
-        )
-        .expect("the richer budget should pin 35 complete layers");
-        let (_richer_residency, richer_plan) = publish_request_stable_residency_plan(
-            MemoryPhase::Prefill,
-            None,
-            richer_opening,
-            &[],
-            0,
-            &incident_geometry(),
-        );
+    // A leftover that holds the pinned claims plus streamed pages keeps
+    // admit-on-read for exactly as many streamed layers as it can seat: the
+    // retention win for already-materialized pages survives the fix where
+    // the budget makes it real.
+    let richer_budget_bytes = 35 * COMPLETE_LAYER_PAYLOAD_BYTES;
+    let richer_opening = plan_expert_residency(
+        MemoryPhase::Prefill,
+        richer_budget_bytes,
+        &incident_geometry(),
+        &[],
+    )
+    .expect("the richer budget should pin 35 complete layers");
+    let (_richer_residency, richer_plan) = publish_request_stable_residency_plan(
+        MemoryPhase::Prefill,
+        None,
+        richer_opening,
+        &[],
+        0,
+        &incident_geometry(),
+    );
+    assert_eq!(
+        richer_plan.complete_layer_targets.len(),
+        34,
+        "the routed floors for all 38 layers consume one layer of the richer budget"
+    );
+    assert_eq!(
+        richer_plan.layer_targets[34],
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
+        "the single leftover page after 34 pinned claims admits the first streamed layer"
+    );
+    for layer_index in 35..SPARSE_LAYER_COUNT {
         assert_eq!(
-            richer_plan.complete_layer_targets.len(),
-            34,
-            "the routed floors for all 38 layers consume one layer of the richer budget"
+            richer_plan.layer_targets[layer_index],
+            ExpertLayerResidencyTarget::StreamOperationLocal,
+            "every further streamed layer exceeds the leftover and must stream operation-local"
         );
-        assert_eq!(
-            richer_plan.layer_targets[34],
-            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
-            "the single leftover page after 34 pinned claims admits the first streamed layer"
-        );
-        for layer_index in 35..SPARSE_LAYER_COUNT {
-            assert_eq!(
-                richer_plan.layer_targets[layer_index],
-                ExpertLayerResidencyTarget::StreamOperationLocal,
-                "every further streamed layer exceeds the leftover and must stream operation-local"
-            );
-        }
     }
-);
+}
 
-offline_denied_test!(
-    should_reproduce_the_first_incident_recovery_target_and_refused_retry,
-    {
-        // The recovery arithmetic of the incident's first failure, reproduced
-        // exactly: the workspace formula reconstructs 947,881,340 bytes (the
-        // 92,243,324 transient bytes alive at the failure plus the rejected
-        // allocation), the reclamation formula demands 64,597,002 bytes, and the
-        // paged profile refuses the unchanged retry. The target is 13x smaller than
-        // the smallest eviction granularity the cache owns (one whole
-        // 855,638,016-byte table), so one table satisfies it — and the halved retry
-        // must re-pay at least one complete-layer SSD read that the same budget
-        // refuses to seat.
-        let fixed_workspace_bytes = ForwardRecoveryPolicy::fixed_workspace_bytes(
-            ACTIVE_MEMORY_BEFORE_RECLAMATION_BYTES,
-            ACTIVE_MEMORY_AT_FAILURE_BYTES,
-            ATTEMPTED_ALLOCATION_BYTES,
-            0,
-        );
-        assert_eq!(fixed_workspace_bytes, FIRST_RECOVERY_FIXED_WORKSPACE_BYTES);
+#[test]
+fn should_reproduce_the_first_incident_recovery_target_and_refused_retry() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        let required_reclamation_bytes = ForwardRecoveryPolicy::required_reclamation_bytes(
-            ACTIVE_MEMORY_BEFORE_RECLAMATION_BYTES,
-            RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES,
-            ACTIVE_MEMORY_CEILING_BYTES,
-            fixed_workspace_bytes,
-        );
-        assert_eq!(
+    // The recovery arithmetic of the incident's first failure, reproduced
+    // exactly: the workspace formula reconstructs 947,881,340 bytes (the
+    // 92,243,324 transient bytes alive at the failure plus the rejected
+    // allocation), the reclamation formula demands 64,597,002 bytes, and the
+    // paged profile refuses the unchanged retry. The target is 13x smaller than
+    // the smallest eviction granularity the cache owns (one whole
+    // 855,638,016-byte table), so one table satisfies it — and the halved retry
+    // must re-pay at least one complete-layer SSD read that the same budget
+    // refuses to seat.
+    let fixed_workspace_bytes = ForwardRecoveryPolicy::fixed_workspace_bytes(
+        ACTIVE_MEMORY_BEFORE_RECLAMATION_BYTES,
+        ACTIVE_MEMORY_AT_FAILURE_BYTES,
+        ATTEMPTED_ALLOCATION_BYTES,
+        0,
+    );
+    assert_eq!(fixed_workspace_bytes, FIRST_RECOVERY_FIXED_WORKSPACE_BYTES);
+
+    let required_reclamation_bytes = ForwardRecoveryPolicy::required_reclamation_bytes(
+        ACTIVE_MEMORY_BEFORE_RECLAMATION_BYTES,
+        RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES,
+        ACTIVE_MEMORY_CEILING_BYTES,
+        fixed_workspace_bytes,
+    );
+    assert_eq!(
+        required_reclamation_bytes,
+        FIRST_RECOVERY_RECLAMATION_TARGET_BYTES
+    );
+    assert!(
+        u64::try_from(required_reclamation_bytes).unwrap_or(u64::MAX)
+            < COMPLETE_LAYER_PAYLOAD_BYTES,
+        "the recovery target is below the whole-table eviction granularity"
+    );
+
+    assert!(
+        !ForwardRecoveryPolicy::retry_is_authorized(
+            false,
+            RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64,
+            RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64,
             required_reclamation_bytes,
-            FIRST_RECOVERY_RECLAMATION_TARGET_BYTES
-        );
-        assert!(
-            u64::try_from(required_reclamation_bytes).unwrap_or(u64::MAX)
-                < COMPLETE_LAYER_PAYLOAD_BYTES,
-            "the recovery target is below the whole-table eviction granularity"
-        );
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
+        "the paged profile must never retry the unchanged chunk"
+    );
+}
 
-        assert!(
-            !ForwardRecoveryPolicy::retry_is_authorized(
-                false,
-                RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64,
-                RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64,
-                required_reclamation_bytes,
-                AdaptiveRamGrowthExecutionProfile::Paged,
-            ),
-            "the paged profile must never retry the unchanged chunk"
-        );
-    }
-);
+#[test]
+fn should_floor_the_cache_ceiling_at_the_overshoot_after_every_budget_refresh() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_floor_the_cache_ceiling_at_the_overshoot_after_every_budget_refresh,
-    {
-        // The budget-refresh floor legalizes the incident's overshoot for the rest
-        // of the request: with 38 complete layers resident (32,514,244,608 bytes)
-        // against a 28,974,982,400-byte composed budget, every later publication
-        // floors the cache ceiling at the resident payload, and after each
-        // one-table eviction the floor still sits a full table above the composed
-        // budget. The composed budget never reasserts itself while the overshoot
-        // exists, which is how a single first-chunk overshoot becomes a
-        // whole-request budget the composer never chose.
-        assert_eq!(
-            retained_resident_ceiling_after_budget_refresh(
-                COMPOSED_LEFTOVER_BUDGET_BYTES,
-                RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64,
-            ),
-            RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64
-        );
-        assert_eq!(
-            retained_resident_ceiling_after_budget_refresh(
-                COMPOSED_LEFTOVER_BUDGET_BYTES,
-                RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64,
-            ),
-            RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64
-        );
-        assert!(
-            RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64 > COMPOSED_LEFTOVER_BUDGET_BYTES,
-            "after one whole-table eviction the floored ceiling still exceeds the composed budget"
-        );
-    }
-);
-
-offline_denied_test!(
-    should_round_the_recovery_target_up_to_whole_table_granularity,
-    {
-        // The eviction granularity is one complete table; a byte-exact target
-        // leaves the next attempt's headroom dependent on where table boundaries
-        // fall. The incident's 64,597,002-byte deficit must round up to one
-        // whole 855,638,016-byte table, and a deficit of one and a fraction
-        // tables must round to two.
-        assert_eq!(
-            whole_table_reclamation_target_bytes(
-                FIRST_RECOVERY_RECLAMATION_TARGET_BYTES,
-                COMPLETE_LAYER_PAYLOAD_BYTES as usize,
-            ),
-            COMPLETE_LAYER_PAYLOAD_BYTES as usize
-        );
-        assert_eq!(
-            whole_table_reclamation_target_bytes(
-                COMPLETE_LAYER_PAYLOAD_BYTES as usize + 1,
-                COMPLETE_LAYER_PAYLOAD_BYTES as usize,
-            ),
-            2 * COMPLETE_LAYER_PAYLOAD_BYTES as usize
-        );
-        assert_eq!(
-            whole_table_reclamation_target_bytes(
-                2 * COMPLETE_LAYER_PAYLOAD_BYTES as usize,
-                COMPLETE_LAYER_PAYLOAD_BYTES as usize,
-            ),
-            2 * COMPLETE_LAYER_PAYLOAD_BYTES as usize,
-            "an exact whole-table multiple must stay unchanged"
-        );
-        assert_eq!(
-            whole_table_reclamation_target_bytes(0, COMPLETE_LAYER_PAYLOAD_BYTES as usize),
-            0,
-            "zero deficit must stay zero"
-        );
-        assert_eq!(
-            whole_table_reclamation_target_bytes(FIRST_RECOVERY_RECLAMATION_TARGET_BYTES, 0),
-            FIRST_RECOVERY_RECLAMATION_TARGET_BYTES,
-            "a dense model with no tables must keep the byte-exact target"
-        );
-    }
-);
-
-offline_denied_test!(
-    should_leave_the_evicted_layer_unseatable_under_both_documented_ceilings,
-    {
-        // The eviction-and-restream thrash the halving loop entered: once one table
-        // is evicted under request pressure, neither documented ceiling restores the
-        // evicted layer — the pressure override admits only
-        // `resident_at_pressure_time - target` bytes, and the next budget-refresh
-        // floor freezes the post-eviction payload. The evicted layer is therefore
-        // re-read from SSD on every subsequent attempt with no path back into the
-        // cache, which is the steady state the incident's five failed attempts and
-        // the 69-second silent span executed.
-        let pressure_override_bytes = RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64
-            - FIRST_RECOVERY_RECLAMATION_TARGET_BYTES as u64;
-        let post_eviction_resident_bytes = RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64;
-        assert!(
-            post_eviction_resident_bytes + COMPLETE_LAYER_PAYLOAD_BYTES > pressure_override_bytes,
-            "the pressure override refuses the evicted layer's re-adoption"
-        );
-        let floored_ceiling_bytes = retained_resident_ceiling_after_budget_refresh(
+    // The budget-refresh floor legalizes the incident's overshoot for the rest
+    // of the request: with 38 complete layers resident (32,514,244,608 bytes)
+    // against a 28,974,982,400-byte composed budget, every later publication
+    // floors the cache ceiling at the resident payload, and after each
+    // one-table eviction the floor still sits a full table above the composed
+    // budget. The composed budget never reasserts itself while the overshoot
+    // exists, which is how a single first-chunk overshoot becomes a
+    // whole-request budget the composer never chose.
+    assert_eq!(
+        retained_resident_ceiling_after_budget_refresh(
             COMPOSED_LEFTOVER_BUDGET_BYTES,
-            post_eviction_resident_bytes,
-        );
-        assert_eq!(floored_ceiling_bytes, post_eviction_resident_bytes);
-        assert!(
-            post_eviction_resident_bytes + COMPLETE_LAYER_PAYLOAD_BYTES > floored_ceiling_bytes,
-            "the budget-refresh floor also refuses the evicted layer's re-adoption"
-        );
-    }
-);
+            RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64,
+        ),
+        RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64
+    );
+    assert_eq!(
+        retained_resident_ceiling_after_budget_refresh(
+            COMPOSED_LEFTOVER_BUDGET_BYTES,
+            RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64,
+        ),
+        RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64
+    );
+    assert!(
+        RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64 > COMPOSED_LEFTOVER_BUDGET_BYTES,
+        "after one whole-table eviction the floored ceiling still exceeds the composed budget"
+    );
+}
+
+#[test]
+fn should_round_the_recovery_target_up_to_whole_table_granularity() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // The eviction granularity is one complete table; a byte-exact target
+    // leaves the next attempt's headroom dependent on where table boundaries
+    // fall. The incident's 64,597,002-byte deficit must round up to one
+    // whole 855,638,016-byte table, and a deficit of one and a fraction
+    // tables must round to two.
+    assert_eq!(
+        whole_table_reclamation_target_bytes(
+            FIRST_RECOVERY_RECLAMATION_TARGET_BYTES,
+            COMPLETE_LAYER_PAYLOAD_BYTES as usize,
+        ),
+        COMPLETE_LAYER_PAYLOAD_BYTES as usize
+    );
+    assert_eq!(
+        whole_table_reclamation_target_bytes(
+            COMPLETE_LAYER_PAYLOAD_BYTES as usize + 1,
+            COMPLETE_LAYER_PAYLOAD_BYTES as usize,
+        ),
+        2 * COMPLETE_LAYER_PAYLOAD_BYTES as usize
+    );
+    assert_eq!(
+        whole_table_reclamation_target_bytes(
+            2 * COMPLETE_LAYER_PAYLOAD_BYTES as usize,
+            COMPLETE_LAYER_PAYLOAD_BYTES as usize,
+        ),
+        2 * COMPLETE_LAYER_PAYLOAD_BYTES as usize,
+        "an exact whole-table multiple must stay unchanged"
+    );
+    assert_eq!(
+        whole_table_reclamation_target_bytes(0, COMPLETE_LAYER_PAYLOAD_BYTES as usize),
+        0,
+        "zero deficit must stay zero"
+    );
+    assert_eq!(
+        whole_table_reclamation_target_bytes(FIRST_RECOVERY_RECLAMATION_TARGET_BYTES, 0),
+        FIRST_RECOVERY_RECLAMATION_TARGET_BYTES,
+        "a dense model with no tables must keep the byte-exact target"
+    );
+}
+
+#[test]
+fn should_leave_the_evicted_layer_unseatable_under_both_documented_ceilings() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // The eviction-and-restream thrash the halving loop entered: once one table
+    // is evicted under request pressure, neither documented ceiling restores the
+    // evicted layer — the pressure override admits only
+    // `resident_at_pressure_time - target` bytes, and the next budget-refresh
+    // floor freezes the post-eviction payload. The evicted layer is therefore
+    // re-read from SSD on every subsequent attempt with no path back into the
+    // cache, which is the steady state the incident's five failed attempts and
+    // the 69-second silent span executed.
+    let pressure_override_bytes = RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64
+        - FIRST_RECOVERY_RECLAMATION_TARGET_BYTES as u64;
+    let post_eviction_resident_bytes = RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64;
+    assert!(
+        post_eviction_resident_bytes + COMPLETE_LAYER_PAYLOAD_BYTES > pressure_override_bytes,
+        "the pressure override refuses the evicted layer's re-adoption"
+    );
+    let floored_ceiling_bytes = retained_resident_ceiling_after_budget_refresh(
+        COMPOSED_LEFTOVER_BUDGET_BYTES,
+        post_eviction_resident_bytes,
+    );
+    assert_eq!(floored_ceiling_bytes, post_eviction_resident_bytes);
+    assert!(
+        post_eviction_resident_bytes + COMPLETE_LAYER_PAYLOAD_BYTES > floored_ceiling_bytes,
+        "the budget-refresh floor also refuses the evicted layer's re-adoption"
+    );
+}

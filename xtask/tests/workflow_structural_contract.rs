@@ -8,7 +8,6 @@
 
 mod contract_support;
 
-use astronomical_test_harness::offline_test;
 use contract_support::{
     EXPECTED_LIBRARY_REST_COMMAND, EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP,
     EXPECTED_OBSERVATORY_COMMAND, EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id,
@@ -17,7 +16,8 @@ use contract_support::{
 };
 use serde_yaml::Value;
 
-offline_test!(workflow_triggers_keep_the_classification_surface_open, {
+#[test]
+fn workflow_triggers_keep_the_classification_surface_open() {
     let workflow = workflow_contract();
     let triggers = triggers_of(&workflow);
     assert!(
@@ -48,9 +48,10 @@ offline_test!(workflow_triggers_keep_the_classification_surface_open, {
         workflow.get("concurrency").is_none(),
         "classifier-only runs must not wait behind macOS work"
     );
-});
+}
 
-offline_test!(detect_changes_outputs_drive_the_authority, {
+#[test]
+fn detect_changes_outputs_drive_the_authority() {
     let workflow = workflow_contract();
     let detection_job = required_job(&workflow, "detect-changes");
     let detection_outputs = required_field(detection_job, "outputs", "job detect-changes");
@@ -78,78 +79,75 @@ offline_test!(detect_changes_outputs_drive_the_authority, {
             .unwrap_or(true)),
         "classifier job still computes unused native identity"
     );
-});
+}
 
-offline_test!(
-    required_jobs_keep_names_timeouts_and_fail_closed_authority,
-    {
-        let workflow = workflow_contract();
-        let verification_job = required_job(&workflow, "rust-core");
-        let swift_node_job = required_job(&workflow, "swift-node");
-        let static_job = required_job(&workflow, "static");
-        assert_eq!(
-            required_text(verification_job, "name", "job rust-core"),
-            "macOS offline verification",
-            "required check name changed"
-        );
-        assert_eq!(
-            required_u64(verification_job, "timeout-minutes", "job rust-core"),
-            15,
-            "required check exceeded its hard cap"
-        );
-        assert_eq!(
-            required_u64(swift_node_job, "timeout-minutes", "job swift-node"),
-            12,
-            "swift-node exceeded its hard cap"
-        );
-        assert_eq!(
-            required_text(verification_job, "if", "job rust-core"),
-            EXPECTED_MACOS_AUTHORITY,
-            "macOS authority does not fail closed"
-        );
-        assert_eq!(
-            required_text(swift_node_job, "if", "job swift-node"),
-            EXPECTED_MACOS_AUTHORITY,
-            "swift-node authority does not fail closed"
-        );
-        let verification_concurrency =
-            required_field(verification_job, "concurrency", "job rust-core");
-        assert_eq!(
-            required_text(verification_concurrency, "group", "rust-core concurrency"),
-            EXPECTED_MACOS_CONCURRENCY_GROUP,
-            "macOS concurrency is not event-and-ref scoped"
-        );
-        assert!(
-            !required_bool(
-                verification_concurrency,
-                "cancel-in-progress",
-                "rust-core concurrency"
-            ),
-            "required macOS verification must not cancel in-flight runs"
-        );
-        let swift_concurrency = required_field(swift_node_job, "concurrency", "job swift-node");
-        assert_eq!(
-            required_text(swift_concurrency, "group", "swift-node concurrency"),
-            EXPECTED_SWIFT_CONCURRENCY_GROUP,
-            "swift-node concurrency is not event-and-ref scoped"
-        );
-        assert!(
-            !required_bool(
-                swift_concurrency,
-                "cancel-in-progress",
-                "swift-node concurrency"
-            ),
-            "swift-node must not cancel in-flight runs"
-        );
-        assert!(
-            required_text(static_job, "if", "job static")
-                .contains("needs.detect-changes.result =="),
-            "static checks must require successful classification"
-        );
-    }
-);
+#[test]
+fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
+    let workflow = workflow_contract();
+    let verification_job = required_job(&workflow, "rust-core");
+    let swift_node_job = required_job(&workflow, "swift-node");
+    let static_job = required_job(&workflow, "static");
+    assert_eq!(
+        required_text(verification_job, "name", "job rust-core"),
+        "macOS offline verification",
+        "required check name changed"
+    );
+    assert_eq!(
+        required_u64(verification_job, "timeout-minutes", "job rust-core"),
+        15,
+        "required check exceeded its hard cap"
+    );
+    assert_eq!(
+        required_u64(swift_node_job, "timeout-minutes", "job swift-node"),
+        12,
+        "swift-node exceeded its hard cap"
+    );
+    assert_eq!(
+        required_text(verification_job, "if", "job rust-core"),
+        EXPECTED_MACOS_AUTHORITY,
+        "macOS authority does not fail closed"
+    );
+    assert_eq!(
+        required_text(swift_node_job, "if", "job swift-node"),
+        EXPECTED_MACOS_AUTHORITY,
+        "swift-node authority does not fail closed"
+    );
+    let verification_concurrency = required_field(verification_job, "concurrency", "job rust-core");
+    assert_eq!(
+        required_text(verification_concurrency, "group", "rust-core concurrency"),
+        EXPECTED_MACOS_CONCURRENCY_GROUP,
+        "macOS concurrency is not event-and-ref scoped"
+    );
+    assert!(
+        !required_bool(
+            verification_concurrency,
+            "cancel-in-progress",
+            "rust-core concurrency"
+        ),
+        "required macOS verification must not cancel in-flight runs"
+    );
+    let swift_concurrency = required_field(swift_node_job, "concurrency", "job swift-node");
+    assert_eq!(
+        required_text(swift_concurrency, "group", "swift-node concurrency"),
+        EXPECTED_SWIFT_CONCURRENCY_GROUP,
+        "swift-node concurrency is not event-and-ref scoped"
+    );
+    assert!(
+        !required_bool(
+            swift_concurrency,
+            "cancel-in-progress",
+            "swift-node concurrency"
+        ),
+        "swift-node must not cancel in-flight runs"
+    );
+    assert!(
+        required_text(static_job, "if", "job static").contains("needs.detect-changes.result =="),
+        "static checks must require successful classification"
+    );
+}
 
-offline_test!(required_check_steps_keep_their_bounded_contracts, {
+#[test]
+fn required_check_steps_keep_their_bounded_contracts() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
@@ -236,7 +234,7 @@ offline_test!(required_check_steps_keep_their_bounded_contracts, {
         run_text_of(swiftpm_timestamp_step, "swiftpm-timestamp").contains("touch -c"),
         "SwiftPM timestamp reuse does not touch restored artifacts"
     );
-});
+}
 
 /// Collects one job's timed steps and asserts the begin call lives in the
 /// same run text, mirroring the shell contract's
@@ -274,7 +272,8 @@ fn assert_timed_steps_pair_begin_and_end(job_steps: &[&Value], job_id: &str) -> 
     timed_step_count
 }
 
-offline_test!(every_timed_step_pairs_its_begin_and_end_calls, {
+#[test]
+fn every_timed_step_pairs_its_begin_and_end_calls() {
     let workflow = workflow_contract();
     let mut total_timed_steps: usize = 0;
     for (job_id, job) in [
@@ -288,7 +287,7 @@ offline_test!(every_timed_step_pairs_its_begin_and_end_calls, {
         total_timed_steps > 0,
         "workflow has no timed steps to attribute"
     );
-});
+}
 
 // The macOS toolchain pin contract: one workflow-level Xcode version keeps
 // the xcodebuild/xcrun/swift identity inputs stable across runner-image
@@ -298,7 +297,8 @@ offline_test!(every_timed_step_pairs_its_begin_and_end_calls, {
 // resolution step makes a stale pin fail the job — printing the image's
 // installed Xcode inventory — instead of silently falling back to the
 // image's moving default.
-offline_test!(macos_toolchain_identity_is_pinned_to_a_versioned_xcode, {
+#[test]
+fn macos_toolchain_identity_is_pinned_to_a_versioned_xcode() {
     let workflow = workflow_contract();
     let workflow_env = workflow
         .get("env")
@@ -359,9 +359,10 @@ offline_test!(macos_toolchain_identity_is_pinned_to_a_versioned_xcode, {
             "job {job_id} does not log the pinned toolchain version"
         );
     }
-});
+}
 
-offline_test!(macos_jobs_publish_the_timing_summary_even_when_failing, {
+#[test]
+fn macos_jobs_publish_the_timing_summary_even_when_failing() {
     let workflow = workflow_contract();
     for job_id in ["rust-core", "swift-node"] {
         let job = required_job(&workflow, job_id);
@@ -387,4 +388,4 @@ offline_test!(macos_jobs_publish_the_timing_summary_even_when_failing, {
             );
         }
     }
-});
+}
