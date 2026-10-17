@@ -250,6 +250,129 @@ async fn should_stream_parallel_tool_calls_in_openai_compatible_chunks_for_openc
     );
 }
 
+#[tokio::test]
+async fn should_stream_the_complete_tool_call_journey_reasoning_then_text_then_calls() {
+    // The episode behind issue #1326 depended on this exact wire journey: an
+    // agent turn streams reasoning, then visible text, then tool-call deltas,
+    // and only then the terminal reason. The thinking parser already suppresses
+    // late reasoning after visible text starts, so the phases must reach the
+    // wire strictly ordered; pin that ordering so a serialization change cannot
+    // merge or reorder them silently.
+    let application = build_application(ScriptedExecutor::ready(vec![
+        ChatGenerationStreamEvent::ReasoningFragment("locating the plugin".to_owned()),
+        ChatGenerationStreamEvent::TextFragment("Found it. Let me look.".to_owned()),
+        ChatGenerationStreamEvent::ToolCall {
+            tool_call_index: 0,
+            function_name: "read".to_owned(),
+            arguments_json: r#"{"filePath":"plugins/thread-rename/package.json"}"#.to_owned(),
+        },
+        completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
+    ]));
+
+    let (status, response_body) = post_chat_with_body(
+        application,
+        r#"{"model":"astronomical/streaming-test-model","messages":[{"role":"user","content":"find the thread rename plugin"}],"stream":true}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let parsed_stream = ParsedChatSseStream::parse(&response_body);
+    assert!(
+        parsed_stream.saw_done,
+        "stream should terminate: {response_body}"
+    );
+
+    // The assistant role chunk opens the stream before any content phase.
+    assert!(
+        parsed_stream.payloads[0]["choices"][0]["delta"]["role"] == "assistant",
+        "the journey must open with the assistant role chunk: {response_body}"
+    );
+
+    let mut highest_observed_phase = 0;
+    for payload in &parsed_stream.payloads {
+        if let Some(journey_phase) = parsed_stream.journey_phase(payload) {
+            assert!(
+                journey_phase >= highest_observed_phase,
+                "stream phases must run reasoning, then visible text, then tool calls in order: {response_body}"
+            );
+            highest_observed_phase = journey_phase;
+        }
+    }
+
+    assert_eq!(parsed_stream.reasoning_text(), "locating the plugin");
+    assert_eq!(
+        parsed_stream.visible_text_for_opencode(),
+        "Found it. Let me look."
+    );
+    let tool_call_deltas = parsed_stream
+        .payloads
+        .iter()
+        .filter_map(|payload| payload["choices"][0]["delta"]["tool_calls"].as_array())
+        .flat_map(|tool_calls| tool_calls.iter())
+        .collect::<Vec<_>>();
+    assert_eq!(tool_call_deltas.len(), 1, "response body: {response_body}");
+    assert_eq!(tool_call_deltas[0]["function"]["name"], "read");
+
+    // The terminal reason arrives after every tool-call delta and closes the
+    // journey.
+    let first_tool_call_position = parsed_stream
+        .payloads
+        .iter()
+        .position(|payload| payload["choices"][0]["delta"]["tool_calls"].is_array())
+        .expect("the journey must contain a tool-call delta");
+    let terminal_position = parsed_stream
+        .payloads
+        .iter()
+        .position(|payload| payload["choices"][0]["finish_reason"] == "tool_calls")
+        .expect("the journey must terminate with the tool_calls reason");
+    assert!(first_tool_call_position < terminal_position);
+    assert_eq!(parsed_stream.finish_reason(), Some("tool_calls"));
+}
+
+#[tokio::test]
+async fn should_stream_a_model_invented_tool_call_name_faithfully_for_the_harness() {
+    // The output parser deliberately forwards tool calls for names the session
+    // never declared so the harness can adjudicate them (issue #1326 episode:
+    // the model invented "shell" while the session declared "bash"). The REST
+    // wire must carry the invented name unchanged — rewriting or dropping it
+    // would hide the model's actual output from the harness — and the turn
+    // still terminates with the tool_calls reason.
+    let application = build_application(ScriptedExecutor::ready(vec![
+        ChatGenerationStreamEvent::ToolCall {
+            tool_call_index: 0,
+            function_name: "shell".to_owned(),
+            arguments_json: r#"{"command":"ls plugins"}"#.to_owned(),
+        },
+        completed_generation_event(ChatGenerationCompletionReason::ToolCalls),
+    ]));
+
+    let (status, response_body) = post_chat_with_body(
+        application,
+        r#"{"model":"astronomical/streaming-test-model","messages":[{"role":"user","content":"list the plugins"}],"stream":true}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let parsed_stream = ParsedChatSseStream::parse(&response_body);
+    let tool_call_deltas = parsed_stream
+        .payloads
+        .iter()
+        .filter_map(|payload| payload["choices"][0]["delta"]["tool_calls"].as_array())
+        .flat_map(|tool_calls| tool_calls.iter())
+        .collect::<Vec<_>>();
+    assert_eq!(tool_call_deltas.len(), 1, "response body: {response_body}");
+    assert_eq!(tool_call_deltas[0]["function"]["name"], "shell");
+    assert_eq!(
+        tool_call_deltas[0]["function"]["arguments"],
+        r#"{"command":"ls plugins"}"#
+    );
+    assert_eq!(parsed_stream.finish_reason(), Some("tool_calls"));
+    assert!(
+        parsed_stream.saw_done,
+        "stream should terminate: {response_body}"
+    );
+}
+
 fn completed_generation_event(
     completion_reason: ChatGenerationCompletionReason,
 ) -> ChatGenerationStreamEvent {
@@ -332,6 +455,22 @@ impl ParsedChatSseStream {
             .iter()
             .filter_map(|payload| payload["choices"][0]["finish_reason"].as_str())
             .next_back()
+    }
+
+    /// Phase rank of one chunk in the tool-call journey: reasoning streams
+    /// first, then visible text, then tool calls. Chunks without one of these
+    /// deltas (role, terminal reason, usage) carry no journey phase.
+    fn journey_phase(&self, payload: &Value) -> Option<u8> {
+        let delta = &payload["choices"][0]["delta"];
+        if delta["reasoning_content"].is_string() {
+            Some(0)
+        } else if delta["content"].is_string() {
+            Some(1)
+        } else if delta["tool_calls"].is_array() {
+            Some(2)
+        } else {
+            None
+        }
     }
 }
 
