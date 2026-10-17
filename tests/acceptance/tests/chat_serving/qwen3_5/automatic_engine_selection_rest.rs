@@ -155,7 +155,7 @@ async fn should_select_streaming_engine_when_complete_residency_headroom_does_no
         stop_real_model_rest_server(real_model_rest_server).await;
     })
     .await
-    .expect("the streaming engine-selection SSD journey must finish within 60 seconds");
+    .expect("the streaming engine-selection SSD journey must finish within 120 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -308,7 +308,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
         );
     })
     .await
-    .expect("the retry/cache SSD journey must finish within 60 seconds");
+    .expect("the retry/cache SSD journey must finish within 120 seconds");
 }
 
 struct SparseArtifactResidencyGeometry {

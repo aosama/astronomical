@@ -13,7 +13,9 @@ export class HostChannel {
   private readonly handlers: ThintalkMessageHandlers | null;
 
   public constructor() {
-    this.handlers = window.webkit?.messageHandlers ?? null;
+    const detectedHandlers: ThintalkMessageHandlers | null =
+      window.webkit?.messageHandlers != null ? window.webkit.messageHandlers : null;
+    this.handlers = detectedHandlers;
   }
 
   public postSessionCall(request: SessionBridgeRequest): void {

@@ -181,7 +181,7 @@ function captureLibrarySearchSnapshot() {
 }
 
 function librarySearchCaretIndex(capturedCaretIndex, valueLength) {
-    const caretIndex = capturedCaretIndex ?? valueLength;
+    const caretIndex = capturedCaretIndex != null ? capturedCaretIndex : valueLength;
     return Math.min(Math.max(caretIndex, 0), valueLength);
 }
 

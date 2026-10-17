@@ -18,16 +18,22 @@ interface Journey {
 function bootJourney(previous?: Journey): Journey {
   installDom();
   installConfig(DAEMON_BASE_URL);
-  const host = previous?.host ?? new FakeSessionHost(
-    (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
-    (callId, message) => window.__thintalkBridge?.reject(callId, message),
-  );
+  const previousHost: FakeSessionHost | undefined = previous?.host;
+  const host = previousHost != null
+    ? previousHost
+    : new FakeSessionHost(
+      (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
+      (callId, message) => window.__thintalkBridge?.reject(callId, message),
+    );
   host.install();
-  const daemon = previous?.daemon ?? new FakeDaemon({
-    daemonBaseURL: DAEMON_BASE_URL,
-    channel: "development",
-    stateDirectory: "~/.astronomical-dev",
-  });
+  const previousDaemon: FakeDaemon | undefined = previous?.daemon;
+  const daemon = previousDaemon != null
+    ? previousDaemon
+    : new FakeDaemon({
+      daemonBaseURL: DAEMON_BASE_URL,
+      channel: "development",
+      stateDirectory: "~/.astronomical-dev",
+    });
   daemon.install();
   bootChatClient();
   return { host, daemon };
@@ -45,7 +51,10 @@ function sendUserMessage(text: string): void {
 
 function renderedMessageTexts(): string[] {
   return [...document.querySelectorAll<HTMLElement>("#transcript article.message")].map(
-    (element) => (element.textContent ?? "").trim(),
+    (element) => {
+      const messageText: string | null = element.textContent;
+      return (messageText != null ? messageText : "").trim();
+    },
   );
 }
 
@@ -132,7 +141,8 @@ test("a failed handshake shows the failure notice instead of a transcript", asyn
   // (the banner is reserved for failures while streaming).
   await waitFor(() => {
     const notice = document.querySelector<HTMLElement>("#empty-state-notice");
-    return (notice?.textContent ?? "").includes("runtime channel");
+    const noticeText: string | null | undefined = notice?.textContent;
+    return (noticeText != null ? noticeText : "").includes("runtime channel");
   }, "the failure notice to appear");
   assert.equal(host.fileCount(), 0, "no session is written when the daemon is unreachable");
 }, { timeout: 30_000 });

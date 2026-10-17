@@ -175,3 +175,22 @@ pub(crate) struct ActiveGeneration {
     pub(crate) request_id: RequestId,
     pub(crate) stream_event_sender: mpsc::Sender<ChatGenerationStreamEvent>,
 }
+
+impl ActiveGeneration {
+    /// Folds one observed MLX peak sample into the request's durable peak
+    /// record.
+    ///
+    /// The MLX peak counter resets at allocator-cache cleanups, so a later
+    /// sample can read a lower window peak than an earlier one; the durable
+    /// claim is a request maximum, so it must retain the highest window seen.
+    /// Every event that carries a worker memory snapshot must route through
+    /// here so the durable record never under-reports a transient the status
+    /// endpoint visibly published.
+    pub(crate) fn fold_observed_mlx_peak_memory_bytes(&mut self, observed_peak_memory_bytes: u64) {
+        self.maximum_mlx_peak_memory_bytes = Some(
+            self.maximum_mlx_peak_memory_bytes
+                .unwrap_or(0)
+                .max(observed_peak_memory_bytes),
+        );
+    }
+}

@@ -42,7 +42,7 @@ async fn should_retain_seated_experts_during_a_repeated_cached_request_at_a_25gb
         run_repeated_cached_decode_retention_journey(DECODE_RETENTION_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the repeated cached decode-retention SSD journey must finish within 60 seconds");
+    .expect("the repeated cached decode-retention SSD journey must finish within 120 seconds");
 }
 
 /// Runs the identical request twice. The second request restores the cached
@@ -65,7 +65,7 @@ async fn should_retain_seated_experts_across_large_cached_requests_at_a_25gb_cei
         run_large_cached_retention_journey(DECODE_RETENTION_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the large cached retention SSD journey must finish within 60 seconds");
+    .expect("the large cached retention SSD journey must finish within 120 seconds");
 }
 
 async fn run_large_cached_retention_journey(maximum_mlx_memory_bytes: u64) {

@@ -133,7 +133,13 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     case "action":
       handleAction(envelope)
     case "error":
-      NSLog("ThinTalk canvas page error: \(envelope["detail"] as? String ?? "unknown")")
+      let errorDetail: String
+      if let storedDetail = envelope["detail"] as? String {
+        errorDetail = storedDetail
+      } else {
+        errorDetail = "unknown"
+      }
+      NSLog("ThinTalk canvas page error: \(errorDetail)")
     default:
       NSLog("ThinTalk canvas: ignoring unknown message kind: \(kind)")
     }
@@ -235,7 +241,13 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     let script: String
     switch outcome {
     case .success(let payloadJSON):
-      script = "window.__thintalkBridge.resolve(\(javaScriptString(callID)), \(payloadJSON ?? "null"));"
+      let resolvedPayloadJSON: String
+      if let payloadJSON {
+        resolvedPayloadJSON = payloadJSON
+      } else {
+        resolvedPayloadJSON = "null"
+      }
+      script = "window.__thintalkBridge.resolve(\(javaScriptString(callID)), \(resolvedPayloadJSON));"
     case .failure(let failure):
       script = "window.__thintalkBridge.reject(\(javaScriptString(callID)), \(javaScriptString(failure.message)));"
     }
@@ -246,9 +258,14 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     guard let action = envelope["action"] as? String else { return }
     switch action {
     case "copy":
-      let detail = envelope["detail"] as? String ?? ""
+      let copiedDetail: String
+      if let storedDetail = envelope["detail"] as? String {
+        copiedDetail = storedDetail
+      } else {
+        copiedDetail = ""
+      }
       NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(detail, forType: .string)
+      NSPasteboard.general.setString(copiedDetail, forType: .string)
     case "openExternal":
       guard let rawURL = envelope["detail"] as? String,
             let externalURL = CanvasSecurityPolicy.externalURL(fromRawValue: rawURL)

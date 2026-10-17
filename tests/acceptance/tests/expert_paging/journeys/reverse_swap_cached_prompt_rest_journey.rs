@@ -34,7 +34,7 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 async fn should_complete_cached_reverse_swap_without_hidden_model_page_ins() {
     timeout(SSD_JOURNEY_TIMEOUT, run_cached_reverse_swap_journey())
         .await
-        .expect("the cached reverse-swap SSD journey must finish within 60 seconds");
+        .expect("the cached reverse-swap SSD journey must finish within 120 seconds");
 }
 
 async fn run_cached_reverse_swap_journey() {

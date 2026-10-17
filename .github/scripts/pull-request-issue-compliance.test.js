@@ -25,13 +25,15 @@ function issueUrlFor(issueNumber) {
 }
 
 async function validateBody(pullRequestBody, overrides = {}) {
+    const defaultLoadIssue = async (issueNumber) => createIssue({
+        number: issueNumber,
+        html_url: issueUrlFor(issueNumber),
+    });
+    const loadIssue = overrides.loadIssue != null ? overrides.loadIssue : defaultLoadIssue;
     return validatePullRequestIssue({
         pullRequestBody,
         repositoryFullName: REPOSITORY_FULL_NAME,
-        loadIssue: overrides.loadIssue ?? (async (issueNumber) => createIssue({
-            number: issueNumber,
-            html_url: issueUrlFor(issueNumber),
-        })),
+        loadIssue,
     });
 }
 

@@ -25,7 +25,12 @@ final class ChatWindowController: NSObject, NSWindowDelegate {
 
   func showChatWindow(handleClose: @escaping () -> Void) {
     self.handleClose = handleClose
-    let window = chatWindow ?? makeChatWindow()
+    let window: NSWindow
+    if let chatWindow {
+      window = chatWindow
+    } else {
+      window = makeChatWindow()
+    }
     chatWindow = window
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)

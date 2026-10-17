@@ -113,14 +113,23 @@ impl LibraryDownloadCoordinator {
     pub async fn recover_startup_state(&self) -> Result<(), LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         let job_store = self.job_store.clone();
-        let recovered_job = tokio::task::spawn_blocking(move || match job_store.load() {
+        // Two failure layers: the join fails only when the blocking task
+        // panicked or was aborted; the inner Result is the recovery outcome.
+        let recovery_join = tokio::task::spawn_blocking(move || match job_store.load() {
             Ok(Some(download_job)) if download_job.state() == DownloadJobState::Publishing => {
                 Ok(Some(download_job))
             }
             Ok(_) => job_store.load_recovering_interrupted_job(current_unix_millis()),
             Err(error) => Err(error),
         })
-        .await??;
+        .await;
+        let recovery_outcome = match recovery_join {
+            Ok(recovery_outcome) => recovery_outcome,
+            Err(join_error) => {
+                return Err(LibraryDownloadCoordinatorError::BackgroundTask(join_error));
+            }
+        };
+        let recovered_job = recovery_outcome?;
         if recovered_job.is_some_and(|job| job.state() == DownloadJobState::Publishing) {
             self.spawn_publication_task().await?;
         }
@@ -136,7 +145,14 @@ impl LibraryDownloadCoordinator {
             return Ok(Some(download_job));
         }
         let job_store = self.job_store.clone();
-        Ok(tokio::task::spawn_blocking(move || job_store.load()).await??)
+        let load_join = tokio::task::spawn_blocking(move || job_store.load()).await;
+        let load_outcome = match load_join {
+            Ok(load_outcome) => load_outcome,
+            Err(join_error) => {
+                return Err(LibraryDownloadCoordinatorError::BackgroundTask(join_error));
+            }
+        };
+        Ok(load_outcome?)
     }
 
     pub async fn validated_publications_snapshot(&self) -> BTreeSet<String> {
@@ -202,16 +218,30 @@ impl LibraryDownloadCoordinator {
         let _command_guard = self.command_lock.lock().await;
         self.abort_active_task().await;
         let job_store = self.job_store.clone();
-        tokio::task::spawn_blocking(move || job_store.pause_current_job(current_unix_millis()))
-            .await??
-            .ok_or(LibraryDownloadCoordinatorError::JobNotFound)
+        let pause_join =
+            tokio::task::spawn_blocking(move || job_store.pause_current_job(current_unix_millis()))
+                .await;
+        let pause_outcome = match pause_join {
+            Ok(pause_outcome) => pause_outcome,
+            Err(join_error) => {
+                return Err(LibraryDownloadCoordinatorError::BackgroundTask(join_error));
+            }
+        };
+        pause_outcome?.ok_or(LibraryDownloadCoordinatorError::JobNotFound)
     }
 
     pub async fn cancel(&self) -> Result<bool, LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         self.abort_active_task().await;
         let job_store = self.job_store.clone();
-        Ok(tokio::task::spawn_blocking(move || job_store.cancel_current_job()).await??)
+        let cancel_join = tokio::task::spawn_blocking(move || job_store.cancel_current_job()).await;
+        let cancel_outcome = match cancel_join {
+            Ok(cancel_outcome) => cancel_outcome,
+            Err(join_error) => {
+                return Err(LibraryDownloadCoordinatorError::BackgroundTask(join_error));
+            }
+        };
+        Ok(cancel_outcome?)
     }
 
     async fn spawn_download_task(&self, catalog_entry: DownloadCatalogEntry) {

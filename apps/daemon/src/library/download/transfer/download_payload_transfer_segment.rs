@@ -114,15 +114,21 @@ impl SegmentedFileAssembler {
     ) -> Result<Self, DownloadPayloadTransferError> {
         let open_models_directory = models_directory.to_path_buf();
         let open_staged_path = staged_file_path.to_path_buf();
-        let staged_file = tokio::task::spawn_blocking(move || {
+        // Two failure layers: the join fails only when the blocking task
+        // panicked or was aborted; the inner Result is the open outcome.
+        let staged_file_join = tokio::task::spawn_blocking(move || {
             open_staged_file_for_append(
                 &open_models_directory,
                 &open_staged_path,
                 resume_offset_bytes,
             )
         })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)??;
+        .await;
+        let staged_file_result = match staged_file_join {
+            Ok(staged_file_result) => staged_file_result,
+            Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
+        };
+        let staged_file = staged_file_result?;
         Ok(Self {
             assembly: Arc::new(Mutex::new(SegmentAssembly {
                 staged_file: tokio::fs::File::from_std(staged_file),

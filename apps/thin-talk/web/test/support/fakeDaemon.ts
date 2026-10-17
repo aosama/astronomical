@@ -44,7 +44,8 @@ export class FakeDaemon {
 
   private async handle(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = String(input);
-    this.requests.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? init.body : null });
+    const requestMethod: string = init?.method != null ? init.method : "GET";
+    this.requests.push({ url, method: requestMethod, body: typeof init?.body === "string" ? init.body : null });
     if (url.endsWith("/v1/status")) {
       if (this.options.failHandshake) {
         return new Response("daemon is pretending to be down", { status: 503 });
@@ -58,10 +59,15 @@ export class FakeDaemon {
       });
     }
     if (url.endsWith("/v1/models")) {
-      return Response.json({ data: this.options.models ?? [defaultFakeModel()] });
+      const configuredModels: unknown[] | undefined = this.options.models;
+      const models: unknown[] = configuredModels != null ? configuredModels : [defaultFakeModel()];
+      return Response.json({ data: models });
     }
     if (url.endsWith("/v1/chat/completions")) {
-      return sseResponse(this.options.chatStreamLines ?? DEFAULT_CHAT_LINES);
+      const configuredChatStreamLines: string[] | undefined = this.options.chatStreamLines;
+      const chatStreamLines: string[] =
+        configuredChatStreamLines != null ? configuredChatStreamLines : DEFAULT_CHAT_LINES;
+      return sseResponse(chatStreamLines);
     }
     return new Response("no such route on the fake daemon", { status: 404 });
   }

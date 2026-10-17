@@ -28,6 +28,7 @@ export class TranscriptMessage {
     this.markdown = init.markdown;
     this.reasoning = init.reasoning;
     this.state = init.state;
-    this.attachments = init.attachments ?? [];
+    const configuredAttachments: readonly TranscriptAttachment[] | undefined = init.attachments;
+    this.attachments = configuredAttachments != null ? configuredAttachments : [];
   }
 }

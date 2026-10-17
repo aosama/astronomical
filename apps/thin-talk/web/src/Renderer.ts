@@ -77,7 +77,8 @@ export class Renderer {
     if (state === ChatMessageState.STREAMING) {
       return 'generating<span class="message__streaming-caret"></span>';
     }
-    return VISIBLE_STATE_LABELS[state] ?? "";
+    const configuredLabel: string | undefined = VISIBLE_STATE_LABELS[state];
+    return configuredLabel != null ? configuredLabel : "";
   }
 
   private attachmentStripHtml(attachments: readonly TranscriptAttachment[]): string {
@@ -138,12 +139,15 @@ export class Renderer {
       if (codeElement.dataset.highlighted === "true" || codeElement.dataset.highlighted === "skipped") {
         return;
       }
-      const language = (codeElement.className.match(/language-([\w+#-]+)/) ?? [])[1];
+      const languageMatch: RegExpMatchArray | null = codeElement.className.match(/language-([\w+#-]+)/);
+      const language = languageMatch != null ? languageMatch[1] : undefined;
       if (!language || !hljs.getLanguage(language)) {
         codeElement.dataset.highlighted = "skipped";
         return;
       }
-      codeElement.innerHTML = hljs.highlight(codeElement.textContent ?? "", { language }).value;
+      const codeText: string | null = codeElement.textContent;
+      const highlightSource: string = codeText != null ? codeText : "";
+      codeElement.innerHTML = hljs.highlight(highlightSource, { language }).value;
       codeElement.dataset.highlighted = "true";
       codeElement.classList.add("hljs");
     });
@@ -160,7 +164,9 @@ export class Renderer {
       ) {
         return;
       }
-      const language = ((codeBlock as HTMLElement).className.match(/language-([\w+#-]+)/) ?? [])[1];
+      const languageMatch: RegExpMatchArray | null =
+        (codeBlock as HTMLElement).className.match(/language-([\w+#-]+)/);
+      const language = languageMatch != null ? languageMatch[1] : undefined;
       if (!language) {
         return;
       }

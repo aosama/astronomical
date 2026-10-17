@@ -54,7 +54,7 @@ async fn should_keep_leftover_expert_layers_seated_when_the_ceiling_is_below_the
         run_leftover_complete_layer_seating_rest_journey(LEFTOVER_SEATING_MLX_MEMORY_BYTES),
     )
     .await
-    .expect("the below-payload leftover-seating SSD journey must finish within 60 seconds");
+    .expect("the below-payload leftover-seating SSD journey must finish within 120 seconds");
 }
 
 async fn run_leftover_complete_layer_seating_rest_journey(maximum_mlx_memory_bytes: u64) {

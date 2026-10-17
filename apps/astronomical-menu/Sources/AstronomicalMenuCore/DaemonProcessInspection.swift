@@ -73,7 +73,10 @@ func orphanedProcessIdentifiers(matchingExecutablePath executablePath: String) -
 }
 
 private func psOutputFields(arguments: [String]) -> [Substring] {
-  psOutputFieldsByLine(arguments: arguments).first ?? []
+  if let outputFields = psOutputFieldsByLine(arguments: arguments).first {
+    return outputFields
+  }
+  return []
 }
 
 private func psOutputFieldsByLine(arguments: [String]) -> [[Substring]] {

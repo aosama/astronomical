@@ -298,7 +298,14 @@ do {
   let arguments = try parseArguments()
   try renderIconFamily(arguments: arguments)
 } catch {
-  let failureMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+  let failureMessage: String
+  if let localizedError = error as? LocalizedError,
+    let localizedDescription = localizedError.errorDescription
+  {
+    failureMessage = localizedDescription
+  } else {
+    failureMessage = error.localizedDescription
+  }
   FileHandle.standardError.write(Data("Error: \(failureMessage)\n".utf8))
   exit(1)
 }
