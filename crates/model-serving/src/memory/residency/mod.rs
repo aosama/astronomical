@@ -21,6 +21,7 @@ mod decode_seating;
 mod foundation_overlay;
 mod ownership_mode;
 mod page_commit;
+mod promotion_on_raise;
 mod release;
 mod request_plan;
 mod validation;
@@ -36,6 +37,8 @@ mod phase_aware_expert_residency_tests;
 #[cfg(test)]
 mod planner_boundary_tests;
 #[cfg(test)]
+mod promotion_on_raise_tests;
+#[cfg(test)]
 mod request_plan_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
@@ -45,6 +48,7 @@ pub use page_commit::{
     hot_expert_warm_slot_count, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page,
 };
+pub use promotion_on_raise::StreamingStartupResidencyFacts;
 pub use release::should_enact_planned_expert_release;
 pub use request_plan::{
     RequestExpertLayerRole, RequestExpertResidency, publish_request_stable_residency_plan,

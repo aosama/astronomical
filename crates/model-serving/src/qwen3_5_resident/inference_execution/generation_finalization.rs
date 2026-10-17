@@ -84,6 +84,7 @@ impl Qwen3_5EngineState {
                 InferenceEngineError::InvalidRequest { .. }
                 | InferenceEngineError::ResidentForkRequired { .. }
                 | InferenceEngineError::ResidentStreamingReplacementRequired { .. }
+                | InferenceEngineError::StreamingResidentPromotionRequired { .. }
                 | InferenceEngineError::MlxMemoryLimitRejected { .. }
                 | InferenceEngineError::EngineBusy => (
                     PerformanceAttributionOutcome::Rejected,
@@ -130,8 +131,12 @@ impl Qwen3_5EngineState {
                 self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
             },
         );
-        let generation_finalization =
-            self.collect_generation_finalization(&mut performance_attribution);
+        let generation_finalization = self.collect_generation_finalization(
+            &mut performance_attribution,
+            mlx_memory_snapshot
+                .as_ref()
+                .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
+        );
         self.record_generation_performance_attribution(
             performance_attribution,
             outcome,
@@ -232,6 +237,7 @@ impl Qwen3_5EngineState {
     fn collect_generation_finalization(
         &self,
         performance_attribution: &mut PerformanceAttribution,
+        release_peak_memory_bytes: Option<u64>,
     ) -> GenerationFinalization {
         let Some(model) = self.model.as_ref() else {
             return GenerationFinalization::default();
@@ -249,8 +255,19 @@ impl Qwen3_5EngineState {
                 (
                     Ok(active_memory_bytes),
                     Ok(allocator_cache_memory_bytes),
-                    Ok(peak_memory_bytes),
+                    Ok(sampled_peak_memory_bytes),
                 ) => {
+                    // The MLX peak counter resets at allocator-cache cleanups,
+                    // so this post-cleanup sample can read a lower window peak
+                    // than the synchronized release sample taken moments
+                    // earlier. The finalized claim is a request maximum, so it
+                    // must retain the higher of the two windows.
+                    let peak_memory_bytes = release_peak_memory_bytes.map_or(
+                        sampled_peak_memory_bytes,
+                        |release_peak_memory_bytes| {
+                            release_peak_memory_bytes.max(sampled_peak_memory_bytes)
+                        },
+                    );
                     // The finalized claim derives from the breakdown reconciling
                     // this exact snapshot, so the pair cannot straddle a
                     // promotion or demote (issue #337).
