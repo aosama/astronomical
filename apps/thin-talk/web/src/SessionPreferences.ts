@@ -15,8 +15,11 @@ export class SessionPreferences {
   public composerFontSize: number;
 
   public constructor(init: { thinkingEffort?: ThinkingEffort; composerFontSize?: number }) {
-    this.thinkingEffort = init.thinkingEffort ?? ThinkingEffort.DEFAULT;
-    this.composerFontSize = init.composerFontSize ?? DEFAULT_COMPOSER_FONT_SIZE;
+    const configuredEffort: ThinkingEffort | undefined = init.thinkingEffort;
+    this.thinkingEffort = configuredEffort != null ? configuredEffort : ThinkingEffort.DEFAULT;
+    const configuredFontSize: number | undefined = init.composerFontSize;
+    this.composerFontSize =
+      configuredFontSize != null ? configuredFontSize : DEFAULT_COMPOSER_FONT_SIZE;
   }
 
   public static default(): SessionPreferences {

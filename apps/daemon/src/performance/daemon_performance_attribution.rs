@@ -388,7 +388,9 @@ impl DaemonPerformanceAttributionLog {
         let elapsed_nanoseconds =
             u64::try_from(started_at.elapsed().as_nanos()).map_err(io::Error::other)?;
         let ended_at_unix_millis = (enabled_sink.unix_epoch_millis)()?;
-        tokio::task::spawn_blocking(move || {
+        // Two failure layers: the join fails only when the recording task
+        // panicked or was aborted; the inner Result is the write outcome.
+        let record_join = tokio::task::spawn_blocking(move || {
             Self::record_completed_measurement(
                 &enabled_sink,
                 operation,
@@ -398,8 +400,9 @@ impl DaemonPerformanceAttributionLog {
                 measurement,
             )
         })
-        .await
-        .map_err(io::Error::other)??;
+        .await;
+        let record_result = record_join.map_err(io::Error::other)?;
+        record_result?;
         Ok(())
     }
 

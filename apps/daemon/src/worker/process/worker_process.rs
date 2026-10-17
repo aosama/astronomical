@@ -380,14 +380,22 @@ impl WorkerProcess {
         let Some(command_writer) = self.command_writer.as_mut() else {
             return Err(WorkerControlError::CommandWriterClosed);
         };
-        timeout(
+        // Two failure layers: the outer wait fails when the write deadline
+        // elapses; the inner Result is the write outcome itself.
+        let command_write_wait_outcome = timeout(
             self.command_write_timeout,
             command_writer.send_command(worker_command),
         )
-        .await
-        .map_err(|_| WorkerControlError::CommandWriteTimeout {
-            command_timeout_millis: self.command_write_timeout.as_millis(),
-        })??;
+        .await;
+        let command_write_outcome = match command_write_wait_outcome {
+            Ok(write_outcome) => write_outcome,
+            Err(_deadline_elapsed) => {
+                return Err(WorkerControlError::CommandWriteTimeout {
+                    command_timeout_millis: self.command_write_timeout.as_millis(),
+                });
+            }
+        };
+        command_write_outcome?;
         Ok(())
     }
 

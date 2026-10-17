@@ -57,7 +57,10 @@ public enum ApplicationUpdateControllerInstaller {
   public static func makeController(
     applicationChannel: ApplicationChannel
   ) -> any ApplicationUpdateChecking {
-    factory?(applicationChannel) ?? AppStoreUpdateController()
+    if let installedFactory = factory {
+      return installedFactory(applicationChannel)
+    }
+    return AppStoreUpdateController()
   }
 }
 

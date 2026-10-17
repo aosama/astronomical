@@ -29,11 +29,13 @@ export class SessionStore {
   }
 
   public activeSessionID(): string | null {
-    return this.activeDocument?.id ?? null;
+    const activeDocument = this.activeDocument;
+    return activeDocument != null ? activeDocument.id : null;
   }
 
   public activeTitle(): string {
-    return this.activeDocument?.title ?? "";
+    const activeDocument = this.activeDocument;
+    return activeDocument != null ? activeDocument.title : "";
   }
 
   public async refreshList(): Promise<void> {

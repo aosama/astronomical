@@ -116,7 +116,8 @@ const contentTypes = {
 };
 
 const server = http.createServer((request, response) => {
-  const url = new URL(request.url ?? "/", daemonBaseURL);
+  const requestTarget = request.url != null ? request.url : "/";
+  const url = new URL(requestTarget, daemonBaseURL);
   const requestStartedAtMs = performance.now();
   response.on("finish", () => {
     const durationMs = (performance.now() - requestStartedAtMs).toFixed(1);
@@ -155,7 +156,9 @@ const server = http.createServer((request, response) => {
     // Browsing via http://localhost:6791 and http://127.0.0.1:6791 are
     // different origins, so the config is derived per request from the Host
     // header rather than fixed at startup.
-    const requestHost = request.headers.host ?? `127.0.0.1:${actualPort}`;
+    const requestHost = request.headers.host != null
+      ? request.headers.host
+      : `127.0.0.1:${actualPort}`;
     const requestConfig = { ...previewConfig, daemonBaseURL: `http://${requestHost}` };
     response.writeHead(200, { "content-type": contentTypes[".js"], "cache-control": "no-store" });
     response.end(`window.__thintalkConfig = ${JSON.stringify(requestConfig)};`);
@@ -183,7 +186,10 @@ const server = http.createServer((request, response) => {
     response.end("no such asset on the preview server");
     return;
   }
-  response.writeHead(200, { "content-type": contentTypes[path.extname(assetPath)] ?? "application/octet-stream", "cache-control": "no-store" });
+  const assetContentType = contentTypes[path.extname(assetPath)] != null
+    ? contentTypes[path.extname(assetPath)]
+    : "application/octet-stream";
+  response.writeHead(200, { "content-type": assetContentType, "cache-control": "no-store" });
   fs.createReadStream(assetPath).pipe(response);
 });
 

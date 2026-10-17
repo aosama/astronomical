@@ -53,7 +53,8 @@ export class DaemonClient {
     if (!matchesChannel || !matchesStateDirectory) {
       throw new Error("This app must connect to its own runtime channel and state directory.");
     }
-    return status.status ?? "unknown";
+    const reportedStatus = status.status;
+    return reportedStatus != null ? reportedStatus : "unknown";
   }
 
   /** Returns the chat-capable models discovered on this channel. */
@@ -110,7 +111,8 @@ export class DaemonClient {
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
       const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
-      throw new ChatFailure(ChatFailureClassifier.classify(response.status, reason ?? ""), reason);
+      const searchReason: string = reason != null ? reason : "";
+      throw new ChatFailure(ChatFailureClassifier.classify(response.status, searchReason), reason);
     }
     await this.consumeStream(response, init);
   }
@@ -133,7 +135,8 @@ export class DaemonClient {
         }
         buffered += decoder.decode(read.value, { stream: true });
         const lines = buffered.split("\n");
-        buffered = lines.pop() ?? "";
+        const remainder: string | undefined = lines.pop();
+        buffered = remainder != null ? remainder : "";
         for (const line of lines) {
           this.consumeLine(line, init);
         }
@@ -175,7 +178,8 @@ export class DaemonClient {
     if (typeof errorField === "object" && errorField !== null) {
       const message = (errorField as Record<string, unknown>)["message"];
       const reason = typeof message === "string" ? message : null;
-      throw new ChatFailure(ChatFailureClassifier.classifyReason(reason ?? ""), reason);
+      const classifiedReason: string = reason != null ? reason : "";
+      throw new ChatFailure(ChatFailureClassifier.classifyReason(classifiedReason), reason);
     }
     const choices = Array.isArray(record["choices"]) ? record["choices"] : [];
     for (const rawChoice of choices) {
@@ -213,7 +217,8 @@ export class DaemonClient {
     }
     if (!response.ok) {
       const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
-      throw new ChatFailure(ChatFailureClassifier.classify(response.status, reason ?? ""), reason);
+      const searchReason: string = reason != null ? reason : "";
+      throw new ChatFailure(ChatFailureClassifier.classify(response.status, searchReason), reason);
     }
     return bodyText;
   }

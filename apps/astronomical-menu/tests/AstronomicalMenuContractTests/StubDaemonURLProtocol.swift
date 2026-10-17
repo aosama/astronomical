@@ -19,11 +19,23 @@ final class StubDaemonURLProtocol: URLProtocol, @unchecked Sendable {
 
   override func startLoading() {
     Self.receivedRequestTimeoutInterval = request.timeoutInterval
-    Self.receivedRequestPaths.append(request.url?.path ?? "")
-    let selectedResponseConfiguration =
-      request.url?.path == "/v1/status"
-      ? Self.statusResponseConfiguration ?? Self.matchingDevelopmentStatusResponse
-      : Self.responseConfiguration
+    let requestedPath: String
+    if let requestPath = request.url?.path {
+      requestedPath = requestPath
+    } else {
+      requestedPath = ""
+    }
+    Self.receivedRequestPaths.append(requestedPath)
+    let selectedResponseConfiguration: ResponseConfiguration?
+    if requestedPath == "/v1/status" {
+      if let statusConfiguration = Self.statusResponseConfiguration {
+        selectedResponseConfiguration = statusConfiguration
+      } else {
+        selectedResponseConfiguration = Self.matchingDevelopmentStatusResponse
+      }
+    } else {
+      selectedResponseConfiguration = Self.responseConfiguration
+    }
     guard let responseConfiguration = selectedResponseConfiguration,
       let requestURL = request.url,
       let urlProtocolClient = client

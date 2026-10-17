@@ -79,8 +79,10 @@ export class ComposerView {
         return;
       }
       this.closeEffortMenu();
+      const storedEffortValue: string | undefined = (choice as HTMLElement).dataset.effortValue;
+      const effortDetail: string = storedEffortValue != null ? storedEffortValue : "";
       this.onAction(
-        new ComposerAction({ kind: "setEffort", detail: (choice as HTMLElement).dataset.effortValue ?? "" }),
+        new ComposerAction({ kind: "setEffort", detail: effortDetail }),
       );
     });
     document.addEventListener("keydown", (event) => {

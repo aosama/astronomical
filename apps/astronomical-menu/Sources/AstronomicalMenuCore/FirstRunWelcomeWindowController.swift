@@ -23,13 +23,18 @@ final class FirstRunWelcomeWindowController: NSObject, NSWindowDelegate {
     handleClose: @escaping () -> Void
   ) {
     self.handleClose = handleClose
-    let window = welcomeWindow ?? makeWelcomeWindow(
-      telemetryStore: telemetryStore,
-      applicationIdentity: applicationIdentity,
-      openObservatory: openObservatory,
-      openLibrary: openLibrary,
-      restartServer: restartServer
-    )
+    let window: NSWindow
+    if let welcomeWindow {
+      window = welcomeWindow
+    } else {
+      window = makeWelcomeWindow(
+        telemetryStore: telemetryStore,
+        applicationIdentity: applicationIdentity,
+        openObservatory: openObservatory,
+        openLibrary: openLibrary,
+        restartServer: restartServer
+      )
+    }
     welcomeWindow = window
     NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)

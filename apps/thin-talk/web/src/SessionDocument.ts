@@ -29,7 +29,9 @@ export class SessionDocument {
     messages: ChatMessage[];
     schemaVersion?: number;
   }) {
-    this.schemaVersion = init.schemaVersion ?? SESSION_SCHEMA_VERSION;
+    const configuredSchemaVersion: number | undefined = init.schemaVersion;
+    this.schemaVersion =
+      configuredSchemaVersion != null ? configuredSchemaVersion : SESSION_SCHEMA_VERSION;
     this.id = init.id;
     this.title = init.title;
     this.createdAt = init.createdAt;

@@ -58,9 +58,15 @@ struct LocalDaemonClient: DaemonClient {
         expected: applicationIdentity.channel.rawValue, connected: connectedChannel)
     }
     guard statusDocument.application?.stateDirectory == applicationIdentity.expectedServerStateDirectory else {
+      let connectedStateDirectory: String
+      if let stateDirectory = statusDocument.application?.stateDirectory {
+        connectedStateDirectory = stateDirectory
+      } else {
+        connectedStateDirectory = "unidentified"
+      }
       throw DaemonClientError.wrongStateDirectory(
         expected: applicationIdentity.expectedServerStateDirectory,
-        connected: statusDocument.application?.stateDirectory ?? "unidentified")
+        connected: connectedStateDirectory)
     }
     return statusDocument
   }
@@ -124,8 +130,11 @@ struct LocalDaemonClient: DaemonClient {
     }
     guard acceptedStatusCodes.contains(httpResponse.statusCode) else {
       let serverMessage = try? JSONDecoder().decode(ConfigurationReloadResult.self, from: responseBody)
+      if let serverMessage {
+        throw DaemonClientError.serverRejected(serverMessage.message)
+      }
       throw DaemonClientError.serverRejected(
-        serverMessage?.message ?? "Server returned HTTP \(httpResponse.statusCode)"
+        "Server returned HTTP \(httpResponse.statusCode)"
       )
     }
     return responseBody
@@ -176,7 +185,13 @@ struct ConfigurationReloadResult: Decodable, Equatable {
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     message = try container.decode(String.self, forKey: .message)
-    workerRestartCompleted = try container.decodeIfPresent(Bool.self, forKey: .workerRestartCompleted) ?? false
+    let decodedWorkerRestartCompleted = try container.decodeIfPresent(
+      Bool.self, forKey: .workerRestartCompleted)
+    if let decodedWorkerRestartCompleted {
+      workerRestartCompleted = decodedWorkerRestartCompleted
+    } else {
+      workerRestartCompleted = false
+    }
     workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
       WorkerRuntimeFeatureConfiguration.self, forKey: .workerRuntimeFeatureConfiguration)
     restApiRestartRequired = try container.decodeIfPresent(Bool.self, forKey: .restApiRestartRequired)

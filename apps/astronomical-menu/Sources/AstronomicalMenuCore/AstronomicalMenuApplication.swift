@@ -55,14 +55,22 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         restartServer: { [weak self] in self?.restartServer() },
         checkForUpdates: { [weak self] in self?.checkForUpdates() },
         automaticallyChecksForUpdates: Binding(
-          get: { [weak self] in self?.applicationUpdateController.automaticallyChecksForUpdates ?? true },
+          get: {
+            [weak self] in
+            guard let updateController = self?.applicationUpdateController else { return true }
+            return updateController.automaticallyChecksForUpdates
+          },
           set: { [weak self] shouldCheckAutomatically in
             guard let updateController = self?.applicationUpdateController else { return }
             setAutomaticApplicationUpdateChecks(shouldCheckAutomatically, using: updateController)
           }
         ),
         selectedUpdateChannel: Binding(
-          get: { [weak self] in self?.applicationUpdateController.selectedChannel ?? .stable },
+          get: {
+            [weak self] in
+            guard let updateController = self?.applicationUpdateController else { return .stable }
+            return updateController.selectedChannel
+          },
           set: { [weak self] updateChannel in
             self?.applicationUpdateController.selectUpdateChannel(updateChannel)
           }
@@ -84,7 +92,12 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         applicationIdentity.channel == .development
         ? " DEV\(menuBarTitle.isEmpty ? "" : " · \(menuBarTitle)")" : menuBarTitle
       latestMenuBarTitle = channelAwareMenuBarTitle
-      let currentTitle = statusItem?.button?.title ?? ""
+      let currentTitle: String
+      if let statusButton = statusItem?.button {
+        currentTitle = statusButton.title
+      } else {
+        currentTitle = ""
+      }
       statusItem?.button?.title = menuBarTitleToDisplay(
         currentTitle: currentTitle,
         latestTitle: channelAwareMenuBarTitle,
@@ -146,9 +159,15 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
 
   public func popoverDidClose(_ notification: Notification) {
     telemetryStore.setPopoverVisible(false)
+    let currentButtonWidth: CGFloat
+    if let statusButton = statusItem?.button {
+      currentButtonWidth = statusButton.bounds.width
+    } else {
+      currentButtonWidth = NSStatusItem.squareLength
+    }
     statusItem?.length = menuBarStatusItemLength(
       popoverIsShown: false,
-      currentButtonWidth: statusItem?.button?.bounds.width ?? NSStatusItem.squareLength
+      currentButtonWidth: currentButtonWidth
     )
     statusItem?.button?.title = latestMenuBarTitle
   }
@@ -308,5 +327,8 @@ func popoverAnchorRect(
   statusButtonBounds: CGRect,
   statusItemImageRect: CGRect?
 ) -> CGRect {
-  statusItemImageRect ?? statusButtonBounds
+  if let statusItemImageRect {
+    return statusItemImageRect
+  }
+  return statusButtonBounds
 }

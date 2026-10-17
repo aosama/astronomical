@@ -107,9 +107,13 @@ export class ConversationLog {
   }
 
   private currentAssistantTurn(): ChatMessage | null {
-    return this.assistantMessageID
-      ? this.messages.find((message) => message.id === this.assistantMessageID) ?? null
-      : null;
+    if (!this.assistantMessageID) {
+      return null;
+    }
+    const assistantTurn: ChatMessage | undefined = this.messages.find(
+      (message) => message.id === this.assistantMessageID,
+    );
+    return assistantTurn != null ? assistantTurn : null;
   }
 
   private currentAssistantTurnByID(id: string): ChatMessage {

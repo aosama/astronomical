@@ -10,7 +10,8 @@ export class ChatFailure extends Error {
   public readonly reason: string | null;
 
   public constructor(kind: ChatFailureKind, reason: string | null = null) {
-    super(reason ?? kind);
+    const failureMessage: string = reason != null ? reason : kind;
+    super(failureMessage);
     this.name = "ChatFailure";
     this.kind = kind;
     this.reason = reason;
