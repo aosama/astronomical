@@ -131,3 +131,10 @@ pub use e2e_test_model_names::{
 };
 
 mod e2e_test_model_names;
+
+pub use qwen_image_21_oracles::{
+    QWEN_IMAGE_21_CONDITIONING_ORACLE_JSON, QWEN_IMAGE_21_ROPE_ORACLE_JSON,
+    QWEN_IMAGE_21_TIME_ORACLE_JSON,
+};
+
+mod qwen_image_21_oracles;
