@@ -1,45 +1,49 @@
-use astronomical_test_harness::offline_denied_test;
-
 use super::*;
 
-offline_denied_test!(
-    should_serialize_rejected_generation_outcome_and_failure_description,
-    {
-        let performance_attribution_json = serialize_generation_report(
-            PerformanceAttribution::enabled(),
-            PerformanceAttributionOutcome::Rejected,
-        );
+#[test]
+fn should_serialize_rejected_generation_outcome_and_failure_description() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(performance_attribution_json["report_kind"], "generation");
-        assert_eq!(performance_attribution_json["outcome"], "rejected");
-        assert_eq!(performance_attribution_json["request_id"], 42);
-        assert_eq!(
-            performance_attribution_json["failure_description"],
-            "simulated generation failure"
-        );
-    }
-);
+    let performance_attribution_json = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Rejected,
+    );
 
-offline_denied_test!(
-    should_serialize_unobserved_prefill_state_in_model_loading_report,
-    {
-        let performance_attribution_json = serialize_model_loading_report(
-            PerformanceAttribution::enabled(),
-            PerformanceAttributionOutcome::Success,
-        );
+    assert_eq!(performance_attribution_json["report_kind"], "generation");
+    assert_eq!(performance_attribution_json["outcome"], "rejected");
+    assert_eq!(performance_attribution_json["request_id"], 42);
+    assert_eq!(
+        performance_attribution_json["failure_description"],
+        "simulated generation failure"
+    );
+}
 
-        assert_eq!(
-            performance_attribution_json["prefill_transient_observation_completed"],
-            false
-        );
-        assert_eq!(
-            performance_attribution_json["prefill_observed_transient_high_water_bytes"],
-            0
-        );
-    }
-);
+#[test]
+fn should_serialize_unobserved_prefill_state_in_model_loading_report() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(should_serialize_prefill_evidence_in_generation_report, {
+    let performance_attribution_json = serialize_model_loading_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Success,
+    );
+
+    assert_eq!(
+        performance_attribution_json["prefill_transient_observation_completed"],
+        false
+    );
+    assert_eq!(
+        performance_attribution_json["prefill_observed_transient_high_water_bytes"],
+        0
+    );
+}
+
+#[test]
+fn should_serialize_prefill_evidence_in_generation_report() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -53,9 +57,13 @@ offline_denied_test!(should_serialize_prefill_evidence_in_generation_report, {
         performance_attribution_json["prefill_observed_transient_high_water_bytes"],
         ATTRIBUTED_PREFILL_TRANSIENT_HIGH_WATER_BYTES
     );
-});
+}
 
-offline_denied_test!(should_serialize_process_io_as_an_all_or_unavailable_pair, {
+#[test]
+fn should_serialize_process_io_as_an_all_or_unavailable_pair() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -78,88 +86,91 @@ offline_denied_test!(should_serialize_process_io_as_an_all_or_unavailable_pair, 
         unavailability_reason.is_none(),
         "available byte deltas and an unavailability reason are mutually exclusive"
     );
-});
+}
 
-offline_denied_test!(
-    should_finish_cancelled_generation_process_io_from_the_final_sample,
-    {
-        let initial_process_io =
+#[test]
+fn should_finish_cancelled_generation_process_io_from_the_final_sample() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let initial_process_io =
             crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(10_000, 4_000);
-        let final_process_io = crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(90_000, 14_000);
+    let final_process_io = crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(90_000, 14_000);
 
-        let cancelled_generation_delta =
-            crate::process_io_delta_between_samples(&initial_process_io, Ok(final_process_io))
-                .expect("a cancelled generation still receives an end-boundary sample");
+    let cancelled_generation_delta =
+        crate::process_io_delta_between_samples(&initial_process_io, Ok(final_process_io))
+            .expect("a cancelled generation still receives an end-boundary sample");
 
+    assert_eq!(
+        cancelled_generation_delta.physical_disk_read_bytes(),
+        80_000
+    );
+    assert_eq!(
+        cancelled_generation_delta.physical_disk_written_bytes(),
+        10_000
+    );
+}
+
+#[test]
+fn should_keep_the_cancelled_outcome_independent_from_process_io_availability() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // A cancelled request must reach the same serialization path as a completed
+    // one, so its I/O fields obey the identical all-or-unavailable contract
+    // instead of being dropped by an early return.
+    let cancelled_report = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Cancelled,
+    );
+    let completed_report = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Success,
+    );
+
+    assert_eq!(cancelled_report["outcome"], "cancelled");
+    for field_name in [
+        "process_physical_disk_read_bytes",
+        "process_physical_disk_written_bytes",
+        "process_io_unavailability_reason",
+    ] {
         assert_eq!(
-            cancelled_generation_delta.physical_disk_read_bytes(),
-            80_000
-        );
-        assert_eq!(
-            cancelled_generation_delta.physical_disk_written_bytes(),
-            10_000
+            cancelled_report[field_name].is_null(),
+            completed_report[field_name].is_null(),
+            "the cancelled report must present {field_name} exactly as a completed report does"
         );
     }
-);
+}
 
-offline_denied_test!(
-    should_keep_the_cancelled_outcome_independent_from_process_io_availability,
-    {
-        // A cancelled request must reach the same serialization path as a completed
-        // one, so its I/O fields obey the identical all-or-unavailable contract
-        // instead of being dropped by an early return.
-        let cancelled_report = serialize_generation_report(
-            PerformanceAttribution::enabled(),
-            PerformanceAttributionOutcome::Cancelled,
-        );
-        let completed_report = serialize_generation_report(
-            PerformanceAttribution::enabled(),
-            PerformanceAttributionOutcome::Success,
-        );
+#[test]
+fn should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(cancelled_report["outcome"], "cancelled");
-        for field_name in [
-            "process_physical_disk_read_bytes",
-            "process_physical_disk_written_bytes",
-            "process_io_unavailability_reason",
-        ] {
-            assert_eq!(
-                cancelled_report[field_name].is_null(),
-                completed_report[field_name].is_null(),
-                "the cancelled report must present {field_name} exactly as a completed report does"
-            );
-        }
-    }
-);
+    let mut performance_attribution = PerformanceAttribution::enabled();
+    performance_attribution.record_completed_operation(
+        PerformanceOperation::PromptPrefillAdvanceSpan,
+        std::time::Duration::ZERO,
+        std::time::Duration::from_secs(10),
+    );
+    performance_attribution.record_completed_operation(
+        PerformanceOperation::DecodeAdvanceSpan,
+        std::time::Duration::ZERO,
+        std::time::Duration::from_secs(5),
+    );
+    performance_attribution.record_completed_operation(
+        PerformanceOperation::PromptTokenization,
+        std::time::Duration::ZERO,
+        std::time::Duration::from_nanos(7),
+    );
 
-offline_denied_test!(
-    should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time,
-    {
-        let mut performance_attribution = PerformanceAttribution::enabled();
-        performance_attribution.record_completed_operation(
-            PerformanceOperation::PromptPrefillAdvanceSpan,
-            std::time::Duration::ZERO,
-            std::time::Duration::from_secs(10),
-        );
-        performance_attribution.record_completed_operation(
-            PerformanceOperation::DecodeAdvanceSpan,
-            std::time::Duration::ZERO,
-            std::time::Duration::from_secs(5),
-        );
-        performance_attribution.record_completed_operation(
-            PerformanceOperation::PromptTokenization,
-            std::time::Duration::ZERO,
-            std::time::Duration::from_nanos(7),
-        );
+    let performance_attribution_json = serialize_generation_report(
+        performance_attribution,
+        PerformanceAttributionOutcome::Success,
+    );
 
-        let performance_attribution_json = serialize_generation_report(
-            performance_attribution,
-            PerformanceAttributionOutcome::Success,
-        );
-
-        assert_eq!(
-            performance_attribution_json["attributed_elapsed_nanoseconds"],
-            7
-        );
-    }
-);
+    assert_eq!(
+        performance_attribution_json["attributed_elapsed_nanoseconds"],
+        7
+    );
+}

@@ -1,36 +1,43 @@
-use astronomical_test_harness::offline_denied_test;
-
 use crate::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
     DecoderCacheTensorLayout, rotating_committed_token_count,
     rotating_prefill_transient_token_count,
 };
 
-offline_denied_test!(
-    should_charge_window_plus_chunk_minus_one_for_rotating_prefill,
-    {
-        for (window_size, chunk_tokens, expected_peak_tokens) in [
-            (8_u32, 1_u32, 8_u32),
-            (8, 3, 10),
-            (64, 16, 79),
-            (512, 128, 639),
-            (4, 0, 4),
-        ] {
-            assert_eq!(
-                rotating_prefill_transient_token_count(window_size, chunk_tokens)
-                    .expect("positive geometry should be valid"),
-                expected_peak_tokens
-            );
-        }
-    }
-);
+#[test]
+fn should_charge_window_plus_chunk_minus_one_for_rotating_prefill() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(should_bound_committed_tokens_to_the_window, {
+    for (window_size, chunk_tokens, expected_peak_tokens) in [
+        (8_u32, 1_u32, 8_u32),
+        (8, 3, 10),
+        (64, 16, 79),
+        (512, 128, 639),
+        (4, 0, 4),
+    ] {
+        assert_eq!(
+            rotating_prefill_transient_token_count(window_size, chunk_tokens)
+                .expect("positive geometry should be valid"),
+            expected_peak_tokens
+        );
+    }
+}
+
+#[test]
+fn should_bound_committed_tokens_to_the_window() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     assert_eq!(rotating_committed_token_count(8, 3), 3);
     assert_eq!(rotating_committed_token_count(8, 40), 8);
-});
+}
 
-offline_denied_test!(should_validate_and_persist_rotating_boundary_geometry, {
+#[test]
+fn should_validate_and_persist_rotating_boundary_geometry() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let zero_window = DecoderCacheLayout::new(vec![rotating_layout(0)]);
     assert_eq!(
         zero_window,
@@ -55,15 +62,16 @@ offline_denied_test!(should_validate_and_persist_rotating_boundary_geometry, {
             "layer_0_attention.ring_write_index",
         ]
     );
-});
+}
 
-offline_denied_test!(
-    should_reject_zero_window_and_overflowing_transient_geometry,
-    {
-        assert!(rotating_prefill_transient_token_count(0, 4).is_err());
-        assert!(rotating_prefill_transient_token_count(u32::MAX, 2).is_err());
-    }
-);
+#[test]
+fn should_reject_zero_window_and_overflowing_transient_geometry() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    assert!(rotating_prefill_transient_token_count(0, 4).is_err());
+    assert!(rotating_prefill_transient_token_count(u32::MAX, 2).is_err());
+}
 
 fn rotating_layout(window_size: usize) -> DecoderCacheLayerLayout {
     DecoderCacheLayerLayout::rotating_window_attention(

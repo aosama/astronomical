@@ -1,5 +1,3 @@
-use astronomical_test_harness::offline_denied_test;
-
 use crate::{
     CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
     MemoryBoundary, MlxRamBudgetModelGeometry,
@@ -15,63 +13,65 @@ fn sparse_geometry() -> MlxRamBudgetModelGeometry {
     }
 }
 
-offline_denied_test!(
-    should_return_no_paging_ceiling_when_the_artifact_has_no_headroom_gap,
-    {
-        let geometry_without_experts = MlxRamBudgetModelGeometry {
-            complete_expert_payload_bytes: 0,
-            ..sparse_geometry()
-        };
-        assert_eq!(
-            CompleteResidencyHeadroomBoundary::from_model_geometry(geometry_without_experts, 40)
-                .paging_ceiling_bytes(),
-            None
-        );
-        assert_eq!(
-            CompleteResidencyHeadroomBoundary::from_model_geometry(sparse_geometry(), 0)
-                .paging_ceiling_bytes(),
-            None
-        );
+#[test]
+fn should_return_no_paging_ceiling_when_the_artifact_has_no_headroom_gap() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let geometry_without_experts = MlxRamBudgetModelGeometry {
+        complete_expert_payload_bytes: 0,
+        ..sparse_geometry()
+    };
+    assert_eq!(
+        CompleteResidencyHeadroomBoundary::from_model_geometry(geometry_without_experts, 40)
+            .paging_ceiling_bytes(),
+        None
+    );
+    assert_eq!(
+        CompleteResidencyHeadroomBoundary::from_model_geometry(sparse_geometry(), 0)
+            .paging_ceiling_bytes(),
+        None
+    );
+}
+
+#[test]
+fn should_place_the_paging_ceiling_where_static_weights_fit_and_headroom_does_not() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let required_headroom_bytes = 40;
+    let boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
+        sparse_geometry(),
+        required_headroom_bytes,
+    );
+    let paging_ceiling_bytes = boundary
+        .paging_ceiling_bytes()
+        .expect("a sparse artifact with headroom must expose a paging ceiling");
+    assert_eq!(paging_ceiling_bytes, 1_039);
+
+    let rejected = CompleteResidencyRequirements {
+        current_active_memory_bytes: 100,
+        retained_paged_expert_payload_bytes: 0,
+        complete_expert_payload_bytes: 1_000,
+        required_headroom_bytes,
+        active_memory_ceiling_bytes: paging_ceiling_bytes,
     }
-);
-
-offline_denied_test!(
-    should_place_the_paging_ceiling_where_static_weights_fit_and_headroom_does_not,
-    {
-        let required_headroom_bytes = 40;
-        let boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
-            sparse_geometry(),
-            required_headroom_bytes,
-        );
-        let paging_ceiling_bytes = boundary
-            .paging_ceiling_bytes()
-            .expect("a sparse artifact with headroom must expose a paging ceiling");
-        assert_eq!(paging_ceiling_bytes, 1_039);
-
-        let rejected = CompleteResidencyRequirements {
-            current_active_memory_bytes: 100,
-            retained_paged_expert_payload_bytes: 0,
-            complete_expert_payload_bytes: 1_000,
-            required_headroom_bytes,
-            active_memory_ceiling_bytes: paging_ceiling_bytes,
+    .decide();
+    assert!(matches!(
+        rejected,
+        CompleteResidencyDecision::DoesNotFit {
+            boundary: MemoryBoundary::CompleteResidency,
+            ..
         }
-        .decide();
-        assert!(matches!(
-            rejected,
-            CompleteResidencyDecision::DoesNotFit {
-                boundary: MemoryBoundary::CompleteResidency,
-                ..
-            }
-        ));
+    ));
 
-        let admitted = CompleteResidencyRequirements {
-            current_active_memory_bytes: 100,
-            retained_paged_expert_payload_bytes: 0,
-            complete_expert_payload_bytes: 1_000,
-            required_headroom_bytes,
-            active_memory_ceiling_bytes: 100 + 1_000 + required_headroom_bytes,
-        }
-        .decide();
-        assert!(matches!(admitted, CompleteResidencyDecision::Admit { .. }));
+    let admitted = CompleteResidencyRequirements {
+        current_active_memory_bytes: 100,
+        retained_paged_expert_payload_bytes: 0,
+        complete_expert_payload_bytes: 1_000,
+        required_headroom_bytes,
+        active_memory_ceiling_bytes: 100 + 1_000 + required_headroom_bytes,
     }
-);
+    .decide();
+    assert!(matches!(admitted, CompleteResidencyDecision::Admit { .. }));
+}

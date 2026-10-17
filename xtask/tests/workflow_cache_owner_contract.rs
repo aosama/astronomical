@@ -6,7 +6,6 @@
 
 mod contract_support;
 
-use astronomical_test_harness::offline_test;
 use contract_support::{
     composite_action_contract, find_step_by_id, find_step_by_name, is_pinned_action_reference,
     path_lines, required_field, required_job, required_text, required_u64, run_text_of, steps_of,
@@ -130,7 +129,8 @@ fn assert_composite_cache_owner(
     );
 }
 
-offline_test!(cache_owners_are_disjoint_composite_users, {
+#[test]
+fn cache_owners_are_disjoint_composite_users() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
@@ -174,9 +174,10 @@ offline_test!(cache_owners_are_disjoint_composite_users, {
         deduplicated_paths.len(),
         "cache owners overlap paths"
     );
-});
+}
 
-offline_test!(native_and_sccache_keys_keep_their_identity_couplings, {
+#[test]
+fn native_and_sccache_keys_keep_their_identity_couplings() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
 
@@ -252,9 +253,10 @@ offline_test!(native_and_sccache_keys_keep_their_identity_couplings, {
         swift_key.contains("SWIFT_TOOLCHAIN_IDENTITY"),
         "Swift cache omits toolchain compatibility"
     );
-});
+}
 
-offline_test!(cache_prune_runs_last_with_bounded_authority, {
+#[test]
+fn cache_prune_runs_last_with_bounded_authority() {
     let workflow = workflow_contract();
     let verification_job = required_job(&workflow, "rust-core");
     let verification_steps = steps_of(verification_job, "rust-core");
@@ -311,9 +313,10 @@ offline_test!(cache_prune_runs_last_with_bounded_authority, {
         "write",
         "cache prune needs actions write permission"
     );
-});
+}
 
-offline_test!(shared_cache_action_is_pinned_and_reported, {
+#[test]
+fn shared_cache_action_is_pinned_and_reported() {
     let composite = composite_action_contract();
     let composite_runs = required_field(&composite, "runs", "the shared cache action");
     assert_eq!(
@@ -379,4 +382,4 @@ offline_test!(shared_cache_action_is_pinned_and_reported, {
         .contains("steps.restore.outputs.cache-hit"),
         "shared cache action must surface cache hits to callers"
     );
-});
+}

@@ -1,5 +1,3 @@
-use astronomical_test_harness::offline_tokio_real_clock_test;
-
 use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
@@ -36,66 +34,65 @@ fn cleanup_transport_test_directory(test_directory: &Path) {
     let _ = std::fs::remove_dir_all(test_directory);
 }
 
-offline_tokio_real_clock_test!(
-    should_round_trip_handshake_request_and_accepted_response_over_unix_socket,
-    {
-        let test_directory = fresh_transport_test_directory("handshake-round-trip");
-        let socket_path = test_directory.join(SOCKET_FILE_NAME);
+#[tokio::test(flavor = "current_thread")]
+async fn should_round_trip_handshake_request_and_accepted_response_over_unix_socket() {
+    let test_directory = fresh_transport_test_directory("handshake-round-trip");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
 
-        let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone())
-            .await
-            .expect("the daemon listener should bind a fresh socket path");
-        let listener_task = tokio::spawn(async move {
-            daemon_listener
-                .serve_next_request(|daemon_request| async move {
-                    assert_eq!(daemon_request, DaemonRequest::Handshake);
-                    DaemonResponse::HandshakeAccepted {
-                        protocol_version: DAEMON_PROTOCOL_VERSION,
-                        application_name: DAEMON_APPLICATION_NAME.to_owned(),
-                    }
-                })
-                .await
-                .expect("the listener should serve the handshake connection")
-        });
-
-        let mut daemon_client = timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            DaemonIpcClient::connect(socket_path.clone()),
-        )
+    let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone())
         .await
-        .expect("the client connect should finish inside the test timeout")
-        .expect("the client should connect to the bound daemon socket");
-        timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            daemon_client.send_request(&DaemonRequest::Handshake),
-        )
+        .expect("the daemon listener should bind a fresh socket path");
+    let listener_task = tokio::spawn(async move {
+        daemon_listener
+            .serve_next_request(|daemon_request| async move {
+                assert_eq!(daemon_request, DaemonRequest::Handshake);
+                DaemonResponse::HandshakeAccepted {
+                    protocol_version: DAEMON_PROTOCOL_VERSION,
+                    application_name: DAEMON_APPLICATION_NAME.to_owned(),
+                }
+            })
+            .await
+            .expect("the listener should serve the handshake connection")
+    });
+
+    let mut daemon_client = timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        DaemonIpcClient::connect(socket_path.clone()),
+    )
+    .await
+    .expect("the client connect should finish inside the test timeout")
+    .expect("the client should connect to the bound daemon socket");
+    timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        daemon_client.send_request(&DaemonRequest::Handshake),
+    )
+    .await
+    .expect("the request send should finish inside the test timeout")
+    .expect("the client should transmit the handshake request");
+
+    let daemon_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
         .await
-        .expect("the request send should finish inside the test timeout")
-        .expect("the client should transmit the handshake request");
+        .expect("the response read should finish inside the test timeout")
+        .expect("the response read should not fail at the transport layer")
+        .expect("the daemon should answer the handshake before closing");
 
-        let daemon_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
-            .await
-            .expect("the response read should finish inside the test timeout")
-            .expect("the response read should not fail at the transport layer")
-            .expect("the daemon should answer the handshake before closing");
+    assert_eq!(
+        daemon_response,
+        DaemonResponse::HandshakeAccepted {
+            protocol_version: DAEMON_PROTOCOL_VERSION,
+            application_name: DAEMON_APPLICATION_NAME.to_owned(),
+        }
+    );
 
-        assert_eq!(
-            daemon_response,
-            DaemonResponse::HandshakeAccepted {
-                protocol_version: DAEMON_PROTOCOL_VERSION,
-                application_name: DAEMON_APPLICATION_NAME.to_owned(),
-            }
-        );
+    timeout(HANDSHAKE_TEST_TIMEOUT, listener_task)
+        .await
+        .expect("the listener task should finish inside the test timeout")
+        .expect("the listener task should not panic");
+    cleanup_transport_test_directory(&test_directory);
+}
 
-        timeout(HANDSHAKE_TEST_TIMEOUT, listener_task)
-            .await
-            .expect("the listener task should finish inside the test timeout")
-            .expect("the listener task should not panic");
-        cleanup_transport_test_directory(&test_directory);
-    }
-);
-
-offline_tokio_real_clock_test!(should_replace_stale_socket_file_when_binding, {
+#[tokio::test(flavor = "current_thread")]
+async fn should_replace_stale_socket_file_when_binding() {
     let test_directory = fresh_transport_test_directory("stale-socket");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     std::fs::write(&socket_path, b"stale bytes from a dead daemon")
@@ -109,9 +106,10 @@ offline_tokio_real_clock_test!(should_replace_stale_socket_file_when_binding, {
         bind_result.err()
     );
     cleanup_transport_test_directory(&test_directory);
-});
+}
 
-offline_tokio_real_clock_test!(should_create_daemon_socket_with_owner_only_permissions, {
+#[tokio::test(flavor = "current_thread")]
+async fn should_create_daemon_socket_with_owner_only_permissions() {
     let test_directory = fresh_transport_test_directory("socket-permissions");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
 
@@ -129,108 +127,105 @@ offline_tokio_real_clock_test!(should_create_daemon_socket_with_owner_only_permi
     );
     drop(daemon_listener);
     cleanup_transport_test_directory(&test_directory);
-});
+}
 
-offline_tokio_real_clock_test!(
-    should_report_daemon_not_running_when_connecting_to_missing_socket,
-    {
-        let test_directory = fresh_transport_test_directory("not-running");
-        let socket_path = test_directory.join(SOCKET_FILE_NAME);
+#[tokio::test(flavor = "current_thread")]
+async fn should_report_daemon_not_running_when_connecting_to_missing_socket() {
+    let test_directory = fresh_transport_test_directory("not-running");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
 
-        let connect_result: Result<DaemonIpcClient, DaemonTransportError> = timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            DaemonIpcClient::connect(socket_path.clone()),
-        )
-        .await
-        .expect("the client connect attempt should finish inside the test timeout");
+    let connect_result: Result<DaemonIpcClient, DaemonTransportError> = timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        DaemonIpcClient::connect(socket_path.clone()),
+    )
+    .await
+    .expect("the client connect attempt should finish inside the test timeout");
 
-        match connect_result {
-            Err(DaemonTransportError::DaemonNotRunning {
-                socket_path: reported_path,
-            }) => {
-                assert_eq!(reported_path, socket_path);
-            }
-            Err(unexpected_error) => panic!(
-                "connecting to a missing daemon socket should report DaemonNotRunning, got: {unexpected_error:?}"
-            ),
-            Ok(_unexpected_client) => {
-                panic!("connecting to a missing daemon socket should fail, but a client connected")
-            }
+    match connect_result {
+        Err(DaemonTransportError::DaemonNotRunning {
+            socket_path: reported_path,
+        }) => {
+            assert_eq!(reported_path, socket_path);
         }
-        cleanup_transport_test_directory(&test_directory);
-    }
-);
-
-offline_tokio_real_clock_test!(
-    should_keep_serving_after_client_disconnects_without_a_request,
-    {
-        let test_directory = fresh_transport_test_directory("silent-disconnect");
-        let socket_path = test_directory.join(SOCKET_FILE_NAME);
-
-        let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone())
-            .await
-            .expect("the daemon listener should bind a fresh socket path");
-
-        {
-            let _silent_client = DaemonIpcClient::connect(socket_path.clone())
-                .await
-                .expect("the silent client should connect before dropping");
+        Err(unexpected_error) => panic!(
+            "connecting to a missing daemon socket should report DaemonNotRunning, got: {unexpected_error:?}"
+        ),
+        Ok(_unexpected_client) => {
+            panic!("connecting to a missing daemon socket should fail, but a client connected")
         }
-
-        timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            daemon_listener.serve_next_request(|daemon_request| async move {
-                let _ = daemon_request;
-                DaemonResponse::HandshakeAccepted {
-                    protocol_version: DAEMON_PROTOCOL_VERSION,
-                    application_name: DAEMON_APPLICATION_NAME.to_owned(),
-                }
-            }),
-        )
-        .await
-        .expect("serving the silent connection should finish inside the test timeout")
-        .expect("a client that vanishes without a request must not fail the listener");
-
-        let mut following_client = DaemonIpcClient::connect(socket_path.clone())
-            .await
-            .expect("the following client should connect after the silent disconnect");
-        timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            following_client.send_request(&DaemonRequest::Handshake),
-        )
-        .await
-        .expect("the following request send should finish inside the test timeout")
-        .expect("the following client should transmit after the silent disconnect");
-        // The daemon serves connections one at a time in a loop, so the second
-        // serve_next_request call mirrors the real serving loop after the silent
-        // connection ended.
-        timeout(
-            HANDSHAKE_TEST_TIMEOUT,
-            daemon_listener.serve_next_request(|daemon_request| async move {
-                let _ = daemon_request;
-                DaemonResponse::HandshakeAccepted {
-                    protocol_version: DAEMON_PROTOCOL_VERSION,
-                    application_name: DAEMON_APPLICATION_NAME.to_owned(),
-                }
-            }),
-        )
-        .await
-        .expect("serving the following connection should finish inside the test timeout")
-        .expect("the listener should serve the connection after the silent disconnect");
-        let following_response = timeout(HANDSHAKE_TEST_TIMEOUT, following_client.next_response())
-            .await
-            .expect("the following response read should finish inside the test timeout")
-            .expect("the following response read should not fail at the transport layer")
-            .expect("the listener should still answer after the silent disconnect");
-        assert!(matches!(
-            following_response,
-            DaemonResponse::HandshakeAccepted { .. }
-        ));
-        cleanup_transport_test_directory(&test_directory);
     }
-);
+    cleanup_transport_test_directory(&test_directory);
+}
 
-offline_tokio_real_clock_test!(should_stream_multiple_responses_for_one_request, {
+#[tokio::test(flavor = "current_thread")]
+async fn should_keep_serving_after_client_disconnects_without_a_request() {
+    let test_directory = fresh_transport_test_directory("silent-disconnect");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+
+    let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone())
+        .await
+        .expect("the daemon listener should bind a fresh socket path");
+
+    {
+        let _silent_client = DaemonIpcClient::connect(socket_path.clone())
+            .await
+            .expect("the silent client should connect before dropping");
+    }
+
+    timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        daemon_listener.serve_next_request(|daemon_request| async move {
+            let _ = daemon_request;
+            DaemonResponse::HandshakeAccepted {
+                protocol_version: DAEMON_PROTOCOL_VERSION,
+                application_name: DAEMON_APPLICATION_NAME.to_owned(),
+            }
+        }),
+    )
+    .await
+    .expect("serving the silent connection should finish inside the test timeout")
+    .expect("a client that vanishes without a request must not fail the listener");
+
+    let mut following_client = DaemonIpcClient::connect(socket_path.clone())
+        .await
+        .expect("the following client should connect after the silent disconnect");
+    timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        following_client.send_request(&DaemonRequest::Handshake),
+    )
+    .await
+    .expect("the following request send should finish inside the test timeout")
+    .expect("the following client should transmit after the silent disconnect");
+    // The daemon serves connections one at a time in a loop, so the second
+    // serve_next_request call mirrors the real serving loop after the silent
+    // connection ended.
+    timeout(
+        HANDSHAKE_TEST_TIMEOUT,
+        daemon_listener.serve_next_request(|daemon_request| async move {
+            let _ = daemon_request;
+            DaemonResponse::HandshakeAccepted {
+                protocol_version: DAEMON_PROTOCOL_VERSION,
+                application_name: DAEMON_APPLICATION_NAME.to_owned(),
+            }
+        }),
+    )
+    .await
+    .expect("serving the following connection should finish inside the test timeout")
+    .expect("the listener should serve the connection after the silent disconnect");
+    let following_response = timeout(HANDSHAKE_TEST_TIMEOUT, following_client.next_response())
+        .await
+        .expect("the following response read should finish inside the test timeout")
+        .expect("the following response read should not fail at the transport layer")
+        .expect("the listener should still answer after the silent disconnect");
+    assert!(matches!(
+        following_response,
+        DaemonResponse::HandshakeAccepted { .. }
+    ));
+    cleanup_transport_test_directory(&test_directory);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn should_stream_multiple_responses_for_one_request() {
     let test_directory = fresh_transport_test_directory("stream-many");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone())
@@ -338,9 +333,10 @@ offline_tokio_real_clock_test!(should_stream_multiple_responses_for_one_request,
         "the daemon should close the connection after the terminal frame"
     );
     cleanup_transport_test_directory(&test_directory);
-});
+}
 
-offline_tokio_real_clock_test!(should_survive_a_client_disconnect_mid_stream, {
+#[tokio::test(flavor = "current_thread")]
+async fn should_survive_a_client_disconnect_mid_stream() {
     let test_directory = fresh_transport_test_directory("stream-disconnect");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone())
@@ -434,4 +430,4 @@ offline_tokio_real_clock_test!(should_survive_a_client_disconnect_mid_stream, {
         DaemonResponse::HandshakeAccepted { .. }
     ));
     cleanup_transport_test_directory(&test_directory);
-});
+}

@@ -1,22 +1,25 @@
-use astronomical_test_harness::offline_denied_test;
-
 use crate::mlx_runtime_types::{
     ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, allocator_cache_exceeds_reclaim_threshold,
 };
 
-offline_denied_test!(
-    should_leave_small_allocator_cache_pooled_after_a_prefill_chunk,
-    {
-        assert!(!allocator_cache_exceeds_reclaim_threshold(
-            ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES - 1,
-            ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
-        ));
-    }
-);
+#[test]
+fn should_leave_small_allocator_cache_pooled_after_a_prefill_chunk() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(should_reclaim_allocator_cache_at_the_policy_threshold, {
+    assert!(!allocator_cache_exceeds_reclaim_threshold(
+        ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES - 1,
+        ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
+    ));
+}
+
+#[test]
+fn should_reclaim_allocator_cache_at_the_policy_threshold() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     assert!(allocator_cache_exceeds_reclaim_threshold(
         ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
         ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
     ));
-});
+}

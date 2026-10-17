@@ -3,37 +3,45 @@
 // across tests in one process, and defer to platform sandboxing elsewhere.
 
 use astronomical_test_harness::network_denial::ensure_network_denied;
-use astronomical_test_harness::offline_denied_test;
 
 #[cfg(target_os = "macos")]
-offline_denied_test!(
-    denied_macro_blocks_binding_an_ephemeral_loopback_listener,
-    {
-        let bind_attempt = std::net::TcpListener::bind("127.0.0.1:0");
-        assert!(
-            bind_attempt.is_err(),
-            "network denial must make loopback bind fail, got: {:?}",
-            bind_attempt.map(|listener| listener.local_addr())
-        );
-    }
-);
+#[test]
+fn denied_macro_blocks_binding_an_ephemeral_loopback_listener() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let bind_attempt = std::net::TcpListener::bind("127.0.0.1:0");
+    assert!(
+        bind_attempt.is_err(),
+        "network denial must make loopback bind fail, got: {:?}",
+        bind_attempt.map(|listener| listener.local_addr())
+    );
+}
 
 #[cfg(target_os = "macos")]
-offline_denied_test!(denied_macro_blocks_an_outbound_loopback_connection, {
+#[test]
+fn denied_macro_blocks_an_outbound_loopback_connection() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let connect_attempt = std::net::TcpStream::connect("127.0.0.1:9");
     assert!(
         connect_attempt.is_err(),
         "network denial must make outbound connects fail, got: {:?}",
         connect_attempt.err()
     );
-});
+}
 
-offline_denied_test!(denial_application_is_idempotent_within_one_process, {
+#[test]
+fn denial_application_is_idempotent_within_one_process() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     assert!(
         ensure_network_denied().is_ok(),
         "a second denial application in the same process must be a no-op success"
     );
-});
+}
 
 #[cfg(not(target_os = "macos"))]
 #[test]
