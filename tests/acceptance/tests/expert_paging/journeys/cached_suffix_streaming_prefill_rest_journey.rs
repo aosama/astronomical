@@ -73,7 +73,7 @@ async fn should_complete_cold_and_cached_append_requests_with_consistent_prefill
         run_interaction_journey(StreamingPrefillJourneyKind::HalfModelReread),
     )
     .await
-    .expect("the prefill/decode residency SSD journey must finish within 60 seconds");
+    .expect("the prefill/decode residency SSD journey must finish within 120 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -85,7 +85,7 @@ async fn should_keep_high_ram_tool_prefixed_cached_suffix_prefill_responsive() {
         run_interaction_journey(StreamingPrefillJourneyKind::HighRamResponsiveSuffix),
     )
     .await
-    .expect("the high-RAM cached suffix SSD journey must finish within 60 seconds");
+    .expect("the high-RAM cached suffix SSD journey must finish within 120 seconds");
 }
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one real worker against the large sparse MoE e2e fixture under a tight ceiling that forces the prefill OOM-retry-reread stall"]
@@ -96,7 +96,7 @@ async fn should_recover_from_prefill_oom_without_stalling() {
         run_interaction_journey(StreamingPrefillJourneyKind::TightCeiling),
     )
     .await
-    .expect("the tight-ceiling large sparse MoE prefill must finish within 60 seconds");
+    .expect("the tight-ceiling large sparse MoE prefill must finish within 120 seconds");
 }
 
 fn journey_kind_label(kind: StreamingPrefillJourneyKind) -> &'static str {

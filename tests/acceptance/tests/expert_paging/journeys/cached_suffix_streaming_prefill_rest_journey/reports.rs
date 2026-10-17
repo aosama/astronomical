@@ -20,6 +20,12 @@ pub(super) fn read_interaction_reports(isolated_worker_home: &Path) -> Interacti
         )
         .into_iter()
         .filter(|report| report["report_kind"] == "generation")
+        // A near-disk-size ceiling can reject one admission attempt before
+        // reclamation makes room; the OpenAI client retries and the successful
+        // generation writes its own report. A rejected attempt carries no
+        // counters, so keeping it here would only shift the per-request indices
+        // and turn the cold-side counter assertions into vacuous checks.
+        .filter(|report| report["outcome"] == "success")
         .collect(),
     }
 }
@@ -134,19 +140,37 @@ pub(super) fn assert_reported_interaction(
             || matches!(append_outcome.finish_reason.as_deref(), Some("tool_calls")),
         "append request must publish visible text or finish with tool calls"
     );
+    // The completion record folds the worker's in-request MLX samples and is
+    // frozen when the request completes, while the status endpoint keeps
+    // publishing cumulative peak samples until the worker goes idle. One
+    // post-completion sampler tick can therefore sit a fraction of a percent
+    // above the record without any memory being misreported. The defect this
+    // guards against — the record carrying final memory instead of the request
+    // peak — is a five-percent drop, so a one-percent envelope keeps that
+    // guard sharp while tolerating the sampler race.
+    let recorded_cold_peak_memory_bytes = reports.performance_records[0]["mlx_peak_memory_bytes"]
+        .as_u64()
+        .unwrap_or(0);
     assert!(
-        reports.performance_records[0]["mlx_peak_memory_bytes"]
-            .as_u64()
-            .unwrap_or(0)
-            >= cold_outcome.live_evidence.maximum_peak_memory_bytes,
-        "the performance record must retain the request maximum rather than overwrite it with final memory"
+        recorded_cold_peak_memory_bytes
+            >= cold_outcome
+                .live_evidence
+                .maximum_peak_memory_bytes
+                .saturating_sub(cold_outcome.live_evidence.maximum_peak_memory_bytes / 100),
+        "the performance record must retain the request maximum rather than overwrite it with final memory: recorded={recorded_cold_peak_memory_bytes} observed={}",
+        cold_outcome.live_evidence.maximum_peak_memory_bytes
     );
+    let recorded_append_peak_memory_bytes = append_performance["mlx_peak_memory_bytes"]
+        .as_u64()
+        .unwrap_or(0);
     assert!(
-        append_performance["mlx_peak_memory_bytes"]
-            .as_u64()
-            .unwrap_or(0)
-            >= append_outcome.live_evidence.maximum_peak_memory_bytes,
-        "the append performance record must retain the request maximum peak"
+        recorded_append_peak_memory_bytes
+            >= append_outcome
+                .live_evidence
+                .maximum_peak_memory_bytes
+                .saturating_sub(append_outcome.live_evidence.maximum_peak_memory_bytes / 100),
+        "the append performance record must retain the request maximum peak: recorded={recorded_append_peak_memory_bytes} observed={}",
+        append_outcome.live_evidence.maximum_peak_memory_bytes
     );
     let final_residency = &append_outcome.live_evidence.final_status["expert_residency"];
     let resident_expert_count = final_residency["resident_expert_count"]

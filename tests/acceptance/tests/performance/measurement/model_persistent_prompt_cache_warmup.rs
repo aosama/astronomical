@@ -317,7 +317,7 @@ fn configured_prompt_cache_maximum_size_gb_from_user_config() -> u64 {
         .expect("Development config should be valid JSON");
     config_document
         .get("prompt_cache")
-        .and_then(|prompt_cache_document| prompt_cache_document.get("max_size_gb"))
+        .and_then(|prompt_cache_document| prompt_cache_document.get("maximum_size_gb"))
         .and_then(Value::as_u64)
-        .expect("Development config should define prompt_cache.max_size_gb")
+        .expect("Development config should define prompt_cache.maximum_size_gb")
 }
