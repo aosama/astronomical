@@ -303,9 +303,16 @@ impl OpenAiChatCompletionRequest {
                 option_name: "presence_penalty",
             });
         }
-        if self.store.is_some() {
+        // `store: false` is the documented protocol default ("do not store output
+        // for distillation or retrieval") and describes exactly what this local
+        // server does anyway, so a protocol-faithful client that spells out the
+        // default must not be rejected — OpenCode sends `store: false` on every
+        // request, and rejecting it failed their entire conversation. `store:
+        // true` requests an unimplemented server-side store, so it stays an
+        // explicit rejection, mirroring the Responses surface.
+        if self.store == Some(true) {
             return Err(OpenAiChatCompletionValidationError::UnsupportedOption {
-                option_name: "store",
+                option_name: "store=true",
             });
         }
         Ok(())
