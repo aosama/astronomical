@@ -6,12 +6,14 @@
 //! streaming. Final telemetry then reports that restored ownership.
 
 use crate::decoder_cache::DecoderCacheState;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
-    PerformanceOperation, PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
-    RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
+    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
+    PersistentPromptCacheBlockKey, RetainedPrefixRetentionDecision,
+    RetainedPrefixRetentionRequirements,
 };
 
 use super::Qwen3_5EngineState;
@@ -385,3 +387,5 @@ impl Qwen3_5EngineState {
         }
     }
 }
+
+use crate::MlxMemoryTelemetry;

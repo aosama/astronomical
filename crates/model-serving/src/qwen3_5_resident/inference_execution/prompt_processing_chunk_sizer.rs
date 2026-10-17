@@ -1,5 +1,8 @@
 //! Fixed prompt-chunk boundaries for complete-residency execution.
 
+#[cfg(test)]
+mod tests;
+
 mod configuration;
 
 pub use configuration::Qwen3_5ResidentPromptProcessingChunkSizerError;

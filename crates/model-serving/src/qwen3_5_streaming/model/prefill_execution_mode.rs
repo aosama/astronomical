@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 /// Selects the paged MoE execution path for multi-token target forwards.
 ///
 /// Diagnostic variants remain explicit test seams rather than runtime settings.

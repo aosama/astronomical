@@ -5,7 +5,7 @@ use super::{
     Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5OutputParserError, Qwen3_5TokenDecoder,
     Qwen3_5Tokenizer, Qwen3_5TokenizerError,
 };
-use crate::MalformedModelOutputDiagnostic;
+use crate::model_generation_processor::MalformedModelOutputDiagnostic;
 
 /// Request-local owner that translates generated token IDs into neutral chat events.
 #[derive(Debug)]

@@ -26,7 +26,7 @@ use super::inventory::{
     validate_vae_inventory,
 };
 
-mod error;
+pub(crate) mod error;
 mod provenance;
 
 pub use error::QwenImage21ArtifactError;

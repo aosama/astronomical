@@ -8,6 +8,9 @@
 //! at the most sensitive component and is immaterial because the embedding feeds a learned linear
 //! projection.
 
+#[cfg(test)]
+mod tests;
+
 /// Default embedding width (`QwenImage21TimestepProjEmbeddings` uses `timestep_dim=256`).
 pub const DEFAULT_TIMESTEP_DIM: usize = 256;
 /// Default sinusoidal base period.
@@ -71,6 +74,7 @@ impl SinusoidalTimesteps {
         embedding
     }
 
+    #[cfg(test)]
     /// The precomputed frequency table, exposed for offline verification against the oracle.
     #[doc(hidden)]
     #[must_use]

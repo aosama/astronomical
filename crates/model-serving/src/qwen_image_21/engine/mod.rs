@@ -10,15 +10,12 @@
 //! `request_validation.rs` pins the official request envelope, `lifecycle.rs` is the engine,
 //! and `mlx_components.rs` is the production owner.
 
-mod components;
+pub(crate) mod components;
 mod lifecycle;
 #[cfg(feature = "direct-mlx")]
 mod mlx_components;
 mod request_validation;
 
-pub use components::{
-    QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,
-};
 pub use lifecycle::QwenImage21ImageEngine;
 #[cfg(feature = "direct-mlx")]
 pub use mlx_components::QwenImage21MlxComponents;

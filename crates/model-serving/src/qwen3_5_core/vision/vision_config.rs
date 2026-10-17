@@ -6,6 +6,9 @@
 //! Validating them at artifact load keeps later graph assembly simple and avoids
 //! accidentally running checkpoint tensors under a merely similar architecture.
 
+#[cfg(test)]
+mod tests;
+
 use super::Qwen3_5ConfigError;
 use serde::Deserialize;
 

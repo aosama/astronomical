@@ -11,8 +11,8 @@ use super::output;
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::EmbeddingEngine;
 use crate::InferenceEngine;
-use crate::ModelGenerationProcessor;
 use crate::engine_backed_worker::support::ModelFactory;
+use crate::model_generation_processor::ModelGenerationProcessor;
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>

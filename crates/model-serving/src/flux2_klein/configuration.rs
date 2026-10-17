@@ -1,5 +1,8 @@
 //! Exact JSON configuration profile for the official distilled 4B artifact.
 
+#[cfg(test)]
+mod tests;
+
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;

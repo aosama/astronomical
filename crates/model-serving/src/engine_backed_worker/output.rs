@@ -8,10 +8,11 @@ use super::support::{ActiveEngineGeneration, engine_generation_error};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
 use crate::{
     EmbeddingEngine, EngineBackedWorker, GenerationFinalization, ImageGenerationEngine,
-    InferenceEngine, MlxMemoryTelemetry, WorkerRuntimeError,
+    InferenceEngine, WorkerRuntimeError,
 };
 
 use super::LoadedRuntime;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
@@ -450,7 +451,7 @@ fn worker_memory_observation(
 
 /// Converts engine-owned residency telemetry into the public worker snapshot.
 pub(super) fn worker_expert_residency_snapshot(
-    expert_residency: crate::ExpertResidencyTelemetry,
+    expert_residency: crate::inference_engine::contract::ExpertResidencyTelemetry,
 ) -> astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
     astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
         total_layer_count: expert_residency.total_layer_count,

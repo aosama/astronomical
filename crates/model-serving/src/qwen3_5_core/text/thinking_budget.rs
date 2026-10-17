@@ -4,8 +4,13 @@
 //! forcing here prevents the public token stream from diverging from the model's
 //! autoregressive history when a reasoning allowance is exhausted.
 
+#[cfg(test)]
+mod tests;
+
+#[cfg(any(test, feature = "direct-mlx"))]
 use thiserror::Error;
 
+#[cfg(any(test, feature = "direct-mlx"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ThinkingBudgetPhase {
     VisibleAnswer,
@@ -13,6 +18,7 @@ enum ThinkingBudgetPhase {
     ForcingTransition,
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 /// Request-local reasoning allowance and forced-transition cursor.
 #[derive(Clone, Debug)]
 pub struct Qwen3_5ThinkingBudgetState {
@@ -25,6 +31,7 @@ pub struct Qwen3_5ThinkingBudgetState {
     forced_token_awaiting_commit: Option<u32>,
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 impl Qwen3_5ThinkingBudgetState {
     /// Creates a state whose model-owned transition must end at a recognized
     /// reasoning boundary whenever a positive hard allowance is active.
@@ -167,6 +174,7 @@ impl Qwen3_5ThinkingBudgetState {
     }
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 /// A violated model-owned hard-budget state transition.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum Qwen3_5ThinkingBudgetError {

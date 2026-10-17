@@ -1,9 +1,9 @@
 mod inference_request;
-mod output_parser;
+pub(crate) mod output_parser;
 mod output_parser_error;
 mod processor;
 mod prompt;
-mod request_output;
+pub(crate) mod request_output;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod sampler;
 mod sampler_config;
@@ -12,7 +12,7 @@ mod chat_images;
 mod context_token_validation;
 mod template_safe_content;
 mod thinking_allowance;
-mod thinking_budget;
+pub(crate) mod thinking_budget;
 mod token_decoder;
 mod token_ids;
 mod tokenizer;
@@ -22,7 +22,8 @@ mod tool_schema;
 pub use crate::sampling_seed::resolve_sampling_seed;
 pub use context_token_validation::validate_context_token_count;
 pub use inference_request::{Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy};
-pub use output_parser::{Qwen3_5OutputEvent, Qwen3_5OutputParser, Qwen3_5ToolCall};
+pub use output_parser::Qwen3_5OutputEvent;
+pub(crate) use output_parser::Qwen3_5OutputParser;
 pub use output_parser_error::Qwen3_5OutputParserError;
 pub use processor::{
     Qwen3_5GenerationProcessor, qwen3_5_request_enables_thinking,
@@ -37,7 +38,6 @@ pub use sampler::qwen3_5_apply_top_p_mask;
 pub use sampler_config::{Qwen3_5SamplerConfig, discover_sampler_config};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use thinking_budget::minimum_bounded_output_token_count;
-pub use thinking_budget::{Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState};
 pub use token_decoder::Qwen3_5TokenDecoder;
 pub use token_ids::{Qwen3_5TokenIds, discover_token_ids};
 pub use tokenizer::Qwen3_5Tokenizer;

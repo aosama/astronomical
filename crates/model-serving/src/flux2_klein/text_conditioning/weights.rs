@@ -5,7 +5,8 @@ use std::fs::File;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::{PerformanceAttribution, PerformanceOperation, ValidatedWeightsFile};
+use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
+use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::Flux2KleinResidencyMode;
 use super::error::Flux2KleinTextConditioningError;

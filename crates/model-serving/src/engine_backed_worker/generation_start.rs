@@ -3,10 +3,9 @@ use tokio::io::AsyncWrite;
 
 use super::fatal;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
+use crate::inference_engine::contract::PreparedInferenceRequest;
 use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{
-    ImageGenerationEngine, InferenceEngine, InferenceEngineError, PreparedInferenceRequest,
-};
+use crate::{ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
 use super::{EngineBackedWorker, LoadedRuntime};
 

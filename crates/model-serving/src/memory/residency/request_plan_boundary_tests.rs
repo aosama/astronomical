@@ -8,10 +8,11 @@
 
 use astronomical_test_harness::offline_denied_test;
 
+use crate::memory::residency::ExpertLayerGeometry;
 use crate::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlan, MemoryPhase, RequestExpertLayerRole, RequestExpertResidency,
-    RetainedExpertPageClass, publish_request_stable_residency_plan,
+    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlan, MemoryPhase,
+    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
+    publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh,
 };

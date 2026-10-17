@@ -3,6 +3,9 @@
 //! Tokenization must happen before any lazy graph construction so an
 //! out-of-context request fails before GPU work is submitted.
 
+#[cfg(test)]
+mod tests;
+
 use astronomical_ipc_protocol::EmbeddingsFailureReason;
 use tokenizers::Tokenizer;
 

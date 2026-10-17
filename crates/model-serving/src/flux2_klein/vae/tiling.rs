@@ -1,13 +1,18 @@
 //! Tiled decode geometry assigns every output core to one tile while retaining halo context.
 
+#[cfg(test)]
+mod tests;
+
 use super::Flux2KleinVaeError;
 
+#[cfg(feature = "direct-mlx")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Flux2KleinVaeTilingConfig {
     owned_latent_edge: usize,
     overlap_latents: usize,
 }
 
+#[cfg(feature = "direct-mlx")]
 impl Flux2KleinVaeTilingConfig {
     pub fn new(
         owned_latent_edge: usize,
@@ -35,6 +40,7 @@ impl Flux2KleinVaeTilingConfig {
     }
 }
 
+#[cfg(feature = "direct-mlx")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Flux2KleinVaeTile {
     source_row_start: usize,
@@ -47,6 +53,7 @@ pub struct Flux2KleinVaeTile {
     owned_column_end: usize,
 }
 
+#[cfg(feature = "direct-mlx")]
 impl Flux2KleinVaeTile {
     pub const fn source_row_start(&self) -> usize {
         self.source_row_start
@@ -74,11 +81,13 @@ impl Flux2KleinVaeTile {
     }
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinVaeTilePlan {
     tiles: Vec<Flux2KleinVaeTile>,
 }
 
+#[cfg(test)]
 impl Flux2KleinVaeTilePlan {
     pub fn new(
         latent_width: usize,

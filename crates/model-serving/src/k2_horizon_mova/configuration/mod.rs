@@ -4,7 +4,7 @@ mod affine_profile;
 mod config;
 mod document;
 mod error;
-mod layer_schedule;
+pub(crate) mod layer_schedule;
 
 pub use affine_profile::{K2HorizonMoVAAffineProfile, K2HorizonMoVAQuantizationContract};
 pub use config::{K2HorizonMoVAAttentionGateFunc, K2HorizonMoVAConfig};

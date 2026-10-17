@@ -89,7 +89,7 @@ impl Qwen3_5EngineState {
             let block_end = absolute_boundary;
             let block_tokens = &active_request.input_token_ids[block_start..block_end];
             let block_index = block_start / persistent_prompt_cache_block_token_count;
-            let empty_block_causal_input = crate::PersistentPromptCacheBlockCausalInput::empty();
+            let empty_block_causal_input = crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput::empty();
             let block_causal_input = if active_request
                 .persistent_prompt_cache_block_causal_inputs
                 .is_empty()

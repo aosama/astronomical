@@ -103,7 +103,7 @@ impl Qwen3_5EngineState {
                 .and_then(|telemetry| telemetry.expert_residency_telemetry())
                 .unwrap_or_else(|| {
                     model.expert_residency_telemetry_for_breakdown(
-                        &crate::MlxActiveMemoryBreakdown::default(),
+                        &crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
                     )
                 });
             return Ok(ActiveRequestAdvance::Continue(

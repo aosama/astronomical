@@ -3,7 +3,7 @@ use astronomical_ipc_protocol::{
 };
 use serde::Serialize;
 
-use crate::PreparedInferenceRequest;
+use crate::inference_engine::contract::PreparedInferenceRequest;
 
 /// Model-specific request preparation and generated-token interpretation.
 pub trait ModelGenerationProcessor {

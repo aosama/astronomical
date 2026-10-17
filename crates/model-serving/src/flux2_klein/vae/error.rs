@@ -2,6 +2,7 @@
 
 use thiserror::Error;
 
+#[cfg(feature = "direct-mlx")]
 #[derive(Debug, Error)]
 pub enum Flux2KleinVaeError {
     #[error("FLUX.2 Klein packed latent geometry is invalid: {reason}")]

@@ -29,9 +29,9 @@
 
 - MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
 
-- All and any tests must have a built-in timeout with a maximum of 60 seconds. Exceptions can be made for performance-endurance tests and/or tests that reproduce out-of-memory (OOM) issues.
+- Tests are plain, Book-style `#[test]` / `#[tokio::test]` functions; hang protection lives at the runner level (job-level timeouts in CI, or a runner with per-test timeout support), not inside each test. A test that must bound a specific wait (polling, IPC) wraps that wait in an explicit in-test timeout. Target per-test budget: 60 seconds; performance-endurance tests and out-of-memory (OOM) reproduction tests are exempt. The legacy `astronomical-test-harness` wrapper macros remain only until their retirement lands (tracked as a dedicated issue); new unit tests must not adopt them.
 
-- SSD-paging e2e tests must have a built-in timeout of 120 seconds. If e2e test exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the e2e test timeout or repeating long model runs.
+- SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the budget or repeating long model runs.
 
 - The fixture of Romeo and Juliet MUST be used as the source test input for LLMs; there should not be random text or tokens used for testing.
 

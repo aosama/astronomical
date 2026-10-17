@@ -6,6 +6,9 @@
 //! layout. These profiles therefore document the boundary between stored model
 //! tensors and the MLX operation contracts used by `vision_model.rs`.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{TensorDtype, TensorProfile};
 
 use super::Qwen3_5VisionConfig;

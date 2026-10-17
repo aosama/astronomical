@@ -12,9 +12,11 @@ use astronomical_ipc_protocol::{
 
 #[cfg(feature = "direct-mlx")]
 use crate::QWEN_IMAGE_21_OFFICIAL_MODEL_ID;
+use crate::image_generation_engine::ImageGenerationEngineLoadResult;
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::{
-    ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttributionOutcome,
+    ImageGenerationEngine, ImageGenerationEngineStep, PerformanceAttributionOutcome,
     qwen_image_21::engine::components::{
         QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,
     },

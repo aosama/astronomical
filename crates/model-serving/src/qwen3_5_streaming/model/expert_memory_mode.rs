@@ -1,8 +1,8 @@
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
 use super::streaming_model::Qwen3_5StreamingModel;
-use crate::ExpertResidencyTelemetry;
-use crate::MlxActiveMemoryBreakdown;
+use crate::inference_engine::contract::ExpertResidencyTelemetry;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 
 impl Qwen3_5StreamingModel {
     /// Builds the residency claim from the reconciled breakdown of the same MLX

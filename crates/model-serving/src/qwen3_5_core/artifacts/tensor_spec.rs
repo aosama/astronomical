@@ -6,6 +6,9 @@ use crate::{TensorDtype, TensorProfile};
 use super::quantizations::optiq::OptiQQuantizationProfile;
 use super::{Qwen3_5ArtifactError, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 
+#[cfg(test)]
+mod tests;
+
 const PACKING_WORD_BITS: usize = 32;
 
 /// Generates the executable language-tensor metadata for a Qwen3.5 artifact.
@@ -48,8 +51,11 @@ pub fn qwen3_5_language_tensor_profiles(qwen3_5_config: &Qwen3_5Config) -> Vec<T
 }
 
 /// Returns the language tensors that remain resident after sparse expert paging.
+/// Resident paging executes only in the direct-MLX engine world, so the fn and
+/// its helper exist only there.
 #[must_use]
-pub fn qwen3_5_resident_language_tensor_profiles(
+#[cfg(feature = "direct-mlx")]
+pub(crate) fn qwen3_5_resident_language_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,
 ) -> Vec<TensorProfile> {
     let complete_language_tensor_profiles = qwen3_5_language_tensor_profiles(qwen3_5_config);
@@ -236,6 +242,7 @@ fn append_qwen3_5_moe_feed_forward_tensor_profiles(
     );
 }
 
+#[cfg(feature = "direct-mlx")]
 fn is_sparse_selected_expert_tensor_name(tensor_name: &str) -> bool {
     tensor_name.contains(".mlp.switch_mlp.")
 }

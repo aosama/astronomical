@@ -93,10 +93,10 @@ impl Qwen3_5ResidentModel {
 
     pub(crate) fn expert_residency_telemetry_for_breakdown(
         &self,
-        active_memory_breakdown: &crate::MlxActiveMemoryBreakdown,
-    ) -> crate::ExpertResidencyTelemetry {
+        active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
+    ) -> crate::inference_engine::contract::ExpertResidencyTelemetry {
         let resident_expert_statistics = self.expert_weight_memory_cache_statistics();
-        crate::ExpertResidencyTelemetry {
+        crate::inference_engine::contract::ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(resident_expert_statistics.complete_layer_count)
                 .unwrap_or(u32::MAX),
             resident_expert_count: u32::try_from(resident_expert_statistics.entry_count)

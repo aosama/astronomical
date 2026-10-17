@@ -1,7 +1,7 @@
-use crate::MlxActiveMemoryBreakdown;
 use crate::PerformanceAttribution;
 use crate::PerformanceCounter;
 use crate::memory::MemoryCeilingUtilization;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 
 use super::{Qwen3_5Model, Qwen3_5VisionModel, RequestDecoderStateStack};
 

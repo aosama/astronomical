@@ -10,6 +10,9 @@
 //! condition images adjacent with no text between them still form separate blocks, otherwise they
 //! would attend to each other bidirectionally.
 
+#[cfg(test)]
+mod tests;
+
 /// Build the per-token image-block id used by the block-causal mask.
 ///
 /// Returns `-1` at text positions and a unique non-negative id per image block, in the same form

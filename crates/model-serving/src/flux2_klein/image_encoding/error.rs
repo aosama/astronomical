@@ -2,6 +2,7 @@
 
 use thiserror::Error;
 
+#[cfg(feature = "direct-mlx")]
 #[derive(Debug, Error)]
 pub enum Flux2KleinImageEncodingError {
     #[error("decoded FLUX.2 Klein pixels must be finite RGB values")]

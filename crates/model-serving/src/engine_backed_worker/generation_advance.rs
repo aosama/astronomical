@@ -8,12 +8,10 @@ use tokio::io::AsyncWrite;
 use super::fatal;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
-use crate::{
-    EngineGenerationStart, GeneratedToken, ImageGenerationEngine, InferenceEngine,
-    InferenceEngineError,
-};
+use crate::{GeneratedToken, ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
 use super::{EngineBackedWorker, LoadedRuntime};
+use crate::inference_engine::contract::EngineGenerationStart;
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>

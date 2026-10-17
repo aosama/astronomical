@@ -6,8 +6,6 @@
 
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
-use crate::MlxMemoryLimitAdjustment;
-
 use super::*;
 
 impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
@@ -230,7 +228,7 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                     snapshot.active_memory_bytes() as u64,
                     snapshot.allocator_cache_memory_bytes() as u64,
                     snapshot.peak_memory_bytes() as u64,
-                    crate::MlxActiveMemoryBreakdown::default(),
+                    crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
                 );
                 if let Some(memory_ceiling_utilization) =
                     self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)
@@ -291,3 +289,5 @@ fn allocator_cache_limit_for_ceiling(
 ) -> usize {
     original_allocator_cache_memory_limit_bytes.min(requested_mlx_memory_ceiling_bytes)
 }
+
+use crate::MlxMemoryLimitAdjustment;

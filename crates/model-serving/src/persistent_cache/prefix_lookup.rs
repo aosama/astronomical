@@ -9,10 +9,8 @@
 //! boundary.
 
 use super::partial_tail_probe;
-use crate::{
-    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
-    PersistentPromptCacheModelContract,
-};
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+use crate::{PersistentPromptCacheBlockKey, PersistentPromptCacheModelContract};
 
 /// The exact reason a prompt prefix could not be restored from the persistent prompt cache.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

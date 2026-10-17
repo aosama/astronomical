@@ -2,6 +2,9 @@
 
 use sha2::{Digest, Sha256};
 
+#[cfg(test)]
+mod tests;
+
 /// Version of the persisted projected visual-embedding tensor contract.
 pub const PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION: &str = "2";
 

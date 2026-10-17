@@ -6,8 +6,7 @@
 
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    MlxMemoryTelemetry, PerformanceAttribution, PerformanceAttributionOutcome,
-    PerformanceOperation,
+    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::Qwen3_5EngineState;
@@ -308,3 +307,5 @@ impl Qwen3_5EngineState {
         }
     }
 }
+
+use crate::MlxMemoryTelemetry;

@@ -5,6 +5,9 @@
 //! treats condition images as RGBA), and `scale_factor_spatial = 16`, so decoding a
 //! `[B, H, W, 64]` latent grid yields `[B, 16 * H, 16 * W, 4]` pixels.
 
+#[cfg(test)]
+mod tests;
+
 /// Latent channels entering the decoder (`z_dim`).
 pub const QWEN_IMAGE_21_LATENT_CHANNEL_COUNT: usize = 64;
 /// Reconstructed pixel channels — the pipeline converts condition images to RGBA.

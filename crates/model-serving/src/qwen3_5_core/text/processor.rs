@@ -1,17 +1,21 @@
+#[cfg(test)]
+mod tests;
+
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ChatMessage,
     ChatModelCapabilities, WorkerEvent,
 };
 
-use crate::{
-    ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
-    PerformanceAttribution, PreparedModelGeneration, Qwen3_5InferenceRequest,
-};
+use crate::{PerformanceAttribution, Qwen3_5InferenceRequest};
 
 use super::{
     Qwen3_5OutputEvent, Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5Tokenizer,
     Qwen3_5TokenizerError, ValidatedQwen3_5Artifact,
 };
+use crate::model_generation_processor::ModelGeneratedTokenTranslation;
+use crate::model_generation_processor::ModelGenerationOutputError;
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::model_generation_processor::PreparedModelGeneration;
 
 /// Model-specific structured-chat preparation and output translation for Qwen3.5.
 #[derive(Clone, Debug)]

@@ -1,5 +1,8 @@
 //! Exact reversible mapping between transformer tokens and VAE spatial latents.
 
+#[cfg(test)]
+mod tests;
+
 use super::Flux2KleinVaeError;
 use crate::Flux2KleinImageDimensions;
 
@@ -7,6 +10,7 @@ pub const FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT: usize = 128;
 pub const FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT: usize = 32;
 const LATENT_PATCH_EDGE: usize = 2;
 
+#[cfg(feature = "direct-mlx")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Flux2KleinPackedLatentLayout {
     batch_size: usize,
@@ -14,6 +18,7 @@ pub struct Flux2KleinPackedLatentLayout {
     packed_width: usize,
 }
 
+#[cfg(feature = "direct-mlx")]
 impl Flux2KleinPackedLatentLayout {
     pub fn for_image_dimensions(
         batch_size: usize,
@@ -131,6 +136,7 @@ impl Flux2KleinPackedLatentLayout {
     }
 }
 
+#[cfg(feature = "direct-mlx")]
 /// Scalar oracle for the inference-mode inverse BatchNorm used around packed latents.
 pub fn flux2_klein_inverse_batch_norm_reference(
     packed_values: &[f32],

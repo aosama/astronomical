@@ -9,7 +9,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::{ImageGenerationEngine, InferenceEngine};
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
