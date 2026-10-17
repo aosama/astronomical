@@ -6,8 +6,6 @@
 //! (the #1278 thrash loop), and generation phases must discard the contract
 //! instead of replaying prefill decisions during decode.
 
-use astronomical_test_harness::offline_denied_test;
-
 use crate::memory::residency::ExpertLayerGeometry;
 use crate::{
     CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlan, MemoryPhase,
@@ -43,123 +41,124 @@ fn candidate_plan(complete_layer_targets: Vec<usize>, ceiling_bytes: u64) -> Exp
     }
 }
 
-offline_denied_test!(
-    should_demote_every_pinned_layer_when_the_reclamation_exceeds_all_pins,
-    {
-        let geometries = uniform_geometry(3);
-        let request_residency =
-            RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1, 2], 120));
+#[test]
+fn should_demote_every_pinned_layer_when_the_reclamation_exceeds_all_pins() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        let shrunk = request_residency.shrink_after_capacity_failure(200, &geometries);
+    let geometries = uniform_geometry(3);
+    let request_residency =
+        RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1, 2], 120));
 
-        assert_eq!(
-            shrunk.layer_role(0),
-            Some(RequestExpertLayerRole::DemotedByCapacityFailure),
-            "an unmeetable reclamation must demote every pin rather than half of them"
-        );
-        assert_eq!(
-            shrunk.layer_role(1),
-            Some(RequestExpertLayerRole::DemotedByCapacityFailure)
-        );
-        assert_eq!(
-            shrunk.layer_role(2),
-            Some(RequestExpertLayerRole::DemotedByCapacityFailure)
-        );
-        assert!(shrunk.pinned_complete_layer_indexes().is_empty());
-    }
-);
+    let shrunk = request_residency.shrink_after_capacity_failure(200, &geometries);
 
-offline_denied_test!(
-    should_leave_the_contract_unchanged_when_nothing_must_yield,
-    {
-        let geometries = uniform_geometry(3);
-        let request_residency =
-            RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1], 80));
+    assert_eq!(
+        shrunk.layer_role(0),
+        Some(RequestExpertLayerRole::DemotedByCapacityFailure),
+        "an unmeetable reclamation must demote every pin rather than half of them"
+    );
+    assert_eq!(
+        shrunk.layer_role(1),
+        Some(RequestExpertLayerRole::DemotedByCapacityFailure)
+    );
+    assert_eq!(
+        shrunk.layer_role(2),
+        Some(RequestExpertLayerRole::DemotedByCapacityFailure)
+    );
+    assert!(shrunk.pinned_complete_layer_indexes().is_empty());
+}
 
-        let unchanged = request_residency.shrink_after_capacity_failure(0, &geometries);
+#[test]
+fn should_leave_the_contract_unchanged_when_nothing_must_yield() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        assert_eq!(
-            unchanged.pinned_complete_layer_indexes(),
-            vec![0, 1],
-            "a zero-byte reclamation must not touch the pin set"
-        );
-    }
-);
+    let geometries = uniform_geometry(3);
+    let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1], 80));
 
-offline_denied_test!(
-    should_never_reseat_a_streamed_layer_when_pinned_claims_exhaust_the_ceiling,
-    {
-        let geometries = uniform_geometry(3);
-        // Pins claim 80 of an 80-byte ceiling, leaving zero headroom for layer 2.
-        let request_residency =
-            RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1], 80));
+    let unchanged = request_residency.shrink_after_capacity_failure(0, &geometries);
 
-        let stabilized = request_residency.stabilize_prefill_plan(
-            candidate_plan(Vec::new(), 80),
-            &[],
-            &geometries,
-        );
+    assert_eq!(
+        unchanged.pinned_complete_layer_indexes(),
+        vec![0, 1],
+        "a zero-byte reclamation must not touch the pin set"
+    );
+}
 
-        assert_eq!(
-            stabilized.layer_targets[2],
-            ExpertLayerResidencyTarget::StreamOperationLocal,
-            "a streamed layer the exhausted budget cannot hold must stream, not re-seat"
-        );
-        assert_eq!(stabilized.maximum_new_retained_bytes, 0);
-        assert_eq!(stabilized.complete_layer_targets, vec![0, 1]);
-    }
-);
+#[test]
+fn should_never_reseat_a_streamed_layer_when_pinned_claims_exhaust_the_ceiling() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(
-    should_admit_a_streamed_layer_at_the_exact_headroom_boundary_only,
-    {
-        let geometries = uniform_geometry(3);
-        // One pin claims 40 of 80, leaving exactly one 40-byte complete layer of headroom.
-        let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0], 80));
+    let geometries = uniform_geometry(3);
+    // Pins claim 80 of an 80-byte ceiling, leaving zero headroom for layer 2.
+    let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1], 80));
 
-        let stabilized = request_residency.stabilize_prefill_plan(
-            candidate_plan(Vec::new(), 80),
-            &[],
-            &geometries,
-        );
+    let stabilized =
+        request_residency.stabilize_prefill_plan(candidate_plan(Vec::new(), 80), &[], &geometries);
 
-        assert_eq!(
-            stabilized.layer_targets[1],
-            ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
-            "a streamed layer must adopt its already-paid complete read at the exact boundary"
-        );
-        assert_eq!(stabilized.maximum_new_retained_bytes, 40);
-        assert_eq!(
-            stabilized.layer_targets[2],
-            ExpertLayerResidencyTarget::StreamOperationLocal,
-            "the next streamed layer must find zero headroom left and stream"
-        );
-    }
-);
+    assert_eq!(
+        stabilized.layer_targets[2],
+        ExpertLayerResidencyTarget::StreamOperationLocal,
+        "a streamed layer the exhausted budget cannot hold must stream, not re-seat"
+    );
+    assert_eq!(stabilized.maximum_new_retained_bytes, 0);
+    assert_eq!(stabilized.complete_layer_targets, vec![0, 1]);
+}
 
-offline_denied_test!(
-    should_floor_a_refreshed_ceiling_at_payload_already_resident,
-    {
-        assert_eq!(
-            retained_complete_layer_ceiling_after_prefill_budget_refresh(30, 40),
-            40,
-            "a learned budget that tightens below seated payload must not force eviction"
-        );
-        assert_eq!(
-            retained_complete_layer_ceiling_after_prefill_budget_refresh(40, 40),
-            40
-        );
-        assert_eq!(
-            retained_complete_layer_ceiling_after_prefill_budget_refresh(50, 40),
-            50
-        );
-        assert_eq!(retained_resident_ceiling_after_budget_refresh(30, 45), 45);
-        assert_eq!(retained_resident_ceiling_after_budget_refresh(45, 45), 45);
-        assert_eq!(retained_resident_ceiling_after_budget_refresh(60, 45), 60);
-    }
-);
+#[test]
+fn should_admit_a_streamed_layer_at_the_exact_headroom_boundary_only() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(should_discard_the_prefill_contract_for_generation_phases, {
+    let geometries = uniform_geometry(3);
+    // One pin claims 40 of 80, leaving exactly one 40-byte complete layer of headroom.
+    let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0], 80));
+
+    let stabilized =
+        request_residency.stabilize_prefill_plan(candidate_plan(Vec::new(), 80), &[], &geometries);
+
+    assert_eq!(
+        stabilized.layer_targets[1],
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
+        "a streamed layer must adopt its already-paid complete read at the exact boundary"
+    );
+    assert_eq!(stabilized.maximum_new_retained_bytes, 40);
+    assert_eq!(
+        stabilized.layer_targets[2],
+        ExpertLayerResidencyTarget::StreamOperationLocal,
+        "the next streamed layer must find zero headroom left and stream"
+    );
+}
+
+#[test]
+fn should_floor_a_refreshed_ceiling_at_payload_already_resident() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    assert_eq!(
+        retained_complete_layer_ceiling_after_prefill_budget_refresh(30, 40),
+        40,
+        "a learned budget that tightens below seated payload must not force eviction"
+    );
+    assert_eq!(
+        retained_complete_layer_ceiling_after_prefill_budget_refresh(40, 40),
+        40
+    );
+    assert_eq!(
+        retained_complete_layer_ceiling_after_prefill_budget_refresh(50, 40),
+        50
+    );
+    assert_eq!(retained_resident_ceiling_after_budget_refresh(30, 45), 45);
+    assert_eq!(retained_resident_ceiling_after_budget_refresh(45, 45), 45);
+    assert_eq!(retained_resident_ceiling_after_budget_refresh(60, 45), 60);
+}
+
+#[test]
+fn should_discard_the_prefill_contract_for_generation_phases() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let geometries = uniform_geometry(3);
     let candidate = candidate_plan(vec![0], 80);
 
@@ -180,9 +179,13 @@ offline_denied_test!(should_discard_the_prefill_contract_for_generation_phases, 
         published_plan, candidate,
         "the generation candidate must pass through unchanged"
     );
-});
+}
 
-offline_denied_test!(should_shrink_but_never_expand_an_open_prefill_contract, {
+#[test]
+fn should_shrink_but_never_expand_an_open_prefill_contract() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let geometries = uniform_geometry(3);
 
     let (opened_residency, _) = publish_request_stable_residency_plan(
@@ -252,4 +255,4 @@ offline_denied_test!(should_shrink_but_never_expand_an_open_prefill_contract, {
         vec![0],
         "a zero-release republish must not re-pin the demoted layer"
     );
-});
+}

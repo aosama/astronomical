@@ -3,13 +3,16 @@
 //! CI hardware cannot make a real kernel fail, so the capability owner
 //! accepts forced verdicts through this documented test-only constructor.
 //! Production code must never call it.
-use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     CustomKernelVerdict, CustomMetalKernelFamily, KernelUnsupportedReason, WorkerKernelCapabilities,
 };
 
-offline_denied_test!(should_force_an_unsupported_verdict_for_a_single_family, {
+#[test]
+fn should_force_an_unsupported_verdict_for_a_single_family() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let capabilities = WorkerKernelCapabilities::with_forced_verdicts_for_tests([(
         CustomMetalKernelFamily::SortedExpertWeightedSum,
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
@@ -28,18 +31,26 @@ offline_denied_test!(should_force_an_unsupported_verdict_for_a_single_family, {
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
         "families absent from the forced set stay fail-closed"
     );
-});
+}
 
-offline_denied_test!(should_force_a_supported_verdict, {
+#[test]
+fn should_force_a_supported_verdict() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let capabilities = WorkerKernelCapabilities::with_forced_verdicts_for_tests([(
         CustomMetalKernelFamily::GatedDeltaSequence,
         CustomKernelVerdict::Supported,
     )]);
 
     assert!(capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaSequence));
-});
+}
 
-offline_denied_test!(should_honor_every_forced_reason_for_every_family, {
+#[test]
+fn should_honor_every_forced_reason_for_every_family() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     // Families are data, not tests: one loop proves the fail-closed verdict
     // contract across the whole family catalogue, so a new family is covered
     // by adding an enum variant, not a new test.
@@ -83,4 +94,4 @@ offline_denied_test!(should_honor_every_forced_reason_for_every_family, {
             );
         }
     }
-});
+}

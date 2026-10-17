@@ -1,7 +1,5 @@
 //! Adversarial PNG fixtures for the image-completion wire boundary.
 
-use astronomical_test_harness::offline_denied_test;
-
 use std::{io::Cursor, ops::Range};
 
 use crate::{
@@ -10,11 +8,19 @@ use crate::{
 };
 use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
 
-offline_denied_test!(should_reject_empty_idat_data_at_the_wire_boundary, {
-    assert_invalid_png_encoding(png_bytes_from_chunks(1_024, 768, 8, 2, &[]));
-});
+#[test]
+fn should_reject_empty_idat_data_at_the_wire_boundary() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-offline_denied_test!(should_reject_decoded_rgb_bomb_before_allocation, {
+    assert_invalid_png_encoding(png_bytes_from_chunks(1_024, 768, 8, 2, &[]));
+}
+
+#[test]
+fn should_reject_decoded_rgb_bomb_before_allocation() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let worker_event = image_completion_event(
         png_bytes_from_chunks(16_384, 16_384, 8, 2, &[0]),
         ImageGenerationResultMetadata {
@@ -30,57 +36,67 @@ offline_denied_test!(should_reject_decoded_rgb_bomb_before_allocation, {
             ImageGenerationCompletionValidationError::PngDecodeResourceLimit
         ))
     ));
-});
+}
 
-offline_denied_test!(
-    should_reject_source_palette_png_even_when_the_decoder_expands_it_to_rgb8,
-    {
-        let mut palette_png = encode_solid_luma_png(1_024, 768);
-        let ihdr_range = png_chunk_range(&palette_png, b"IHDR");
-        palette_png[ihdr_range.start + 17] = 3;
-        rewrite_png_chunk_crc(&mut palette_png, ihdr_range.clone());
-        let idat_start = png_chunk_range(&palette_png, b"IDAT").start;
-        palette_png.splice(idat_start..idat_start, png_chunk_bytes(b"PLTE", &[0, 0, 0]));
+#[test]
+fn should_reject_source_palette_png_even_when_the_decoder_expands_it_to_rgb8() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        let worker_event = image_completion_event(palette_png, valid_image_result_metadata());
-        assert!(matches!(
-            decode_event(&encode_event(&worker_event).expect("event should serialize")),
-            Err(ProtocolError::InvalidImageGenerationCompletion(
-                ImageGenerationCompletionValidationError::NonRgb8Png
-            ))
-        ));
-    }
-);
+    let mut palette_png = encode_solid_luma_png(1_024, 768);
+    let ihdr_range = png_chunk_range(&palette_png, b"IHDR");
+    palette_png[ihdr_range.start + 17] = 3;
+    rewrite_png_chunk_crc(&mut palette_png, ihdr_range.clone());
+    let idat_start = png_chunk_range(&palette_png, b"IDAT").start;
+    palette_png.splice(idat_start..idat_start, png_chunk_bytes(b"PLTE", &[0, 0, 0]));
 
-offline_denied_test!(
-    should_reject_corrupt_missing_and_trailing_iend_at_the_wire_boundary,
-    {
-        let valid_png = valid_rgb_png(1_024, 768);
-        let iend_range = png_chunk_range(&valid_png, b"IEND");
+    let worker_event = image_completion_event(palette_png, valid_image_result_metadata());
+    assert!(matches!(
+        decode_event(&encode_event(&worker_event).expect("event should serialize")),
+        Err(ProtocolError::InvalidImageGenerationCompletion(
+            ImageGenerationCompletionValidationError::NonRgb8Png
+        ))
+    ));
+}
 
-        let mut corrupt_iend_png = valid_png.clone();
-        corrupt_iend_png[iend_range.end - 1] ^= 0xff;
-        assert_invalid_png_encoding(corrupt_iend_png);
+#[test]
+fn should_reject_corrupt_missing_and_trailing_iend_at_the_wire_boundary() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        let mut missing_iend_png = valid_png.clone();
-        missing_iend_png.drain(iend_range.clone());
-        assert_invalid_png_encoding(missing_iend_png);
+    let valid_png = valid_rgb_png(1_024, 768);
+    let iend_range = png_chunk_range(&valid_png, b"IEND");
 
-        let mut trailing_iend_png = valid_png;
-        trailing_iend_png.push(0);
-        assert_invalid_png_encoding(trailing_iend_png);
-    }
-);
+    let mut corrupt_iend_png = valid_png.clone();
+    corrupt_iend_png[iend_range.end - 1] ^= 0xff;
+    assert_invalid_png_encoding(corrupt_iend_png);
 
-offline_denied_test!(should_reject_nonzero_length_iend_at_the_wire_boundary, {
+    let mut missing_iend_png = valid_png.clone();
+    missing_iend_png.drain(iend_range.clone());
+    assert_invalid_png_encoding(missing_iend_png);
+
+    let mut trailing_iend_png = valid_png;
+    trailing_iend_png.push(0);
+    assert_invalid_png_encoding(trailing_iend_png);
+}
+
+#[test]
+fn should_reject_nonzero_length_iend_at_the_wire_boundary() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let mut png = png_bytes_from_chunks(1_024, 768, 8, 2, &[0]);
     let iend_range = png_chunk_range(&png, b"IEND");
     png.splice(iend_range, png_chunk_bytes(b"IEND", &[0]));
 
     assert_invalid_png_encoding(png);
-});
+}
 
-offline_denied_test!(should_reject_malformed_deflate_with_valid_chunk_crcs, {
+#[test]
+fn should_reject_malformed_deflate_with_valid_chunk_crcs() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     assert_invalid_png_encoding(png_bytes_from_chunks(
         1_024,
         768,
@@ -88,7 +104,7 @@ offline_denied_test!(should_reject_malformed_deflate_with_valid_chunk_crcs, {
         2,
         &[0xde, 0xad, 0xbe, 0xef],
     ));
-});
+}
 
 fn encode_solid_luma_png(width_pixels: u32, height_pixels: u32) -> Vec<u8> {
     let pixel_bytes = vec![0; width_pixels as usize * height_pixels as usize];

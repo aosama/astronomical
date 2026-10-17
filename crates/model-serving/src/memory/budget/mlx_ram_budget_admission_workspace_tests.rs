@@ -8,7 +8,6 @@
 //! every later request with `generation context exceeds available GPU wired
 //! memory` until the model reloaded. These tests pin the numbers admission
 //! actually charges so the rejection cascade cannot creep back in.
-use astronomical_test_harness::offline_denied_test;
 
 use crate::{
     ContextAdmissionRequirements, MemoryAdmissionDecision, MemoryPhase, MlxRamBudget,
@@ -27,7 +26,12 @@ fn production_failure_geometry() -> MlxRamBudgetModelGeometry {
     }
 }
 
-offline_denied_test!(should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_activation_evidence, {
+#[test]
+fn should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_activation_evidence()
+ {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
     let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -67,35 +71,36 @@ offline_denied_test!(should_reclaim_instead_of_rejecting_the_follow_up_context_a
         },
         "the follow-up turn must be servable by reclaiming retained experts, never rejected"
     );
-});
+}
 
-offline_denied_test!(
-    should_resolve_the_follow_up_reserve_from_evidence_at_the_operation_scope,
-    {
-        let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
-            .expect("positive ceiling should construct");
-        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
-            phase: MemoryPhase::Prefill,
-            context_token_count: 2_048,
-            measured_context_and_activation_bytes: 9_900_000_000,
-            observed_activation_headroom_bytes: 9_000_000_000,
-            exact_temporary_workspace_bytes: 0,
-        });
-        mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
-            phase: MemoryPhase::Prefill,
-            context_token_count: 8_192,
-            measured_context_and_activation_bytes: 3_400_000_000,
-            observed_activation_headroom_bytes: 3_000_000_000,
-            exact_temporary_workspace_bytes: 0,
-        });
+#[test]
+fn should_resolve_the_follow_up_reserve_from_evidence_at_the_operation_scope() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
 
-        // Once the 8,192-token scope carries its own measured evidence, the
-        // follow-up promise resolves from the honest at-or-below maximum: the
-        // smaller-scope observation must not override the larger known lower
-        // bucket, and neither value may be multiplied further.
-        let admission_workspace =
-            mlx_ram_budget.context_admission_workspace_snapshot(50_591, 8_192, 0, 0);
+    let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
+        .expect("positive ceiling should construct");
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 2_048,
+        measured_context_and_activation_bytes: 9_900_000_000,
+        observed_activation_headroom_bytes: 9_000_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
+    mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
+        phase: MemoryPhase::Prefill,
+        context_token_count: 8_192,
+        measured_context_and_activation_bytes: 3_400_000_000,
+        observed_activation_headroom_bytes: 3_000_000_000,
+        exact_temporary_workspace_bytes: 0,
+    });
 
-        assert_eq!(admission_workspace.activation_headroom_bytes, 9_000_000_000);
-    }
-);
+    // Once the 8,192-token scope carries its own measured evidence, the
+    // follow-up promise resolves from the honest at-or-below maximum: the
+    // smaller-scope observation must not override the larger known lower
+    // bucket, and neither value may be multiplied further.
+    let admission_workspace =
+        mlx_ram_budget.context_admission_workspace_snapshot(50_591, 8_192, 0, 0);
+
+    assert_eq!(admission_workspace.activation_headroom_bytes, 9_000_000_000);
+}
