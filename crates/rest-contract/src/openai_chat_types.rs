@@ -339,6 +339,17 @@ pub enum OpenAiToolType {
 }
 
 /// One function declaration in a tool definition.
+///
+/// `strict` is a documented field of the OpenAI `function` object. A client that
+/// declares the OpenAI-compatible tool schema sends it; rejecting it here with a
+/// generic unknown-field error silently fails every tool call a client makes with
+/// the standard schema, and leaves Chat Completions inconsistent with the Responses
+/// surface, which already recognizes `strict`. Accepting it here keeps request-body
+/// validation faithful to the protocol. The serving layer does not enforce strict
+/// schema conformance, so the value is recorded but not forwarded downstream, exactly
+/// as the Responses contract forwards `strict: false`. Like the sibling optional
+/// fields, the value is modeled as `Option` so a lenient client that sends
+/// `strict: null` is accepted rather than rejected with a type error.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct OpenAiFunctionDefinition {
@@ -347,6 +358,8 @@ pub struct OpenAiFunctionDefinition {
     description: Option<String>,
     #[serde(default)]
     parameters: Option<Value>,
+    #[serde(default)]
+    strict: Option<bool>,
 }
 
 /// A selected automatic tool mode or one named forced function.
