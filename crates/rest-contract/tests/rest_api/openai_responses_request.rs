@@ -157,6 +157,62 @@ fn should_accept_native_function_tools_and_harmless_compatibility_fields() {
 }
 
 #[test]
+fn should_accept_the_documented_strict_tool_field_on_responses() {
+    // Issue #1323: Chat Completions accepts the documented `strict` field in
+    // every spelling, so the Responses surface must accept it too — same
+    // request intent, same outcome. The requested value is echoed in the
+    // validated parts; the serving layer enforces no strict conformance on
+    // either surface.
+    let request = serde_json::from_str::<OpenAiResponsesRequest>(
+        r#"{
+            "model":"astronomical/fake-mixture-of-experts",
+            "input":"List Rust files.",
+            "tools":[{
+                "type":"function",
+                "name":"glob",
+                "description":"List matching files.",
+                "parameters":{"type":"object","properties":{"pattern":{"type":"string"}}},
+                "strict":true
+            }]
+        }"#,
+    )
+    .expect("the documented strict tool field must be accepted on Responses");
+
+    let request_parts = request
+        .into_parts()
+        .expect("a request declaring strict must validate");
+
+    assert_eq!(request_parts.tools.len(), 1);
+    assert!(request_parts.tools[0].strict);
+}
+
+#[test]
+fn should_accept_an_explicit_strict_null_on_responses_tools() {
+    // A lenient client may serialize an absent boolean as an explicit null;
+    // like the sibling optional fields, null must be treated as omission
+    // rather than rejected with a type error.
+    let request = serde_json::from_str::<OpenAiResponsesRequest>(
+        r#"{
+            "model":"astronomical/fake-mixture-of-experts",
+            "input":"List Rust files.",
+            "tools":[{
+                "type":"function",
+                "name":"glob",
+                "parameters":{"type":"object"},
+                "strict":null
+            }]
+        }"#,
+    )
+    .expect("strict:null must be accepted like an omitted strict field");
+
+    let request_parts = request
+        .into_parts()
+        .expect("strict:null must validate like an omitted strict field");
+
+    assert!(!request_parts.tools[0].strict);
+}
+
+#[test]
 fn should_parse_recognized_behavior_changing_fields_before_rejecting_them() {
     let unsupported_requests = [
         (
