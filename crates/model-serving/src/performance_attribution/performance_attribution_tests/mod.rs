@@ -1,3 +1,5 @@
+mod flux2_image_tests;
+
 use crate::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
     PerformanceAttribution, PerformanceAttributionOutcome, PerformanceCounter,

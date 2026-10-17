@@ -39,8 +39,8 @@
 //!
 //! This module observes. It never decides residency.
 
-use crate::MlxActiveMemoryBreakdown;
 use crate::memory::MlxRamBudgetSnapshot;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 
 /// The reason-tagged split of one MLX ceiling's unused headroom.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

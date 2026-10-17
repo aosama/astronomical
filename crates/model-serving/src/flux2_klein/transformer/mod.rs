@@ -4,17 +4,18 @@
 //! separate so the image engine can cancel and attribute work between GPU roots.
 
 mod blocks;
-mod error;
-mod execution;
-mod geometry;
+pub(crate) mod error;
+pub(crate) mod execution;
+pub(crate) mod geometry;
 mod math;
-mod preparation;
-mod weights;
+pub(crate) mod preparation;
+pub(crate) mod weights;
 
 pub use error::{Flux2KleinTransformerError, Flux2KleinTransformerGeometryError};
+pub use execution::Flux2KleinBlockGroupEvent;
 pub use execution::{
-    Flux2KleinBlockGroupEvent, Flux2KleinBlockKind, Flux2KleinForwardAdvance,
-    Flux2KleinForwardState, Flux2KleinTransformer, Flux2KleinTransformerOutput,
+    Flux2KleinBlockKind, Flux2KleinForwardAdvance, Flux2KleinForwardState, Flux2KleinTransformer,
+    Flux2KleinTransformerOutput,
 };
 pub use geometry::Flux2KleinTransformerGeometry;
 #[doc(hidden)]

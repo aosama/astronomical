@@ -44,6 +44,9 @@ pub use model::{
     Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,
 };
 
-/// Model identity constants retained for sparse-artifact test fixtures.
-pub const ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID: &str = "Ornith-1.0-35B-OptiQ-4bit";
-pub const ORNITH_1_0_35B_OPTIQ_4BIT_REVISION: &str = "ce62c23d34b91d84f838e0b292d517dbe4b9b60f";
+/// Model identity constants for the frozen Ornith 1.0 sparse artifact; defined
+/// in the shared family core so every engine and test fixture can reach them
+/// without crossing engine boundaries. Re-exported here for path stability.
+pub use crate::qwen3_5_core::{
+    ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
+};

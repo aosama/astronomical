@@ -6,16 +6,16 @@ use astronomical_ipc_protocol::{
 };
 
 use crate::k2_horizon_mova::artifacts::ValidatedK2HorizonMoVAArtifact;
-use crate::{
-    ModelGeneratedTokenTranslation, ModelGenerationOutputError, ModelGenerationProcessor,
-    PreparedModelGeneration,
-};
 
 use super::thinking_budget;
 use super::{
     K2HorizonMoVAInferenceRequest, K2HorizonMoVAPromptRenderer, K2HorizonMoVARequestOutput,
     K2HorizonMoVATokenizer, K2HorizonMoVATokenizerError,
 };
+use crate::model_generation_processor::ModelGeneratedTokenTranslation;
+use crate::model_generation_processor::ModelGenerationOutputError;
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::model_generation_processor::PreparedModelGeneration;
 
 const DEFAULT_TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 const DEFAULT_TOP_P_THOUSANDTHS: u16 = 950;

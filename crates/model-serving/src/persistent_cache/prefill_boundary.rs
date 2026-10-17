@@ -4,6 +4,9 @@
 //! captured decoder state and token slice at the same exact point, and ensures a
 //! required synchronous publication succeeds before processing can advance.
 
+#[cfg(test)]
+mod tests;
+
 /// Returns local completed-token counts for every persistent prompt-cache
 /// boundary crossed by one attempted prefill forward.
 #[must_use]

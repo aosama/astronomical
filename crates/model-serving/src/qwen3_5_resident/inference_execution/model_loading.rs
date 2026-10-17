@@ -1,8 +1,9 @@
 use astronomical_runtime_integration::MlxRuntime;
 use std::sync::Arc;
 
+use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
-    EngineLoadResult, InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
+    InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
     PerformanceOperation, PersistentPromptCacheDiskStore, PersistentPromptCacheModelContract,
     PersistentVisualEmbeddingModelContract,
 };

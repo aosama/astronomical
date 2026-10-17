@@ -6,15 +6,20 @@
 //! live here so a capability demotion cannot accidentally route to the
 //! custom kernel.
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod tests;
+
 /// Sorting gathered expert reads pays off only once the assignment set is
-/// large enough to group reads by the leading expert axis.
+/// large enough to group reads by the leading expert axis. Both items execute
+/// only in the direct-MLX engine world, where the resident and streaming
+/// engines route gathered expert projections.
 pub const MINIMUM_SORTED_EXPERT_ASSIGNMENTS: usize = 64;
 
 /// Returns whether production may take the sorted custom-kernel reduction
 /// route. A capability-demoted kernel always takes the unsorted MLX route,
 /// which the direct-MLX contracts prove numerically equal.
 #[must_use]
-pub fn should_use_sorted_expert_reduction(
+pub(crate) fn should_use_sorted_expert_reduction(
     assignment_count: usize,
     is_sorted_reduction_kernel_available: bool,
 ) -> bool {

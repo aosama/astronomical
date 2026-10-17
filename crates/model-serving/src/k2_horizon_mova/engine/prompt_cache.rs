@@ -11,12 +11,13 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::k2_horizon_mova::cache_layout;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAConfig;
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
+use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
     PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
-    PersistentPromptCacheModelContractError, PersistentPromptCachePrefixLookup,
-    PersistentPromptCachePrefixLookupResult, PersistentPromptCachePublicationOutcome,
+    PersistentPromptCacheModelContractError, PersistentPromptCachePrefixLookupResult,
+    PersistentPromptCachePublicationOutcome,
 };
 
 /// Opens the SSD store for one loaded K2 Horizon MoVA revision.

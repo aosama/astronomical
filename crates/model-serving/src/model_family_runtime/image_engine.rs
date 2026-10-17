@@ -1,9 +1,10 @@
 use astronomical_ipc_protocol::{ImageGenerationCommand, ImageGenerationFailureReason, RequestId};
 
+use crate::image_generation_engine::ImageGenerationEngineLoadResult;
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::{
-    Flux2KleinImageEngine, ImageGenerationEngine, ImageGenerationEngineLoadResult,
-    ImageGenerationEngineStep, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-    QwenImage21ImageEngine,
+    Flux2KleinImageEngine, ImageGenerationEngine, ImageGenerationEngineStep, QwenImage21ImageEngine,
 };
 
 /// Family-tagged image engine used by the generic worker so one process can serve any

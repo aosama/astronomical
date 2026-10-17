@@ -16,10 +16,10 @@ use crate::k2_horizon_mova::model::K2HorizonMoVAModel;
 use crate::k2_horizon_mova::{
     K2HorizonMoVAInferenceRequest, K2HorizonMoVAThinkingBudgetState, ValidatedK2HorizonMoVAArtifact,
 };
+use crate::persistent_cache::counters::PersistentPromptCacheCounters;
 use crate::{
     PerformanceAttribution, PerformanceAttributionLog, PersistentPromptCacheBlockKey,
-    PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
-    PersistentPromptCacheDiskStoreConfig,
+    PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
 };
 
 pub struct K2HorizonMoVAPendingStartup {

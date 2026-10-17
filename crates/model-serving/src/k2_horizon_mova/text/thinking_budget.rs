@@ -7,6 +7,7 @@
 
 use thiserror::Error;
 
+#[cfg(any(test, feature = "direct-mlx"))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ThinkingBudgetPhase {
     VisibleAnswer,
@@ -14,6 +15,7 @@ enum ThinkingBudgetPhase {
     ForcingTransition,
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 /// Request-local reasoning allowance and forced `</ifm|think>` cursor.
 #[derive(Clone, Debug)]
 pub struct K2HorizonMoVAThinkingBudgetState {
@@ -26,6 +28,7 @@ pub struct K2HorizonMoVAThinkingBudgetState {
     forced_token_awaiting_commit: Option<u32>,
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 impl K2HorizonMoVAThinkingBudgetState {
     /// Builds budget state. A missing close-token sequence disables forcing.
     pub fn new(
@@ -133,6 +136,7 @@ impl K2HorizonMoVAThinkingBudgetState {
         }
     }
 
+    #[cfg(test)]
     #[must_use]
     pub const fn is_inside_thinking(&self) -> bool {
         !matches!(self.phase, ThinkingBudgetPhase::VisibleAnswer)
@@ -164,10 +168,12 @@ pub fn resolve_k2_horizon_mova_thinking_budget(
     Some(u16::try_from(uncapped_think_tokens.min(maximum_think_tokens)).unwrap_or(u16::MAX))
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 fn is_natural_end(natural_reasoning_end_token_ids: &[u32], token_id: u32) -> bool {
     natural_reasoning_end_token_ids.contains(&token_id)
 }
 
+#[cfg(any(test, feature = "direct-mlx"))]
 impl K2HorizonMoVAThinkingBudgetState {
     fn is_natural_reasoning_end(&self, token_id: u32) -> bool {
         is_natural_end(&self.natural_reasoning_end_token_ids, token_id)

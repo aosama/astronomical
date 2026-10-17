@@ -8,11 +8,12 @@ use super::output::worker_expert_residency_snapshot;
 use super::support;
 use super::support::{ModelFactory, WorkerRuntimeError};
 use crate::{
-    ImageGenerationEngine, InferenceEngine, InferenceEngineError, ModelGenerationProcessor,
+    ImageGenerationEngine, InferenceEngine, InferenceEngineError,
     effective_mlx_memory_ceiling_bytes,
 };
 
 use super::{EngineBackedWorker, LoadedRuntime};
+use crate::model_generation_processor::ModelGenerationProcessor;
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>

@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::qwen_image_21::artifact::{QwenImage21ArtifactProvenance, QwenImage21ArtifactValidator};
 use crate::qwen_image_21::official_profile::{
     QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES, QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
@@ -26,9 +27,8 @@ use crate::qwen_image_21::pipeline::QwenImage21Pipeline;
 use crate::qwen_image_21::render_contract::{QwenImage21RenderAdvance, QwenImage21RenderRequest};
 use crate::qwen_image_21::render_session::QwenImage21RenderSession;
 use crate::{
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelLoadingPerformanceAttributionMetadata,
-    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
-    PerformanceOperation,
+    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::components::{
@@ -124,7 +124,7 @@ impl QwenImage21MlxComponents {
             snapshot.active_memory_bytes() as u64,
             snapshot.allocator_cache_memory_bytes() as u64,
             snapshot.peak_memory_bytes() as u64,
-            crate::MlxActiveMemoryBreakdown::default(),
+            MlxActiveMemoryBreakdown::default(),
         ))
     }
 
@@ -364,7 +364,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
                 snapshot.active_memory_bytes() as u64,
                 snapshot.allocator_cache_memory_bytes() as u64,
                 snapshot.peak_memory_bytes() as u64,
-                crate::MlxActiveMemoryBreakdown::default(),
+                MlxActiveMemoryBreakdown::default(),
             )
         });
         let (width_pixels, height_pixels, steps, seed) = request_controls
@@ -456,3 +456,5 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
         ))
     }
 }
+
+use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

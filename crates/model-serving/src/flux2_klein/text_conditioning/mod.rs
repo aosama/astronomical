@@ -1,5 +1,8 @@
 //! Native Qwen3-4B prompt preparation and request-scoped FLUX text conditioning.
 
+#[cfg(test)]
+mod tests;
+
 mod batch;
 mod error;
 mod prompt;

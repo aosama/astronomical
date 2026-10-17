@@ -3,6 +3,9 @@
 //! Counts, widths, and router knobs come from the artifact. This type must not
 //! bake in one Hugging Face repository's 36B geometry.
 
+#[cfg(test)]
+mod tests;
+
 use super::affine_profile::K2HorizonMoVAQuantizationContract;
 use super::document::{K2HorizonMoVAConfigDocument, K2HorizonMoVATokenIdDocument};
 use super::error::K2HorizonMoVAConfigError;

@@ -2,9 +2,11 @@
 
 use astronomical_ipc_protocol::{ImageGenerationCapabilities, RequestId};
 
-use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttributionOutcome};
+use crate::PerformanceAttributionOutcome;
 
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinFlowStep, Flux2KleinImageDimensions};
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// Loaded identity supplied by either native components or an offline lifecycle fake.
 #[doc(hidden)]

@@ -8,9 +8,9 @@
 
 mod pipeline;
 mod scheduler;
-mod text_encoder;
-mod transformer;
-mod vae;
+pub(crate) mod text_encoder;
+pub(crate) mod transformer;
+pub(crate) mod vae;
 
 pub use pipeline::QwenImage21PipelineConfig;
 pub use scheduler::QwenImage21SchedulerConfig;

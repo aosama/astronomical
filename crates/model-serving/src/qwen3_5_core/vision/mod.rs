@@ -1,8 +1,9 @@
-mod image_processor;
+pub(crate) mod image_processor;
 #[cfg(feature = "direct-mlx")]
 mod vision_attention;
 mod vision_config;
-mod vision_input_plan;
+#[cfg(any(test, feature = "direct-mlx"))]
+pub(crate) mod vision_input_plan;
 #[cfg(feature = "direct-mlx")]
 mod vision_model;
 #[cfg(feature = "direct-mlx")]
@@ -12,19 +13,20 @@ pub(crate) mod vision_tensor_spec;
 mod vision_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod visual_embedding_injection;
-mod visual_embeddings;
+pub(crate) mod visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod visual_embeddings_runtime;
 mod visual_prompt_cache_identity;
 
+#[cfg(any(test, feature = "direct-mlx"))]
+pub use image_processor::Qwen3_5ImageGrid;
+
 pub use image_processor::{
-    Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
-    Qwen3_5ProcessedImage,
+    Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor, Qwen3_5ProcessedImage,
 };
 #[cfg(feature = "direct-mlx")]
 pub use vision_attention::Qwen3_5VisionPaddingZeroCache;
 pub use vision_config::Qwen3_5VisionConfig;
-pub use vision_input_plan::{Qwen3_5VisionInputPlan, Qwen3_5VisionInputPlanError};
 #[cfg(feature = "direct-mlx")]
 pub use vision_model::Qwen3_5VisionModel;
 pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles;
@@ -33,8 +35,8 @@ pub use vision_weights::Qwen3_5VisionWeights;
 #[cfg(feature = "direct-mlx")]
 pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 pub use visual_embeddings::{
-    Qwen3_5VisualEmbeddingRequiredImage, Qwen3_5VisualEmbeddingSuffixPlan,
-    Qwen3_5VisualEmbeddingSuffixPlanError, plan_qwen3_5_visual_embedding_suffix,
+    Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
+    plan_qwen3_5_visual_embedding_suffix,
 };
 pub use visual_prompt_cache_identity::{
     Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
@@ -50,3 +52,6 @@ pub(crate) use super::model_math::error::Qwen3_5ExecutionError;
 pub(crate) use visual_embeddings_runtime::{
     VisualEmbeddingEngineContext, resolve_visual_embeddings_for_processed_images,
 };
+
+#[cfg(feature = "direct-mlx")]
+pub use vision_input_plan::Qwen3_5VisionInputPlan;

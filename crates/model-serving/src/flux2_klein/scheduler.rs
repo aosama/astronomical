@@ -1,5 +1,8 @@
 //! Deterministic CPU-FP64 shifted flow-matching Euler schedule.
 
+#[cfg(test)]
+mod tests;
+
 use thiserror::Error;
 
 use super::Flux2KleinOfficialProfile;

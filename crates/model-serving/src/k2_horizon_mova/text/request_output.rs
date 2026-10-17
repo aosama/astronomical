@@ -4,7 +4,7 @@ use super::{
     K2HorizonMoVAOutputParser, K2HorizonMoVATokenDecoder, K2HorizonMoVATokenizer,
     K2HorizonMoVATokenizerError,
 };
-use crate::ModelGenerationOutputError;
+use crate::model_generation_processor::ModelGenerationOutputError;
 
 /// Request-local decode and IFM parse state.
 #[derive(Debug)]

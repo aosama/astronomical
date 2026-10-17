@@ -10,22 +10,6 @@ use super::{
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Flux2KleinPngEncoder {
-    pub fn encode_decoded_mlx_rgb(
-        runtime: &MlxRuntime,
-        decoded_channel_last_rgb: &MlxArray,
-        width_pixels: u32,
-        height_pixels: u32,
-    ) -> Result<Vec<u8>, Flux2KleinImageEncodingError> {
-        let mut attribution = PerformanceAttribution::disabled();
-        Self::encode_decoded_mlx_rgb_with_performance_attribution(
-            runtime,
-            decoded_channel_last_rgb,
-            width_pixels,
-            height_pixels,
-            &mut attribution,
-        )
-    }
-
     pub fn encode_decoded_mlx_rgb_with_performance_attribution(
         runtime: &MlxRuntime,
         decoded_channel_last_rgb: &MlxArray,

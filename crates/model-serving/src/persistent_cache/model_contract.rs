@@ -6,6 +6,9 @@
 
 use sha2::{Digest, Sha256};
 
+#[cfg(test)]
+mod tests;
+
 use crate::{DecoderCacheLayout, DecoderCachePersistedTensorLayout};
 
 use super::block_format::PERSISTENT_PROMPT_CACHE_FORMAT_VERSION;

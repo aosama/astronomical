@@ -174,9 +174,10 @@ fn prefill_logits(
 pub(super) fn load_probe_model(runtime: MlxRuntime) -> K2HorizonMoVAModel {
     let model_directory = configured_k2_horizon_mova_model_directory();
     let mut performance_attribution = PerformanceAttribution::disabled();
-    let validated_artifact = crate::K2HorizonMoVAArtifactValidator::new()
-        .validate(&model_directory)
-        .expect("the installed K2 artifact should validate");
+    let validated_artifact =
+        crate::k2_horizon_mova::artifacts::validator::K2HorizonMoVAArtifactValidator::new()
+            .validate(&model_directory)
+            .expect("the installed K2 artifact should validate");
     let weights =
         K2HorizonMoVAWeights::load(&runtime, &validated_artifact, &mut performance_attribution)
             .expect("K2 weights should load for the causality probe");

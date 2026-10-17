@@ -3,6 +3,9 @@
 //! The struct stays GPU-free so offline tests and non-MLX callers can pin
 //! the served configuration without the direct-MLX feature.
 
+#[cfg(test)]
+mod tests;
+
 use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;

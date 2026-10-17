@@ -8,6 +8,9 @@
 //! Pi compaction sends exactly that shape: an output cap of 16,000 with a
 //! 16,384 high-effort allowance.
 
+#[cfg(test)]
+mod tests;
+
 use super::thinking_budget;
 
 /// Resolves the effective thinking allowance for one request.

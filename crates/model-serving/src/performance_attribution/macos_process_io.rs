@@ -245,3 +245,6 @@ struct MacosResourceUsageInfoV4 {
 unsafe extern "C" {
     fn proc_pid_rusage(process_id: i32, flavor: i32, buffer: *mut std::ffi::c_void) -> i32;
 }
+
+#[cfg(test)]
+mod tests;

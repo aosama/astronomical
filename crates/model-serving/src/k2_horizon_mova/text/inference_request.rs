@@ -1,4 +1,4 @@
-use crate::PreparedInferenceRequest;
+use crate::inference_engine::contract::PreparedInferenceRequest;
 
 /// Prepared K2 Horizon MoVA generation request accepted by the family engine.
 #[derive(Debug)]

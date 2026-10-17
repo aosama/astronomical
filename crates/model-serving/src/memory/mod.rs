@@ -58,9 +58,9 @@ mod geometry_floor;
 mod phase;
 mod reclamation;
 mod recovery;
-mod residency;
+pub(crate) mod residency;
 mod serving_ceiling;
-mod telemetry;
+pub(crate) mod telemetry;
 mod utilization;
 mod vocabulary;
 
@@ -138,6 +138,5 @@ pub use serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     machine_ceiling_from_physical_ram_bytes,
 };
-pub use telemetry::{MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
 pub use utilization::MemoryCeilingUtilization;
 pub use vocabulary::{MemoryAdmissionDecision, MemoryBoundary};

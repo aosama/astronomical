@@ -4,9 +4,9 @@ mod raw_safetensors_inventory;
 mod required_files;
 mod safetensors_dtype;
 mod shared_blob_resolution;
-mod tensor_inventory;
-mod types;
-mod validated_artifact;
+pub(crate) mod tensor_inventory;
+pub(crate) mod types;
+pub(crate) mod validated_artifact;
 mod validated_safetensors_source;
 
 #[cfg(test)]
@@ -26,8 +26,7 @@ pub(crate) use required_files::{
     validate_required_files,
 };
 pub use tensor_inventory::{
-    TensorDeclarationOrigin, TensorInventory, TensorInventoryError, TensorLocation,
-    TensorSemanticRole, TensorSourceId,
+    TensorDeclarationOrigin, TensorInventory, TensorLocation, TensorSemanticRole, TensorSourceId,
 };
 pub use types::{RequiredFileProfile, TensorDtype, TensorProfile};
 pub(crate) use validated_artifact::ValidatedRequiredFile;

@@ -6,6 +6,9 @@
 //! `contiguous_selected_runs()` groups adjacent selected experts for efficient
 //! sequential I/O.
 
+#[cfg(test)]
+mod tests;
+
 use std::collections::{HashMap, hash_map::Entry};
 use std::path::{Path, PathBuf};
 

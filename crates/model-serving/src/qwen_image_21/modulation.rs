@@ -10,6 +10,9 @@
 //! is pure integer logic with no runtime dependency and is tested offline against the diffusers
 //! reference.
 
+#[cfg(test)]
+mod tests;
+
 /// Mark the target image's tokens in the joint sequence.
 ///
 /// Returns `true` only at the last image block's positions (the target image), `false` at every text and

@@ -5,6 +5,9 @@
 //! not use this owner because repeatedly materializing concatenations would add
 //! work to their one-operation lifetime.
 
+#[cfg(test)]
+mod tests;
+
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::artifacts::expert_gate_up_fusion_plan::{
@@ -106,7 +109,7 @@ impl Qwen3_5ResidentGateUpWeights {
 }
 
 /// Maximum temporary duplicate needed while materializing one compatible layer.
-pub fn maximum_resident_gate_up_fusion_transient_payload_bytes(
+pub(crate) fn maximum_resident_gate_up_fusion_transient_payload_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<u64, Qwen3_5ExecutionError> {
     maximum_expert_gate_up_fusion_transient_payload_bytes(layer_plans)

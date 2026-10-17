@@ -10,6 +10,9 @@
 //! resizes, normalizes, and packs host pixels; `vision_model.rs` uploads the
 //! resulting rows and delegates all learned tensor math to MLX.
 
+#[cfg(test)]
+mod tests;
+
 use std::io::Cursor;
 
 use image::{ImageReader, RgbImage, imageops::FilterType};

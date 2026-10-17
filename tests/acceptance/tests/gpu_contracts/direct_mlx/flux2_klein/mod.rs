@@ -1,14 +1,14 @@
 //! Serialized direct-MLX acceptance for FLUX component boundaries.
 
-#[path = "../../../../../../crates/model-serving/tests/flux2_klein_offline/engine/direct_mlx.rs"]
+#[path = "../../../../../../crates/model-serving/tests/families/flux2_klein/engine/direct_mlx.rs"]
 mod engine;
 
 #[allow(dead_code)]
 #[path = "../../../../../../crates/model-serving/src/flux2_klein/text_conditioning/error.rs"]
 mod error;
 
-#[path = "../../../../../../crates/model-serving/tests/flux2_klein_offline/text_conditioning/direct_mlx_oracles.rs"]
-mod text_conditioning;
+// The text-conditioning direct-MLX oracles moved beside-source in the model-serving
+// test-layout campaign; they run in its direct-mlx lib lane now.
 
-#[path = "../../../../../../crates/model-serving/tests/flux2_klein_offline/transformer/execution.rs"]
+#[path = "../../../../../../crates/model-serving/tests/families/flux2_klein/transformer/execution.rs"]
 mod transformer;

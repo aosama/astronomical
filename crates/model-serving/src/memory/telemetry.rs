@@ -56,7 +56,8 @@ pub struct MlxMemoryTelemetry {
     pub active_memory_breakdown: MlxActiveMemoryBreakdown,
     /// Sparse-expert ownership captured at the same instant as the measurement,
     /// so a published snapshot can never pair with a stale residency claim.
-    pub expert_residency_telemetry: Option<crate::ExpertResidencyTelemetry>,
+    pub expert_residency_telemetry:
+        Option<crate::inference_engine::contract::ExpertResidencyTelemetry>,
     /// Reason-tagged split of the ceiling's unused headroom at this instant
     /// (issue #510). `None` when the owner that composes the budget split did
     /// not participate in this measurement, for example image engines.
@@ -95,14 +96,16 @@ impl MlxMemoryTelemetry {
     #[must_use]
     pub const fn with_expert_residency_telemetry(
         mut self,
-        expert_residency_telemetry: crate::ExpertResidencyTelemetry,
+        expert_residency_telemetry: crate::inference_engine::contract::ExpertResidencyTelemetry,
     ) -> Self {
         self.expert_residency_telemetry = Some(expert_residency_telemetry);
         self
     }
 
     #[must_use]
-    pub const fn expert_residency_telemetry(self) -> Option<crate::ExpertResidencyTelemetry> {
+    pub const fn expert_residency_telemetry(
+        self,
+    ) -> Option<crate::inference_engine::contract::ExpertResidencyTelemetry> {
         self.expert_residency_telemetry
     }
 }
@@ -115,7 +118,7 @@ pub struct MlxMemoryLimitAdjustment {
     minimum_mlx_memory_ceiling_bytes: u64,
     expert_memory_mode: ExpertMemoryMode,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
-    expert_residency_telemetry: Option<crate::ExpertResidencyTelemetry>,
+    expert_residency_telemetry: Option<crate::inference_engine::contract::ExpertResidencyTelemetry>,
 }
 
 impl MlxMemoryLimitAdjustment {
@@ -142,7 +145,7 @@ impl MlxMemoryLimitAdjustment {
     #[must_use]
     pub const fn with_expert_residency_telemetry(
         mut self,
-        expert_residency_telemetry: crate::ExpertResidencyTelemetry,
+        expert_residency_telemetry: crate::inference_engine::contract::ExpertResidencyTelemetry,
     ) -> Self {
         self.expert_residency_telemetry = Some(expert_residency_telemetry);
         self
@@ -176,7 +179,9 @@ impl MlxMemoryLimitAdjustment {
 
     /// Returns the sparse-expert ownership produced by the same atomic adjustment.
     #[must_use]
-    pub const fn expert_residency_telemetry(self) -> Option<crate::ExpertResidencyTelemetry> {
+    pub const fn expert_residency_telemetry(
+        self,
+    ) -> Option<crate::inference_engine::contract::ExpertResidencyTelemetry> {
         self.expert_residency_telemetry
     }
 }
