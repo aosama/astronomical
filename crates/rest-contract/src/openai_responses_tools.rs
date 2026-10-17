@@ -45,11 +45,6 @@ impl OpenAiResponseToolDefinition {
         }
         let name = self.name.unwrap_or_default();
         validate_function_name(&name)?;
-        if self.strict == Some(true) {
-            return Err(OpenAiResponsesValidationError::UnsupportedOption {
-                option_name: "tools[].strict=true",
-            });
-        }
         if let Some(parameters) = &self.parameters {
             let schema_nesting_depth = json_nesting_depth(parameters);
             if schema_nesting_depth > MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
@@ -63,7 +58,13 @@ impl OpenAiResponseToolDefinition {
             name,
             description: self.description,
             parameters: self.parameters.unwrap_or_else(|| serde_json::json!({})),
-            strict: false,
+            // `strict` is a documented field of the Responses function tool and is
+            // accepted in every spelling for parity with the Chat Completions
+            // surface (#1323). The requested value is recorded here and echoed in
+            // the response configuration; the serving layer enforces no strict
+            // schema conformance on either surface, matching how an unenforced
+            // strict json_schema response format is served best-effort.
+            strict: self.strict == Some(true),
         })
     }
 }
