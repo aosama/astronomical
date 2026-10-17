@@ -4,7 +4,7 @@ use astronomical_model_serving::{
     PersistentPromptCachePrefixLookup,
 };
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use super::persistent_prompt_cache_model_contract_fixture::persistent_prompt_cache_model_contract;
 
 #[test]
 fn should_report_no_cache_hit_when_no_complete_blocks_exist() {
