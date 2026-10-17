@@ -2,4 +2,3 @@
 
 mod artifact;
 mod artifact_fixture;
-mod engine;

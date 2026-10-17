@@ -76,7 +76,10 @@ impl Flux2KleinImageEngine {
     }
 
     #[doc(hidden)]
-    pub fn with_components_for_tests(
+    // The DX production constructor composes through this seam, so it survives
+    // any direct-mlx build, not just test builds.
+    #[cfg(any(test, feature = "direct-mlx"))]
+    pub(super) fn with_components_for_tests(
         serving_model_id: impl Into<String>,
         components: Box<dyn Flux2KleinEngineComponents>,
     ) -> Self {
