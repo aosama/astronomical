@@ -120,7 +120,6 @@ function validCatalogEntry(overrides = {}) {
             max_output_tokens: 4096
         },
         quantization_label: "6-bit affine (group 64)",
-        architecture_summary: "Test architecture",
         upstream_license: "MIT",
         ...overrides
     };

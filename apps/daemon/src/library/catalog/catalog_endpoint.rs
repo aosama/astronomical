@@ -45,8 +45,19 @@ async fn get_library_catalog(
             destination_directory,
         ));
     }
+    let models_download_directory =
+        application_state
+            .library_download_coordinator
+            .as_ref()
+            .map(|download_coordinator| {
+                download_coordinator
+                    .models_directory()
+                    .display()
+                    .to_string()
+            });
     Json(LibraryCatalogResponse {
         schema_version: application_state.download_catalog.schema_version(),
+        models_download_directory,
         entries,
     })
 }
@@ -54,6 +65,10 @@ async fn get_library_catalog(
 #[derive(Debug, Serialize)]
 struct LibraryCatalogResponse {
     schema_version: u32,
+    /// Where new Library downloads are published, so clients can show the
+    /// destination before the user commits to a multi-gigabyte download.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    models_download_directory: Option<String>,
     entries: Vec<LibraryCatalogEntryResponse>,
 }
 
@@ -73,8 +88,6 @@ struct LibraryCatalogEntryResponse {
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     quantization_label: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    architecture_summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     upstream_license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -114,7 +127,6 @@ impl LibraryCatalogEntryResponse {
             download_state: projection.download_state,
             description: catalog_entry.description().map(str::to_owned),
             quantization_label: catalog_entry.quantization_label().map(str::to_owned),
-            architecture_summary: catalog_entry.architecture_summary().map(str::to_owned),
             upstream_license: catalog_entry.upstream_license().map(str::to_owned),
             requestable_model_id: projection.requestable_model_id.clone(),
             capabilities: LibraryCatalogCapabilitiesResponse {

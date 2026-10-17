@@ -51,6 +51,66 @@ function createTypingSession() {
     return { libraryDocument, currentSearchInput };
 }
 
+test("shows where new downloads are saved in the hero summary", () => {
+    const scriptContext = createLibraryContext();
+    const libraryDocument = createLibraryDocument();
+    scriptContext.document = libraryDocument;
+    scriptContext.catalogDocument = {
+        schema_version: 2,
+        models_download_directory: "/shared/astronomical-models",
+        entries: [validCatalogEntry()]
+    };
+
+    assert.equal(
+        vm.runInContext(
+            "renderLibraryCatalogDocument(catalogDocument)",
+            scriptContext
+        ),
+        "ready"
+    );
+
+    const heroSummary = libraryDocument.catalogContainer.children.find(
+        (renderedElement) => renderedElement.className === "library-hero-summary"
+    );
+    const locationNote = heroSummary.children.find(
+        (element) => element.className === "library-hero-location"
+    );
+    assert.ok(locationNote, "the hero should surface the download directory");
+    assert.equal(
+        locationNote.textContent,
+        "New downloads are saved to /shared/astronomical-models"
+    );
+});
+
+test("omits the hero download location when the catalog ships none", () => {
+    const scriptContext = createLibraryContext();
+    const libraryDocument = createLibraryDocument();
+    scriptContext.document = libraryDocument;
+    scriptContext.catalogDocument = {
+        schema_version: 2,
+        entries: [validCatalogEntry()]
+    };
+
+    assert.equal(
+        vm.runInContext(
+            "renderLibraryCatalogDocument(catalogDocument)",
+            scriptContext
+        ),
+        "ready"
+    );
+
+    const heroSummary = libraryDocument.catalogContainer.children.find(
+        (renderedElement) => renderedElement.className === "library-hero-summary"
+    );
+    assert.equal(
+        heroSummary.children.some(
+            (element) => element.className === "library-hero-location"
+        ),
+        false,
+        "no location line should render without a catalog directory"
+    );
+});
+
 test("keeps the search input focused, valued, and caret-set while typing", () => {
     const { libraryDocument, currentSearchInput } = createTypingSession();
     // The user clicks into the field and types — the exact flow the issue
@@ -137,7 +197,6 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             downloadState: null,
             description: "A test model for exercising Library rendering.",
             quantizationLabel: "6-bit affine (group 64)",
-            architectureSummary: "Test architecture",
             upstreamLicense: "MIT",
             requestableModelId: null,
             supportsReasoning: true,
@@ -159,7 +218,6 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             downloadState: null,
             description: "A test model for exercising Library rendering.",
             quantizationLabel: "6-bit affine (group 64)",
-            architectureSummary: "Test architecture",
             upstreamLicense: "MIT",
             requestableModelId: null,
             supportsReasoning: true,

@@ -13,7 +13,6 @@
                 "supports_embeddings": true
             },
             "quantization_label": "8-bit affine (group 64)",
-            "architecture_summary": "ModernBERT base encoder, 149M parameters, 22 layers, hidden 768, 8192-token input",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -31,7 +30,6 @@
                 "context_window": 262144
             },
             "quantization_label": "4-bit affine (group 64), bf16 vision tower",
-            "architecture_summary": "Qwen3.5 dense VLM, 0.8B parameters, 24 layers, hidden 1024, 12-layer vision tower",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -49,7 +47,6 @@
                 "context_window": 262144
             },
             "quantization_label": "4-bit affine (group 64), bf16 vision tower",
-            "architecture_summary": "Qwen3.5 dense VLM, 2B parameters, 24 layers, hidden 2048, 297-tensor vision tower",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -67,7 +64,6 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-            "architecture_summary": "Qwen3.6 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -85,7 +81,6 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ static 4.5bpw (mixed-precision affine, group 64)",
-            "architecture_summary": "Qwen3.5 dense VLM, 9B params, 32 layers, 27-layer vision tower",
             "upstream_license": "MIT"
         },
         {
@@ -108,7 +103,6 @@
                 "transformer/",
                 "vae/"
             ],
-            "architecture_summary": "FLUX.2 Klein, 4B parameters, BF16 weights",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -131,7 +125,6 @@
                 "transformer/",
                 "vae/"
             ],
-            "architecture_summary": "Qwen-Image 2.1 MMDiT, Qwen3-VL text encoder, 4-bit affine MLX weights",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -149,7 +142,6 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-            "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
             "upstream_license": "MIT"
         },
         {
@@ -167,7 +159,6 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ 4/8-bit affine (group 64), REAP-pruned",
-            "architecture_summary": "Qwen3.5 MoE VLM, 19B total params after pruning, ~3B active (A3B), 40 layers, 128 retained experts (pruned from 256), 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
             "upstream_license": "Apache-2.0",
             "included_paths": [
                 ".gitattributes",
@@ -201,7 +192,6 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ static 5.5bpw (mixed-precision affine, group 64)",
-            "architecture_summary": "Qwen3.5 MoE VLM, 35B total params, ~3B active (A3B), 40 layers, 256 experts, 8 routed per token. bf16 vision tower and int4 MTP head via OptiQ",
             "upstream_license": "MIT"
         },
         {
@@ -218,7 +208,6 @@
                 "context_window": 262144
             },
             "quantization_label": "6-bit affine (group 64)",
-            "architecture_summary": "Ornith 1.5 35B-A3B sparse MoE, 35B total params, ~3B active, 40 layers, 256 experts, 8 routed per token, 2048 hidden, text-only",
             "upstream_license": "MIT"
         },
         {
@@ -235,7 +224,6 @@
                 "context_window": 524288
             },
             "quantization_label": "4-bit affine (group 64)",
-            "architecture_summary": "K2 Horizon MoVA sparse MoE, 36B parameters, about 4B active per token, Mixture-of-Values attention, 512K context, text-only",
             "upstream_license": "Apache-2.0",
             "included_paths": [
                 "config.json",
@@ -294,6 +282,55 @@
                 "chat_template.jinja",
                 "special_tokens_map.json"
             ]
+        },
+        {
+            "huggingface_id": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e",
+            "revision": "e96662f04124748aed20b2a2e768f75997f136ca",
+            "display_name": "Tiel Coder 35B A3B 6-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 29529737097,
+            "public": true,
+            "description": "A large, coding-focused model built from Ornith 1.5. It reads code and text, reasons through multi-step problems, and uses tools to work through real software tasks - strong at finding and fixing bugs. Runs on ordinary Macs with a lean 6-bit compression that keeps quality high for serious work.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ mixed-precision 6/8-bit (affine, group 64)",
+            "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed",
+            "revision": "1d5087d2062c02b279180a53e4016cf9cd7a3d7e",
+            "display_name": "Qwen 3.8 27B MTPLX Optimized Speed 4-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 20703486926,
+            "public": true,
+            "description": "A fast all-around model that reads pictures and text, reasons before answering, and calls tools for agentic work. It keeps Qwen 3.8's native multi-token-prediction head for two to three times the speed of plain decoding, at a lean 4-bit size that fits comfortably on 32 GB Macs.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MTPLX dynamic 4-bit (affine, group 32)",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "ornith-ai/Ornith-1.5-35B-A3B-MLX-8bit",
+            "revision": "02440c39bdf7365c494a7f55f2a8b104ba87562f",
+            "display_name": "Ornith 1.5 35B A3B MLX 8-bit",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 36850140696,
+            "public": true,
+            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents and takes about 34.3 GB on disk. This is the highest-precision MLX build of the 35B model, favoring quality over fitting smaller Macs.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "8-bit affine (group 64)",
+            "upstream_license": "MIT"
         }
     ]
 }

@@ -178,6 +178,19 @@ impl AstronomicalConfig {
         &self.user_config_file.runtime.model_directories
     }
 
+    /// Returns the optional override for the Library model download destination.
+    ///
+    /// When present, new Library downloads publish here instead of this
+    /// instance's own models directory, which lets a development instance
+    /// share a model root with other installations on the same machine.
+    #[must_use]
+    pub fn model_download_directory(&self) -> Option<&PathBuf> {
+        self.user_config_file
+            .runtime
+            .model_download_directory
+            .as_ref()
+    }
+
     /// Finds one exact model ID beneath the configured recursive model roots.
     ///
     /// The discovery rules are shared with daemon model registration, so the
