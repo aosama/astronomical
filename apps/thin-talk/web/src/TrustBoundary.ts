@@ -49,7 +49,8 @@ export class TrustBoundary {
         return;
       }
       if (node.nodeName === "A" && node.hasAttribute("href")) {
-        const href = node.getAttribute("href") ?? "";
+        const storedHref: string | null = node.getAttribute("href");
+        const href: string = storedHref != null ? storedHref : "";
         if (!SAFE_LINK_URI.test(href)) {
           node.removeAttribute("href");
         } else {
@@ -58,7 +59,8 @@ export class TrustBoundary {
         }
       }
       if (node.nodeName === "IMG") {
-        const src = node.getAttribute("src") ?? "";
+        const storedSrc: string | null = node.getAttribute("src");
+        const src: string = storedSrc != null ? storedSrc : "";
         if (!SAFE_IMAGE_URI.test(src)) {
           node.removeAttribute("src");
         }

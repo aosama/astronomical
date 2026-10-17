@@ -52,7 +52,8 @@ export class DiagramPipeline {
       if (renderState === "true" || renderState === "failed" || renderState === "pending") {
         return;
       }
-      const diagramSource = diagramBlock.textContent ?? "";
+      const storedDiagramSource: string | null = diagramBlock.textContent;
+      const diagramSource: string = storedDiagramSource != null ? storedDiagramSource : "";
       const cacheKey = `diagram-${ContentKey.hash(diagramSource)}`;
       const cachedSvg = this.diagramCache.get(cacheKey);
       if (cachedSvg !== undefined) {

@@ -83,7 +83,8 @@ export function installPreviewShim(win: PreviewWindowLike, storage: Storage): vo
     }
 
     try {
-      const reply = handleSessionCall(envelope.op, envelope.payload ?? null, adapter);
+      const requestPayload = envelope.payload != null ? envelope.payload : null;
+      const reply = handleSessionCall(envelope.op, requestPayload, adapter);
       win.__thintalkBridge?.resolve?.(envelope.callId, reply);
     } catch (error) {
       win.__thintalkBridge?.reject?.(envelope.callId, error instanceof Error ? error.message : String(error));

@@ -34,23 +34,87 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
     // THINTALK_DAEMON_PORT) to target another installed daemon without
     // rebuilding Info.plist. Falls back to the bundle, then channel defaults.
     let environment = ProcessInfo.processInfo.environment
-    let explicitPort = Int(environment["THINTALK_DAEMON_PORT"] ?? "")
-    let explicitChannel = ThinTalkChannel(rawValue: environment["THINTALK_CHANNEL"] ?? "")
+    let explicitPort: Int?
+    if let daemonPortText = environment["THINTALK_DAEMON_PORT"] {
+      explicitPort = Int(daemonPortText)
+    } else {
+      explicitPort = nil
+    }
+    let explicitChannel: ThinTalkChannel?
+    if let channelText = environment["THINTALK_CHANNEL"] {
+      explicitChannel = ThinTalkChannel(rawValue: channelText)
+    } else {
+      explicitChannel = nil
+    }
+
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
-    let channel = explicitChannel ?? (ThinTalkChannel(rawValue: rawChannel ?? "") ?? .development)
-    let configuredPort = explicitPort ?? (bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int)
+    let channel: ThinTalkChannel
+    if let explicitChannel {
+      channel = explicitChannel
+    } else if let rawChannel, let bundledChannel = ThinTalkChannel(rawValue: rawChannel) {
+      channel = bundledChannel
+    } else {
+      channel = .development
+    }
+
+    let daemonPort: Int
+    if let explicitPort {
+      daemonPort = explicitPort
+    } else if let bundledPort = bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int {
+      daemonPort = bundledPort
+    } else {
+      daemonPort = channel.defaultDaemonPort
+    }
+
+    let configuredStateDirectoryName =
+      bundle.object(forInfoDictionaryKey: "AstronomicalStateDirectoryName") as? String
+    let stateDirectoryName: String
+    if let configuredStateDirectoryName {
+      stateDirectoryName = configuredStateDirectoryName
+    } else {
+      stateDirectoryName = channel.stateDirectoryName
+    }
+
+    let bundledVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    let version: String
+    if let bundledVersion {
+      version = bundledVersion
+    } else {
+      version = "unknown"
+    }
+
+    let bundledBuildNumber = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    let buildNumber: String
+    if let bundledBuildNumber {
+      buildNumber = bundledBuildNumber
+    } else {
+      buildNumber = "0"
+    }
+
+    let bundledCommit = bundle.object(forInfoDictionaryKey: "AstronomicalBuildCommit") as? String
+    let commit: String
+    if let bundledCommit {
+      commit = bundledCommit
+    } else {
+      commit = "unknown"
+    }
+
+    let bundledDirtyFlag = bundle.object(forInfoDictionaryKey: "AstronomicalBuildDirty") as? Bool
+    let isDirty: Bool
+    if let bundledDirtyFlag {
+      isDirty = bundledDirtyFlag
+    } else {
+      isDirty = false
+    }
+
     return ThinTalkApplicationIdentity(
       channel: channel,
-      daemonPort: configuredPort ?? channel.defaultDaemonPort,
-      stateDirectoryName:
-        (bundle.object(forInfoDictionaryKey: "AstronomicalStateDirectoryName") as? String)
-          ?? channel.stateDirectoryName,
-      version: (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
-        ?? "unknown",
-      buildNumber: (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "0",
-      commit: (bundle.object(forInfoDictionaryKey: "AstronomicalBuildCommit") as? String)
-        ?? "unknown",
-      isDirty: (bundle.object(forInfoDictionaryKey: "AstronomicalBuildDirty") as? Bool) ?? false
+      daemonPort: daemonPort,
+      stateDirectoryName: stateDirectoryName,
+      version: version,
+      buildNumber: buildNumber,
+      commit: commit,
+      isDirty: isDirty
     )
   }
 

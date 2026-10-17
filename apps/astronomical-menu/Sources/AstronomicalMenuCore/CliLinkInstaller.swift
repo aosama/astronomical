@@ -136,7 +136,13 @@ struct CliLinkInstaller {
         } else {
           let failureOutput = String(
             data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-          logger.error("osascript failed: \(failureOutput ?? "", privacy: .public)")
+          let failureText: String
+          if let failureOutput {
+            failureText = failureOutput
+          } else {
+            failureText = ""
+          }
+          logger.error("osascript failed: \(failureText, privacy: .public)")
           continuation.resume(throwing: CliLinkError.privilegedExecutionUnavailable)
         }
       }
@@ -163,9 +169,12 @@ struct CliLinkInstaller {
         symlinkDestinationExists: false)
     }
     let destinationPath = (try? fileManager.destinationOfSymbolicLink(atPath: url.path))
-    let destinationExists = destinationPath.map {
-      fileManager.fileExists(atPath: $0)
-    } ?? false
+    let destinationExists: Bool
+    if let destinationPath {
+      destinationExists = fileManager.fileExists(atPath: destinationPath)
+    } else {
+      destinationExists = false
+    }
     return CliLinkStatus(
       exists: true, isSymlink: true, symlinkDestinationPath: destinationPath,
       symlinkDestinationExists: destinationExists)

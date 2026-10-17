@@ -357,12 +357,17 @@ impl DownloadPayloadTransfer {
         updated_at_unix_millis: u64,
     ) -> Result<DownloadJob, DownloadPayloadTransferError> {
         let job_store = self.job_store.clone();
-        tokio::task::spawn_blocking(move || {
+        // Two failure layers: the join fails only when the blocking task
+        // panicked or was aborted; the inner Result is the recovery outcome.
+        let recover_join = tokio::task::spawn_blocking(move || {
             job_store.load_recovering_interrupted_job(updated_at_unix_millis)
         })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)??
-        .ok_or(DownloadPayloadTransferError::InvalidJobState)
+        .await;
+        let recover_result = match recover_join {
+            Ok(recover_result) => recover_result,
+            Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
+        };
+        recover_result?.ok_or(DownloadPayloadTransferError::InvalidJobState)
     }
 
     async fn replace_job(
@@ -370,9 +375,13 @@ impl DownloadPayloadTransfer {
         download_job: DownloadJob,
     ) -> Result<(), DownloadPayloadTransferError> {
         let job_store = self.job_store.clone();
-        tokio::task::spawn_blocking(move || job_store.replace_current(&download_job))
-            .await
-            .map_err(DownloadPayloadTransferError::Task)??;
+        let replace_join =
+            tokio::task::spawn_blocking(move || job_store.replace_current(&download_job)).await;
+        let replace_result = match replace_join {
+            Ok(replace_result) => replace_result,
+            Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
+        };
+        replace_result?;
         Ok(())
     }
 
@@ -447,21 +456,26 @@ impl DownloadPayloadTransfer {
             .map(crate::library::DownloadJobFile::expected_bytes)
             .ok_or(DownloadPayloadTransferError::InvalidJobState)?;
         let models_directory = self.job_store.models_directory().to_path_buf();
-        tokio::task::spawn_blocking(move || -> Result<(), DownloadPayloadTransferError> {
-            let staged_file = open_staged_file_for_append(
-                &models_directory,
-                &staged_file_path,
-                expected_file_bytes,
-            )?;
-            staged_file
-                .set_len(0)
-                .map_err(DownloadPayloadTransferError::WritePayload)?;
-            staged_file
-                .sync_all()
-                .map_err(DownloadPayloadTransferError::WritePayload)
-        })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)??;
+        let truncate_join =
+            tokio::task::spawn_blocking(move || -> Result<(), DownloadPayloadTransferError> {
+                let staged_file = open_staged_file_for_append(
+                    &models_directory,
+                    &staged_file_path,
+                    expected_file_bytes,
+                )?;
+                staged_file
+                    .set_len(0)
+                    .map_err(DownloadPayloadTransferError::WritePayload)?;
+                staged_file
+                    .sync_all()
+                    .map_err(DownloadPayloadTransferError::WritePayload)
+            })
+            .await;
+        let truncate_result = match truncate_join {
+            Ok(truncate_result) => truncate_result,
+            Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
+        };
+        truncate_result?;
         download_job
             .mark_checksum_failed_for_retry(relative_path, updated_at_unix_millis)
             .map_err(DownloadJobStoreError::from)?;
@@ -475,12 +489,15 @@ impl DownloadPayloadTransfer {
         updated_at_unix_millis: u64,
     ) -> Result<DownloadPayloadTransferOutcome, DownloadPayloadTransferError> {
         let job_store = self.job_store.clone();
-        let paused_job = tokio::task::spawn_blocking(move || {
+        let pause_join = tokio::task::spawn_blocking(move || {
             job_store.pause_current_job(updated_at_unix_millis)
         })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)??
-        .ok_or(DownloadPayloadTransferError::InvalidJobState)?;
+        .await;
+        let pause_result = match pause_join {
+            Ok(pause_result) => pause_result,
+            Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
+        };
+        let paused_job = pause_result?.ok_or(DownloadPayloadTransferError::InvalidJobState)?;
         self.progress_snapshot.publish(paused_job.clone());
         Ok(DownloadPayloadTransferOutcome::Paused(paused_job))
     }
@@ -491,7 +508,7 @@ impl DownloadPayloadTransfer {
         updated_at_unix_millis: u64,
     ) -> Result<(), DownloadPayloadTransferError> {
         let job_store = self.job_store.clone();
-        let failed_job = tokio::task::spawn_blocking(move || {
+        let persist_join = tokio::task::spawn_blocking(move || {
             let mut failed_job = job_store
                 .pause_current_job(updated_at_unix_millis)?
                 .ok_or(DownloadJobStoreError::JobNotFound)?;
@@ -499,8 +516,12 @@ impl DownloadPayloadTransfer {
             job_store.replace_current(&failed_job)?;
             Ok::<DownloadJob, DownloadJobStoreError>(failed_job)
         })
-        .await
-        .map_err(DownloadPayloadTransferError::Task)??;
+        .await;
+        let persist_result = match persist_join {
+            Ok(persist_result) => persist_result,
+            Err(join_error) => return Err(DownloadPayloadTransferError::Task(join_error)),
+        };
+        let failed_job = persist_result?;
         self.progress_snapshot.publish(failed_job);
         Ok(())
     }

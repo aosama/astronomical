@@ -26,8 +26,11 @@ public final class SparkleApplicationUpdateController: NSObject, ApplicationUpda
     self.userDefaults = userDefaults
     let defaultUpdateChannel: ApplicationUpdateChannel =
       applicationChannel == .stable ? .stable : .development
-    selectedChannel = userDefaults.string(forKey: Self.selectedChannelUserDefaultsKey)
-      .flatMap(ApplicationUpdateChannel.init(rawValue:)) ?? defaultUpdateChannel
+    selectedChannel = defaultUpdateChannel
+    let storedChannelValue = userDefaults.string(forKey: Self.selectedChannelUserDefaultsKey)
+    if let storedChannelValue, let storedChannel = ApplicationUpdateChannel(rawValue: storedChannelValue) {
+      selectedChannel = storedChannel
+    }
     allowedChannels = sparkleUpdateChannels(for: selectedChannel)
   }
 

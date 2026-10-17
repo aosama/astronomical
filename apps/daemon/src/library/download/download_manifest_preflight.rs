@@ -97,7 +97,9 @@ where
             return Ok(premanifest_job);
         }
 
-        let _initial_capacity = self
+        // Two failure layers: the outer wait fails when the attribution
+        // machinery itself errors; the inner Result is the measured operation.
+        let initial_capacity_join = self
             .attribution_log
             .measure_blocking_operation(
                 DaemonPerformanceOperation::DiskPreflight,
@@ -112,11 +114,20 @@ where
                 },
                 |capacity_outcome| disk_measurement(catalog_entry, capacity_outcome),
             )
-            .await??;
+            .await;
+        let initial_capacity_result = match initial_capacity_join {
+            Ok(capacity_result) => capacity_result,
+            Err(attribution_error) => {
+                return Err(DownloadManifestPreflightError::Attribution(
+                    attribution_error,
+                ));
+            }
+        };
+        let _initial_capacity = initial_capacity_result?;
         premanifest_job.mark_fetching_manifest(fetching_manifest_at_unix_millis)?;
         self.replace_job(&premanifest_job).await?;
 
-        let manifest_outcome = self
+        let manifest_fetch_join = self
             .attribution_log
             .measure_async_operation(
                 DaemonPerformanceOperation::ManifestFetch,
@@ -144,7 +155,16 @@ where
                     ),
                 },
             )
-            .await??;
+            .await;
+        let manifest_fetch_result = match manifest_fetch_join {
+            Ok(fetch_result) => fetch_result,
+            Err(attribution_error) => {
+                return Err(DownloadManifestPreflightError::Attribution(
+                    attribution_error,
+                ));
+            }
+        };
+        let manifest_outcome = manifest_fetch_result?;
         self.validate_executable_identity(catalog_entry, &manifest_outcome)
             .await?;
         let exact_job =
@@ -191,7 +211,7 @@ where
         catalog_entry: &DownloadCatalogEntry,
         exact_job: &DownloadJob,
     ) -> Result<(), DownloadManifestPreflightError> {
-        let _exact_capacity = self
+        let exact_capacity_join = self
             .attribution_log
             .measure_blocking_operation(
                 DaemonPerformanceOperation::DiskPreflight,
@@ -203,7 +223,16 @@ where
                 },
                 |capacity_outcome| disk_measurement(catalog_entry, capacity_outcome),
             )
-            .await??;
+            .await;
+        let exact_capacity_result = match exact_capacity_join {
+            Ok(capacity_result) => capacity_result,
+            Err(attribution_error) => {
+                return Err(DownloadManifestPreflightError::Attribution(
+                    attribution_error,
+                ));
+            }
+        };
+        let _exact_capacity = exact_capacity_result?;
         Ok(())
     }
 
@@ -212,10 +241,17 @@ where
         updated_at_unix_millis: u64,
     ) -> Result<Option<DownloadJob>, DownloadManifestPreflightError> {
         let job_store = self.job_store.clone();
-        Ok(tokio::task::spawn_blocking(move || {
+        let recover_join = tokio::task::spawn_blocking(move || {
             job_store.load_recovering_interrupted_job(updated_at_unix_millis)
         })
-        .await??)
+        .await;
+        let recover_result = match recover_join {
+            Ok(recover_result) => recover_result,
+            Err(join_error) => {
+                return Err(DownloadManifestPreflightError::BackgroundTask(join_error));
+            }
+        };
+        Ok(recover_result?)
     }
 
     async fn create_job(
@@ -224,7 +260,15 @@ where
     ) -> Result<(), DownloadManifestPreflightError> {
         let job_store = self.job_store.clone();
         let download_job = download_job.clone();
-        Ok(tokio::task::spawn_blocking(move || job_store.create(&download_job)).await??)
+        let create_join =
+            tokio::task::spawn_blocking(move || job_store.create(&download_job)).await;
+        let create_result = match create_join {
+            Ok(create_result) => create_result,
+            Err(join_error) => {
+                return Err(DownloadManifestPreflightError::BackgroundTask(join_error));
+            }
+        };
+        Ok(create_result?)
     }
 
     async fn replace_job(
@@ -233,10 +277,15 @@ where
     ) -> Result<(), DownloadManifestPreflightError> {
         let job_store = self.job_store.clone();
         let replacement_job = replacement_job.clone();
-        Ok(
-            tokio::task::spawn_blocking(move || job_store.replace_current(&replacement_job))
-                .await??,
-        )
+        let replace_join =
+            tokio::task::spawn_blocking(move || job_store.replace_current(&replacement_job)).await;
+        let replace_result = match replace_join {
+            Ok(replace_result) => replace_result,
+            Err(join_error) => {
+                return Err(DownloadManifestPreflightError::BackgroundTask(join_error));
+            }
+        };
+        Ok(replace_result?)
     }
 }
 

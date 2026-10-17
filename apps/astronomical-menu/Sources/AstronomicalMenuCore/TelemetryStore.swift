@@ -64,8 +64,11 @@ final class TelemetryStore: ObservableObject {
   ) {
     self.daemonClient = daemonClient
     self.controlActionFeedbackDismissalDelay = controlActionFeedbackDismissalDelay
-    self.controlActionFeedbackDismissalSleep = controlActionFeedbackDismissalSleep
-      ?? { delay in try? await Task.sleep(for: delay) }
+    if let controlActionFeedbackDismissalSleep {
+      self.controlActionFeedbackDismissalSleep = controlActionFeedbackDismissalSleep
+    } else {
+      self.controlActionFeedbackDismissalSleep = { delay in try? await Task.sleep(for: delay) }
+    }
     self.workerPolicyConfirmationRetryDelay = workerPolicyConfirmationRetryDelay
   }
 
@@ -368,8 +371,12 @@ final class TelemetryStore: ObservableObject {
   private func clampedEditableMaximumMlxMemoryGigabytes(
     for statusDocument: DaemonStatusDocument
   ) -> UInt64 {
-    let requestedWholeGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes
-      ?? maximumWholeGigabytes(for: statusDocument)
+    let requestedWholeGigabytes: UInt64
+    if let configuredWholeGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes {
+      requestedWholeGigabytes = configuredWholeGigabytes
+    } else {
+      requestedWholeGigabytes = maximumWholeGigabytes(for: statusDocument)
+    }
     return min(requestedWholeGigabytes, maximumWholeGigabytes(for: statusDocument))
   }
 

@@ -61,7 +61,9 @@ impl DownloadPublication {
             huggingface_id: huggingface_id.clone(),
             revision: revision.clone(),
         };
-        let publication_outcome = self
+        // Two failure layers: the outer wait fails when the attribution
+        // machinery itself errors; the inner Result is the publication outcome.
+        let publication_join = self
             .attribution_log
             .measure_blocking_operation(
                 DaemonPerformanceOperation::Publication,
@@ -77,8 +79,14 @@ impl DownloadPublication {
                         .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
                 },
             )
-            .await
-            .map_err(DownloadPublicationError::Attribution)??;
+            .await;
+        let publication_result = match publication_join {
+            Ok(publication_result) => publication_result,
+            Err(attribution_error) => {
+                return Err(DownloadPublicationError::Attribution(attribution_error));
+            }
+        };
+        let publication_outcome = publication_result?;
         Ok(publication_outcome)
     }
 }

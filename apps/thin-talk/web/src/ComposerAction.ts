@@ -7,7 +7,8 @@ export class ComposerAction {
   public readonly detail: string;
 
   public constructor(init: { kind: "send" | "stop" | "retry" | "setEffort"; detail?: string }) {
+    const configuredDetail: string | undefined = init.detail;
     this.kind = init.kind;
-    this.detail = init.detail ?? "";
+    this.detail = configuredDetail != null ? configuredDetail : "";
   }
 }

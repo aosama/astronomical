@@ -15,7 +15,8 @@ class MemoryAdapter implements SessionStoreAdapter {
     return [...this.files.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
   public loadSession(id: string): SessionStoreRecord | null {
-    return this.files.get(id) ?? null;
+    const storedRecord: SessionStoreRecord | undefined = this.files.get(id);
+    return storedRecord != null ? storedRecord : null;
   }
   public saveSession(record: SessionStoreRecord): void {
     this.files.set(record.id, { ...record });

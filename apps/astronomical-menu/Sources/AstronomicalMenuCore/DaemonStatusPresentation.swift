@@ -50,8 +50,10 @@ extension DaemonStatusDocument {
   var flightTitle: String {
     guard isActive else { return "Standing by" }
     if activity == "generating" {
-      return currentPhaseTokensPerSecond.map { String(format: "Generating · %.1f tok/s", $0) }
-        ?? "Generating"
+      if let currentPhaseTokensPerSecond {
+        return String(format: "Generating · %.1f tok/s", currentPhaseTokensPerSecond)
+      }
+      return "Generating"
     }
     if activity == "image_generation", let progress {
       if progress.hasCompletedDenoising { return "Denoising complete" }
@@ -70,16 +72,20 @@ extension DaemonStatusDocument {
 
   var phaseTitle: String {
     switch activity {
-    case "generating": "Generating"
-    case "generation_preparation": "Preparing generation"
-    case "prompt_processing" where isRestoringPromptCache: "Restoring prompt cache"
-    case "prompt_processing": "Prompt processing"
-    case "image_generation": progress?.imagePhaseTitle ?? "Generating image"
+    case "generating": return "Generating"
+    case "generation_preparation": return "Preparing generation"
+    case "prompt_processing" where isRestoringPromptCache: return "Restoring prompt cache"
+    case "prompt_processing": return "Prompt processing"
+    case "image_generation":
+      if let progress {
+        return progress.imagePhaseTitle
+      }
+      return "Generating image"
     default:
       switch status {
-      case "ready": "Ready"
-      case "loading": "Loading"
-      default: "Unavailable"
+      case "ready": return "Ready"
+      case "loading": return "Loading"
+      default: return "Unavailable"
       }
     }
   }
@@ -94,7 +100,10 @@ extension DaemonStatusDocument {
   }
 
   var modelDiskSizeTitle: String {
-    readyModelSizeBytes.map(gigabyteText) ?? "Not measured"
+    if let readyModelSizeBytes {
+      return gigabyteText(byteCount: readyModelSizeBytes)
+    }
+    return "Not measured"
   }
 
   var progressTitle: String {
@@ -145,6 +154,12 @@ extension DaemonStatusDocument {
     return progress.unit != .steps || progress.phase == "denoising"
   }
 
-  var progressCompletedUnitCount: UInt32 { progress?.completedUnitCount ?? 0 }
-  var progressTotalUnitCount: UInt32 { max(1, progress?.totalUnitCount ?? 1) }
+  var progressCompletedUnitCount: UInt32 {
+    guard let progress else { return 0 }
+    return progress.completedUnitCount
+  }
+  var progressTotalUnitCount: UInt32 {
+    guard let progress else { return 1 }
+    return max(1, progress.totalUnitCount)
+  }
 }

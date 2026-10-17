@@ -44,9 +44,15 @@ impl DaemonIpcService {
     /// socket file so clients cannot discover a dead endpoint.
     pub async fn shutdown(self) -> Result<(), DaemonTransportError> {
         let _ = self.shutdown_sender.send(true);
-        self.service_task
-            .await
-            .map_err(DaemonTransportError::ServiceTaskFailed)??;
+        // Two failure layers: awaiting the join handle fails only when the
+        // service task panicked or was aborted; the inner Result is the
+        // outcome the service loop itself returned.
+        let service_task_join = self.service_task.await;
+        let service_loop_outcome = match service_task_join {
+            Ok(service_loop_outcome) => service_loop_outcome,
+            Err(join_error) => return Err(DaemonTransportError::ServiceTaskFailed(join_error)),
+        };
+        service_loop_outcome?;
         remove_socket_file_ignoring_missing(&self.socket_path)?;
         Ok(())
     }

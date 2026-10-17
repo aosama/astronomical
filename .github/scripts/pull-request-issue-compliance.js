@@ -6,7 +6,9 @@
 // pull requests only. The suffix match covers Dependabot, Renovate, and any
 // future automation GitHub names with the [bot] marker.
 function isAutomatedPullRequest(pullRequestAuthorLogin) {
-    return /\[bot\]$/i.test(String(pullRequestAuthorLogin ?? ""));
+    const authorLoginText =
+        pullRequestAuthorLogin != null ? String(pullRequestAuthorLogin) : "";
+    return /\[bot\]$/i.test(authorLoginText);
 }
 
 function removeHtmlComments(markdown) {
@@ -63,9 +65,13 @@ function findIssueReferences(searchText, repositoryFullName) {
         }
 
         const relationship = referenceMatch[1];
+        // The designator pattern is an alternation, so exactly one of the two
+        // capture groups matched.
+        const referenceDesignatorText =
+            referenceMatch[2] != null ? referenceMatch[2] : referenceMatch[3];
         references.push({
             relationship,
-            issueNumber: Number(referenceMatch[2] ?? referenceMatch[3]),
+            issueNumber: Number(referenceDesignatorText),
         });
         let groupEndIndex = referencePattern.lastIndex;
 
@@ -79,9 +85,11 @@ function findIssueReferences(searchText, repositoryFullName) {
             if (continuationMatch === null || continuationMatch.index !== groupEndIndex) {
                 break;
             }
+            const continuationDesignatorText =
+                continuationMatch[1] != null ? continuationMatch[1] : continuationMatch[2];
             references.push({
                 relationship,
-                issueNumber: Number(continuationMatch[1] ?? continuationMatch[2]),
+                issueNumber: Number(continuationDesignatorText),
             });
             groupEndIndex = groupedContinuationPattern.lastIndex;
         }
@@ -104,8 +112,9 @@ function dedupeIssueReferences(references) {
 }
 
 function findMentionedIssueNumbers(text) {
+    const searchableText = text != null ? String(text) : "";
     return [...new Set(
-        [...String(text ?? "").matchAll(/#([1-9]\d*)\b/g)].map((match) => Number(match[1])),
+        [...searchableText.matchAll(/#([1-9]\d*)\b/g)].map((match) => Number(match[1])),
     )];
 }
 
@@ -117,7 +126,8 @@ const AMBIGUOUS_BODY_FAILURE =
     "Link every issue number mentioned in the pull request body with a canonical keyword: `Fixes #N`, `Closes #N`, `Resolves #N`, or `Refs #N`; grouped forms such as `Fixes #N and #M` are accepted.";
 
 function extractLinkedIssue(pullRequestBody, repositoryFullName) {
-    const bodyLines = String(pullRequestBody ?? "").split(/\r?\n/);
+    const bodyText = pullRequestBody != null ? String(pullRequestBody) : "";
+    const bodyLines = bodyText.split(/\r?\n/);
     const linkedIssueHeadingIndex = bodyLines.findIndex((line) =>
         /^#{0,6}\s*linked issue\s*:?\s*$/i.test(line.trim()),
     );
