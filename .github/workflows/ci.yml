@@ -395,6 +395,16 @@ jobs:
           set -o pipefail
           cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
         timeout-minutes: 2
+      # Physics proof for the lane's no-network property (issue #1333): the
+      # same binaries re-run under a repository-owned seatbelt profile that
+      # denies every network operation. Binaries are warm from the step above,
+      # so this costs only execution time; a socket attempt aborts loudly.
+      - name: Re-run offline lane tests under the network-denying seatbelt
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end offline-tests-seatbelt' EXIT
+          scripts/ci/ci-step-timing.sh begin offline-tests-seatbelt
+          sandbox-exec -f scripts/ci/offline-sandbox.sb cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline-seatbelt.log"
+        timeout-minutes: 4
       - name: Run Library REST contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
@@ -749,33 +759,3 @@ jobs:
         run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
         timeout-minutes: 8
 
-  # The macOS counterpart of the Linux offline-sandbox job: the whole offline
-  # lane runs under a repository-owned seatbelt profile that denies every
-  # network operation while leaving file and process access alone. The lane's
-  # tests are plain Book-style functions (issue #1333), so the runner-level
-  # sandbox is what enforces the no-network property end to end.
-  macos-offline-sandbox:
-    name: macOS offline sandbox
-    runs-on: macos-26
-    needs: detect-changes
-    if: ${{ always() && needs.detect-changes.result == 'success' }}
-    timeout-minutes: 20
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Sync pinned toolchain
-        run: rustup show
-      # The same target selection as the macOS offline verification lane
-      # (--lib plus each package's offline_tests); that selection needs no
-      # native dependency cache, keeping this job cache-free.
-      - name: Fetch and build the whole offline lane
-        run: |
-          cargo fetch --locked
-          cargo test --locked --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests
-        timeout-minutes: 12
-      - name: Run the whole offline lane with network denied by seatbelt
-        run: sandbox-exec -f scripts/ci/offline-sandbox.sb cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests
-        timeout-minutes: 8
