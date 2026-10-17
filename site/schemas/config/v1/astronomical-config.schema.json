@@ -71,6 +71,13 @@
           "minLength": 1,
           "description": "Requestable model id used as the default by one-shot CLI verbs; omission falls back to the built-in default model.",
           "x-astronomical-apply-mode": "live"
+        },
+        "model_download_directory": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/",
+          "description": "Optional absolute directory that Library downloads are published into; omission publishes into this instance's own models directory.",
+          "x-astronomical-apply-mode": "application-restart"
         }
       }
     },

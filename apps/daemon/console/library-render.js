@@ -37,7 +37,7 @@ function formatLibraryContextTokens(tokenCount) {
     return tokenCount + " context";
 }
 
-function createLibraryHeroSummary(catalogRows) {
+function createLibraryHeroSummary(catalogRows, catalogDocument) {
     const summary = document.createElement("div");
     summary.className = "library-hero-summary";
     const readyCount = catalogRows.filter((row) => row.readyOnThisMac).length;
@@ -55,6 +55,13 @@ function createLibraryHeroSummary(catalogRows) {
     downloadSpan.textContent = " · " + downloadableCount + " ready to download";
     headline.replaceChildren(readySpan, downloadSpan);
     summary.appendChild(headline);
+    const downloadLocation = catalogDocument?.models_download_directory;
+    if (typeof downloadLocation === "string" && downloadLocation.trim().length > 0) {
+        const locationNote = document.createElement("p");
+        locationNote.className = "library-hero-location";
+        locationNote.textContent = "New downloads are saved to " + downloadLocation;
+        summary.appendChild(locationNote);
+    }
     if (totalSizeBytes > 0 && readyCount > 0) {
         const sizeNote = document.createElement("p");
         sizeNote.className = "library-hero-size";
@@ -312,9 +319,6 @@ function createLibraryDetailsPanel(catalogRow, allRows) {
     }
     if (catalogRow.quantizationLabel) {
         detailEntries.push(["Quantization", catalogRow.quantizationLabel]);
-    }
-    if (catalogRow.architectureSummary) {
-        detailEntries.push(["Architecture", catalogRow.architectureSummary]);
     }
     if (catalogRow.upstreamLicense) {
         detailEntries.push(["License", catalogRow.upstreamLicense]);

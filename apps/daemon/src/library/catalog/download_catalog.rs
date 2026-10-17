@@ -17,7 +17,6 @@ const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
 const MAXIMUM_DISPLAY_NAME_BYTES: usize = 256;
 const MAXIMUM_DESCRIPTION_BYTES: usize = 512;
 const MAXIMUM_QUANTIZATION_LABEL_BYTES: usize = 64;
-const MAXIMUM_ARCHITECTURE_SUMMARY_BYTES: usize = 256;
 const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
 const GIT_COMMIT_SHA_HEX_CHARACTER_COUNT: usize = 40;
 const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
@@ -42,7 +41,6 @@ pub struct DownloadCatalogEntry {
     description: Option<String>,
     capabilities: DownloadCatalogCapabilities,
     quantization_label: Option<String>,
-    architecture_summary: Option<String>,
     upstream_license: Option<String>,
     download_path_selection: DownloadPathSelection,
 }
@@ -112,8 +110,6 @@ pub enum DownloadCatalogError {
     InvalidCapabilities { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid quantization label")]
     InvalidQuantizationLabel { entry_index: usize },
-    #[error("download catalog entry {entry_index} has an invalid architecture summary")]
-    InvalidArchitectureSummary { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid upstream license")]
     InvalidUpstreamLicense { entry_index: usize },
     #[error(
@@ -148,7 +144,6 @@ struct DownloadCatalogEntryDocument {
     description: Option<String>,
     capabilities: Option<DownloadCatalogCapabilitiesDocument>,
     quantization_label: Option<String>,
-    architecture_summary: Option<String>,
     upstream_license: Option<String>,
     included_paths: Option<Vec<String>>,
 }
@@ -268,20 +263,6 @@ impl DownloadCatalog {
                     Ok(label)
                 })
                 .transpose()?;
-            let architecture_summary = entry_document
-                .architecture_summary
-                .filter(|summary| !summary.trim().is_empty())
-                .map(|summary| {
-                    if summary.len() > MAXIMUM_ARCHITECTURE_SUMMARY_BYTES
-                        || summary.chars().any(char::is_control)
-                    {
-                        return Err(DownloadCatalogError::InvalidArchitectureSummary {
-                            entry_index,
-                        });
-                    }
-                    Ok(summary)
-                })
-                .transpose()?;
             let upstream_license = entry_document
                 .upstream_license
                 .filter(|license| !license.trim().is_empty())
@@ -306,7 +287,6 @@ impl DownloadCatalog {
                 description,
                 capabilities,
                 quantization_label,
-                architecture_summary,
                 upstream_license,
                 download_path_selection,
             });
@@ -387,11 +367,6 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub fn quantization_label(&self) -> Option<&str> {
         self.quantization_label.as_deref()
-    }
-
-    #[must_use]
-    pub fn architecture_summary(&self) -> Option<&str> {
-        self.architecture_summary.as_deref()
     }
 
     #[must_use]

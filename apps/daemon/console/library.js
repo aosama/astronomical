@@ -137,7 +137,7 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
     // Capturing after the rebuild would observe the fresh, unfocused input
     // and silently drop focus on every keystroke.
     const searchSnapshot = captureLibrarySearchSnapshot();
-    const heroSummary = createLibraryHeroSummary(catalogRows);
+    const heroSummary = createLibraryHeroSummary(catalogRows, catalogDocument);
     const filterBar = createLibraryFilterBar(catalogRows);
     const catalogList = document.createElement("div");
     catalogList.className = "library-catalog-list";
@@ -218,8 +218,7 @@ function filterLibraryRows(catalogRows) {
                 catalogRow.huggingfaceId,
                 catalogRow.family,
                 catalogRow.description || "",
-                catalogRow.quantizationLabel || "",
-                catalogRow.architectureSummary || ""
+                catalogRow.quantizationLabel || ""
             ].join(" ").toLowerCase();
             if (!haystack.includes(librarySearchQuery)) return false;
         }
@@ -255,9 +254,6 @@ function libraryCatalogRowsFromDocument(catalogDocument) {
                 : null,
             quantizationLabel: typeof catalogEntry.quantization_label === "string"
                 ? catalogEntry.quantization_label
-                : null,
-            architectureSummary: typeof catalogEntry.architecture_summary === "string"
-                ? catalogEntry.architecture_summary
                 : null,
             upstreamLicense: typeof catalogEntry.upstream_license === "string"
                 ? catalogEntry.upstream_license

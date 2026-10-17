@@ -238,6 +238,14 @@ pub(crate) fn validate_user_config_file(
             });
         }
     }
+    if let Some(model_download_directory) = &user_config_file.runtime.model_download_directory
+        && !model_download_directory.is_absolute()
+    {
+        return Err(AstronomicalConfigError::PathMustBeAbsolute {
+            field_name: "runtime.model_download_directory".to_owned(),
+            configured_path: model_download_directory.clone(),
+        });
+    }
     if let Some(maximum_mlx_memory_gb) = user_config_file.runtime.maximum_mlx_memory_gb {
         crate::maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
     }

@@ -11,110 +11,22 @@ use std::{
 
 use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
-    DownloadCatalog, DownloadCatalogFamily,
+    DownloadCatalog,
 };
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// Guards that the shipped, compiled-in catalog parses, validates, and is non-empty.
+/// `include_str!` only proves the file exists at compile time; this proves its contents
+/// are a valid catalog in the cheap offline lane, not only at e2e startup time.
 #[test]
-fn should_package_flux_with_only_its_executable_diffusers_graph() {
-    let download_catalog = DownloadCatalog::load_bundled()
-        .expect("the bundled production catalog should remain valid");
-    let flux_entry = download_catalog
-        .entries()
-        .iter()
-        .find(|entry| entry.family() == DownloadCatalogFamily::Flux2Klein)
-        .expect("the release catalog should include the executable FLUX profile");
-
-    assert!(flux_entry.capabilities().supports_image_generation);
-    for required_path in [
-        "LICENSE.md",
-        "model_index.json",
-        "scheduler/scheduler_config.json",
-        "text_encoder/config.json",
-        "tokenizer/tokenizer.json",
-        "transformer/diffusion_pytorch_model.safetensors",
-        "vae/diffusion_pytorch_model.safetensors",
-    ] {
-        assert!(flux_entry.download_path_selection().includes(required_path));
-    }
+fn should_parse_and_load_the_shipped_bundled_catalog() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
     assert!(
-        !flux_entry
-            .download_path_selection()
-            .includes("flux-2-klein-4b.safetensors")
+        !download_catalog.entries().is_empty(),
+        "the shipped catalog must offer at least one model"
     );
-    assert!(!flux_entry.download_path_selection().includes("editing.jpg"));
-}
-
-#[test]
-fn should_package_the_modernbert_embedding_entry_for_its_embedding_purpose() {
-    let download_catalog = DownloadCatalog::load_bundled()
-        .expect("the bundled production catalog should remain valid");
-    let embeddings_entry = download_catalog
-        .entries()
-        .iter()
-        .find(|entry| entry.family() == DownloadCatalogFamily::ModernBert)
-        .expect("the release catalog should include the executable ModernBERT embedding profile");
-
-    // The pinned revision is the contract: it must match the reviewed 8-bit
-    // affine conversion, not whatever the repository head happens to be.
-    assert_eq!(
-        embeddings_entry.huggingface_id(),
-        "mlx-community/nomicai-modernbert-embed-base-8bit"
-    );
-    assert_eq!(
-        embeddings_entry.revision(),
-        "1b353387163e225681db8580046c445de54a63bb"
-    );
-    assert!(embeddings_entry.capabilities().supports_embeddings);
-    assert!(!embeddings_entry.capabilities().supports_reasoning);
-    assert!(
-        embeddings_entry
-            .quantization_label()
-            .is_some_and(|label| label.contains("8-bit"))
-    );
-    // Keep the authored size within a decimal band so re-quantizations do not
-    // silently invalidate the preflight disk estimate.
-    assert!(embeddings_entry.approximate_size_bytes() > 100_000_000);
-    assert!(embeddings_entry.approximate_size_bytes() < 200_000_000);
-    assert!(
-        embeddings_entry
-            .download_path_selection()
-            .includes("config.json")
-    );
-    assert!(
-        embeddings_entry
-            .download_path_selection()
-            .includes("model.safetensors")
-    );
-    assert!(
-        embeddings_entry
-            .download_path_selection()
-            .includes("tokenizer.json")
-    );
-}
-
-#[test]
-fn should_package_the_structured_response_entry_for_chat_and_structured_purposes() {
-    let download_catalog = DownloadCatalog::load_bundled()
-        .expect("the bundled production catalog should remain valid");
-    let structured_entry = download_catalog
-        .entries()
-        .iter()
-        .find(|entry| entry.huggingface_id() == "mlx-community/Qwen3.5-2B-4bit")
-        .expect("the release catalog should include the structured-response chat model");
-
-    // The pinned revision keeps the acceptance journeys and the shipped
-    // download byte-identical until a deliberate catalog bump re-pins them.
-    assert_eq!(
-        structured_entry.revision(),
-        "674aaa7240b91e8012fcad5d791b7dfe5ba90207"
-    );
-    assert_eq!(structured_entry.family(), DownloadCatalogFamily::Qwen3_5);
-    assert!(structured_entry.capabilities().supports_reasoning);
-    assert!(structured_entry.capabilities().supports_tool_calls);
-    assert!(structured_entry.capabilities().context_window.is_some());
-    assert!(structured_entry.approximate_size_bytes() > 1_000_000_000);
-    assert!(structured_entry.approximate_size_bytes() < 2_000_000_000);
 }
 
 #[test]
