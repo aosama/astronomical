@@ -4,12 +4,12 @@ use std::thread::{self, JoinHandle};
 use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use tokio::sync::oneshot;
 
-use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
-
 use super::{
     EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
     InferenceEngine, InferenceEngineError, MlxInferenceExecution,
 };
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 const MLX_OWNER_COMMAND_CAPACITY: usize = 1;
 

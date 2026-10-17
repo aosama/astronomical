@@ -17,6 +17,7 @@ use astronomical_runtime_integration::{
 };
 use tokenizers::Tokenizer;
 
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::modernbert::artifact::ModernBertArtifact;
 use crate::modernbert::configuration::ModernBertConfiguration;
 use crate::modernbert::forward;
@@ -28,7 +29,6 @@ use crate::performance_attribution::{
 };
 use crate::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, MemoryCeilingUtilization,
-    MlxMemoryTelemetry,
 };
 
 /// Loaded ModernBERT runtime bound to one artifact directory.
@@ -129,7 +129,7 @@ impl ModernBertEmbeddingEngine {
             active_memory_bytes,
             memory_snapshot.allocator_cache_memory_bytes() as u64,
             memory_snapshot.peak_memory_bytes() as u64,
-            crate::MlxActiveMemoryBreakdown::default(),
+            MlxActiveMemoryBreakdown::default(),
         );
         if let Some(memory_ceiling_utilization) = self.memory_ceiling_utilization(
             active_memory_bytes,
@@ -324,3 +324,5 @@ fn runtime_failure(runtime_error: MlxRuntimeError) -> EmbeddingsFailureReason {
             .collect(),
     }
 }
+
+use crate::MlxMemoryTelemetry;

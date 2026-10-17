@@ -3,6 +3,7 @@ mod flux2_klein;
 mod gpu_wired_ceiling_probe;
 mod k2_horizon_mova;
 mod kernel_capability;
+mod model_artifact_memory_limits_tests;
 mod persistent_prompt_cache_block_topology;
 mod persistent_prompt_cache_block_transaction;
 mod persistent_prompt_cache_direct_writer;

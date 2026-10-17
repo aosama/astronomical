@@ -5,7 +5,7 @@ use std::fs::File;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
-use crate::ValidatedWeightsFile;
+use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};

@@ -6,7 +6,10 @@
 
 use thiserror::Error;
 
-use crate::PersistentPromptCacheBlockCausalInput;
+#[cfg(test)]
+mod tests;
+
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 
 const QWEN_VISUAL_BLOCK_CAUSAL_INPUT_DOMAIN: &[u8] = b"astronomical-qwen3-5-visual-block-v1";
 

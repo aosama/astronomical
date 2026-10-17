@@ -2,17 +2,19 @@
 
 use astronomical_ipc_protocol::WorkerEvent;
 
+use crate::inference_engine::contract::ExpertResidencyTelemetry;
 use crate::k2_horizon_mova;
 use crate::k2_horizon_mova::configuration::{K2HorizonMoVAConfig, K2HorizonMoVALayerKind};
 use crate::k2_horizon_mova::model::K2HorizonMoVAKvState;
 use crate::k2_horizon_mova::model::K2HorizonMoVAModel;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::memory::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, ExpertLayerResidencyTarget, MemoryPhase,
     plan_expert_residency,
 };
 use crate::{
-    ExpertResidencyTelemetry, InferenceEngineError, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
-    PersistentPromptCacheDiskStoreConfig, build_persistent_prompt_cache_stats_event,
+    InferenceEngineError, PersistentPromptCacheDiskStoreConfig,
+    build_persistent_prompt_cache_stats_event,
 };
 
 use super::execution::K2HorizonMoVAInferenceExecution;
@@ -172,3 +174,5 @@ fn resident_expert_count(config: &K2HorizonMoVAConfig) -> u32 {
         )
         .fold(0_u32, u32::saturating_add)
 }
+
+use crate::MlxMemoryTelemetry;

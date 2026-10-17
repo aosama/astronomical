@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
     EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities,
 };
 
-use crate::MlxMemoryTelemetry;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// A loaded embedding runtime that turns validated text into unit-norm vectors.
 pub trait EmbeddingEngine: 'static {

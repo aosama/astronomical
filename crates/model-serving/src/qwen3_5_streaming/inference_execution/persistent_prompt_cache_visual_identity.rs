@@ -3,9 +3,10 @@
 //! This owner validates image row geometry once, builds the ordinary target
 //! block plan once, and lets lookup and capture consume the same immutable identities.
 
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheDiskStore, Qwen3_5InferenceRequest,
+    PersistentPromptCacheDiskStore, Qwen3_5InferenceRequest,
     plan_qwen3_5_visual_prompt_cache_block_inputs,
 };
 

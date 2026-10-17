@@ -11,6 +11,9 @@
 //! with the terminal stretch, and the Euler step — that drives the denoise loop; the tensor work
 //! that consumes it lands with the GPU runtime.
 
+#[cfg(test)]
+mod tests;
+
 /// Reviewed artifact `base_image_seq_len` (latent tokens) for the dynamic shift.
 pub const DEFAULT_BASE_SEQ_LEN: f64 = 256.0;
 /// Reviewed artifact `max_image_seq_len` (latent tokens) for the dynamic shift.

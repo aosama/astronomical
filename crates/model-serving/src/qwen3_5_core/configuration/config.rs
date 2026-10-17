@@ -5,6 +5,9 @@ use super::config_validation;
 use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
 use super::quantizations::optiq::OptiQQuantizationProfile;
 
+#[cfg(test)]
+mod tests;
+
 const EXPECTED_MOE_ARCHITECTURE: &str = "Qwen3_5MoeForConditionalGeneration";
 const EXPECTED_DENSE_ARCHITECTURE: &str = "Qwen3_5ForConditionalGeneration";
 const EXPECTED_MOE_MODEL_TYPE: &str = "qwen3_5_moe";

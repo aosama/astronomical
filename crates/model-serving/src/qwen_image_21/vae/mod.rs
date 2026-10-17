@@ -12,7 +12,7 @@
 //! owns the typed failure.
 
 mod error;
-mod latent_geometry;
+pub(crate) mod latent_geometry;
 
 #[cfg(feature = "direct-mlx")]
 mod attention;
@@ -36,7 +36,7 @@ mod up_block;
 pub use error::QwenImage21VaeError;
 pub use latent_geometry::{
     QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT,
-    QWEN_IMAGE_21_SPATIAL_COMPRESSION_RATIO, decoded_pixel_dimensions,
+    decoded_pixel_dimensions,
 };
 
 #[cfg(feature = "direct-mlx")]

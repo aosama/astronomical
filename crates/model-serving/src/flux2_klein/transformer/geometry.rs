@@ -1,5 +1,8 @@
 //! Validated model geometry shared by weight binding and graph construction.
 
+#[cfg(test)]
+mod tests;
+
 use super::Flux2KleinTransformerGeometryError;
 use crate::flux2_klein::Flux2KleinTransformerConfig;
 

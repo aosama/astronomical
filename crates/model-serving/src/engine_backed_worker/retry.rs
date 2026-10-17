@@ -3,10 +3,9 @@ use astronomical_ipc_protocol::RequestId;
 use super::model_swap::factory_runtime_matches_configuration;
 use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
-use crate::{
-    EmbeddingEngine, ImageGenerationEngine, InferenceEngine, InferenceEngineError,
-    ModelGenerationProcessor, PreparedInferenceRequest,
-};
+use crate::inference_engine::contract::PreparedInferenceRequest;
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::{EmbeddingEngine, ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
@@ -22,7 +21,8 @@ where
         request_id: RequestId,
         mut retry_request: Processor::InferenceRequest,
         resident_fork_reason: String,
-    ) -> Result<crate::EngineGenerationStart, InferenceEngineError> {
+    ) -> Result<crate::inference_engine::contract::EngineGenerationStart, InferenceEngineError>
+    {
         let Some(SelectedModel {
             model_directory,
             model_configuration,

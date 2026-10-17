@@ -5,6 +5,9 @@ use sha2::{Digest, Sha256};
 use super::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use super::model_contract::PersistentPromptCacheModelContract;
 
+#[cfg(test)]
+mod tests;
+
 const PERSISTENT_PROMPT_CACHE_ROOT_SEED: &[u8] = b"astronomical-decoder-cache-root";
 const PERSISTENT_PROMPT_CACHE_BLOCK_CAUSAL_INPUT_DOMAIN: &[u8] =
     b"astronomical-decoder-cache-block-causal-input";

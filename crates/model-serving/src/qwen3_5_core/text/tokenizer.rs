@@ -1,3 +1,6 @@
+#[cfg(test)]
+pub(crate) mod tests;
+
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::ChatGenerationCommand;

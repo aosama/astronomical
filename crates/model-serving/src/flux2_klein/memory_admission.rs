@@ -1,9 +1,12 @@
 //! Sequential unified-memory admission for conditioning, denoising, and decoding.
 
+#[cfg(feature = "direct-mlx")]
 use thiserror::Error;
 
+#[cfg(feature = "direct-mlx")]
 use crate::memory::{MlxRamBudget, MlxRamBudgetModelGeometry};
 
+#[cfg(any(test, feature = "direct-mlx"))]
 /// Validated payload and transient byte owners supplied by artifact/runtime measurements.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinMemoryGeometry {
@@ -21,6 +24,7 @@ pub struct Flux2KleinMemoryGeometry {
     pub maximum_base64_bytes: u64,
 }
 
+#[cfg(feature = "direct-mlx")]
 /// Component strategy selected without changing BF16 checkpoint precision.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Flux2KleinResidencyMode {
@@ -28,6 +32,7 @@ pub enum Flux2KleinResidencyMode {
     Streamed,
 }
 
+#[cfg(feature = "direct-mlx")]
 /// A sequential plan consumed directly by the future concrete engine.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinResidencyPlan {
@@ -42,6 +47,7 @@ pub struct Flux2KleinResidencyPlan {
     minimum_mlx_memory_ceiling_bytes: u64,
 }
 
+#[cfg(feature = "direct-mlx")]
 impl Flux2KleinResidencyPlan {
     pub const fn text_encoder_mode(&self) -> Flux2KleinResidencyMode {
         self.text_encoder_mode
@@ -81,6 +87,7 @@ impl Flux2KleinResidencyPlan {
     }
 }
 
+#[cfg(feature = "direct-mlx")]
 /// Failure to fit bounded streaming or the exact complete VAE decoder.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum Flux2KleinMemoryAdmissionError {
@@ -108,12 +115,15 @@ pub enum Flux2KleinMemoryAdmissionError {
     },
 }
 
+#[cfg(feature = "direct-mlx")]
 /// Composes image owners against the same process MLX ceiling primitive as text serving.
 pub struct Flux2KleinMemoryAdmission;
 
+#[cfg(feature = "direct-mlx")]
 impl Flux2KleinMemoryAdmission {
     /// Returns the maximum of streamed text, fixed transformer execution with no
     /// retained blocks, complete VAE decoding, and RGB/PNG/base64 encoding overlap.
+    #[cfg(test)]
     pub fn minimum_mlx_memory_ceiling_bytes(
         geometry: &Flux2KleinMemoryGeometry,
     ) -> Result<u64, Flux2KleinMemoryAdmissionError> {
@@ -220,6 +230,7 @@ impl Flux2KleinMemoryAdmission {
     }
 }
 
+#[cfg(feature = "direct-mlx")]
 struct MinimumExecutionPeaks {
     streamed_text_peak_bytes: u64,
     transformer_fixed_execution_peak_bytes: u64,
@@ -227,6 +238,7 @@ struct MinimumExecutionPeaks {
     encoding_overlap_peak_bytes: u64,
 }
 
+#[cfg(feature = "direct-mlx")]
 impl MinimumExecutionPeaks {
     fn minimum_mlx_memory_ceiling_bytes(&self) -> u64 {
         self.streamed_text_peak_bytes
@@ -236,6 +248,7 @@ impl MinimumExecutionPeaks {
     }
 }
 
+#[cfg(feature = "direct-mlx")]
 fn minimum_execution_peaks(
     geometry: &Flux2KleinMemoryGeometry,
 ) -> Result<MinimumExecutionPeaks, Flux2KleinMemoryAdmissionError> {
@@ -283,6 +296,7 @@ fn minimum_execution_peaks(
     })
 }
 
+#[cfg(feature = "direct-mlx")]
 fn checked_sum(byte_counts: &[u64]) -> Result<u64, Flux2KleinMemoryAdmissionError> {
     byte_counts
         .iter()
@@ -293,6 +307,7 @@ fn checked_sum(byte_counts: &[u64]) -> Result<u64, Flux2KleinMemoryAdmissionErro
         })
 }
 
+#[cfg(feature = "direct-mlx")]
 fn ensure_fits(
     required_bytes: u64,
     ceiling_bytes: u64,

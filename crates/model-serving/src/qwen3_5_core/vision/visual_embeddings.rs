@@ -2,6 +2,9 @@
 
 use thiserror::Error;
 
+#[cfg(test)]
+mod tests;
+
 /// One source image whose persisted or computed visual rows are still needed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Qwen3_5VisualEmbeddingRequiredImage {

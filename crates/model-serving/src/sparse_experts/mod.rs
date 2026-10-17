@@ -7,6 +7,7 @@
 //! source storage and encoding interpretation remain family-owned.
 
 mod assignment_permutation;
+#[cfg(feature = "direct-mlx")]
 mod assignment_sort_policy;
 mod error;
 
@@ -27,7 +28,8 @@ pub use assignment_sort::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use assignment_sort_policy::MINIMUM_SORTED_EXPERT_ASSIGNMENTS;
-pub use assignment_sort_policy::should_use_sorted_expert_reduction;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use assignment_sort_policy::should_use_sorted_expert_reduction;
 pub use error::SparseExpertError;
 #[cfg(feature = "direct-mlx")]
 pub use gathered_projection::{

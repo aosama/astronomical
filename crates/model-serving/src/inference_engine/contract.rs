@@ -1,12 +1,14 @@
 use std::future::Future;
 
-use crate::{InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+use crate::InferenceEngineError;
 use astronomical_ipc_protocol::{
     ExpertMemoryMode, RequestId, WorkerEvent, WorkerPersistentPromptCacheRequestDiagnostics,
     WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 
 use super::EngineLoadResult;
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// Asynchronous inference-engine contract that keeps runtime-affine work off Tokio threads.
 pub trait InferenceEngine {
@@ -367,7 +369,7 @@ pub enum GeneratedToken {
         total_layer_count: u32,
         resident_expert_count: u32,
         resident_expert_payload_bytes: u64,
-        mlx_memory_telemetry: Option<crate::MlxMemoryTelemetry>,
+        mlx_memory_telemetry: Option<crate::memory::telemetry::MlxMemoryTelemetry>,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
     EndOfSequence,

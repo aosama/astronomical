@@ -35,11 +35,12 @@
 
 use astronomical_test_harness::offline_denied_test;
 
+use crate::memory::residency::ExpertLayerGeometry;
 use crate::{
-    AdaptiveRamGrowthExecutionProfile, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ForwardRecoveryPolicy, MemoryPhase, plan_expert_residency,
-    publish_request_stable_residency_plan, retained_resident_ceiling_after_budget_refresh,
-    should_commit_mandatory_complete_layer, whole_table_reclamation_target_bytes,
+    AdaptiveRamGrowthExecutionProfile, ExpertLayerResidencyTarget, ForwardRecoveryPolicy,
+    MemoryPhase, plan_expert_residency, publish_request_stable_residency_plan,
+    retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
+    whole_table_reclamation_target_bytes,
 };
 
 /// Sparse decoder layers of the incident artifact (40-layer model, 2 dense).

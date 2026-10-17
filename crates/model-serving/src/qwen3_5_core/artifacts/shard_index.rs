@@ -3,6 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use thiserror::Error;
 
+#[cfg(test)]
+mod tests;
+
 use super::tensor_spec;
 use crate::artifact_validation::TensorProfile;
 

@@ -6,9 +6,10 @@
 //! again. Tail capture is best-effort by contract: the request never depends
 //! on tail reuse, so every failure is logged and skipped.
 
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{
-    PerformanceOperation, PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
-    PersistentPromptCacheDiskStore, PersistentPromptCachePublicationOutcome,
+    PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
+    PersistentPromptCachePublicationOutcome,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;

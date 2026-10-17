@@ -1,10 +1,11 @@
 //! Converts Qwen geometry and composed RAM budgets into the pure residency target.
 
+use crate::memory::residency::ExpertLayerGeometry;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError;
 use crate::{
-    ExpertLayerGeometry, ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution,
-    PerformanceCounter, PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,
+    ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution, PerformanceCounter,
+    PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,
     plan_expert_residency, publish_request_stable_residency_plan,
     retained_resident_ceiling_after_budget_refresh, should_enact_planned_expert_release,
 };

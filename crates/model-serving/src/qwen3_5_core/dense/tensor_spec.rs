@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use crate::artifact_validation::TensorProfile;
 use crate::qwen3_5_core::artifacts::Qwen3_5Config;
 use crate::qwen3_5_core::artifacts::tensor_spec;

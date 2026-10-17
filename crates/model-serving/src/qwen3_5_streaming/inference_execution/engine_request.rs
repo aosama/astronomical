@@ -9,10 +9,10 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey, Qwen3_5SamplingStrategy,
-    Qwen3_5ThinkingBudgetState,
+    PersistentPromptCacheBlockKey, Qwen3_5SamplingStrategy,
 };
 
 use super::qwen3_5_runtime_error;
@@ -304,3 +304,5 @@ impl Qwen3_5EngineRequest {
         self.pending_generated_token = Some(pending_generated_token);
     }
 }
+
+use crate::Qwen3_5ThinkingBudgetState;

@@ -9,9 +9,10 @@
 
 use astronomical_test_harness::offline_denied_test;
 
+use crate::memory::residency::ExpertLayerGeometry;
 use crate::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlanError, MemoryPhase, RetainedExpertPageClass, plan_expert_residency,
+    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError, MemoryPhase,
+    RetainedExpertPageClass, plan_expert_residency,
 };
 
 fn geometry(

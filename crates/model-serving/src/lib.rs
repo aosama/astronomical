@@ -1,60 +1,94 @@
 // Unsafe is denied workspace-wide. This crate previously carried a source-level
+
 // forbid; it was relaxed to the workspace deny for exactly one module —
+
 // performance_attribution::macos_process_io — whose macOS accounting syscall is
+
 // inseparable from the evidence types it produces (rationale lives there). Any
+
 // new unsafe elsewhere in this crate still fails the build.
-mod artifact_validation;
+
+pub(crate) mod artifact_validation;
+
 mod attention;
+
 mod decoder_cache;
+
 mod embedding_engine;
+
 mod engine_backed_worker;
+
 mod expert_paging;
-mod flux2_klein;
+
+pub(crate) mod flux2_klein;
+
 #[cfg(feature = "direct-mlx")]
 mod gpu_token_sampling;
-mod image_generation_engine;
-mod inference_engine;
-mod k2_horizon_mova;
+
+pub(crate) mod image_generation_engine;
+
+pub(crate) mod inference_engine;
+
+pub(crate) mod k2_horizon_mova;
+
 mod kernel_capability;
-mod memory;
+
+pub(crate) mod memory;
+
 mod model_family_runtime;
-mod model_generation_processor;
+
+pub(crate) mod model_generation_processor;
+
 #[cfg(feature = "direct-mlx")]
-mod modernbert;
-mod performance_attribution;
-mod persistent_cache;
-mod qwen3_5_core;
+pub(crate) mod modernbert;
+
+pub(crate) mod performance_attribution;
+
+pub(crate) mod persistent_cache;
+
+pub(crate) mod qwen3_5_core;
+
+#[cfg(feature = "direct-mlx")]
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_resident;
+
 mod qwen3_5_streaming;
-mod qwen_image_21;
+
+pub(crate) mod qwen_image_21;
+
 mod safetensors;
+
 mod sampling_seed;
+
 mod sparse_experts;
+
 mod strict_json;
+
 #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
 mod structured_generation;
 
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
-pub use artifact_validation::{
-    ArtifactValidationError, RequiredFileProfile, TensorDeclarationOrigin, TensorDtype,
-    TensorInventory, TensorInventoryError, TensorLocation, TensorProfile, TensorSemanticRole,
-    TensorSourceId, ValidatedWeightsFile,
-};
+
+pub use artifact_validation::{ArtifactValidationError, TensorDtype, TensorProfile};
+
 #[doc(hidden)]
 pub use artifact_validation::{
     RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests,
     validate_safetensors_required_profiles_for_tests,
 };
+
 pub use astronomical_ipc_protocol::ExpertMemoryMode;
+
 #[cfg(feature = "direct-mlx")]
 pub use attention::build_causal_sliding_window_mask;
+
 pub use attention::{
     RopeFrequencyError, SlidingWindowVisibilityError, YarnRopeFrequencyDenominators,
     compute_default_rope_frequency_denominators, compute_yarn_rope_frequency_denominators,
     sliding_window_position_is_visible, sliding_window_visibility_table,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use decoder_cache::{
     ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
@@ -63,18 +97,23 @@ pub use decoder_cache::{
     QuantizedFullAttentionKeyValueState, QuantizedKeyValueViews, QuantizedTensorViews,
     RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };
+
 pub use decoder_cache::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
     DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
+
 pub use embedding_engine::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
 };
+
 pub use engine_backed_worker::{
     EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use expert_paging::load_quantized_expert_page;
+
 pub use expert_paging::{
     ExpertManifestError, ExpertPageRoutePartition, ExpertWeightMemoryCacheStatistics,
     ExpertWeightPage, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
@@ -86,47 +125,42 @@ pub use expert_paging::{
     last_prefill_chunk_demand_weight, parse_safetensors_header, validate_expert_ids,
     validate_quantization_contract, validate_source_intervals, validate_virtual_intervals,
 };
+
 pub use flux2_klein::{
-    FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION,
-    FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, FLUX2_KLEIN_PROVIDER_MODEL_ID,
-    FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT, Flux2KleinArtifactError, Flux2KleinArtifactProvenance,
-    Flux2KleinArtifactValidator, Flux2KleinComponentLoad, Flux2KleinConfigError,
-    Flux2KleinDimensionError, Flux2KleinEngineComponents, Flux2KleinFlowSchedule,
-    Flux2KleinFlowScheduler, Flux2KleinFlowSchedulerError, Flux2KleinFlowStep,
-    Flux2KleinImageDimensions, Flux2KleinImageEncodingError, Flux2KleinImageEngine,
-    Flux2KleinLicense, Flux2KleinMemoryAdmission, Flux2KleinMemoryAdmissionError,
-    Flux2KleinMemoryGeometry, Flux2KleinOfficialProfile, Flux2KleinPackedLatentLayout,
-    Flux2KleinPipelineConfig, Flux2KleinPngEncoder, Flux2KleinResidencyMode,
-    Flux2KleinResidencyPlan, Flux2KleinRetainedArtifactFiles, Flux2KleinSchedulerConfig,
-    Flux2KleinTensorDescriptor, Flux2KleinTensorInventory, Flux2KleinTextEncoderConfig,
-    Flux2KleinTransformerConfig, Flux2KleinVaeConfig, Flux2KleinVaeError, Flux2KleinVaeTile,
-    Flux2KleinVaeTilePlan, Flux2KleinVaeTilingConfig, ValidatedFlux2KleinArtifact,
-    flux2_klein_inverse_batch_norm_reference, flux2_klein_reference_rgb_u8,
+    FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID,
+    Flux2KleinArtifactProvenance, Flux2KleinFlowSchedulerError, Flux2KleinImageDimensions,
+    Flux2KleinImageEngine, Flux2KleinLicense, Flux2KleinRetainedArtifactFiles,
+    Flux2KleinTensorDescriptor, Flux2KleinTensorInventory, ValidatedFlux2KleinArtifact,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use flux2_klein::{
-    Flux2KleinBlockGroupEvent, Flux2KleinBlockKind, Flux2KleinComponentOracle,
-    Flux2KleinTransformer, Flux2KleinTransformerError, Flux2KleinTransformerGeometry,
-    Flux2KleinTransformerGeometryError, Flux2KleinTransformerInputs, Flux2KleinTransformerOutput,
-    Flux2KleinTransformerWeights, Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder,
+    FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT,
+    Flux2KleinBlockKind, Flux2KleinComponentOracle, Flux2KleinImageEncodingError,
+    Flux2KleinResidencyPlan, Flux2KleinTransformerError, Flux2KleinTransformerOutput,
+    Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder, Flux2KleinVaeError, Flux2KleinVaeTile,
     apply_rope_for_component_oracle, flux2_klein_euler_update_for_tests,
-    flux2_klein_initial_latents_for_tests, flux2_klein_keyed_noise_and_euler_for_tests,
+    flux2_klein_initial_latents_for_tests, flux2_klein_inverse_batch_norm_reference,
+    flux2_klein_keyed_noise_and_euler_for_tests, flux2_klein_reference_rgb_u8,
 };
+
 #[doc(hidden)]
 #[cfg(feature = "direct-mlx")]
 pub use gpu_token_sampling::{
     sample_acceptance_coins_for_tests, sample_from_relative_probabilities_for_tests,
 };
+
 pub use image_generation_engine::{
-    ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
-    ImageGenerationUnavailableEngine,
+    ImageGenerationEngine, ImageGenerationEngineStep, ImageGenerationUnavailableEngine,
 };
+
 pub use inference_engine::{
-    EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
-    GenerationFinalization, InferenceEngine, InferenceEngineError, MlxInferenceEngine,
-    MlxInferenceExecution, PreparedInferenceRequest,
+    GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
+    MlxInferenceEngine, MlxInferenceExecution,
 };
+
 pub use k2_horizon_mova::K2HorizonMoVAServingSettings;
+
 #[cfg(feature = "direct-mlx")]
 pub use k2_horizon_mova::{
     FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, K2HorizonMoVAEngine,
@@ -135,28 +169,32 @@ pub use k2_horizon_mova::{
     initialize_k2_horizon_mova_execution_with_serving_settings, initialize_k2_horizon_mova_model,
     initialize_k2_horizon_mova_model_with_serving_settings,
 };
+
 pub use k2_horizon_mova::{
     K2HorizonMoVAAffineProfile, K2HorizonMoVAArtifactValidationError,
-    K2HorizonMoVAArtifactValidator, K2HorizonMoVAAttentionGateFunc, K2HorizonMoVAConfig,
-    K2HorizonMoVAConfigError, K2HorizonMoVAExpertGeometryError, K2HorizonMoVAGenerationProcessor,
-    K2HorizonMoVAInferenceRequest, K2HorizonMoVALayerKind, K2HorizonMoVAOutputParser,
-    K2HorizonMoVAPromptRenderer, K2HorizonMoVAQuantizationContract, K2HorizonMoVARequestOutput,
-    K2HorizonMoVAShardIndex, K2HorizonMoVASparseLayerExpertPayload,
-    K2HorizonMoVAThinkingBudgetError, K2HorizonMoVAThinkingBudgetState, K2HorizonMoVATokenizer,
-    K2HorizonMoVATokenizerError, K2HorizonMoVAWeightDialect, ValidatedK2HorizonMoVAArtifact,
+    K2HorizonMoVAAttentionGateFunc, K2HorizonMoVAConfig, K2HorizonMoVAConfigError,
+    K2HorizonMoVAExpertGeometryError, K2HorizonMoVAGenerationProcessor,
+    K2HorizonMoVAInferenceRequest, K2HorizonMoVAPromptRenderer, K2HorizonMoVAQuantizationContract,
+    K2HorizonMoVARequestOutput, K2HorizonMoVAShardIndex, K2HorizonMoVAThinkingBudgetError,
+    K2HorizonMoVATokenizer, K2HorizonMoVATokenizerError, ValidatedK2HorizonMoVAArtifact,
     expected_stacked_affine_tensor_names, k2_horizon_mova_decoder_cache_layout,
     k2_horizon_mova_expert_layer_geometries, resolve_k2_horizon_mova_thinking_budget,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use kernel_capability::SortedExpertWeightedSumProbe;
+
 #[cfg(feature = "direct-mlx")]
 pub use kernel_capability::install_forced_worker_verdicts_for_tests;
+
 #[cfg(feature = "direct-mlx")]
 pub use kernel_capability::worker_process_kernel_capabilities;
+
 pub use kernel_capability::{
     CustomKernelVerdict, CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError,
     KernelUnsupportedReason, WorkerKernelCapabilities, validate_probe_outputs,
 };
+
 pub use memory::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
@@ -164,13 +202,12 @@ pub use memory::{
     AllocationAdmissionObservation, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
     CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
     ContextAdmissionRequirements, CurrentExpertLayerResidency, DecodeExpertCache,
-    ExpertLayerGeometry, ExpertLayerResidencyTarget, ExpertMemoryAdmissionError,
-    ExpertReclamationPlan, ExpertResidencyPlan, ExpertResidencyPlanError, ForwardRecoveryDecision,
-    ForwardRecoveryPolicy, ForwardRecoveryRequirements, MeasuredExpertLayerPayload,
-    MemoryAdmissionDecision, MemoryBoundary, MemoryCeilingChangeDecision,
-    MemoryCeilingChangeRequirements, MemoryCeilingUtilization, MemoryPhase,
-    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
+    ExpertLayerResidencyTarget, ExpertMemoryAdmissionError, ExpertReclamationPlan,
+    ExpertResidencyPlan, ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryPolicy,
+    ForwardRecoveryRequirements, MeasuredExpertLayerPayload, MemoryAdmissionDecision,
+    MemoryBoundary, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
+    MemoryCeilingUtilization, MemoryPhase, MlxRamBudget, MlxRamBudgetError,
+    MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
     PagedExpertReclamationStep, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
     PreviousTokenPrefetchPlan, RamBudgetGeometryError, RequestExpertLayerRole,
     RequestExpertResidency, ResidentExpertWeight, RetainedExpertPageClass,
@@ -200,46 +237,42 @@ pub use memory::{
     should_enact_planned_expert_release, should_retry_fixed_forward_after_expert_reclamation,
     whole_table_reclamation_target_bytes,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
+
 #[cfg(feature = "direct-mlx")]
 pub use model_family_runtime::ModelFamilyInferenceEngine;
+
 pub use model_family_runtime::{
     ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceRequest,
     ModelFamilyRequestOutput,
 };
-pub use model_generation_processor::{
-    MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
-    ModelGenerationProcessor, PreparedModelGeneration,
-};
+
 #[cfg(feature = "direct-mlx")]
-pub use modernbert::{
-    EncodedEmbeddingInput, ModernBertConfiguration, ModernBertEmbeddingEngine,
-    encode_embedding_input,
-};
+pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
+
 pub use performance_attribution::macos_process_io::{
-    MacosProcessIoDelta, MacosProcessIoError, MacosProcessIoSnapshot, sample_current_process_io,
-    sample_process_io_for_process_id,
+    MacosProcessIoDelta, sample_current_process_io, sample_process_io_for_process_id,
 };
+
 pub use performance_attribution::{
     GenerationPerformanceAttributionMetadata, ModelLoadingPerformanceAttributionMetadata,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
     PerformanceAttributionReport, PerformanceCounter, PerformanceOperation,
     PerformanceOperationMeasurement, process_io_delta_between_samples,
 };
+
 pub use persistent_cache::{
-    PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION, PersistentPromptCacheBlockCausalInput,
-    PersistentPromptCacheBlockError, PersistentPromptCacheBlockHeader,
     PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError,
-    PersistentPromptCacheCounters, PersistentPromptCacheLookupDiagnostics,
-    PersistentPromptCacheMissReason, PersistentPromptCacheModelContract,
-    PersistentPromptCacheModelContractError, PersistentPromptCachePrefixLookup,
+    PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,
+    PersistentPromptCacheModelContract, PersistentPromptCacheModelContractError,
     PersistentPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
-    PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
-    PersistentVisualEmbeddingModelContract,
+    PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use persistent_cache::{
     PersistentPromptCacheClearOutcome, PersistentPromptCacheDiskStore,
@@ -248,53 +281,146 @@ pub use persistent_cache::{
     PersistentPromptCacheStartupCleanupEvidence, build_persistent_prompt_cache_stats_event,
     clear_persistent_prompt_cache_directory,
 };
+
 pub use qwen3_5_core::artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
     Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
     mlx_ram_budget_model_geometry_from_validated_artifact, qwen3_5_language_tensor_profiles,
-    qwen3_5_resident_language_tensor_profiles,
 };
+
+// Restored public surface: these items are the API the crate's own integration
+
+// tests consume (they verify the public seam); everything else that only the
+
+// beside-source unit tests exercised stays crate-private.
+
+pub use crate::artifact_validation::tensor_inventory::{
+    TensorDeclarationOrigin, TensorInventory, TensorInventoryError, TensorLocation,
+    TensorSemanticRole, TensorSourceId,
+};
+
+pub use crate::artifact_validation::types::RequiredFileProfile;
+
+pub use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
+
+pub use crate::flux2_klein::artifact::{Flux2KleinArtifactError, Flux2KleinArtifactValidator};
+
+pub use crate::flux2_klein::configuration::Flux2KleinTransformerConfig;
+
+pub use crate::flux2_klein::engine::components::{
+    Flux2KleinComponentLoad, Flux2KleinEngineComponents,
+};
+
+pub use crate::flux2_klein::scheduler::{
+    Flux2KleinFlowSchedule, Flux2KleinFlowScheduler, Flux2KleinFlowStep,
+};
+
+#[cfg(feature = "direct-mlx")]
+#[cfg(feature = "direct-mlx")]
+pub use crate::flux2_klein::transformer::execution::Flux2KleinTransformer;
+#[cfg(feature = "direct-mlx")]
+pub use flux2_klein::transformer::{
+    Flux2KleinBlockGroupEvent, Flux2KleinTransformerGeometry, Flux2KleinTransformerGeometryError,
+    Flux2KleinTransformerInputs, Flux2KleinTransformerWeights,
+};
+
+pub use crate::image_generation_engine::ImageGenerationEngineLoadResult;
+
+pub use crate::inference_engine::contract::{
+    EngineGenerationStart, ExpertResidencyTelemetry, PreparedInferenceRequest,
+};
+
+pub use crate::inference_engine::load_result::EngineLoadResult;
+
+pub use crate::k2_horizon_mova::artifacts::dialect::K2HorizonMoVAWeightDialect;
+
+pub use crate::k2_horizon_mova::artifacts::validator::K2HorizonMoVAArtifactValidator;
+
+pub use crate::memory::telemetry::{
+    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
+};
+
+pub use crate::model_generation_processor::{
+    MalformedModelOutputDiagnostic, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
+    ModelGenerationProcessor, PreparedModelGeneration,
+};
+
+pub use crate::performance_attribution::macos_process_io::MacosProcessIoError;
+
+pub use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+
+pub use crate::persistent_cache::block_format::PersistentPromptCacheBlockHeader;
+
+pub use crate::persistent_cache::block_format_error::PersistentPromptCacheBlockError;
+
+pub use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;
+
+pub use crate::persistent_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
+
+pub use crate::persistent_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
+
+pub use crate::qwen_image_21::artifact::QwenImage21ArtifactValidator;
+
+pub use crate::qwen_image_21::artifact::error::QwenImage21ArtifactError;
+
+pub use crate::qwen_image_21::configuration::text_encoder::QwenImage21TextEncoderConfig;
+
+pub use crate::qwen_image_21::configuration::transformer::QwenImage21TransformerConfig;
+
+pub use crate::qwen_image_21::configuration::vae::QwenImage21VaeConfig;
+
+pub use crate::qwen_image_21::engine::components::{
+    QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,
+};
+
+pub use crate::qwen_image_21::render_contract::{QwenImage21RenderAdvance, QwenImage21Rendered};
+
+pub use crate::qwen_image_21::tensor_profiles::QwenImage21TensorProfile;
+
 pub use qwen3_5_core::configuration::{
-    ModelWeightStorage, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
+    Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
 };
+
 pub use qwen3_5_core::decoder::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
-pub use qwen3_5_core::quantizations::optiq::{
-    OptiQMetadata, OptiQMetadataError, OptiQQuantizationProfile,
-};
+
+pub use qwen3_5_core::quantizations::optiq::{OptiQMetadata, OptiQMetadataError};
+
+#[cfg(any(test, feature = "direct-mlx"))]
+pub use qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetState;
+
 pub use qwen3_5_core::text::{
-    Qwen3_5GenerationProcessor, Qwen3_5InferenceRequest, Qwen3_5OutputEvent, Qwen3_5OutputParser,
+    Qwen3_5GenerationProcessor, Qwen3_5InferenceRequest, Qwen3_5OutputEvent,
     Qwen3_5OutputParserError, Qwen3_5PromptError, Qwen3_5PromptRenderer, Qwen3_5RenderedPrompt,
-    Qwen3_5RequestOutput, Qwen3_5RequestOutputError, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy,
-    Qwen3_5ThinkingBudgetError, Qwen3_5ThinkingBudgetState, Qwen3_5TokenDecoder, Qwen3_5TokenIds,
-    Qwen3_5Tokenizer, Qwen3_5TokenizerError, Qwen3_5ToolCall, discover_sampler_config,
+    Qwen3_5RequestOutput, Qwen3_5SamplerConfig, Qwen3_5SamplingStrategy, Qwen3_5TokenDecoder,
+    Qwen3_5TokenIds, Qwen3_5Tokenizer, Qwen3_5TokenizerError, discover_sampler_config,
     discover_token_ids, qwen3_5_request_enables_thinking, resolve_sampling_seed,
     translate_qwen3_5_preparation_error, translate_request_output_error,
     validate_context_token_count,
 };
+
 pub use qwen3_5_core::vision::{
-    Qwen3_5ImageDimensions, Qwen3_5ImageGrid, Qwen3_5ImageProcessingError, Qwen3_5ImageProcessor,
-    Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
-    Qwen3_5VisionInputPlanError, Qwen3_5VisualEmbeddingRequiredImage,
+    Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5VisionConfig,
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
     Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
     plan_qwen3_5_visual_embedding_suffix, plan_qwen3_5_visual_prompt_cache_block_inputs,
     qwen3_5_vision_tensor_profiles,
 };
 
+#[cfg(any(test, feature = "direct-mlx"))]
+pub use qwen3_5_core::vision::vision_input_plan::Qwen3_5VisionInputPlanError;
+
 // Qwen-Image-2.1: the family's pure contracts, artifact validation, and geometry constants. The
+
 // MLX components (text encoder, transformer, VAE decoder, pipeline) follow below under `direct-mlx`.
+
 pub use qwen_image_21::{
-    CacheMode, FlowMatchSchedule, FlowMatchSchedulerParams, NUM_TRAIN_TIMESTEPS,
-    PromptConditioningOutput, QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_LICENSE_IDENTIFIER,
-    QWEN_IMAGE_21_OFFICIAL_MODEL_ID, QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT,
-    QWEN_IMAGE_21_PROVIDER_MODEL_ID, QWEN_IMAGE_21_SPATIAL_COMPRESSION_RATIO,
-    QWEN_IMAGE_21_SYS_PROMPT, QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QWEN_IMAGE_21_VAE_SCALE_FACTOR,
-    QwenImage21ArtifactError, QwenImage21ArtifactProvenance, QwenImage21ArtifactValidator,
-    QwenImage21ConfigError, QwenImage21License, QwenImage21PipelineConfig,
-    QwenImage21RetainedArtifactFiles, QwenImage21Rope, QwenImage21SchedulerConfig,
-    QwenImage21TensorDescriptor, QwenImage21TensorInventory, QwenImage21TensorProfile,
-    QwenImage21TextEncoderConfig, QwenImage21TransformerConfig, QwenImage21VaeConfig,
-    QwenImage21VaeError, SinusoidalTimesteps, TextConditioningError, VAE_SPATIAL_MULTIPLE,
+    CacheMode, FlowMatchSchedule, QWEN_IMAGE_21_LATENT_CHANNEL_COUNT,
+    QWEN_IMAGE_21_LICENSE_IDENTIFIER, QWEN_IMAGE_21_OFFICIAL_MODEL_ID,
+    QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT, QWEN_IMAGE_21_PROVIDER_MODEL_ID,
+    QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QWEN_IMAGE_21_VAE_SCALE_FACTOR,
+    QwenImage21ArtifactProvenance, QwenImage21ConfigError, QwenImage21License,
+    QwenImage21PipelineConfig, QwenImage21RetainedArtifactFiles, QwenImage21SchedulerConfig,
+    QwenImage21TensorDescriptor, QwenImage21TensorInventory, QwenImage21VaeError,
     ValidatedQwenImage21Artifact, build_block_causal_mask, build_image_ids,
     build_prompt_conditioning, build_schedule, build_target_token_mask, cache_is_valid,
     cache_query_slice, cache_write_slice, calculate_dimensions, calculate_shift,
@@ -306,74 +432,89 @@ pub use qwen_image_21::{
     round_half_to_even, round_to_nearest_multiple, special_tokens, text_encoder_tensor_profiles,
     transformer_tensor_profiles, unpack_spatial_dims, vae_tensor_profiles, zero_center_rms_norm,
 };
+
 pub use qwen_image_21::{
     QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES, QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
-    QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineError,
-    QwenImage21EngineRequest, QwenImage21ImageEngine, QwenImage21RenderAdvance,
-    QwenImage21RenderRequest, QwenImage21Rendered, qwen_image_21_image_generation_capabilities,
-    qwen_image_21_official_model_id, validate_official_request,
+    QwenImage21EngineError, QwenImage21ImageEngine, QwenImage21RenderRequest,
+    qwen_image_21_image_generation_capabilities, qwen_image_21_official_model_id,
+    validate_official_request,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen_image_21::{
     QwenImage21MlxComponents, QwenImage21Pipeline, QwenImage21TextEncoder, QwenImage21Transformer,
     QwenImage21TransformerRequest, QwenImage21VaeDecoder,
 };
+
 pub use qwen3_5_core::artifacts::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::decoder::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::gated_delta_boundary_checkpoints::{
     Qwen3_5GatedDeltaBoundaryCheckpointResult, qwen3_5_gated_delta_checkpoint_kernel,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints,
     qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::gated_delta_sequence::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
     qwen3_5_gated_delta_sequence_ops_fallback,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::gated_delta_step::qwen3_5_gated_delta_step;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::gdn_decode_prework_kernel::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::weights::Qwen3_5Weights;
+
 pub use qwen3_5_core::route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::text::qwen3_5_apply_repetition_penalty;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::text::qwen3_5_apply_top_p_mask;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::vision::{
     Qwen3_5VisionModel, Qwen3_5VisionPaddingZeroCache, Qwen3_5VisionWeights,
     qwen3_5_inject_visual_embeddings,
 };
-#[cfg(feature = "direct-mlx")]
-#[doc(hidden)]
-pub use qwen3_5_resident::maximum_resident_gate_up_fusion_transient_payload_bytes;
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     Qwen3_5ResidentEngine, Qwen3_5ResidentModel, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5ResidentPromptProcessingChunkSizerError,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoECachedPlusStreamedPageRoute,
@@ -383,9 +524,11 @@ pub use qwen3_5_streaming::{
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
+
 pub use qwen3_5_streaming::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
 };
+
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
     Qwen3_5StreamingEngine, Qwen3_5StreamingModel, Qwen3_5StreamingPrefillExecutionContext,
@@ -393,10 +536,11 @@ pub use qwen3_5_streaming::{
     Qwen3_5StreamingTargetForwardOutput, persistent_prompt_cache_publication_advances_parent_chain,
     safe_minimum_mlx_memory_ceiling_bytes,
 };
+
 pub use qwen3_5_streaming::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
-pub use sparse_experts::should_use_sorted_expert_reduction;
+
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
     ExpertAssignmentOrder, SortedExpertAssignments, StackedExpertProjection,
@@ -404,17 +548,26 @@ pub use sparse_experts::{
     sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
     unsorted_expert_weighted_sum,
 };
+
 pub use sparse_experts::{SparseExpertError, invert_assignment_order};
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles
+
 /// and remaining tensors are accepted by name only.
+
 ///
+
 /// Exposed for integration tests that build synthetic multi-tensor shard fixtures.
+
 pub fn validate_bounded_safetensors_with_partial_profiles(
     weights_file: &std::fs::File,
+
     file_size_bytes: u64,
+
     weights_file_name: &str,
+
     profiled_tensor_profiles: &[TensorProfile],
+
     accepted_extra_tensor_names: &std::collections::HashSet<&str>,
 ) -> Result<artifact_validation::PartialProfileMetadata, ArtifactValidationError> {
     artifact_validation::validate_bounded_safetensors_with_partial_profiles(

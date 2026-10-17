@@ -8,9 +8,8 @@ use tokio::io::AsyncWrite;
 
 use super::support::{ActiveImageGeneration, ModelFactory, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::{
-    ImageGenerationEngine, ImageGenerationEngineStep, InferenceEngine, ModelGenerationProcessor,
-};
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::{ImageGenerationEngine, ImageGenerationEngineStep, InferenceEngine};
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>

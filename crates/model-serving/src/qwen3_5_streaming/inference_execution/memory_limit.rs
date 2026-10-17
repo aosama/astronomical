@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use crate::{
-    InferenceEngineError, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,
-    safe_minimum_active_memory_ceiling_bytes,
-};
+use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
 
 use super::Qwen3_5EngineState;
 
@@ -159,3 +156,5 @@ impl Qwen3_5EngineState {
         })
     }
 }
+
+use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

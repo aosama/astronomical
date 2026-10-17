@@ -84,8 +84,8 @@ offline_denied_test!(
     should_finish_cancelled_generation_process_io_from_the_final_sample,
     {
         let initial_process_io =
-            crate::MacosProcessIoSnapshot::from_cumulative_bytes(10_000, 4_000);
-        let final_process_io = crate::MacosProcessIoSnapshot::from_cumulative_bytes(90_000, 14_000);
+            crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(10_000, 4_000);
+        let final_process_io = crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(90_000, 14_000);
 
         let cancelled_generation_delta =
             crate::process_io_delta_between_samples(&initial_process_io, Ok(final_process_io))

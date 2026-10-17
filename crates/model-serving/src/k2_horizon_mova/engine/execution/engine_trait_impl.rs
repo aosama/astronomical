@@ -11,6 +11,7 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerEvent};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::{K2HorizonMoVAActiveGeneration, K2HorizonMoVAInferenceExecution};
+use crate::inference_engine::load_result::EngineLoadResult;
 use crate::k2_horizon_mova::engine::retained_live_prefix::{
     install_retained_live_prefix, take_retained_live_prefix,
 };
@@ -24,9 +25,8 @@ use crate::persistent_cache::PersistentPromptCachePrefixLookup;
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 use crate::{
-    CustomMetalKernelFamily, EngineGenerationStart, EngineLoadResult, GeneratedToken,
-    GenerationFinalization, InferenceEngineError, MlxInferenceExecution, MlxMemoryLimitAdjustment,
-    MlxMemoryTelemetry, PerformanceAttribution, PerformanceOperation,
+    CustomMetalKernelFamily, GeneratedToken, GenerationFinalization, InferenceEngineError,
+    MlxInferenceExecution, PerformanceAttribution, PerformanceOperation,
 };
 use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu};
 
@@ -591,3 +591,5 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
         ))
     }
 }
+
+use crate::{EngineGenerationStart, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

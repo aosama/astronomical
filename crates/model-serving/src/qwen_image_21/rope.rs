@@ -9,6 +9,9 @@
 //! construction and the frequency tables are pure f64/f32 math with no runtime dependency —
 //! the offline test compares the output against the diffusers Python reference bit-for-bit.
 
+#[cfg(test)]
+mod tests;
+
 /// Positive-index table length (diffusers `arange(8192)`).
 const POS_TABLE_LEN: usize = 8192;
 /// Negative-index table length (diffusers `arange(1024).flip() * -1 - 1`, i.e. -1024..=-1).

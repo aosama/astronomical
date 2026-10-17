@@ -19,6 +19,9 @@
 //! runtime relies on it. This module is pure integer/tuple bookkeeping — no runtime dependency — so
 //! it is tested offline against the diffusers oracle.
 
+#[cfg(test)]
+mod tests;
+
 /// Which caching mode a cache-carrying transformer forward would run for a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheMode {

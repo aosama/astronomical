@@ -16,10 +16,10 @@ use std::time::Instant;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
 use crate::{
-    MemoryCeilingUtilization, MlxMemoryTelemetry, ModelLoadingPerformanceAttributionMetadata,
-    PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
-    PerformanceOperation, ValidatedWeightsFile,
+    MemoryCeilingUtilization, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
+    PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::super::memory_utilization::{
@@ -272,3 +272,5 @@ impl Flux2KleinMlxComponents {
         Ok(())
     }
 }
+
+use crate::MlxMemoryTelemetry;

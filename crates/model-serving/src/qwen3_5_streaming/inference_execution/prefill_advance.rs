@@ -442,8 +442,8 @@ impl Qwen3_5EngineState {
                     active_memory_bytes,
                     0,
                 );
-                Ok::<crate::MlxMemoryTelemetry, InferenceEngineError>(
-                    crate::MlxMemoryTelemetry::new(
+                Ok::<crate::memory::telemetry::MlxMemoryTelemetry, InferenceEngineError>(
+                    crate::memory::telemetry::MlxMemoryTelemetry::new(
                         active_memory_bytes,
                         u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(
                             |_| {
