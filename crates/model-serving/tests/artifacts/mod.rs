@@ -3,6 +3,7 @@
 
 mod artifact_validator;
 mod persistent_prompt_cache_block_format;
+mod persistent_prompt_cache_model_contract_fixture;
 mod persistent_prompt_cache_partial_tail_lookup;
 mod persistent_prompt_cache_prefix_lookup;
 mod persistent_prompt_cache_retained_prefix_lookup;

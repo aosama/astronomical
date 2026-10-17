@@ -8,7 +8,7 @@ use astronomical_model_serving::{
 };
 use serde_json::{Map, Value, json};
 
-use crate::common::qwen3_5_moe;
+use super::persistent_prompt_cache_model_contract_fixture as qwen3_5_moe;
 
 #[test]
 fn should_accept_a_contract_generated_sequence_state_header() {

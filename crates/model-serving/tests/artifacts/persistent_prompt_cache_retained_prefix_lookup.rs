@@ -2,7 +2,7 @@ use astronomical_model_serving::{
     PersistentPromptCacheBlockKey, PersistentPromptCachePrefixLookup,
 };
 
-use crate::common::qwen3_5_moe::persistent_prompt_cache_model_contract;
+use super::persistent_prompt_cache_model_contract_fixture::persistent_prompt_cache_model_contract;
 
 fn prompt_tokens_with_complete_blocks_and_trailing_tokens(
     complete_block_count: usize,
