@@ -17,6 +17,12 @@ use super::{LOG_MARKER, MAXIMUM_OUTPUT_TOKEN_COUNT};
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 
+/// The daemon converts whole-GB user inputs — the config
+/// `maximum_mlx_memory_gb` field and the REST ceiling endpoint — at 2^30
+/// bytes per marketed gigabyte. Config writers and byte expectations must
+/// round-trip through the same unit or equality checks go stale.
+pub(super) const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
+
 pub(super) fn write_round_trip_config(
     isolated_worker_home: &Path,
     model_directory: &Path,
@@ -28,7 +34,8 @@ pub(super) fn write_round_trip_config(
         .expect("the live-ceiling round-trip configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": initial_mlx_memory_ceiling_bytes / 1_000_000_000,
+        "maximum_mlx_memory_gb": initial_mlx_memory_ceiling_bytes
+            / BYTES_PER_MARKETED_GIGABYTE,
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": false,
         "performance_attribution_enabled": true,
@@ -57,7 +64,8 @@ pub(super) fn write_mid_streaming_raise_config(
         .expect("the mid-streaming raise configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": initial_mlx_memory_ceiling_bytes / 1_000_000_000,
+        "maximum_mlx_memory_gb": initial_mlx_memory_ceiling_bytes
+            / BYTES_PER_MARKETED_GIGABYTE,
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": true,
         "performance_attribution_enabled": true,

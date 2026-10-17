@@ -44,7 +44,7 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 async fn should_serve_after_lowering_the_live_ceiling_below_the_artifact_size() {
     timeout(SSD_JOURNEY_TIMEOUT, run_lower_ceiling_demotion_journey())
         .await
-        .expect("the lower-ceiling demotion SSD journey must finish within 60 seconds");
+        .expect("the lower-ceiling demotion SSD journey must finish within 120 seconds");
 }
 
 async fn run_lower_ceiling_demotion_journey() {
