@@ -124,6 +124,8 @@ pub(in crate::worker) fn handle_worker_output(
     active_request.generated_token_count = generated_token_count;
     active_request.latest_generation_progress_token_count = generated_token_count;
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+        active_request.fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
+        active_request.last_mlx_active_memory_bytes = Some(mlx_memory_snapshot.active_memory_bytes);
         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
     }
     if let Some(expert_residency) = expert_residency {
@@ -195,6 +197,8 @@ pub(in crate::worker) fn handle_worker_generation_progress(
         },
     );
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+        active_request.fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
+        active_request.last_mlx_active_memory_bytes = Some(mlx_memory_snapshot.active_memory_bytes);
         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
     }
     if let Some(expert_residency) = expert_residency {

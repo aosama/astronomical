@@ -21,4 +21,5 @@ const result = spawnSync(process.execPath, ["--test", bundlePath], {
   stdio: "inherit",
   env: { ...process.env, THINTALK_INDEX_HTML: indexHTML },
 });
-process.exit(result.status ?? 1);
+const testExitStatus = result.status != null ? result.status : 1;
+process.exit(testExitStatus);

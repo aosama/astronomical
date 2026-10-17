@@ -32,15 +32,34 @@ impl Qwen3_5EngineState {
         if self.active_request.is_some() {
             return Err(InferenceEngineError::EngineBusy);
         }
+        // A raise that now admits complete expert residency must not be
+        // absorbed in place: this engine structurally never reports complete
+        // ownership, and the startup selection a replacement worker runs
+        // would load the resident engine under the persisted ceiling.
+        // Demanding the replacement keeps the live worker congruent with
+        // what a restart would choose.
+        if requested_mlx_memory_ceiling_bytes > self.current_mlx_memory_ceiling_bytes()?
+            && self.model.is_some()
+            && self
+                .startup_residency_facts
+                .is_some_and(|startup_residency_facts| {
+                    startup_residency_facts.raised_ceiling_selects_complete_residency(
+                        requested_mlx_memory_ceiling_bytes,
+                    )
+                })
+        {
+            return Err(InferenceEngineError::StreamingResidentPromotionRequired {
+                reason:
+                    "the raised ceiling admits complete expert residency; a replacement worker must load the resident engine"
+                        .to_owned(),
+            });
+        }
+        let old_mlx_memory_ceiling_bytes = self.current_mlx_memory_ceiling_bytes()?;
         let Some(model) = self.model.as_mut() else {
             return Err(super::fatal_engine_error(
                 "cannot update the MLX memory ceiling before the model is loaded",
             ));
         };
-        let old_mlx_memory_ceiling_bytes =
-            u64::try_from(self.memory_limits.active_memory_limit_bytes()).map_err(|_| {
-                super::fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
-            })?;
         let mlx_memory_snapshot_before_adjustment = model
             .runtime()
             .memory_snapshot()
@@ -132,5 +151,11 @@ impl Qwen3_5EngineState {
             mlx_memory_telemetry,
         )
         .with_expert_residency_telemetry(expert_residency))
+    }
+
+    fn current_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
+        u64::try_from(self.memory_limits.active_memory_limit_bytes()).map_err(|_| {
+            super::fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
+        })
     }
 }

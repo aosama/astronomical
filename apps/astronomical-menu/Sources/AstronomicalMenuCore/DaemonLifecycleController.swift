@@ -224,8 +224,14 @@ final class DaemonLifecycleController {
     configuredMenuExecutableURL = menuExecutableURL
     configuredDaemonExecutableURL = daemonExecutableURL
     configuredDaemonArguments = daemonArguments
+    let resolvedOwnershipRecordURL: URL
+    if let ownershipRecordURL {
+      resolvedOwnershipRecordURL = ownershipRecordURL
+    } else {
+      resolvedOwnershipRecordURL = applicationIdentity.daemonOwnershipURL()
+    }
     ownershipStore = DaemonOwnershipStore(
-      ownershipRecordURL: ownershipRecordURL ?? applicationIdentity.daemonOwnershipURL()
+      ownershipRecordURL: resolvedOwnershipRecordURL
     )
     injectedOwnershipRecordURL = ownershipRecordURL
   }
@@ -309,9 +315,15 @@ final class DaemonLifecycleController {
 
   private func startOwnedDaemon(menuExecutableURL: URL, daemonExecutableURL: URL) throws {
     prepareDaemonStderrCapture()
+    let daemonArguments: [String]
+    if let configuredDaemonArguments {
+      daemonArguments = configuredDaemonArguments
+    } else {
+      daemonArguments = applicationIdentity.daemonArguments
+    }
     let daemonProcess = try launchOwnedDaemonProcess(
       executableURL: daemonExecutableURL,
-      arguments: configuredDaemonArguments ?? applicationIdentity.daemonArguments,
+      arguments: daemonArguments,
       stderrCapturePath: daemonStderrCapturePath
     )
     let ownershipRecord = DaemonOwnershipRecord(

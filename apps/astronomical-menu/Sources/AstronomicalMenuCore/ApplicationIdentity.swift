@@ -29,18 +29,74 @@ struct ApplicationIdentity: Equatable, Sendable {
   let isDirty: Bool
 
   static func current(bundle: Bundle = .main) -> ApplicationIdentity {
+    // Every bundle value is optional metadata: each falls back to the
+    // channel's compiled-in default when the key is missing or has the
+    // wrong type.
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
-    let channel = ApplicationChannel(rawValue: rawChannel ?? "") ?? .development
+    let channel: ApplicationChannel
+    if let rawChannel, let bundledChannel = ApplicationChannel(rawValue: rawChannel) {
+      channel = bundledChannel
+    } else {
+      channel = .development
+    }
+
     let configuredPort = bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int
+    let daemonPort: Int
+    if let configuredPort {
+      daemonPort = configuredPort
+    } else {
+      daemonPort = channel.defaultDaemonPort
+    }
+
+    let configuredStateDirectoryName =
+      bundle.object(forInfoDictionaryKey: "AstronomicalStateDirectoryName") as? String
+    let stateDirectoryName: String?
+    if let configuredStateDirectoryName {
+      stateDirectoryName = configuredStateDirectoryName
+    } else {
+      stateDirectoryName = channel.stateDirectoryName
+    }
+
+    let bundledVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    let version: String
+    if let bundledVersion {
+      version = bundledVersion
+    } else {
+      version = "unknown"
+    }
+
+    let bundledBuildNumber = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    let buildNumber: String
+    if let bundledBuildNumber {
+      buildNumber = bundledBuildNumber
+    } else {
+      buildNumber = "0"
+    }
+
+    let bundledCommit = bundle.object(forInfoDictionaryKey: "AstronomicalBuildCommit") as? String
+    let commit: String
+    if let bundledCommit {
+      commit = bundledCommit
+    } else {
+      commit = "unknown"
+    }
+
+    let bundledDirtyFlag = bundle.object(forInfoDictionaryKey: "AstronomicalBuildDirty") as? Bool
+    let isDirty: Bool
+    if let bundledDirtyFlag {
+      isDirty = bundledDirtyFlag
+    } else {
+      isDirty = false
+    }
+
     return ApplicationIdentity(
       channel: channel,
-      daemonPort: configuredPort ?? channel.defaultDaemonPort,
-      stateDirectoryName: (bundle.object(forInfoDictionaryKey: "AstronomicalStateDirectoryName") as? String)
-        ?? channel.stateDirectoryName,
-      version: (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "unknown",
-      buildNumber: (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "0",
-      commit: (bundle.object(forInfoDictionaryKey: "AstronomicalBuildCommit") as? String) ?? "unknown",
-      isDirty: (bundle.object(forInfoDictionaryKey: "AstronomicalBuildDirty") as? Bool) ?? false
+      daemonPort: daemonPort,
+      stateDirectoryName: stateDirectoryName,
+      version: version,
+      buildNumber: buildNumber,
+      commit: commit,
+      isDirty: isDirty
     )
   }
 

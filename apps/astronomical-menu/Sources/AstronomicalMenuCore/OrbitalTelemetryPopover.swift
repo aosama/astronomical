@@ -51,9 +51,15 @@ struct OrbitalTelemetryPopover: View {
                 in: Capsule())
           }
           HStack(alignment: .center, spacing: 6) {
-            Text(statusDocument.readyModelIdentifier ?? "No model resident")
-              .font(PopoverTypography.headline)
-              .lineLimit(1)
+            if let readyModelIdentifier = statusDocument.readyModelIdentifier {
+              Text(readyModelIdentifier)
+                .font(PopoverTypography.headline)
+                .lineLimit(1)
+            } else {
+              Text("No model resident")
+                .font(PopoverTypography.headline)
+                .lineLimit(1)
+            }
           }
         }
         Spacer()
@@ -127,8 +133,13 @@ struct OrbitalTelemetryPopover: View {
       }
       Divider()
       VStack(alignment: .leading, spacing: 2) {
-        Text(telemetryStore.statusDocument.application?.buildTitle ?? applicationIdentity.buildTitle)
-          .font(.caption.monospaced())
+        if let serverApplication = telemetryStore.statusDocument.application {
+          Text(serverApplication.buildTitle)
+            .font(.caption.monospaced())
+        } else {
+          Text(applicationIdentity.buildTitle)
+            .font(.caption.monospaced())
+        }
         if let serverIdentity = telemetryStore.statusDocument.application,
           serverIdentity.version != applicationIdentity.version
             || serverIdentity.commit != applicationIdentity.commit
@@ -259,16 +270,30 @@ func orbitalTelemetryBackgroundColor(colorScheme: ColorScheme) -> Color {
 struct GPUUtilizationBar: View {
   let gpuUtilizationPercentage: Double?
 
+  // Statements are not allowed in a ViewBuilder block, so the optional-to-
+  // zero fallback lives beside the view instead of inside its body.
+  private var observedUtilizationFraction: Double {
+    if let gpuUtilizationPercentage {
+      return gpuUtilizationPercentage / 100
+    }
+    return 0
+  }
+
   var body: some View {
     VStack(spacing: 5) {
       HStack {
         Text("GPU utilization").foregroundStyle(.secondary)
         Spacer()
-        Text(gpuUtilizationPercentage.map { "\(Int($0.rounded()))%" } ?? "Unavailable")
-          .font(PopoverTypography.monospacedBody)
+        if let gpuUtilizationPercentage {
+          Text("\(Int(gpuUtilizationPercentage.rounded()))%")
+            .font(PopoverTypography.monospacedBody)
+        } else {
+          Text("Unavailable")
+            .font(PopoverTypography.monospacedBody)
+        }
       }
       HorizontalUsageBar(
-        usageFraction: usageBarFillFraction((gpuUtilizationPercentage ?? 0) / 100),
+        usageFraction: usageBarFillFraction(observedUtilizationFraction),
         fillColor: .green
       )
     }

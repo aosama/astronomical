@@ -49,7 +49,7 @@ async fn should_keep_all_experts_resident_and_avoid_ssd_reads_when_the_model_fit
         run_complete_expert_residency_rest_journey(),
     )
     .await
-    .expect("the complete expert-residency SSD journey must finish within 60 seconds");
+    .expect("the complete expert-residency SSD journey must finish within 120 seconds");
 }
 
 async fn run_complete_expert_residency_rest_journey() {

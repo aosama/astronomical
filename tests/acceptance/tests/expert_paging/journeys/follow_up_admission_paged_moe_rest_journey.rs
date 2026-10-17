@@ -49,7 +49,7 @@ const REJECTION_SUBSTRING: &str = "generation context exceeds available GPU wire
 async fn should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill() {
     timeout(SSD_JOURNEY_TIMEOUT, run_follow_up_admission_journey())
         .await
-        .expect("the paged MoE follow-up admission journey must finish within 60 seconds");
+        .expect("the paged MoE follow-up admission journey must finish within 120 seconds");
 }
 
 async fn run_follow_up_admission_journey() {

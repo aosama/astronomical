@@ -21,7 +21,9 @@ pub enum MlxMemoryLimitUpdateOutcome {
     Applied,
     Queued,
     /// The loaded engine cannot adopt the requested ceiling in place; the
-    /// caller must stop this worker and restart it under the lower ceiling.
+    /// caller must stop this worker and restart it under the requested
+    /// ceiling (resident-to-streaming when lowering, streaming-to-resident
+    /// when the raise admits complete residency).
     RestartRequired,
     Rejected,
 }

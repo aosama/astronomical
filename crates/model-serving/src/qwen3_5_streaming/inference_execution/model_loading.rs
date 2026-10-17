@@ -35,6 +35,35 @@ impl Qwen3_5EngineState {
             model_revision = Some(validated_artifact.revision().to_owned());
             total_artifact_payload_bytes = Some(validated_artifact.total_payload_bytes());
             model_shard_count = Some(validated_artifact.shard_count());
+            // Capture the startup engine-selection facts before the artifact
+            // moves into the model: a later live raise consults them to
+            // decide whether the raised ceiling would select the resident
+            // engine in a replacement worker. Derived from the same artifact
+            // and directory the selection itself reads, so the two answers
+            // cannot drift.
+            let (startup_geometry, startup_complete_residency_headroom_bytes) =
+                model_loading_performance_attribution
+                    .measure_operation(
+                        PerformanceOperation::ArtifactRamBudgetGeometry,
+                        |_performance_attribution| {
+                            crate::mlx_ram_budget_model_geometry_from_validated_artifact(
+                                &validated_artifact,
+                                &self.model_directory,
+                            )
+                        },
+                    )
+                    .map_err(|geometry_error| {
+                        fatal_engine_error(format!(
+                            "startup residency selection facts are unreadable for this artifact: {geometry_error}"
+                        ))
+                    })?;
+            if startup_geometry.complete_expert_payload_bytes > 0 {
+                self.startup_residency_facts = Some(crate::StreamingStartupResidencyFacts {
+                    model_core_payload_bytes: startup_geometry.model_core_payload_bytes,
+                    complete_expert_payload_bytes: startup_geometry.complete_expert_payload_bytes,
+                    startup_complete_residency_headroom_bytes,
+                });
+            }
             let runtime = model_loading_performance_attribution
                 .measure_operation(
                     PerformanceOperation::MlxRuntimeInitialization,

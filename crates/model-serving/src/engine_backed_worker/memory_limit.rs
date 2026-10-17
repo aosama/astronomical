@@ -148,6 +148,16 @@ where
                 )
                 .await
             }
+            Err(InferenceEngineError::StreamingResidentPromotionRequired { reason }) => {
+                self.emit_mlx_memory_limit_restart_required(
+                    requested_mlx_memory_ceiling_bytes,
+                    effective_requested_mlx_memory_ceiling_bytes,
+                    configuration_generation,
+                    &reason,
+                    event_writer,
+                )
+                .await
+            }
             Err(InferenceEngineError::MlxMemoryLimitRejected {
                 minimum_mlx_memory_ceiling_bytes,
                 reason,

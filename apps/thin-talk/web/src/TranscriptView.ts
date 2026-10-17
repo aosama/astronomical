@@ -72,7 +72,12 @@ export class TranscriptView {
     this.pendingMessages.push(...snapshot.messages);
     this.emptyState.hidden = snapshot.messages.length > 0;
     if (this.emptyStateNotice) {
-      this.emptyStateNotice.textContent = snapshot.messages.length > 0 ? "" : snapshot.notice ?? "";
+      if (snapshot.messages.length > 0) {
+        this.emptyStateNotice.textContent = "";
+      } else {
+        const configuredNotice: string | null = snapshot.notice;
+        this.emptyStateNotice.textContent = configuredNotice != null ? configuredNotice : "";
+      }
     }
     this.scheduleFlush();
   }
@@ -82,7 +87,11 @@ export class TranscriptView {
   }
 
   public renderedText(messageID: string): string {
-    return this.articlesByMessageID.get(messageID)?.textContent ?? "";
+    const article = this.articlesByMessageID.get(messageID);
+    if (article != null && article.textContent != null) {
+      return article.textContent;
+    }
+    return "";
   }
 
   public diagnostics(): Record<string, unknown> {
@@ -217,8 +226,11 @@ export class TranscriptView {
       const article = actionButton.closest("[data-message-id]");
       const kind = actionButton.getAttribute("data-action");
       if (kind === "copy") {
-        const messageID =
-          article instanceof HTMLElement ? (article.dataset.messageId ?? "") : "";
+        let messageID = "";
+        if (article instanceof HTMLElement) {
+          const storedMessageID: string | undefined = article.dataset.messageId;
+          messageID = storedMessageID != null ? storedMessageID : "";
+        }
         this.onAction(new TranscriptAction({ kind: "copy", messageID, detail: "" }));
       }
       return;
@@ -226,8 +238,10 @@ export class TranscriptView {
     const anchor = target.closest("a[href]");
     if (anchor) {
       event.preventDefault();
+      const storedHref: string | null = anchor.getAttribute("href");
+      const hrefDetail: string = storedHref != null ? storedHref : "";
       this.onAction(
-        new TranscriptAction({ kind: "openExternal", messageID: "", detail: anchor.getAttribute("href") ?? "" }),
+        new TranscriptAction({ kind: "openExternal", messageID: "", detail: hrefDetail }),
       );
     }
   }

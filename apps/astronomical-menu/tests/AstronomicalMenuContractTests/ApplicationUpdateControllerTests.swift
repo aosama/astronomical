@@ -87,6 +87,61 @@ final class AppStoreUpdateControllerTests: XCTestCase {
 }
 
 @MainActor
+final class SparkleUnbundledUpdateControllerTests: XCTestCase {
+  private static let userDefaultsSuiteName = "AstronomicalMenuContractTests.unbundledSparkle"
+
+  override func tearDown() {
+    UserDefaults.standard.removePersistentDomain(forName: Self.userDefaultsSuiteName)
+    super.tearDown()
+  }
+
+  private func makeUnbundledUpdateController() throws -> SparkleApplicationUpdateController {
+    let ephemeralUserDefaults = try XCTUnwrap(
+      UserDefaults(suiteName: Self.userDefaultsSuiteName))
+    ephemeralUserDefaults.removePersistentDomain(forName: Self.userDefaultsSuiteName)
+    return SparkleApplicationUpdateController(
+      applicationChannel: .development,
+      userDefaults: ephemeralUserDefaults,
+      isHostPackagedApplication: false
+    )
+  }
+
+  func test_should_keep_update_checks_unavailable_for_an_unbundled_host() throws {
+    let updateController = try makeUnbundledUpdateController()
+
+    updateController.start()
+
+    XCTAssertFalse(updateController.canCheckForUpdates)
+  }
+
+  func test_should_ignore_manual_and_automatic_update_actions_for_an_unbundled_host() throws {
+    let updateController = try makeUnbundledUpdateController()
+
+    updateController.start()
+    updateController.checkForUpdates()
+    updateController.automaticallyChecksForUpdates = true
+
+    XCTAssertFalse(updateController.automaticallyChecksForUpdates)
+  }
+
+  func test_should_still_persist_the_selected_channel_for_an_unbundled_host() throws {
+    let updateController = try makeUnbundledUpdateController()
+
+    updateController.selectUpdateChannel(.releaseCandidate)
+
+    XCTAssertEqual(updateController.selectedChannel, .releaseCandidate)
+    XCTAssertEqual(
+      ephemeralPersistedChannelValue(),
+      ApplicationUpdateChannel.releaseCandidate.rawValue)
+  }
+
+  private func ephemeralPersistedChannelValue() -> String? {
+    UserDefaults(suiteName: Self.userDefaultsSuiteName)?.string(
+      forKey: "AstronomicalSelectedUpdateChannel")
+  }
+}
+
+@MainActor
 private final class RecordingApplicationUpdateChecker: ApplicationUpdateChecking {
   let supportsUserUpdateControls = true
   let canCheckForUpdates: Bool

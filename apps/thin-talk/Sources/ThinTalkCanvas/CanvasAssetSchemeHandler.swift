@@ -67,8 +67,14 @@ public final class CanvasAssetSchemeHandler: NSObject, WKURLSchemeHandler {
       urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
       return
     }
+    let responseURL: URL
+    if let requestedURL = urlSchemeTask.request.url {
+      responseURL = requestedURL
+    } else {
+      responseURL = fileURL
+    }
     let response = URLResponse(
-      url: urlSchemeTask.request.url ?? fileURL,
+      url: responseURL,
       mimeType: mimeType(for: fileURL),
       expectedContentLength: data.count,
       textEncodingName: "utf-8"
@@ -83,6 +89,9 @@ public final class CanvasAssetSchemeHandler: NSObject, WKURLSchemeHandler {
     guard !pathExtension.isEmpty, let type = UTType(filenameExtension: pathExtension) else {
       return "application/octet-stream"
     }
-    return type.preferredMIMEType ?? "application/octet-stream"
+    if let preferredMIMEType = type.preferredMIMEType {
+      return preferredMIMEType
+    }
+    return "application/octet-stream"
   }
 }

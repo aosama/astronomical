@@ -146,8 +146,18 @@ public final class SessionFileStore: @unchecked Sendable {
       throw SessionFileStoreError.unreadableDocument(fileURL.lastPathComponent)
     }
     guard let id = document["id"] as? String, !id.isEmpty else { return nil }
-    let title = document["title"] as? String ?? ""
-    let updatedAt = document["updatedAt"] as? String ?? ""
+    let title: String
+    if let storedTitle = document["title"] as? String {
+      title = storedTitle
+    } else {
+      title = ""
+    }
+    let updatedAt: String
+    if let storedUpdatedAt = document["updatedAt"] as? String {
+      updatedAt = storedUpdatedAt
+    } else {
+      updatedAt = ""
+    }
     return SessionFileSummary(id: id, title: title, updatedAt: updatedAt)
   }
 

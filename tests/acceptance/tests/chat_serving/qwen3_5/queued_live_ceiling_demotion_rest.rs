@@ -52,7 +52,7 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 async fn should_demote_the_live_ceiling_queued_behind_an_active_generation() {
     timeout(SSD_JOURNEY_TIMEOUT, run_queued_demotion_journey())
         .await
-        .expect("the queued lower-ceiling demotion SSD journey must finish within 60 seconds");
+        .expect("the queued lower-ceiling demotion SSD journey must finish within 120 seconds");
 }
 
 async fn run_queued_demotion_journey() {

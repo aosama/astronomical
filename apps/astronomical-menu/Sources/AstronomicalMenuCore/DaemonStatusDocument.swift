@@ -117,13 +117,57 @@ struct DaemonStatusDocument: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
-      completedRequestCount = try container.decodeIfPresent(UInt64.self, forKey: .completedRequestCount) ?? 0
-      totalPromptTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .totalPromptTokenCount) ?? 0
-      totalReusedPromptTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .totalReusedPromptTokenCount) ?? 0
-      targetPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .targetPromptWorkTokenCount) ?? 0
-      targetReusedPromptWorkTokenCount = try container.decodeIfPresent(UInt64.self, forKey: .targetReusedPromptWorkTokenCount) ?? 0
-      averagePrefillTokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .averagePrefillTokensPerSecond) ?? 0
-      averageGenerationTokensPerSecond = try container.decodeIfPresent(Double.self, forKey: .averageGenerationTokensPerSecond) ?? 0
+      // Legacy status documents omit these counters; every missing field
+      // falls back to a zero that still renders as "no work recorded yet".
+      let decodedCompletedRequestCount = try container.decodeIfPresent(
+        UInt64.self, forKey: .completedRequestCount)
+      if let decodedCompletedRequestCount {
+        completedRequestCount = decodedCompletedRequestCount
+      } else {
+        completedRequestCount = 0
+      }
+      let decodedTotalPromptTokenCount = try container.decodeIfPresent(
+        UInt64.self, forKey: .totalPromptTokenCount)
+      if let decodedTotalPromptTokenCount {
+        totalPromptTokenCount = decodedTotalPromptTokenCount
+      } else {
+        totalPromptTokenCount = 0
+      }
+      let decodedTotalReusedPromptTokenCount = try container.decodeIfPresent(
+        UInt64.self, forKey: .totalReusedPromptTokenCount)
+      if let decodedTotalReusedPromptTokenCount {
+        totalReusedPromptTokenCount = decodedTotalReusedPromptTokenCount
+      } else {
+        totalReusedPromptTokenCount = 0
+      }
+      let decodedTargetPromptWorkTokenCount = try container.decodeIfPresent(
+        UInt64.self, forKey: .targetPromptWorkTokenCount)
+      if let decodedTargetPromptWorkTokenCount {
+        targetPromptWorkTokenCount = decodedTargetPromptWorkTokenCount
+      } else {
+        targetPromptWorkTokenCount = 0
+      }
+      let decodedTargetReusedPromptWorkTokenCount = try container.decodeIfPresent(
+        UInt64.self, forKey: .targetReusedPromptWorkTokenCount)
+      if let decodedTargetReusedPromptWorkTokenCount {
+        targetReusedPromptWorkTokenCount = decodedTargetReusedPromptWorkTokenCount
+      } else {
+        targetReusedPromptWorkTokenCount = 0
+      }
+      let decodedAveragePrefillTokensPerSecond = try container.decodeIfPresent(
+        Double.self, forKey: .averagePrefillTokensPerSecond)
+      if let decodedAveragePrefillTokensPerSecond {
+        averagePrefillTokensPerSecond = decodedAveragePrefillTokensPerSecond
+      } else {
+        averagePrefillTokensPerSecond = 0
+      }
+      let decodedAverageGenerationTokensPerSecond = try container.decodeIfPresent(
+        Double.self, forKey: .averageGenerationTokensPerSecond)
+      if let decodedAverageGenerationTokensPerSecond {
+        averageGenerationTokensPerSecond = decodedAverageGenerationTokensPerSecond
+      } else {
+        averageGenerationTokensPerSecond = 0
+      }
     }
   }
 
@@ -189,26 +233,51 @@ struct DaemonStatusDocument: Codable, Equatable {
     expertMemoryMode = try container.decodeIfPresent(String.self, forKey: .expertMemoryMode)
     expertResidency = try container.decodeIfPresent(
       ExpertResidencySnapshot.self, forKey: .expertResidency)
-    workerRuntimeFeatureConfigurationApplied = try container.decodeIfPresent(
-      Bool.self, forKey: .workerRuntimeFeatureConfigurationApplied) ?? false
+    let decodedWorkerRuntimeFeatureConfigurationApplied = try container.decodeIfPresent(
+      Bool.self, forKey: .workerRuntimeFeatureConfigurationApplied)
+    if let decodedWorkerRuntimeFeatureConfigurationApplied {
+      workerRuntimeFeatureConfigurationApplied = decodedWorkerRuntimeFeatureConfigurationApplied
+    } else {
+      workerRuntimeFeatureConfigurationApplied = false
+    }
     workerRuntimeFeatureConfiguration = try container.decodeIfPresent(
       WorkerRuntimeFeatureConfiguration.self, forKey: .workerRuntimeFeatureConfiguration)
     mlxMemorySnapshot = try container.decodeIfPresent(MlxMemorySnapshot.self, forKey: .mlxMemorySnapshot)
-    mlxMemoryCeilingBytes =
-      try container.decodeIfPresent(UInt64.self, forKey: .mlxMemoryCeilingBytes) ?? 0
-    machineMlxMemoryCeilingBytes =
-      try container.decodeIfPresent(UInt64.self, forKey: .machineMlxMemoryCeilingBytes) ?? 0
+    let decodedMlxMemoryCeilingBytes = try container.decodeIfPresent(
+      UInt64.self, forKey: .mlxMemoryCeilingBytes)
+    if let decodedMlxMemoryCeilingBytes {
+      mlxMemoryCeilingBytes = decodedMlxMemoryCeilingBytes
+    } else {
+      mlxMemoryCeilingBytes = 0
+    }
+    let decodedMachineMlxMemoryCeilingBytes = try container.decodeIfPresent(
+      UInt64.self, forKey: .machineMlxMemoryCeilingBytes)
+    if let decodedMachineMlxMemoryCeilingBytes {
+      machineMlxMemoryCeilingBytes = decodedMachineMlxMemoryCeilingBytes
+    } else {
+      machineMlxMemoryCeilingBytes = 0
+    }
     wiredResidencyBudgetBytes =
       try container.decodeIfPresent(UInt64.self, forKey: .wiredResidencyBudgetBytes)
-    minimumMlxMemoryCeilingBytes =
-      try container.decodeIfPresent(UInt64.self, forKey: .minimumMlxMemoryCeilingBytes) ?? 1
+    let decodedMinimumMlxMemoryCeilingBytes = try container.decodeIfPresent(
+      UInt64.self, forKey: .minimumMlxMemoryCeilingBytes)
+    if let decodedMinimumMlxMemoryCeilingBytes {
+      minimumMlxMemoryCeilingBytes = decodedMinimumMlxMemoryCeilingBytes
+    } else {
+      minimumMlxMemoryCeilingBytes = 1
+    }
     configuredMaximumMlxMemoryGigabytes =
       try container.decodeIfPresent(UInt64.self, forKey: .configuredMaximumMlxMemoryGigabytes)
     pendingMlxMemoryCeilingBytes =
       try container.decodeIfPresent(UInt64.self, forKey: .pendingMlxMemoryCeilingBytes)
     mlxMemoryLimitError = try container.decodeIfPresent(String.self, forKey: .mlxMemoryLimitError)
-    servingSession =
-      try container.decodeIfPresent(ServingSession.self, forKey: .servingSession) ?? .empty
+    let decodedServingSession = try container.decodeIfPresent(
+      ServingSession.self, forKey: .servingSession)
+    if let decodedServingSession {
+      servingSession = decodedServingSession
+    } else {
+      servingSession = .empty
+    }
   }
 
   init(
@@ -262,7 +331,10 @@ struct DaemonStatusDocument: Codable, Equatable {
   )
 
   var mlxMemoryLimitTitle: String { gigabyteText(byteCount: mlxMemoryCeilingBytes) }
-  var mlxMemoryActiveBytes: UInt64 { mlxMemorySnapshot?.activeMemoryBytes ?? 0 }
+  var mlxMemoryActiveBytes: UInt64 {
+    guard let mlxMemorySnapshot else { return 0 }
+    return mlxMemorySnapshot.activeMemoryBytes
+  }
   var mlxMemorySourceTitle: String {
     switch mlxMemorySnapshot?.source {
     case "model_loaded": "Model loaded"
@@ -276,20 +348,40 @@ struct DaemonStatusDocument: Codable, Equatable {
     }
   }
   var mlxMemoryBreakdown: MlxMemoryBreakdown {
+    // Each owner is reconciled against the memory still unclaimed by the
+    // owners above it; a snapshot without the field observes zero bytes.
+    let observedExpertPayloadBytes: UInt64
+    if let expertPayloadBytes = mlxMemorySnapshot?.expertPayloadBytes {
+      observedExpertPayloadBytes = expertPayloadBytes
+    } else {
+      observedExpertPayloadBytes = 0
+    }
     let reconciledExpertPayloadByteCount = min(
-      mlxMemorySnapshot?.expertPayloadBytes ?? 0,
+      observedExpertPayloadBytes,
       mlxMemoryActiveBytes
     )
     let activeBytesAfterExperts = mlxMemoryActiveBytes.saturatingSubtracting(
       reconciledExpertPayloadByteCount)
+    let observedModelCorePayloadBytes: UInt64
+    if let modelCorePayloadBytes = mlxMemorySnapshot?.modelCorePayloadBytes {
+      observedModelCorePayloadBytes = modelCorePayloadBytes
+    } else {
+      observedModelCorePayloadBytes = 0
+    }
     let reconciledModelCorePayloadByteCount = min(
-      mlxMemorySnapshot?.modelCorePayloadBytes ?? 0,
+      observedModelCorePayloadBytes,
       activeBytesAfterExperts
     )
     let activeBytesAfterModelCore = activeBytesAfterExperts.saturatingSubtracting(
       reconciledModelCorePayloadByteCount)
+    let observedContextStatePayloadBytes: UInt64
+    if let contextStatePayloadBytes = mlxMemorySnapshot?.contextStatePayloadBytes {
+      observedContextStatePayloadBytes = contextStatePayloadBytes
+    } else {
+      observedContextStatePayloadBytes = 0
+    }
     let reconciledContextStatePayloadByteCount = min(
-      mlxMemorySnapshot?.contextStatePayloadBytes ?? 0,
+      observedContextStatePayloadBytes,
       activeBytesAfterModelCore
     )
     let activeBytesAfterContextState = activeBytesAfterModelCore.saturatingSubtracting(

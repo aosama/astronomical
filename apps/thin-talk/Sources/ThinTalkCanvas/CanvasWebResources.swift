@@ -39,7 +39,15 @@ public enum CanvasWebResources {
 
     var candidateDirectories: [URL] = []
     let environment = ProcessInfo.processInfo.environment
-    if let overridePath = environment["PACKAGE_RESOURCE_BUNDLE_PATH"] ?? environment["PACKAGE_RESOURCE_BUNDLE_URL"] {
+    let overridePath: String?
+    if let pathOverride = environment["PACKAGE_RESOURCE_BUNDLE_PATH"] {
+      overridePath = pathOverride
+    } else if let urlOverride = environment["PACKAGE_RESOURCE_BUNDLE_URL"] {
+      overridePath = urlOverride
+    } else {
+      overridePath = nil
+    }
+    if let overridePath {
       candidateDirectories.append(URL(fileURLWithPath: overridePath))
     }
     let relationships: [URL?] = [

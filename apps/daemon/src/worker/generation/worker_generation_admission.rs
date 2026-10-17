@@ -67,9 +67,14 @@ impl WorkerHandle {
                 })
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            start_receiver
-                .await
-                .map_err(|_| GenerationStartError::WorkerUnavailable)??;
+            // Two failure layers: a closed channel means the worker loop died;
+            // the inner Result is the generation admission outcome.
+            let start_acknowledgement_join = start_receiver.await;
+            let start_acknowledgement_outcome = match start_acknowledgement_join {
+                Ok(acknowledgement_outcome) => acknowledgement_outcome,
+                Err(_channel_closed) => return Err(GenerationStartError::WorkerUnavailable),
+            };
+            start_acknowledgement_outcome?;
 
             Ok(stream_event_receiver)
         })
@@ -124,9 +129,14 @@ impl WorkerHandle {
                 })
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            start_receiver
-                .await
-                .map_err(|_| GenerationStartError::WorkerUnavailable)??;
+            // Two failure layers: a closed channel means the worker loop died;
+            // the inner Result is the generation admission outcome.
+            let start_acknowledgement_join = start_receiver.await;
+            let start_acknowledgement_outcome = match start_acknowledgement_join {
+                Ok(acknowledgement_outcome) => acknowledgement_outcome,
+                Err(_channel_closed) => return Err(GenerationStartError::WorkerUnavailable),
+            };
+            start_acknowledgement_outcome?;
 
             Ok(image_result_receiver)
         })
@@ -179,9 +189,14 @@ impl WorkerHandle {
                 })
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
-            start_receiver
-                .await
-                .map_err(|_| GenerationStartError::WorkerUnavailable)??;
+            // Two failure layers: a closed channel means the worker loop died;
+            // the inner Result is the generation admission outcome.
+            let start_acknowledgement_join = start_receiver.await;
+            let start_acknowledgement_outcome = match start_acknowledgement_join {
+                Ok(acknowledgement_outcome) => acknowledgement_outcome,
+                Err(_channel_closed) => return Err(GenerationStartError::WorkerUnavailable),
+            };
+            start_acknowledgement_outcome?;
 
             Ok(embeddings_result_receiver)
         })

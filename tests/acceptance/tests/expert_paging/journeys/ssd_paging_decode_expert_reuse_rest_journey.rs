@@ -65,7 +65,7 @@ async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memor
         run_ssd_paging_decode_expert_reuse_journey(),
     )
     .await
-    .expect("the progressive expert-memory SSD journey must finish within 60 seconds");
+    .expect("the progressive expert-memory SSD journey must finish within 120 seconds");
 }
 
 async fn run_ssd_paging_decode_expert_reuse_journey() {

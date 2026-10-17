@@ -117,6 +117,20 @@ pub(super) fn handle_worker_event(
             expert_residency,
         } => {
             if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+                // Standalone samples are process-scoped and publish the public
+                // status snapshot; when a chat request is active they also
+                // carry decode-phase peaks no other event delivers. Folding
+                // them here keeps the durable request record at least as high
+                // as anything the status endpoint shows: the MLX peak counter
+                // resets at allocator cleanups, so any single snapshot can
+                // miss the true request maximum.
+                if let Some(chat_request) = active_request
+                    .as_mut()
+                    .and_then(ActiveWorkerRequest::chat_mut)
+                {
+                    chat_request
+                        .fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
+                }
                 publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
             } else {
                 clear_latest_mlx_memory_snapshot(health_snapshot);
@@ -197,12 +211,8 @@ pub(super) fn handle_worker_event(
                 ));
             }
             if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
-                chat_request.maximum_mlx_peak_memory_bytes = Some(
-                    chat_request
-                        .maximum_mlx_peak_memory_bytes
-                        .unwrap_or(0)
-                        .max(mlx_memory_snapshot.peak_memory_bytes),
-                );
+                chat_request
+                    .fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
                 chat_request.last_mlx_active_memory_bytes =
                     Some(mlx_memory_snapshot.active_memory_bytes);
                 publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);

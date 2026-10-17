@@ -25,7 +25,9 @@ export class ChatMessage {
     this.id = init.id;
     this.role = init.role;
     this.content = init.content;
-    this.reasoning = init.reasoning ?? "";
-    this.state = init.state ?? ChatMessageState.COMPLETE;
+    const configuredReasoning: string | undefined = init.reasoning;
+    this.reasoning = configuredReasoning != null ? configuredReasoning : "";
+    const configuredState: ChatMessageState | undefined = init.state;
+    this.state = configuredState != null ? configuredState : ChatMessageState.COMPLETE;
   }
 }

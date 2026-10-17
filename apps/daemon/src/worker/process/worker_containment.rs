@@ -80,14 +80,22 @@ async fn recover_worker_after_cancellation_failure(
     let expected_configuration_generation = worker_process
         .expected_configuration_generation()
         .map(str::to_owned);
-    let (readiness_event, runtime_configuration) = timeout(
+    // Two failure layers: the outer wait fails when the acknowledgement
+    // deadline elapses; the inner Result is the read outcome itself.
+    let acknowledgement_wait_outcome = timeout(
         recovery_acknowledgement_timeout,
         read_recovery_acknowledgement(worker_process, expected_configuration_generation.as_deref()),
     )
-    .await
-    .map_err(|_| WorkerControlError::CandidateAcknowledgementTimeout {
-        acknowledgement_timeout_millis: recovery_acknowledgement_timeout.as_millis(),
-    })??;
+    .await;
+    let acknowledgement_read_outcome = match acknowledgement_wait_outcome {
+        Ok(read_outcome) => read_outcome,
+        Err(_deadline_elapsed) => {
+            return Err(WorkerControlError::CandidateAcknowledgementTimeout {
+                acknowledgement_timeout_millis: recovery_acknowledgement_timeout.as_millis(),
+            });
+        }
+    };
+    let (readiness_event, runtime_configuration) = acknowledgement_read_outcome?;
     publish_recovery_acknowledgement(health_snapshot, readiness_event, runtime_configuration)
 }
 
