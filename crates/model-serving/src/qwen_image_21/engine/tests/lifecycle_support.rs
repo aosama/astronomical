@@ -2,14 +2,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use astronomical_ipc_protocol::{
-    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
-};
-use astronomical_model_serving::{
+use crate::{
     MlxActiveMemoryBreakdown, MlxMemoryTelemetry, PerformanceAttributionOutcome,
     QWEN_IMAGE_21_OFFICIAL_MODEL_ID, QwenImage21ComponentLoad, QwenImage21EngineComponents,
     QwenImage21EngineRequest, QwenImage21ImageEngine, QwenImage21RenderAdvance,
     QwenImage21Rendered, qwen_image_21_image_generation_capabilities,
+};
+use astronomical_ipc_protocol::{
+    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
 
 /// The revision the scripted artifact claims; distinct from any real Hub SHA on purpose so a

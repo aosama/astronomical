@@ -25,3 +25,6 @@ pub use mlx_components::{
     flux2_klein_euler_update_for_tests, flux2_klein_initial_latents_for_tests,
     flux2_klein_keyed_noise_and_euler_for_tests,
 };
+
+#[cfg(test)]
+mod tests;

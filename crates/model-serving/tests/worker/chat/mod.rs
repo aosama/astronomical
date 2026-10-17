@@ -29,7 +29,6 @@ use tokio::{
 
 mod expert_memory_mode;
 mod generation_lifecycle;
-mod memory_breakdown;
 mod model_visible_correction;
 mod prefill_progress;
 mod prompt_cache_stats;
