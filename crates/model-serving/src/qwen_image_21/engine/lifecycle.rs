@@ -75,7 +75,8 @@ impl QwenImage21ImageEngine {
 
     /// Test seam: a fake components owner drives the same lifecycle as the native owner.
     #[doc(hidden)]
-    pub fn with_components_for_tests(
+    #[cfg(test)]
+    pub(super) fn with_components_for_tests(
         serving_model_id: impl Into<String>,
         components: Box<dyn QwenImage21EngineComponents>,
     ) -> Self {

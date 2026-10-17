@@ -78,6 +78,8 @@ mod memory_policy_tests;
 mod reclamation_boundary_tests;
 #[cfg(test)]
 mod serving_memory_ceiling_tests;
+#[cfg(test)]
+mod telemetry_tests;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,

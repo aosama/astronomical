@@ -1,16 +1,16 @@
-//! Injected-stage acceptance coverage for bounded VAE advancement and cancellation.
+//! Injected-stage unit coverage for bounded VAE advancement and cancellation.
 
 use std::sync::{Arc, Mutex};
 
-use astronomical_ipc_protocol::{
-    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationPhase,
-    ImageGenerationSettings, RequestId,
-};
-use astronomical_model_serving::{
+use crate::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, Flux2KleinComponentLoad,
     Flux2KleinEngineComponents, Flux2KleinFlowSchedule, Flux2KleinFlowScheduler,
     Flux2KleinFlowStep, Flux2KleinImageDimensions, Flux2KleinImageEngine, ImageGenerationEngine,
     ImageGenerationEngineStep, PerformanceAttributionOutcome,
+};
+use astronomical_ipc_protocol::{
+    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationPhase,
+    ImageGenerationSettings, RequestId,
 };
 
 #[test]

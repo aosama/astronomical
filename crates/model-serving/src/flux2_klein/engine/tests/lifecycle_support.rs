@@ -2,14 +2,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use astronomical_ipc_protocol::{
-    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
-};
-use astronomical_model_serving::{
+use crate::{
     FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, Flux2KleinComponentLoad,
     Flux2KleinEngineComponents, Flux2KleinFlowStep, Flux2KleinImageDimensions,
     Flux2KleinImageEngine, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
     PerformanceAttributionOutcome,
+};
+use astronomical_ipc_protocol::{
+    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationSettings, RequestId,
 };
 
 pub(super) fn fake_engine(
@@ -126,7 +126,7 @@ impl Flux2KleinEngineComponents for FakeComponents {
         _request_id: RequestId,
         dimensions: Flux2KleinImageDimensions,
         seed: u64,
-    ) -> Result<astronomical_model_serving::Flux2KleinFlowSchedule, String> {
+    ) -> Result<crate::Flux2KleinFlowSchedule, String> {
         assert_eq!(
             (dimensions.width_pixels(), dimensions.height_pixels()),
             (64, 64)
@@ -135,7 +135,7 @@ impl Flux2KleinEngineComponents for FakeComponents {
         self.next_conditioning_group_index = 0;
         self.post_cleanup_memory_telemetry = None;
         self.record(&format!("start:{seed}"))?;
-        astronomical_model_serving::Flux2KleinFlowScheduler::schedule(
+        crate::Flux2KleinFlowScheduler::schedule(
             dimensions.width_pixels(),
             dimensions.height_pixels(),
         )

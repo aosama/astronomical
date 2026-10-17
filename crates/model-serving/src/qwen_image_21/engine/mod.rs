@@ -20,3 +20,6 @@ pub use lifecycle::QwenImage21ImageEngine;
 #[cfg(feature = "direct-mlx")]
 pub use mlx_components::QwenImage21MlxComponents;
 pub use request_validation::validate_official_request;
+
+#[cfg(test)]
+mod tests;

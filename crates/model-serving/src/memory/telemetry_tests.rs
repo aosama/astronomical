@@ -1,4 +1,4 @@
-use super::*;
+use super::telemetry::MlxActiveMemoryBreakdown;
 
 #[test]
 fn should_reconcile_shared_payload_views_to_the_measured_mlx_active_total() {
