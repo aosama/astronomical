@@ -733,16 +733,20 @@ jobs:
       # the namespace: the pinned toolchain sync and the dependency download.
       - name: Sync pinned toolchain
         run: rustup show
-      - name: Fetch and build the whole offline lane
+      # The Linux-buildable subset only: runtime-integration's build script
+      # probes the xcode identity and mlx-c-rust needs the native dependency
+      # cache, so the macOS-first crates cannot compile on this runner. The
+      # macOS sandbox job below owns the full lane.
+      - name: Fetch and build the Linux-buildable offline crates
         run: |
           cargo fetch --locked
-          cargo build --locked --tests -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon
+          cargo test --locked --no-run -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
       # The namespace run is execution-only: with artifacts warm and --offline
       # set, cargo never attempts a lookup, so the only thing the missing
       # network can break is a test opening a socket — the exact physics the
       # job exists to prove.
-      - name: Run the whole offline lane with no network namespace
-        run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests
+      - name: Run the Linux-buildable offline crates with no network namespace
+        run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
         timeout-minutes: 8
 
   # The macOS counterpart of the Linux offline-sandbox job: the whole offline
@@ -764,10 +768,13 @@ jobs:
           persist-credentials: false
       - name: Sync pinned toolchain
         run: rustup show
+      # The same target selection as the macOS offline verification lane
+      # (--lib plus each package's offline_tests); that selection needs no
+      # native dependency cache, keeping this job cache-free.
       - name: Fetch and build the whole offline lane
         run: |
           cargo fetch --locked
-          cargo build --locked --tests -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon
+          cargo test --locked --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests
         timeout-minutes: 12
       - name: Run the whole offline lane with network denied by seatbelt
         run: sandbox-exec -f scripts/ci/offline-sandbox.sb cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests
