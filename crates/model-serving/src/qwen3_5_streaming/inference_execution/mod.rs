@@ -47,7 +47,8 @@ use crate::{
     PerformanceAttributionLog, PerformanceAttributionOutcome, PersistentPromptCacheCounters,
     PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
     PersistentPromptCacheModelContract, PersistentVisualEmbeddingModelContract,
-    Qwen3_5InferenceRequest, build_persistent_prompt_cache_stats_event,
+    Qwen3_5InferenceRequest, StreamingStartupResidencyFacts,
+    build_persistent_prompt_cache_stats_event,
 };
 
 use self::engine_request::Qwen3_5EngineRequest;
@@ -199,6 +200,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             prompt_processing_chunk_sizer,
             chunking,
             validated_artifact: Some(validated_artifact),
+            startup_residency_facts: None,
             vocabulary_size,
         })
     }
@@ -237,6 +239,9 @@ pub struct Qwen3_5InferenceExecution {
     prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
     chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
+    /// Cached startup engine-selection facts; a raised ceiling consults them
+    /// to decide whether a replacement worker must load the resident engine.
+    startup_residency_facts: Option<StreamingStartupResidencyFacts>,
     vocabulary_size: u32,
 }
 
