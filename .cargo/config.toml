@@ -13,19 +13,20 @@ warnings = "deny"
 # Lane vocabulary (issue #1208): "offline" names the property — sealed and
 # deterministic, no real network beyond localhost, no real model artifacts,
 # everything scripted. The offline lane runs each package's offline_tests
-# binary; the property-named aliases from before the vocabulary campaign
-# were retired with the campaign's final batch.
-# test-offline: every package's offline_tests binary.
+# binary AND its beside-source lib unit tests (--lib); the property-named
+# aliases from before the vocabulary campaign were retired with the
+# campaign's final batch.
+# test-offline: every package's offline_tests binary plus lib unit tests.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
 # test-e2e: the root whole-product journeys (tests/e2e) that spawn the real
 # astronomicald binary; run `cargo build --bins -p astronomical-daemon`
 # first, and the harness's workspace_binary names that command if skipped.
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
-test-offline = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--test", "offline_tests"]
+test-offline = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--lib", "--test", "offline_tests"]
 test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-daemon", "--test", "rest_api_tests"]
 test-e2e = ["test", "--no-fail-fast", "-p", "astronomical-e2e", "--test", "e2e"]
-test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--test", "offline_tests", "--test", "rest_api_tests"]
+test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--lib", "--test", "offline_tests", "--test", "rest_api_tests"]
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
@@ -49,7 +50,7 @@ verify = ["check", "--workspace", "--all-targets"]
 # test-direct-mlx: the model-serving direct-MLX contract suite plus the
 # runtime-integration MLX-C coverage bridge contract (CPU-only, seconds) so
 # bridge drift fails the lane instead of shipping silently.
-test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "astronomical-acceptance/direct-mlx", "-p", "astronomical-runtime-integration", "--features", "astronomical-runtime-integration/mlx", "--test", "direct_mlx", "--test", "mlx_c_coverage_contract_tests", "--", "--test-threads=1"]
+test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "astronomical-acceptance/direct-mlx", "-p", "astronomical-runtime-integration", "--features", "astronomical-runtime-integration/mlx", "-p", "astronomical-model-serving", "--features", "astronomical-model-serving/direct-mlx", "--lib", "--test", "direct_mlx", "--test", "mlx_c_coverage_contract_tests", "--", "--test-threads=1"]
 # test-mlx-memory: every native memory-contract phase (model-swap allocator,
 # native probe, MLX-C transitions) in one bounded invocation; the probe
 # binary must exist in the native build store (build it first with
