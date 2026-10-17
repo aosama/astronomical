@@ -1,7 +1,11 @@
 //! Exact Diffusers-compatible clamp, scale, ties-to-even, and uint8 conversion.
 
+#[cfg(test)]
+mod tests;
+
 use super::Flux2KleinImageEncodingError;
 
+#[cfg(feature = "direct-mlx")]
 pub fn flux2_klein_reference_rgb_u8(
     decoded_rgb_values: &[f32],
 ) -> Result<Vec<u8>, Flux2KleinImageEncodingError> {

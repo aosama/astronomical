@@ -1,5 +1,8 @@
 //! Paged prompt-chunk boundaries for SSD-streaming execution.
 
+#[cfg(test)]
+mod tests;
+
 mod configuration;
 
 pub use configuration::Qwen3_5StreamingPromptProcessingChunkSizerError;

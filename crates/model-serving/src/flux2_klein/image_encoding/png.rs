@@ -1,5 +1,8 @@
 //! Deterministic, lossless RGB PNG encoding through the workspace image crate.
 
+#[cfg(test)]
+mod tests;
+
 use std::io::Cursor;
 
 use image::ImageEncoder;
@@ -7,9 +10,11 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use super::Flux2KleinImageEncodingError;
 
+#[cfg(feature = "direct-mlx")]
 pub struct Flux2KleinPngEncoder;
 
 impl Flux2KleinPngEncoder {
+    #[cfg(test)]
     pub fn encode_decoded_rgb(
         width_pixels: u32,
         height_pixels: u32,

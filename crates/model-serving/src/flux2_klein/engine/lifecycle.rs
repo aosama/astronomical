@@ -9,16 +9,16 @@ use astronomical_ipc_protocol::{
     ImageGenerationResultMetadata, RequestId,
 };
 
-use crate::{
-    ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttributionOutcome,
-};
+use crate::image_generation_engine::ImageGenerationEngineLoadResult;
+use crate::{ImageGenerationEngine, ImageGenerationEngineStep, PerformanceAttributionOutcome};
 
 #[cfg(feature = "direct-mlx")]
 use super::super::{FLUX2_KLEIN_OFFICIAL_MODEL_ID, Flux2KleinArtifactProvenance};
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinImageDimensions, Flux2KleinOfficialProfile};
 use super::components::Flux2KleinEngineComponents;
 use super::request_validation;
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 const IMAGE_TRANSPORT_LIMIT_BYTES: u64 = 32 * 1024 * 1024;
 

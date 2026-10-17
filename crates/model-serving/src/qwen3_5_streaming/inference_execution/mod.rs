@@ -40,15 +40,15 @@ use std::sync::Arc;
 use astronomical_ipc_protocol::{RequestId, WorkerChunkingConfiguration, WorkerEvent};
 use astronomical_runtime_integration::MlxMemoryLimits;
 
+use crate::inference_engine::load_result::EngineLoadResult;
+use crate::persistent_cache::counters::PersistentPromptCacheCounters;
 use crate::{
-    AdaptiveRamGrowthGuard, EngineGenerationStart, EngineLoadResult, GeneratedToken,
-    GenerationFinalization, InferenceEngineError, MlxInferenceEngine, MlxInferenceExecution,
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttribution,
-    PerformanceAttributionLog, PerformanceAttributionOutcome, PersistentPromptCacheCounters,
-    PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheModelContract, PersistentVisualEmbeddingModelContract,
-    Qwen3_5InferenceRequest, StreamingStartupResidencyFacts,
-    build_persistent_prompt_cache_stats_event,
+    AdaptiveRamGrowthGuard, GeneratedToken, GenerationFinalization, InferenceEngineError,
+    MlxInferenceEngine, MlxInferenceExecution, PerformanceAttribution, PerformanceAttributionLog,
+    PerformanceAttributionOutcome, PersistentPromptCacheDiskStore,
+    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
+    PersistentVisualEmbeddingModelContract, Qwen3_5InferenceRequest,
+    StreamingStartupResidencyFacts, build_persistent_prompt_cache_stats_event,
 };
 
 use self::engine_request::Qwen3_5EngineRequest;
@@ -376,3 +376,5 @@ pub(crate) fn fatal_engine_error(reason: impl Into<String>) -> InferenceEngineEr
         reason: reason.into(),
     }
 }
+
+use crate::{EngineGenerationStart, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

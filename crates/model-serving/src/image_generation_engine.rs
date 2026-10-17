@@ -5,7 +5,8 @@ use astronomical_ipc_protocol::{
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata, RequestId,
 };
 
-use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// A loaded image runtime advanced through bounded, independently cancellable steps.
 ///

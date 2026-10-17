@@ -24,6 +24,9 @@
 //!   reference's own `(width, height)` order so the port stays readable against the source. Read
 //!   that one function's return type before destructuring it.
 
+#[cfg(test)]
+mod tests;
+
 /// The width of the text embeddings the denoising transformer consumes.
 ///
 /// This is the one number two components must agree on: the Qwen3-VL encoder emits it

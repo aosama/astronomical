@@ -1,4 +1,4 @@
-mod config;
+pub(crate) mod config;
 mod config_accessors;
 mod config_document;
 mod config_memory;
@@ -6,5 +6,5 @@ pub(crate) mod config_validation;
 
 pub(crate) use super::quantizations;
 
-pub use config::{ModelWeightStorage, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
+pub use config::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 pub use config_validation::Qwen3_5ConfigError;

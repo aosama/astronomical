@@ -20,29 +20,33 @@
 //!   stages them. Everything here is behind `direct-mlx`; the components own their weights and
 //!   release them in the reference's offload order.
 
-mod artifact;
-mod configuration;
+#[cfg(test)]
+pub(crate) mod oracle_test_support;
+
+pub(crate) mod artifact;
+pub(crate) mod configuration;
 mod inventory;
 mod kv_cache;
-mod latent_layout;
+pub(crate) mod latent_layout;
 mod mask;
 mod modulation;
 mod norm;
-mod rope;
-mod scheduler;
+pub(crate) mod rope;
+pub(crate) mod scheduler;
 pub mod tensor_profiles;
-mod text_conditioning;
-mod time;
-mod vae;
+pub(crate) mod text_conditioning;
+#[cfg(any(test, feature = "direct-mlx"))]
+pub(crate) mod time;
+pub(crate) mod vae;
 
-mod engine;
+pub(crate) mod engine;
 mod engine_error;
 #[cfg(feature = "direct-mlx")]
 mod mlx_math;
 mod official_profile;
 #[cfg(feature = "direct-mlx")]
 mod pipeline;
-mod render_contract;
+pub(crate) mod render_contract;
 #[cfg(feature = "direct-mlx")]
 mod render_session;
 #[cfg(feature = "direct-mlx")]
@@ -52,13 +56,11 @@ mod transformer;
 
 pub use artifact::{
     QWEN_IMAGE_21_LICENSE_IDENTIFIER, QWEN_IMAGE_21_OFFICIAL_MODEL_ID,
-    QWEN_IMAGE_21_PROVIDER_MODEL_ID, QwenImage21ArtifactError, QwenImage21ArtifactProvenance,
-    QwenImage21ArtifactValidator, QwenImage21License, QwenImage21RetainedArtifactFiles,
-    ValidatedQwenImage21Artifact,
+    QWEN_IMAGE_21_PROVIDER_MODEL_ID, QwenImage21ArtifactProvenance, QwenImage21License,
+    QwenImage21RetainedArtifactFiles, ValidatedQwenImage21Artifact,
 };
 pub use configuration::{
     QwenImage21ConfigError, QwenImage21PipelineConfig, QwenImage21SchedulerConfig,
-    QwenImage21TextEncoderConfig, QwenImage21TransformerConfig, QwenImage21VaeConfig,
     quantized_group_count, quantized_row_count,
 };
 pub use inventory::{QwenImage21TensorDescriptor, QwenImage21TensorInventory};
@@ -74,34 +76,28 @@ pub use latent_layout::{
 pub use mask::{build_block_causal_mask, build_image_ids, prefix_segments};
 pub use modulation::{build_target_token_mask, causal_modulation_row_map};
 pub use norm::zero_center_rms_norm;
-pub use rope::{QwenImage21Rope, frequencies_for_tests};
+pub use rope::frequencies_for_tests;
 pub use scheduler::{
-    FlowMatchSchedule, FlowMatchSchedulerParams, NUM_TRAIN_TIMESTEPS, build_schedule,
-    calculate_shift, default_shift, euler_step,
+    FlowMatchSchedule, FlowMatchSchedulerParams, build_schedule, calculate_shift, default_shift,
+    euler_step,
 };
 pub use tensor_profiles::{
-    QwenImage21TensorProfile, text_encoder_tensor_profiles, transformer_tensor_profiles,
-    vae_tensor_profiles,
+    text_encoder_tensor_profiles, transformer_tensor_profiles, vae_tensor_profiles,
 };
 pub use text_conditioning::{
-    PromptConditioningOutput, QWEN_IMAGE_21_SYS_PROMPT, TextConditioningError,
     build_prompt_conditioning, normalize_empty_prompt, render_t2i_prompt_template,
     render_ti2i_prompt_template, render_ti2i_prompt_template_with_image_count, special_tokens,
 };
-pub use time::SinusoidalTimesteps;
 #[cfg(feature = "direct-mlx")]
 pub use vae::QwenImage21VaeDecoder;
 pub use vae::{
-    QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT,
-    QWEN_IMAGE_21_SPATIAL_COMPRESSION_RATIO, QwenImage21VaeError, decoded_pixel_dimensions,
+    QWEN_IMAGE_21_LATENT_CHANNEL_COUNT, QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT, QwenImage21VaeError,
+    decoded_pixel_dimensions,
 };
 
 #[cfg(feature = "direct-mlx")]
 pub use engine::QwenImage21MlxComponents;
-pub use engine::{
-    QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,
-    QwenImage21ImageEngine, validate_official_request,
-};
+pub use engine::{QwenImage21ImageEngine, validate_official_request};
 pub use engine_error::QwenImage21EngineError;
 pub use official_profile::{
     QWEN_IMAGE_21_ACTIVATION_HEADROOM_BYTES, QWEN_IMAGE_21_GUIDANCE_THOUSANDTHS,
@@ -109,10 +105,11 @@ pub use official_profile::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use pipeline::QwenImage21Pipeline;
-pub use render_contract::{
-    QwenImage21RenderAdvance, QwenImage21RenderRequest, QwenImage21Rendered,
-};
+pub use render_contract::QwenImage21RenderRequest;
 #[cfg(feature = "direct-mlx")]
 pub use text_encoder::QwenImage21TextEncoder;
 #[cfg(feature = "direct-mlx")]
 pub use transformer::{QwenImage21Transformer, QwenImage21TransformerRequest};
+
+#[cfg(feature = "direct-mlx")]
+pub use text_conditioning::QWEN_IMAGE_21_SYS_PROMPT;

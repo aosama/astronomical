@@ -277,7 +277,7 @@ impl Flux2KleinMlxComponents {
                 snapshot.active_memory_bytes() as u64,
                 snapshot.allocator_cache_memory_bytes() as u64,
                 snapshot.peak_memory_bytes() as u64,
-                crate::MlxActiveMemoryBreakdown::default(),
+                crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
             );
             if let Some(memory_ceiling_utilization) =
                 self.memory_ceiling_utilization(snapshot.active_memory_bytes() as u64)

@@ -1,4 +1,4 @@
-mod config;
+pub(crate) mod config;
 mod metadata;
 
 pub use config::{OptiQQuantizationConfig, OptiQQuantizationProfile, QuantizationConfigSource};

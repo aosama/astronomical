@@ -1,7 +1,8 @@
+use crate::inference_engine::contract::ExpertResidencyTelemetry;
+use crate::qwen3_5_core::text::thinking_budget::Qwen3_5ThinkingBudgetError;
 use crate::{
-    EngineGenerationStart, InferenceEngineError, PerformanceAttributionOutcome, PerformanceCounter,
+    InferenceEngineError, PerformanceAttributionOutcome, PerformanceCounter,
     PersistentPromptCacheBlockKey, Qwen3_5InferenceRequest, Qwen3_5SamplingStrategy,
-    Qwen3_5ThinkingBudgetState,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
@@ -349,3 +350,5 @@ impl Qwen3_5EngineState {
         admitted_generation_start
     }
 }
+
+use crate::{EngineGenerationStart, Qwen3_5ThinkingBudgetState};

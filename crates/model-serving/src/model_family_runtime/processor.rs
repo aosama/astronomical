@@ -2,12 +2,13 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, WorkerEvent,
 };
 
-use crate::{
-    K2HorizonMoVAGenerationProcessor, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
-    ModelGenerationProcessor, PreparedModelGeneration, Qwen3_5GenerationProcessor,
-};
+use crate::{K2HorizonMoVAGenerationProcessor, Qwen3_5GenerationProcessor};
 
 use super::{ModelFamilyInferenceRequest, ModelFamilyRequestOutput};
+use crate::model_generation_processor::ModelGeneratedTokenTranslation;
+use crate::model_generation_processor::ModelGenerationOutputError;
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::model_generation_processor::PreparedModelGeneration;
 
 /// Family-tagged prompt and output processor used by EngineBackedWorker.
 pub enum ModelFamilyGenerationProcessor {

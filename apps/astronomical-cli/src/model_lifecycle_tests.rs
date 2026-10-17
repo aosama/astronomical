@@ -53,7 +53,7 @@ fn should_match_catalog_entries_by_huggingface_id_or_leaf_even_when_not_ready() 
 }
 
 #[test]
-fn should_render_download_progress_with_decimal_gigabytes() {
+fn should_render_download_progress_with_apple_box_gigabytes() {
     let download_job = DaemonDownloadJob {
         huggingface_id: "example/2gb-model".to_owned(),
         state: "downloading".to_owned(),
@@ -61,9 +61,12 @@ fn should_render_download_progress_with_decimal_gigabytes() {
         bytes_total: 2_000_000_000,
         error: None,
     };
+    // The user-facing gigabyte is the one Apple prints on the box (2^30,
+    // per AGENTS.md), so 1.5/2.0 decimal gigabytes of bytes render as
+    // 1.4/1.86 user-facing gigabytes at the same 75%.
     assert_eq!(
         model_lifecycle::render_download_progress(&download_job),
-        "example/2gb-model: downloading 1.5 GB / 2 GB (75%)"
+        "example/2gb-model: downloading 1.4 GB / 1.86 GB (75%)"
     );
 }
 

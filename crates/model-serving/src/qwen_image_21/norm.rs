@@ -10,6 +10,9 @@
 //! The runtime path uses `mlx_math::fp32_zero_center_rms_norm` instead; this one exists so the
 //! formula stays checkable without a GPU. Change both together.
 
+#[cfg(test)]
+mod tests;
+
 /// Apply the zero-centered RMSNorm to a single row of `dim` channels.
 ///
 /// `input` and `weight` must have the same non-zero width; `eps` is the variance floor (the

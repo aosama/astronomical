@@ -29,6 +29,8 @@ pub struct K2HorizonMoVAOutputParser {
 }
 
 impl K2HorizonMoVAOutputParser {
+    #[cfg(test)]
+    #[cfg(any(test, feature = "direct-mlx"))]
     /// Prompt rendering already opened the think channel.
     #[must_use]
     pub fn new_after_thinking_prefix() -> Self {

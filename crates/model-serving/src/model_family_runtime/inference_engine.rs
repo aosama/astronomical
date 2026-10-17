@@ -1,9 +1,9 @@
 use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 
+use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
-    EngineGenerationStart, EngineLoadResult, GeneratedToken, GenerationFinalization,
-    InferenceEngine, InferenceEngineError, K2HorizonMoVAEngine, MlxMemoryLimitAdjustment,
-    MlxMemoryTelemetry, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
+    GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
+    K2HorizonMoVAEngine, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
 };
 
 use super::ModelFamilyInferenceRequest;
@@ -152,3 +152,5 @@ fn family_mismatch_error() -> InferenceEngineError {
         reason: "model-family engine and inference request do not match".to_owned(),
     }
 }
+
+use crate::{EngineGenerationStart, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

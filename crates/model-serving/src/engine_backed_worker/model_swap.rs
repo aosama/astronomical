@@ -8,7 +8,8 @@ use tokio::io::AsyncWrite;
 
 use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
-use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::{ImageGenerationEngine, InferenceEngine};
 
 /// Emits paired timing boundaries for one model-swap phase only when the
 /// factory has performance attribution enabled, mirroring the prompt-cache

@@ -40,6 +40,9 @@
 //! silently corrupts conditioning (this exact hazard stalled the previous onboarding
 //! session; see the repo discovery guide).
 
+#[cfg(test)]
+mod tests;
+
 use std::fmt;
 use std::num::NonZeroUsize;
 

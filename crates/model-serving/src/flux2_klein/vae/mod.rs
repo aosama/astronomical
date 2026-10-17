@@ -1,7 +1,10 @@
 //! Native MLX decoder owners plus offline packed-latent and tile geometry contracts.
 
+#[cfg(feature = "direct-mlx")]
 mod error;
+#[cfg(feature = "direct-mlx")]
 mod latent_layout;
+#[cfg(feature = "direct-mlx")]
 mod tiling;
 
 #[cfg(feature = "direct-mlx")]
@@ -19,12 +22,15 @@ mod resnet;
 #[cfg(feature = "direct-mlx")]
 mod up_block;
 
+#[cfg(feature = "direct-mlx")]
 pub use error::Flux2KleinVaeError;
+#[cfg(feature = "direct-mlx")]
 pub use latent_layout::{
     FLUX2_KLEIN_PACKED_LATENT_CHANNEL_COUNT, FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT,
     Flux2KleinPackedLatentLayout, flux2_klein_inverse_batch_norm_reference,
 };
-pub use tiling::{Flux2KleinVaeTile, Flux2KleinVaeTilePlan, Flux2KleinVaeTilingConfig};
+#[cfg(feature = "direct-mlx")]
+pub use tiling::{Flux2KleinVaeTile, Flux2KleinVaeTilingConfig};
 
 #[cfg(feature = "direct-mlx")]
 use attention::Flux2KleinVaeMiddleAttention;

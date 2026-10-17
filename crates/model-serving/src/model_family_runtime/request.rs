@@ -1,4 +1,5 @@
-use crate::{K2HorizonMoVAInferenceRequest, PreparedInferenceRequest, Qwen3_5InferenceRequest};
+use crate::inference_engine::contract::PreparedInferenceRequest;
+use crate::{K2HorizonMoVAInferenceRequest, Qwen3_5InferenceRequest};
 
 /// Family-tagged prepared request accepted by the model-family engine boundary.
 #[derive(Debug)]

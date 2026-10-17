@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 /// Resolves the sampling seed for one generation request.
 ///
 /// When the client supplies an explicit seed, it is used directly for deterministic

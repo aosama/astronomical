@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use serde::Deserialize;
 
 /// Sampler tuning parameters specific to a Qwen3.5 model instance.

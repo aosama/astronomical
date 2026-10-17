@@ -15,10 +15,11 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_mlx_c_rust::MlxArray;
 
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
-    PersistentPromptCacheDiskStore, PersistentPromptCachePrefixLookup,
+    PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
 };
 
 use super::Qwen3_5EngineState;

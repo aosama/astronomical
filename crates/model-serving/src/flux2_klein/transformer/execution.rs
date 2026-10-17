@@ -121,7 +121,7 @@ impl Flux2KleinTransformer {
 
     pub(crate) fn load_with_geometry_and_performance_attribution(
         runtime: MlxRuntime,
-        weights_file: crate::ValidatedWeightsFile,
+        weights_file: crate::artifact_validation::validated_artifact::ValidatedWeightsFile,
         geometry: Flux2KleinTransformerGeometry,
         retained_block_indices: &[usize],
         performance_attribution: &mut PerformanceAttribution,

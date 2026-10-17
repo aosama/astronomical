@@ -6,6 +6,9 @@
 //! loaded instead of recomputed. They are pure Rust so they can be tested without
 //! the `direct-mlx` feature and without MLX hardware.
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(feature = "direct-mlx")]
 use astronomical_ipc_protocol::WorkerEvent;
 
@@ -29,6 +32,7 @@ pub struct PersistentPromptCacheCounters {
 }
 
 impl PersistentPromptCacheCounters {
+    #[cfg(any(test, feature = "direct-mlx"))]
     /// Records one successful persistent prompt-cache prefix restore.
     ///
     /// `restored_token_count` is the number of prompt tokens the cache supplied,
@@ -40,6 +44,7 @@ impl PersistentPromptCacheCounters {
             .saturating_add(u64::try_from(restored_token_count).unwrap_or(u64::MAX));
     }
 
+    #[cfg(feature = "direct-mlx")]
     /// Records one persistent prompt-cache miss (cold prefill fallback).
     /// Records one request that adopted the retained live state.
     pub fn record_in_memory_prefix_adoption_hit(&mut self) {
@@ -139,12 +144,13 @@ impl PersistentPromptCacheCounters {
     }
 }
 
+#[cfg(feature = "direct-mlx")]
 /// Builds the IPC event carrying persistent prompt-cache observability data.
 ///
 /// Combines cumulative counters and active-model file counts with global-root
 /// byte totals in the `WorkerEvent::PersistentPromptCacheStats` variant emitted
 /// after `Ready` and after each `Completed`.
-#[cfg(feature = "direct-mlx")]
+#[cfg(any(test, feature = "direct-mlx"))]
 #[must_use]
 pub fn build_persistent_prompt_cache_stats_event(
     persistent_prompt_cache_counters: &PersistentPromptCacheCounters,

@@ -1,8 +1,12 @@
+#[cfg(test)]
+mod tests;
+
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{PerformanceAttribution, PerformanceOperation, PreparedInferenceRequest};
+use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5ProcessedImage;
+use crate::inference_engine::contract::PreparedInferenceRequest;
 
 /// Token-level request prepared for Qwen3.5 inference.
 #[derive(Clone, Debug)]

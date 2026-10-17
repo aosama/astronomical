@@ -6,10 +6,10 @@
 
 use astronomical_ipc_protocol::{ImageGenerationCapabilities, RequestId};
 
-use crate::{
-    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, PerformanceAttributionOutcome,
-    qwen_image_21::render_contract::QwenImage21RenderAdvance,
-};
+use crate::PerformanceAttributionOutcome;
+use crate::memory::telemetry::MlxMemoryLimitAdjustment;
+use crate::memory::telemetry::MlxMemoryTelemetry;
+use crate::qwen_image_21::render_contract::QwenImage21RenderAdvance;
 
 /// Loaded identity supplied by either the native components or an offline lifecycle fake.
 pub struct QwenImage21ComponentLoad {

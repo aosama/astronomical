@@ -1,6 +1,6 @@
 //! Concrete bounded image-engine lifecycle and its native MLX component owner.
 
-mod components;
+pub(crate) mod components;
 mod lifecycle;
 mod request_validation;
 
@@ -17,6 +17,7 @@ mod request_geometry;
 #[cfg(feature = "direct-mlx")]
 mod mlx_components;
 
+#[cfg(feature = "direct-mlx")]
 pub use components::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
 pub use lifecycle::Flux2KleinImageEngine;
 #[cfg(feature = "direct-mlx")]

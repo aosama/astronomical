@@ -29,7 +29,8 @@ pub use ram_budget_measurements::{
     Qwen3_5RamBudgetGeometryError, mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 pub use shard_index::{MAXIMUM_INDEX_BYTES, Qwen3_5ArtifactError, Qwen3_5ShardIndex};
-pub use tensor_spec::{
-    qwen3_5_language_tensor_profiles, qwen3_5_resident_language_tensor_profiles,
-};
+pub use tensor_spec::qwen3_5_language_tensor_profiles;
+#[cfg(feature = "direct-mlx")]
+#[cfg(feature = "direct-mlx")]
+pub(crate) use tensor_spec::qwen3_5_resident_language_tensor_profiles;
 pub use validated_artifact::ValidatedQwen3_5Artifact;

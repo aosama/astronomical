@@ -11,6 +11,9 @@
 //! processor, absolute positions, rotary positions, and merger reshape must all
 //! use this exact order or valid tensors will describe different patches.
 
+#[cfg(test)]
+mod tests;
+
 use thiserror::Error;
 
 use super::{Qwen3_5ImageGrid, Qwen3_5VisionConfig};

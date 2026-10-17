@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use astronomical_runtime_integration::MlxRuntimeError;
 use thiserror::Error;
 

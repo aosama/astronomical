@@ -20,6 +20,9 @@ mod foreign_syntax;
 mod salvage;
 mod state;
 
+#[cfg(test)]
+mod tests;
+
 use state::{
     Qwen3_5OutputParserState, ToolCallEntry, ToolCallEntryKind, earliest_marker,
     longest_suffix_prefix_for_markers, split_qwen_function_envelope,
@@ -79,7 +82,7 @@ pub struct Qwen3_5ToolCall {
 
 /// Bounded incremental parser for Qwen3.5 reasoning and XML-style function output.
 #[derive(Debug)]
-pub struct Qwen3_5OutputParser {
+pub(crate) struct Qwen3_5OutputParser {
     completed_tool_call_count: u16,
     declared_tools: BTreeMap<String, DeclaredTool>,
     has_streamed_visible_text: bool,

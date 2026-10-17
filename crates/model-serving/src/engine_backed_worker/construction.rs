@@ -1,6 +1,7 @@
 use super::support::ModelFactory;
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
-use crate::{ImageGenerationEngine, InferenceEngine, ModelGenerationProcessor};
+use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::{ImageGenerationEngine, InferenceEngine};
 
 impl<Processor, Engine> EngineBackedWorker<Processor, Engine, ()>
 where

@@ -1,5 +1,8 @@
 //! Model-derived image geometry and encoded-transport bounds.
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod tests;
+
 use thiserror::Error;
 
 const DIMENSION_MULTIPLE_PIXELS: u32 = 16;
