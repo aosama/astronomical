@@ -93,7 +93,11 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        assert!(ready_catalog.is_some(), "published model should become ready");
+        let ready_catalog = ready_catalog.expect("published model should become ready");
+        assert_eq!(
+            ready_catalog["models_download_directory"],
+            test_directory.path().join("models").display().to_string()
+        );
         assert!(
             test_directory
                 .path()

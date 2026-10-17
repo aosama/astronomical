@@ -144,6 +144,38 @@ fn should_reject_relative_v1_model_directory_paths() {
 }
 
 #[test]
+fn should_reject_relative_v1_model_download_directory_paths() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"model_download_directory":"relative/downloads"}}"#,
+    );
+
+    assert!(matches!(
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+        Err(AstronomicalConfigError::PathMustBeAbsolute { .. })
+    ));
+}
+
+#[test]
+fn should_expose_configured_v1_model_download_directory_override() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"model_download_directory":"/opt/shared-models"}}"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("configuration with a download override should load");
+
+    assert_eq!(
+        astronomical_config.model_download_directory(),
+        Some(&PathBuf::from("/opt/shared-models"))
+    );
+}
+
+#[test]
 fn should_keep_configuration_generation_stable_across_formatting_only_changes() {
     let compact_home_directory = tempfile::tempdir().expect("compact config home should exist");
     let formatted_home_directory = tempfile::tempdir().expect("formatted config home should exist");

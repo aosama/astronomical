@@ -209,6 +209,7 @@ fn build_migrated_config(
             model_directories: legacy_config.model_directories,
             maximum_mlx_memory_gb: legacy_config.maximum_mlx_memory_gb,
             default_model: None,
+            model_download_directory: None,
         },
         prompt_cache: Some(PromptCacheConfigFile {
             enabled: legacy_config.persistent_prompt_cache_enabled,

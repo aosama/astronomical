@@ -36,6 +36,7 @@
 .library-hero-ready-count { color: var(--ok); font-weight: var(--weight-strong); }
 .library-hero-downloadable-count { color: var(--accent-cool); font-weight: var(--weight-label); }
 .library-hero-size { margin: 3px 0 0; font-size: var(--text-sm); }
+.library-hero-location { margin: 3px 0 0; font-size: var(--text-sm); color: var(--text-dim); overflow-wrap: anywhere; }
 
 /* Filter bar */
 .library-filter-bar {
