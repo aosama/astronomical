@@ -9,8 +9,7 @@ use crate::qwen_image_21::oracle_test_support::oracle_f32_array;
 
 /// Reference frequency table plus embeddings, derived from the diffusers
 /// QwenImage21TemporalTimesteps implementation.
-const TIME_ORACLE_JSON: &str =
-    include_str!("../../../tests/fixtures/qwen_image_21/time_oracle.json");
+const TIME_ORACLE_JSON: &str = astronomical_test_harness::fixtures::QWEN_IMAGE_21_TIME_ORACLE_JSON;
 
 /// Slack for the f32 embedding: both sides compute cos/sin in f64 and cast, so the gap is sub-ULP.
 const EMBED_TOLERANCE: f32 = 1e-5;

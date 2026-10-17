@@ -12,14 +12,14 @@ use astronomical_model_serving::{
 };
 use tokio::time::timeout;
 
-use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
-use super::chat::support;
-use super::image_support::{
+use self::support::{
     ScriptedImageEngine, ScriptedRuntime, ScriptedRuntimeFactory, assert_completed_payload,
     assert_finalized_with_cleanup, close_worker, completed_step, image_command,
     image_configuration, lock, next_event, progress_step, start_idle_worker, start_worker,
     swap_image_command,
 };
+use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
+use super::chat::support as chat_support;
 
 #[tokio::test]
 async fn should_complete_an_image_before_finalization_without_duplicate_delivery_and_reuse_after_failures()
@@ -202,7 +202,7 @@ async fn should_fail_closed_across_modalities_and_apply_an_idle_image_memory_upd
     commands
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/chat".to_owned(),
-            model_configuration: support::worker_model_configuration("example/scripted-chat"),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
         })
         .await
         .expect("chat swap");
@@ -227,7 +227,9 @@ async fn should_fail_closed_across_modalities_and_apply_an_idle_image_memory_upd
     let _image_swapped = next_event(&mut events).await;
     let _image_model_load_memory = next_event(&mut events).await;
     commands
-        .send_command(&WorkerCommand::Generate(support::chat_command(921, 17)))
+        .send_command(&WorkerCommand::Generate(chat_support::chat_command(
+            921, 17,
+        )))
         .await
         .expect("unsupported chat request");
     assert!(
@@ -253,8 +255,7 @@ async fn should_fail_closed_across_modalities_and_apply_an_idle_image_memory_upd
 }
 
 #[tokio::test]
-async fn should_swap_chat_image_chat_acknowledge_exact_tags_and_preserve_prior_runtime_after_failure()
- {
+async fn should_preserve_the_prior_runtime_when_a_replacement_model_load_fails_mid_swap() {
     let factory = ScriptedRuntimeFactory::new(vec![
         Ok(ScriptedRuntime::autoregressive(
             ScriptedChatProcessor::new(),
@@ -283,7 +284,7 @@ async fn should_swap_chat_image_chat_acknowledge_exact_tags_and_preserve_prior_r
     commands
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/chat".to_owned(),
-            model_configuration: support::worker_model_configuration("example/scripted-chat"),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
         })
         .await
         .expect("chat swap");
@@ -305,7 +306,7 @@ async fn should_swap_chat_image_chat_acknowledge_exact_tags_and_preserve_prior_r
     commands
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/invalid".to_owned(),
-            model_configuration: support::worker_model_configuration("example/scripted-chat"),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
         })
         .await
         .expect("failed swap");
@@ -326,14 +327,16 @@ async fn should_swap_chat_image_chat_acknowledge_exact_tags_and_preserve_prior_r
     commands
         .send_command(&WorkerCommand::SwapModel {
             model_directory: "/models/chat-again".to_owned(),
-            model_configuration: support::worker_model_configuration("example/scripted-chat"),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
         })
         .await
         .expect("chat replacement");
     let _chat_swapped_again = next_event(&mut events).await;
     let _chat_configuration = next_event(&mut events).await;
     commands
-        .send_command(&WorkerCommand::Generate(support::chat_command(931, 19)))
+        .send_command(&WorkerCommand::Generate(chat_support::chat_command(
+            931, 19,
+        )))
         .await
         .expect("chat after image");
     while !matches!(next_event(&mut events).await, WorkerEvent::Completed { request_id, .. } if request_id == RequestId::new(931))
@@ -372,3 +375,5 @@ async fn should_report_a_bounded_actionable_image_engine_load_failure() {
     assert!(model_load_failure_reason.chars().count() <= 512);
     close_worker(commands, worker).await;
 }
+
+mod support;

@@ -22,7 +22,7 @@ use tokio::io::{AsyncWrite, duplex, split};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
+use crate::worker::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
 
 pub(super) type ScriptedRuntime =
     ModelFactoryRuntime<ScriptedChatProcessor, ScriptedChatEngine, ScriptedImageEngine>;

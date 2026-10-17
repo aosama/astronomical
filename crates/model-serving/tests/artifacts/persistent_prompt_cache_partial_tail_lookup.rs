@@ -3,7 +3,7 @@ use astronomical_model_serving::{
     PersistentPromptCachePrefixLookup,
 };
 
-use super::persistent_prompt_cache_model_contract_fixture::persistent_prompt_cache_model_contract;
+use super::frozen_ornith_1_0_fixtures::persistent_prompt_cache_model_contract;
 
 #[test]
 fn should_restore_a_partial_tail_block_on_top_of_a_matched_chain_tip() {

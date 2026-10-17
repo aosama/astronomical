@@ -24,7 +24,7 @@ use std::num::NonZeroUsize;
 use std::sync::OnceLock;
 
 const ORACLE_FIXTURE_JSON: &str =
-    include_str!("../../../tests/fixtures/qwen_image_21/conditioning_oracle.json");
+    astronomical_test_harness::fixtures::QWEN_IMAGE_21_CONDITIONING_ORACLE_JSON;
 
 struct OracleCase {
     raw_input_ids: Vec<Vec<u32>>,
