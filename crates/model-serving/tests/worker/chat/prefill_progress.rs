@@ -1,5 +1,15 @@
-use super::*;
-
+use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
+use super::support::{chat_command, close_worker_transport, next_event, ready_event};
+use astronomical_ipc_protocol::{
+    MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId,
+    WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot,
+    WorkerPromptWorkReuse,
+};
+use astronomical_model_serving::{
+    EngineBackedWorker, ExpertResidencyTelemetry, GeneratedToken, MlxActiveMemoryBreakdown,
+    MlxMemoryTelemetry,
+};
+use tokio::io::{duplex, split};
 #[tokio::test]
 async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_cached_usage()
  {

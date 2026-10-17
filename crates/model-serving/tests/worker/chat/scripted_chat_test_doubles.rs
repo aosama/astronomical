@@ -1,5 +1,16 @@
-use super::*;
-
+use super::support::{ScriptedInferenceRequest, ready_event};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ExpertMemoryMode,
+    RequestId, WorkerEvent,
+};
+use astronomical_model_serving::{
+    EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
+    GenerationFinalization, InferenceEngine, InferenceEngineError, MlxActiveMemoryBreakdown,
+    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelGeneratedTokenTranslation,
+    ModelGenerationOutputError, ModelGenerationProcessor, PreparedModelGeneration,
+};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 pub(crate) struct ScriptedChatProcessor {
     emits_parallel_tool_calls: bool,
     prompt_token_count: usize,
