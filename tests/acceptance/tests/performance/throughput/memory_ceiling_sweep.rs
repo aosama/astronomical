@@ -298,6 +298,7 @@ fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
         maximum_mlx_memory_bytes: Some(configured_maximum_mlx_memory_bytes),
         attribution_enabled: true,
         journey_timeout: MEMORY_CELL_SERVING_BUDGET,
+        model_directory: None,
     }
 }
 

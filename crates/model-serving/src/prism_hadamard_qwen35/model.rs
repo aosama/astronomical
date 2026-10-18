@@ -20,12 +20,17 @@ use weights::{PrismHadamardWeights, build_gdn_normalization_scale_weights, load_
 
 mod forward;
 mod fwht;
+mod measurement;
 mod weights;
 
 #[cfg(test)]
 mod tests;
 
 pub(crate) use forward::StraightGenerationState;
+pub use measurement::{
+    PrismHadamardGenerationState, PrismHadamardGreedySession, PrismHadamardProbeDimensions,
+    PrismHadamardProbeProjection,
+};
 
 /// The loaded, ready-to-run folded ternary text model.
 #[derive(Debug)]
@@ -42,6 +47,10 @@ pub struct PrismHadamardTextModel {
     pub(crate) weights: PrismHadamardWeights,
     pub(crate) gdn_query_scale_weight: MlxArray,
     pub(crate) gdn_key_scale_weight: MlxArray,
+    /// Each decoder layer's index within its own attention kind: the slot its
+    /// convolution/recurrent (gated-delta) or key-value (full-attention) state
+    /// occupies in the generation state.
+    pub(crate) decoder_layer_state_slots: Vec<usize>,
 }
 
 impl PrismHadamardTextModel {
@@ -81,6 +90,7 @@ impl PrismHadamardTextModel {
             );
             None
         };
+        let decoder_layer_state_slots = decoder_layer_state_slots(&weights);
         Ok(Self {
             pack,
             runtime,
@@ -90,6 +100,7 @@ impl PrismHadamardTextModel {
             weights,
             gdn_query_scale_weight,
             gdn_key_scale_weight,
+            decoder_layer_state_slots,
         })
     }
 
@@ -98,46 +109,37 @@ impl PrismHadamardTextModel {
         &self.pack
     }
 
-    /// Greedy generation: feeds the prompt tokens, then decodes one token at
-    /// a time, stopping when an end-of-sequence id appears or the token
-    /// budget is spent. Returns the generated ids, excluding the stop token.
+    /// Greedy generation: feeds the whole prompt as one prefill pass, then
+    /// decodes one token at a time, stopping when an end-of-sequence id
+    /// appears or the token budget is spent. Returns the generated ids,
+    /// excluding the stop token.
     pub fn generate_greedy(
         &self,
         prompt_token_ids: &[i32],
         maximum_new_token_count: usize,
         stop_token_ids: &[u32],
     ) -> Result<Vec<u32>, PrismHadamardModelError> {
-        let text_dimensions = self.pack.config().text();
-        validate_greedy_generation_request(
-            prompt_token_ids,
-            maximum_new_token_count,
-            text_dimensions.vocab_size,
-            text_dimensions.max_position_embeddings,
-        )?;
         if maximum_new_token_count == 0 {
+            validate_greedy_generation_request(
+                prompt_token_ids,
+                maximum_new_token_count,
+                self.pack.config().text().vocab_size,
+                self.pack.config().text().max_position_embeddings,
+            )?;
             return Ok(Vec::new());
         }
-        let mut generation_state = StraightGenerationState::empty();
-        let prompt_tokens = self
-            .runtime
-            .array_from_i32(prompt_token_ids, &[1, prompt_token_ids.len() as i32])
-            .map_err(PrismHadamardModelError::Forward)?;
-        let mut logits = self.forward_pass(&prompt_tokens, &mut generation_state)?;
+        let prompt_processing_chunk_tokens = u32::try_from(prompt_token_ids.len())
+            .unwrap_or(u32::MAX)
+            .max(1);
+        let mut session = self.begin_greedy_session(
+            prompt_token_ids,
+            prompt_processing_chunk_tokens,
+            maximum_new_token_count,
+            stop_token_ids,
+        )?;
         let mut generated_token_ids = Vec::new();
-        while generated_token_ids.len() < maximum_new_token_count {
-            self.runtime
-                .evaluate_arrays(&[&logits])
-                .map_err(PrismHadamardModelError::Forward)?;
-            let next_token = self.argmax_last_token(&logits)?;
-            if stop_token_ids.contains(&next_token) {
-                break;
-            }
+        while let Some(next_token) = session.next_token()? {
             generated_token_ids.push(next_token);
-            let continuation_tokens = self
-                .runtime
-                .array_from_i32(&[next_token as i32], &[1, 1])
-                .map_err(PrismHadamardModelError::Forward)?;
-            logits = self.forward_pass(&continuation_tokens, &mut generation_state)?;
         }
         Ok(generated_token_ids)
     }
@@ -159,7 +161,30 @@ impl PrismHadamardTextModel {
     }
 }
 
-fn validate_greedy_generation_request(
+/// Numbers each decoder layer within its attention kind so a layer can find
+/// its own convolution/recurrent or key-value state slot directly.
+fn decoder_layer_state_slots(weights: &PrismHadamardWeights) -> Vec<usize> {
+    let mut linear_layer_count = 0_usize;
+    let mut full_layer_count = 0_usize;
+    weights
+        .decoder_layers
+        .iter()
+        .map(|decoder_layer| match decoder_layer.attention {
+            weights::DecoderLayerAttentionWeights::Linear(_) => {
+                let slot = linear_layer_count;
+                linear_layer_count += 1;
+                slot
+            }
+            weights::DecoderLayerAttentionWeights::Full(_) => {
+                let slot = full_layer_count;
+                full_layer_count += 1;
+                slot
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn validate_greedy_generation_request(
     prompt_token_ids: &[i32],
     maximum_new_token_count: usize,
     vocabulary_size: u32,
