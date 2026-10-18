@@ -7,8 +7,7 @@ use tower::ServiceExt;
 use crate::common::ScriptedExecutor;
 
 const EXPECTED_HTML_TITLE_MARKER: &str = "<title>Astronomical Observatory</title>";
-const EXPECTED_THIN_TALK_HANDOFF_MARKER: &str =
-    "href=\"astronomical://chat\"";
+const EXPECTED_THIN_TALK_HANDOFF_MARKER: &str = "href=\"astronomical://chat\"";
 const EXPECTED_THIN_TALK_FALLBACK_MARKER: &str = "choose Chat";
 const EXPECTED_NAVIGATION_LABEL_MARKER: &str = "aria-label=\"Observatory sections\"";
 const EXPECTED_OVERVIEW_REGION_MARKER: &str =
