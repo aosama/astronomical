@@ -10,6 +10,17 @@ warnings = "deny"
 # Each alias expands to one plain `cargo test` invocation; read the list to
 # see the exact packages and test binaries it covers.
 #
+# Every alias is written as one string, never as a TOML array. Cargo merges
+# config files from every ancestor directory and JOINS array values across
+# them, while a string from the nearest file replaces the ancestors' value.
+# A git worktree nested under the repository (for example under
+# .claude/worktrees/) sees this file twice, once from the worktree and once
+# from the main checkout; an array alias then doubles into
+# `check --workspace --all-targets check --workspace --all-targets`, which
+# breaks `cargo verify`, turns the duplicated `test` word of a test alias into
+# a silent test-name filter, and fails the pre-push hook. The string form
+# merges by replacement, so a nested worktree runs each alias exactly once.
+#
 # Lane vocabulary (issue #1208): "offline" names the property — sealed and
 # deterministic, no real network beyond localhost, no real model artifacts,
 # everything scripted. The offline lane runs each package's offline_tests
@@ -30,11 +41,11 @@ warnings = "deny"
 # fails the lane instead of rotting until release day.
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
-test-offline = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--lib", "--test", "offline_tests"]
-test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-daemon", "--test", "rest_api_tests"]
-test-e2e = ["test", "--no-fail-fast", "-p", "astronomical-e2e", "--test", "e2e"]
-test-app-builder = ["test", "-p", "xtask", "--test", "offline_app_builder_journeys"]
-test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--lib", "--test", "offline_tests", "--test", "rest_api_tests"]
+test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests"
+test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
+test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
+test-app-builder = "test -p xtask --test offline_app_builder_journeys"
+test-offline-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-rest-contract --lib --test offline_tests --test rest_api_tests"
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
@@ -44,13 +55,13 @@ test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", 
 # save-sccache <primary-cache-key>`, `cargo xtask install-verification-tools
 # [--prefix DIR]`, `cargo xtask bootstrap-native-dependencies
 # [--cache-dir ABSOLUTE_PATH] [--verify]`.
-xtask = ["run", "-p", "xtask", "--"]
+xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —
 # it catches type errors in any crate or test binary (the class of failure
 # that only surfaces in CI when skipped) for one local compile instead of a
 # paid GitHub Actions round trip. Run `cargo verify` before every push.
-verify = ["check", "--workspace", "--all-targets"]
+verify = "check --workspace --all-targets"
 # Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
 # packages, features, targets, and the GPU serial rule (`--test-threads=1`)
 # cannot be forgotten. Acceptance journeys are `#[ignore]`d: they need real
@@ -60,27 +71,27 @@ verify = ["check", "--workspace", "--all-targets"]
 # test-direct-mlx: the model-serving direct-MLX contract suite plus the
 # runtime-integration MLX-C coverage bridge contract (CPU-only, seconds) so
 # bridge drift fails the lane instead of shipping silently.
-test-direct-mlx = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "astronomical-acceptance/direct-mlx", "-p", "astronomical-runtime-integration", "--features", "astronomical-runtime-integration/mlx", "-p", "astronomical-model-serving", "--features", "astronomical-model-serving/direct-mlx", "--lib", "--test", "direct_mlx", "--test", "mlx_c_coverage_contract_tests", "--", "--test-threads=1"]
+test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features astronomical-acceptance/direct-mlx -p astronomical-runtime-integration --features astronomical-runtime-integration/mlx -p astronomical-model-serving --features astronomical-model-serving/direct-mlx --lib --test direct_mlx --test mlx_c_coverage_contract_tests -- --test-threads=1"
 # test-mlx-memory: every native memory-contract phase (model-swap allocator,
 # native probe, MLX-C transitions) in one bounded invocation; the probe
 # binary must exist in the native build store (build it first with
 # `cargo test -p astronomical-runtime-integration --features
 # mlx-memory-contract-probe --no-run`).
-test-mlx-memory = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,mlx-memory-contract-probe", "--test", "memory_contracts", "--", "--ignored", "--test-threads=1"]
+test-mlx-memory = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx,mlx-memory-contract-probe --test memory_contracts -- --ignored --test-threads=1"
 # check-mlx-memory-contract: compile-only drift gate for the feature world
 # above. The lane sits off every routine graph (and off `cargo verify`, which
 # never enables the feature), so API moves under it are caught here in
 # seconds instead of silently drifting. The probe-profile CMake build can be
 # streamed live first with
 # `scripts/ci/prewarm-native-build.sh --profile core+memory-contract`.
-check-mlx-memory-contract = ["check", "-p", "astronomical-runtime-integration", "--features", "mlx-memory-contract-probe", "--all-targets"]
+check-mlx-memory-contract = "check -p astronomical-runtime-integration --features mlx-memory-contract-probe --all-targets"
 # test-acceptance: the whole real-model acceptance package (journeys and
 # contracts across every feature gate), still `--test-threads=1`.
-test-acceptance = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe", "--tests", "--", "--ignored", "--test-threads=1"]
+test-acceptance = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --tests -- --ignored --test-threads=1"
 # test-prism-hadamard-direct: real-pack text output and upstream greedy parity.
 # Set PRISM_HADAMARD_QWEN35_PACK_DIR and PRISM_HADAMARD_QWEN35_PARITY_REFERENCE
 # to the installed pack and its upstream trajectory reference before running.
-test-prism-hadamard-direct = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx", "--test", "prism_hadamard", "--", "--ignored", "--nocapture", "--test-threads=1"]
+test-prism-hadamard-direct = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx --test prism_hadamard -- --ignored --nocapture --test-threads=1"
 # test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
 # one-token budget coverage; set PRISM_HADAMARD_QWEN35_PACK_DIR first.
-test-prism-hadamard-serving = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "serving-acceptance", "--test", "chat_serving", "should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack", "--", "--ignored", "--nocapture", "--test-threads=1"]
+test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --features serving-acceptance --test chat_serving should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack -- --ignored --nocapture --test-threads=1"
