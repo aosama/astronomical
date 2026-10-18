@@ -71,9 +71,9 @@ main() {
     printf '%s\n' '[channel-isolation-guard-test] case=development-is-accepted status=success'
 
     printf '%s\n' '[channel-isolation-guard-test] case=stable-loader-is-rejected status=start'
-    printf '%s\n' 'AstronomicalConfig::load_from_default_location();' > "$safe_fixture"
+    printf '%s\n' 'AstronomicalConfig::load_from_home_directory(home_directory);' > "$safe_fixture"
     run_checker_expect_failure \
-        'AstronomicalConfig::load_from_default_location' \
+        'AstronomicalConfig::load_from_home_directory' \
         "${SANDBOX_DIRECTORY}/stable-loader.log"
     printf '%s\n' '[channel-isolation-guard-test] case=stable-loader-is-rejected status=success'
 
