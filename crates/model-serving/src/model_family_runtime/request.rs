@@ -6,6 +6,9 @@ use crate::{K2HorizonMoVAInferenceRequest, Qwen3_5InferenceRequest};
 pub enum ModelFamilyInferenceRequest {
     Qwen3_5(Qwen3_5InferenceRequest),
     K2HorizonMoVA(K2HorizonMoVAInferenceRequest),
+    /// The folded ternary family reuses the Qwen3.5 prepared request: the
+    /// pack speaks the same chat dialect and consumes the same request data.
+    PrismHadamardQwen35(Qwen3_5InferenceRequest),
 }
 
 impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
@@ -13,6 +16,7 @@ impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
         match self {
             Self::Qwen3_5(inference_request) => inference_request.prompt_token_count(),
             Self::K2HorizonMoVA(inference_request) => inference_request.prompt_token_count(),
+            Self::PrismHadamardQwen35(inference_request) => inference_request.prompt_token_count(),
         }
     }
 
@@ -20,6 +24,9 @@ impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
         match self {
             Self::Qwen3_5(inference_request) => Some(Self::Qwen3_5(inference_request.clone())),
             Self::K2HorizonMoVA(_) => None,
+            // This family has no streaming replacement engine, even though its
+            // prepared request reuses the Qwen3.5 request representation.
+            Self::PrismHadamardQwen35(_) => None,
         }
     }
 
@@ -33,6 +40,32 @@ impl PreparedInferenceRequest for ModelFamilyInferenceRequest {
                 inference_request.record_streaming_retry_interval(started_at, ended_at);
             }
             Self::K2HorizonMoVA(_) => {}
+            Self::PrismHadamardQwen35(inference_request) => {
+                inference_request.record_streaming_retry_interval(started_at, ended_at);
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use astronomical_ipc_protocol::RequestId;
+
+    use super::{ModelFamilyInferenceRequest, PreparedInferenceRequest};
+    use crate::Qwen3_5InferenceRequest;
+
+    #[test]
+    fn should_keep_prism_resident_only_without_changing_qwen_retry_support() {
+        let request = Qwen3_5InferenceRequest::new(RequestId::new(0), Vec::new(), 1);
+        assert!(
+            ModelFamilyInferenceRequest::PrismHadamardQwen35(request.clone())
+                .clone_for_streaming_retry()
+                .is_none()
+        );
+        assert!(
+            ModelFamilyInferenceRequest::Qwen3_5(request)
+                .clone_for_streaming_retry()
+                .is_some()
+        );
     }
 }

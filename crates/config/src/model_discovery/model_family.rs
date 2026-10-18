@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::{flux2_klein, k2_horizon_mova, modernbert, qwen_image_21, qwen3_5};
+use super::{
+    flux2_klein, k2_horizon_mova, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
+};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -14,6 +16,7 @@ const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
 pub enum ModelFamily {
     Qwen3_5,
     K2HorizonMoVA,
+    PrismHadamardQwen35,
     Flux2Klein,
     QwenImage21,
     ModernBert,
@@ -27,6 +30,8 @@ impl ModelFamily {
             Some(Self::Qwen3_5)
         } else if k2_horizon_mova::recognizes_model_type(model_type) {
             Some(Self::K2HorizonMoVA)
+        } else if prism_hadamard_qwen35::recognizes_model_type(model_type) {
+            Some(Self::PrismHadamardQwen35)
         } else if modernbert::recognizes_model_type(model_type) {
             Some(Self::ModernBert)
         } else {
@@ -40,6 +45,7 @@ impl ModelFamily {
         match self {
             Self::Qwen3_5 => "qwen3_5",
             Self::K2HorizonMoVA => "k2_horizon_mova",
+            Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
             Self::Flux2Klein => "flux2_klein",
             Self::QwenImage21 => "qwen_image_21",
             Self::ModernBert => "modernbert",
