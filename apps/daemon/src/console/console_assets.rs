@@ -3,8 +3,9 @@
 //! The Observatory console is embedded directly into the `astronomicald` binary
 //! through `include_str!` so the daemon has no filesystem dependency and no
 //! separate frontend build step. The console shell and its assets live at
-//! `apps/daemon/console/` and are reached via `../../console/...`; the chat
-//! answer render stack is served by `console_render_assets` (merged in below).
+//! `apps/daemon/console/` and are reached via `../../console/...`; the console
+//! renders no model output — conversations live in Thin Talk, reached through
+//! the `astronomical://chat` link the console's chat view offers.
 
 use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
@@ -15,7 +16,6 @@ const LIBRARY_RENDER_JS: &str = include_str!("../../console/library-render.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
 const CONNECT_JS: &str = include_str!("../../console/connect.js");
-const PLAYGROUND_JS: &str = include_str!("../../console/playground.js");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
 const LIBRARY_CSS: &str = include_str!("../../console/library.css");
 
@@ -43,10 +43,8 @@ where
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
         .route("/connect.js", get(connect_script))
-        .route("/playground.js", get(playground_script))
         .route("/console.css", get(console_stylesheet))
         .route("/library.css", get(library_stylesheet))
-        .merge(crate::console::console_render_assets::render_routes())
 }
 
 /// `GET /` — the Observatory single-page shell. References the per-view scripts and
@@ -86,9 +84,6 @@ pub(crate) async fn connect_script() -> Response {
     embedded_text_response(CONNECT_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-pub(crate) async fn playground_script() -> Response {
-    embedded_text_response(PLAYGROUND_JS, JAVASCRIPT_CONTENT_TYPE)
-}
 
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.
 pub(crate) async fn console_stylesheet() -> Response {
@@ -119,63 +114,64 @@ mod tests {
     use super::*;
 
     /// An inline SVG carrying only a viewBox collapses to 0x0 inside a flex
-    /// button, which shipped composer icons as empty circles. Every SVG the
+    /// button, which shipped navigation icons as empty circles. Every SVG the
     /// console styles must therefore carry an explicit CSS size.
     #[test]
     fn console_css_sizes_every_styled_svg() {
-        for css_rule_selector in [
-            ".navigation-button svg",
-            ".effort-pill__chevron",
-            ".composer-round-button svg,",
-            ".composer-send-button svg",
-        ] {
+        for css_rule_selector in [".navigation-button svg"] {
             assert!(
                 CONSOLE_CSS.contains(css_rule_selector),
                 "console.css is missing a sizing rule for `{css_rule_selector}`"
             );
         }
-        let composer_icon_rule = CONSOLE_CSS
-            .split(".composer-round-button svg,")
+        let navigation_icon_rule = CONSOLE_CSS
+            .split(".navigation-button svg")
             .nth(1)
-            .expect("composer icon rule must exist");
+            .expect("navigation icon rule must exist");
         assert!(
-            composer_icon_rule.contains("width:") && composer_icon_rule.contains("height:"),
-            "composer icon rule must set explicit width and height"
+            navigation_icon_rule.contains("width:") && navigation_icon_rule.contains("height:"),
+            "navigation icon rule must set explicit width and height"
         );
     }
 
-    /// The text-size control sets an inline font-size on #chat-transcript; if a
-    /// chat-content rule pins its own fixed size, the control visibly does
-    /// nothing. The transcript declares the default, and message content
-    /// (messages, markdown, role/meta lines) must inherit or use em units.
+    /// The console renders no model output anymore, so the shell must not load
+    /// any render-stack asset or playground script; chat is handed off to Thin
+    /// Talk through the astronomical:// link with a menu-bar fallback.
     #[test]
-    fn chat_text_scales_with_the_text_size_control() {
-        assert!(
-            CONSOLE_CSS.contains(".chat-transcript:empty::before")
-                && CONSOLE_CSS
-                    .rsplit_once(".chat-transcript:empty::before")
-                    .is_some_and(|(_, after)| after.contains("font-size: inherit;")),
-            "the empty-transcript placeholder must inherit the controlled size"
-        );
-        for rule in CONSOLE_CSS
-            .split('}')
-            .filter_map(|chunk| chunk.split_once('{'))
-        {
-            let (selectors, body) = rule;
-            let is_chat_content = selectors.contains(".chat-message")
-                || selectors.contains(".markdown-body")
-                || selectors.contains(".message__");
-            if !is_chat_content {
-                continue;
-            }
-            for declaration in body.lines().filter(|line| line.contains("font-size:")) {
-                assert!(
-                    declaration.contains("inherit") || declaration.trim_end().ends_with("em;"),
-                    "chat-content rule pins a fixed size, breaking the text-size control: \
-                     selectors `{selectors}` declaration `{declaration}`"
-                );
-            }
+    fn console_hands_chat_to_thin_talk_without_a_render_stack() {
+        for stale_reference in ["/render/", "playground"] {
+            assert!(
+                !INDEX_HTML.contains(stale_reference),
+                "console shell still references the retired `{stale_reference}` surface"
+            );
         }
+        for thin_talk_handoff in [
+            "astronomical://chat",
+            "Open Thin Talk",
+            "choose Chat",
+        ] {
+            assert!(
+                INDEX_HTML.contains(thin_talk_handoff),
+                "console shell is missing the Thin Talk handoff `{thin_talk_handoff}`"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn render_assets_are_no_longer_served() {
+        use tower::ServiceExt;
+
+        let app = console_routes::<()>();
+        let response = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/render/canvas-render.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

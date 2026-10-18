@@ -258,12 +258,8 @@ function createLibraryPrimaryActions(catalogRow, isExpanded) {
         const openInChatButton = document.createElement("button");
         openInChatButton.className = "button button-primary library-open-in-chat";
         openInChatButton.type = "button";
-        openInChatButton.textContent = "Open in Chat";
-        const requestableModelId = catalogRow.requestableModelId
-            || deriveRequestableModelId(catalogRow.huggingfaceId);
-        openInChatButton.addEventListener("click", () =>
-            openLibraryModelInChat(requestableModelId)
-        );
+        openInChatButton.textContent = "Open in Thin Talk";
+        openInChatButton.addEventListener("click", openThinTalkFromLibrary);
         actions.appendChild(openInChatButton);
     }
     for (const button of libraryActionButtons(catalogRow)) {
@@ -284,21 +280,11 @@ function createLibraryPrimaryActions(catalogRow, isExpanded) {
     return actions;
 }
 
-function deriveRequestableModelId(huggingfaceId) {
-    const leafSegment = huggingfaceId.split("/").pop();
-    return leafSegment || huggingfaceId;
-}
-
-function openLibraryModelInChat(requestableModelId) {
-    if (typeof selectedModelId !== "undefined") {
-        selectedModelId = requestableModelId;
-    }
-    const chatNavigationButton = document.querySelector(
-        '[data-observatory-destination="chat"]'
-    );
-    if (chatNavigationButton) {
-        chatNavigationButton.click();
-    }
+// Thin Talk picks the model inside its own model chooser, so opening the
+// conversation window is all the handoff needs; there is no in-Observatory
+// chat to preselect a model for anymore.
+function openThinTalkFromLibrary() {
+    window.location.assign("astronomical://chat");
 }
 
 function createLibraryDetailsPanel(catalogRow, allRows) {

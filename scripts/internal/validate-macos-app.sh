@@ -274,6 +274,14 @@ main() {
     bundle_identifier="$(read_plist_value CFBundleIdentifier)"
     bundle_icon_file="$(read_plist_value CFBundleIconFile)"
     daemon_port="$(read_plist_value AstronomicalDaemonPort)"
+    # The Observatory console links chat through astronomical://chat, so every
+    # channel must register that scheme or the handoff link dead-ends.
+    registered_url_schemes="$(plutil -extract CFBundleURLTypes json -o - \
+        "${APP_BUNDLE_PATH}/Contents/Info.plist" 2>/dev/null || printf '[]')"
+    if ! printf '%s' "$registered_url_schemes" | grep -q '"astronomical"'; then
+        print_error "Bundle must register the astronomical URL scheme the Observatory chat handoff links through"
+        exit 1
+    fi
     state_directory_name=""
     case "$application_channel" in
         stable)
