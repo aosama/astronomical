@@ -16,12 +16,11 @@ workspace = true
 
 [dependencies]
 astronomical-native-identity = { path = "../crates/native-identity" }
-serde = { workspace = true }
-serde_yaml = "0.9"
 sha2.workspace = true
 
 [dev-dependencies]
 astronomical-test-harness = { path = "../crates/test-harness" }
+serde_yaml = "0.9"
 
 [[test]]
 name = "offline_gh_shim_journeys"

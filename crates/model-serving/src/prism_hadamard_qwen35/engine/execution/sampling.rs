@@ -18,11 +18,14 @@ enum SamplingPlan {
     },
 }
 
-pub(super) fn sample_token_id(
+/// Samples the next token as a lazy `[1, 1]` device array: the forward that
+/// consumes it takes it as its token index without a host round trip, and
+/// the caller synchronizes its value only when the host needs it.
+pub(super) fn sample_token(
     model: &PrismHadamardTextModel,
     logits: &MlxArray,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
-) -> Result<u32, InferenceEngineError> {
+) -> Result<MlxArray, InferenceEngineError> {
     let repetition_penalized_logits = crate::gpu_token_sampling::apply_repetition_penalty(
         &model.runtime,
         logits,
@@ -53,7 +56,7 @@ pub(super) fn sample_token_id(
         // temperature precondition intentionally excludes temperature zero.
         SamplingPlan::HighestLogit => {
             model
-                .argmax_last_token(sampling_logits)
+                .greedy_token_lazily(sampling_logits)
                 .map_err(|model_error| InferenceEngineError::Fatal {
                     reason: model_error.to_string(),
                 })
@@ -62,22 +65,34 @@ pub(super) fn sample_token_id(
             temperature_thousandths,
             top_k,
             top_p_thousandths,
-        } => {
-            let sampled_token = crate::gpu_token_sampling::build_sampled_token(
-                &model.runtime,
-                sampling_logits,
-                temperature_thousandths,
-                top_p_thousandths,
-                Some(top_k),
-                &mut active_generation.random_state,
-            )?;
-            sampled_token
-                .item_u32()
-                .map_err(|sampling_error| InferenceEngineError::Fatal {
-                    reason: sampling_error.to_string(),
-                })
-        }
+        } => crate::gpu_token_sampling::build_sampled_token(
+            &model.runtime,
+            sampling_logits,
+            temperature_thousandths,
+            top_p_thousandths,
+            Some(top_k),
+            &mut active_generation.random_state,
+        ),
     }
+}
+
+/// Whether the successor forward may be built before this token's value
+/// reaches the host: every host-side input to the successor's sampling
+/// (repetition history, structured masks) must be unchanged by this token.
+pub(super) fn successor_may_be_speculated(
+    active_generation: &PrismHadamardQwen35ActiveGeneration,
+) -> bool {
+    active_generation.request.repetition_penalty_thousandths() == 1_000
+        && active_generation.structured_generation.is_none()
+}
+
+/// Reads a sampled token's value, waiting for its submitted graph.
+pub(super) fn synchronize_token_id(sampled_token: &MlxArray) -> Result<u32, InferenceEngineError> {
+    sampled_token
+        .item_u32()
+        .map_err(|sampling_error| InferenceEngineError::Fatal {
+            reason: sampling_error.to_string(),
+        })
 }
 
 pub(super) fn record_penalized_token_id(
