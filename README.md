@@ -114,7 +114,7 @@ Required tools:
 
 - Xcode with the macOS 26 software development kit.
 - CMake.
-- Rust 1.97.1 through the checked-in toolchain file.
+- Rust nightly-2026-10-18 (rustc 1.101.0-nightly) through the checked-in toolchain file.
 - Swift 6.2.
 - Homebrew coreutils, jq, curl, and sccache for repository verification and application validation.
 
