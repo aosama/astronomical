@@ -243,7 +243,8 @@ fn packaging_contracts_run_on_required_checks() {
     // day, which is exactly what issue #1346 set out to end.
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    let cache_contract_step = find_step_by_name(&verification_steps, "Verify CI native cache contracts");
+    let cache_contract_step =
+        find_step_by_name(&verification_steps, "Verify CI native cache contracts");
     assert!(
         run_text_of(cache_contract_step, "ci-cache-contracts")
             .contains("--test offline_app_builder_journeys"),
@@ -259,7 +260,11 @@ fn packaging_contracts_run_on_required_checks() {
         "the release packaging contracts are not enforced on the required swift-node check"
     );
     assert!(
-        required_u64(release_contracts_step, "timeout-minutes", "release contracts") <= 4,
+        required_u64(
+            release_contracts_step,
+            "timeout-minutes",
+            "release contracts"
+        ) <= 4,
         "release contracts exceeded their bounded timeout"
     );
 }

@@ -1,0 +1,58 @@
+#!/usr/bin/env sh
+
+# Bounded command execution for CI lanes that run the release contract tests.
+#
+# Why this exists: GitHub's macOS runner images ship no GNU `timeout`, while
+# every release contract test bounds its subject with `timeout SECONDS ...`.
+# Developer machines usually have coreutils on PATH, which is exactly how the
+# suite passed locally while failing its first CI run (issue #1346). CI steps
+# prepend this directory to PATH so the same `timeout` invocation works
+# everywhere; on machines that already carry GNU timeout, this wrapper is
+# never reached.
+#
+# Semantics mirror the subset the tests rely on: exit with the command's own
+# status on success, and exit 124 when the deadline terminates it.
+
+set -eu
+
+if [ "$#" -lt 2 ]; then
+    printf '%s\n' "Usage: timeout SECONDS COMMAND [ARGUMENT ...]" >&2
+    exit 2
+fi
+
+bounded_seconds="$1"
+shift
+case "$bounded_seconds" in
+    ''|*[!0-9]*)
+        printf '%s\n' "Error: SECONDS must be an unsigned integer: ${bounded_seconds}" >&2
+        exit 2
+        ;;
+esac
+
+# The marker resolves the success/timeout race: if the command exits on its
+# own in the same instant the watchdog fires, the marker distinguishes a
+# clean exit (no marker) from a deadline kill. The window is sub-second
+# against bounds of tens of seconds, so the marker check is exact enough.
+watchdog_fired_marker="${TMPDIR:-/tmp}/astronomical-timeout-fired.$$.${bounded_seconds}"
+
+"$@" &
+bounded_child_process_id="$!"
+(
+    sleep "$bounded_seconds"
+    printf '%s\n' fired > "$watchdog_fired_marker"
+    kill -TERM "$bounded_child_process_id" 2>/dev/null || true
+) &
+watchdog_process_id="$!"
+
+child_exit_status=0
+wait "$bounded_child_process_id" || child_exit_status=$?
+kill "$watchdog_process_id" 2>/dev/null || true
+wait "$watchdog_process_id" 2>/dev/null || true
+
+if [ -e "$watchdog_fired_marker" ]; then
+    rm -f "$watchdog_fired_marker"
+    printf '%s\n' "Error: bounded command exceeded ${bounded_seconds}s and was terminated: $*" >&2
+    exit 124
+fi
+
+exit "$child_exit_status"
