@@ -45,16 +45,26 @@ impl Default for PrismHadamardGenerationState {
 pub struct PrismHadamardProbeDimensions {
     pub hidden_width: usize,
     pub intermediate_width: usize,
-    pub query_key_value_width: usize,
+    /// The stacked output rows of the first gated-delta layer's fused
+    /// query/key/value-and-gate launch (`2 * key + 2 * value` widths).
+    pub gated_delta_input_projection_rows: usize,
+    /// The stacked output rows of the fused MLP gate-and-up launch
+    /// (`2 * intermediate`).
+    pub dense_mlp_gate_and_up_rows: usize,
     pub vocabulary_size: usize,
 }
 
-/// Which retained rotated projection a projection probe exercises.
+/// Which retained rotated projection launch a projection probe exercises.
+/// Each is one launch exactly as the forward pass issues it, so the fused
+/// sibling projections are timed as the single launch serving runs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PrismHadamardProbeProjection {
-    /// The first gated-delta layer's fused query/key/value projection
-    /// (hidden width in, `2 * key + value` width out).
-    GatedDeltaQueryKeyValue,
+    /// The first gated-delta layer's fused query/key/value-and-gate launch
+    /// (hidden width in, `2 * key + 2 * value` rows out).
+    GatedDeltaQueryKeyValueAndGate,
+    /// The first decoder layer's fused MLP gate-and-up launch (hidden width
+    /// in, `2 * intermediate` rows out): the tallest per-layer launch.
+    DenseMlpGateAndUp,
     /// The first decoder layer's MLP down projection (intermediate width in,
     /// hidden width out): the widest activation the transform sees.
     DenseMlpDown,
@@ -77,9 +87,12 @@ impl PrismHadamardTextModel {
         PrismHadamardProbeDimensions {
             hidden_width: text.hidden_size as usize,
             intermediate_width: text.intermediate_size as usize,
-            query_key_value_width: (2 * text.linear_num_key_heads * text.linear_key_head_dim
-                + text.linear_num_value_heads * text.linear_value_head_dim)
+            gated_delta_input_projection_rows: (2
+                * text.linear_num_key_heads
+                * text.linear_key_head_dim
+                + 2 * text.linear_num_value_heads * text.linear_value_head_dim)
                 as usize,
+            dense_mlp_gate_and_up_rows: 2 * text.intermediate_size as usize,
             vocabulary_size: text.vocab_size as usize,
         }
     }
@@ -109,29 +122,28 @@ impl PrismHadamardTextModel {
         &self,
         activations: &MlxArray,
     ) -> Result<MlxArray, PrismHadamardModelError> {
-        self.weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                activations,
-            )
+        self.rotate(activations)
             .map(super::fwht::RotatedActivations::into_activations)
             .map_err(PrismHadamardModelError::Forward)
     }
 
-    /// Runs one rotated ternary projection (transform plus packed matmul) on
-    /// `activations`, exactly as the forward pass runs it.
+    /// Runs one rotated ternary projection launch (transform plus packed
+    /// matmul) on `activations`, exactly as the forward pass runs it; a fused
+    /// launch returns its stacked output unsplit.
     pub fn probe_packed_projection(
         &self,
         projection: PrismHadamardProbeProjection,
         activations: &MlxArray,
     ) -> Result<MlxArray, PrismHadamardModelError> {
-        let projection = match projection {
-            PrismHadamardProbeProjection::GatedDeltaQueryKeyValue => {
+        let rotated_activations = self
+            .rotate(activations)
+            .map_err(PrismHadamardModelError::Forward)?;
+        match projection {
+            PrismHadamardProbeProjection::GatedDeltaQueryKeyValueAndGate => {
                 match &self.first_decoder_layer()?.attention {
-                    DecoderLayerAttentionWeights::Linear(linear_layer) => {
-                        &linear_layer.query_key_value
-                    }
+                    DecoderLayerAttentionWeights::Linear(linear_layer) => linear_layer
+                        .query_key_value_and_gate
+                        .forward_fused(&self.runtime, &rotated_activations),
                     DecoderLayerAttentionWeights::Full(_) => {
                         return Err(PrismHadamardModelError::UnsupportedLayerType {
                             layer_type: "the first decoder layer is not a gated-delta layer"
@@ -140,20 +152,22 @@ impl PrismHadamardTextModel {
                     }
                 }
             }
-            PrismHadamardProbeProjection::DenseMlpDown => &self.first_decoder_layer()?.mlp.down,
-            PrismHadamardProbeProjection::LanguageModelHead => &self.weights.language_model_head,
-        };
-        let rotated_activations = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                activations,
-            )
-            .map_err(PrismHadamardModelError::Forward)?;
-        projection
-            .forward(&self.runtime, &rotated_activations)
-            .map_err(PrismHadamardModelError::Forward)
+            PrismHadamardProbeProjection::DenseMlpGateAndUp => self
+                .first_decoder_layer()?
+                .mlp
+                .gate_and_up
+                .forward_fused(&self.runtime, &rotated_activations),
+            PrismHadamardProbeProjection::DenseMlpDown => self
+                .first_decoder_layer()?
+                .mlp
+                .down
+                .forward(&self.runtime, &rotated_activations),
+            PrismHadamardProbeProjection::LanguageModelHead => self
+                .weights
+                .language_model_head
+                .forward(&self.runtime, &rotated_activations),
+        }
+        .map_err(PrismHadamardModelError::Forward)
     }
 
     /// Runs the first decoder layer's dense MLP up to (and including) the
@@ -165,19 +179,10 @@ impl PrismHadamardTextModel {
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let dense_mlp = &self.first_decoder_layer()?.mlp;
         let rotated_input = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                normalized_hidden_states,
-            )
+            .rotate(normalized_hidden_states)
             .map_err(PrismHadamardModelError::Forward)?;
-        let gate_activations = dense_mlp
-            .gate
-            .forward(&self.runtime, &rotated_input)
-            .map_err(PrismHadamardModelError::Forward)?;
-        let up_activations = dense_mlp
-            .up
+        let [gate_activations, up_activations] = dense_mlp
+            .gate_and_up
             .forward(&self.runtime, &rotated_input)
             .map_err(PrismHadamardModelError::Forward)?;
         self.runtime

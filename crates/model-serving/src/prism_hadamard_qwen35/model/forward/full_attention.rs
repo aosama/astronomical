@@ -1,7 +1,8 @@
 //! The full-attention decoder layer of the straight forward.
 //!
-//! The normalized layer input is rotated once and shared by the query, key,
-//! and value projections. The rest mirrors the core's forward exactly:
+//! The normalized layer input is rotated once and feeds one fused packed
+//! matmul whose output splits into the query, key, and value projections.
+//! The rest mirrors the core's forward exactly:
 //! gated-query split, q/k RMS norms, RoPE, append-only KV state, and the
 //! shared attention step with the learned output gate.
 
@@ -30,17 +31,13 @@ impl super::super::PrismHadamardTextModel {
         let attention_projection_head_dimension = attention_head_dimension * 2;
         let rope_offset_tokens = state.sequence_position_offset;
 
-        // One rotation of the layer input feeds all three rotated projections.
+        // One rotation of the layer input feeds the one fused launch that
+        // produces all three rotated projections.
         let rotated_input = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                normalized_input,
-            )
+            .rotate(normalized_input)
             .map_err(PrismHadamardModelError::Forward)?;
-        let query_projection = layer
-            .query
+        let [query_projection, keys, values] = layer
+            .query_key_value
             .forward(&self.runtime, &rotated_input)
             .map_err(PrismHadamardModelError::Forward)?;
         let query_projection = self
@@ -75,10 +72,6 @@ impl super::super::PrismHadamardTextModel {
             )
             .map_err(PrismHadamardModelError::Forward)?;
 
-        let keys = layer
-            .key
-            .forward(&self.runtime, &rotated_input)
-            .map_err(PrismHadamardModelError::Forward)?;
         let keys = self
             .runtime
             .reshape(
@@ -90,10 +83,6 @@ impl super::super::PrismHadamardTextModel {
                     attention_head_dimension,
                 ],
             )
-            .map_err(PrismHadamardModelError::Forward)?;
-        let values = layer
-            .value
-            .forward(&self.runtime, &rotated_input)
             .map_err(PrismHadamardModelError::Forward)?;
         let values = self
             .runtime
@@ -175,12 +164,7 @@ impl super::super::PrismHadamardTextModel {
         )
         .map_err(PrismHadamardModelError::ForwardRuntime)?;
         let rotated_gated_output = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                &gated_output,
-            )
+            .rotate(&gated_output)
             .map_err(PrismHadamardModelError::Forward)?;
         layer
             .output
