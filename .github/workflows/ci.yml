@@ -679,12 +679,15 @@ jobs:
       # pkg, installer promotion) are offline sandbox journeys like the
       # app-builder one on the verification job; wiring them here keeps the
       # release scripts from rotting between releases (issue #1346). The
-      # suite takes about half a minute with its faked toolchain.
+      # suite takes about half a minute with its faked toolchain. macOS
+      # runner images ship no GNU timeout, and every contract bounds its
+      # subject with one, so the committed wrapper goes first on PATH.
       - name: Run macOS packaging release contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end release-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin release-contracts
           set -o pipefail
+          export PATH="$PWD/scripts/ci:$PATH"
           scripts/release/tests/test-release-contracts.sh 2>&1 | tee "$RUNNER_TEMP/test-logs/release-contracts.log"
         timeout-minutes: 4
       - name: Upload test logs
