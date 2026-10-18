@@ -9,10 +9,15 @@ use std::time::Instant;
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use astronomical_mlx_c_rust::MlxArray;
+
 use super::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
-    pending_token_after_sampling, record_emitted_token,
-    sampling::{record_penalized_token_id, sample_token_id},
+    record_emitted_token,
+    sampling::{
+        record_penalized_token_id, sample_token, successor_may_be_speculated, synchronize_token_id,
+    },
+    successor_stays_pending,
 };
 use crate::EngineGenerationStart;
 use crate::GeneratedToken;
@@ -127,7 +132,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
             remaining_prompt_token_ids: inference_request.input_token_ids().to_vec(),
             generation_state: StraightGenerationState::empty(),
-            next_input_token_id: None,
+            pending_sampled_token: None,
             penalized_token_ids,
             random_state,
             request: inference_request,
@@ -175,20 +180,40 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             .map_err(|budget_error| InferenceEngineError::Fatal {
                 reason: format!("folded-ternary thinking budget failed: {budget_error}"),
             })?;
-        let selected_token_id = forced_token_id.or_else(|| active.next_input_token_id);
-        let Some(selected_token_id) = selected_token_id else {
-            return Ok(GeneratedToken::EndOfSequence);
+        let eos_token_ids = &model.pack().config().text().eos_token_ids;
+        let (selected_token_id, speculated_successor) = match forced_token_id {
+            Some(forced_token_id) => {
+                // A forced transition replaces whatever was sampled; the
+                // decoder state is still exactly the state after the last
+                // emitted token, so the forced token's forward runs below.
+                active.pending_sampled_token = None;
+                (forced_token_id, None)
+            }
+            None => {
+                let Some(sampled_token) = active.pending_sampled_token.take() else {
+                    return Ok(GeneratedToken::EndOfSequence);
+                };
+                // Build and submit the successor before reading this token's
+                // value whenever nothing on the host can change the
+                // successor's sampling: the device executes while the host
+                // synchronizes, and the only waste is a successor behind a
+                // token that turns out to end the sequence.
+                let speculated_successor =
+                    if successor_may_be_speculated(active) && active.remaining_output_tokens > 1 {
+                        Some(submit_successor(model, active, &sampled_token)?)
+                    } else {
+                        None
+                    };
+                let selected_token_id = active
+                    .measure_operation(PerformanceOperation::DecodeSamplingSpan, |_| {
+                        synchronize_token_id(&sampled_token)
+                    })?;
+                if eos_token_ids.contains(&selected_token_id) {
+                    return Ok(GeneratedToken::EndOfSequence);
+                }
+                (selected_token_id, speculated_successor)
+            }
         };
-        if forced_token_id.is_none()
-            && model
-                .pack()
-                .config()
-                .text()
-                .eos_token_ids
-                .contains(&selected_token_id)
-        {
-            return Ok(GeneratedToken::EndOfSequence);
-        }
         let was_already_visible = !active.thinking_budget.is_inside_thinking();
         let is_reasoning_token = active
             .thinking_budget
@@ -204,7 +229,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         }
         let output_budget_exhausted = record_emitted_token(&mut active.remaining_output_tokens);
         if output_budget_exhausted {
-            active.next_input_token_id = None;
+            active.pending_sampled_token = None;
             return Ok(GeneratedToken::TokenId {
                 token_id: selected_token_id,
                 is_reasoning_token,
@@ -215,35 +240,18 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             });
         }
         record_penalized_token_id(active, selected_token_id);
-        let next_token_id = {
-            let token_indices = model
-                .runtime
-                .array_from_i32(&[selected_token_id as i32], &[1, 1])
-                .map_err(gpu_error)?;
-            let logits = active
-                .measure_operation(
-                    PerformanceOperation::DecodeAdvanceSpan,
-                    |active_generation| {
-                        model.forward_pass(&token_indices, &mut active_generation.generation_state)
-                    },
-                )
-                .map_err(gpu_error)?;
-            active
-                .measure_operation(
-                    PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                    |_| model.runtime.evaluate_arrays(&[&logits]),
-                )
-                .map_err(gpu_error)?;
-            active.measure_operation(
-                PerformanceOperation::DecodeSamplingSpan,
-                |active_generation| sample_token_id(model, &logits, active_generation),
-            )?
+        let successor = match speculated_successor {
+            Some(successor) => successor,
+            None => {
+                let token_indices = model
+                    .runtime
+                    .array_from_i32(&[selected_token_id as i32], &[1, 1])
+                    .map_err(gpu_error)?;
+                submit_successor(model, active, &token_indices)?
+            }
         };
-        active.next_input_token_id = pending_token_after_sampling(
-            active.remaining_output_tokens,
-            next_token_id,
-            &model.pack().config().text().eos_token_ids,
-        );
+        active.pending_sampled_token =
+            successor_stays_pending(active.remaining_output_tokens).then_some(successor);
         Ok(GeneratedToken::TokenId {
             token_id: selected_token_id,
             is_reasoning_token,
@@ -404,13 +412,16 @@ impl PrismHadamardQwen35InferenceExecution {
         if let Some(final_logits) = final_logits.as_ref() {
             let first_token = active.measure_operation(
                 PerformanceOperation::DecodeSamplingSpan,
-                |active_generation| sample_token_id(model, final_logits, active_generation),
+                |active_generation| sample_token(model, final_logits, active_generation),
             )?;
-            active.next_input_token_id = pending_token_after_sampling(
-                active.remaining_output_tokens,
-                first_token,
-                &model.pack().config().text().eos_token_ids,
-            );
+            active
+                .measure_operation(
+                    PerformanceOperation::DecodeAsyncEvaluationSubmission,
+                    |_| model.runtime.async_eval_arrays(&[&first_token]),
+                )
+                .map_err(gpu_error)?;
+            active.pending_sampled_token =
+                successor_stays_pending(active.remaining_output_tokens).then_some(first_token);
         }
         Ok(GeneratedToken::PrefillProgress {
             processed_token_count: active
@@ -431,6 +442,39 @@ impl PrismHadamardQwen35InferenceExecution {
             persistent_prompt_cache_diagnostics: None,
         })
     }
+}
+
+/// Builds the forward for `token_indices` (`[1, 1]`, host or device
+/// resident), samples its successor lazily, and submits the whole step
+/// asynchronously together with every retained state array. Returns the
+/// lazy successor; nothing here waits for the graphics processor.
+pub(super) fn submit_successor(
+    model: &PrismHadamardTextModel,
+    active: &mut PrismHadamardQwen35ActiveGeneration,
+    token_indices: &MlxArray,
+) -> Result<MlxArray, InferenceEngineError> {
+    let logits = active
+        .measure_operation(
+            PerformanceOperation::DecodeAdvanceSpan,
+            |active_generation| {
+                model.forward_pass(token_indices, &mut active_generation.generation_state)
+            },
+        )
+        .map_err(gpu_error)?;
+    let successor = sample_token(model, &logits, active)?;
+    active
+        .measure_operation(
+            PerformanceOperation::DecodeAsyncEvaluationSubmission,
+            |active_generation| {
+                model.runtime.async_eval_arrays(
+                    &active_generation
+                        .generation_state
+                        .evaluation_arrays(&successor),
+                )
+            },
+        )
+        .map_err(gpu_error)?;
+    Ok(successor)
 }
 
 /// Maps any boundary failure onto the engine error surface, keeping the

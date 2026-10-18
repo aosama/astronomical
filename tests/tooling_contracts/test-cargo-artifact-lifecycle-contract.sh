@@ -428,6 +428,8 @@ expected_aliases = {
     "check-mlx-memory-contract",
     "test-acceptance",
     "test-prism-hadamard-direct",
+    "test-prism-hadamard-performance",
+    "test-prism-hadamard-serving-throughput",
     "test-prism-hadamard-serving",
     "xtask",
 }
