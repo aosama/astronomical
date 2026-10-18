@@ -17,6 +17,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     daemonClient: daemonClient, applicationIdentity: applicationIdentity)
   private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
+  private lazy var loginItemRegistrar: any LoginItemRegistering = SystemLoginItemRegistrar()
   private lazy var chatWindowController = ChatWindowController(
     thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity))
   private var statusItem: NSStatusItem?
@@ -79,6 +80,18 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         terminalCommandSupported: applicationIdentity.channel != .development,
         installTerminalCommand: { [weak self] in self?.installTerminalCommand() },
         removeTerminalCommand: { [weak self] in self?.removeTerminalCommand() },
+        launchAtLoginSupported: launchAtLoginControlsSupported(
+          applicationChannel: applicationIdentity.channel,
+          hostIsPackagedApplication: Bundle.main.bundleIdentifier != nil),
+        launchAtLoginIsEnabled: Binding(
+          get: { [weak self] in
+            guard let loginItemRegistrar = self?.loginItemRegistrar else { return false }
+            return launchAtLoginToggleIsOn(for: loginItemRegistrar.launchAtLoginStatus)
+          },
+          set: { [weak self] isEnabledByUser in
+            self?.applyLaunchAtLoginChoiceFromPopover(isEnabledByUser)
+          }
+        ),
         revealConfiguration: revealConfiguration,
         showWelcome: { [weak self] in self?.showWelcomeWindow() },
         quitApplication: { NSApp.terminate(nil) }
@@ -267,6 +280,36 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       } catch {
         NSApp.presentError(error)
       }
+    }
+  }
+
+  private func applyLaunchAtLoginChoiceFromPopover(_ isEnabledByUser: Bool) {
+    let registrationOutcome = applyLaunchAtLoginChoice(isEnabledByUser, using: loginItemRegistrar)
+    switch registrationOutcome {
+    case .enabled, .disabled: break
+    case .needsSystemApproval:
+      presentLaunchAtLoginSettingsPrompt(
+        messageText: "Astronomical is waiting for approval to start at login",
+        informativeText:
+          "Approve Astronomical under System Settings → General → Login Items & Extensions."
+      )
+    case .failed:
+      presentLaunchAtLoginSettingsPrompt(
+        messageText: "Astronomical could not change starting at login",
+        informativeText:
+          "macOS did not accept the change. You can still manage Astronomical under System Settings → General → Login Items & Extensions."
+      )
+    }
+  }
+
+  private func presentLaunchAtLoginSettingsPrompt(messageText: String, informativeText: String) {
+    let loginItemsPrompt = NSAlert()
+    loginItemsPrompt.messageText = messageText
+    loginItemsPrompt.informativeText = informativeText
+    loginItemsPrompt.addButton(withTitle: "Open Login Items Settings")
+    loginItemsPrompt.addButton(withTitle: "Not Now")
+    if loginItemsPrompt.runModal() == .alertFirstButtonReturn {
+      loginItemRegistrar.openLoginItemsSettings()
     }
   }
 }
