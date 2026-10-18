@@ -36,6 +36,10 @@ name = "offline_bootstrap_journeys"
 path = "tests/offline_bootstrap_journeys.rs"
 
 [[test]]
+name = "offline_app_builder_journeys"
+path = "tests/offline_app_builder_journeys.rs"
+
+[[test]]
 name = "workflow_structural_contract"
 path = "tests/workflow_structural_contract.rs"
 

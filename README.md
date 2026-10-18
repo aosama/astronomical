@@ -132,7 +132,7 @@ Stable installation and release publication are isolated under `scripts/release/
 
     scripts/release/build-and-install-stable-app.sh
 
-Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `scripts/release/build-stable-app.sh` and `scripts/release/install-stable-app.sh` remain available when the two stages need to run independently. Run `scripts/release/tests/test-release-contracts.sh` explicitly before release work.
+Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `scripts/release/build-stable-app.sh` and `scripts/release/install-stable-app.sh` remain available when the two stages need to run independently. The packaging contracts run on every pull request and can also be run explicitly before release work with `scripts/release/tests/test-release-contracts.sh`; the app-builder journey itself runs as `cargo test-app-builder` on the macOS offline verification check.
 
 Stable candidate builds perform signature, resource, metadata, and bundled-daemon validation without launching over a running Stable instance. Promotion does not restart the running app. Stable builds require a clean Git worktree.
 

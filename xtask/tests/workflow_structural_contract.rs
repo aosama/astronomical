@@ -236,6 +236,39 @@ fn required_check_steps_keep_their_bounded_contracts() {
     );
 }
 
+#[test]
+fn packaging_contracts_run_on_required_checks() {
+    // The packaging journeys only stop rotting if they run on required
+    // checks; a deleted step would otherwise fail silently until release
+    // day, which is exactly what issue #1346 set out to end.
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let cache_contract_step =
+        find_step_by_name(&verification_steps, "Verify CI native cache contracts");
+    assert!(
+        run_text_of(cache_contract_step, "ci-cache-contracts")
+            .contains("--test offline_app_builder_journeys"),
+        "the app-builder journey is not enforced on the required verification check"
+    );
+
+    let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+    let release_contracts_step =
+        find_step_by_name(&swift_steps, "Run macOS packaging release contracts");
+    let release_contracts_text = run_text_of(release_contracts_step, "release-contracts");
+    assert!(
+        release_contracts_text.contains("scripts/release/tests/test-release-contracts.sh"),
+        "the release packaging contracts are not enforced on the required swift-node check"
+    );
+    assert!(
+        required_u64(
+            release_contracts_step,
+            "timeout-minutes",
+            "release contracts"
+        ) <= 4,
+        "release contracts exceeded their bounded timeout"
+    );
+}
+
 /// Collects one job's timed steps and asserts the begin call lives in the
 /// same run text, mirroring the shell contract's
 /// `ci-step-timing.sh end ([a-z0-9-]+)` extraction.
