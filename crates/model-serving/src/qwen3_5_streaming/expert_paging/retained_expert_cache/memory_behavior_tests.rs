@@ -8,12 +8,14 @@ use super::retained_expert_cache_tests::{
 };
 use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use serial_test::serial;
 
 /// Issue #955 invariant: after every flush, a table's real payload must equal
 /// the per-expert geometry bytes times its slot-map occupancy. The second
 /// identical ask validates this at plan time, so any accounting drift in
 /// warming surfaces as a fatal paging error on the next request.
 #[test]
+#[serial]
 fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
     let runtime = test_runtime();
     let mut cache = RetainedExpertCache::new(1);
@@ -76,6 +78,7 @@ fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
 /// detach their results; the status-published memory decomposition closes
 /// only when every active expert byte is claimed by the cache.
 #[test]
+#[serial]
 fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     let runtime = test_runtime();
     // Wide rows make each projection array tens of kilobytes, so a real pin

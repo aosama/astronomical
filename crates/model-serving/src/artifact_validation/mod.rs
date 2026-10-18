@@ -17,7 +17,7 @@ pub(crate) use bounded_safetensors::{
 };
 pub use error::ArtifactValidationError;
 pub(crate) use raw_safetensors_inventory::{
-    RawSafetensorsInventory, RawSafetensorsTensorDescriptor,
+    RawSafetensorsInventory, RawSafetensorsTensorDescriptor, read_raw_safetensors_inventory,
 };
 #[doc(hidden)]
 pub use required_files::validate_required_file_for_tests;

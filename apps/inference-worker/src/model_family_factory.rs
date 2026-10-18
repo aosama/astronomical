@@ -12,8 +12,9 @@ use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
     K2HorizonMoVAServingSettings, ModelFactory, ModelFactoryRuntime,
     ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceEngine,
-    ModernBertEmbeddingEngine, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
-    initialize_k2_horizon_mova_model_with_serving_settings,
+    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, QwenImage21ArtifactProvenance,
+    QwenImage21ImageEngine, initialize_k2_horizon_mova_model_with_serving_settings,
+    initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
 use crate::qwen3_5_model_startup::{self, Qwen3_5EngineSelection};
@@ -297,6 +298,47 @@ impl
                 Ok(ModelFactoryRuntime::autoregressive(
                     ModelFamilyGenerationProcessor::K2HorizonMoVA(generation_processor),
                     ModelFamilyInferenceEngine::K2HorizonMoVA(k2_engine),
+                ))
+            }
+            (
+                Some(ModelFamily::PrismHadamardQwen35),
+                WorkerModelConfiguration::Autoregressive(model_configuration),
+            ) => {
+                let initialization_task_result = tokio::task::spawn_blocking(move || {
+                    let (generation_processor, prism_engine) =
+                        initialize_prism_hadamard_qwen35_model_with_serving_settings(
+                            &model_directory_path,
+                            effective_mlx_memory_ceiling_bytes,
+                            allocator_cache_memory_limit_bytes,
+                            performance_attribution_enabled,
+                            PrismHadamardQwen35ServingSettings {
+                                maximum_context_tokens: Some(
+                                    model_configuration.maximum_context_tokens,
+                                ),
+                                maximum_output_tokens: Some(
+                                    model_configuration.maximum_output_tokens,
+                                ),
+                                prompt_processing_chunk_tokens: model_configuration
+                                    .chunking
+                                    .fixed_prompt_processing_chunk_size_tokens,
+                                // The folded pack ships the Qwen thinking
+                                // template and the shared processor honors
+                                // per-request thinking budgets.
+                                enable_thinking: true,
+                                performance_attribution_log_path: Some(
+                                    performance_attribution_log_path,
+                                ),
+                            },
+                        )
+                        .map_err(|startup_error| startup_error.to_string())?;
+                    Ok::<_, String>((generation_processor, prism_engine))
+                })
+                .await
+                .map_err(|_| "folded ternary initialization task failed".to_owned())?;
+                let (generation_processor, prism_engine) = initialization_task_result?;
+                Ok(ModelFactoryRuntime::autoregressive(
+                    ModelFamilyGenerationProcessor::PrismHadamardQwen35(generation_processor),
+                    ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
                 ))
             }
             (

@@ -31,6 +31,39 @@ pub struct Qwen3_5GenerationProcessor {
 }
 
 impl Qwen3_5GenerationProcessor {
+    /// Creates a processor for a folded ternary pack that reuses the Qwen
+    /// text dialect (prompt rendering, thinking markers, tool markers) over
+    /// the pack's own tokenizer with text-only input.
+    pub(crate) fn from_folded_pack_text_dialect(
+        tokenizer_bytes: &[u8],
+        model_id: &str,
+        model_vocabulary_size: u32,
+        context_window: u32,
+        max_output_tokens: u32,
+        enable_thinking: bool,
+        performance_attribution_enabled: bool,
+    ) -> Result<Self, Qwen3_5TokenizerError> {
+        let tokenizer = Qwen3_5Tokenizer::from_json_bytes_with_optional_image_processor(
+            tokenizer_bytes,
+            model_id,
+            model_vocabulary_size,
+            context_window,
+            context_window,
+            None,
+        )?;
+        let max_input_tokens = context_window.saturating_sub(1);
+        Ok(Self {
+            enable_thinking,
+            tokenizer,
+            context_window,
+            max_input_tokens,
+            max_output_tokens,
+            supports_image_input: false,
+            model_id: model_id.to_owned(),
+            performance_attribution_enabled,
+        })
+    }
+
     /// Creates a processor from a complete validated local Qwen3.5 artifact.
     pub fn from_validated_artifact(
         validated_artifact: &ValidatedQwen3_5Artifact,

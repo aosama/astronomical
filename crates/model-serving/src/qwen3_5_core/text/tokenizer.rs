@@ -82,7 +82,7 @@ impl Qwen3_5Tokenizer {
         )
     }
 
-    fn from_json_bytes_with_optional_image_processor(
+    pub(crate) fn from_json_bytes_with_optional_image_processor(
         tokenizer_bytes: &[u8],
         model_id: &str,
         model_vocabulary_size: u32,
