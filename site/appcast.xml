@@ -4,37 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.77</title>
-            <pubDate>Sat, 17 Oct 2026 08:56:24 -0400</pubDate>
-            <sparkle:version>1393</sparkle:version>
-            <sparkle:shortVersionString>0.2.77</sparkle:shortVersionString>
+            <title>0.2.78</title>
+            <pubDate>Sat, 17 Oct 2026 23:02:16 -0400</pubDate>
+            <sparkle:version>1434</sparkle:version>
+            <sparkle:shortVersionString>0.2.78</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.77
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.78
 
-## OpenAI-compatible request validation
+## What's new
 
-Agent harnesses that send the documented `strict` field on tool definitions no longer have their sessions aborted: the field is accepted on both the Chat Completions and Responses surfaces, and the requested value is recorded. `store: false` (or an omitted `store`) on Chat Completions requests is likewise accepted; only an explicit `store: true` remains a named rejection, because Astronomical never retains server-side copies of your requests.
-
-## Memory ceiling and residency
-
-- Raising the memory ceiling now restarts the streaming worker into the resident engine when the raised ceiling admits residency, so the new ceiling takes effect without a full daemon restart cycle.
-- Request records report the true memory high-water mark by folding in every observed peak window.
-- The built-in updater stays dormant during unbundled development launches, so development runs never race the public update feed.
+- **Launch at login** — the menu-bar app can now start automatically when you log in, toggleable from the menu.
+- **Library destinations and offers** — downloaded models go to a destination you choose, the Library presents curated model offers, and every library entry is guaranteed to appear in the Library view.
+- **Chat lives in Thin Talk** — the menu bar opens the Thin Talk conversation window directly, and the Observatory's Chat view hands over through a one-click link with an always-visible menu-bar fallback, replacing the embedded Observatory chat playground. Existing sessions and state are preserved.
+- **Stability** — menu-bar shutdown now matches daemon processes through a shared matcher, ending stray-process leaks.
 
 ## Compatibility
 
-- All changes are backward compatible: previously valid requests remain valid, and validation only becomes more permissive on fields the OpenAI specifications document.
-- Upgraded installs keep their existing models, caches, and settings.
+- macOS 14.0 or later on Apple Silicon.
+- Existing sessions, user state, and model inventories are preserved.
+- The OpenAI-compatible API surface is unchanged.
 
 ## Distribution
 
-This release is distributed as a Developer ID-signed, notarized DMG with Hardened Runtime and secure timestamps. The Sparkle update feed and the DMG are Ed25519-signed, and every published artifact is digest-bound: the GitHub release, the manifest, and the public feed all agree on names, sizes, and SHA-256 digests.
+This release is signed with a Developer ID Application certificate, notarized with Apple's notarization service, and stapled. Updates are delivered through a Sparkle feed signed with an Ed25519 key and verified before installation. SHA-256 digests for every published artifact are bound to the release manifest.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.77/Astronomical-0.2.77-macOS-arm64.dmg" length="19221433" type="application/octet-stream" sparkle:edSignature="B60nafOMWkzs78XN1+A7xfYNQv4E+wOPK8ltZ4gkMg8Cvsqt/ZvzM7DHm0sdxxEA6y21b2Q5L170Od7+LK8jAg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.78/Astronomical-0.2.78-macOS-arm64.dmg" length="17989174" type="application/octet-stream" sparkle:edSignature="17wPt55gJzXVFYWPITXJuzejiq/hSIFjhm/Mkb6dfaKsJVyCq1K4Y8nxNQgGb9UZ7QeJDgNPCR3ZOpf/OEHBAg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 6bIKw3YQZmoAYxq8ixtLLgXepVP8aYsezlDK2zZEmL0w5LN+whj4nuAHReoAQAyurQQfmOoTjvg/VR/frfrKDw==
-length: 2795
+edSignature: UqrbPlN19y3LkG2v6GhgArJgqsKVW+Vn0w/QQ4RXWfF2vLMZh3nwCVPuibUGY9vNSL67Z2cUmMlQGnzS9DMoBw==
+length: 2516
 -->
