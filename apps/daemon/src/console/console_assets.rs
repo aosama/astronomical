@@ -84,7 +84,6 @@ pub(crate) async fn connect_script() -> Response {
     embedded_text_response(CONNECT_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.
 pub(crate) async fn console_stylesheet() -> Response {
     embedded_text_response(CONSOLE_CSS, CSS_CONTENT_TYPE)
@@ -145,11 +144,7 @@ mod tests {
                 "console shell still references the retired `{stale_reference}` surface"
             );
         }
-        for thin_talk_handoff in [
-            "astronomical://chat",
-            "Open Thin Talk",
-            "choose Chat",
-        ] {
+        for thin_talk_handoff in ["astronomical://chat", "Open Thin Talk", "choose Chat"] {
             assert!(
                 INDEX_HTML.contains(thin_talk_handoff),
                 "console shell is missing the Thin Talk handoff `{thin_talk_handoff}`"
