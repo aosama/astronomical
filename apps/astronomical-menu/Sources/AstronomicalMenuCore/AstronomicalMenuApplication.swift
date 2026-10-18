@@ -30,6 +30,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   }
 
   public func applicationDidFinishLaunching(_ notification: Notification) {
+    registerThinTalkOpenHandler()
     let menuBarStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     menuBarStatusItem.button?.target = self
     menuBarStatusItem.button?.action = #selector(toggleTelemetryPopover)
@@ -203,6 +204,27 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   // application normally keeps, exactly like the welcome window does.
   private func showChatWindow() {
     chatWindowController.showChatWindow(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
+  }
+
+  // The Observatory console hands chat over through astronomical://chat; macOS
+  // delivers custom-scheme links to a packaged app as a GURL Apple event, so
+  // the handler lives here at launch rather than in a SwiftUI scene hook — the
+  // menu application has no window scene to receive onOpenURL.
+  private func registerThinTalkOpenHandler() {
+    NSAppleEventManager.shared().setEventHandler(
+      self,
+      andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+      forEventClass: AEEventClass(kInternetEventClass),
+      andEventID: AEEventID(kAEGetURL)
+    )
+  }
+
+  @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
+    guard let openedURLString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+      let openedURL = URL(string: openedURLString),
+      isThinTalkChatOpenRequest(openedURL)
+    else { return }
+    showChatWindow()
   }
 
   private func shouldShowFirstRunWelcome() -> Bool {
