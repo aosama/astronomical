@@ -372,6 +372,18 @@ main() {
         else
             printf '%s\n' '  <key>AstronomicalBuildDirty</key><false/>'
         fi
+        # The Observatory console hands chat over through astronomical://chat,
+        # so both distribution channels register the scheme the link uses.
+        printf '%s\n' '  <key>CFBundleURLTypes</key>'
+        printf '%s\n' '  <array>'
+        printf '%s\n' '    <dict>'
+        printf '%s\n' '      <key>CFBundleURLName</key><string>Astronomical Thin Talk</string>'
+        printf '%s\n' '      <key>CFBundleURLSchemes</key>'
+        printf '%s\n' '      <array>'
+        printf '%s\n' '        <string>astronomical</string>'
+        printf '%s\n' '      </array>'
+        printf '%s\n' '    </dict>'
+        printf '%s\n' '  </array>'
         printf '%s\n' '  <key>CFBundlePackageType</key><string>APPL</string>'
         printf '%s\n' '  <key>LSUIElement</key><true/>'
         printf '%s\n' '</dict>'

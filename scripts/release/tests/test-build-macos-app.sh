@@ -74,6 +74,11 @@ assert_bundle_exists() {
             print_error "bundle metadata does not select Astronomical.icns"
             exit 1
         }
+    grep -F '<string>astronomical</string>' \
+        "$bundle_information_plist" >/dev/null || {
+            print_error "bundle metadata does not register the astronomical URL scheme the Observatory chat handoff links through"
+            exit 1
+        }
     grep -F '<key>AstronomicalBuildDate</key><string>' \
         "$bundle_information_plist" >/dev/null || {
             print_error "bundle metadata does not include the icon build date"
