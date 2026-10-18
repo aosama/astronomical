@@ -263,6 +263,11 @@ jobs:
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo test --locked -p xtask --test workflow_structural_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
+          # The app-builder journey runs the real build-macos-app.sh in a
+          # sandbox with fixture-bin tool shims; it is offline and takes
+          # seconds, so it enforces the packaging contract on every pull
+          # request instead of only before releases.
+          cargo test --locked -p xtask --test offline_app_builder_journeys
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
       - name: Prepare durable test-log directory
@@ -670,6 +675,18 @@ jobs:
           set -o pipefail
           swift test --package-path apps/thin-talk 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk.log"
         timeout-minutes: 6
+      # The packaging publication contracts (DMG, notarization, App Store
+      # pkg, installer promotion) are offline sandbox journeys like the
+      # app-builder one on the verification job; wiring them here keeps the
+      # release scripts from rotting between releases (issue #1346). The
+      # suite takes about half a minute with its faked toolchain.
+      - name: Run macOS packaging release contracts
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end release-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin release-contracts
+          set -o pipefail
+          scripts/release/tests/test-release-contracts.sh 2>&1 | tee "$RUNNER_TEMP/test-logs/release-contracts.log"
+        timeout-minutes: 4
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,6 +1,6 @@
 # Stable Release Operations
 
-Everything in this directory is release-only. Ordinary development builds, commits, pushes, and pull requests must not invoke these scripts.
+Everything in this directory is release-only: ordinary development builds, commits, pushes, and pull requests must not invoke these scripts. The exception is `tests/test-release-contracts.sh`, which CI runs on every pull request (the `macOS packaging release contracts` step) so the packaging journeys cannot rot between releases; the app-builder journey additionally runs as `cargo test-app-builder` on the macOS offline verification check.
 
 - Build Development with `scripts/build-development-app.sh`.
 - Verify ordinary changes with `cargo fmt --all -- --check` and `cargo test-offline-and-rest`.
