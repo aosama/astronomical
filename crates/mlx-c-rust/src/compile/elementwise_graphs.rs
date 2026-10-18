@@ -2,6 +2,7 @@ use std::os::raw::c_int;
 
 use crate::MlxBindingsContext;
 use crate::compile::attention_output_gate::build_attention_output_gate_graph;
+use crate::compile::signed_float32_cast::build_signed_float32_cast_graph;
 use crate::compile::sparse_shared_expert_combination::build_sparse_shared_expert_combination_graph;
 use crate::compile::vision_rope::build_vision_rope_graph;
 use crate::{MlxArray, MlxStream, raw};
@@ -27,6 +28,8 @@ const APPLY_FUSED_SILU_OPERATION: &str = "apply the compiled MLX fused SiLU grap
 const COMPILE_FUSED_SILU_OPERATION: &str = "compile the shapeless MLX fused SiLU graph";
 const APPLY_FUSED_SOFTPLUS_OPERATION: &str = "apply the compiled MLX fused K2 softplus graph";
 const COMPILE_FUSED_SOFTPLUS_OPERATION: &str = "compile the shapeless MLX fused K2 softplus graph";
+const APPLY_SIGNED_FLOAT32_CAST_OPERATION: &str = "apply the compiled MLX signed float32 cast";
+const COMPILE_SIGNED_FLOAT32_CAST_OPERATION: &str = "compile the shapeless MLX signed float32 cast";
 const APPLY_VISION_ROPE_OPERATION: &str =
     "apply the compiled MLX vision rotate-half rotary embedding";
 const COMPILE_VISION_ROPE_OPERATION: &str =
@@ -42,6 +45,7 @@ pub struct MlxCompiledElementwiseGraphs {
     fused_silu: MlxCompiledGraph,
     fused_softplus: MlxCompiledGraph,
     vision_rope: MlxCompiledGraph,
+    signed_float32_cast: MlxCompiledGraph,
 }
 
 impl MlxCompiledElementwiseGraphs {
@@ -81,6 +85,11 @@ impl MlxCompiledElementwiseGraphs {
             vision_rope: MlxCompiledGraph::new(
                 build_vision_rope_graph,
                 COMPILE_VISION_ROPE_OPERATION,
+                true,
+            )?,
+            signed_float32_cast: MlxCompiledGraph::new(
+                build_signed_float32_cast_graph,
+                COMPILE_SIGNED_FLOAT32_CAST_OPERATION,
                 true,
             )?,
         })
@@ -166,6 +175,24 @@ impl MlxBindingsContext {
         compiled_elementwise_graphs
             .fused_silu
             .apply(&[input], APPLY_FUSED_SILU_OPERATION)
+    }
+
+    /// Applies `astype(activations, float32) * signs` as one compiled composite.
+    ///
+    /// The Hadamard-rotated families cast every activation to float32 and
+    /// flip its signs before the block transform; uncompiled, that is a cast
+    /// kernel plus a multiply kernel with a float32 intermediate round trip.
+    /// The fused launch reads the activation once and writes the signed
+    /// float32 result once, with arithmetic identical to the two-op chain.
+    pub fn apply_compiled_signed_float32_cast(
+        &self,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        activations: &MlxArray,
+        signs: &MlxArray,
+    ) -> Result<MlxArray, MlxCError> {
+        compiled_elementwise_graphs
+            .signed_float32_cast
+            .apply(&[activations, signs], APPLY_SIGNED_FLOAT32_CAST_OPERATION)
     }
 
     /// Applies the K2 Horizon MoVA softplus gate as one compiled composite.

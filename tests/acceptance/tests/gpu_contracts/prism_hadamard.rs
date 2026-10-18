@@ -4,73 +4,22 @@
 //! installed pack (roughly 8 GB of model weights) and drives the
 //! graphics processor, so they are feature-gated on `direct-mlx`, run
 //! `--ignored` by default, and locate the pack through environment variables
-//! instead of any hardcoded developer path.
+//! instead of any hardcoded developer path. The performance tiers live in
+//! `prism_hadamard/` beside the shared pack and prompt helpers.
 
-use std::path::PathBuf;
-
-use astronomical_model_serving::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
-use astronomical_model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
 #[path = "../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
-/// The environment variable pointing at the installed folded pack root (the
-/// Hugging Face snapshot directory containing `config.json`,
-/// `hadamard.json`, `tokenizer.json`, and `model.safetensors`).
-const PACK_DIRECTORY_ENV: &str = "PRISM_HADAMARD_QWEN35_PACK_DIR";
-/// The environment variable pointing at the upstream runtime's reference
-/// dump (source prompt, input ids, first-step logits, and greedy token ids).
-const PARITY_REFERENCE_ENV: &str = "PRISM_HADAMARD_QWEN35_PARITY_REFERENCE";
-/// Wired and allocator limits for one roughly 8 GB pack plus activations, far
-/// under the wired ceiling of a maximum-memory laptop.
-const JOURNEY_WIRED_LIMIT_BYTES: usize = 24 * 1024 * 1024 * 1024;
+#[path = "prism_hadamard/mod.rs"]
+mod prism_hadamard;
+
+use prism_hadamard::support::{loaded_journey_model, pack_directory, parity_reference_path};
+
 /// How many greedy tokens the parity journey replays (the reference dump's
 /// length).
 const PARITY_TOKEN_COUNT: usize = 32;
-
-/// Resolves the installed pack root, refusing to guess a developer path.
-fn pack_directory() -> PathBuf {
-    match std::env::var_os(PACK_DIRECTORY_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PACK_DIRECTORY_ENV} to the installed folded-pack snapshot root \
-             (the models--prism-ml--Ternary-Bonsai-2-27B-mlx-2bit snapshots directory \
-             containing config.json, hadamard.json, tokenizer.json, and model.safetensors)"
-        ),
-    }
-}
-
-/// Resolves the upstream reference dump for the parity journey.
-fn parity_reference_path() -> PathBuf {
-    match std::env::var_os(PARITY_REFERENCE_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PARITY_REFERENCE_ENV} to the upstream parity reference JSON \
-             (input_ids, first_step_logits, greedy_token_ids) produced by the \
-             pack's bundled runtime"
-        ),
-    }
-}
-
-/// The process-wide journey runtime, sized for the whole-pack residency.
-fn shared_journey_runtime() -> MlxRuntime {
-    MlxRuntime::initialize(
-        MlxMemoryLimits::new(JOURNEY_WIRED_LIMIT_BYTES, JOURNEY_WIRED_LIMIT_BYTES)
-            .expect("the journey memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize")
-}
-
-/// Loads the real pack into a ready-to-run family text model.
-fn loaded_journey_model() -> PrismHadamardTextModel {
-    let pack = FoldedPackValidator::new()
-        .validate(&pack_directory(), 8192)
-        .expect("the installed folded pack should validate");
-    PrismHadamardTextModel::new(shared_journey_runtime(), pack)
-        .expect("the installed folded pack should load into the runtime")
-}
 
 #[test]
 #[serial]
