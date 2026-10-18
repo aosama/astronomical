@@ -21,11 +21,19 @@ warnings = "deny"
 # test-e2e: the root whole-product journeys (tests/e2e) that spawn the real
 # astronomicald binary; run `cargo build --bins -p astronomical-daemon`
 # first, and the harness's workspace_binary names that command if skipped.
+# test-app-builder: the macOS app-builder packaging journey as an offline
+# integration test — a sandboxed repository copy runs the real
+# scripts/internal/build-macos-app.sh with fixture-bin tool shims on PATH,
+# and typed assertions read the produced bundle through plutil and the shim
+# argv logs. macOS-only (the whole file is target_os = "macos" gated); it
+# runs in CI inside the required macOS offline verification check, so drift
+# fails the lane instead of rotting until release day.
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
 test-offline = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "--lib", "--test", "offline_tests"]
 test-rest-api = ["test", "--no-fail-fast", "-p", "astronomical-rest-contract", "-p", "astronomical-daemon", "--test", "rest_api_tests"]
 test-e2e = ["test", "--no-fail-fast", "-p", "astronomical-e2e", "--test", "e2e"]
+test-app-builder = ["test", "-p", "xtask", "--test", "offline_app_builder_journeys"]
 test-offline-and-rest = ["test", "--no-fail-fast", "-p", "astronomical-config", "-p", "astronomical-cli", "-p", "astronomical-ipc-protocol", "-p", "astronomical-native-build-tool", "-p", "astronomical-runtime-integration", "-p", "astronomical-model-serving", "-p", "astronomical-inference-worker", "-p", "astronomical-daemon", "-p", "astronomical-rest-contract", "--lib", "--test", "offline_tests", "--test", "rest_api_tests"]
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
