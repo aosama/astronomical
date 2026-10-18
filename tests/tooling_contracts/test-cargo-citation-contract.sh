@@ -52,11 +52,13 @@ shellcheck "${repository_root}/tests/tooling_contracts/test-cargo-citation-contr
 ( sleep "$TEST_WATCHDOG_SECONDS" && kill -9 "$$" ) 2>/dev/null &
 WATCHDOG_PID=$!
 
-# The alias surface of this repository: every key under [alias].
+# The alias surface of this repository: every key under [alias]. Aliases are
+# string-valued (tests/tooling_contracts/test-cargo-alias-nested-config-contract.sh
+# explains why), so each key line reads `name = "..."`.
 ALIAS_WORDS="$(awk '
     /^\[alias\]$/ { inside_alias_section = 1; next }
     /^\[/ { inside_alias_section = 0 }
-    inside_alias_section && /^[a-z][a-z0-9-]* = \[/ { print $1 }
+    inside_alias_section && /^[a-z][a-z0-9-]* = "/ { print $1 }
 ' "${repository_root}/.cargo/config.toml" | tr '\n' ' ')"
 
 is_stock_cargo_command() {
