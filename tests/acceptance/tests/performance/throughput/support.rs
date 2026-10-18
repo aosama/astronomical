@@ -1,7 +1,9 @@
 //! Journey driver: launch, warm up, measure, and record one throughput journey.
 //!
-//! The driver launches the production inference-worker process over the
-//! daemon IPC boundary, runs one short warmup completion to spin up first-use
+//! The driver launches the production inference-worker process built with the
+//! same Cargo profile as this test binary (a release journey launches the
+//! release worker or fails before launch) over the daemon IPC boundary, runs
+//! one short warmup completion to spin up first-use
 //! JIT kernels, then one measured completion over the real prompt, and reads the
 //! worker's authoritative per-request throughput (`prefill_tok_per_second` and
 //! `generation_tok_per_second`) from the generation performance log. The warmup
