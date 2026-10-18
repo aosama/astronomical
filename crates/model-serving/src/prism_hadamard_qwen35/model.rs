@@ -19,8 +19,10 @@ use super::hadamard::HadamardContractError;
 use weights::{PrismHadamardWeights, build_gdn_normalization_scale_weights, load_family_weights};
 
 mod forward;
+mod fused_projection;
 mod fwht;
 mod measurement;
+pub(crate) mod signed_rotation_kernel;
 mod weights;
 
 #[cfg(test)]
@@ -44,6 +46,10 @@ pub struct PrismHadamardTextModel {
     /// one-token MLX ops route, which is orders of magnitude slower on
     /// prompt processing and exists only as the documented fallback.
     pub(crate) gated_delta_kernel: Option<MlxMetalKernel>,
+    /// The one-launch signed Hadamard rotation, retained when this GPU
+    /// passes its bit-exact probe and the pack's block size is one the
+    /// kernel reproduces; `None` keeps the composed three-launch route.
+    pub(crate) fused_rotation_kernel: Option<MlxMetalKernel>,
     pub(crate) weights: PrismHadamardWeights,
     pub(crate) gdn_query_scale_weight: MlxArray,
     pub(crate) gdn_key_scale_weight: MlxArray,
@@ -66,19 +72,29 @@ impl PrismHadamardTextModel {
             .load_safetensors(weights_file.into_file(), None)
             .map_err(PrismHadamardModelError::SafetensorsLoading)?;
         let weights = load_family_weights(&runtime, &pack, &loaded_tensors)?;
+        // Fusing stacked copies of the sibling projections, so the members'
+        // own arrays are garbage once the tensor map drops; without this
+        // release their buffers stay in the MLX allocator cache for the
+        // life of the process, inflating the worker's resident footprint by
+        // most of the pack size.
+        drop(loaded_tensors);
+        runtime
+            .clear_allocator_cache()
+            .map_err(PrismHadamardModelError::ForwardRuntime)?;
         let head_dimension = pack.config().text().linear_key_head_dim;
         let (gdn_query_scale_weight, gdn_key_scale_weight) =
             build_gdn_normalization_scale_weights(&runtime, head_dimension)?;
         let compiled_elementwise_graphs =
             MlxCompiledElementwiseGraphs::new().map_err(PrismHadamardModelError::Forward)?;
         let compiled_swiglu = MlxCompiledSwiGlu::new().map_err(PrismHadamardModelError::Forward)?;
-        // The capability probe is cached per worker process, so this mirrors
-        // the core loader's cost and its fused-vs-ops decision exactly.
-        let gated_delta_kernel = if crate::kernel_capability::worker_process_kernel_capabilities(
+        // The capability probes are cached per worker process, so this
+        // mirrors the core loader's cost and its fused-vs-ops decision exactly.
+        let kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
             &runtime,
             &mut PerformanceAttribution::disabled(),
-        )
-        .is_custom_kernel_supported(crate::CustomMetalKernelFamily::GatedDeltaSequence)
+        );
+        let gated_delta_kernel = if kernel_capabilities
+            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::GatedDeltaSequence)
         {
             Some(
                 crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_kernel()
@@ -90,6 +106,21 @@ impl PrismHadamardTextModel {
             );
             None
         };
+        let hadamard_block_size = pack.hadamard_contract().block_size();
+        let fused_rotation_kernel = if kernel_capabilities
+            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::PrismHadamardSignedRotation)
+            && signed_rotation_kernel::is_signed_rotation_eligible(hadamard_block_size)
+        {
+            Some(
+                signed_rotation_kernel::signed_rotation_kernel(hadamard_block_size)
+                    .map_err(PrismHadamardModelError::Forward)?,
+            )
+        } else {
+            tracing::info!(
+                "fused Hadamard rotation demoted to the composed MLX route for this worker process"
+            );
+            None
+        };
         let decoder_layer_state_slots = decoder_layer_state_slots(&weights);
         Ok(Self {
             pack,
@@ -97,6 +128,7 @@ impl PrismHadamardTextModel {
             compiled_elementwise_graphs,
             compiled_swiglu,
             gated_delta_kernel,
+            fused_rotation_kernel,
             weights,
             gdn_query_scale_weight,
             gdn_key_scale_weight,
@@ -107,6 +139,20 @@ impl PrismHadamardTextModel {
     /// The validated pack configuration.
     pub const fn pack(&self) -> &ValidatedFoldedPack {
         &self.pack
+    }
+
+    /// Carries `activations` into the rotated basis of their width, through
+    /// the retained one-launch kernel or the composed route.
+    pub(crate) fn rotate(
+        &self,
+        activations: &MlxArray,
+    ) -> Result<fwht::RotatedActivations, astronomical_mlx_c_rust::MlxCError> {
+        self.weights.rotate(
+            &self.runtime,
+            &self.compiled_elementwise_graphs,
+            self.fused_rotation_kernel.as_ref(),
+            activations,
+        )
     }
 
     /// Greedy generation: feeds the whole prompt as one prefill pass, then

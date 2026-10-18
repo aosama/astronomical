@@ -1,9 +1,10 @@
 //! The gated-delta (linear-attention) decoder layer of the straight forward.
 //!
-//! The normalized layer input is rotated once and shared by the fused
-//! query/key/value projection and the output-gate projection; the two float
-//! rate projections run as one fused matmul. The arithmetic mirrors the
-//! qwen3_5 core's validated GDN composition exactly.
+//! The normalized layer input is rotated once and feeds one fused packed
+//! matmul whose output splits into the mixed query/key/value projection and
+//! the output-gate projection; the two float rate projections run as one
+//! fused matmul too. The arithmetic mirrors the qwen3_5 core's validated GDN
+//! composition exactly.
 
 use astronomical_mlx_c_rust::MlxArray;
 
@@ -29,21 +30,13 @@ impl super::super::PrismHadamardTextModel {
         let linear_value_dimension =
             (text.linear_num_value_heads * text.linear_value_head_dim) as i32;
 
-        // One rotation of the layer input feeds both rotated projections.
+        // One rotation of the layer input feeds the one fused launch that
+        // produces both rotated projections.
         let rotated_input = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                normalized_input,
-            )
+            .rotate(normalized_input)
             .map_err(PrismHadamardModelError::Forward)?;
-        let mixed_queries_keys_values = layer
-            .query_key_value
-            .forward(&self.runtime, &rotated_input)
-            .map_err(PrismHadamardModelError::Forward)?;
-        let output_gate = layer
-            .output_gate
+        let [mixed_queries_keys_values, output_gate] = layer
+            .query_key_value_and_gate
             .forward(&self.runtime, &rotated_input)
             .map_err(PrismHadamardModelError::Forward)?;
         let output_gate = self
@@ -119,12 +112,7 @@ impl super::super::PrismHadamardTextModel {
             .reshape(&gated_output, &[1, token_count, linear_value_dimension])
             .map_err(PrismHadamardModelError::Forward)?;
         let rotated_gated_output = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                &gated_output,
-            )
+            .rotate(&gated_output)
             .map_err(PrismHadamardModelError::Forward)?;
         layer
             .output

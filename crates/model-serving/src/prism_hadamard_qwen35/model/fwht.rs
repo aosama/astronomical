@@ -14,11 +14,17 @@
 //! activation (the gated-delta query/key/value and gate projections, the
 //! full-attention query/key/value projections, the MLP gate and up
 //! projections) therefore share one transform instead of recomputing it.
+//! When the model retains the one-launch rotation kernel
+//! (`signed_rotation_kernel.rs`), the forward transform runs as that single
+//! launch instead of the composed three; both routes produce the same bits.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxDtype};
+use astronomical_mlx_c_rust::{
+    MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxDtype, MlxMetalKernel,
+};
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::super::configuration::FOLDED_MODULE_DTYPE;
+use super::signed_rotation_kernel::apply_signed_rotation;
 
 /// The float32 working domain of the transform, matching the upstream
 /// reference's cast discipline.
@@ -66,10 +72,15 @@ impl HadamardRotation {
 
     /// Applies the forward transform (signs, then the normalized block
     /// transform) to activations whose last axis is this rotation's width.
+    ///
+    /// With `fused_rotation_kernel` the whole transform is one launch; without
+    /// it the composed route runs the compiled signed float32 cast, MLX's
+    /// block Hadamard, and the cast back. Both produce the same bits.
     pub(crate) fn rotate(
         &self,
         runtime: &MlxRuntime,
         compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        fused_rotation_kernel: Option<&MlxMetalKernel>,
         activations: &MlxArray,
     ) -> Result<RotatedActivations, MlxCError> {
         let activation_shape = activations.shape();
@@ -80,6 +91,19 @@ impl HadamardRotation {
             width, self.width,
             "the activation width must match the rotation"
         );
+        if let Some(fused_rotation_kernel) = fused_rotation_kernel {
+            let activations = apply_signed_rotation(
+                runtime,
+                fused_rotation_kernel,
+                activations,
+                &self.signs,
+                self.block_size,
+            )?;
+            return Ok(RotatedActivations {
+                activations,
+                width: self.width,
+            });
+        }
         let activation_dtype = activations.dtype();
         // One fused launch for the float32 cast and the sign flip, replacing
         // a cast kernel plus a multiply kernel and their float32 round trip.
