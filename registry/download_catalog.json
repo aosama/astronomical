@@ -331,6 +331,22 @@
             },
             "quantization_label": "8-bit affine (group 64)",
             "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+            "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+            "display_name": "Ternary Bonsai 2 27B 2-bit",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 8595477990,
+            "public": true,
+            "description": "A 27B dense ternary model folded into a 2-bit pack. Every rotated projection applies its Hadamard transform at run time, so the compressed weights serve full-precision-quality chat with 48 gated-delta layers and 16 full-attention layers.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
+            "upstream_license": "Apache-2.0"
         }
     ]
 }

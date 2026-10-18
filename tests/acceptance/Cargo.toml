@@ -53,6 +53,11 @@ path = "tests/gpu_contracts/installed_model_contracts.rs"
 required-features = ["direct-mlx"]
 
 [[test]]
+name = "prism_hadamard"
+path = "tests/gpu_contracts/prism_hadamard.rs"
+required-features = ["direct-mlx"]
+
+[[test]]
 name = "engine_prompt_cache"
 path = "tests/prompt_cache_engine.rs"
 required-features = ["direct-mlx"]

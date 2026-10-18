@@ -53,6 +53,7 @@
 mod admission;
 mod budget;
 mod ceiling;
+mod dense_resident;
 mod expert_cache;
 mod geometry_floor;
 mod phase;
@@ -109,6 +110,7 @@ pub use budget::{
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
+pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
 pub use expert_cache::{
     DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
     PreviousTokenPrefetchPlan, ResidentExpertWeight, plan_previous_token_prefetch,

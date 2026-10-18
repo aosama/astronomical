@@ -26,6 +26,10 @@ const QWEN_INDEX_FILE_PATH: &str = "model.safetensors.index.json";
 const QWEN_TOKENIZER_FILE_PATH: &str = "tokenizer.json";
 const QWEN_STREAMING_MANIFEST_FILE_PATH: &str = "manifest.json";
 const QWEN_STREAMING_RESIDENT_FILE_PATH: &str = "resident.safetensors";
+const PRISM_HADAMARD_CONTRACT_FILE_PATH: &str = "hadamard.json";
+const PRISM_TOKENIZER_FILE_PATH: &str = "tokenizer.json";
+const PRISM_WEIGHTS_FILE_PATH: &str = "model.safetensors";
+const PRISM_SHARD_INDEX_FILE_PATH: &str = "model.safetensors.index.json";
 
 /// Why one manifest does not describe an executable artifact.
 #[derive(Debug, Error)]
@@ -140,6 +144,9 @@ impl DownloadExecutablePreflight {
                 )
                 .await
             }
+            ModelFamily::PrismHadamardQwen35 => {
+                validate_prism_hadamard_manifest_shape(manifest_file_paths, &config_document)
+            }
         }
     }
 
@@ -187,6 +194,38 @@ impl DownloadExecutablePreflight {
     }
 }
 
+/// Applies the family-owned shallow folded-pack admission rules: the Hadamard
+/// contract, tokenizer, and single-file weights must all be selected, and the
+/// sharded layout the family validator refuses must be caught before download.
+fn validate_prism_hadamard_manifest_shape(
+    manifest_file_paths: &BTreeSet<String>,
+    config_document: &Value,
+) -> Result<(), DownloadExecutablePreflightError> {
+    if context_window_tokens(config_document) < MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS {
+        return Err(DownloadExecutablePreflightError::NotExecutable(
+            "the declared context window cannot serve a single user turn".to_owned(),
+        ));
+    }
+    for required_file_path in [
+        PRISM_HADAMARD_CONTRACT_FILE_PATH,
+        PRISM_TOKENIZER_FILE_PATH,
+        PRISM_WEIGHTS_FILE_PATH,
+    ] {
+        if !manifest_file_paths.contains(required_file_path) {
+            return Err(DownloadExecutablePreflightError::NotExecutable(format!(
+                "folded ternary packs require {required_file_path} in the repository"
+            )));
+        }
+    }
+    if manifest_file_paths.contains(PRISM_SHARD_INDEX_FILE_PATH) {
+        return Err(DownloadExecutablePreflightError::NotExecutable(
+            "folded ternary packs are single-file artifacts; a shard index is not executable"
+                .to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_qwen_shard_inventory(
     manifest_file_paths: &BTreeSet<String>,
     index_bytes: &[u8],
@@ -209,4 +248,63 @@ fn validate_qwen_shard_inventory(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::{DownloadExecutablePreflightError, validate_prism_hadamard_manifest_shape};
+    use serde_json::json;
+
+    #[test]
+    fn should_refuse_a_folded_pack_manifest_missing_required_files() {
+        let manifest_file_paths = BTreeSet::from([
+            "config.json".to_owned(),
+            "tokenizer.json".to_owned(),
+            "model.safetensors".to_owned(),
+        ]);
+
+        let config_document = json!({"text_config": {"max_position_embeddings": 4096}});
+        let preflight_result =
+            validate_prism_hadamard_manifest_shape(&manifest_file_paths, &config_document);
+
+        assert!(matches!(
+            preflight_result,
+            Err(DownloadExecutablePreflightError::NotExecutable(reason))
+                if reason.contains("hadamard.json")
+        ));
+    }
+
+    #[test]
+    fn should_accept_a_complete_single_file_folded_pack_manifest() {
+        let manifest_file_paths = BTreeSet::from([
+            "config.json".to_owned(),
+            "hadamard.json".to_owned(),
+            "tokenizer.json".to_owned(),
+            "model.safetensors".to_owned(),
+        ]);
+        let config_document = json!({"text_config": {"max_position_embeddings": 4096}});
+
+        assert!(
+            validate_prism_hadamard_manifest_shape(&manifest_file_paths, &config_document).is_ok()
+        );
+    }
+
+    #[test]
+    fn should_refuse_a_folded_pack_with_an_unservable_context_window() {
+        let manifest_file_paths = BTreeSet::from([
+            "config.json".to_owned(),
+            "hadamard.json".to_owned(),
+            "tokenizer.json".to_owned(),
+            "model.safetensors".to_owned(),
+        ]);
+        let config_document = json!({"text_config": {"max_position_embeddings": 1}});
+
+        assert!(matches!(
+            validate_prism_hadamard_manifest_shape(&manifest_file_paths, &config_document),
+            Err(DownloadExecutablePreflightError::NotExecutable(reason))
+                if reason.contains("context window")
+        ));
+    }
 }
