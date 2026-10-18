@@ -68,8 +68,12 @@ HTTP), **acceptance** (env-gated real-model journeys).
   plus the real inference worker and installed artifacts (see the
   whole-product daemon journeys section below). The build step is required
   because `CARGO_BIN_EXE_` covers only same-package binaries; the harness's
-  `workspace_binary` fails loudly with this exact command when a binary is
-  missing.
+  `workspace_binary` launches each binary from the test binary's own Cargo
+  profile (`target/debug` for `cargo test`, `target/release` for
+  `cargo test --release`, never the other one) and fails loudly with the
+  matching `cargo build [--release] --bin <name>` command when that build is
+  missing. `ASTRONOMICAL_WORKSPACE_BINARY_PROFILE=<profile directory>`
+  launches binaries from another profile deliberately.
 - `cargo test-offline-and-rest` — both lanes together. This is the
   pre-commit verification gate alongside `cargo fmt --all -- --check`.
 - `cargo xtask tier-pyramid` — workstream 5 of #1198: count tests per
