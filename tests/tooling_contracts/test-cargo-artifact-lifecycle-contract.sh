@@ -420,21 +420,30 @@ expected_aliases = {
     "test-offline",
     "test-rest-api",
     "test-e2e",
+    "test-app-builder",
     "test-offline-and-rest",
     "verify",
     "test-direct-mlx",
     "test-mlx-memory",
+    "check-mlx-memory-contract",
     "test-acceptance",
+    "test-prism-hadamard-direct",
+    "test-prism-hadamard-performance",
+    "test-prism-hadamard-serving-throughput",
+    "test-prism-hadamard-serving",
     "xtask",
 }
 assert set(aliases) == expected_aliases
-assert all(isinstance(alias_command, list) for alias_command in aliases.values())
+# String aliases merge by replacement across nested cargo config files; array
+# aliases concatenate and double inside a worktree nested under the
+# repository (tests/tooling_contracts/test-cargo-alias-nested-config-contract.sh).
+assert all(isinstance(alias_command, str) for alias_command in aliases.values())
 # The GPU serial rule must be baked into every acceptance alias: no human can
 # forget `--test-threads=1` when the alias carries it.
 for acceptance_alias in ("test-direct-mlx", "test-mlx-memory", "test-acceptance"):
-    assert "--test-threads=1" in aliases[acceptance_alias], acceptance_alias
+    assert "--test-threads=1" in aliases[acceptance_alias].split(), acceptance_alias
 for acceptance_alias in ("test-mlx-memory", "test-acceptance"):
-    assert "--ignored" in aliases[acceptance_alias], acceptance_alias
+    assert "--ignored" in aliases[acceptance_alias].split(), acceptance_alias
 
 assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()
 assert not (repository_root / "scripts/run-ignored-serving-acceptance.sh").exists()
