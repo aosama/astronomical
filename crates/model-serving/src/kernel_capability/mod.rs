@@ -18,6 +18,8 @@ pub mod fused_expert_decode_probe;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
+pub mod prism_hadamard_probes;
+#[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_weighted_sum_probe;
 
 #[cfg(test)]
@@ -29,6 +31,8 @@ pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
 pub use gated_delta_probes::{
     GatedDeltaBoundaryCheckpointProbe, GatedDeltaSequenceProbe, GdnDecodePreworkProbe,
 };
+#[cfg(feature = "direct-mlx")]
+pub use prism_hadamard_probes::PrismHadamardSignedRotationProbe;
 #[cfg(feature = "direct-mlx")]
 pub use sorted_expert_weighted_sum_probe::SortedExpertWeightedSumProbe;
 
@@ -48,6 +52,9 @@ pub enum CustomMetalKernelFamily {
     /// Fused gated-delta decode prework: convolution window, conv1d, SiLU,
     /// q/k/v split, RMS norms, and scalar scales in one launch.
     GdnDecodePrework,
+    /// The folded ternary family's forward Hadamard rotation (float32 cast,
+    /// sign flip, block Hadamard, cast back) in one launch.
+    PrismHadamardSignedRotation,
 }
 
 /// Why one custom kernel family cannot run on this GPU.
@@ -253,6 +260,7 @@ pub fn worker_process_kernel_capabilities(
         let gated_delta_probe = GatedDeltaSequenceProbe::new(runtime);
         let gated_delta_checkpoint_probe = GatedDeltaBoundaryCheckpointProbe::new(runtime);
         let gdn_decode_prework_probe = GdnDecodePreworkProbe::new(runtime);
+        let prism_hadamard_signed_rotation_probe = PrismHadamardSignedRotationProbe::new(runtime);
         WorkerKernelCapabilities::probe_custom_kernels(
             &[
                 &sorted_expert_weighted_sum_probe,
@@ -260,6 +268,7 @@ pub fn worker_process_kernel_capabilities(
                 &gated_delta_probe,
                 &gated_delta_checkpoint_probe,
                 &gdn_decode_prework_probe,
+                &prism_hadamard_signed_rotation_probe,
             ],
             performance_attribution,
         )

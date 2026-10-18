@@ -1,10 +1,12 @@
 //! Tier 1: the individual GPU operations of the folded ternary path.
 //!
-//! The Hadamard activation transform and the rotated ternary projection are
-//! timed at the two shapes serving runs them at: one decode row and one
-//! 2,048-token prefill chunk. Inputs are real activations: the packed
-//! embedding of Romeo and Juliet tokens, and the first layer's SwiGLU
-//! intermediate for the intermediate-width transform and down projection.
+//! The Hadamard activation transform and the rotated ternary projection
+//! launches are timed at the two shapes serving runs them at: one decode row
+//! and one 2,048-token prefill chunk. Fused sibling projections are timed as
+//! the single stacked launch the forward pass issues. Inputs are real
+//! activations: the packed embedding of Romeo and Juliet tokens, and the
+//! first layer's SwiGLU intermediate for the intermediate-width transform
+//! and down projection.
 
 use astronomical_mlx_c_rust::MlxArray;
 use astronomical_model_serving::prism_hadamard_qwen35::model::{
@@ -38,7 +40,8 @@ fn should_measure_hadamard_transform_and_folded_ternary_matmul_throughput() {
     let dimensions = model.probe_dimensions();
     let hidden_width = dimensions.hidden_width;
     let intermediate_width = dimensions.intermediate_width;
-    let query_key_value_width = dimensions.query_key_value_width;
+    let gated_delta_input_projection_rows = dimensions.gated_delta_input_projection_rows;
+    let dense_mlp_gate_and_up_rows = dimensions.dense_mlp_gate_and_up_rows;
     let vocabulary_size = dimensions.vocabulary_size;
     let prompt_token_ids = romeo_and_juliet_prompt_token_ids(&tokenizer, PREFILL_CHUNK_TOKENS);
 
@@ -73,10 +76,20 @@ fn should_measure_hadamard_transform_and_folded_ternary_matmul_throughput() {
         report_projection(
             &model,
             shape_label,
-            "gated_delta_query_key_value",
-            PrismHadamardProbeProjection::GatedDeltaQueryKeyValue,
+            "gated_delta_query_key_value_and_gate",
+            PrismHadamardProbeProjection::GatedDeltaQueryKeyValueAndGate,
             token_count,
-            query_key_value_width,
+            gated_delta_input_projection_rows,
+            hidden_width,
+            &hidden_states,
+        );
+        report_projection(
+            &model,
+            shape_label,
+            "dense_mlp_gate_and_up",
+            PrismHadamardProbeProjection::DenseMlpGateAndUp,
+            token_count,
+            dense_mlp_gate_and_up_rows,
             hidden_width,
             &hidden_states,
         );

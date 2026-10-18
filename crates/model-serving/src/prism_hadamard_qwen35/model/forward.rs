@@ -4,7 +4,8 @@
 //! Every rotated projection runs on activations the Hadamard transform
 //! produced — the transform is part of the projection's input type, not a
 //! branch — and each activation is rotated once for every projection that
-//! reads it. The layer arithmetic mirrors the qwen3_5 core's validated GDN
+//! reads it, with sibling projections of one activation fused into a single
+//! launch. The layer arithmetic mirrors the qwen3_5 core's validated GDN
 //! and full-attention composition exactly, minus the production serving
 //! machinery (chunked prefill boundaries, fused decode prework, expert
 //! paging), which the parity milestone does not exercise.
@@ -229,12 +230,7 @@ impl super::PrismHadamardTextModel {
         final_hidden_states: &MlxArray,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let rotated_hidden_states = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                final_hidden_states,
-            )
+            .rotate(final_hidden_states)
             .map_err(PrismHadamardModelError::Forward)?;
         self.weights
             .language_model_head
@@ -261,22 +257,13 @@ impl super::PrismHadamardTextModel {
         normalized_attention: &MlxArray,
         dense_mlp: &DenseMlpWeights,
     ) -> Result<MlxArray, PrismHadamardModelError> {
-        // One rotation of the normalized input feeds both the gate and the
-        // up projection.
+        // One rotation of the normalized input feeds the one fused launch
+        // that produces both the gate and the up projection.
         let rotated_input = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                normalized_attention,
-            )
+            .rotate(normalized_attention)
             .map_err(PrismHadamardModelError::Forward)?;
-        let gate_activations = dense_mlp
-            .gate
-            .forward(&self.runtime, &rotated_input)
-            .map_err(PrismHadamardModelError::Forward)?;
-        let up_activations = dense_mlp
-            .up
+        let [gate_activations, up_activations] = dense_mlp
+            .gate_and_up
             .forward(&self.runtime, &rotated_input)
             .map_err(PrismHadamardModelError::Forward)?;
         let activated_intermediate_states = self
@@ -284,12 +271,7 @@ impl super::PrismHadamardTextModel {
             .apply_compiled_swiglu(&self.compiled_swiglu, &gate_activations, &up_activations)
             .map_err(PrismHadamardModelError::Forward)?;
         let rotated_intermediate_states = self
-            .weights
-            .rotate(
-                &self.runtime,
-                &self.compiled_elementwise_graphs,
-                &activated_intermediate_states,
-            )
+            .rotate(&activated_intermediate_states)
             .map_err(PrismHadamardModelError::Forward)?;
         dense_mlp
             .down
