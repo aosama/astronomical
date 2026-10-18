@@ -29,6 +29,8 @@ struct OrbitalTelemetryPopover: View {
   let terminalCommandSupported: Bool
   let installTerminalCommand: () -> Void
   let removeTerminalCommand: () -> Void
+  let launchAtLoginSupported: Bool
+  @Binding var launchAtLoginIsEnabled: Bool
   let revealConfiguration: () -> Void
   let showWelcome: () -> Void
   let quitApplication: () -> Void
@@ -185,6 +187,10 @@ struct OrbitalTelemetryPopover: View {
           if terminalCommandSupported {
             Button("Install “astronomical” command in terminal…", action: installTerminalCommand)
             Button("Remove “astronomical” terminal command…", action: removeTerminalCommand)
+            Divider()
+          }
+          if launchAtLoginSupported {
+            Toggle("Launch at Login", isOn: $launchAtLoginIsEnabled)
             Divider()
           }
           Button("Welcome…", action: showWelcome)
