@@ -109,6 +109,10 @@ pub(crate) struct ThroughputJourney {
     pub(crate) maximum_mlx_memory_bytes: Option<u64>,
     pub(crate) attribution_enabled: bool,
     pub(crate) journey_timeout: Duration,
+    /// The measured model's directory when the journey locates it itself
+    /// (an environment-addressed pack); `None` resolves the model id through
+    /// the Development configuration's model directories.
+    pub(crate) model_directory: Option<PathBuf>,
 }
 
 impl ThroughputJourney {
@@ -136,6 +140,7 @@ impl ThroughputJourney {
             maximum_mlx_memory_bytes: None,
             attribution_enabled: false,
             journey_timeout: JOURNEY_TIMEOUT,
+            model_directory: None,
         }
     }
 }
@@ -250,7 +255,10 @@ pub(crate) async fn measure_throughput(
     // inside — a panic on the driver thread leaves the runtime running.
     let cell_deadline = tokio::time::Instant::now() + journey.journey_timeout;
     let remaining_budget = || cell_deadline.saturating_duration_since(tokio::time::Instant::now());
-    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id);
+    let model_directory = journey
+        .model_directory
+        .clone()
+        .unwrap_or_else(|| crate::support::configured_installed_model_directory_by_id(model_id));
     let (
         _isolated_home,
         worker_executable_path,

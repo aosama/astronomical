@@ -54,8 +54,10 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
     pub(super) remaining_output_tokens: u32,
     pub(super) remaining_prompt_token_ids: Vec<u32>,
     pub(super) generation_state: StraightGenerationState,
-    /// The next input token for decode, or `None` once generation finished.
-    pub(super) next_input_token_id: Option<u32>,
+    /// The next sampled token as a lazy `[1, 1]` device array whose graph
+    /// is already submitted, or `None` once generation finished. Its value
+    /// reaches the host only when the next step synchronizes it.
+    pub(super) pending_sampled_token: Option<MlxArray>,
     /// Sorted unique ids the repetition penalty dampens.
     pub(super) penalized_token_ids: Vec<u32>,
     pub(super) random_state: MlxArray,
@@ -110,13 +112,11 @@ impl PrismHadamardQwen35InferenceExecution {
     }
 }
 
-pub(super) fn pending_token_after_sampling(
-    remaining_output_tokens: u32,
-    sampled_token_id: u32,
-    eos_token_ids: &[u32],
-) -> Option<u32> {
-    (remaining_output_tokens > 0 && !eos_token_ids.contains(&sampled_token_id))
-        .then_some(sampled_token_id)
+/// Whether a freshly sampled successor should stay queued: only while output
+/// budget remains. An end-of-sequence successor is recognized when its value
+/// is synchronized, so it is queued like any other token here.
+pub(super) fn successor_stays_pending(remaining_output_tokens: u32) -> bool {
+    remaining_output_tokens > 0
 }
 
 pub(super) fn record_emitted_token(remaining_output_tokens: &mut u32) -> bool {
@@ -129,26 +129,14 @@ mod tests {
     #[test]
     fn should_count_a_prefill_sample_only_when_it_is_emitted() {
         let mut remaining_output_tokens = 1;
-        let first_sampled_token =
-            super::pending_token_after_sampling(remaining_output_tokens, 17, &[]);
-
-        assert_eq!(first_sampled_token, Some(17));
+        assert!(super::successor_stays_pending(remaining_output_tokens));
         assert_eq!(remaining_output_tokens, 1);
 
         assert!(super::record_emitted_token(&mut remaining_output_tokens));
         assert_eq!(remaining_output_tokens, 0);
-        assert_eq!(
-            super::pending_token_after_sampling(remaining_output_tokens, 29, &[]),
-            None,
+        assert!(
+            !super::successor_stays_pending(remaining_output_tokens),
             "the successor beyond a one-token output budget must not be queued"
-        );
-    }
-
-    #[test]
-    fn should_not_queue_an_end_of_sequence_sample() {
-        assert_eq!(
-            super::pending_token_after_sampling(1, 248_046, &[248_046]),
-            None
         );
     }
 }

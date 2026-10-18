@@ -81,6 +81,12 @@ test-acceptance = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "-
 # Set PRISM_HADAMARD_QWEN35_PACK_DIR and PRISM_HADAMARD_QWEN35_PARITY_REFERENCE
 # to the installed pack and its upstream trajectory reference before running.
 test-prism-hadamard-direct = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx", "--test", "prism_hadamard", "--", "--ignored", "--nocapture", "--test-threads=1"]
+# test-prism-hadamard-performance: the folded-ternary performance tiers
+# (GPU operation, decoder layer, forward pass, greedy generation) through an
+# optimized build; set PRISM_HADAMARD_QWEN35_PACK_DIR first. The serving tier
+# over worker IPC is test-prism-hadamard-serving-throughput.
+test-prism-hadamard-performance = ["test", "--release", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "direct-mlx", "--test", "prism_hadamard", "throughput", "--", "--ignored", "--nocapture", "--test-threads=1"]
+test-prism-hadamard-serving-throughput = ["test", "--release", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "performance_throughput", "--test", "performance_throughput", "folded_ternary", "--", "--ignored", "--nocapture", "--test-threads=1"]
 # test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
 # one-token budget coverage; set PRISM_HADAMARD_QWEN35_PACK_DIR first.
 test-prism-hadamard-serving = ["test", "--no-fail-fast", "-p", "astronomical-acceptance", "--features", "serving-acceptance", "--test", "chat_serving", "should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack", "--", "--ignored", "--nocapture", "--test-threads=1"]
