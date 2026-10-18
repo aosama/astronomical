@@ -31,7 +31,10 @@ warnings = "deny"
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
 # test-e2e: the root whole-product journeys (tests/e2e) that spawn the real
 # astronomicald binary; run `cargo build --bins -p astronomical-daemon`
-# first, and the harness's workspace_binary names that command if skipped.
+# first. The harness's workspace_binary launches binaries from the test
+# binary's own profile (debug for `cargo test`, release for `--release`,
+# never the other) and names the matching `cargo build --bin` command if
+# the build was skipped; ASTRONOMICAL_WORKSPACE_BINARY_PROFILE overrides it.
 # test-app-builder: the macOS app-builder packaging journey as an offline
 # integration test — a sandboxed repository copy runs the real
 # scripts/internal/build-macos-app.sh with fixture-bin tool shims on PATH,

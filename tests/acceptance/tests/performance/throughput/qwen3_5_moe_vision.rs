@@ -28,9 +28,10 @@
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU
 //! memory, so it is `#[ignore]`d and not wired into CI. Invoke it directly with
-//! `cargo test --release -p astronomical-inference-worker --features
-//! astronomical-inference-worker/performance_throughput --test
-//! performance_throughput_tests -- --ignored --exact`.
+//! `cargo build --release --bin astronomical-inference-worker` followed by
+//! `cargo test --release -p astronomical-acceptance --features
+//! performance_throughput --test performance_throughput -- --ignored --exact`;
+//! the release journey launches the release worker that the build step produced.
 
 use std::io::Cursor;
 
