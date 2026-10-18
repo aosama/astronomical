@@ -48,7 +48,12 @@ likewise adapted from oMLX and compiled just in time from Rust source. These
 kernels are Apple MIT-licensed as part of MLX and Apache-2.0 licensed by oMLX
 for the additions. The adapted kernels point back to this notice, and the
 inline attribution comments in the corresponding MLX patches preserve that
-provenance for every line ported from oMLX.
+provenance for every line ported from oMLX. The folded ternary family's
+one-launch signed Hadamard rotation
+(crates/model-serving/src/prism_hadamard_qwen35/model/signed_rotation_kernel.rs)
+reproduces the radix butterfly of MLX's own Hadamard kernel
+(mlx/backend/metal/kernels/hadamard.h, Apple MIT) so its float32 addition
+order matches the public MLX operation bit for bit.
 
 OMLX source translations
 Copyright © 2023-2025 oMLX contributors
