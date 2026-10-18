@@ -503,7 +503,7 @@ fn committed_size_after_addition(
 
 fn subtract_atomic_size_bytes(atomic_size_bytes: &AtomicU64, removed_size_bytes: u64) {
     let _previous_size_bytes = atomic_size_bytes
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current_size_bytes| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |current_size_bytes| {
             Some(current_size_bytes.saturating_sub(removed_size_bytes))
         })
         .unwrap_or_else(|unchanged_size_bytes| unchanged_size_bytes);

@@ -1,5 +1,10 @@
 [toolchain]
-channel = "1.97.1"
+# Pinned to the latest available nightly as of 2026-10-18 (rustc
+# 1.101.0-nightly). Pinned by date rather than floating `nightly` so every
+# machine and CI run compiles with the identical compiler; with
+# `build.warnings = "deny"` a floating nightly would let brand-new upstream
+# lints break the build at random on any given day.
+channel = "nightly-2026-10-18"
 components = ["clippy", "rustfmt"]
 profile = "minimal"
 targets = ["aarch64-apple-darwin"]
