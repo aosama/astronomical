@@ -1,4 +1,5 @@
-//! Performance-throughput journeys for the Qwen3.5-family sparse-MoE models.
+//! Performance-throughput journeys for the Qwen3.5-family sparse-MoE models
+//! and the folded ternary dense pack.
 //!
 //! The surface measures serving throughput over the worker IPC boundary, records
 //! the numbers against this machine's specifications, and appends them to a
@@ -15,6 +16,9 @@ mod machine_specs;
 
 #[cfg(feature = "performance_throughput")]
 mod memory_ceiling_sweep;
+
+#[cfg(feature = "performance_throughput")]
+mod prism_hadamard_qwen35;
 
 #[cfg(feature = "performance_throughput")]
 mod qwen3_5_moe;

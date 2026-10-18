@@ -1,11 +1,15 @@
 //! Packed-weight modules and family weight loading.
 //!
 //! Every rotated projection applies the Hadamard transform unconditionally:
-//! a `PackedProjection` cannot be constructed without its sign vector and
-//! block size, so there is no code path that could silently skip the
-//! transform the pack's contract requires.
+//! a `PackedProjection` runs only on [`RotatedActivations`], which only the
+//! transform produces, so there is no code path that could silently skip the
+//! transform the pack's contract requires. The transform itself is shared:
+//! one [`HadamardRotation`] per activation width, built from the validated
+//! contract's sign table exactly as the upstream runtime indexes it.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxCError};
+use std::collections::BTreeMap;
+
+use astronomical_mlx_c_rust::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs};
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -13,33 +17,41 @@ use crate::qwen3_5_core::model_math::tensor_slicing;
 
 use super::super::artifacts::ValidatedFoldedPack;
 use super::PrismHadamardModelError;
-use super::fwht::{apply_forward_transform, apply_inverse_transform};
+use super::fwht::{HadamardRotation, RotatedActivations};
 
 /// The ternary quantization constants of the family's packs.
 const QUANTIZATION_GROUP_SIZE: i32 = 128;
 const QUANTIZATION_BITS: i32 = 2;
 
-/// One rotated ternary projection: Hadamard forward transform, then grouped
-/// affine quantized matmul against the transposed packed weights.
+/// One rotated ternary projection: grouped affine quantized matmul against
+/// the transposed packed weights, over activations already carried into the
+/// rotated basis at this projection's input width.
 #[derive(Debug)]
 pub(crate) struct PackedProjection {
     packed_weight: MlxArray,
     quantization_scales: MlxArray,
     quantization_biases: MlxArray,
-    sign_vector: MlxArray,
-    block_size: u32,
+    input_width: i32,
 }
 
 impl PackedProjection {
     pub(crate) fn forward(
         &self,
         runtime: &MlxRuntime,
-        activations: &MlxArray,
+        rotated_activations: &RotatedActivations,
     ) -> Result<MlxArray, MlxCError> {
-        let transformed_activations =
-            apply_forward_transform(runtime, activations, &self.sign_vector, self.block_size)?;
+        if rotated_activations.width() != self.input_width {
+            return Err(MlxCError {
+                operation: "apply a rotated ternary projection",
+                description: format!(
+                    "activations rotated at width {} cannot feed a projection of input width {}",
+                    rotated_activations.width(),
+                    self.input_width
+                ),
+            });
+        }
         runtime.quantized_matmul_affine(
-            &transformed_activations,
+            rotated_activations.activations(),
             &self.packed_weight,
             &self.quantization_scales,
             &self.quantization_biases,
@@ -47,6 +59,10 @@ impl PackedProjection {
             QUANTIZATION_GROUP_SIZE,
             QUANTIZATION_BITS,
         )
+    }
+
+    pub(crate) const fn input_width(&self) -> i32 {
+        self.input_width
     }
 }
 
@@ -57,14 +73,13 @@ pub(crate) struct PackedEmbedding {
     packed_weight: MlxArray,
     quantization_scales: MlxArray,
     quantization_biases: MlxArray,
-    sign_vector: MlxArray,
-    block_size: u32,
 }
 
 impl PackedEmbedding {
     pub(crate) fn lookup(
         &self,
         runtime: &MlxRuntime,
+        rotation: &HadamardRotation,
         token_indices: &MlxArray,
     ) -> Result<MlxArray, MlxCError> {
         let selected_weights = runtime.take_axis(&self.packed_weight, token_indices, 0)?;
@@ -77,24 +92,42 @@ impl PackedEmbedding {
             QUANTIZATION_GROUP_SIZE,
             QUANTIZATION_BITS,
         )?;
-        apply_inverse_transform(runtime, &dequantized, &self.sign_vector, self.block_size)
+        rotation.rotate_inverse(runtime, &dequantized)
     }
 }
 
-/// One unrotated float projection bound at the activation dtype.
+/// The gated-delta update-rate (`in_proj_b`) and decay-interval
+/// (`in_proj_a`) float projections fused into one `[hidden, 2 * heads]`
+/// matmul. Both read the same normalized input and both are unrotated, so
+/// one launch produces both and two views split it. The weight is stored
+/// already transposed and materialized at load, so no per-call transpose
+/// node enters the graph.
 #[derive(Debug)]
-pub(crate) struct FloatProjection {
-    weight: MlxArray,
+pub(crate) struct GatedDeltaRateProjection {
+    transposed_weight: MlxArray,
+    head_count: i32,
 }
 
-impl FloatProjection {
+/// The two gated-delta rate pre-activations one fused launch produces.
+pub(crate) struct GatedDeltaRateLogits {
+    pub(crate) update_logits: MlxArray,
+    pub(crate) decay_inputs: MlxArray,
+}
+
+impl GatedDeltaRateProjection {
     pub(crate) fn forward(
         &self,
         runtime: &MlxRuntime,
         activations: &MlxArray,
-    ) -> Result<MlxArray, MlxCError> {
-        let transposed_weight = runtime.transpose_axes(&self.weight, &[1, 0])?;
-        runtime.matmul(activations, &transposed_weight)
+    ) -> Result<GatedDeltaRateLogits, MlxCError> {
+        let fused_logits = runtime.matmul(activations, &self.transposed_weight)?;
+        let update_logits = slice_last_dimension_raw(runtime, &fused_logits, 0, self.head_count)?;
+        let decay_inputs =
+            slice_last_dimension_raw(runtime, &fused_logits, self.head_count, 2 * self.head_count)?;
+        Ok(GatedDeltaRateLogits {
+            update_logits,
+            decay_inputs,
+        })
     }
 }
 
@@ -126,8 +159,7 @@ pub(crate) struct LinearLayerWeights {
     pub(crate) query_key_value: PackedProjection,
     pub(crate) output_gate: PackedProjection,
     pub(crate) output: PackedProjection,
-    pub(crate) update_rate: FloatProjection,
-    pub(crate) decay_interval: FloatProjection,
+    pub(crate) rates: GatedDeltaRateProjection,
     pub(crate) convolution: MlxArray,
     pub(crate) decay_rate_logarithm: MlxArray,
     pub(crate) decay_interval_bias: MlxArray,
@@ -153,6 +185,37 @@ pub(crate) struct PrismHadamardWeights {
     pub(crate) post_attention_normalization_weights: Vec<MlxArray>,
     pub(crate) final_normalization: MlxArray,
     pub(crate) language_model_head: PackedProjection,
+    /// One activation-side rotation per input width the pack rotates.
+    rotations_by_width: BTreeMap<i32, HadamardRotation>,
+}
+
+impl PrismHadamardWeights {
+    /// The rotation for activations of `width`; every width a packed
+    /// projection consumes was registered at load, so a miss is a bug.
+    pub(crate) fn rotation(&self, width: i32) -> Result<&HadamardRotation, MlxCError> {
+        self.rotations_by_width
+            .get(&width)
+            .ok_or_else(|| MlxCError {
+                operation: "select a Hadamard rotation",
+                description: format!("no sign vector is registered for activation width {width}"),
+            })
+    }
+
+    /// Carries `activations` into the rotated basis for every projection of
+    /// its width.
+    pub(crate) fn rotate(
+        &self,
+        runtime: &MlxRuntime,
+        compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
+        activations: &MlxArray,
+    ) -> Result<RotatedActivations, MlxCError> {
+        let width = *activations
+            .shape()
+            .last()
+            .expect("activations always have at least one axis");
+        self.rotation(width)?
+            .rotate(runtime, compiled_elementwise_graphs, activations)
+    }
 }
 
 /// Loads every family tensor from the pack's retained weights file map.
@@ -185,13 +248,35 @@ pub(crate) fn load_family_weights(
             let packed_weight = take(&format!("{stem}.weight"))?;
             let quantization_scales = take(&format!("{stem}.scales"))?;
             let quantization_biases = take(&format!("{stem}.biases"))?;
-            let sign_vector = take(&format!("{stem}.signs"))?;
+            let packed_shape = packed_weight.shape();
+            let input_width = packed_shape[packed_shape.len() - 1] * 32 / QUANTIZATION_BITS;
             Ok(PackedProjection {
                 packed_weight,
                 quantization_scales,
                 quantization_biases,
-                sign_vector,
-                block_size: pack.hadamard_contract().block_size(),
+                input_width,
+            })
+        };
+    let rate_projection =
+        |layer_prefix: &str| -> Result<GatedDeltaRateProjection, PrismHadamardModelError> {
+            let update_rate_weight =
+                take_cast(&format!("{layer_prefix}.linear_attn.in_proj_b.weight"))?;
+            let decay_interval_weight =
+                take_cast(&format!("{layer_prefix}.linear_attn.in_proj_a.weight"))?;
+            let head_count = update_rate_weight.shape()[0];
+            let fused_weight = runtime
+                .concatenate_axis(&[&update_rate_weight, &decay_interval_weight], 0)
+                .map_err(PrismHadamardModelError::WeightCasting)?;
+            let transposed_weight = runtime
+                .transpose_axes(&fused_weight, &[1, 0])
+                .and_then(|transposed| runtime.build_contiguous_row_major_copy(&transposed))
+                .map_err(PrismHadamardModelError::WeightCasting)?;
+            runtime
+                .evaluate_arrays(&[&transposed_weight])
+                .map_err(PrismHadamardModelError::WeightCasting)?;
+            Ok(GatedDeltaRateProjection {
+                transposed_weight,
+                head_count,
             })
         };
 
@@ -200,8 +285,6 @@ pub(crate) fn load_family_weights(
         packed_weight: take(&format!("{embedding_stem}.weight"))?,
         quantization_scales: take(&format!("{embedding_stem}.scales"))?,
         quantization_biases: take(&format!("{embedding_stem}.biases"))?,
-        sign_vector: take(&format!("{embedding_stem}.signs"))?,
-        block_size: pack.hadamard_contract().block_size(),
     };
 
     let mut decoder_layers = Vec::with_capacity(text.num_hidden_layers as usize);
@@ -216,73 +299,95 @@ pub(crate) fn load_family_weights(
         post_attention_normalization_weights.push(take_cast(&format!(
             "{layer_prefix}.post_attention_layernorm.weight"
         ))?);
-        let decoder_layer = match layer_type.as_str() {
-            "linear_attention" => DecoderLayerWeights {
-                attention: DecoderLayerAttentionWeights::Linear(LinearLayerWeights {
-                    query_key_value: packed_projection(&format!(
-                        "model.layers.{layer_index}.linear_attn.in_proj_qkv"
-                    ))?,
-                    output_gate: packed_projection(&format!(
-                        "model.layers.{layer_index}.linear_attn.in_proj_z"
-                    ))?,
-                    output: packed_projection(&format!(
-                        "model.layers.{layer_index}.linear_attn.out_proj"
-                    ))?,
-                    update_rate: FloatProjection {
-                        weight: take_cast(&format!("{layer_prefix}.linear_attn.in_proj_b.weight"))?,
-                    },
-                    decay_interval: FloatProjection {
-                        weight: take_cast(&format!("{layer_prefix}.linear_attn.in_proj_a.weight"))?,
-                    },
-                    convolution: take_cast(&format!("{layer_prefix}.linear_attn.conv1d.weight"))?,
-                    decay_rate_logarithm: take_cast(&format!("{layer_prefix}.linear_attn.A_log"))?,
-                    decay_interval_bias: take_cast(&format!("{layer_prefix}.linear_attn.dt_bias"))?,
-                    normalization: take_cast(&format!("{layer_prefix}.linear_attn.norm.weight"))?,
-                }),
-                mlp: DenseMlpWeights {
-                    gate: packed_projection(&format!("model.layers.{layer_index}.mlp.gate_proj"))?,
-                    up: packed_projection(&format!("model.layers.{layer_index}.mlp.up_proj"))?,
-                    down: packed_projection(&format!("model.layers.{layer_index}.mlp.down_proj"))?,
-                },
-            },
-            "full_attention" => DecoderLayerWeights {
-                attention: DecoderLayerAttentionWeights::Full(FullLayerWeights {
-                    query: packed_projection(&format!(
-                        "model.layers.{layer_index}.self_attn.q_proj"
-                    ))?,
-                    key: packed_projection(&format!(
-                        "model.layers.{layer_index}.self_attn.k_proj"
-                    ))?,
-                    value: packed_projection(&format!(
-                        "model.layers.{layer_index}.self_attn.v_proj"
-                    ))?,
-                    output: packed_projection(&format!(
-                        "model.layers.{layer_index}.self_attn.o_proj"
-                    ))?,
-                    query_normalization: take_cast(&format!(
-                        "{layer_prefix}.self_attn.q_norm.weight"
-                    ))?,
-                    key_normalization: take_cast(&format!(
-                        "{layer_prefix}.self_attn.k_norm.weight"
-                    ))?,
-                }),
-                mlp: DenseMlpWeights {
-                    gate: packed_projection(&format!("model.layers.{layer_index}.mlp.gate_proj"))?,
-                    up: packed_projection(&format!("model.layers.{layer_index}.mlp.up_proj"))?,
-                    down: packed_projection(&format!("model.layers.{layer_index}.mlp.down_proj"))?,
-                },
-            },
+        let mlp = DenseMlpWeights {
+            gate: packed_projection(&format!("model.layers.{layer_index}.mlp.gate_proj"))?,
+            up: packed_projection(&format!("model.layers.{layer_index}.mlp.up_proj"))?,
+            down: packed_projection(&format!("model.layers.{layer_index}.mlp.down_proj"))?,
+        };
+        let attention = match layer_type.as_str() {
+            "linear_attention" => DecoderLayerAttentionWeights::Linear(LinearLayerWeights {
+                query_key_value: packed_projection(&format!(
+                    "model.layers.{layer_index}.linear_attn.in_proj_qkv"
+                ))?,
+                output_gate: packed_projection(&format!(
+                    "model.layers.{layer_index}.linear_attn.in_proj_z"
+                ))?,
+                output: packed_projection(&format!(
+                    "model.layers.{layer_index}.linear_attn.out_proj"
+                ))?,
+                rates: rate_projection(&layer_prefix)?,
+                convolution: take_cast(&format!("{layer_prefix}.linear_attn.conv1d.weight"))?,
+                decay_rate_logarithm: take_cast(&format!("{layer_prefix}.linear_attn.A_log"))?,
+                decay_interval_bias: take_cast(&format!("{layer_prefix}.linear_attn.dt_bias"))?,
+                normalization: take_cast(&format!("{layer_prefix}.linear_attn.norm.weight"))?,
+            }),
+            "full_attention" => DecoderLayerAttentionWeights::Full(FullLayerWeights {
+                query: packed_projection(&format!("model.layers.{layer_index}.self_attn.q_proj"))?,
+                key: packed_projection(&format!("model.layers.{layer_index}.self_attn.k_proj"))?,
+                value: packed_projection(&format!("model.layers.{layer_index}.self_attn.v_proj"))?,
+                output: packed_projection(&format!("model.layers.{layer_index}.self_attn.o_proj"))?,
+                query_normalization: take_cast(&format!("{layer_prefix}.self_attn.q_norm.weight"))?,
+                key_normalization: take_cast(&format!("{layer_prefix}.self_attn.k_norm.weight"))?,
+            }),
             other_layer_type => {
                 return Err(PrismHadamardModelError::UnsupportedLayerType {
                     layer_type: other_layer_type.to_owned(),
                 });
             }
         };
-        decoder_layers.push(decoder_layer);
+        decoder_layers.push(DecoderLayerWeights { attention, mlp });
     }
 
     let final_normalization = take_cast("language_model.model.norm.weight")?;
     let language_model_head = packed_projection("lm_head")?;
+
+    let hadamard_contract = pack.hadamard_contract();
+    let mut rotations_by_width = BTreeMap::new();
+    let mut register_width = |width: i32| -> Result<(), PrismHadamardModelError> {
+        if rotations_by_width.contains_key(&width) {
+            return Ok(());
+        }
+        let sign_values = hadamard_contract.sign_vector(width as u32).ok_or_else(|| {
+            PrismHadamardModelError::WeightSlicing {
+                description: format!(
+                    "the hadamard contract declares no sign vector for activation width {width}"
+                ),
+            }
+        })?;
+        let rotation = HadamardRotation::new(
+            runtime,
+            width as u32,
+            hadamard_contract.block_size(),
+            sign_values,
+        )
+        .map_err(PrismHadamardModelError::WeightCasting)?;
+        rotations_by_width.insert(width, rotation);
+        Ok(())
+    };
+    register_width(text.hidden_size as i32)?;
+    register_width(language_model_head.input_width())?;
+    for decoder_layer in &decoder_layers {
+        let projections: Vec<&PackedProjection> = match &decoder_layer.attention {
+            DecoderLayerAttentionWeights::Linear(linear_layer) => vec![
+                &linear_layer.query_key_value,
+                &linear_layer.output_gate,
+                &linear_layer.output,
+            ],
+            DecoderLayerAttentionWeights::Full(full_layer) => vec![
+                &full_layer.query,
+                &full_layer.key,
+                &full_layer.value,
+                &full_layer.output,
+            ],
+        };
+        for projection in projections.into_iter().chain([
+            &decoder_layer.mlp.gate,
+            &decoder_layer.mlp.up,
+            &decoder_layer.mlp.down,
+        ]) {
+            register_width(projection.input_width())?;
+        }
+    }
 
     Ok(PrismHadamardWeights {
         embedding,
@@ -291,6 +396,7 @@ pub(crate) fn load_family_weights(
         post_attention_normalization_weights,
         final_normalization,
         language_model_head,
+        rotations_by_width,
     })
 }
 
@@ -342,4 +448,18 @@ pub(crate) fn slice_last_dimension(
             description: execution_error.to_string(),
         },
     )
+}
+
+fn slice_last_dimension_raw(
+    runtime: &MlxRuntime,
+    array: &MlxArray,
+    start: i32,
+    end: i32,
+) -> Result<MlxArray, MlxCError> {
+    tensor_slicing::slice_last_dimension(runtime, array, start, end).map_err(|execution_error| {
+        MlxCError {
+            operation: "split the fused gated-delta rate projection",
+            description: execution_error.to_string(),
+        }
+    })
 }
