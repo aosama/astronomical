@@ -300,7 +300,7 @@ fn completion_id_namespace() -> Arc<str> {
 
 pub(crate) fn allocate_chat_request_id(next_chat_request_id: &AtomicU64) -> Option<u64> {
     next_chat_request_id
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current_request_id| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |current_request_id| {
             current_request_id.checked_add(1)
         })
         .ok()
