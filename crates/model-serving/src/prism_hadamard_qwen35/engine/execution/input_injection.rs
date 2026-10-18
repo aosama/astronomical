@@ -3,8 +3,8 @@
 use astronomical_ipc_protocol::RequestId;
 
 use super::engine_trait_impl::gpu_error;
-use super::sampling::sample_token_id;
-use super::{PrismHadamardQwen35InferenceExecution, pending_token_after_sampling};
+use super::sampling::sample_token;
+use super::{PrismHadamardQwen35InferenceExecution, successor_stays_pending};
 use crate::{InferenceEngineError, PerformanceOperation};
 
 pub(super) fn inject_input_tokens(
@@ -100,14 +100,17 @@ pub(super) fn inject_input_tokens(
             },
         )
         .map_err(gpu_error)?;
-    let next_token_id = active_generation.measure_operation(
+    let next_token = active_generation.measure_operation(
         PerformanceOperation::DecodeSamplingSpan,
-        |active_generation| sample_token_id(model, &final_logits, active_generation),
+        |active_generation| sample_token(model, &final_logits, active_generation),
     )?;
-    active_generation.next_input_token_id = pending_token_after_sampling(
-        active_generation.remaining_output_tokens,
-        next_token_id,
-        &model.pack().config().text().eos_token_ids,
-    );
+    active_generation
+        .measure_operation(
+            PerformanceOperation::DecodeAsyncEvaluationSubmission,
+            |_| model.runtime.async_eval_arrays(&[&next_token]),
+        )
+        .map_err(gpu_error)?;
+    active_generation.pending_sampled_token =
+        successor_stays_pending(active_generation.remaining_output_tokens).then_some(next_token);
     Ok(())
 }
