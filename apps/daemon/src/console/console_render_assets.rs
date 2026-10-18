@@ -5,12 +5,13 @@
 //! `include_str!` / `include_bytes!` so the daemon keeps no filesystem
 //! dependency and needs no frontend build step.
 //!
-//! The files are symlinks into Thin Talk's canvas shell
-//! (`apps/thin-talk/Sources/ThinTalkCanvas/Resources/web/`), which is the single
-//! source of truth. The modules are bridge-agnostic: they depend only on the
-//! `window.__thintalk*` namespace, the vendor libraries, and the DOM, so the same
-//! files serve both the Thin Talk native canvas and the Observatory console. Editing
-//! the symlinks here would be a drift bug — change the files under Thin Talk instead.
+//! The five `canvas-*.js` modules under `console/render/` are owned by the
+//! console: Thin Talk's canvas client moved to the TypeScript sources under
+//! `apps/thin-talk/web/src/` (shipped as the generated `bundle.js`), so the
+//! plain-JS modules are no longer shared with Thin Talk and evolve here. The
+//! `vendor/` directory is still a symlink into Thin Talk's web shell — the
+//! vendored libraries are identical third-party releases consumed by both
+//! surfaces, so they keep one shared source.
 
 use axum::{
     Router,
