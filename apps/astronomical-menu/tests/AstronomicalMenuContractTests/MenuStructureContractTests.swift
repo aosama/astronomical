@@ -54,4 +54,23 @@ final class MenuStructureContractTests: XCTestCase {
 
     XCTAssertLessThan(downloadActionStart.lowerBound, overflowMenuStart.lowerBound)
   }
+
+  func test_should_place_the_launch_at_login_switch_inside_the_overflow_menu_behind_its_guard()
+    throws
+  {
+    let packageDirectoryURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let popoverSource = try String(
+      contentsOf: packageDirectoryURL.appendingPathComponent(
+        "Sources/AstronomicalMenuCore/OrbitalTelemetryPopover.swift"),
+      encoding: .utf8)
+    let overflowMenuStart = try XCTUnwrap(popoverSource.range(of: "Menu {"))
+    let launchAtLoginGuardStart = try XCTUnwrap(
+      popoverSource.range(of: "if launchAtLoginSupported {"))
+    let launchAtLoginToggleStart = try XCTUnwrap(
+      popoverSource.range(of: "Toggle(\"Launch at Login\", isOn: $launchAtLoginIsEnabled)"))
+
+    XCTAssertGreaterThan(launchAtLoginGuardStart.lowerBound, overflowMenuStart.lowerBound)
+    XCTAssertGreaterThan(launchAtLoginToggleStart.lowerBound, launchAtLoginGuardStart.lowerBound)
+  }
 }
