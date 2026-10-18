@@ -14,6 +14,9 @@ use crate::model_generation_processor::PreparedModelGeneration;
 pub enum ModelFamilyGenerationProcessor {
     Qwen3_5(Qwen3_5GenerationProcessor),
     K2HorizonMoVA(K2HorizonMoVAGenerationProcessor),
+    /// The folded ternary family reuses the Qwen3.5 text processor: the pack
+    /// speaks the same chat dialect over its own tokenizer.
+    PrismHadamardQwen35(Qwen3_5GenerationProcessor),
 }
 
 impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
@@ -24,6 +27,7 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
         match self {
             Self::Qwen3_5(processor) => processor.ready_event(),
             Self::K2HorizonMoVA(processor) => processor.ready_event(),
+            Self::PrismHadamardQwen35(processor) => processor.ready_event(),
         }
     }
 
@@ -53,6 +57,18 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
                         ModelFamilyRequestOutput::K2HorizonMoVA(prepared_generation.request_output),
                     )
                 }),
+            Self::PrismHadamardQwen35(processor) => processor
+                .prepare_chat_generation(chat_generation_command)
+                .map(|prepared_generation| {
+                    PreparedModelGeneration::new(
+                        ModelFamilyInferenceRequest::PrismHadamardQwen35(
+                            prepared_generation.inference_request,
+                        ),
+                        ModelFamilyRequestOutput::PrismHadamardQwen35(
+                            prepared_generation.request_output,
+                        ),
+                    )
+                }),
         }
     }
 
@@ -60,6 +76,9 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
         match self {
             Self::Qwen3_5(processor) => processor.is_end_of_sequence_token(generated_token_id),
             Self::K2HorizonMoVA(processor) => {
+                processor.is_end_of_sequence_token(generated_token_id)
+            }
+            Self::PrismHadamardQwen35(processor) => {
                 processor.is_end_of_sequence_token(generated_token_id)
             }
         }
@@ -78,6 +97,10 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
                 Self::K2HorizonMoVA(processor),
                 ModelFamilyRequestOutput::K2HorizonMoVA(request_output),
             ) => processor.translate_generated_token(request_output, generated_token_id),
+            (
+                Self::PrismHadamardQwen35(processor),
+                ModelFamilyRequestOutput::PrismHadamardQwen35(request_output),
+            ) => processor.translate_generated_token(request_output, generated_token_id),
             _ => Err(ModelGenerationOutputError::Fatal {
                 reason: "model-family processor and request output do not match".to_owned(),
             }),
@@ -95,6 +118,10 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             (
                 Self::K2HorizonMoVA(processor),
                 ModelFamilyRequestOutput::K2HorizonMoVA(request_output),
+            ) => processor.finish_request_output(request_output),
+            (
+                Self::PrismHadamardQwen35(processor),
+                ModelFamilyRequestOutput::PrismHadamardQwen35(request_output),
             ) => processor.finish_request_output(request_output),
             _ => Err(ModelGenerationOutputError::Fatal {
                 reason: "model-family processor and request output do not match".to_owned(),

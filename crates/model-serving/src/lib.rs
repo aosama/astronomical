@@ -46,6 +46,12 @@ pub(crate) mod performance_attribution;
 
 pub(crate) mod persistent_cache;
 
+// The folded ternary family ships its loader and straight text model as
+// crate API ahead of the serving-path integration; the acceptance crate
+// exercises it through this public surface.
+
+pub mod prism_hadamard_qwen35;
+
 pub(crate) mod qwen3_5_core;
 
 #[cfg(feature = "direct-mlx")]
@@ -168,6 +174,13 @@ pub use k2_horizon_mova::{
     gathered_fused_swiglu, gathered_value_experts, initialize_k2_horizon_mova_execution,
     initialize_k2_horizon_mova_execution_with_serving_settings, initialize_k2_horizon_mova_model,
     initialize_k2_horizon_mova_model_with_serving_settings,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use prism_hadamard_qwen35::engine::{
+    PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
+    PrismHadamardQwen35ServingSettings, PrismHadamardQwen35StartupError,
+    initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
 pub use k2_horizon_mova::{

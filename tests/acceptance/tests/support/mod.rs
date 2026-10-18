@@ -17,6 +17,8 @@ pub(crate) mod memory_utilization_parity;
 #[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 #[allow(dead_code)]
 pub(crate) mod openai_client;
+#[allow(dead_code)]
+pub(crate) mod romeo_and_juliet;
 #[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 #[allow(dead_code)]
 pub(crate) mod serving_rest;

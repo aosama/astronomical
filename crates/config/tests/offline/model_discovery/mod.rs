@@ -6,6 +6,7 @@ mod family_classification;
 mod flux2_klein;
 mod k2_horizon_mova;
 mod modernbert;
+mod prism_hadamard_qwen35;
 mod qwen3_5;
 mod qwen_image_21;
 mod traversal;

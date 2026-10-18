@@ -17,6 +17,7 @@ mod flux2_klein_documents;
 mod k2_horizon_mova;
 mod model_family;
 mod modernbert;
+mod prism_hadamard_qwen35;
 mod qwen3_5;
 mod qwen_image_21;
 mod qwen_image_21_documents;
