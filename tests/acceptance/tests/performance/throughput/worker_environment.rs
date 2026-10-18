@@ -1,10 +1,15 @@
 //! The isolated Development home a throughput journey launches its worker into.
 //!
 //! A throughput measurement is only production-faithful if the worker it
-//! measures is the real worker binary, started from the real configuration
-//! resolver, with the measured model and nothing else. This module owns that
-//! setup and nothing else; driving a completion and reading its numbers back
-//! live in `completion`, and the journey itself lives in `support`.
+//! measures is the real worker binary, built with the same Cargo profile as
+//! this test binary, started from the real configuration resolver, with the
+//! measured model and nothing else. A `cargo test --release` journey therefore
+//! measures `target/release/astronomical-inference-worker` and fails before
+//! launch when that build is missing, instead of quietly measuring a leftover
+//! debug worker; `ASTRONOMICAL_WORKSPACE_BINARY_PROFILE` launches a worker from
+//! another profile directory deliberately. This module owns that setup and
+//! nothing else; driving a completion and reading its numbers back live in
+//! `completion`, and the journey itself lives in `support`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -34,7 +39,9 @@ fn discovery_root_for_model_directory(model_directory: &Path) -> &Path {
 }
 
 /// Builds an isolated Development home pinned to the measured model and resolves
-/// the daemon-owned bootstrap settings for the worker. The worker's logging
+/// the daemon-owned bootstrap settings for the worker. The worker executable is
+/// the one built with this test binary's profile (see the module docs), so an
+/// optimized journey never records debug-build rates. The worker's logging
 /// directory is pointed at a persistent per-model directory so its log lines
 /// survive the isolated home's panic-unwind cleanup and stay readable after a
 /// failed journey.

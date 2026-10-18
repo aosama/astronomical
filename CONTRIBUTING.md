@@ -28,6 +28,8 @@ Run direct MLX or model-artifact acceptance only when the change crosses those b
 
 Routine offline, Representational State Transfer (REST), and commit verification tests retain one stable Cargo graph for warm iteration. Commit verification preserves caller-selected Cargo and compiler-cache configuration. Release and acceptance Cargo commands can use marker-owned disposable targets that are removed automatically. Use the `full-debug` profile only when complete packed symbols are required.
 
+Cargo aliases in `.cargo/config.toml` are string-valued on purpose. Cargo merges the config file of every ancestor directory, and a git worktree nested under the repository (for example under `.claude/worktrees/`) sees the file twice; string aliases merge by replacement, while array aliases would concatenate and double. If cargo stops with `failed to merge config value ... expected string, but found array` inside a nested worktree, the worktree and the main checkout disagree on the alias form: merge `main` into the worktree branch, or update the main checkout, so both carry the string form.
+
 Preview retired native CMake output with `scripts/clean-retired-cargo-native-output.sh --dry-run`. Its explicit `--apply` mode holds every affected Cargo profile lock and preserves generated bindings and diagnostics.
 
 Historical Rust generations without an Astronomical ownership marker remain Cargo-owned. Remove them only through a deliberate whole-target `cargo clean` after other Cargo processes finish; never delete hashed generations by age.
