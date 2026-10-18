@@ -8,8 +8,6 @@ const consoleScriptPath = path.join(__dirname, "console.js");
 const consoleScript = fs.readFileSync(consoleScriptPath, "utf8");
 const memoryControlScriptPath = path.join(__dirname, "memory-control.js");
 const memoryControlScript = fs.readFileSync(memoryControlScriptPath, "utf8");
-const playgroundScriptPath = path.join(__dirname, "playground.js");
-const playgroundScript = fs.readFileSync(playgroundScriptPath, "utf8");
 const overviewCompactScriptPath = path.join(__dirname, "overview-compact.js");
 const overviewCompactScript = fs.readFileSync(overviewCompactScriptPath, "utf8");
 
@@ -28,7 +26,6 @@ function createConsoleContext() {
     vm.runInContext(memoryControlScript, scriptContext, { filename: memoryControlScriptPath });
     vm.runInContext(consoleScript, scriptContext, { filename: consoleScriptPath });
     vm.runInContext(overviewCompactScript, scriptContext, { filename: overviewCompactScriptPath });
-    vm.runInContext(playgroundScript, scriptContext, { filename: playgroundScriptPath });
     return scriptContext;
 }
 
@@ -255,47 +252,6 @@ test("reports the loaded-model floor as status information, not a bound", () => 
         statusElement.textContent,
         "Effective 18.63 GB of 45.60 GB · Loaded model floor 18.17 GB"
     );
-});
-
-test("rejects a serialized chat request after base64 expansion exceeds the HTTP body limit", () => {
-    const scriptContext = createConsoleContext();
-    const oversizedSerializedRequest = "x".repeat(32 * 1024 * 1024 + 1);
-    scriptContext.oversizedSerializedRequest = oversizedSerializedRequest;
-
-    assert.equal(
-        vm.runInContext(
-            "chatRequestFitsHttpBodyLimit(oversizedSerializedRequest)",
-            scriptContext
-        ),
-        false
-    );
-});
-
-test("retains partial assistant output in conversation history after interruption", () => {
-    const scriptContext = createConsoleContext();
-    const assistantHistoryMessage = vm.runInContext(
-        'assistantHistoryMessage({ markdown: "partial", reasoning: "working" })',
-        scriptContext
-    );
-
-    assert.deepEqual(
-        JSON.parse(JSON.stringify(assistantHistoryMessage)),
-        {
-            role: "assistant",
-            content: "partial",
-            reasoning_content: "working"
-        }
-    );
-});
-
-test("describes an attached image in the visible user transcript", () => {
-    const scriptContext = createConsoleContext();
-    const visibleMessage = vm.runInContext(
-        'visibleUserMessageText({ content: [{ type: "text", text: "inspect" }, { type: "image_url", image_url: { url: "data:image/png;base64,AA==" } }] })',
-        scriptContext
-    );
-
-    assert.equal(visibleMessage, "inspect\n[Image attached]");
 });
 
 test("maps every observatory destination to a stable URL path", () => {

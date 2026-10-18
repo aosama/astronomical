@@ -42,7 +42,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(pollStatus, POLL_INTERVAL_MILLIS);
     setInterval(pollCacheStats, POLL_INTERVAL_MILLIS);
     setInterval(pollModels, POLL_INTERVAL_MILLIS);
-    wirePlayground();
     wireServerControls();
     wireMemoryLimitControl();
 });
