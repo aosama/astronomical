@@ -44,6 +44,8 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+# Channel table. The ports mirror the daemon's master constants in
+# crates/config/src/astronomical_runtime_instance.rs; keep them in sync.
 case "$APPLICATION_CHANNEL" in
     development)
         bundle_name="Thin Talk Development"
@@ -112,6 +114,19 @@ canvas_resource_bundle="${package_path}/.build/release/ThinTalk_ThinTalkCanvas.b
     printf '%s\n' "Error: conversation canvas resources are unavailable at ${canvas_resource_bundle}" >&2
     exit 1
 }
+# SwiftPM copies Resources/web verbatim, so the resource bundle exists even on a
+# fresh clone where the generated web client was never built; a bundle lacking
+# the client scripts still opens a blank canvas. Fail with the recovery command
+# instead of shipping a silently empty conversation.
+canvas_web_root="${canvas_resource_bundle}/Contents/Resources/web"
+for canvas_client_asset in bundle.js bundle.css; do
+    [ -s "${canvas_web_root}/${canvas_client_asset}" ] || {
+        printf '%s\n' "Error: ${canvas_client_asset} is missing from the canvas resources." >&2
+        printf '%s\n' "The web client is generated, not committed. Build it once with:" >&2
+        printf '%s\n' "  (cd \"${repository_root}/apps/thin-talk/web\" && npm install && npm run build)" >&2
+        exit 1
+    }
+done
 rm -rf "${app_bundle_path}/Contents/Resources/ThinTalk_ThinTalkCanvas.bundle"
 cp -R "$canvas_resource_bundle" "${app_bundle_path}/Contents/Resources/"
 

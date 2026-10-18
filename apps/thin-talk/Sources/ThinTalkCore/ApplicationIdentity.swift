@@ -13,7 +13,10 @@ public enum ThinTalkChannel: String, Equatable, Sendable {
   /// The state directory this channel owns under the home directory.
   public var stateDirectoryName: String { self == .development ? ".astronomical-dev" : ".astronomical" }
 
-  /// The default daemon port for this channel.
+  /// The default daemon port for this channel. Mirrors the daemon's master
+  /// table (STABLE_LOOPBACK_PORT / DEVELOPMENT_LOOPBACK_PORT in
+  /// crates/config/src/astronomical_runtime_instance.rs); Swift cannot import
+  /// the Rust constants, so keep the values in sync by hand.
   public var defaultDaemonPort: Int { self == .development ? 6733 : 6732 }
 }
 

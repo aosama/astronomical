@@ -593,39 +593,9 @@ final class DaemonLifecycleController {
     removeOwnershipRecord()
   }
 
-  private func processMatches(
-    processIdentifier: Int32, executablePath: String, processGroupIdentifier: Int32?
-  ) -> Bool {
-    let processInspection = Process()
-    processInspection.executableURL = URL(fileURLWithPath: "/bin/ps")
-    processInspection.arguments = [
-      "-p", String(processIdentifier), "-o", "pgid=", "-o", "state=", "-o", "comm=",
-    ]
-    let standardOutput = Pipe()
-    processInspection.standardOutput = standardOutput
-    processInspection.standardError = FileHandle.nullDevice
-    guard (try? processInspection.run()) != nil else { return false }
-    processInspection.waitUntilExit()
-    guard processInspection.terminationStatus == 0,
-      let processDescription = String(
-        data: standardOutput.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-    else { return false }
-    let descriptionFields = processDescription.split(whereSeparator: { $0.isWhitespace })
-    // comm is the tail, not the third token: bundle paths like
-    // "Astronomical Development.app" contain spaces, so splitting on
-    // whitespace breaks the executable path across fields and every
-    // Development-channel match would silently fail.
-    guard descriptionFields.count >= 3,
-      let observedProcessGroupIdentifier = Int32(descriptionFields[0]),
-      !descriptionFields[1].hasPrefix("Z")
-    else { return false }
-    if let processGroupIdentifier, processGroupIdentifier != observedProcessGroupIdentifier {
-      return false
-    }
-    let observedExecutablePath = descriptionFields.dropFirst(2).joined(separator: " ")
-    return observedExecutablePath == executablePath
-  }
-
+  // Process-identity checks — including the comm-with-spaces parsing that
+  // bundle paths like "Astronomical Development.app" require — live once in
+  // DaemonProcessInspection so every termination decision shares one matcher.
   private func terminateProcessGroup(processIdentifier: Int32) {
     _ = kill(-processIdentifier, SIGTERM)
     let deadline = ContinuousClock.now + daemonShutdownTimeout
