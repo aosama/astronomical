@@ -443,7 +443,7 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin observatory-contracts
           set -o pipefail
-          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js apps/daemon/console/playground.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
+          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
         timeout-minutes: 2
       - name: Upload test logs
         if: always()

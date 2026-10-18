@@ -3,13 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Astronomical Observatory: local model-runner status, telemetry, chat playground, and controls.">
+    <meta name="description" content="Astronomical Observatory: local model-runner status, telemetry, controls, and library.">
     <title>Astronomical Observatory</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/console.css">
     <link rel="stylesheet" href="/library.css">
-    <link rel="stylesheet" href="/render/vendor/katex/katex.min.css">
-    <link rel="stylesheet" href="/render/vendor/highlight-github-dark.min.css">
 </head>
 <body class="observatory">
     <div class="observatory-shell">
@@ -138,51 +136,19 @@
                 <section id="chat-view" class="observatory-view" data-observatory-view="chat" aria-labelledby="chat-title" hidden>
                     <div class="view-heading">
                         <div><p class="eyebrow">Local inference</p><h2 id="chat-title">Chat</h2></div>
-                        <p>Talk directly to the ready model without leaving this Mac.</p>
+                        <p>Conversations live in Thin Talk, Astronomical's chat window.</p>
                     </div>
-                    <section id="playground" class="panel playground">
-                        <div class="playground-column">
-                            <section id="chat-transcript" class="chat-transcript" aria-live="polite" aria-label="Chat transcript"></section>
-                            <div id="chat-error-banner" class="chat-error-banner" hidden></div>
-                            <div class="chat-image-preview-row">
-                                <img id="chat-image-preview" class="chat-image-preview" alt="" hidden>
-                                <button id="chat-image-clear" class="button button-secondary" type="button" hidden>Remove image</button>
-                            </div>
-                            <div class="composer-dock">
-                                <textarea id="chat-input" class="chat-input" placeholder="Message Astronomical…" rows="1" aria-label="Message to send"></textarea>
-                                <div class="composer-toolbar">
-                                    <button id="chat-effort" class="effort-pill" type="button" aria-haspopup="menu" aria-expanded="false" title="How much the model thinks before answering">
-                                        <span id="chat-effort-label" class="effort-pill__label">Quick</span>
-                                        <svg class="effort-pill__chevron" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-                                    </button>
-                                    <div id="chat-effort-menu" class="effort-menu" role="menu" hidden>
-                                        <button class="effort-menu__choice" role="menuitem" data-effort="quick">Quick<span class="effort-menu__budget">256 tokens</span></button>
-                                        <button class="effort-menu__choice" role="menuitem" data-effort="balanced">Balanced<span class="effort-menu__budget">512 tokens</span></button>
-                                        <button class="effort-menu__choice" role="menuitem" data-effort="high">High<span class="effort-menu__budget">1024 tokens</span></button>
-                                    </div>
-                                    <label class="composer-round-button chat-attach" title="Attach image">
-                                        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2.75v8.5M4.75 8 8 11.25 11.25 8"/></svg>
-                                        <input type="file" id="chat-image" accept="image/*" hidden>
-                                    </label>
-                                    <button id="chat-stop" class="composer-round-button" type="button" title="Stop generating" disabled><svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg></button>
-                                    <span class="composer-spacer"></span>
-                                    <button id="chat-send" class="composer-send-button" type="button" title="Send" aria-label="Send message"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg></button>
-                                </div>
-                            </div>
-                            <aside class="playground-right" aria-label="Chat display options">
-                                <div class="playground-right-body">
-                                    <div class="font-size-controls">
-                                        <span class="font-size-label" id="font-size-heading">Text size</span>
-                                        <div class="font-size-controls-row" role="group" aria-labelledby="font-size-heading">
-                                            <button id="font-size-decrease" class="font-size-button" type="button" title="Decrease text size" aria-label="Decrease text size">A−</button>
-                                            <span id="font-size-value" class="font-size-value" aria-live="polite">14</span>
-                                            <button id="font-size-increase" class="font-size-button" type="button" title="Increase text size" aria-label="Increase text size">A+</button>
-                                        </div>
-                                    </div>
-                                    <p class="playground-note">Effort controls how much the model thinks before answering. It maps to the model's thinking budget; temperature and token caps are not exposed here.</p>
-                                </div>
-                            </aside>
-                        </div>
+                    <section id="thin-talk-redirect" class="panel chat-redirect">
+                        <h3>Chat in Thin Talk</h3>
+                        <p class="chat-redirect-lede">
+                            Thin Talk is the home for conversations with your models — sessions,
+                            formatting, math, and diagrams, all in one window.
+                        </p>
+                        <a id="open-thin-talk" class="button button-primary chat-redirect-open" href="astronomical://chat">Open Thin Talk</a>
+                        <p class="chat-redirect-fallback">
+                            If the button does nothing, open it from the menu bar instead: click the
+                            Astronomical item and choose Chat.
+                        </p>
                     </section>
                 </section>
 
@@ -297,20 +263,8 @@
     <script src="/library-render.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
-    <!-- Chat answer render stack: shared source is Thin Talk's canvas shell.
-         Vendor libraries load first, then the bridge-agnostic canvas modules in
-         dependency order (content-key, trust, math, diagrams, render). -->
-    <script src="/render/vendor/morphdom-umd.min.js" defer></script>
-    <script src="/render/vendor/purify.min.js" defer></script>
-    <script src="/render/vendor/katex/katex.min.js" defer></script>
-    <script src="/render/vendor/mermaid.min.js" defer></script>
-    <script src="/render/vendor/marked.min.js" defer></script>
-    <script src="/render/vendor/highlight.min.js" defer></script>
-    <script src="/render/canvas-content-key.js" defer></script>
-    <script src="/render/canvas-trust.js" defer></script>
-    <script src="/render/canvas-math.js" defer></script>
-    <script src="/render/canvas-diagrams.js" defer></script>
-    <script src="/render/canvas-render.js" defer></script>
-    <script src="/playground.js" defer></script>
+    <!-- Chat opens in Thin Talk through the astronomical:// link the
+         #open-thin-talk entry point uses; the Observatory itself renders no
+         model output, so it loads no render stack. -->
 </body>
 </html>

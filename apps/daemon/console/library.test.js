@@ -478,7 +478,7 @@ test("surfaces ModernBERT embedding entries with their family and capability bad
     );
 });
 
-test("does not offer chat for a ready image-generation-only model", () => {
+test("does not offer the Thin Talk handoff for a ready image-generation-only model", () => {
     const scriptContext = createLibraryContext();
     scriptContext.document = createLibraryDocument();
     scriptContext.catalogRow = {
@@ -494,6 +494,38 @@ test("does not offer chat for a ready image-generation-only model", () => {
     );
 
     assert.deepEqual(JSON.parse(JSON.stringify(actionLabels)), ["Details"]);
+});
+
+test("hands a ready model off to Thin Talk through the astronomical link", () => {
+    const thinTalkHandoffs = [];
+    const scriptContext = createLibraryContext();
+    scriptContext.document = createLibraryDocument();
+    scriptContext.window = {
+        location: { assign: (handoffTarget) => thinTalkHandoffs.push(handoffTarget) }
+    };
+    scriptContext.catalogRow = {
+        huggingfaceId: "astronomical-test/example-qwen",
+        readyOnThisMac: true,
+        supportsImageGeneration: false
+    };
+
+    const primaryActions = vm.runInContext(
+        "createLibraryPrimaryActions(catalogRow, false)",
+        scriptContext
+    );
+    const openInThinTalkButton = primaryActions.children.find(
+        (actionButton) => actionButton.textContent === "Open in Thin Talk"
+    );
+
+    assert.notEqual(
+        openInThinTalkButton,
+        undefined,
+        "a ready model should offer the Thin Talk handoff"
+    );
+    for (const clickListener of openInThinTalkButton.listeners.click) {
+        clickListener();
+    }
+    assert.deepEqual(thinTalkHandoffs, ["astronomical://chat"]);
 });
 
 test("rejects an incomplete entry even when its visible fields are renderable", () => {
