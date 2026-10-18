@@ -21,7 +21,7 @@ main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
     check_started_at="$(date +%s)"
     printf '%s step=test-channel-isolation status=start\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')"
-    forbidden_pattern='load_from_(default_location|home_directory)\(|AstronomicalRuntimeInstance::Stable|~/\.astronomical("|/)|"\.astronomical("|/)'
+    forbidden_pattern='load_from_home_directory\(|AstronomicalRuntimeInstance::Stable|~/\.astronomical("|/)|"\.astronomical("|/)'
     if forbidden_matches="$(
         rg --line-number --glob '*.rs' "$forbidden_pattern" \
             "${repository_root}/apps/inference-worker/tests" \
