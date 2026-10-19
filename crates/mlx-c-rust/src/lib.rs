@@ -63,11 +63,13 @@ pub mod raw;
 
 pub use bindings::context::MlxBindingsContext;
 pub use compile::elementwise_graphs::MlxCompiledElementwiseGraphs;
+pub use compile::gated_delta_rate_activation::MlxCompiledGatedDeltaRateActivation;
 pub use compile::graph::{
     MlxGraphBuilder, array_from_vector, graph_output_array, set_graph_output,
     set_graph_output_vector,
 };
 pub use compile::multi_output_graph::MlxCompiledMultiOutputGraph;
+pub use compile::norm_fusion::MlxCompiledDualHeadNorm;
 pub use compile::swiglu::MlxCompiledSwiGlu;
 pub use compile::transforms::{
     MlxCompileCache, disable_compile, enable_compile, jvp_of_closure, set_compile_mode,

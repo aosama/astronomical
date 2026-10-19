@@ -16,6 +16,7 @@
 
 pub(crate) mod support;
 
+mod elementwise_fusion_parity;
 mod forward_throughput;
 mod generation_throughput;
 mod layer_throughput;
