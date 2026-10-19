@@ -84,30 +84,6 @@ where
             .map(|entry| &entry.page)
     }
 
-    pub fn retained_layer_mut(&mut self, layer_index: usize) -> Option<&mut ExpertPage> {
-        self.retained_layers
-            .get_mut(layer_index)?
-            .as_mut()
-            .map(|entry| &mut entry.page)
-    }
-
-    /// Re-reads the page after an in-place overlay grow.
-    pub fn sync_page_payload_bytes(&mut self, layer_index: usize) {
-        let Some(entry) = self
-            .retained_layers
-            .get_mut(layer_index)
-            .and_then(|layer_slot| layer_slot.as_mut())
-        else {
-            return;
-        };
-        let updated_payload_bytes = entry.page.resident_payload_byte_count();
-        self.resident_payload_bytes = self
-            .resident_payload_bytes
-            .saturating_sub(entry.payload_bytes)
-            .saturating_add(updated_payload_bytes);
-        entry.payload_bytes = updated_payload_bytes;
-    }
-
     /// Repeats exact projected-byte accounting before a caller transfers ownership.
     #[must_use]
     pub fn can_commit_materialized_page(
@@ -285,19 +261,6 @@ where
         Ok(())
     }
 
-    /// Transfers one retained page out without counting the move as eviction.
-    ///
-    /// Decode handoff uses this so prefill-pinned experts become ordinary
-    /// decode-cache residents instead of being recorded as a squeeze.
-    pub fn take_retained_layer(&mut self, layer_index: usize) -> Option<ExpertPage> {
-        let layer_slot = self.retained_layers.get_mut(layer_index)?;
-        let taken_entry = layer_slot.take()?;
-        self.resident_payload_bytes = self
-            .resident_payload_bytes
-            .saturating_sub(taken_entry.payload_bytes);
-        Some(taken_entry.page)
-    }
-
     /// Removes one stale page before a barrier-safe topology rebuild.
     pub fn remove_layer(&mut self, layer_index: usize) -> bool {
         let Some(layer_slot) = self.retained_layers.get_mut(layer_index) else {
@@ -425,15 +388,6 @@ where
         self.request_pressure_maximum_resident_payload_bytes
             .take()
             .is_some()
-    }
-
-    pub fn release_all(&mut self) -> bool {
-        let had_retained_layers = self.resident_payload_bytes > 0;
-        for layer_index in 0..self.retained_layers.len() {
-            self.remove_layer(layer_index);
-        }
-        self.resident_payload_bytes = 0;
-        had_retained_layers
     }
 
     #[must_use]

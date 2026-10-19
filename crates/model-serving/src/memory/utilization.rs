@@ -132,15 +132,6 @@ impl MemoryCeilingUtilization {
         }
     }
 
-    /// Fraction of the ceiling that was in use, as a percentage.
-    #[must_use]
-    pub fn ceiling_utilization_percent(&self) -> f64 {
-        if self.mlx_active_memory_ceiling_bytes == 0 {
-            return 0.0;
-        }
-        (self.active_memory_bytes as f64 / self.mlx_active_memory_ceiling_bytes as f64) * 100.0
-    }
-
     /// Share of unused headroom that only a residency change could recover.
     ///
     /// The rest is held for other owners by policy, so a reader comparing

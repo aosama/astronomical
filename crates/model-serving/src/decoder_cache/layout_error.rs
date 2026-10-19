@@ -86,8 +86,6 @@ pub enum DecoderCacheLayoutError {
     SequenceTensorPayloadByteCountOverflow,
     #[error("decoder-cache persistence alignment token count overflowed")]
     PersistenceAlignmentTokenCountOverflow,
-    #[error("persistent prompt-cache block payload byte count overflowed")]
-    PersistentPromptCacheBlockPayloadByteCountOverflow,
     #[error(
         "decoder-cache layer {layer_index} append-only attention keys and values have different geometry"
     )]

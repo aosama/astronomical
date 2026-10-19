@@ -112,17 +112,6 @@ impl Qwen3_5ShardIndex {
         &self.vision_tensor_name_to_shard_file_name
     }
 
-    /// Returns vision tensor names that belong to one indexed file.
-    #[must_use]
-    pub fn vision_tensor_names_for_shard(&self, shard_file_name: &str) -> Vec<&str> {
-        self.vision_tensor_name_to_shard_file_name
-            .iter()
-            .filter_map(|(tensor_name, tensor_shard_file_name)| {
-                (tensor_shard_file_name == shard_file_name).then_some(tensor_name.as_str())
-            })
-            .collect()
-    }
-
     /// Returns executable model shard file names in sorted order.
     ///
     /// Includes target-language files and language files with embedded vision.
