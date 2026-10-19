@@ -29,8 +29,8 @@ pub const DOWNLOAD_POLL_INTERVAL: Duration = Duration::from_secs(2);
 /// exit 1 as transient daemon problems.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelLifecycleError {
-    #[error("Astronomical isn't running — start it, then retry.")]
-    DaemonNotRunning,
+    #[error("{disclosure}")]
+    DaemonNotRunning { disclosure: String },
     #[error("The Astronomical worker is not ready yet — retry in a moment.")]
     WorkerNotReady,
     #[error("The daemon stopped responding.")]
@@ -44,7 +44,9 @@ pub enum ModelLifecycleError {
 impl From<DaemonProbeError> for ModelLifecycleError {
     fn from(probe_error: DaemonProbeError) -> Self {
         match probe_error {
-            DaemonProbeError::DaemonNotRunning => ModelLifecycleError::DaemonNotRunning,
+            DaemonProbeError::DaemonNotRunning { disclosure } => {
+                ModelLifecycleError::DaemonNotRunning { disclosure }
+            }
             DaemonProbeError::DaemonStoppedResponding => {
                 ModelLifecycleError::DaemonStoppedResponding
             }

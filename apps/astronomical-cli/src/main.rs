@@ -147,7 +147,12 @@ fn build_current_thread_runtime() -> Result<tokio::runtime::Runtime, std::io::Er
 
 /// IPC socket of the instance the running executable serves: its own channel
 /// only, per the strict dev/stable isolation decision.
-fn candidate_ipc_socket_paths() -> Vec<std::path::PathBuf> {
+/// The executable's own channel plus that channel's IPC socket paths: the
+/// daemon verbs probe only their own channel (strict isolation), and the
+/// not-running disclosure names this channel so a failure says whose daemon
+/// is down instead of leaving the user to guess (issue #1392).
+fn own_runtime_instance_and_ipc_socket_paths()
+-> (AstronomicalRuntimeInstance, Vec<std::path::PathBuf>) {
     let current_executable_path = env::current_exe()
         .inspect_err(|exe_error| eprintln!("astronomical: {exe_error}"))
         .ok();
@@ -155,7 +160,7 @@ fn candidate_ipc_socket_paths() -> Vec<std::path::PathBuf> {
         .as_deref()
         .map(runtime_instance_from_executable_path)
         .unwrap_or(AstronomicalRuntimeInstance::Development);
-    candidate_instances(preferred_instance)
+    let candidate_socket_paths = candidate_instances(preferred_instance)
         .into_iter()
         .filter_map(|runtime_instance| {
             astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
@@ -164,7 +169,8 @@ fn candidate_ipc_socket_paths() -> Vec<std::path::PathBuf> {
             .ok()
         })
         .map(|instance_paths| instance_paths.ipc_socket_file_path())
-        .collect()
+        .collect();
+    (preferred_instance, candidate_socket_paths)
 }
 
 fn run_respond_verb(respond_arguments: astronomical_cli::RespondArguments) -> ExitCode {
@@ -177,8 +183,11 @@ fn run_respond_verb(respond_arguments: astronomical_cli::RespondArguments) -> Ex
     };
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
+    let (respond_runtime_instance, respond_candidate_socket_paths) =
+        own_runtime_instance_and_ipc_socket_paths();
     let mut respond_dependencies = astronomical_cli::RespondDependencies {
-        candidate_socket_paths: candidate_ipc_socket_paths(),
+        candidate_socket_paths: respond_candidate_socket_paths,
+        runtime_instance: respond_runtime_instance,
         stdout: &mut stdout,
         stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
@@ -214,8 +223,11 @@ fn run_embed_verb(embed_arguments: astronomical_cli::EmbedArguments) -> ExitCode
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
+    let (embed_runtime_instance, embed_candidate_socket_paths) =
+        own_runtime_instance_and_ipc_socket_paths();
     let mut embed_dependencies = astronomical_cli::EmbedDependencies {
-        candidate_socket_paths: candidate_ipc_socket_paths(),
+        candidate_socket_paths: embed_candidate_socket_paths,
+        runtime_instance: embed_runtime_instance,
         stdin: &mut stdin,
         stdout: &mut stdout,
         stderr: &mut stderr,
@@ -251,8 +263,11 @@ fn run_models_verb(models_command: astronomical_cli::ModelsCommand) -> ExitCode 
     };
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
+    let (models_runtime_instance, models_candidate_socket_paths) =
+        own_runtime_instance_and_ipc_socket_paths();
     let mut models_dependencies = astronomical_cli::ModelsDependencies {
-        candidate_socket_paths: candidate_ipc_socket_paths(),
+        candidate_socket_paths: models_candidate_socket_paths,
+        runtime_instance: models_runtime_instance,
         stdout: &mut stdout,
         stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
@@ -286,8 +301,11 @@ fn run_status_verb() -> ExitCode {
         }
     };
     let mut stdout = io::stdout();
+    let (status_runtime_instance, status_candidate_socket_paths) =
+        own_runtime_instance_and_ipc_socket_paths();
     let mut status_dependencies = astronomical_cli::StatusDependencies {
-        candidate_socket_paths: candidate_ipc_socket_paths(),
+        candidate_socket_paths: status_candidate_socket_paths,
+        runtime_instance: status_runtime_instance,
         stdout: &mut stdout,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
     };

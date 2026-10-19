@@ -3,6 +3,8 @@
 
 use std::{fmt::Write as _, io::Write, path::PathBuf, time::Duration};
 
+use astronomical_config::AstronomicalRuntimeInstance;
+
 use astronomical_ipc_protocol::{DaemonDownloadJob, DaemonWorkerStatus};
 
 use crate::{
@@ -14,6 +16,9 @@ use crate::{
 pub struct StatusDependencies<'a> {
     /// Instance sockets to try, most preferred first.
     pub candidate_socket_paths: Vec<PathBuf>,
+    /// Channel these sockets belong to: carried into the not-running
+    /// disclosure so the failure names whose daemon is down.
+    pub runtime_instance: AstronomicalRuntimeInstance,
     /// Where the status report goes.
     pub stdout: &'a mut dyn Write,
     /// Bound for each protocol exchange.
@@ -27,6 +32,7 @@ pub async fn run_status(
     let daemon_probe = DaemonProbe {
         candidate_socket_paths: status_dependencies.candidate_socket_paths.clone(),
         request_timeout: status_dependencies.request_timeout,
+        runtime_instance: status_dependencies.runtime_instance,
     };
     let status_snapshot = daemon_probe.status_snapshot().await?;
     let active_download_job = daemon_probe.download_status().await?;

@@ -5,6 +5,7 @@
 use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::StatusDependencies;
+use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::DaemonWorkerStatus;
 use tokio::time::timeout;
 
@@ -20,6 +21,7 @@ fn status_dependencies<'a>(
 ) -> StatusDependencies<'a> {
     StatusDependencies {
         candidate_socket_paths,
+        runtime_instance: AstronomicalRuntimeInstance::Development,
         stdout: stdout as &mut dyn Write,
         request_timeout: TEST_TIMEOUT,
     }
@@ -217,7 +219,7 @@ async fn should_report_a_missing_daemon_as_not_running_for_status() {
     assert!(
         matches!(
             status_outcome,
-            Err(astronomical_cli::StatusError::DaemonNotRunning)
+            Err(astronomical_cli::StatusError::DaemonNotRunning { .. })
         ),
         "a missing daemon must fail with the not-running error: {status_outcome:?}"
     );

@@ -12,6 +12,7 @@ use std::{
 
 use astronomical_cli::RespondDependencies;
 use astronomical_cli::errors::RespondError;
+use astronomical_config::AstronomicalRuntimeInstance;
 use tokio::time::timeout;
 
 use super::stub_daemon;
@@ -28,6 +29,7 @@ fn respond_dependencies<'a>(
 ) -> RespondDependencies<'a> {
     RespondDependencies {
         candidate_socket_paths,
+        runtime_instance: AstronomicalRuntimeInstance::Development,
         stdout: stdout as &mut dyn Write,
         stderr: stderr as &mut dyn Write,
         request_timeout: TEST_TIMEOUT,

@@ -5,6 +5,8 @@
 
 use std::{fmt::Write as _, io::Write, path::PathBuf, time::Duration};
 
+use astronomical_config::AstronomicalRuntimeInstance;
+
 use astronomical_ipc_protocol::{DaemonCatalogEntry, DaemonListedModel};
 
 use crate::{
@@ -16,6 +18,9 @@ use crate::{
 pub struct ModelsDependencies<'a> {
     /// Instance sockets to try, most preferred first.
     pub candidate_socket_paths: Vec<PathBuf>,
+    /// Channel these sockets belong to: carried into the not-running
+    /// disclosure so the failure names whose daemon is down.
+    pub runtime_instance: AstronomicalRuntimeInstance,
     /// Where the report data goes.
     pub stdout: &'a mut dyn Write,
     /// Where download progress goes.
@@ -36,6 +41,7 @@ pub async fn run_models(
     let daemon_probe = DaemonProbe {
         candidate_socket_paths: models_dependencies.candidate_socket_paths.clone(),
         request_timeout: models_dependencies.request_timeout,
+        runtime_instance: models_dependencies.runtime_instance,
     };
     match models_command {
         ModelsCommand::List => {
