@@ -4353,7 +4353,7 @@ Used by:
 - digest 0.11.3
 - hybrid-array 0.4.14
 - sha1 0.11.0
-- sha2 0.11.0
+- sha2 0.11.1
 
                               Apache License
                         Version 2.0, January 2004
@@ -5281,7 +5281,7 @@ Used by:
 - serde 1.0.229
 - serde_core 1.0.229
 - serde_derive 1.0.229
-- serde_json 1.0.151
+- serde_json 1.0.154
 - serde_path_to_error 0.1.20
 - serde_urlencoded 0.7.1
 - serde_yaml 0.9.34+deprecated
@@ -5290,8 +5290,8 @@ Used by:
 - syn 2.0.119
 - syn 3.0.3
 - sync_wrapper 1.0.2
-- thiserror-impl 2.0.20
-- thiserror 2.0.20
+- thiserror-impl 2.0.21
+- thiserror 2.0.21
 - time-core 0.1.9
 - time 0.3.55
 - unicode-ident 1.0.24
@@ -6418,8 +6418,8 @@ SOFTWARE.
 MIT License
 
 Used by:
-- tokio-util 0.7.19
-- tokio 1.53.2
+- tokio-util 0.7.20
+- tokio 1.53.3
 
 MIT License
 
