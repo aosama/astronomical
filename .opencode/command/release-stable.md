@@ -80,9 +80,17 @@ scripts/release/accept-sparkle-update.sh
 
 Its transcript is long, so capture the exit code explicitly (`scripts/release/accept-sparkle-update.sh; echo EXIT=$?`); the terminal result otherwise scrolls out of reach.
 
-2. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe. Re-resolve signing arguments in the same shell invocation that runs preparation; do not assume shell variables persisted from preflight.
-3. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
-4. Prepare the release:
+2. Run the installed-variant round trip — the gate that catches pack variants the single-pack journeys structurally miss (a real installed export whose config shape the loader refuses must fail here, before the release ships):
+
+```sh
+cargo test --release -p astronomical-acceptance --features serving-acceptance --test chat_serving should_round_trip_every_installed_chat_model_variant -- --ignored --nocapture --test-threads=1
+```
+
+Every chat-capable model the configured model roots discover must load and stream a non-empty sampled reply (roughly one hundred tokens in at temperature 1.0, one-hundred-token budget, 120-second budget per model). Set `ASTRONOMICAL_RELEASE_VARIANT_MODEL_ROOTS` (colon-separated) to pin an explicit variant set. A variant that fails to load or replies empty blocks the release; fix forward before tagging. This journey needs the release machine's real graphics processor and model inventory — it never runs in continuous integration.
+
+3. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe. Re-resolve signing arguments in the same shell invocation that runs preparation; do not assume shell variables persisted from preflight.
+4. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
+5. Prepare the release:
 
 ```sh
 scripts/release/prepare-and-publish.sh \

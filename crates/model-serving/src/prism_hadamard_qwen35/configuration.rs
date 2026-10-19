@@ -109,9 +109,10 @@ impl FoldedPackConfig {
                 actual_gdn_activation_layout: document.gdn_activation_layout,
             });
         }
-        if document.requires_runtime.is_empty()
-            || document.requires_runtime.len() > MAXIMUM_REQUIRES_RUNTIME_BYTES
-        {
+        // Absence is legitimate (text-only exporter variants omit the
+        // marker); only an absurdly long value is refused, because it rides
+        // inside every load error report.
+        if document.requires_runtime.len() > MAXIMUM_REQUIRES_RUNTIME_BYTES {
             return Err(FoldedPackConfigError::InvalidRequiresRuntime);
         }
         if document.components.mtp {
