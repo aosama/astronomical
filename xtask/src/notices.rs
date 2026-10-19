@@ -1,7 +1,14 @@
 //! Typed port of `scripts/ci/generate-rust-dependency-notices.sh`: regenerate
 //! or check `third-party/RUST_DEPENDENCY_NOTICES` with the pinned cargo-about,
-//! keeping the committed digest file byte-compatible so hooks and CI gates
-//! survive the move unchanged.
+//! keeping the committed digest file byte-compatible so CI gates survive the
+//! move unchanged.
+//!
+//! Contract: the generated notices text is the artifact that must stay
+//! current. The digest file's `input_sha256` is only a fast-path memo of
+//! which manifest bytes last produced that text; manifest edits that cannot
+//! alter license output (workspace version bumps, tooling metadata blocks,
+//! comments) legitimately leave the memo behind, so a check that regenerates
+//! and finds the text unchanged passes regardless of memo freshness.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -163,6 +170,42 @@ fn notices_digest_is_current(
         && recorded_notices_digest == sha256_hex(&notices_bytes))
 }
 
+/// Outcome of the harvest comparison: freshly regenerated notices against the
+/// committed file, plus the fast-path memo state when the text matches. The
+/// text is the contract; a behind memo only means the next check pays the
+/// harvest again instead of skipping it.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum HarvestVerdict {
+    NoticesTextStale,
+    Current { memo_matches_inputs: bool },
+}
+
+pub(crate) fn harvest_verdict(
+    regenerated_bytes: &[u8],
+    committed_bytes: &[u8],
+    memo_matches_inputs: bool,
+) -> HarvestVerdict {
+    if regenerated_bytes != committed_bytes {
+        return HarvestVerdict::NoticesTextStale;
+    }
+    HarvestVerdict::Current {
+        memo_matches_inputs,
+    }
+}
+
+/// Reads the digest file's recorded `input_sha256` and compares it with the
+/// digest of the manifests currently on disk. A missing or malformed digest
+/// file also reports `false`: the harvest comparison has already proven the
+/// notices text current, so the memo state only picks the log wording.
+fn recorded_input_digest_matches(repository_root: &Path, expected_input_digest: &str) -> bool {
+    let Some(digest_text) = fs::read_to_string(repository_root.join(DIGEST_RELATIVE_PATH)).ok()
+    else {
+        return false;
+    };
+    read_digest_field(&digest_text, "input_sha256")
+        .is_some_and(|recorded_input_digest| recorded_input_digest == expected_input_digest)
+}
+
 fn write_notices_digest(
     digest_path: &Path,
     input_digest: &str,
@@ -282,22 +325,38 @@ pub fn run(repository_root: &Path, check_only: bool) -> Result<(), String> {
         let committed_bytes = fs::read(&generated_notices_path).map_err(|error| {
             format!("[rust-dependency-notices] committed notices unreadable: {error}")
         })?;
-        if regenerated_bytes != committed_bytes {
-            return Err(
-                "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES is stale; regenerate it"
-                    .to_owned(),
-            );
-        }
-        if !notices_digest_is_current(repository_root, &input_digest)? {
-            return Err(
-                "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES.digest is stale; run cargo xtask notices"
-                    .to_owned(),
-            );
-        }
-        println!(
-            "[rust-dependency-notices] status=current reason=harvest elapsed_seconds={} cargo_about={pinned_version}",
-            started_at.elapsed().as_secs()
+        // Byte-identical regenerated text is ground truth that the notices
+        // are current, so a behind `input_sha256` memo no longer fails the
+        // check: manifest edits that cannot alter license output (workspace
+        // version bumps, tooling metadata, comments) used to block pushes on
+        // pure bookkeeping. A behind memo only costs this harvest again on
+        // the next check; only a real text difference is stale.
+        let verdict = harvest_verdict(
+            &regenerated_bytes,
+            &committed_bytes,
+            recorded_input_digest_matches(repository_root, &input_digest),
         );
+        match verdict {
+            HarvestVerdict::NoticesTextStale => {
+                return Err(
+                    "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES is stale; regenerate it"
+                        .to_owned(),
+                );
+            }
+            HarvestVerdict::Current {
+                memo_matches_inputs,
+            } => {
+                let digest_memo_state = if memo_matches_inputs {
+                    "current"
+                } else {
+                    "behind"
+                };
+                println!(
+                    "[rust-dependency-notices] status=current reason=harvest digest_memo={digest_memo_state} elapsed_seconds={} cargo_about={pinned_version}",
+                    started_at.elapsed().as_secs()
+                );
+            }
+        }
         return Ok(());
     }
 
