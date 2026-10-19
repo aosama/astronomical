@@ -1,24 +1,12 @@
 //! Narrow unsafe ownership boundary around the official MLX C API.
 
 #[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
 mod mlx_bounded_safetensors_read_concurrency;
 #[cfg(feature = "mlx")]
 mod mlx_bounded_safetensors_reader;
 #[cfg(feature = "mlx")]
 mod mlx_descriptor_file_reader;
 mod mlx_metallib_path;
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
-#[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 mod mlx_runtime;
 #[cfg(feature = "mlx")]
@@ -50,7 +38,6 @@ pub use mlx_runtime_types::{
 pub use mlx_safetensors::{BoundedReadInterval, MlxSafetensors, SafetensorsLoadResult};
 #[cfg(feature = "mlx")]
 pub use mlx_safetensors_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
-#[cfg(feature = "mlx")]
 #[cfg(feature = "mlx")]
 pub use positional_file_read_metrics::{
     PositionalFileReadMetrics, PositionalFileReadMetricsSnapshot,

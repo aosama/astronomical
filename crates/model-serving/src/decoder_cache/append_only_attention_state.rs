@@ -101,44 +101,6 @@ impl FullAttentionKeyValueState {
         })
     }
 
-    /// Returns exact slab growth across updates that execute as separate forwards.
-    pub fn projected_sequential_capacity_growth_tokens(
-        &self,
-        sequential_update_token_counts: &[usize],
-    ) -> Result<usize, MlxRuntimeError> {
-        let initial_capacity_tokens = self.capacity_tokens();
-        let mut projected_capacity_token_count = initial_capacity_tokens;
-        let mut projected_offset_token_count = self.offset_tokens;
-        let mut has_projected_storage = self.keys.is_some();
-        for sequential_update_token_count in sequential_update_token_counts {
-            let sequential_update_token_count = i32::try_from(*sequential_update_token_count)
-                .map_err(|_| {
-                    full_attention_error(
-                        "sequential full-attention KV update token count exceeds the i32 range",
-                    )
-                })?;
-            projected_capacity_token_count = projected_capacity_tokens(
-                projected_capacity_token_count,
-                has_projected_storage,
-                projected_offset_token_count,
-                sequential_update_token_count,
-                self.full_attention_kv_state_growth_tokens,
-            )?;
-            projected_offset_token_count = projected_offset_token_count
-                .checked_add(sequential_update_token_count)
-                .ok_or_else(|| {
-                    full_attention_error("sequential full-attention KV offset overflowed")
-                })?;
-            has_projected_storage = true;
-        }
-        let capacity_growth_tokens = projected_capacity_token_count
-            .checked_sub(initial_capacity_tokens)
-            .ok_or_else(|| full_attention_error("projected KV capacity moved backwards"))?;
-        usize::try_from(capacity_growth_tokens).map_err(|_| {
-            full_attention_error("full-attention KV capacity growth exceeds the usize range")
-        })
-    }
-
     /// Grows capacity when needed, writes the new K and V into the slab, and
     /// returns views over `[0..offset_tokens]` for the attention call. This is
     /// the single entry point for capacity decisions and in-place writes; the
