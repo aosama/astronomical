@@ -48,7 +48,9 @@ assert_lane_root_is_empty() {
 run_subject() {
     timeout_executable="$1"
     shift
-    "$timeout_executable" --foreground -k 1s "${SUBJECT_TIMEOUT_SECONDS}s" "$@"
+    # Plain `timeout SECONDS` is the only form the committed scripts/ci/timeout
+    # wrapper understands, and macOS CI runners rely on that wrapper.
+    "$timeout_executable" "${SUBJECT_TIMEOUT_SECONDS}" "$@"
 }
 
 main() {
@@ -344,7 +346,7 @@ TOML
     interruption_target_record="${SANDBOX_DIRECTORY}/interruption-target"
     interruption_status=0
     ASTRONOMICAL_CARGO_LANE_ROOT="$lane_root" \
-        "$timeout_executable" --foreground -k 5s 2s "$lifecycle_subject" --lane interrupted-acceptance -- \
+        "$timeout_executable" 2 "$lifecycle_subject" --lane interrupted-acceptance -- \
         "$lifecycle_fixture" interrupt "$interruption_target_record" || interruption_status=$?
     [ "$interruption_status" -eq 124 ] || [ "$interruption_status" -eq 143 ] || {
         print_error "interrupted lifecycle returned unexpected status ${interruption_status}"

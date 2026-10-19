@@ -59,6 +59,7 @@ main() {
         "${SANDBOX_DIRECTORY}/apps/inference-worker/tests" \
         "${SANDBOX_DIRECTORY}/apps/daemon/tests" \
         "${SANDBOX_DIRECTORY}/crates/model-serving/tests" \
+        "${SANDBOX_DIRECTORY}/crates/example-family/tests" \
         "${SANDBOX_DIRECTORY}/experimental"
     cp "${repository_root}/scripts/check-test-channel-isolation.sh" \
         "${SANDBOX_DIRECTORY}/scripts/check-test-channel-isolation.sh"
@@ -88,6 +89,14 @@ main() {
     printf '%s\n' 'let state = "~/.astronomical";' > "$safe_fixture"
     run_checker_expect_failure '"~/.astronomical"' "${SANDBOX_DIRECTORY}/stable-state.log"
     printf '%s\n' '[channel-isolation-guard-test] case=stable-state-label-is-rejected status=success'
+
+    printf '%s\n' '[channel-isolation-guard-test] case=glob-covers-a-new-package-test-tree status=start'
+    printf '%s\n' 'let channel = AstronomicalRuntimeInstance::Stable;' \
+        > "${SANDBOX_DIRECTORY}/crates/example-family/tests/channel_fixture.rs"
+    run_checker_expect_failure \
+        'AstronomicalRuntimeInstance::Stable' \
+        "${SANDBOX_DIRECTORY}/glob-new-tree.log"
+    printf '%s\n' '[channel-isolation-guard-test] case=glob-covers-a-new-package-test-tree status=success'
 }
 
 main "$@"

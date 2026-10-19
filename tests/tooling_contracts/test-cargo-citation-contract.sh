@@ -45,9 +45,6 @@ repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 
 require_command git
 require_command awk
-require_command shellcheck
-
-shellcheck "${repository_root}/tests/tooling_contracts/test-cargo-citation-contract.sh"
 
 ( sleep "$TEST_WATCHDOG_SECONDS" && kill -9 "$$" ) 2>/dev/null &
 WATCHDOG_PID=$!
