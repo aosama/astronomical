@@ -6,6 +6,19 @@
 # emitted by third-party dependencies.
 warnings = "deny"
 
+# Build parallelism is deliberately left at Cargo's default. `build.jobs`
+# defaults to the logical CPU count, so any literal value here could only cap
+# parallelism (and would hardwire a machine-specific core count); there is no
+# config switch that raises it. The nightly parallel rustc front-end
+# (rustflags = ["-Zthreads=0"]) was measured on a cold `cargo check
+# --workspace --all-targets` and rejected: wall time was within noise
+# (15.04s vs 14.88s) while user CPU rose 21%, because Cargo's cross-crate
+# parallelism already saturates the cores. It roughly halves a single-crate
+# `cargo check -p astronomical-model-serving` (1.8s -> 0.95s), but that ~1s
+# per iteration does not justify the nightly-ICE risk surface, CI/local flag
+# divergence, or splitting the sccache cache key (flags hash into it), which
+# would make locally warmed entries unusable to the CI lane.
+
 [alias]
 # Each alias expands to one plain `cargo test` invocation; read the list to
 # see the exact packages and test binaries it covers.
@@ -65,6 +78,36 @@ xtask = "run -p xtask --"
 # that only surfaces in CI when skipped) for one local compile instead of a
 # paid GitHub Actions round trip. Run `cargo verify` before every push.
 verify = "check --workspace --all-targets"
+# Visibility audits (issue #1355): find public items that nothing calls.
+# rustc's `dead_code` lint deliberately ignores `pub` items in library crates,
+# because a dependent crate could still use them, so `cargo verify` and
+# `cargo clippy` never report unused public library API. These two aliases are
+# how we obtain that list today.
+#
+# audit-unused-public-bins: the nightly rustc lint `dead_code_pub_in_binary`,
+# allow-by-default and scoped to EXECUTABLE crates. Run it with --bins on
+# purpose. Adding --all-targets also compiles each library's unit tests as
+# executable test harnesses, and every public library item then looks unused;
+# that variant reported 1,091 diagnostics, almost all rest-contract and
+# mlx-c-rust lib-test items that other workspace crates do use. `-A
+# clippy::all` keeps unrelated Clippy style warnings from tripping
+# `build.warnings = "deny"` and hiding the answer. Verified on this workspace:
+# no findings in the binary targets.
+audit-unused-public-bins = "clippy --workspace --bins -- -A clippy::all -D dead_code_pub_in_binary"
+# audit-unused-public-workspace: the third-party `cargo-workspace-unused-pub`
+# subcommand, which performs the cross-crate analysis the lint cannot. It
+# needs `rustup component add rust-analyzer`, and it writes a ~51 MB
+# `index.scip` into the repository root, which must never be committed.
+#
+# CAVEAT: a zero result here is NOT proof of cleanliness. The tool's final
+# pass is a text search for each candidate name across the workspace, and this
+# repository keeps nested Git worktrees under .claude/worktrees/, each a full
+# checkout carrying the candidate names. Those matches mark every candidate as
+# used, so the tool reports 0 while issue #1355 still lists 21 candidates that
+# really have no caller. Move .claude/worktrees aside, or run the tool against
+# a checkout without nested worktrees, before trusting the output, and confirm
+# any candidate by hand before changing visibility.
+audit-unused-public-workspace = "workspace-unused-pub"
 # Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
 # packages, features, targets, and the GPU serial rule (`--test-threads=1`)
 # cannot be forgotten. Acceptance journeys are `#[ignore]`d: they need real

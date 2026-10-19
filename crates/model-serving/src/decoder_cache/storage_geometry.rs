@@ -82,20 +82,6 @@ impl DecoderCacheLayout {
         )
     }
 
-    /// Returns payload bytes for one complete persistent model-state capture.
-    pub fn persistent_prompt_cache_block_payload_byte_count(
-        &self,
-        block_token_count: usize,
-    ) -> Result<usize, DecoderCacheLayoutError> {
-        let sequence_payload_bytes = self
-            .sequence_state_payload_byte_count_per_token()?
-            .checked_mul(block_token_count)
-            .ok_or(DecoderCacheLayoutError::PersistentPromptCacheBlockPayloadByteCountOverflow)?;
-        sequence_payload_bytes
-            .checked_add(self.boundary_snapshot_payload_byte_count()?)
-            .ok_or(DecoderCacheLayoutError::PersistentPromptCacheBlockPayloadByteCountOverflow)
-    }
-
     /// Returns the natural token alignment shared by every append-only state component.
     pub fn persistence_alignment_token_count(&self) -> Result<usize, DecoderCacheLayoutError> {
         let mut persistence_alignment_token_count = 1_usize;
