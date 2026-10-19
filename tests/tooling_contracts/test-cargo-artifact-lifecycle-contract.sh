@@ -419,6 +419,10 @@ assert profiles["full-debug"]["split-debuginfo"] == "packed"
 cargo_configuration = tomllib.loads((repository_root / ".cargo/config.toml").read_text())
 aliases = cargo_configuration["alias"]
 expected_aliases = {
+    # Dead-public-symbol audit lanes (issue #1355): read-only analysis, so
+    # they carry no --test-threads=1 or --ignored acceptance requirements.
+    "audit-unused-public-bins",
+    "audit-unused-public-workspace",
     "test-offline",
     "test-rest-api",
     "test-e2e",
