@@ -202,23 +202,6 @@ impl Qwen3_5Config {
             .collect()
     }
 
-    /// Returns the decoder-layer indexes that use linear attention.
-    #[must_use]
-    pub fn linear_attention_decoder_layer_indexes(&self) -> Vec<usize> {
-        self.text_config
-            .layer_types
-            .iter()
-            .enumerate()
-            .filter_map(|(decoder_layer_index, decoder_layer_type)| {
-                if decoder_layer_type == "linear_attention" {
-                    Some(decoder_layer_index)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
     /// Returns whether the validated decoder layer uses full attention.
     #[must_use]
     pub fn decoder_layer_is_full_attention(&self, decoder_layer_index: usize) -> bool {

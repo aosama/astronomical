@@ -8,11 +8,6 @@ impl<ExpertPage> RetainedExpertPageCache<ExpertPage>
 where
     ExpertPage: ExpertWeightPage,
 {
-    /// Drops the least-used retained page so a just-routed expert set can stay.
-    pub fn evict_least_used_retained_page(&mut self) -> bool {
-        self.evict_least_used_retained_page_except(usize::MAX)
-    }
-
     /// Evicts elsewhere so the layer we are growing is not the one we drop.
     pub fn evict_least_used_retained_page_except(&mut self, protected_layer_index: usize) -> bool {
         if let Some(layer_index) = self
