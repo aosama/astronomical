@@ -43,16 +43,6 @@ pub enum MlxSafetensorsWriterError {
     },
 }
 
-impl MlxSafetensorsWriterError {
-    #[must_use]
-    pub const fn native_error(&self) -> Option<&MlxRuntimeError> {
-        match self {
-            Self::Native { source } => Some(source),
-            Self::DescriptorIo { .. } => None,
-        }
-    }
-}
-
 impl MlxRuntime {
     /// Saves named arrays and string metadata through one retained writable descriptor.
     ///

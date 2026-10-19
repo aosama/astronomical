@@ -187,48 +187,6 @@ pub(crate) fn validate_context_memory_admission(
     ))
 }
 
-pub(crate) fn context_memory_admission_fits_without_expert_reclamation(
-    model: &Qwen3_5ResidentModel,
-    memory_limits: MlxMemoryLimits,
-    context_memory_reservation_bytes_per_token: usize,
-    context_token_count_requiring_reservation: usize,
-    temporary_workspace_reservation_bytes: usize,
-    additional_maximum_expert_page_reservation_bytes: usize,
-) -> Result<bool, InferenceEngineError> {
-    let projection = build_context_memory_admission_projection(
-        model,
-        memory_limits,
-        context_memory_reservation_bytes_per_token,
-        context_token_count_requiring_reservation,
-        temporary_workspace_reservation_bytes,
-        additional_maximum_expert_page_reservation_bytes,
-    )?;
-    let context_admission_requirements = ContextAdmissionRequirements {
-        current_active_memory_bytes: projection.memory_snapshot.active_memory_bytes(),
-        context_growth_bytes: projection.context_reservation_bytes,
-        expert_page_reservation_bytes: projection.maximum_expert_page_reservation_bytes,
-        temporary_workspace_bytes: temporary_workspace_reservation_bytes,
-        retained_expert_payload_bytes: usize::try_from(
-            model
-                .expert_weight_memory_cache_statistics()
-                .resident_payload_byte_count,
-        )
-        .unwrap_or(usize::MAX),
-        active_memory_ceiling_bytes: projection.configured_mlx_memory_limit_bytes,
-        complete_experts_are_resident: model.resident_expert_weights.is_some(),
-    };
-    crate::memory::log_context_admission_projection(
-        "resident_fit_without_reclamation",
-        context_token_count_requiring_reservation,
-        context_memory_reservation_bytes_per_token,
-        context_admission_requirements,
-    );
-    Ok(matches!(
-        context_admission_requirements.decide(),
-        MemoryAdmissionDecision::Admit
-    ))
-}
-
 struct ContextMemoryAdmissionProjection {
     memory_snapshot: MlxMemorySnapshot,
     context_reservation_bytes: usize,
