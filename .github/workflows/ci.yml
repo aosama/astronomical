@@ -445,6 +445,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin repository-contracts
+          export PATH="$PWD/scripts/ci:$PATH"
           tests/tooling_contracts/test-cargo-citation-contract.sh
           tests/tooling_contracts/test-cargo-artifact-lifecycle-contract.sh
           tests/tooling_contracts/test-channel-isolation-checker-contract.sh
