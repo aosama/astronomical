@@ -48,7 +48,22 @@ pub(super) struct FoldedPackDocument {
     pub(super) schema_version: u32,
     pub(super) model_type: String,
     pub(super) base_model_type: String,
+    // The requires-runtime marker points generic MLX loaders at the bundled
+    // runtime that applies the Hadamard transforms. Text-only exporter
+    // variants of the same schema legitimately omit it — the family identity
+    // is already pinned by model_type, the tensor namespace, and the GDN
+    // layout — so absence defaults to empty and validation only bounds its
+    // length when present.
+    #[serde(default)]
     pub(super) requires_runtime: String,
+    // Standard Transformers export metadata some pack exporters emit; it is
+    // deliberately accepted (unknown fields are refused) so those variants
+    // parse, and deliberately unread — the field exists only to widen what
+    // the document parser tolerates, which is why dead-code analysis is
+    // silenced for it.
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub(super) transformers_version: Option<String>,
     pub(super) hadamard_config: String,
     pub(super) tensor_namespace: String,
     pub(super) gdn_activation_layout: String,
