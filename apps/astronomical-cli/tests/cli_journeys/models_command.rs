@@ -4,6 +4,7 @@
 use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::{ModelsCommand, ModelsDependencies};
+use astronomical_config::AstronomicalRuntimeInstance;
 use tokio::time::timeout;
 
 use super::stub_daemon::{
@@ -20,6 +21,7 @@ fn models_dependencies<'a>(
 ) -> ModelsDependencies<'a> {
     ModelsDependencies {
         candidate_socket_paths,
+        runtime_instance: AstronomicalRuntimeInstance::Development,
         stdout: stdout as &mut dyn Write,
         stderr: stderr as &mut dyn Write,
         request_timeout: TEST_TIMEOUT,

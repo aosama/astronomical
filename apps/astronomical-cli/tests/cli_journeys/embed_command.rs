@@ -9,6 +9,7 @@ use std::{
 
 use astronomical_cli::errors::EmbedError;
 use astronomical_cli::{EmbedArguments, EmbedDependencies};
+use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::EmbeddingsFailureReason;
 use tokio::time::timeout;
 
@@ -39,6 +40,7 @@ fn embed_dependencies<'a>(
 ) -> EmbedDependencies<'a> {
     EmbedDependencies {
         candidate_socket_paths,
+        runtime_instance: AstronomicalRuntimeInstance::Development,
         stdin,
         stdout: stdout as &mut dyn Write,
         stderr: stderr as &mut dyn Write,
@@ -210,11 +212,11 @@ async fn should_report_a_missing_daemon_as_not_running_for_embed() {
     .await
     .expect("the embed journey should finish inside the test timeout");
     assert!(
-        matches!(embed_outcome, Err(EmbedError::DaemonNotRunning)),
+        matches!(embed_outcome, Err(EmbedError::DaemonNotRunning { .. })),
         "a missing daemon must fail with the not-running error: {embed_outcome:?}"
     );
     assert!(
-        format!("{embed_outcome:?}").contains("Astronomical isn't running"),
+        format!("{embed_outcome:?}").contains("Astronomical (development channel) isn't running"),
         "the not-running error must carry the clear guidance text: {embed_outcome:?}"
     );
     let _ = std::fs::remove_dir_all(&test_directory);

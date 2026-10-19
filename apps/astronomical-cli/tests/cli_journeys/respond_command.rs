@@ -6,6 +6,7 @@ use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::RespondDependencies;
 use astronomical_cli::errors::RespondError;
+use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::{ChatImageInput, ChatMessage};
 use tokio::time::timeout;
 
@@ -24,6 +25,7 @@ fn respond_dependencies<'a>(
 ) -> RespondDependencies<'a> {
     RespondDependencies {
         candidate_socket_paths,
+        runtime_instance: AstronomicalRuntimeInstance::Development,
         stdout: stdout as &mut dyn Write,
         stderr: stderr as &mut dyn Write,
         request_timeout: TEST_TIMEOUT,
@@ -38,8 +40,11 @@ async fn should_report_a_missing_daemon_as_not_running() {
     let missing_socket_path = test_directory.join(SOCKET_FILE_NAME);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let mut respond_dependencies =
-        respond_dependencies(vec![missing_socket_path], &mut stdout, &mut stderr);
+    let mut respond_dependencies = respond_dependencies(
+        vec![missing_socket_path.clone()],
+        &mut stdout,
+        &mut stderr,
+    );
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
@@ -51,12 +56,16 @@ async fn should_report_a_missing_daemon_as_not_running() {
     .await
     .expect("the respond journey should finish inside the test timeout");
     assert!(
-        matches!(respond_outcome, Err(RespondError::DaemonNotRunning)),
+        matches!(respond_outcome, Err(RespondError::DaemonNotRunning { .. })),
         "a missing socket must surface as the not-running error: {respond_outcome:?}"
     );
     assert!(
-        format!("{respond_outcome:?}").contains("Astronomical isn't running"),
-        "the not-running error should tell the user to start Astronomical: {respond_outcome:?}"
+        format!("{respond_outcome:?}").contains("Astronomical (development channel) isn't running"),
+        "the not-running error should name the channel the CLI is bound to: {respond_outcome:?}"
+    );
+    assert!(
+        format!("{respond_outcome:?}").contains(missing_socket_path.to_string_lossy().as_ref()),
+        "the not-running error should name the socket it probed: {respond_outcome:?}"
     );
     let _ = std::fs::remove_dir_all(&test_directory);
 }

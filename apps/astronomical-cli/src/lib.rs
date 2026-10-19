@@ -32,6 +32,8 @@ pub mod validate_config_arguments;
 #[cfg(test)]
 mod arguments_tests;
 #[cfg(test)]
+mod daemon_probe_tests;
+#[cfg(test)]
 mod instance_tests;
 #[cfg(test)]
 mod model_lifecycle_tests;
