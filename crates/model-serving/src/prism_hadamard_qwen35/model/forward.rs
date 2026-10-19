@@ -183,7 +183,6 @@ impl super::PrismHadamardTextModel {
                     &normalized_input,
                     token_count,
                     linear_layer,
-                    rms_norm_epsilon,
                     state_slot,
                     state,
                 )?
