@@ -98,9 +98,6 @@ impl Flux2KleinLicense {
     pub const fn display_name(&self) -> &'static str {
         "Apache License 2.0"
     }
-    pub const fn canonical_url(&self) -> &'static str {
-        "https://www.apache.org/licenses/LICENSE-2.0"
-    }
 }
 
 /// A bounded artifact rejection whose display never includes a local path.

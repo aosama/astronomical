@@ -155,23 +155,6 @@ impl Qwen3_5ShardIndex {
             .map(String::as_str)
     }
 
-    /// Returns language tensor names that belong to one shard.
-    #[must_use]
-    pub fn language_tensor_names_for_shard(&self, shard_file_name: &str) -> Vec<&str> {
-        self.tensor_name_to_shard_file_name
-            .iter()
-            .filter_map(|(tensor_name, tensor_shard_file_name)| {
-                if tensor_shard_file_name == shard_file_name
-                    && tensor_name.starts_with("language_model.")
-                {
-                    Some(tensor_name.as_str())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
     /// Extracts the set of language tensor names from the safetensors index JSON
     /// without performing any validation against tensor profiles.
     ///

@@ -160,19 +160,6 @@ impl Qwen3_5InferenceRequest {
         }
     }
 
-    /// Attaches pre-computed visual embeddings and clears pending processed images.
-    #[must_use]
-    pub fn with_visual_embeddings(
-        mut self,
-        visual_embeddings: Vec<f32>,
-        visual_embedding_row_count: usize,
-    ) -> Self {
-        self.visual_embeddings = Some(visual_embeddings);
-        self.visual_embedding_row_count = visual_embedding_row_count;
-        self.processed_visual_images.clear();
-        self
-    }
-
     /// Attaches CPU-processed images for inference-side vision-tower execution.
     #[must_use]
     pub fn with_processed_visual_images(
