@@ -5,6 +5,7 @@
 
 pub mod arguments;
 pub mod daemon_probe;
+pub mod doctor_command;
 pub mod embed;
 pub mod embed_arguments;
 pub mod errors;
@@ -34,6 +35,8 @@ mod arguments_tests;
 #[cfg(test)]
 mod daemon_probe_tests;
 #[cfg(test)]
+mod doctor_command_tests;
+#[cfg(test)]
 mod instance_tests;
 #[cfg(test)]
 mod model_lifecycle_tests;
@@ -48,6 +51,7 @@ mod schema_tests;
 
 pub use arguments::{CliCommand, LaunchArguments, help_text, parse_command};
 pub use daemon_probe::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
+pub use doctor_command::{DoctorDependencies, DoctorError, run_doctor};
 pub use embed::{EmbedDependencies, run_embed};
 pub use embed_arguments::EmbedArguments;
 pub use errors::{EmbedError, LaunchError, ModelsError, RespondError, StatusError, UsageError};

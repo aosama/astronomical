@@ -1,3 +1,4 @@
+mod doctor_command;
 mod embed_command;
 mod launch_opencode;
 mod models_command;

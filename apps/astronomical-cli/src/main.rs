@@ -50,6 +50,7 @@ fn main() -> ExitCode {
         Ok(CliCommand::Embed(embed_arguments)) => run_embed_verb(embed_arguments),
         Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
         Ok(CliCommand::Status) => run_status_verb(),
+        Ok(CliCommand::Doctor) => run_doctor_verb(),
         Err(usage_error) => {
             eprint!("astronomical: {usage_error}\n\n{}", help_text());
             ExitCode::from(2)
@@ -145,8 +146,6 @@ fn build_current_thread_runtime() -> Result<tokio::runtime::Runtime, std::io::Er
         .build()
 }
 
-/// IPC socket of the instance the running executable serves: its own channel
-/// only, per the strict dev/stable isolation decision.
 /// The executable's own channel plus that channel's IPC socket paths: the
 /// daemon verbs probe only their own channel (strict isolation), and the
 /// not-running disclosure names this channel so a failure says whose daemon
@@ -287,6 +286,60 @@ fn run_models_verb(models_command: astronomical_cli::ModelsCommand) -> ExitCode 
         }
         Err(models_error) => {
             let _ = writeln!(stderr, "astronomical: {models_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Shorter than the daemon-verb stage bound: a doctor probe only needs to
+/// learn reachability, and a diagnostic that can hang minutes per channel
+/// would defeat its own purpose.
+const DOCTOR_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn run_doctor_verb() -> ExitCode {
+    let doctor_runtime = match build_current_thread_runtime() {
+        Ok(doctor_runtime) => doctor_runtime,
+        Err(runtime_error) => {
+            eprintln!("astronomical: {runtime_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let executable_path = match env::current_exe() {
+        Ok(raw_executable_path) => raw_executable_path
+            .canonicalize()
+            .unwrap_or(raw_executable_path),
+        Err(exe_error) => {
+            eprintln!("astronomical: {exe_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    // Both channels, Stable first: the mismatch a doctor report exists to
+    // expose is only visible when both sides are printed side by side.
+    let mut channel_socket_paths = Vec::new();
+    for runtime_instance in [
+        AstronomicalRuntimeInstance::Stable,
+        AstronomicalRuntimeInstance::Development,
+    ] {
+        match astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
+            runtime_instance,
+        ) {
+            Ok(instance_paths) => {
+                channel_socket_paths.push((runtime_instance, instance_paths.ipc_socket_file_path()))
+            }
+            Err(config_error) => eprintln!("astronomical: {config_error}"),
+        }
+    }
+    let mut stdout = io::stdout();
+    let mut doctor_dependencies = astronomical_cli::DoctorDependencies {
+        executable_path,
+        channel_socket_paths,
+        stdout: &mut stdout,
+        request_timeout: DOCTOR_PROBE_TIMEOUT,
+    };
+    match doctor_runtime.block_on(astronomical_cli::run_doctor(&mut doctor_dependencies)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(doctor_error) => {
+            eprintln!("astronomical: {doctor_error}");
             ExitCode::FAILURE
         }
     }
