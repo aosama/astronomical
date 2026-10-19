@@ -34,6 +34,9 @@ impl Qwen3_5GenerationProcessor {
     /// Creates a processor for a folded ternary pack that reuses the Qwen
     /// text dialect (prompt rendering, thinking markers, tool markers) over
     /// the pack's own tokenizer with text-only input.
+    // Consumed only by the direct-MLX prism_hadamard engine startup, so the
+    // isolated default-feature build would otherwise flag it as dead.
+    #[cfg(feature = "direct-mlx")]
     pub(crate) fn from_folded_pack_text_dialect(
         tokenizer_bytes: &[u8],
         model_id: &str,
