@@ -83,14 +83,6 @@ impl Flux2KleinForwardAdvance {
             Self::ForwardCompleted(_) => None,
         }
     }
-
-    #[must_use]
-    pub fn into_output(self) -> Option<Flux2KleinTransformerOutput> {
-        match self {
-            Self::BlockGroupCompleted(_) => None,
-            Self::ForwardCompleted(output) => Some(output),
-        }
-    }
 }
 
 #[derive(Debug)]

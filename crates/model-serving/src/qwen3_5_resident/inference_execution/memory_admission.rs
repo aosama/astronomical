@@ -189,13 +189,3 @@ impl Qwen3_5EngineState {
 fn performance_attribution_payload_bytes(performance_attribution: &PerformanceAttribution) -> u64 {
     performance_attribution.expert_streaming_payload_byte_count()
 }
-
-pub(crate) fn resident_prefill_operation_token_count(
-    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
-) -> Option<usize> {
-    if adaptive_ram_growth_context.memory_phase() == MemoryPhase::Prefill {
-        Some(adaptive_ram_growth_context.forward_token_count())
-    } else {
-        None
-    }
-}
