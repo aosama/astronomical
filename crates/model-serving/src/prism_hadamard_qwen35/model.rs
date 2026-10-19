@@ -7,7 +7,8 @@
 //! no branch anywhere in this path that could skip it.
 
 use astronomical_mlx_c_rust::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
+    MlxArray, MlxCompiledDualHeadNorm, MlxCompiledElementwiseGraphs,
+    MlxCompiledGatedDeltaRateActivation, MlxCompiledSwiGlu, MlxMetalKernel,
 };
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
@@ -41,6 +42,13 @@ pub struct PrismHadamardTextModel {
     pub(crate) runtime: MlxRuntime,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
+    /// The dual-output rate-activation replay: one launch produces the
+    /// sigmoid update rates and the decay factors every gated-delta layer
+    /// consumed as two separate launches before (issue #1366).
+    pub(crate) compiled_gated_delta_rate_activation: MlxCompiledGatedDeltaRateActivation,
+    /// The dual-output query/key head-normalization replay for the
+    /// gated-delta prework, with this model's RMS epsilon baked in.
+    pub(crate) compiled_dual_head_norm: MlxCompiledDualHeadNorm,
     /// The fused gated-delta Metal kernel, retained only when this GPU passes
     /// the capability probe; `None` demotes the recurrence to the shared
     /// one-token MLX ops route, which is orders of magnitude slower on
@@ -87,6 +95,13 @@ impl PrismHadamardTextModel {
         let compiled_elementwise_graphs =
             MlxCompiledElementwiseGraphs::new().map_err(PrismHadamardModelError::Forward)?;
         let compiled_swiglu = MlxCompiledSwiGlu::new().map_err(PrismHadamardModelError::Forward)?;
+        // The dual head-norm graph bakes the pack's RMS epsilon at
+        // compilation; the rate-activation graph is epsilon-free.
+        let rms_norm_epsilon = f32::from_bits(pack.config().text().rms_norm_epsilon_bits);
+        let compiled_gated_delta_rate_activation =
+            MlxCompiledGatedDeltaRateActivation::new().map_err(PrismHadamardModelError::Forward)?;
+        let compiled_dual_head_norm = MlxCompiledDualHeadNorm::new(rms_norm_epsilon)
+            .map_err(PrismHadamardModelError::Forward)?;
         // The capability probes are cached per worker process, so this
         // mirrors the core loader's cost and its fused-vs-ops decision exactly.
         let kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
@@ -127,6 +142,8 @@ impl PrismHadamardTextModel {
             runtime,
             compiled_elementwise_graphs,
             compiled_swiglu,
+            compiled_gated_delta_rate_activation,
+            compiled_dual_head_norm,
             gated_delta_kernel,
             fused_rotation_kernel,
             weights,
