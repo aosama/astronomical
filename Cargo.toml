@@ -45,7 +45,7 @@ repository = "https://github.com/aosama/astronomical"
 # exact compiler remains pinned by rust-toolchain.toml
 # (nightly-2026-10-18); this field only records the major.minor floor.
 rust-version = "1.101"
-version = "0.2.78"
+version = "0.2.79"
 
 [workspace.dependencies]
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
