@@ -66,12 +66,6 @@ impl QwenImage21License {
     pub const fn display_name(&self) -> &'static str {
         "Qwen Research License Agreement"
     }
-
-    /// The page the license terms are published under. The upstream model card hosts the
-    /// agreement's text, so it is the durable reference for what this identifier names.
-    pub const fn canonical_url(&self) -> &'static str {
-        "https://huggingface.co/Qwen/Qwen-Image-2.1"
-    }
 }
 
 /// The Hub revision of the reviewed snapshot that `official()` records. Content checks, not

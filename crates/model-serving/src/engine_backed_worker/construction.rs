@@ -34,26 +34,6 @@ where
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
 {
-    pub fn with_model_factory(
-        processor: Processor,
-        engine: Engine,
-        model_factory: Factory,
-    ) -> Self {
-        Self {
-            loaded_runtime: Some(LoadedRuntime::Autoregressive(LoadedModel {
-                processor,
-                engine,
-            })),
-            model_factory: Some(model_factory),
-            machine_mlx_memory_ceiling_bytes: 0,
-            effective_mlx_memory_ceiling_bytes: 0,
-            minimum_mlx_memory_ceiling_bytes: 1,
-            wired_residency_budget_bytes: None,
-            worker_runtime_feature_configuration: None,
-            selected_model: None,
-        }
-    }
-
     pub fn idle_with_model_factory(model_factory: Factory, mlx_memory_ceiling_bytes: u64) -> Self {
         Self::idle_with_model_factory_and_machine_mlx_memory_ceiling(
             model_factory,
