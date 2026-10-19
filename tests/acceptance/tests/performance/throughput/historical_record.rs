@@ -4,8 +4,8 @@
 //! that a machine's throughput can be compared across commits and dates. The log
 //! lives beside the surface that produces it and is source-controlled, so the
 //! trend travels with the code. The path is resolved from the
-//! `ASTRONOMICAL_PERF_HISTORY` environment variable, falling back to
-//! `tests/performance_throughput/throughput-history.jsonl`.
+//! `ASTRONOMICAL_PERF_HISTORY` environment variable, falling back to the
+//! source-controlled ledger under `tests/acceptance/tests/performance/throughput/`.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -19,9 +19,15 @@ use crate::performance_throughput::machine_specs::MachineSpecs;
 
 /// Repo-root-relative path of the source-controlled throughput history.
 ///
-/// Cargo test processes run from the workspace root, so this relative path
-/// resolves to the ledger that travels with the code. It must stay in sync
-/// with the file's actual location under
+/// The default is anchored to the compile-time manifest directory of the
+/// acceptance package rather than to the test process's working directory: the
+/// standard acceptance launcher starts test binaries with the package
+/// directory as their working directory, so a launch-directory-relative
+/// default resolved to the package's own path repeated inside itself and
+/// measurements forked into an unintended doubled nested copy instead of this
+/// ledger. `CARGO_MANIFEST_DIR` is baked in at compile time, so every launch
+/// directory resolves to the same canonical file. It must stay in sync with
+/// the file's actual location under
 /// `tests/acceptance/tests/performance/throughput/`; the Oct-13 test-tree
 /// reorganization moved that file and left this constant stale, forking new
 /// measurements into an untracked sibling until the drift was noticed.
@@ -162,7 +168,17 @@ pub fn throughput_record_json(record: &ThroughputRecord) -> Value {
 pub fn history_log_path() -> PathBuf {
     std::env::var_os(HISTORY_ENV_VAR)
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_HISTORY_RELATIVE_PATH))
+        .unwrap_or_else(default_history_log_path)
+}
+
+/// Anchors the default ledger location to the acceptance package's manifest
+/// directory (two levels above it is the workspace root), so the resolution
+/// cannot depend on the launch directory.
+fn default_history_log_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join(DEFAULT_HISTORY_RELATIVE_PATH)
 }
 
 /// Appends one measurement to the durable history log.
@@ -201,3 +217,7 @@ pub fn current_unix_epoch_millis() -> u64 {
         .map(|elapsed| elapsed.as_millis() as u64)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+#[path = "historical_record_tests.rs"]
+mod historical_record_tests;
