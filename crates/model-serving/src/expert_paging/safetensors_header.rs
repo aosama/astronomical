@@ -18,27 +18,6 @@ use crate::safetensors::{
 /// This bound limits header-only reads before any expert payload is mapped.
 const MAXIMUM_HEADER_BYTES: usize = 64 * 1024 * 1024;
 
-/// Byte widths for safetensors dtype strings.
-/// These deliberately match MLX 0.32's dtype_from_safetensor_str().
-/// Accepting newer spellings here would defer a deterministic manifest
-/// error until the later native MLX loader boundary.
-static DTYPE_BYTE_WIDTHS: &[(&str, usize)] = &[
-    ("BOOL", 1),
-    ("I8", 1),
-    ("U8", 1),
-    ("F8_E4M3", 1),
-    ("F8_E5M2", 1),
-    ("I16", 2),
-    ("U16", 2),
-    ("F16", 2),
-    ("BF16", 2),
-    ("I32", 4),
-    ("U32", 4),
-    ("F32", 4),
-    ("I64", 8),
-    ("U64", 8),
-];
-
 /// Typed failures during safetensors header parsing and validation.
 #[derive(Debug, Error)]
 pub enum SafetensorsHeaderError {
@@ -181,39 +160,6 @@ pub struct SafetensorsHeader {
     /// (immediately after the 8-byte length prefix + JSON header).
     pub payload_start_offset: u64,
     pub total_file_size_bytes: u64,
-}
-
-impl SafetensorsDtype {
-    /// Parses a safetensors dtype name ("U32", "BF16", ...) as carried by
-    /// pack headers and safetensors documents.
-    #[must_use]
-    pub fn from_dtype_name(dtype_name: &str) -> Option<Self> {
-        match dtype_name {
-            "BOOL" => Some(Self::Bool),
-            "I8" => Some(Self::Int8),
-            "U8" => Some(Self::Uint8),
-            "F8_E4M3" => Some(Self::Float8E4M3),
-            "F8_E5M2" => Some(Self::Float8E5M2),
-            "I16" => Some(Self::Int16),
-            "U16" => Some(Self::Uint16),
-            "F16" => Some(Self::Float16),
-            "BF16" => Some(Self::BFloat16),
-            "I32" => Some(Self::Int32),
-            "U32" => Some(Self::Uint32),
-            "F32" => Some(Self::Float32),
-            "I64" => Some(Self::Int64),
-            "U64" => Some(Self::Uint64),
-            _ => None,
-        }
-    }
-
-    /// Returns the byte width for a safetensors dtype string, or `None` if unsupported.
-    pub fn byte_width_for_dtype(dtype_str: &str) -> Option<usize> {
-        DTYPE_BYTE_WIDTHS
-            .iter()
-            .find(|(name, _)| *name == dtype_str)
-            .map(|(_, width)| *width)
-    }
 }
 
 impl SafetensorsHeader {
