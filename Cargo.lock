@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "astronomical-acceptance"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-cli"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-config"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-test-harness",
  "libc",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-daemon"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-e2e"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -142,7 +142,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-inference-worker"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-ipc-protocol"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-test-harness",
  "base64 0.23.1",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-mlx-c-rust"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-native-identity",
  "bindgen",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-model-serving"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-native-build-tool"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-native-identity",
  "fs4",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-native-identity"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-test-harness",
  "sha2",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-rest-contract"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "base64 0.23.1",
  "regex-automata",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-runtime-integration"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-mlx-c-rust",
  "astronomical-native-identity",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-test-harness"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "base64 0.23.1",
  "image",
@@ -3012,7 +3012,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "xtask"
-version = "0.2.79"
+version = "0.2.80"
 dependencies = [
  "astronomical-native-identity",
  "astronomical-test-harness",
