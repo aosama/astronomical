@@ -72,6 +72,10 @@ initialize_staged_hook_repository() {
     staged_hook_repository_root="$1"
     mkdir -p "${staged_hook_repository_root}/.githooks"
     git -C "${staged_hook_repository_root}" init --quiet
+    # The sandbox has no toolchain file of its own, so rustup would fall back
+    # to the machine's default toolchain when the hook runs cargo from inside
+    # it. Copying the checkout's pin keeps the sandbox on the same compiler.
+    cp "${REPOSITORY_ROOT}/rust-toolchain.toml" "${staged_hook_repository_root}/rust-toolchain.toml"
     git -C "${staged_hook_repository_root}" config user.email 'source-size-test@example.invalid'
     git -C "${staged_hook_repository_root}" config user.name 'Source Size Test'
     git -C "${staged_hook_repository_root}" config core.hooksPath .githooks
