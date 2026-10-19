@@ -4,35 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.78</title>
-            <pubDate>Sat, 17 Oct 2026 23:02:16 -0400</pubDate>
-            <sparkle:version>1434</sparkle:version>
-            <sparkle:shortVersionString>0.2.78</sparkle:shortVersionString>
+            <title>0.2.79</title>
+            <pubDate>Mon, 19 Oct 2026 11:17:48 -0400</pubDate>
+            <sparkle:version>1493</sparkle:version>
+            <sparkle:shortVersionString>0.2.79</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.78
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.79
 
 ## What's new
 
-- **Launch at login** — the menu-bar app can now start automatically when you log in, toggleable from the menu.
-- **Library destinations and offers** — downloaded models go to a destination you choose, the Library presents curated model offers, and every library entry is guaranteed to appear in the Library view.
-- **Chat lives in Thin Talk** — the menu bar opens the Thin Talk conversation window directly, and the Observatory's Chat view hands over through a one-click link with an always-visible menu-bar fallback, replacing the embedded Observatory chat playground. Existing sessions and state are preserved.
-- **Stability** — menu-bar shutdown now matches daemon processes through a shared matcher, ending stray-process leaks.
+- **Folded ternary model family support.** Astronomical now serves the `prism_hadamard_qwen35` family from the folded ternary 27B pack (`prism-ml/Ternary-Bonsai-2-27B-mlx-2bit`): streaming chat completions, greedy and sampled, through the resident serving stack, with the family's full acceptance journeys — upstream greedy parity replay and five performance tiers.
+- **Faster replies from the folded ternary pack.** Decode optimizations across this release — one Hadamard rotation per activation, one-token-ahead pipelined decode, fused sibling projections, and fused rate-activation and head-normalization launches — raise decode throughput while the model's output stays bit-for-bit unchanged.
+- **New `doctor` command-line verb.** A read-only diagnostic that reports channel binding and daemon liveness, so a broken command-line path explains itself.
+- **Clearer daemon-not-running errors.** The message now names the channel and the sockets that were probed.
+- **Dependency and tooling refresh**, with no configuration format changes and no removed settings.
 
 ## Compatibility
 
-- macOS 14.0 or later on Apple Silicon.
-- Existing sessions, user state, and model inventories are preserved.
-- The OpenAI-compatible API surface is unchanged.
+- macOS 14.0 and later on Apple silicon (arm64).
+- Existing configuration, state, and installed models are preserved; no migration is required.
 
 ## Distribution
 
-This release is signed with a Developer ID Application certificate, notarized with Apple's notarization service, and stapled. Updates are delivered through a Sparkle feed signed with an Ed25519 key and verified before installation. SHA-256 digests for every published artifact are bound to the release manifest.
+- The application and every nested executable are signed with Astronomical's Developer ID Application certificate (Hardened Runtime, timestamped), and the disk image is notarized with Apple and carries a stapled notarization ticket.
+- Existing installs receive this update through the signed Sparkle feed; new installs download `Astronomical-0.2.79-macOS-arm64.dmg` from the releases page.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.78/Astronomical-0.2.78-macOS-arm64.dmg" length="17989174" type="application/octet-stream" sparkle:edSignature="17wPt55gJzXVFYWPITXJuzejiq/hSIFjhm/Mkb6dfaKsJVyCq1K4Y8nxNQgGb9UZ7QeJDgNPCR3ZOpf/OEHBAg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.79/Astronomical-0.2.79-macOS-arm64.dmg" length="18171621" type="application/octet-stream" sparkle:edSignature="TkEPn1oKidGEMopsDgAuHnuD7kBJoc06lkntx0ymLXMLEofQQkrnwL+h4oYzV7thHyvOhhBwBl+p54ICkwKAAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: UqrbPlN19y3LkG2v6GhgArJgqsKVW+Vn0w/QQ4RXWfF2vLMZh3nwCVPuibUGY9vNSL67Z2cUmMlQGnzS9DMoBw==
-length: 2516
+edSignature: fe2+aVRgCwWmq6nwGdzl17VFk7M4mOD8UZebMjKKL8Dz/Ym59e21JfHNwALDQPZel3BX6e27OCLFfpPCi4sgBQ==
+length: 2907
 -->
