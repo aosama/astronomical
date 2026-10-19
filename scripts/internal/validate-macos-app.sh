@@ -154,7 +154,7 @@ validate_real_model() {
     model_identifier="$LIVE_SERVING_PROBE_MODEL_IDENTIFIER"
     printf '%s model=%s status=selected\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$model_identifier"
-    romeo_fixture="${repository_root}/apps/inference-worker/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    romeo_fixture="${repository_root}/tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
     request_file="${VALIDATION_TEMP_DIRECTORY}/chat-request.json"
     jq --null-input --arg model "$model_identifier" --rawfile prompt "$romeo_fixture" \
         '{model:$model,messages:[{role:"user",content:$prompt}],max_tokens:16,stream:false}' > "$request_file"

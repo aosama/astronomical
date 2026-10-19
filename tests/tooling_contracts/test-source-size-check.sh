@@ -110,24 +110,24 @@ main() {
         "${generated_root}/src" \
         "${misleading_generated_marker_root}/src" \
         "${missing_final_newline_root}/src"
-    write_rust_source_file "${warning_root}/src/warning.rs" 501
-    write_rust_source_file "${failing_root}/src/failing.rs" 551
+    write_rust_source_file "${warning_root}/src/warning.rs" 601
+    write_rust_source_file "${failing_root}/src/failing.rs" 651
     write_rust_source_file "${generated_root}/src/generated.rs" 600 '// @generated deterministic binding'
     write_rust_source_file \
         "${misleading_generated_marker_root}/src/hand_written.rs" \
-        600 \
+        651 \
         '// This hand-written source mentions @generated but is not generated.'
     write_rust_source_file_without_final_newline \
         "${missing_final_newline_root}/src/failing_without_final_newline.rs" \
-        551
+        651
 
     printf '%s\n' "[source-size-test] status=progress scenarios=0/12 scenario=warning expected=success ETA_seconds=10"
     warning_scenario_output="$(run_source_size "${warning_root}")"
     printf '%s\n' "${warning_scenario_output}"
     case "${warning_scenario_output}" in
-        *"[source-size] status=warning lines=501 "*) ;;
+        *"[source-size] status=warning lines=601 "*) ;;
         *)
-            printf '%s\n' '[source-size-test] status=failed reason=501-lines-did-not-emit-warning' >&2
+            printf '%s\n' '[source-size-test] status=failed reason=601-lines-did-not-emit-warning' >&2
             exit 1
             ;;
     esac
@@ -147,12 +147,12 @@ main() {
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=3/12 scenario=failing expected=failure ETA_seconds=7"
     if run_source_size "${failing_root}"; then
-        printf '%s\n' '[source-size-test] status=failed reason=551-lines-was-accepted' >&2
+        printf '%s\n' '[source-size-test] status=failed reason=651-lines-was-accepted' >&2
         exit 1
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=4/12 scenario=missing-final-newline expected=failure ETA_seconds=6"
     if run_source_size "${missing_final_newline_root}"; then
-        printf '%s\n' '[source-size-test] status=failed reason=551-lines-without-final-newline-was-accepted' >&2
+        printf '%s\n' '[source-size-test] status=failed reason=651-lines-without-final-newline-was-accepted' >&2
         exit 1
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=5/12 scenario=staged-rust-boundary expected=success ETA_seconds=5"
@@ -184,15 +184,15 @@ main() {
     run_staged_pre_commit_hook "${staged_hook_repository_root}"
 
     printf '%s\n' "[source-size-test] status=progress scenarios=10/12 scenario=staged-limit expected=failure ETA_seconds=0"
-    write_source_file "${staged_hook_repository_root}/too_long.cpp" 601 '// staged C++ source line'
+    write_source_file "${staged_hook_repository_root}/too_long.cpp" 701 '// staged C++ source line'
     git -C "${staged_hook_repository_root}" add too_long.cpp
     if staged_hook_output="$(run_staged_pre_commit_hook "${staged_hook_repository_root}" 2>&1)"; then
-        printf '%s\n' '[source-size-test] status=failed reason=601-line-staged-source-was-accepted' >&2
+        printf '%s\n' '[source-size-test] status=failed reason=701-line-staged-source-was-accepted' >&2
         exit 1
     fi
     printf '%s\n' "${staged_hook_output}"
     case "${staged_hook_output}" in
-        *"limit=600 path=too_long.cpp"*) ;;
+        *"limit=700 path=too_long.cpp"*) ;;
         *)
             printf '%s\n' '[source-size-test] status=failed reason=staged-limit-failure-was-not-reported' >&2
             exit 1

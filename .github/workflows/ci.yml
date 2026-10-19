@@ -441,6 +441,16 @@ jobs:
           scripts/ci/ci-step-timing.sh begin test-tier-pyramid
           cargo xtask tier-pyramid
         timeout-minutes: 5
+      - name: Run repository contract scripts
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin repository-contracts
+          tests/tooling_contracts/test-cargo-citation-contract.sh
+          tests/tooling_contracts/test-cargo-artifact-lifecycle-contract.sh
+          tests/tooling_contracts/test-channel-isolation-checker-contract.sh
+          tests/tooling_contracts/test-source-size-check.sh
+          scripts/ci/tests/test-report-tier-pyramid-contract.sh
+        timeout-minutes: 5
       # Observatory contracts stay in this required job until branch
       # protection also requires swift-node; then this step can migrate.
       - name: Run Observatory contracts
