@@ -85,8 +85,8 @@ pub enum UsageError {
 /// These exit 1, except `ModelUnavailable`, which exits 2 as a usage error.
 #[derive(Error)]
 pub enum RespondError {
-    #[error("Astronomical isn't running — start it, then retry.")]
-    DaemonNotRunning,
+    #[error("{disclosure}")]
+    DaemonNotRunning { disclosure: String },
     #[error("The Astronomical worker is not ready yet — retry in a moment.")]
     WorkerNotReady,
     #[error("{reason}")]
@@ -130,7 +130,9 @@ pub enum RespondError {
 impl From<DaemonProbeError> for RespondError {
     fn from(probe_error: DaemonProbeError) -> Self {
         match probe_error {
-            DaemonProbeError::DaemonNotRunning => RespondError::DaemonNotRunning,
+            DaemonProbeError::DaemonNotRunning { disclosure } => {
+                RespondError::DaemonNotRunning { disclosure }
+            }
             DaemonProbeError::DaemonStoppedResponding => RespondError::DaemonStoppedResponding,
             DaemonProbeError::DaemonRejected { reason } => RespondError::DownloadFailed { reason },
         }
@@ -140,8 +142,8 @@ impl From<DaemonProbeError> for RespondError {
 impl From<crate::model_lifecycle::ModelLifecycleError> for RespondError {
     fn from(lifecycle_error: crate::model_lifecycle::ModelLifecycleError) -> Self {
         match lifecycle_error {
-            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning => {
-                RespondError::DaemonNotRunning
+            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning { disclosure } => {
+                RespondError::DaemonNotRunning { disclosure }
             }
             crate::model_lifecycle::ModelLifecycleError::WorkerNotReady => {
                 RespondError::WorkerNotReady
@@ -171,8 +173,8 @@ impl std::fmt::Debug for RespondError {
 /// These exit 1, except `ModelUnavailable`, which exits 2 as a usage error.
 #[derive(Error)]
 pub enum EmbedError {
-    #[error("Astronomical isn't running — start it, then retry.")]
-    DaemonNotRunning,
+    #[error("{disclosure}")]
+    DaemonNotRunning { disclosure: String },
     #[error("The Astronomical worker is not ready yet — retry in a moment.")]
     WorkerNotReady,
     #[error("{reason}")]
@@ -198,7 +200,9 @@ pub enum EmbedError {
 impl From<DaemonProbeError> for EmbedError {
     fn from(probe_error: DaemonProbeError) -> Self {
         match probe_error {
-            DaemonProbeError::DaemonNotRunning => EmbedError::DaemonNotRunning,
+            DaemonProbeError::DaemonNotRunning { disclosure } => {
+                EmbedError::DaemonNotRunning { disclosure }
+            }
             DaemonProbeError::DaemonStoppedResponding => EmbedError::DaemonStoppedResponding,
             DaemonProbeError::DaemonRejected { reason } => EmbedError::DownloadFailed { reason },
         }
@@ -208,8 +212,8 @@ impl From<DaemonProbeError> for EmbedError {
 impl From<crate::model_lifecycle::ModelLifecycleError> for EmbedError {
     fn from(lifecycle_error: crate::model_lifecycle::ModelLifecycleError) -> Self {
         match lifecycle_error {
-            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning => {
-                EmbedError::DaemonNotRunning
+            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning { disclosure } => {
+                EmbedError::DaemonNotRunning { disclosure }
             }
             crate::model_lifecycle::ModelLifecycleError::WorkerNotReady => {
                 EmbedError::WorkerNotReady
@@ -239,8 +243,8 @@ impl std::fmt::Debug for EmbedError {
 /// except `ModelUnavailable`, which exits 2 as a usage error.
 #[derive(Error)]
 pub enum ModelsError {
-    #[error("Astronomical isn't running — start it, then retry.")]
-    DaemonNotRunning,
+    #[error("{disclosure}")]
+    DaemonNotRunning { disclosure: String },
     #[error("The daemon stopped responding.")]
     DaemonStoppedResponding,
     #[error("The Astronomical worker is not ready yet — retry in a moment.")]
@@ -258,7 +262,9 @@ pub enum ModelsError {
 impl From<DaemonProbeError> for ModelsError {
     fn from(probe_error: DaemonProbeError) -> Self {
         match probe_error {
-            DaemonProbeError::DaemonNotRunning => ModelsError::DaemonNotRunning,
+            DaemonProbeError::DaemonNotRunning { disclosure } => {
+                ModelsError::DaemonNotRunning { disclosure }
+            }
             DaemonProbeError::DaemonStoppedResponding => ModelsError::DaemonStoppedResponding,
             DaemonProbeError::DaemonRejected { reason } => ModelsError::DaemonRejected { reason },
         }
@@ -268,8 +274,8 @@ impl From<DaemonProbeError> for ModelsError {
 impl From<crate::model_lifecycle::ModelLifecycleError> for ModelsError {
     fn from(lifecycle_error: crate::model_lifecycle::ModelLifecycleError) -> Self {
         match lifecycle_error {
-            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning => {
-                ModelsError::DaemonNotRunning
+            crate::model_lifecycle::ModelLifecycleError::DaemonNotRunning { disclosure } => {
+                ModelsError::DaemonNotRunning { disclosure }
             }
             crate::model_lifecycle::ModelLifecycleError::WorkerNotReady => {
                 ModelsError::WorkerNotReady
@@ -296,8 +302,8 @@ impl std::fmt::Debug for ModelsError {
 /// Failures of the `status` verb after arguments have parsed. These exit 1.
 #[derive(Error)]
 pub enum StatusError {
-    #[error("Astronomical isn't running — start it, then retry.")]
-    DaemonNotRunning,
+    #[error("{disclosure}")]
+    DaemonNotRunning { disclosure: String },
     #[error("The daemon stopped responding.")]
     DaemonStoppedResponding,
     #[error("Could not write the status report to standard output: {cause}")]
@@ -307,7 +313,9 @@ pub enum StatusError {
 impl From<DaemonProbeError> for StatusError {
     fn from(probe_error: DaemonProbeError) -> Self {
         match probe_error {
-            DaemonProbeError::DaemonNotRunning => StatusError::DaemonNotRunning,
+            DaemonProbeError::DaemonNotRunning { disclosure } => {
+                StatusError::DaemonNotRunning { disclosure }
+            }
             DaemonProbeError::DaemonStoppedResponding | DaemonProbeError::DaemonRejected { .. } => {
                 StatusError::DaemonStoppedResponding
             }

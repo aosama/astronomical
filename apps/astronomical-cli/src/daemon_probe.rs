@@ -5,17 +5,53 @@
 
 use std::{path::PathBuf, time::Duration};
 
+use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonIpcClient, DaemonListedModel, DaemonRequest,
     DaemonResponse, DaemonWorkerStatus,
 };
 use tokio::time::timeout;
 
+/// The single wording source for "this CLI's own-channel daemon is not
+/// reachable": names the channel and every socket the probe tried, so the
+/// failure explains itself when the other channel's app is running normally
+/// (issue #1392 — channel binding follows the executable path, and strict
+/// isolation means restarting the other channel's app cannot help). Every
+/// verb error carries this text unchanged, so the guidance stays
+/// byte-identical across `respond`, `embed`, `models`, and `status`.
+#[must_use]
+pub fn daemon_not_running_disclosure(
+    runtime_instance: AstronomicalRuntimeInstance,
+    probed_socket_paths: &[PathBuf],
+) -> String {
+    let probed_socket_list_text = if probed_socket_paths.is_empty() {
+        "none".to_owned()
+    } else {
+        probed_socket_paths
+            .iter()
+            .map(|probed_socket_path| probed_socket_path.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let socket_word = if probed_socket_paths.len() == 1 {
+        "socket"
+    } else {
+        "sockets"
+    };
+    format!(
+        "Astronomical ({} channel) isn't running — start it, then retry. \
+         (probed {}: {})",
+        runtime_instance.as_str(),
+        socket_word,
+        probed_socket_list_text
+    )
+}
+
 /// Why a verb could not learn the daemon's state before submitting work.
 #[derive(Debug, thiserror::Error)]
 pub enum DaemonProbeError {
-    #[error("Astronomical isn't running — start it, then retry.")]
-    DaemonNotRunning,
+    #[error("{disclosure}")]
+    DaemonNotRunning { disclosure: String },
     #[error("The daemon stopped responding.")]
     DaemonStoppedResponding,
     #[error("The daemon declined the request: {reason}")]
@@ -40,6 +76,10 @@ pub struct DaemonProbe {
     pub candidate_socket_paths: Vec<PathBuf>,
     /// Bound for each protocol stage of the journey.
     pub request_timeout: Duration,
+    /// Channel this probe belongs to: the not-running disclosure names it, so
+    /// the failure says whose daemon is down instead of leaving the user to
+    /// guess which of the two installed apps the error is about.
+    pub runtime_instance: AstronomicalRuntimeInstance,
 }
 
 impl DaemonProbe {
@@ -148,7 +188,12 @@ impl DaemonProbe {
                 return Ok(daemon_client);
             }
         }
-        Err(DaemonProbeError::DaemonNotRunning)
+        Err(DaemonProbeError::DaemonNotRunning {
+            disclosure: daemon_not_running_disclosure(
+                self.runtime_instance,
+                &self.candidate_socket_paths,
+            ),
+        })
     }
 
     /// One request per connection: the daemon serves each socket connection
