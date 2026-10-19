@@ -21,11 +21,11 @@ impl super::super::PrismHadamardTextModel {
         normalized_input: &MlxArray,
         token_count: i32,
         layer: &LinearLayerWeights,
-        rms_norm_epsilon: f32,
         state_slot: usize,
         state: &mut StraightGenerationState,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
+        let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
         let linear_value_head_count = text.linear_num_value_heads as i32;
         let linear_value_dimension =
             (text.linear_num_value_heads * text.linear_value_head_dim) as i32;
@@ -55,16 +55,15 @@ impl super::super::PrismHadamardTextModel {
             .rates
             .forward(&self.runtime, normalized_input)
             .map_err(PrismHadamardModelError::Forward)?;
-        let update_rates = self
+        // One dual-output replay replaces the separate sigmoid and decay
+        // launches; both consume this same rate projection (issue #1366).
+        let (update_rates, decays) = self
             .runtime
-            .sigmoid(&rate_logits.update_logits)
-            .map_err(PrismHadamardModelError::Forward)?;
-        let decays = self
-            .runtime
-            .apply_compiled_gated_delta_decay(
-                &self.compiled_elementwise_graphs,
-                &layer.decay_rate_logarithm,
+            .apply_compiled_gated_delta_rate_activation(
+                &self.compiled_gated_delta_rate_activation,
+                &rate_logits.update_logits,
                 &rate_logits.decay_inputs,
+                &layer.decay_rate_logarithm,
                 &layer.decay_interval_bias,
             )
             .map_err(PrismHadamardModelError::Forward)?;
@@ -72,12 +71,8 @@ impl super::super::PrismHadamardTextModel {
         let convolution_input = state.convolution_states[state_slot]
             .update(&self.runtime, &mixed_queries_keys_values, token_count)
             .map_err(PrismHadamardModelError::ForwardRuntime)?;
-        let head_queries_keys_values = self.convolution_to_normalized_heads(
-            &convolution_input,
-            token_count,
-            layer,
-            rms_norm_epsilon,
-        )?;
+        let head_queries_keys_values =
+            self.convolution_to_normalized_heads(&convolution_input, token_count, layer)?;
         let recurrent_state = &mut state.recurrent_states[state_slot];
         let current_recurrent_state = recurrent_state
             .current_or_zero(&self.runtime)
@@ -128,7 +123,6 @@ impl super::super::PrismHadamardTextModel {
         convolution_input: &MlxArray,
         token_count: i32,
         layer: &LinearLayerWeights,
-        rms_norm_epsilon: f32,
     ) -> Result<(MlxArray, MlxArray, MlxArray), PrismHadamardModelError> {
         let text = self.pack.config().text();
         let linear_key_head_count = text.linear_num_key_heads as i32;
@@ -199,13 +193,18 @@ impl super::super::PrismHadamardTextModel {
             )
             .map_err(PrismHadamardModelError::Forward)?;
 
-        let queries = self
+        // One dual-output replay replaces the two separate head-norm
+        // launches (issue #1366); each output is the same fast-rms kernel
+        // over its own input.
+        let (queries, keys) = self
             .runtime
-            .rms_norm(&queries, &self.gdn_query_scale_weight, rms_norm_epsilon)
-            .map_err(PrismHadamardModelError::Forward)?;
-        let keys = self
-            .runtime
-            .rms_norm(&keys, &self.gdn_key_scale_weight, rms_norm_epsilon)
+            .apply_compiled_dual_head_norm(
+                &self.compiled_dual_head_norm,
+                &queries,
+                &keys,
+                &self.gdn_query_scale_weight,
+                &self.gdn_key_scale_weight,
+            )
             .map_err(PrismHadamardModelError::Forward)?;
         Ok((queries, keys, values))
     }
