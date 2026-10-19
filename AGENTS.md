@@ -1,9 +1,5 @@
 # Instructions for the Astronomical Project
 
-- Keep full workspace verification and formatting verification only before committing and pushing, when the user asks you to commit.
-
-- Run cargo fmt or similar commands only before committing; that is, when the user asks you to commit, run cargo fmt.
-
 ## Never Hardwire Local Developer Environment Into the Codebase
 
 - Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.
@@ -21,15 +17,12 @@
 
 - Never use "qualification" or any variant ("qualify", "qualified", etc.) in code, comments, tests, scripts, documentation, commit messages, GitHub content, or replies.
 - "hermetic" is equally banned and being decommissioned (issue #1208). Remove existing occurrences and replace with the most specific term below.
-- Test classification vocabulary: **offline** (a property, not a scope) = sealed and deterministic — no network beyond localhost, no real model artifacts, no machine state, so it passes identically on any laptop; **unit** = in-process logic with fakes; **integration** = crossing a component seam through stubs or fixture binaries (unix-socket IPC, spawned fixture workers, real filesystem); **end-to-end (E2E)** = driving the real `astronomicald` binary over its real HTTP surface; **acceptance** = env-gated e2e tests loading real model artifacts. A test spanning several tiers is named by the highest seam it crosses.
 
 ## Testing Instructions For Astronomical
 
 - Running unit tests or offline tests in parallel is desired.
 
 - MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
-
-- Tests are plain, Book-style `#[test]` / `#[tokio::test]` functions; hang protection lives at the runner level (job-level timeouts in CI, or a runner with per-test timeout support), not inside each test. A test that must bound a specific wait (polling, IPC) wraps that wait in an explicit in-test timeout. Target per-test budget: 60 seconds; performance-endurance tests and out-of-memory (OOM) reproduction tests are exempt. The legacy `astronomical-test-harness` wrapper macros remain only until their retirement lands (tracked as a dedicated issue); new unit tests must not adopt them.
 
 - SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the budget or repeating long model runs.
 
