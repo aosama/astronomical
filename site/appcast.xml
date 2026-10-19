@@ -4,21 +4,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.79</title>
-            <pubDate>Mon, 19 Oct 2026 11:17:48 -0400</pubDate>
-            <sparkle:version>1493</sparkle:version>
-            <sparkle:shortVersionString>0.2.79</sparkle:shortVersionString>
+            <title>0.2.80</title>
+            <pubDate>Mon, 19 Oct 2026 12:55:40 -0400</pubDate>
+            <sparkle:version>1499</sparkle:version>
+            <sparkle:shortVersionString>0.2.80</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.79
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.80
 
 ## What's new
 
-- **Folded ternary model family support.** Astronomical now serves the `prism_hadamard_qwen35` family from the folded ternary 27B pack (`prism-ml/Ternary-Bonsai-2-27B-mlx-2bit`): streaming chat completions, greedy and sampled, through the resident serving stack, with the family's full acceptance journeys — upstream greedy parity replay and five performance tiers.
-- **Faster replies from the folded ternary pack.** Decode optimizations across this release — one Hadamard rotation per activation, one-token-ahead pipelined decode, fused sibling projections, and fused rate-activation and head-normalization launches — raise decode throughput while the model's output stays bit-for-bit unchanged.
-- **New `doctor` command-line verb.** A read-only diagnostic that reports channel binding and daemon liveness, so a broken command-line path explains itself.
-- **Clearer daemon-not-running errors.** The message now names the channel and the sockets that were probed.
-- **Dependency and tooling refresh**, with no configuration format changes and no removed settings.
+- **Fixed: text-only folded ternary pack variants now load.** A real installed export of the folded ternary family (the text-only DFlash2 variant of schema version 2) was refused with a model-load failure on 0.2.79; the loader now accepts that export's omitted runtime marker and Transformers metadata, and validation failures carry their cause. Model output is unchanged — the upstream greedy parity journey still replays token for token.
+- **Release hardening behind the scenes**: releases now round-trip every installed chat model (a sampled one-hundred-token reply from each) before shipping, so a pack variant the loader would refuse is caught at release time.
 
 ## Compatibility
 
@@ -28,12 +25,12 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 ## Distribution
 
 - The application and every nested executable are signed with Astronomical's Developer ID Application certificate (Hardened Runtime, timestamped), and the disk image is notarized with Apple and carries a stapled notarization ticket.
-- Existing installs receive this update through the signed Sparkle feed; new installs download `Astronomical-0.2.79-macOS-arm64.dmg` from the releases page.
+- Existing installs receive this update through the signed Sparkle feed; new installs download `Astronomical-0.2.80-macOS-arm64.dmg` from the releases page.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.79/Astronomical-0.2.79-macOS-arm64.dmg" length="18171621" type="application/octet-stream" sparkle:edSignature="TkEPn1oKidGEMopsDgAuHnuD7kBJoc06lkntx0ymLXMLEofQQkrnwL+h4oYzV7thHyvOhhBwBl+p54ICkwKAAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.80/Astronomical-0.2.80-macOS-arm64.dmg" length="18168258" type="application/octet-stream" sparkle:edSignature="Zf2nFcw2EG7TLPnuShT/o+SMrCDwnBPH2mwvqazpXBHloNb4ClShG2rSelpWVaUv/eHb3A9Ggw4NjhozOckJBg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: fe2+aVRgCwWmq6nwGdzl17VFk7M4mOD8UZebMjKKL8Dz/Ym59e21JfHNwALDQPZel3BX6e27OCLFfpPCi4sgBQ==
-length: 2907
+edSignature: ncsr96mN8mRHCuO/Xub6DFE/EA79V2h61lTrL/tAhoBrC/2P/wULExWZyuzDVj0perLmgJ/qz6xKfgN0/B8bCg==
+length: 2505
 -->
