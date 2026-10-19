@@ -47,3 +47,9 @@
 ## Release Scripts Folder
 
 - All **Release releated scripts** must live are under "<repo-root>/scripts/release" , they will help you through the release process.
+
+## Development App Sessions Must Leave The User's CLI Working
+
+- The CLI resolves its channel (Stable vs Development) from its own executable path (`apps/astronomical-cli/src/instance.rs`) and, per the strict channel isolation decision, never falls back to the other channel. A `astronomical` command whose resolved binary lives outside either app bundle is therefore bound to the Development channel and fails with "Astronomical isn't running" whenever the Development instance is not running — even while the Stable app runs normally.
+- Any session that builds, launches, or quits "Astronomical Development.app" must finish by verifying the user's default `astronomical` command still reaches the instance the user actually uses: resolve `which astronomical`, follow every symlink to the real binary, and confirm the channel that path implies matches that instance.
+- Never leave a PATH entry named `astronomical` pointing at a repository build. A repository-built CLI for testing the Development channel belongs under a distinct command name (for example `astronomical-dev`), so the channel the name implies matches the channel the binary is bound to.
