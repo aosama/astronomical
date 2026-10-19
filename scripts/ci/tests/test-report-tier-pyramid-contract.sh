@@ -29,23 +29,21 @@ write_unit_fixture() {
         "${fixture_root}/crates/example/tests/support" \
         "${fixture_root}/tests/e2e/tests"
     cat > "${fixture_root}/crates/example/src/example_tests.rs" <<'EOF'
-use astronomical_test_harness::offline_test;
-use astronomical_test_harness::offline_tokio_test;
-
-offline_test!(first_unit_case, {
+#[test]
+fn first_unit_case() {
     assert_eq!(1 + 1, 2);
-});
+}
 
-offline_tokio_test!(second_unit_case, {
+#[tokio::test]
+async fn second_unit_case() {
     assert_eq!(2 + 2, 4);
-});
+}
 EOF
     cat > "${fixture_root}/crates/example/tests/offline/journeys.rs" <<'EOF'
-use astronomical_test_harness::offline_test;
-
-offline_test!(first_integration_case, {
+#[test]
+fn first_integration_case() {
     assert_eq!(1, 1);
-});
+}
 
 #[test]
 fn second_integration_case() {
@@ -96,7 +94,7 @@ main() {
         exit 1
     }
     printf '%s\n' "$first_report" | grep -q "unit=2" || {
-        print_error "unit tier must count 2 harness macro invocations, got: $first_report"
+        print_error "unit tier must count 2 unindented test attribute lines beside source, got: $first_report"
         exit 1
     }
     printf '%s\n' "$first_report" | grep -q "integration=2" || {
@@ -128,12 +126,15 @@ main() {
 
     printf '%s\n' '[tier-pyramid-contract] case=fails-naming-the-drifted-tier status=start'
     cat > "${fixture_root}/crates/example/tests/offline/more_journeys.rs" <<'EOF'
-offline_test!(third_integration_case, {
+#[test]
+fn third_integration_case() {
     assert_eq!(1, 1);
-});
-offline_test!(fourth_integration_case, {
+}
+
+#[test]
+fn fourth_integration_case() {
     assert_eq!(1, 1);
-});
+}
 EOF
     drift_exit_status=0
     drift_report="$(run_pyramid "$fixture_root" 2>&1)" || drift_exit_status=$?
