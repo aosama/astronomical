@@ -22,6 +22,8 @@ mod native_dependency_manifest_tests;
 mod native_fingerprint;
 mod notices;
 #[cfg(test)]
+mod notices_tests;
+#[cfg(test)]
 mod sccache_save_tests;
 mod source_size;
 mod tier_pyramid;

@@ -29,16 +29,9 @@ else
     exit 1
 fi
 
-# Dependency bumps change the generated license notices; a stale digest fails
-# the CI notices gate, so prove it fresh here for one local digest comparison.
-printf '%s\n' '[pre-push] status=start check=rust-dependency-notices-digest'
-started_epoch_seconds="$(date +%s)"
-if (cd "${REPOSITORY_ROOT}" && cargo xtask notices --check); then
-    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
-    printf '%s\n' "[pre-push] status=success check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}"
-    exit 0
-fi
-elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
-printf '%s\n' "[pre-push] status=failed check=rust-dependency-notices-digest elapsed_seconds=${elapsed_seconds}" >&2
-printf '%s\n' '[pre-push] hint=run cargo xtask notices and commit the result' >&2
-exit 1
+# Rust dependency notices freshness is CI-owned: ci.yml regenerates the file
+# in place for bot and default-branch builds and enforces the strict contract
+# on human pull requests, where only a real notices-text difference fails.
+# Keeping the check out of this hook means a push never requires the pinned
+# cargo-about locally and never inspects uncommitted manifest edits from the
+# dirty working tree.
