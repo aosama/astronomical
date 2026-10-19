@@ -13,11 +13,6 @@ main() {
         print_error "check-test-channel-isolation.sh does not accept arguments"
         exit 2
     fi
-    command -v rg >/dev/null 2>&1 || {
-        print_error "ripgrep is required for test channel isolation checks"
-        exit 2
-    }
-
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
     check_started_at="$(date +%s)"
     printf '%s step=test-channel-isolation status=start\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')"
@@ -34,13 +29,23 @@ main() {
         "${repository_root}/tests/*/tests" \
         "${repository_root}/tests/fixtures/*/src"; do
         for candidate in $search_glob; do
+            # The config crate's tests load configuration from temporary home
+            # directories and name the Stable instance deliberately: they test
+            # the loader itself, never a live Stable state, so that tree is
+            # the one package test tree this check does not scan.
+            if [ "$candidate" = "${repository_root}/crates/config/tests" ]; then
+                continue
+            fi
             if [ -d "$candidate" ]; then
                 set -- "$@" "$candidate"
             fi
         done
     done
+    # grep -E rather than ripgrep: the forbidden pattern is plain extended
+    # regular expression syntax, and grep is present on every CI runner image
+    # while ripgrep is not.
     if [ "$#" -gt 0 ] && forbidden_matches="$(
-        rg --line-number --glob '*.rs' "$forbidden_pattern" "$@" 2>&1
+        grep -rEn --include='*.rs' "$forbidden_pattern" "$@" 2>&1
     )"
     then
         printf '%s\n' "$forbidden_matches" >&2
