@@ -9,6 +9,8 @@
 
 use std::{io::Write, time::Duration};
 
+use astronomical_config::AstronomicalRuntimeInstance;
+
 use astronomical_ipc_protocol::{
     ChatGenerationFailureReason, ChatGenerationSettings, ChatImageInput, ChatMessage,
     DaemonIpcClient, DaemonRequest, DaemonResponse,
@@ -23,6 +25,9 @@ use crate::{
 pub struct RespondDependencies<'a> {
     /// Instance sockets to try, most preferred first.
     pub candidate_socket_paths: Vec<std::path::PathBuf>,
+    /// Channel these sockets belong to: carried into the not-running
+    /// disclosure so the failure names whose daemon is down.
+    pub runtime_instance: AstronomicalRuntimeInstance,
     /// Where the answer payload goes.
     pub stdout: &'a mut dyn Write,
     /// Where progress, reasoning, and errors go.
@@ -45,6 +50,7 @@ pub async fn run_respond(
     let daemon_probe = DaemonProbe {
         candidate_socket_paths: respond_dependencies.candidate_socket_paths.clone(),
         request_timeout: respond_dependencies.request_timeout,
+        runtime_instance: respond_dependencies.runtime_instance,
     };
     let model_lifecycle = ModelLifecycle {
         daemon_probe,

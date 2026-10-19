@@ -12,6 +12,8 @@ use std::{
     time::Duration,
 };
 
+use astronomical_config::AstronomicalRuntimeInstance;
+
 use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse, EmbeddingsFailureReason};
 use serde_json::json;
 use tokio::time::timeout;
@@ -22,6 +24,9 @@ use crate::{DaemonProbe, EmbedArguments, ModelLifecycle, RequiredCapability, err
 pub struct EmbedDependencies<'a> {
     /// Instance sockets to try, most preferred first.
     pub candidate_socket_paths: Vec<std::path::PathBuf>,
+    /// Channel these sockets belong to: carried into the not-running
+    /// disclosure so the failure names whose daemon is down.
+    pub runtime_instance: AstronomicalRuntimeInstance,
     /// Read to EOF when no text or file was supplied.
     pub stdin: &'a mut dyn Read,
     /// Where the JSON vector document goes.
@@ -47,6 +52,7 @@ pub async fn run_embed(
     let daemon_probe = DaemonProbe {
         candidate_socket_paths: embed_dependencies.candidate_socket_paths.clone(),
         request_timeout: embed_dependencies.request_timeout,
+        runtime_instance: embed_dependencies.runtime_instance,
     };
     let model_lifecycle = ModelLifecycle {
         daemon_probe,
