@@ -73,3 +73,23 @@ fn should_accept_a_vision_free_pack() {
     let config = parse_config(&document).expect("a text-only pack should parse");
     assert!(!config.vision_declared());
 }
+
+#[test]
+fn should_accept_a_text_only_export_without_the_requires_runtime_marker() {
+    // Real text-only exporter variants of schema version 2 omit the
+    // requires-runtime marker and carry Transformers export metadata instead;
+    // the family identity is pinned by the model type, tensor namespace, and
+    // GDN layout, so the pack must load (the 0.2.79 Stable defect: such a
+    // pack was refused with a bare config-validation failure).
+    let mut document = shipped_shape_config_json();
+    document
+        .as_object_mut()
+        .expect("the fixture is an object")
+        .remove("requires_runtime");
+    document["transformers_version"] = serde_json::json!("4.57.1");
+    document["components"] = serde_json::json!({"text": true, "vision": false, "mtp": false});
+    let config = parse_config(&document)
+        .expect("a text-only export without the runtime marker should parse");
+    assert!(!config.vision_declared());
+    assert_eq!(config.packed_modules().len(), 3);
+}

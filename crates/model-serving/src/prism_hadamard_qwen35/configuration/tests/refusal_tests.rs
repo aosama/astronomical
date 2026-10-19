@@ -188,3 +188,17 @@ fn should_refuse_invalid_packed_modules() {
         FoldedPackConfigError::DuplicateModulePath { .. }
     ));
 }
+
+#[test]
+fn should_refuse_an_absurdly_long_requires_runtime_marker() {
+    use super::FoldedPackConfigError;
+    // Absence is legitimate, but a marker longer than the bound is refused
+    // because it rides inside every load error report.
+    assert!(matches!(
+        refusal(|d| {
+            d["requires_runtime"] =
+                serde_json::json!["x".repeat(super::super::MAXIMUM_REQUIRES_RUNTIME_BYTES + 1)];
+        }),
+        FoldedPackConfigError::InvalidRequiresRuntime
+    ));
+}

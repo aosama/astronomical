@@ -214,7 +214,7 @@ pub(crate) fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
 pub enum FoldedPackValidationError {
     #[error("folded pack file or safetensors validation failed: {0}")]
     Artifact(#[from] ArtifactValidationError),
-    #[error("folded pack config validation failed")]
+    #[error("folded pack config validation failed: {0}")]
     Config(#[from] FoldedPackConfigError),
     #[error("folded pack hadamard transform contract refused")]
     Hadamard(#[from] HadamardContractError),
