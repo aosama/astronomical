@@ -52,11 +52,11 @@ main() {
         print_error "tests must use Development configuration or isolated Development-shaped state"
         exit 1
     else
-        ripgrep_exit_code=$?
+        search_exit_code=$?
     fi
-    [ "$ripgrep_exit_code" -eq 1 ] || {
+    [ "$search_exit_code" -eq 1 ] || {
         print_error "test channel isolation scan failed: ${forbidden_matches}"
-        exit "$ripgrep_exit_code"
+        exit "$search_exit_code"
     }
     printf '%s step=test-channel-isolation status=success elapsed_seconds=%s\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$(( $(date +%s) - check_started_at ))"
