@@ -27,6 +27,10 @@
 //! in this crate's `COVERAGE_INVENTORY.md`; regenerate it after a deliberate
 //! surface change with `scripts/generate-mlx-c-coverage-inventory.sh`.
 //!
+//! Source-reference audits must never drive removals here: a wrapper with no
+//! Astronomical caller yet is the expected steady state of a complete bridge,
+//! and this crate is recorded as exempt from dead-surface cleanup batches.
+//!
 //! # Attribution
 //!
 //! The fallible-closure error channel — a payload trampoline parking its

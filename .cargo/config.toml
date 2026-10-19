@@ -107,6 +107,16 @@ audit-unused-public-bins = "clippy --workspace --bins -- -A clippy::all -D dead_
 # really have no caller. Move .claude/worktrees aside, or run the tool against
 # a checkout without nested worktrees, before trusting the output, and confirm
 # any candidate by hand before changing visibility.
+#
+# SECOND CAVEAT (audit tranche 2): the index output is a candidate generator,
+# never a verdict. It over-reports (test-harness functions look uncalled) and
+# under-reports (items whose only callers are tests or feature-gated code
+# count as referenced, and zero-caller `pub(crate)` items reachable through
+# the module chain from the crate root are invisible to rustc's dead-code
+# pass). The verdict is always `git grep -wn "<name>" -- '*.rs'` across every
+# tracked source file. `crates/mlx-c-rust` is exempt from dead-surface
+# cleanup by policy: its bridge is complete rather than selective (see that
+# crate's lib.rs documentation).
 audit-unused-public-workspace = "workspace-unused-pub"
 # Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
 # packages, features, targets, and the GPU serial rule (`--test-threads=1`)

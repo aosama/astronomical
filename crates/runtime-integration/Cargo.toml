@@ -10,7 +10,7 @@ version.workspace = true
 
 [features]
 default = []
-mlx = ["dep:astronomical-mlx-c-rust"]
+mlx = ["dep:astronomical-mlx-c-rust", "dep:libc", "dep:sha2"]
 mlx-memory-contract-probe = ["mlx"]
 
 [lints.rust]
@@ -22,8 +22,8 @@ all = { level = "warn", priority = -1 }
 
 [dependencies]
 astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
-libc.workspace = true
-sha2.workspace = true
+libc = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [build-dependencies]
