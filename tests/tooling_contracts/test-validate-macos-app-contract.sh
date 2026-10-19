@@ -86,6 +86,7 @@ case "${2:-}" in
     CFBundleIconFile) printf '%s\n' Astronomical.icns ;;
     AstronomicalDaemonPort) printf '%s\n' 6733 ;;
     AstronomicalStateDirectoryName) printf '%s\n' .astronomical-dev ;;
+    CFBundleURLTypes) printf '%s\n' '[{"CFBundleURLSchemes":["astronomical"]}]' ;;
     *) exit 1 ;;
 esac
 PLUTIL

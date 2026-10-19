@@ -3,9 +3,10 @@
 //! committed baseline at a drift tolerance, and can re-record the baseline.
 //!
 //! Counting parity notes (must match the historical numbers exactly):
-//! - unit: lines invoking any harness test macro under beside-source trees.
-//! - integration: harness macros plus raw test attributes under `tests/`
-//!   directories, excluding helper folders.
+//! - unit: lines that are exactly `#[test]` or that start with `#[tokio::test`
+//!   at column zero, under beside-source trees.
+//! - integration: the same unindented `#[test]` and `#[tokio::test`
+//!   attribute lines under `tests/` directories, excluding helper folders.
 //! - e2e / acceptance split of the root e2e package: files with the
 //!   `ASTRONOMICAL_REAL_MODEL` gate count as acceptance.
 //! - acceptance also counts the root acceptance package.
