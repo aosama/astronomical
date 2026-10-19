@@ -42,7 +42,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::memory;
 use crate::memory::MemoryPhase;
 
 /// Bootstrap context-window reserve before any live measurement exists
@@ -150,12 +149,6 @@ impl MlxRamBudget {
         }
         self.mlx_active_memory_ceiling_bytes = mlx_active_memory_ceiling_bytes;
         Ok(())
-    }
-
-    pub fn update_model_geometry(&mut self, model_geometry: MlxRamBudgetModelGeometry) {
-        // The owner follows the loaded model. Callers must provide geometry from
-        // validated artifacts, not infer payload sizes from model names.
-        self.model_geometry = model_geometry;
     }
 
     #[must_use]
@@ -415,23 +408,6 @@ impl MlxRamBudget {
         }
         current_retained_expert_payload_bytes
             .saturating_sub(projected_active_memory_bytes - mlx_active_memory_ceiling_bytes)
-    }
-
-    /// Reclamation needed so a fixed forward workspace fits the ceiling.
-    #[must_use]
-    pub fn expert_reclamation_bytes_for_fixed_forward(
-        &self,
-        current_active_memory_bytes: u64,
-        retained_expert_payload_bytes: u64,
-        fixed_forward_workspace_bytes: u64,
-    ) -> u64 {
-        u64::try_from(memory::expert_reclamation_bytes_to_fit_fixed_forward(
-            usize::try_from(current_active_memory_bytes).unwrap_or(usize::MAX),
-            usize::try_from(retained_expert_payload_bytes).unwrap_or(usize::MAX),
-            usize::try_from(self.mlx_active_memory_ceiling_bytes()).unwrap_or(usize::MAX),
-            usize::try_from(fixed_forward_workspace_bytes).unwrap_or(usize::MAX),
-        ))
-        .unwrap_or(u64::MAX)
     }
 }
 
