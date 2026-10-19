@@ -20,6 +20,7 @@ const HELP_TEXT: &str = concat!(
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
     "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
     "       astronomical status\n",
+    "       astronomical doctor\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
     "       astronomical validate config [--instance stable|development] [--json]\n",
     "       astronomical --help\n",
@@ -41,6 +42,7 @@ const HELP_TEXT: &str = concat!(
     "                   first when this Mac lacks it, then persist it\n",
     "  models download  Start (or resume) a download and wait, with live progress\n",
     "  status           Worker state, resident model, default model, active download\n",
+    "  doctor           This binary's channel binding plus both channels' daemon liveness\n",
     "  schema object    Build a strict JSON object schema for structured output\n",
     "  validate config  Report effective values of an instance configuration\n\n",
     "Options:\n",
@@ -69,6 +71,7 @@ pub enum CliCommand {
     Embed(EmbedArguments),
     Models(ModelsCommand),
     Status,
+    Doctor,
     Schema(SchemaArguments),
     ValidateConfig(ValidateConfigArguments),
 }
@@ -123,6 +126,14 @@ pub fn parse_command(
                 ));
             }
             Ok(CliCommand::Status)
+        }
+        "doctor" => {
+            if remaining_arguments.len() > 1 {
+                return Err(UsageError::UnknownArgument(
+                    remaining_arguments[1].to_string_lossy().into_owned(),
+                ));
+            }
+            Ok(CliCommand::Doctor)
         }
         "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
         "validate" => {

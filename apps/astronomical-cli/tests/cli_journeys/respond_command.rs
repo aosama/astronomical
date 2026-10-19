@@ -40,11 +40,8 @@ async fn should_report_a_missing_daemon_as_not_running() {
     let missing_socket_path = test_directory.join(SOCKET_FILE_NAME);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let mut respond_dependencies = respond_dependencies(
-        vec![missing_socket_path.clone()],
-        &mut stdout,
-        &mut stderr,
-    );
+    let mut respond_dependencies =
+        respond_dependencies(vec![missing_socket_path.clone()], &mut stdout, &mut stderr);
 
     let respond_outcome = timeout(
         TEST_TIMEOUT,
