@@ -53,6 +53,10 @@
 mod admission;
 mod budget;
 mod ceiling;
+// The dense-resident ceiling policy is consumed only by the direct-MLX
+// engine, so an isolated default-feature build would otherwise flag the
+// whole module as dead (workspace builds unify the feature away).
+#[cfg(feature = "direct-mlx")]
 mod dense_resident;
 mod expert_cache;
 mod geometry_floor;
@@ -110,6 +114,7 @@ pub use budget::{
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
+#[cfg(feature = "direct-mlx")]
 pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
 pub use expert_cache::{
     DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
