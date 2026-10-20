@@ -36,8 +36,15 @@ impl Ord for UpgradeCandidate {
     /// ascending so `BinaryHeap` (a max-heap) pops the lexically smaller
     /// name first, matching Python's `heapq` on `(-efficiency, name, ...)`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let _ = other;
-        todo!("total_cmp on efficiency, then reversed name order so the smaller name is the max")
+        // `total_cmp` gives a total order over efficiency (including any NaN
+        // efficiency, ordered as the largest). On an exact tie the module
+        // name decides, reversed: the smaller name becomes the `Greater`
+        // entry, so the max-heap pops it first — the same deterministic
+        // tie-break Python's tuple ordering provides and the parity fixtures
+        // depend on.
+        self.efficiency
+            .total_cmp(&other.efficiency)
+            .then_with(|| other.module_name.cmp(&self.module_name))
     }
 }
 
@@ -57,8 +64,17 @@ impl Ord for UpgradeCandidate {
 /// rule. A missing width reads as zero.
 #[must_use]
 pub fn kl_reduction(result: &SensitivityResult, current: BitWidth, next: BitWidth) -> f64 {
-    let _ = (result, current, next);
-    todo!("apply the sign-detection rule documented above")
+    let kl_current = result.kl_divergence_at(current).unwrap_or(0.0);
+    let kl_next = result.kl_divergence_at(next).unwrap_or(0.0);
+    // Under a uniform-N reference the KL at the matching bit-width is ~0 and
+    // the KL at a higher width is the benefit directly, so `kl_next > kl_current`
+    // while `next > current`. That sign flip is the autodetect; every other
+    // case is the bf16 reference where upgrading reduces KL.
+    if next.bits() > current.bits() && kl_next > kl_current {
+        kl_next - kl_current
+    } else {
+        kl_current - kl_next
+    }
 }
 
 /// Pushes the module's next step, if any, onto the heap. No push when the
@@ -70,8 +86,26 @@ pub fn push_next_upgrade(
     current: BitWidth,
     candidate_bit_widths: &CandidateBitWidths,
 ) {
-    let _ = (heap, effective_result, current, candidate_bit_widths);
-    todo!(
-        "compute next_above, the reduction, the bit cost, and push when the reduction is positive"
-    )
+    // `next_above` is `None` at the top of the ladder and when `current` is
+    // not on it, which together cover "already at max" and "off the grid".
+    let Some(next_bit_width) = candidate_bit_widths.next_above(current) else {
+        return;
+    };
+    let reduction = kl_reduction(effective_result, current, next_bit_width);
+    if reduction <= 0.0 {
+        return;
+    }
+    // `bit_cost = (next - current) * parameters`; efficiency is the KL benefit
+    // per added bit-weight. `max(bit_cost, 1)` mirrors OptiQ and guards the
+    // (pathological) zero-parameter case against division by zero.
+    let bit_cost = ((next_bit_width.bits() - current.bits()) as f64)
+        * (effective_result.logical_parameter_count as f64);
+    let efficiency = reduction / bit_cost.max(1.0);
+    heap.push(UpgradeCandidate {
+        module_name: effective_result.module_name.clone(),
+        current_bit_width: current,
+        next_bit_width,
+        kl_reduction: reduction,
+        efficiency,
+    });
 }
