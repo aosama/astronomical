@@ -78,10 +78,34 @@ impl CandidateBitWidths {
     /// ladders. The allocator relies on ascending order to find "the next
     /// width up" for a module.
     pub fn new(candidate_bits: &[u32]) -> Result<Self, QuantizationError> {
-        let _ = candidate_bits;
-        todo!(
-            "validate every width through BitWidth::new, sort ascending, reject empty or duplicate ladders with InvalidCandidateBitWidths"
-        )
+        // An empty ladder is rejected outright: `lowest()` indexes the first
+        // entry and would panic on an empty ladder, and allocation needs at
+        // least one width to choose from.
+        if candidate_bits.is_empty() {
+            return Err(QuantizationError::InvalidCandidateBitWidths {
+                candidate_bit_widths: candidate_bits.to_vec(),
+            });
+        }
+
+        let mut widths: Vec<BitWidth> = Vec::with_capacity(candidate_bits.len());
+        for &bits in candidate_bits {
+            // A width outside the validated grid (1, 7, 9, ...) fails here with
+            // its own specific error before the ladder is ever sorted.
+            widths.push(BitWidth::new(bits)?);
+        }
+
+        // Sort ascending and reject duplicates: the allocator walks this ladder
+        // to find "the next width up", so a repeated width would double-count a
+        // budget step. `BitWidth` is `Ord`, so adjacent equality after sorting
+        // finds every duplicate.
+        widths.sort();
+        if widths.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(QuantizationError::InvalidCandidateBitWidths {
+                candidate_bit_widths: candidate_bits.to_vec(),
+            });
+        }
+
+        Ok(Self(widths))
     }
 
     #[must_use]
@@ -105,8 +129,11 @@ impl CandidateBitWidths {
     /// or when `current` is not on the ladder.
     #[must_use]
     pub fn next_above(&self, current: BitWidth) -> Option<BitWidth> {
-        let _ = current;
-        todo!("find current on the ladder and return the following entry")
+        // The ladder is stored ascending (see `new`), so the width directly
+        // above `current` is simply the next entry after its position. A width
+        // not on the ladder, or the highest one, has no successor.
+        let index = self.0.iter().position(|&width| width == current)?;
+        self.0.get(index + 1).copied()
     }
 
     #[must_use]

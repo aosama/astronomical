@@ -64,11 +64,14 @@ impl ProgressReporter for SilentProgressReporter {
 /// Tracks one stage and forwards a snapshot to the reporter at most once per
 /// interval, plus once at completion.
 ///
-/// Work to port: the ETA is `(elapsed / completed) * remaining`, the same
-/// per-unit extrapolation OptiQ prints as `(Ns/layer, ~Hh left)`. A resumed
-/// sweep must extrapolate from the units completed in this run only, not from
-/// checkpointed ones, or the first report after a resume claims the run is
-/// nearly done. Time comes from an injected clock so tests are deterministic.
+/// The ETA is `(elapsed / completed_this_run) * remaining`, the same per-unit
+/// extrapolation OptiQ prints as `(Ns/layer, ~Hh left)`. A resumed sweep
+/// extrapolates from the units completed in this run only (see
+/// `units_completed_before_start`), never the checkpointed ones, or the first
+/// report after a resume would claim the run is nearly done. Time is read from
+/// `Instant::now`, so tests pin the deterministic parts — the report cadence and
+/// the completed-unit accounting — with a long interval rather than the elapsed
+/// timestamps.
 pub struct StageProgressTracker<'reporter> {
     stage_name: &'static str,
     total_work_units: u64,
@@ -105,31 +108,60 @@ impl<'reporter> StageProgressTracker<'reporter> {
         }
     }
 
-    /// Records one more completed unit and reports if the interval elapsed.
+    /// Records one more completed unit and reports only when the cadence
+    /// allows: unconditionally on the very first unit, then at most once per
+    /// `report_interval`.
     pub fn advance(&mut self, detail: &str) {
-        let _ = detail;
-        todo!(
-            "increment completed units; call report_now when last_report_at is None or the interval elapsed"
-        )
+        self.completed_work_units += 1;
+        // The first advance always reports (last_report_at is None); afterwards
+        // a report fires only once the interval has elapsed since the previous
+        // one, which keeps a fast stage from flooding the log.
+        let should_report = self
+            .last_report_at
+            .is_none_or(|last| Instant::now().duration_since(last) >= self.report_interval);
+        if should_report {
+            self.report_now(detail);
+        }
     }
 
     /// Reports unconditionally; called at stage end so the last line always
     /// shows 100 percent.
     pub fn report_now(&mut self, detail: &str) {
-        let _ = (detail, &mut self.reporter);
-        todo!(
-            "build StageProgress with the ETA from the units completed since start and forward it to the reporter"
-        )
+        let now = Instant::now();
+        let estimate = self.estimate(now);
+        let snapshot = StageProgress {
+            stage_name: self.stage_name,
+            completed_work_units: self.completed_work_units,
+            total_work_units: self.total_work_units,
+            elapsed: now.duration_since(self.started_at),
+            estimate,
+            detail: detail.to_string(),
+        };
+        self.last_report_at = Some(now);
+        self.reporter.report(&snapshot);
     }
 
     /// Computes the ETA from the elapsed time and the units completed since
     /// the tracker started.
     #[must_use]
     pub fn estimate(&self, now: Instant) -> EtaEstimate {
-        let _ = now;
-        todo!(
-            "NotYetAvailable until at least one unit completed in this run; otherwise elapsed / completed_since_start * remaining"
-        )
+        // Extrapolate from the units completed *in this run only*, excluding the
+        // units that were already checkpointed before the tracker started;
+        // otherwise a resumed sweep's first estimate claims it is nearly done.
+        let completed_this_run = self
+            .completed_work_units
+            .saturating_sub(self.units_completed_before_start);
+        if completed_this_run == 0 {
+            return EtaEstimate::NotYetAvailable;
+        }
+        let elapsed = now.duration_since(self.started_at);
+        let remaining_units = self
+            .total_work_units
+            .saturating_sub(self.completed_work_units);
+        let per_unit_seconds = elapsed.as_secs_f64() / completed_this_run as f64;
+        EtaEstimate::Remaining(Duration::from_secs_f64(
+            per_unit_seconds * remaining_units as f64,
+        ))
     }
 
     #[must_use]
