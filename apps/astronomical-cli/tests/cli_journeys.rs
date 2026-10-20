@@ -2,6 +2,7 @@ mod doctor_command;
 mod embed_command;
 mod launch_opencode;
 mod models_command;
+mod quantize_command;
 mod respond_command;
 mod respond_schema;
 mod status_command;

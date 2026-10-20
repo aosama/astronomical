@@ -54,6 +54,13 @@ pub mod prism_hadamard_qwen35;
 
 pub(crate) mod qwen3_5_core;
 
+// The sensitivity probe adapter for the quantization crate (the OptiQ port):
+// swaps one Qwen3.5 module at a time between its bf16 weight and a
+// simulate-quantized copy and reports KL divergence, using this crate's
+// resident model and weights.
+#[cfg(feature = "direct-mlx")]
+pub mod quantization_probe;
+
 #[cfg(feature = "direct-mlx")]
 #[cfg(feature = "direct-mlx")]
 mod qwen3_5_resident;

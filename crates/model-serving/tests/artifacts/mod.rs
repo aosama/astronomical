@@ -2,6 +2,7 @@
 // across the safetensors, persistent prompt-cache, and visual-embedding surfaces.
 
 mod frozen_ornith_1_0_fixtures;
+mod optiq_artifact_round_trip;
 mod persistent_prompt_cache_block_format;
 mod persistent_prompt_cache_partial_tail_lookup;
 mod persistent_prompt_cache_prefix_lookup;

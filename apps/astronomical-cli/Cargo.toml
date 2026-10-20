@@ -23,9 +23,25 @@ path = "tests/offline_tests.rs"
 [lints]
 workspace = true
 
+[features]
+default = []
+# `astronomical quantize convert` runs the sensitivity sweep and the
+# requantizer in-process, which links MLX and the model-serving engine into
+# the CLI binary. The default CLI stays MLX-free: `quantize plan` (allocate
+# from an existing sensitivity document) and `quantize inspect` (read an
+# artifact's metadata) are pure and always available; `convert` is compiled
+# in only with this feature, and without it the verb explains how to build
+# a CLI that has it.
+quantize-convert = [
+    "astronomical-quantization/direct-mlx",
+    "dep:astronomical-model-serving",
+]
+
 [dependencies]
 astronomical-config = { path = "../../crates/config" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }
+astronomical-quantization = { path = "../../crates/quantization" }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
