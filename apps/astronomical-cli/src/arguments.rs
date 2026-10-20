@@ -6,6 +6,7 @@ use std::{ffi::OsString, path::PathBuf};
 use crate::embed_arguments::EmbedArguments;
 use crate::errors::UsageError;
 use crate::models_arguments::ModelsCommand;
+use crate::quantize_arguments::QuantizeCommand;
 use crate::respond_arguments::RespondArguments;
 use crate::schema_arguments::SchemaArguments;
 use crate::validate_config_arguments::ValidateConfigArguments;
@@ -23,6 +24,13 @@ const HELP_TEXT: &str = concat!(
     "       astronomical doctor\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
     "       astronomical validate config [--instance stable|development] [--json]\n",
+    "       astronomical quantize plan --sensitivity FILE --target-bits-per-weight N [--candidate-bits LIST] [--json]\n",
+    "       astronomical quantize inspect ARTIFACT_DIR [--json]\n",
+    "       astronomical quantize convert SOURCE_DIR --output DIR [--method exact|static]\n",
+    "                                     [--reference auto|bf16|uniform-4-bit] [--target-bits-per-weight N]\n",
+    "                                     [--candidate-bits LIST] [--group-size N] [--calibration-sequences N]\n",
+    "                                     [--calibration-mix FILE] [--floor-components-per-block N]\n",
+    "                                     [--no-range-search] [--overwrite]\n",
     "       astronomical --help\n",
     "       astronomical --version\n\n",
     "Launch a coding harness against the local Astronomical Library, manage\n",
@@ -44,7 +52,11 @@ const HELP_TEXT: &str = concat!(
     "  status           Worker state, resident model, default model, active download\n",
     "  doctor           This binary's channel binding plus both channels' daemon liveness\n",
     "  schema object    Build a strict JSON object schema for structured output\n",
-    "  validate config  Report effective values of an instance configuration\n\n",
+    "  validate config  Report effective values of an instance configuration\n",
+    "  quantize plan    Allocate per-module bit widths from a measured sensitivity document\n",
+    "  quantize inspect Show an artifact's quantization method, reference, and bit map summary\n",
+    "  quantize convert Build a mixed-precision artifact from a local bf16 source (in-process;\n",
+    "                   needs a CLI built with the quantize-convert feature)\n\n",
     "Options:\n",
     "  --model MODEL_ID     Model to use (default: the daemon's effective default model)\n",
     "  --no-stream          Print the finished respond answer once instead of streaming\n",
@@ -74,6 +86,7 @@ pub enum CliCommand {
     Doctor,
     Schema(SchemaArguments),
     ValidateConfig(ValidateConfigArguments),
+    Quantize(QuantizeCommand),
 }
 
 /// Launch-specific arguments after `astronomical launch`.
@@ -139,6 +152,8 @@ pub fn parse_command(
         "validate" => {
             parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
         }
+        "quantize" => crate::quantize_arguments::parse_quantize_command(&remaining_arguments[1..])
+            .map(CliCommand::Quantize),
         other => Err(UsageError::UnknownCommand(other.to_owned())),
     }
 }

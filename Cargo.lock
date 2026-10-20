@@ -48,6 +48,7 @@ dependencies = [
  "astronomical-mlx-c-rust",
  "astronomical-model-serving",
  "astronomical-native-identity",
+ "astronomical-quantization",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
@@ -73,6 +74,8 @@ version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
+ "astronomical-model-serving",
+ "astronomical-quantization",
  "serde_json",
  "tempfile",
  "thiserror",
@@ -202,6 +205,7 @@ dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
  "astronomical-mlx-c-rust",
+ "astronomical-quantization",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
  "image",
@@ -235,6 +239,23 @@ version = "0.2.80"
 dependencies = [
  "astronomical-test-harness",
  "sha2",
+]
+
+[[package]]
+name = "astronomical-quantization"
+version = "0.2.80"
+dependencies = [
+ "astronomical-mlx-c-rust",
+ "astronomical-runtime-integration",
+ "astronomical-test-harness",
+ "safetensors",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
+ "tracing",
 ]
 
 [[package]]
