@@ -29,7 +29,6 @@ fn should_report_one_hundred_percent_when_there_is_no_work() {
 }
 
 #[test]
-#[ignore = "pending implementation of StageProgressTracker::advance"]
 fn should_report_immediately_on_the_first_unit_and_then_only_after_the_interval() {
     let mut recording_reporter = RecordingProgressReporter::default();
     let mut tracker = StageProgressTracker::new(
@@ -49,12 +48,11 @@ fn should_report_immediately_on_the_first_unit_and_then_only_after_the_interval(
 }
 
 #[test]
-#[ignore = "pending implementation of StageProgressTracker::estimate"]
 fn should_extrapolate_the_eta_from_units_completed_in_this_run_only() {
     // A resumed sweep with 90 of 100 modules already checkpointed must not
     // claim the remaining 10 are nearly free: the rate comes from this run.
     let mut recording_reporter = RecordingProgressReporter::default();
-    let tracker = StageProgressTracker::new(
+    let mut tracker = StageProgressTracker::new(
         "sensitivity sweep",
         100,
         90,
@@ -62,13 +60,23 @@ fn should_extrapolate_the_eta_from_units_completed_in_this_run_only() {
         &mut recording_reporter,
     );
 
+    // With nothing completed in this run yet, there is no rate to extrapolate.
     let estimate = tracker.estimate(tracker.started_at());
-
     assert_eq!(estimate, EtaEstimate::NotYetAvailable);
+
+    // The first advance reports immediately and the completed count continues
+    // from the checkpoint (90 -> 91), proving the checkpointed units are not
+    // counted as this run's work (which would reset the rate to near-complete).
+    tracker.advance("model.layers.90.mlp.up_proj");
+    let first = recording_reporter
+        .snapshots
+        .first()
+        .expect("the first advance reports immediately");
+    assert_eq!(first.completed_work_units, 91);
+    assert_eq!(first.percent_complete(), 91.0);
 }
 
 #[test]
-#[ignore = "pending implementation of StageProgressTracker::report_now"]
 fn should_always_emit_a_final_report_at_completion() {
     let mut recording_reporter = RecordingProgressReporter::default();
     let mut tracker = StageProgressTracker::new(

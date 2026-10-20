@@ -37,7 +37,6 @@ fn should_accept_only_the_three_affine_group_sizes() {
 }
 
 #[test]
-#[ignore = "pending implementation of CandidateBitWidths::new"]
 fn should_sort_the_ladder_ascending_and_expose_its_ends() {
     let ladder = CandidateBitWidths::new(&[8, 2, 4]).expect("a valid ladder");
 
@@ -47,7 +46,6 @@ fn should_sort_the_ladder_ascending_and_expose_its_ends() {
 }
 
 #[test]
-#[ignore = "pending implementation of CandidateBitWidths::new"]
 fn should_reject_an_empty_or_duplicated_ladder() {
     assert!(matches!(
         CandidateBitWidths::new(&[]),
@@ -60,7 +58,6 @@ fn should_reject_an_empty_or_duplicated_ladder() {
 }
 
 #[test]
-#[ignore = "pending implementation of CandidateBitWidths::next_above"]
 fn should_step_up_the_ladder_and_stop_at_the_top() {
     let ladder = CandidateBitWidths::new(&[2, 4, 8]).expect("a valid ladder");
 
@@ -71,4 +68,16 @@ fn should_step_up_the_ladder_and_stop_at_the_top() {
     assert_eq!(ladder.next_above(BitWidth::new(8).expect("valid")), None);
     // A width that is not on the ladder has no next step.
     assert_eq!(ladder.next_above(BitWidth::new(3).expect("valid")), None);
+}
+
+#[test]
+fn should_treat_a_single_width_ladder_as_its_own_top_and_bottom() {
+    // A one-width ladder is its own lowest and highest; there is no step up and
+    // no second width for the block-aware floor to promote to.
+    let ladder = CandidateBitWidths::new(&[4]).expect("a single-width ladder");
+
+    assert_eq!(ladder.lowest().bits(), 4);
+    assert_eq!(ladder.highest().bits(), 4);
+    assert_eq!(ladder.second_lowest(), None);
+    assert_eq!(ladder.next_above(BitWidth::new(4).expect("valid")), None);
 }
