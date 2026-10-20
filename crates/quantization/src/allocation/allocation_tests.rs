@@ -40,7 +40,6 @@ fn constraints_without_block_rules(target: f64) -> AllocationConstraints {
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_return_an_empty_result_for_an_empty_table() {
     let allocation = optimize_mixed_precision(
         &table(Vec::new()),
@@ -53,7 +52,6 @@ fn should_return_an_empty_result_for_an_empty_table() {
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_upgrade_the_most_efficient_module_first_until_the_target_is_met() {
     // Equal sizes; `sensitive` gains far more from 4→8 than `robust`, so at
     // a 6.0 target exactly one of the two is upgraded and it is `sensitive`.
@@ -80,7 +78,6 @@ fn should_upgrade_the_most_efficient_module_first_until_the_target_is_met() {
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_treat_the_target_as_a_floor_and_accept_discrete_overshoot() {
     let sensitivity_table = table(vec![
         result("model.layers.5.mlp.up_proj", 1000, &[(4, 1.0), (8, 0.1)]),
@@ -96,7 +93,6 @@ fn should_treat_the_target_as_a_floor_and_accept_discrete_overshoot() {
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_upgrade_protected_modules_before_unprotected_ones_of_equal_efficiency() {
     let sensitivity_table = table(vec![
         result("lm_head", 1000, &[(4, 0.5), (8, 0.1)]),
@@ -116,7 +112,6 @@ fn should_upgrade_protected_modules_before_unprotected_ones_of_equal_efficiency(
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_treat_non_finite_measurements_as_maximally_sensitive() {
     let sensitivity_table = table(vec![
         result(
@@ -144,7 +139,6 @@ fn should_treat_non_finite_measurements_as_maximally_sensitive() {
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_leave_every_module_at_the_minimum_when_no_upgrade_has_benefit() {
     let sensitivity_table = table(vec![result(
         "model.layers.5.mlp.up_proj",
@@ -160,7 +154,6 @@ fn should_leave_every_module_at_the_minimum_when_no_upgrade_has_benefit() {
 }
 
 #[test]
-#[ignore = "pending implementation of kl_reduction"]
 fn should_detect_the_uniform_reference_sign_convention() {
     // Uniform-4-bit reference: KL at 4 is ~0 and KL at 8 is the benefit.
     let uniform_result = result("m", 1, &[(4, 1e-18), (8, 0.3)]);
@@ -174,7 +167,6 @@ fn should_detect_the_uniform_reference_sign_convention() {
 }
 
 #[test]
-#[ignore = "pending implementation of apply_block_aware_floor"]
 fn should_reserve_two_floor_slots_for_attention_in_a_full_attention_block() {
     // Feed-forward projections out-rank attention on raw KL; the floor must
     // still promote two attention components.
@@ -217,7 +209,6 @@ fn should_reserve_two_floor_slots_for_attention_in_a_full_attention_block() {
 }
 
 #[test]
-#[ignore = "pending implementation of apply_block_aware_floor"]
 fn should_cap_the_floor_at_one_for_a_two_linear_block() {
     let results = vec![
         result("model.layers.3.mixer.in_proj", 1, &[(4, 0.5), (8, 0.0)]),
@@ -235,7 +226,6 @@ fn should_cap_the_floor_at_one_for_a_two_linear_block() {
 }
 
 #[test]
-#[ignore = "pending implementation of enforce_block_run_limit"]
 fn should_break_a_run_of_low_bit_blocks_longer_than_the_limit() {
     // Five consecutive blocks with both components at 4 bits, limit 3.
     let mut results = Vec::new();
@@ -267,7 +257,6 @@ fn should_break_a_run_of_low_bit_blocks_longer_than_the_limit() {
 }
 
 #[test]
-#[ignore = "pending implementation of QuantizationPredicate"]
 fn should_match_module_paths_by_suffix_after_stripping_the_model_prefix() {
     let allocation = AllocationResult {
         decisions: vec![ModuleQuantizationDecision {
@@ -307,7 +296,6 @@ fn should_match_module_paths_by_suffix_after_stripping_the_model_prefix() {
 }
 
 #[test]
-#[ignore = "pending implementation of QuantizationPredicate"]
 fn should_emit_keep_bfloat16_for_the_lossless_tier() {
     let allocation = AllocationResult {
         decisions: vec![ModuleQuantizationDecision {
@@ -336,7 +324,6 @@ fn should_emit_keep_bfloat16_for_the_lossless_tier() {
 }
 
 #[test]
-#[ignore = "pending implementation of AllocationResult::overshoot_note"]
 fn should_surface_an_overshoot_note_when_the_floor_pushes_past_the_target() {
     let allocation = AllocationResult {
         decisions: Vec::new(),
