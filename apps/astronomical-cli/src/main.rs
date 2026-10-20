@@ -51,6 +51,7 @@ fn main() -> ExitCode {
         Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
         Ok(CliCommand::Status) => run_status_verb(),
         Ok(CliCommand::Doctor) => run_doctor_verb(),
+        Ok(CliCommand::Quantize(quantize_command)) => run_quantize_verb(quantize_command),
         Err(usage_error) => {
             eprint!("astronomical: {usage_error}\n\n{}", help_text());
             ExitCode::from(2)
@@ -82,6 +83,37 @@ fn run_validate_config_verb(
         Ok(()) => ExitCode::SUCCESS,
         Err(validate_error) => {
             let _ = writeln!(stderr, "{validate_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// The quantize verb is synchronous and in-process: no daemon, no socket,
+/// no async runtime. Progress goes to standard error, the report to standard
+/// output.
+fn run_quantize_verb(quantize_command: astronomical_cli::QuantizeCommand) -> ExitCode {
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+    let mut quantize_dependencies = astronomical_cli::QuantizeDependencies {
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        progress_interval: std::time::Duration::from_secs(5),
+    };
+    let outcome = match &quantize_command {
+        astronomical_cli::QuantizeCommand::Plan(plan_arguments) => {
+            astronomical_cli::run_quantize_plan(plan_arguments, &mut quantize_dependencies)
+        }
+        astronomical_cli::QuantizeCommand::Inspect(inspect_arguments) => {
+            astronomical_cli::run_quantize_inspect(inspect_arguments, &mut quantize_dependencies)
+        }
+        astronomical_cli::QuantizeCommand::Convert(convert_arguments) => {
+            astronomical_cli::run_quantize_convert(convert_arguments, &mut quantize_dependencies)
+        }
+    };
+    match outcome {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(quantize_error) => {
+            eprintln!("astronomical: {quantize_error}");
             ExitCode::FAILURE
         }
     }

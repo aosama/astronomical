@@ -63,6 +63,10 @@ pub enum UsageError {
     UnknownSchemaTarget(String),
     #[error("unknown validate target: {0}. Supported targets: config")]
     UnknownValidateTarget(String),
+    #[error("unknown quantize target: {0}. Supported targets: plan, inspect, convert")]
+    UnknownQuantizeTarget(String),
+    #[error("invalid value for {flag}: {reason}")]
+    InvalidQuantizeValue { flag: &'static str, reason: String },
     #[error("unknown instance {0}: expected stable or development")]
     UnknownInstance(String),
     #[error("respond needs a prompt. Try: astronomical respond 'Hello'")]

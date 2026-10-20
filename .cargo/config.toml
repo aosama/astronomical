@@ -57,11 +57,26 @@ warnings = "deny"
 # fails the lane instead of rotting until release day.
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
-test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests"
+test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test offline_tests"
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 test-app-builder = "test -p xtask --test offline_app_builder_journeys"
-test-offline-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-rest-contract --lib --test offline_tests --test rest_api_tests"
+test-offline-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test offline_tests --test rest_api_tests"
+# Quantization lanes (the OptiQ port in crates/quantization). The crate's
+# unit tests and offline journeys (allocator parity against the Python
+# reference, taxonomy, calibration, artifact round trips) ride in the
+# offline aliases above. These two aliases cover what needs a Metal device.
+# test-quantization-direct-mlx: the GPU encoder against the pure reference
+# encoder and the shard-wise requantizer on a synthetic two-shard source;
+# seconds, no model artifacts, serial because MLX tests never parallelize.
+test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization --features direct-mlx --test direct_mlx -- --test-threads=1"
+# test-quantization-acceptance: real-model journeys (static and exact
+# conversions of an installed bf16 Qwen3.5 artifact, parity against an
+# artifact the Python tool produced from the same source, requantizer
+# throughput against the Python tool). Set
+# ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR and, for the parity journey,
+# ASTRONOMICAL_QUANTIZATION_PYTHON_REFERENCE_DIR first; ignored by default.
+test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx --test quantization -- --ignored --nocapture --test-threads=1"
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo

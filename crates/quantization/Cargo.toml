@@ -1,0 +1,56 @@
+[package]
+name = "astronomical-quantization"
+description = "Sensitivity-driven mixed-precision affine quantization for MLX artifacts, a Rust port of the OptiQ quantization core"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# One explicit offline test binary: unit tests live beside their source as
+# `*_tests.rs` modules inside `src/`, and the offline integration journeys
+# stay under tests/offline/ behind tests/offline_tests.rs. `autotests = false`
+# keeps stray .rs files under tests/ from auto-discovering as extra binaries.
+autotests = false
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# The GPU world: the range-search affine encoder, the shard-wise requantizer,
+# and the KL divergence math all run through MLX. Everything else in the crate
+# (module taxonomy, the knapsack allocator, the static structural scorer,
+# calibration loading, artifact schemas, the roofline latency model, the KV
+# cache allocator, and the sensitivity sweep driver) is pure Rust so it
+# compiles, unit-tests, and runs on any host, including the CLI's `plan`
+# sub-verb and the Linux offline sandbox lane.
+direct-mlx = ["dep:astronomical-mlx-c-rust", "dep:astronomical-runtime-integration"]
+
+[dependencies]
+astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
+astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+safetensors.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+astronomical-test-harness = { path = "../test-harness" }
+serial_test.workspace = true
+tempfile = "=3.27.0"
+
+[[test]]
+name = "offline_tests"
+path = "tests/offline_tests.rs"
+
+# GPU contract tests for the encoder and the shard-wise requantizer. They need
+# a Metal device, so they only exist in the direct-MLX feature world and run
+# serially through the `cargo test-quantization-direct-mlx` alias.
+[[test]]
+name = "direct_mlx"
+path = "tests/direct_mlx.rs"
+required-features = ["direct-mlx"]
