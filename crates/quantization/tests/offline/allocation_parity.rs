@@ -54,7 +54,6 @@ fn constraints_for(case: &FixtureAllocationCase) -> AllocationConstraints {
 }
 
 #[test]
-#[ignore = "pending implementation of optimize_mixed_precision"]
 fn should_reproduce_the_python_allocation_for_every_fixture_case() {
     let table = fixture_table();
 
