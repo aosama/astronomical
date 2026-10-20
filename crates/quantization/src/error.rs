@@ -39,7 +39,7 @@ pub enum QuantizationError {
     UnsupportedGroupSize { group_size: u32 },
 
     #[error(
-        "candidate bit widths must be non-empty, ascending, and unique; got {candidate_bit_widths:?}"
+        "candidate bit widths must be non-empty and free of duplicates, in any input order; got {candidate_bit_widths:?}"
     )]
     InvalidCandidateBitWidths { candidate_bit_widths: Vec<u32> },
 
