@@ -19,6 +19,8 @@ pub mod models_arguments;
 pub mod models_command;
 pub mod opencode;
 pub mod prompt;
+pub mod quantize_arguments;
+pub mod quantize_command;
 pub mod respond;
 pub mod respond_arguments;
 pub mod respond_image;
@@ -60,6 +62,13 @@ pub use launch::{LaunchDependencies, PreparedLaunch, prepare_launch};
 pub use model_lifecycle::{ModelLifecycle, RequiredCapability};
 pub use models_arguments::ModelsCommand;
 pub use models_command::{ModelsDependencies, run_models};
+pub use quantize_arguments::{
+    QuantizeCommand, QuantizeConvertArguments, QuantizeInspectArguments, QuantizePlanArguments,
+};
+pub use quantize_command::{
+    QuantizeDependencies, QuantizeError, run_quantize_convert, run_quantize_inspect,
+    run_quantize_plan,
+};
 pub use respond::{RespondDependencies, run_respond};
 pub use respond_arguments::RespondArguments;
 pub use schema::{build_schema_document, run_schema};

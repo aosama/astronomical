@@ -437,6 +437,10 @@ expected_aliases = {
     "test-prism-hadamard-performance",
     "test-prism-hadamard-serving-throughput",
     "test-prism-hadamard-serving",
+    # Quantization lanes (the OptiQ port in crates/quantization): the GPU
+    # encoder and requantizer contracts, and the real-model journeys.
+    "test-quantization-direct-mlx",
+    "test-quantization-acceptance",
     "xtask",
 }
 assert set(aliases) == expected_aliases
@@ -446,9 +450,15 @@ assert set(aliases) == expected_aliases
 assert all(isinstance(alias_command, str) for alias_command in aliases.values())
 # The GPU serial rule must be baked into every acceptance alias: no human can
 # forget `--test-threads=1` when the alias carries it.
-for acceptance_alias in ("test-direct-mlx", "test-mlx-memory", "test-acceptance"):
+for acceptance_alias in (
+    "test-direct-mlx",
+    "test-mlx-memory",
+    "test-acceptance",
+    "test-quantization-direct-mlx",
+    "test-quantization-acceptance",
+):
     assert "--test-threads=1" in aliases[acceptance_alias].split(), acceptance_alias
-for acceptance_alias in ("test-mlx-memory", "test-acceptance"):
+for acceptance_alias in ("test-mlx-memory", "test-acceptance", "test-quantization-acceptance"):
     assert "--ignored" in aliases[acceptance_alias].split(), acceptance_alias
 
 assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()

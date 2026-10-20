@@ -12,11 +12,19 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust", "dep:astronomical-quantization"]
 
 [dependencies]
 astronomical-config = { path = "../config" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
+# The quantization crate's pure surface (probe trait, artifact schemas). Its
+# GPU world is never enabled from here: the Qwen3.5 sensitivity probe under
+# src/quantization_probe implements the trait with this crate's own engine
+# and MLX bindings, so the dependency direction stays quantization <-
+# model-serving and the quantization crate never learns about an engine.
+# Optional because only the direct-MLX probe uses it in production code;
+# the offline artifact round-trip test reaches it as a dev-dependency.
+astronomical-quantization = { path = "../quantization", optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
 image.workspace = true
@@ -32,6 +40,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+astronomical-quantization = { path = "../quantization" }
 astronomical-test-harness = { path = "../test-harness", features = ["test-fixtures"] }
 libc.workspace = true
 # start_paused virtual time for harness offline_tokio_test! bodies.

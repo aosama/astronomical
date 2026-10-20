@@ -62,6 +62,15 @@ name = "engine_prompt_cache"
 path = "tests/prompt_cache_engine.rs"
 required-features = ["direct-mlx"]
 
+# The quantization journeys (crates/quantization, the OptiQ port): static
+# and exact conversions of an installed bf16 source, parity against a
+# Python-produced artifact, and requantizer throughput. Run through
+# `cargo test-quantization-acceptance`.
+[[test]]
+name = "quantization"
+path = "tests/quantization.rs"
+required-features = ["direct-mlx"]
+
 [[test]]
 name = "runtime_direct_mlx"
 path = "tests/gpu_contracts/runtime_mlx/direct_mlx.rs"
@@ -101,6 +110,7 @@ astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
 astronomical-mlx-c-rust = { path = "../../crates/mlx-c-rust" }
 astronomical-native-identity = { path = "../../crates/native-identity" }
+astronomical-quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
 astronomical-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
