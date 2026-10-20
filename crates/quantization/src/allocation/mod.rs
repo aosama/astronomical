@@ -37,13 +37,13 @@ pub mod knapsack;
 pub mod predicate;
 pub mod protected_modules;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BinaryHeap};
 
 use serde::{Deserialize, Serialize};
 
 use crate::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
 use crate::error::QuantizationError;
-use crate::sensitivity::SensitivityTable;
+use crate::sensitivity::{SensitivityResult, SensitivityTable};
 
 pub use predicate::QuantizationPredicate;
 
@@ -128,26 +128,37 @@ impl AllocationResult {
     /// not fit, so the overshoot is surfaced for the caller to print.
     #[must_use]
     pub fn overshoot_note(&self, floor_components_per_block: usize) -> Option<String> {
-        let _ = floor_components_per_block;
-        todo!(
-            "when achieved exceeds target by more than 0.25 bits per weight, render OptiQ's NOTE text with the percentage and the floor hint"
-        )
+        // Only an overshoot past 0.25 bpw warrants a note; a smaller one is the
+        // discrete grid doing its job and does not warn.
+        if self.achieved_bits_per_weight <= self.target_bits_per_weight + 0.25 {
+            return None;
+        }
+        let achieved = self.achieved_bits_per_weight;
+        let target = self.target_bits_per_weight;
+        let over = (achieved - target) / target * 100.0;
+        Some(format!(
+            "  NOTE: achieved {0:.2} bpw against a target of {1:.2} ({2:+.0}%). The block-aware floor and run guard take precedence over the budget so no stretch of blocks is left wholly at the lowest width. Lower --n-floor-per-block (currently {3}) to trade that protection for size.",
+            achieved, target, over, floor_components_per_block
+        ))
     }
 
     /// Modules grouped by assigned width, for the summary line.
     #[must_use]
     pub fn module_count_by_bit_width(&self) -> BTreeMap<BitWidth, usize> {
-        todo!("count decisions per bit width")
+        let mut counts: BTreeMap<BitWidth, usize> = BTreeMap::new();
+        for decision in &self.decisions {
+            *counts.entry(decision.bit_width).or_insert(0) += 1;
+        }
+        counts
     }
 }
 
-/// Runs the full allocation.
+/// Runs the full allocation, ported from OptiQ's `optimize_mixed_precision`.
 ///
-/// Work to port (OptiQ's `optimize_mixed_precision`), in this order:
+/// The sequence (see the module doc for the rationale of each stage):
 /// 1. Empty table → empty result with zeroed figures.
 /// 2. Resolve the ladder (constraints, else `table.observed_bit_widths()`).
-/// 3. Build the protected set from the module names (see
-///    [`protected_modules`]).
+/// 3. Build the protected set from the module names (see [`protected_modules`]).
 /// 4. Initialize every module at the lowest width.
 /// 5. Apply the block-aware floor; count its upgrades.
 /// 6. Replace NaN measurements: for a module with any NaN, substitute
@@ -167,6 +178,257 @@ pub fn optimize_mixed_precision(
     table: &SensitivityTable,
     constraints: &AllocationConstraints,
 ) -> Result<AllocationResult, QuantizationError> {
-    let _ = (table, constraints);
-    todo!("compose the floor, the knapsack, and the run guard as documented above")
+    // 1. Empty table → empty result with zeroed figures.
+    if table.results.is_empty() {
+        return Ok(AllocationResult {
+            decisions: Vec::new(),
+            target_bits_per_weight: constraints.target_bits_per_weight,
+            achieved_bits_per_weight: 0.0,
+            module_count_at_highest_width: 0,
+            module_count_at_lowest_width: 0,
+            total_logical_parameter_count: 0,
+            estimated_weight_bytes: 0,
+            floor_upgrade_count: 0,
+            run_guard_upgrade_count: 0,
+            non_finite_module_names: Vec::new(),
+        });
+    }
+
+    // 2. Resolve the ladder: the caller's, else the union of the table's
+    //    observed widths (ascending, de-duplicated). A real sweep always yields
+    //    at least one width, so this inference is non-empty; a table whose every
+    //    result has no measurements is degenerate and errors here rather than
+    //    falling back to OptiQ's `[low_bits, high_bits]` = `[4, 8]` shim,
+    //    because an empty sweep carries no information to quantize from.
+    let candidate_bit_widths = match &constraints.candidate_bit_widths {
+        Some(ladder) => ladder.clone(),
+        None => {
+            let widths: Vec<u32> = table
+                .observed_bit_widths()
+                .iter()
+                .map(|width| width.bits())
+                .collect();
+            CandidateBitWidths::new(&widths)?
+        }
+    };
+    let lowest = candidate_bit_widths.lowest();
+    let highest = candidate_bit_widths.highest();
+    let second_lowest = candidate_bit_widths.second_lowest();
+
+    // 3. The protected set: embeddings/heads/outside-blocks, MoE routers and
+    //    shared experts, plus the boundary blocks when enabled.
+    let module_names: Vec<&str> = table
+        .results
+        .iter()
+        .map(|result| result.module_name.as_str())
+        .collect();
+    let protected = protected_modules::protected_module_names(
+        &module_names,
+        constraints.protect_boundary_blocks,
+        constraints.boundary_block_count,
+    );
+
+    // 4. Seed every module at the lowest width.
+    let mut allocation: BTreeMap<String, BitWidth> = table
+        .results
+        .iter()
+        .map(|result| (result.module_name.clone(), lowest))
+        .collect();
+
+    // 5. Block-aware floor, before any NaN cleaning, so it ranks on the raw
+    //    measurements. It only runs with a floor budget and a multi-width
+    //    ladder (a single-width ladder has no `second_lowest` to promote to).
+    let mut floor_upgrade_count = 0usize;
+    if constraints.floor_components_per_block > 0
+        && let Some(second) = second_lowest
+    {
+        floor_upgrade_count = block_floor::apply_block_aware_floor(
+            &mut allocation,
+            &table.results,
+            lowest,
+            second,
+            constraints.floor_components_per_block,
+        );
+    }
+
+    // 6. Replace NaN measurements with a large finite value so the greedy pass
+    //    sees them as maximally sensitive; record the affected names.
+    let (results, non_finite_module_names) = clean_non_finite(&table.results, highest.bits());
+
+    // 7. Effective measurements: protected modules get their KL multiplied so
+    //    the greedy heap upgrades them first, without exempting them.
+    let effective_results: BTreeMap<String, SensitivityResult> = results
+        .iter()
+        .map(|result| {
+            if protected.contains(&result.module_name) {
+                let kl_divergence_by_bit_width = result
+                    .kl_divergence_by_bit_width
+                    .iter()
+                    .map(|(&width, &value)| {
+                        (
+                            width,
+                            value * protected_modules::PROTECTED_MODULE_KL_MULTIPLIER,
+                        )
+                    })
+                    .collect();
+                (
+                    result.module_name.clone(),
+                    SensitivityResult {
+                        module_name: result.module_name.clone(),
+                        kl_divergence_by_bit_width,
+                        logical_parameter_count: result.logical_parameter_count,
+                    },
+                )
+            } else {
+                (result.module_name.clone(), result.clone())
+            }
+        })
+        .collect();
+
+    // 8. Seed the heap with each module's next upgrade.
+    let mut heap: BinaryHeap<knapsack::UpgradeCandidate> = BinaryHeap::new();
+    for result in &results {
+        let current = *allocation
+            .get(&result.module_name)
+            .expect("every module is seeded at the lowest width");
+        if let Some(effective) = effective_results.get(&result.module_name) {
+            knapsack::push_next_upgrade(&mut heap, effective, current, &candidate_bit_widths);
+        }
+    }
+
+    // Greedy: keep upgrading the most efficient module until the running
+    // bits-per-weight meets the target. The target is a floor, not a cap, so
+    // the discrete grid's slight overshoot is accepted.
+    while !heap.is_empty()
+        && bits_per_weight::bits_per_weight_of_allocation(&allocation, &results)
+            < constraints.target_bits_per_weight
+    {
+        let candidate = heap
+            .pop()
+            .expect("the heap is non-empty whenever the loop condition holds");
+        // A stale entry means the module already moved past `current`; skip it.
+        let Some(&current) = allocation.get(&candidate.module_name) else {
+            continue;
+        };
+        if current != candidate.current_bit_width {
+            continue;
+        }
+        allocation.insert(candidate.module_name.clone(), candidate.next_bit_width);
+        if let Some(effective) = effective_results.get(&candidate.module_name) {
+            knapsack::push_next_upgrade(
+                &mut heap,
+                effective,
+                candidate.next_bit_width,
+                &candidate_bit_widths,
+            );
+        }
+    }
+
+    // 9. Block-run guard, the post-greedy backstop. Same single-width-ladder
+    //    guard as the floor: it needs a `second_lowest` to promote to.
+    let mut run_guard_upgrade_count = 0usize;
+    if constraints.maximum_low_bit_block_run > 0
+        && let Some(second) = second_lowest
+    {
+        run_guard_upgrade_count = block_run_guard::enforce_block_run_limit(
+            &mut allocation,
+            &results,
+            lowest,
+            second,
+            constraints.maximum_low_bit_block_run,
+        );
+    }
+
+    // 10. Build the decisions and the summary figures, in the sweep's order.
+    let group_size = constraints.group_size;
+    let decisions: Vec<ModuleQuantizationDecision> = results
+        .iter()
+        .map(|result| ModuleQuantizationDecision {
+            module_name: result.module_name.clone(),
+            bit_width: *allocation
+                .get(&result.module_name)
+                .expect("every module has a final width"),
+            group_size,
+            logical_parameter_count: result.logical_parameter_count,
+        })
+        .collect();
+
+    let achieved_bits_per_weight = bits_per_weight::bits_per_weight_of_decisions(&decisions);
+    let module_count_at_highest_width = decisions
+        .iter()
+        .filter(|decision| decision.bit_width == highest)
+        .count();
+    let module_count_at_lowest_width = decisions
+        .iter()
+        .filter(|decision| decision.bit_width == lowest)
+        .count();
+    let total_logical_parameter_count: u64 = results
+        .iter()
+        .map(|result| result.logical_parameter_count)
+        .sum();
+    let estimated_weight_bytes = bits_per_weight::estimated_weight_bytes(&decisions);
+
+    Ok(AllocationResult {
+        decisions,
+        target_bits_per_weight: constraints.target_bits_per_weight,
+        achieved_bits_per_weight,
+        module_count_at_highest_width,
+        module_count_at_lowest_width,
+        total_logical_parameter_count,
+        estimated_weight_bytes,
+        floor_upgrade_count,
+        run_guard_upgrade_count,
+        non_finite_module_names,
+    })
+}
+
+/// Replaces NaN KL measurements with a large finite value so the greedy pass
+/// treats the module as maximally sensitive (lower widths look far worse),
+/// returning the cleaned results and the names of the modules that had a NaN.
+/// OptiQ's step 6.
+fn clean_non_finite(
+    results: &[SensitivityResult],
+    max_bits: u32,
+) -> (Vec<SensitivityResult>, Vec<String>) {
+    let mut cleaned: Vec<SensitivityResult> = Vec::with_capacity(results.len());
+    let mut non_finite_module_names: Vec<String> = Vec::new();
+    for result in results {
+        if !result.has_non_finite_measurement() {
+            cleaned.push(result.clone());
+            continue;
+        }
+        non_finite_module_names.push(result.module_name.clone());
+        // The largest of this module's finite measurements, or 1e6 when it has
+        // none (OptiQ's `default=1e6`).
+        let max_finite = result
+            .kl_divergence_by_bit_width
+            .values()
+            .copied()
+            .filter(|value| !value.is_nan())
+            .fold(None, |highest: Option<f64>, value| {
+                Some(highest.map_or(value, |current| current.max(value)))
+            })
+            .unwrap_or(1e6);
+        let kl_divergence_by_bit_width = result
+            .kl_divergence_by_bit_width
+            .iter()
+            .map(|(&width, &value)| {
+                if value.is_nan() {
+                    // Lower widths get a higher substituted KL. `max(b, 1)`
+                    // guards the divisor; every valid width is at least 2.
+                    let substituted =
+                        max_finite * 10.0 * (max_bits as f64 / (width.bits() as f64).max(1.0));
+                    (width, substituted)
+                } else {
+                    (width, value)
+                }
+            })
+            .collect();
+        cleaned.push(SensitivityResult {
+            module_name: result.module_name.clone(),
+            kl_divergence_by_bit_width,
+            logical_parameter_count: result.logical_parameter_count,
+        });
+    }
+    (cleaned, non_finite_module_names)
 }

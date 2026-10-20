@@ -24,7 +24,7 @@ pub mod probe;
 pub mod report;
 pub mod static_scorer;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -91,12 +91,24 @@ impl SensitivityTable {
     /// not pass one.
     #[must_use]
     pub fn observed_bit_widths(&self) -> Vec<BitWidth> {
-        todo!("collect the union of keys across results into a sorted, de-duplicated vector")
+        // A `BTreeSet` collects the union of every result's width keys while
+        // both de-duplicating and keeping them sorted, which is exactly the
+        // ascending, de-duplicated ladder the allocator walks for
+        // "the next width up".
+        self.results
+            .iter()
+            .flat_map(|result| result.kl_divergence_by_bit_width.keys().copied())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 
     #[must_use]
     pub fn total_logical_parameter_count(&self) -> u64 {
-        todo!("sum logical_parameter_count across results")
+        self.results
+            .iter()
+            .map(|result| result.logical_parameter_count)
+            .sum()
     }
 
     #[must_use]
