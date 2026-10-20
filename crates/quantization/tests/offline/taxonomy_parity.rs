@@ -12,7 +12,6 @@ use astronomical_quantization::requantize::bit_policy::is_router_tensor_key;
 use super::fixtures;
 
 #[test]
-#[ignore = "pending implementation of transformer_block_index"]
 fn should_agree_with_optiq_on_block_indices() {
     let fixture = fixtures::taxonomy_parity();
 
@@ -26,7 +25,6 @@ fn should_agree_with_optiq_on_block_indices() {
 }
 
 #[test]
-#[ignore = "pending implementation of classify_module"]
 fn should_agree_with_optiq_on_attention_components() {
     let fixture = fixtures::taxonomy_parity();
 
@@ -40,7 +38,6 @@ fn should_agree_with_optiq_on_attention_components() {
 }
 
 #[test]
-#[ignore = "pending implementation of classify_module"]
 fn should_agree_with_optiq_on_the_protected_output_and_moe_sets() {
     let fixture = fixtures::taxonomy_parity();
     let expected_output: BTreeSet<&str> =
@@ -79,7 +76,6 @@ fn should_agree_with_optiq_on_the_protected_output_and_moe_sets() {
 }
 
 #[test]
-#[ignore = "pending implementation of boundary_block_modules"]
 fn should_agree_with_optiq_on_boundary_modules() {
     let fixture = fixtures::taxonomy_parity();
     let names: Vec<&str> = fixture.module_names.iter().map(String::as_str).collect();
@@ -112,12 +108,11 @@ fn should_agree_with_the_shardwise_router_predicate() {
 }
 
 #[test]
-#[ignore = "pending implementation of classify_module"]
 fn should_agree_with_the_shardwise_expert_predicate() {
     let fixture = fixtures::taxonomy_parity();
 
     for (tensor_key, expected) in &fixture.shardwise_is_expert {
-        let module_name = tensor_key.trim_end_matches(".weight");
+        let module_name = tensor_key.strip_suffix(".weight").unwrap_or(tensor_key);
         assert_eq!(
             classify_module(module_name) == ModuleRole::RoutedExpert,
             *expected,
