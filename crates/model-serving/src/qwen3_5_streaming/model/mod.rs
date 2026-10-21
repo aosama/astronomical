@@ -43,6 +43,9 @@ pub(crate) use crate::qwen3_5_core::model_math::{
 };
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod paged_execution_tests;
+
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod adaptive_ram_growth_logging;
 #[cfg(feature = "direct-mlx")]

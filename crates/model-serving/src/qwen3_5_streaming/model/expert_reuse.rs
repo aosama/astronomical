@@ -115,14 +115,15 @@ impl Qwen3_5Model {
     }
 
     /// Returns the routed experts of a seated complete layer as their own
-    /// page, for a multi-token forward.
+    /// page, for a forward that decodes the page it multiplies.
     ///
-    /// A chunk of several tokens decodes the packed page it multiplies, so
-    /// handing it the complete table would decode every expert of the layer
-    /// (about 4.8 GB on the 122B bundle) whatever the chunk size — which
-    /// defeats prefill's chunk halving, whose premise is that a smaller chunk
-    /// needs less memory. The subset page holds exactly the routed union and
-    /// its manifest maps those global ids to slots 0.., so the caller gathers
+    /// A multi-token chunk (or a decode token on a worker without the fused
+    /// kernel) decodes the packed page it multiplies, so handing it the
+    /// complete table would decode every expert of the layer (about 4.8 GB
+    /// on the 122B bundle) whatever the route size — which defeats prefill's
+    /// chunk halving, whose premise is that a smaller chunk needs less
+    /// memory. The subset page holds exactly the routed union and its
+    /// manifest maps those global ids to slots 0.., so the caller gathers
     /// with `routed_expert_ids` exactly as it does for a streamed union.
     pub(super) fn routed_subset_of_cached_page(
         &self,
@@ -154,11 +155,15 @@ impl Qwen3_5Model {
             .collect::<Result<Vec<_>, _>>()?;
         let subset_page = complete_page
             .select_experts(&self.runtime, &page_slots)
-            .map_err(|error| Qwen3_5ExecutionError::InvalidInput {
-                description: Box::leak(
-                    format!("the routed subset of a seated layer could not be built: {error}")
-                        .into_boxed_str(),
-                ),
+            .map_err(|error| {
+                tracing::warn!(
+                    layer_index,
+                    %error,
+                    "the routed subset of a seated layer could not be built"
+                );
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "the routed subset of a seated layer could not be built",
+                }
             })?;
         let mut page_slot_by_global_expert_id = vec![u32::MAX; expert_capacity];
         for (subset_slot, &expert_id) in routed_expert_ids.iter().enumerate() {

@@ -417,7 +417,7 @@ impl Qwen3_5Model {
 /// tokens has more assignments than one token routes, and keeps the
 /// materializing path: the kernel is a matrix-vector product and the
 /// chunk's matrix multiply belongs on `gather_mm`.
-fn decode_token_activation_rows(
+pub(super) fn decode_token_activation_rows(
     runtime: &MlxRuntime,
     projection_activations: &MlxArray,
     selected_expert_indices: &MlxArray,
