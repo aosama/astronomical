@@ -8,6 +8,8 @@
 //! * `{"mode": "jangtq2", "bits": 2, "rotation": "hadamard32"}` — routed
 //!   expert projections stored as codebook-packed tensors.
 //! * `{"bits": 8, "group_size": 64}` — standard MLX affine quantization.
+//!   Older OptiQ documents repeat the document-level `"mode": "affine"`
+//!   inside every entry; that restatement is accepted as redundant.
 //! * `false` — the module is stored as native floating point (routers,
 //!   shared-expert gates, norms); the MLX loader convention treats a missing
 //!   or `false` entry as unquantized.
@@ -28,6 +30,11 @@ use super::codebook;
 
 /// Discriminator string routing an entry to the JANGTQ v2 codebook format.
 const CODEBOOK_MODE_WIRE_NAME: &str = "jangtq2";
+
+/// Mode string older OptiQ documents repeat inside every affine entry. The
+/// document-level `mode` is the authority; per-module affine entries may
+/// restate it (historical artifacts do) or omit it, and both parse.
+const AFFINE_MODE_WIRE_NAME: &str = "affine";
 
 /// Wire name of the `none` rotation.
 const NO_ROTATION_WIRE_NAME: &str = "none";
@@ -138,10 +145,11 @@ impl<'de> Deserialize<'de> for Jangtq2WeightOverrideEntry {
                     rotation,
                 })
             }
-            Some(unknown_mode) => Err(D::Error::custom(format!(
-                "unknown quantization mode `{unknown_mode}`; only `{CODEBOOK_MODE_WIRE_NAME}` is recognized"
-            ))),
-            None => {
+            // An affine entry restating its mode is accepted: the repeated
+            // string is redundant with the document-level mode, and older
+            // OptiQ artifacts carry it in every entry. This arm must precede
+            // the unknown-mode catch-all below it.
+            Some(AFFINE_MODE_WIRE_NAME) | None => {
                 if rotation_wire_name.is_some() {
                     return dispatch_error(
                         "a rotation is only valid inside a jangtq2 codebook entry".to_owned(),
@@ -162,6 +170,9 @@ impl<'de> Deserialize<'de> for Jangtq2WeightOverrideEntry {
                 })?;
                 Ok(Self::Affine { bits, group_size })
             }
+            Some(unknown_mode) => Err(D::Error::custom(format!(
+                "unknown quantization mode `{unknown_mode}`; only `{AFFINE_MODE_WIRE_NAME}` and `{CODEBOOK_MODE_WIRE_NAME}` are recognized"
+            ))),
         }
     }
 }
@@ -252,6 +263,8 @@ mod tests {
     const CODEBOOK_ENTRY_CARRYING_GROUP_SIZE: &str =
         r#"{"mode": "jangtq2", "bits": 2, "rotation": "hadamard32", "group_size": 64}"#;
     const AFFINE_EIGHT_BIT_GROUP_SIXTY_FOUR_ENTRY: &str = r#"{"bits": 8, "group_size": 64}"#;
+    const AFFINE_ENTRY_REPEATING_THE_AFFINE_MODE: &str =
+        r#"{"bits": 8, "group_size": 64, "mode": "affine"}"#;
     const AFFINE_ENTRY_WITHOUT_GROUP_SIZE: &str = r#"{"bits": 8}"#;
     const AFFINE_ENTRY_CARRYING_ROTATION: &str =
         r#"{"bits": 8, "group_size": 64, "rotation": "hadamard32"}"#;
@@ -320,6 +333,21 @@ mod tests {
     fn should_parse_affine_entry() {
         let parsed_entry = parse_entry(AFFINE_EIGHT_BIT_GROUP_SIXTY_FOUR_ENTRY)
             .expect("affine entries must keep parsing");
+        assert_eq!(
+            parsed_entry,
+            Jangtq2WeightOverrideEntry::Affine {
+                bits: 8,
+                group_size: 64,
+            }
+        );
+    }
+
+    #[test]
+    fn should_parse_affine_entry_that_repeats_the_affine_mode() {
+        // Older OptiQ artifacts restate the document-level mode inside every
+        // affine entry; the extra string is redundant, never a conflict.
+        let parsed_entry = parse_entry(AFFINE_ENTRY_REPEATING_THE_AFFINE_MODE)
+            .expect("affine entries restating their mode must keep parsing");
         assert_eq!(
             parsed_entry,
             Jangtq2WeightOverrideEntry::Affine {
