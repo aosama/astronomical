@@ -202,6 +202,10 @@ impl ValidatedSafetensorsSource {
             .map(|profile| (profile.name.as_str(), profile))
             .collect::<BTreeMap<_, _>>();
         for location in locations {
+            if location.semantic_role() == crate::artifact_validation::TensorSemanticRole::Auxiliary
+            {
+                continue;
+            }
             let profile = profile_by_canonical_name
                 .get(location.canonical_name())
                 .ok_or_else(|| ArtifactValidationError::TensorMissing {

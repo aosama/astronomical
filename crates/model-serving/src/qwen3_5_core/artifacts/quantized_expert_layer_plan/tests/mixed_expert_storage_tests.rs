@@ -15,8 +15,12 @@ use serde_json::json;
 use crate::expert_paging::quantized_expert_manifest::{
     ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan,
 };
+use crate::expert_paging::safetensors_header::SafetensorsDtype;
 use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
+};
+use crate::qwen3_5_core::artifacts::{
+    Qwen3_5ArtifactValidator, Qwen3_5ShardIndex, qwen3_5_language_tensor_profiles,
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_bytes;
@@ -152,6 +156,136 @@ fn should_plan_mixed_native_and_affine_projections_in_one_layer() {
 }
 
 #[test]
+fn should_plan_stacked_jangtq2_codebook_projections_from_float16_row_scales() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+    let jangtq2_artifact = write_jangtq2_expert_artifact();
+
+    let jangtq2_layer_plan = build_quantized_expert_layer_plan(
+        jangtq2_artifact.model_directory.path(),
+        &jangtq2_artifact.weight_map,
+        NATIVE_LAYER_PREFIX,
+        &jangtq2_artifact.config,
+    )
+    .expect("stacked codebook projections should build a validated page plan");
+
+    assert_eq!(
+        jangtq2_layer_plan.quantization_mode,
+        QuantizationMode::Jangtq2Codebook
+    );
+    assert_eq!(
+        jangtq2_layer_plan.jangtq2_projection_rotations.len(),
+        PROJECTION_NAMES.len()
+    );
+    for projection_name in PROJECTION_NAMES {
+        assert_eq!(
+            jangtq2_layer_plan.quantization_mode_for_projection(projection_name),
+            QuantizationMode::Jangtq2Codebook
+        );
+        assert_eq!(
+            jangtq2_layer_plan.jangtq2_rotation_for_projection(projection_name),
+            Some(crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32)
+        );
+        assert_eq!(
+            projection_parameter_names(&jangtq2_layer_plan, projection_name),
+            ["tq2_packed", "tq2_scales"]
+        );
+    }
+    assert_eq!(
+        jangtq2_layer_plan
+            .jangtq2_decoded_weight_page_shapes(1)
+            .expect("one selected expert should have valid decoded matrix shapes"),
+        [vec![1, 512, 2048], vec![1, 512, 2048], vec![1, 2048, 512]]
+    );
+    assert_eq!(
+        jangtq2_layer_plan
+            .tensor_sources
+            .iter()
+            .filter(|tensor_source| tensor_source.parameter_name == "tq2_scales")
+            .map(|tensor_source| tensor_source.dtype)
+            .collect::<Vec<_>>(),
+        [SafetensorsDtype::Float16; 3]
+    );
+}
+
+#[test]
+#[ignore = "requires ASTRONOMICAL_JANGTQ2_MODEL_DIR pointing to the downloaded JANGH2 artifact"]
+fn should_plan_every_jangtq2_projection_from_the_real_artifact_headers() {
+    let model_directory = std::env::var_os("ASTRONOMICAL_JANGTQ2_MODEL_DIR")
+        .map(std::path::PathBuf::from)
+        .expect("ASTRONOMICAL_JANGTQ2_MODEL_DIR should name the local JANGH2 artifact");
+    let config_bytes = std::fs::read(model_directory.join("config.json"))
+        .expect("the JANGH2 config should be readable");
+    let config = Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("the JANGH2 config should parse through the production parser");
+    Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 1)
+        .expect("the complete JANGH2 artifact should pass production validation");
+    let shard_index_bytes = std::fs::read(model_directory.join("model.safetensors.index.json"))
+        .expect("the JANGH2 shard index should be readable");
+    let shard_index_value: serde_json::Value = serde_json::from_slice(&shard_index_bytes)
+        .expect("the JANGH2 shard index should be valid JSON");
+    let language_tensor_profiles = qwen3_5_language_tensor_profiles(&config)
+        .expect("the JANGH2 language tensor contract should build");
+    let shard_index =
+        Qwen3_5ShardIndex::from_json_bytes(&shard_index_bytes, &language_tensor_profiles)
+            .expect("the JANGH2 shard index should match the language tensor contract");
+    let weight_map = shard_index_value["weight_map"]
+        .as_object()
+        .expect("the JANGH2 index should contain a weight map")
+        .iter()
+        .map(|(tensor_name, shard_name)| {
+            (
+                tensor_name.clone(),
+                shard_name
+                    .as_str()
+                    .expect("shard names should be strings")
+                    .to_owned(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let layer_plans = build_quantized_expert_layer_plans(
+        &model_directory,
+        &weight_map,
+        &HashMap::new(),
+        &config,
+        config.layer_count() as usize,
+    )
+    .expect("every sparse expert layer should validate against the JANGH2 shard headers");
+    let packed_codebook_source_count = layer_plans
+        .iter()
+        .flat_map(|layer_plan| &layer_plan.tensor_sources)
+        .filter(|tensor_source| tensor_source.parameter_name == "tq2_packed")
+        .count();
+    let codebook_scale_sources = layer_plans
+        .iter()
+        .flat_map(|layer_plan| &layer_plan.tensor_sources)
+        .filter(|tensor_source| tensor_source.parameter_name == "tq2_scales")
+        .collect::<Vec<_>>();
+
+    assert_eq!(layer_plans.len(), config.layer_count() as usize);
+    assert_eq!(
+        shard_index.language_tensor_name_to_shard_file_name().len(),
+        language_tensor_profiles.len()
+    );
+    assert_eq!(packed_codebook_source_count, 144);
+    assert_eq!(codebook_scale_sources.len(), packed_codebook_source_count);
+    assert!(
+        codebook_scale_sources
+            .iter()
+            .all(|tensor_source| tensor_source.dtype == SafetensorsDtype::Float16)
+    );
+    assert_eq!(
+        layer_plans
+            .iter()
+            .map(|layer_plan| layer_plan.jangtq2_projection_rotations.len())
+            .sum::<usize>(),
+        packed_codebook_source_count
+    );
+}
+
+#[test]
 fn should_reject_affine_profiles_when_companion_tensors_are_absent() {
     let affine_profile_without_companions = write_weight_only_tensors_without_unquantized_resolve();
 
@@ -242,6 +376,88 @@ fn write_weight_only_tensors_without_unquantized_resolve() -> MixedExpertArtifac
         }],
         false,
     )
+}
+
+fn write_jangtq2_expert_artifact() -> MixedExpertArtifact {
+    let mut config_value =
+        serde_json::from_slice::<serde_json::Value>(&frozen_ornith_1_0_config_bytes())
+            .expect("the frozen Qwen3.5 config should decode as JSON");
+    config_value["text_config"]["num_experts"] = json!(EXPERT_CAPACITY);
+    config_value["text_config"]["num_experts_per_tok"] = json!(EXPERT_CAPACITY);
+    let mut quantization_overrides = config_value["quantization"]
+        .as_object()
+        .expect("the frozen quantization profile should be an object")
+        .clone();
+    for projection_name in PROJECTION_NAMES {
+        quantization_overrides.insert(
+            format!("{NATIVE_LAYER_PREFIX}.switch_mlp.{projection_name}"),
+            json!({"mode": "jangtq2", "bits": 2, "rotation": "hadamard32"}),
+        );
+    }
+    let quantization_value = serde_json::Value::Object(quantization_overrides);
+    config_value["quantization"] = quantization_value.clone();
+    config_value["quantization_config"] = quantization_value;
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the synthetic jangtq2 config should serialize as JSON");
+    let config = Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("the synthetic jangtq2 config should parse");
+
+    let model_directory =
+        tempfile::tempdir().expect("the jangtq2 fixture should create a temporary directory");
+    let mut tensors = Vec::new();
+    let mut weight_map = HashMap::new();
+    for projection_name in PROJECTION_NAMES {
+        append_jangtq2_projection(
+            &mut tensors,
+            &mut weight_map,
+            NATIVE_LAYER_PREFIX,
+            projection_name,
+            &config,
+        );
+    }
+    write_safetensors_file(&model_directory.path().join(SHARD_FILE_NAME), &tensors);
+    MixedExpertArtifact {
+        model_directory,
+        config,
+        weight_map,
+    }
+}
+
+fn append_jangtq2_projection(
+    tensors: &mut Vec<ShardTensor>,
+    weight_map: &mut HashMap<String, String>,
+    layer_prefix: &str,
+    projection_name: &str,
+    config: &Qwen3_5Config,
+) {
+    let (input_dimension, output_dimension) = if projection_name == "down_proj" {
+        (
+            config.expert_intermediate_size() as usize,
+            config.hidden_size() as usize,
+        )
+    } else {
+        (
+            config.hidden_size() as usize,
+            config.expert_intermediate_size() as usize,
+        )
+    };
+    let packed_width = input_dimension * 2 / 32;
+    let packed_tensor_name = format!("{layer_prefix}.switch_mlp.{projection_name}.tq2_packed");
+    let scales_tensor_name = format!("{layer_prefix}.switch_mlp.{projection_name}.tq2_scales");
+    weight_map.insert(packed_tensor_name.clone(), SHARD_FILE_NAME.to_owned());
+    weight_map.insert(scales_tensor_name.clone(), SHARD_FILE_NAME.to_owned());
+    tensors.push(ShardTensor {
+        tensor_name: packed_tensor_name,
+        dtype: "U32",
+        shape: vec![EXPERT_CAPACITY, output_dimension, packed_width],
+        payload_bytes: vec![0_u8; EXPERT_CAPACITY * output_dimension * packed_width * 4],
+    });
+    tensors.push(ShardTensor {
+        tensor_name: scales_tensor_name,
+        dtype: "F16",
+        shape: vec![EXPERT_CAPACITY, output_dimension],
+        payload_bytes: vec![0_u8; EXPERT_CAPACITY * output_dimension * 2],
+    });
 }
 
 enum LayerStorage<'layer> {

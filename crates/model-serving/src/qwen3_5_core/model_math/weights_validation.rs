@@ -19,6 +19,7 @@ pub(crate) fn validate_bound_tensor(
             MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
         ),
         TensorDtype::BFloat16 => bound_tensor.dtype() == MlxDtype::BFloat16,
+        TensorDtype::Float16 => bound_tensor.dtype() == MlxDtype::Float16,
         TensorDtype::Float32 => bound_tensor.dtype() == MlxDtype::Float32,
         TensorDtype::UInt32 => bound_tensor.dtype() == MlxDtype::UInt32,
     };
@@ -38,7 +39,26 @@ pub(crate) fn validate_bound_tensor(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    if bound_tensor.shape() != expected_shape {
+    let accepted_published_shape = tensor_profile
+        .equivalent_published_shapes
+        .iter()
+        .map(|published_shape| {
+            published_shape
+                .iter()
+                .map(|dimension| {
+                    i32::try_from(*dimension).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
+                        tensor_name: tensor_profile.name.clone(),
+                        description: "published tensor dimension exceeds the MLX integer range",
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if bound_tensor.shape() != expected_shape
+        && !accepted_published_shape
+            .iter()
+            .any(|published_shape| bound_tensor.shape() == *published_shape)
+    {
         return Err(Qwen3_5ExecutionError::InvalidTensor {
             tensor_name: tensor_profile.name.clone(),
             description: "tensor shape differs from the config-derived profile",

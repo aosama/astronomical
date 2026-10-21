@@ -285,7 +285,13 @@ fn complete_table_eviction_granularity_bytes(
         expert_pager
             .layer_plans()
             .iter()
-            .filter_map(|layer_plan| layer_plan.complete_expert_payload_byte_count().ok())
+            .filter_map(|layer_plan| {
+                crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+                    layer_plan,
+                    layer_plan.expert_capacity,
+                )
+                .ok()
+            })
             .max()
             .unwrap_or(0)
     });

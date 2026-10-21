@@ -71,6 +71,28 @@ impl Jangtq2CodebookRotation {
     }
 }
 
+/// Declared language RMSNorm convention for a jangtq2 bundle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Jangtq2RmsNormConvention {
+    /// Apply the stored RMSNorm weight directly.
+    DirectWeight,
+    /// The stored weight is a deviation from one; apply `1 + weight`.
+    LanguageMlxPlusOne,
+}
+
+impl Jangtq2RmsNormConvention {
+    /// Resolves the bundle-level convention string, rejecting unknown values.
+    pub fn from_wire_name(wire_name: &str) -> Result<Self, Jangtq2ConfigurationError> {
+        match wire_name {
+            "direct" => Ok(Self::DirectWeight),
+            "qwen3_5_language_mlx_plus_one" => Ok(Self::LanguageMlxPlusOne),
+            _ => Err(Jangtq2ConfigurationError::UnsupportedRmsNormConvention {
+                actual_convention: wire_name.to_owned(),
+            }),
+        }
+    }
+}
+
 /// One per-module quantization override entry, in any of its three shapes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Jangtq2WeightOverrideEntry {
@@ -180,6 +202,12 @@ impl<'de> Deserialize<'de> for Jangtq2WeightOverrideEntry {
 /// Errors rejected while resolving a jangtq2 module's storage contract.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Jangtq2ConfigurationError {
+    /// A bundle declared an RMSNorm storage convention the loader does not know.
+    #[error("jangtq2 RMSNorm convention `{actual_convention}` is not supported")]
+    UnsupportedRmsNormConvention {
+        /// The rejected convention string.
+        actual_convention: String,
+    },
     /// A codebook entry declared a bit width outside the codebook family.
     #[error(
         "jangtq2 codebook bit width {actual_bit_width} is not supported (expected one of {supported_bit_widths:?})"
@@ -251,6 +279,7 @@ impl Jangtq2WeightOverrideEntry {
 mod tests {
     use super::Jangtq2CodebookMode;
     use super::Jangtq2CodebookRotation;
+    use super::Jangtq2RmsNormConvention;
     use super::Jangtq2WeightOverrideEntry;
 
     const TWO_BIT_CODEBOOK_ENTRY_FROM_THE_JANGH2_BUNDLE: &str =
@@ -283,6 +312,28 @@ mod tests {
 
     fn parse_entry(entry_json: &str) -> Result<Jangtq2WeightOverrideEntry, serde_json::Error> {
         serde_json::from_str(entry_json)
+    }
+
+    #[test]
+    fn should_resolve_the_jangtq2_language_mlx_plus_one_norm_convention() {
+        assert_eq!(
+            Jangtq2RmsNormConvention::from_wire_name("qwen3_5_language_mlx_plus_one"),
+            Ok(Jangtq2RmsNormConvention::LanguageMlxPlusOne)
+        );
+        assert_eq!(
+            Jangtq2RmsNormConvention::from_wire_name("direct"),
+            Ok(Jangtq2RmsNormConvention::DirectWeight)
+        );
+    }
+
+    #[test]
+    fn should_reject_an_unknown_jangtq2_language_norm_convention() {
+        assert!(matches!(
+            Jangtq2RmsNormConvention::from_wire_name("unknown"),
+            Err(super::Jangtq2ConfigurationError::UnsupportedRmsNormConvention {
+                actual_convention
+            }) if actual_convention == "unknown"
+        ));
     }
 
     #[test]

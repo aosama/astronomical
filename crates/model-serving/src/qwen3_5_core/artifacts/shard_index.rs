@@ -20,6 +20,8 @@ pub struct Qwen3_5ShardIndex {
     tensor_name_to_shard_file_name: BTreeMap<String, String>,
     /// Vision tensor name to shard file name mapping for embedded or sidecar storage.
     vision_tensor_name_to_shard_file_name: BTreeMap<String, String>,
+    /// Auxiliary tensors retained in the artifact but not loaded by this runtime.
+    auxiliary_tensor_name_to_shard_file_name: BTreeMap<String, String>,
     total_payload_bytes: u64,
     model_shard_file_names: Vec<String>,
     vision_sidecar_file_names: Vec<String>,
@@ -47,6 +49,7 @@ impl Qwen3_5ShardIndex {
         let mut language_tensor_names = BTreeSet::new();
         let mut language_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut vision_tensor_name_to_shard_file_name = BTreeMap::new();
+        let mut auxiliary_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut language_shard_file_names = BTreeSet::new();
         let mut vision_shard_file_names = BTreeSet::new();
         for (tensor_name, shard_file_name) in &index_document.weight_map {
@@ -63,6 +66,9 @@ impl Qwen3_5ShardIndex {
                 // of its filename.
                 vision_shard_file_names.insert(shard_file_name.clone());
                 vision_tensor_name_to_shard_file_name
+                    .insert(tensor_name.clone(), shard_file_name.clone());
+            } else if tensor_name.starts_with("mtp.") {
+                auxiliary_tensor_name_to_shard_file_name
                     .insert(tensor_name.clone(), shard_file_name.clone());
             }
             // Other tensor prefixes are silently skipped.
@@ -82,6 +88,7 @@ impl Qwen3_5ShardIndex {
         Ok(Self {
             tensor_name_to_shard_file_name: language_tensor_name_to_shard_file_name,
             vision_tensor_name_to_shard_file_name,
+            auxiliary_tensor_name_to_shard_file_name,
             total_payload_bytes,
             model_shard_file_names,
             vision_sidecar_file_names,
@@ -110,6 +117,12 @@ impl Qwen3_5ShardIndex {
     #[must_use]
     pub fn vision_tensor_name_to_shard_file_name(&self) -> &BTreeMap<String, String> {
         &self.vision_tensor_name_to_shard_file_name
+    }
+
+    /// Returns the MTP tensors preserved by the artifact but not loaded by this runtime.
+    #[must_use]
+    pub fn auxiliary_tensor_name_to_shard_file_name(&self) -> &BTreeMap<String, String> {
+        &self.auxiliary_tensor_name_to_shard_file_name
     }
 
     /// Returns executable model shard file names in sorted order.
@@ -179,6 +192,30 @@ impl Qwen3_5ShardIndex {
             .cloned()
             .collect())
     }
+
+    /// Extracts the language and vision tensor names needed to resolve native
+    /// modules before profile validation, without validating their profiles.
+    pub fn extract_language_and_vision_tensor_names_from_json(
+        index_bytes: &[u8],
+    ) -> Result<BTreeSet<String>, Qwen3_5ArtifactError> {
+        if index_bytes.len() > MAXIMUM_INDEX_BYTES {
+            return Err(Qwen3_5ArtifactError::IndexTooLarge {
+                actual_index_bytes: index_bytes.len(),
+                maximum_index_bytes: MAXIMUM_INDEX_BYTES,
+            });
+        }
+        let index_document = serde_json::from_slice::<Qwen3_5ShardIndexDocument>(index_bytes)
+            .map_err(Qwen3_5ArtifactError::DeserializeIndex)?;
+        Ok(index_document
+            .weight_map
+            .keys()
+            .filter(|tensor_name| {
+                tensor_name.starts_with("language_model.")
+                    || tensor_name.starts_with("vision_tower.")
+            })
+            .cloned()
+            .collect())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,6 +266,13 @@ pub enum Qwen3_5ArtifactError {
     MissingLanguageTensor { tensor_name: String },
     #[error("Qwen3.5 index contains unexpected vision tensor '{tensor_name}'")]
     UnexpectedVisionTensor { tensor_name: String },
+    #[error(
+        "Qwen3.5 vision module '{module_name}' has an unsupported quantization profile: {description}"
+    )]
+    InvalidVisionQuantizationProfile {
+        module_name: String,
+        description: String,
+    },
     #[error("the jangtq2 tensor contract rejected module '{module_name}': {source}")]
     Jangtq2TensorContract {
         module_name: String,

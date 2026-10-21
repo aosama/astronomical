@@ -8,6 +8,9 @@ use crate::qwen3_5_core::artifacts::{
 use crate::qwen3_5_core::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
+#[cfg(test)]
+mod tests;
+
 use super::weights_validation;
 use super::{
     decoder_layer_weights::{
@@ -80,7 +83,7 @@ impl Qwen3_5Weights {
         performance_attribution.measure_operation(
             PerformanceOperation::ModelTensorBinding,
             |_performance_attribution| {
-                Self::bind_from_model_shards(&qwen3_5_config, &shard_index, model_shards)
+                Self::bind_from_model_shards(runtime, &qwen3_5_config, &shard_index, model_shards)
             },
         )
     }
@@ -92,11 +95,15 @@ impl Qwen3_5Weights {
     /// caller is responsible for loading the shard files and extracting vision
     /// tensors first.
     pub fn bind_from_model_shards(
+        runtime: &MlxRuntime,
         qwen3_5_config: &Qwen3_5Config,
         shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
         model_shards: Vec<MlxSafetensors>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)?;
+        let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)
+            .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                description: artifact_error.to_string(),
+            })?;
         let mut bound_tensors = HashMap::with_capacity(language_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
         for tensor_profile in &language_tensor_profiles {
@@ -122,6 +129,12 @@ impl Qwen3_5Weights {
             let tensor = model_shard.tensor(&tensor_profile.name)?;
             weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
             weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
+            let tensor = apply_declared_jangtq2_rms_norm_convention(
+                runtime,
+                qwen3_5_config,
+                &tensor_profile.name,
+                tensor,
+            )?;
             let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidTensor {
                     tensor_name: tensor_profile.name.clone(),
@@ -379,12 +392,47 @@ pub(crate) fn take_full_attention_weights(
     })
 }
 
+fn apply_declared_jangtq2_rms_norm_convention(
+    runtime: &MlxRuntime,
+    qwen3_5_config: &Qwen3_5Config,
+    tensor_name: &str,
+    tensor: MlxArray,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let should_add_unit_scale = matches!(
+        qwen3_5_config.jangtq2_rms_norm_convention(),
+        Some(crate::jangtq2_qwen35::configuration::Jangtq2RmsNormConvention::LanguageMlxPlusOne)
+    ) && is_language_rms_norm_weight_tensor(tensor_name);
+    if !should_add_unit_scale {
+        return Ok(tensor);
+    }
+
+    // JANGH2 stores AWQ-folded RMSNorm deviations, not the direct scale used by
+    // ordinary Qwen checkpoints. Materialize `1 + deviation` once during model
+    // binding so every attention and MoE path shares the declared convention.
+    let unit_scale = runtime.full(&[], 1.0, tensor.dtype())?;
+    Ok(runtime.add(&unit_scale, &tensor)?)
+}
+
+fn is_language_rms_norm_weight_tensor(tensor_name: &str) -> bool {
+    tensor_name == "language_model.model.norm.weight"
+        || tensor_name.ends_with(".input_layernorm.weight")
+        || tensor_name.ends_with(".post_attention_layernorm.weight")
+        || tensor_name.ends_with(".self_attn.q_norm.weight")
+        || tensor_name.ends_with(".self_attn.k_norm.weight")
+        || tensor_name.ends_with(".linear_attn.norm.weight")
+}
+
 pub(crate) fn take_quantized_affine_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     module_name: &str,
 ) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
     let quantization_profile = qwen3_5_config.quantization_profile_for_module(module_name);
+    if quantization_profile.is_jangtq2_codebook() {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "jangtq2 codebook weights are only decoded by the streamed expert path",
+        });
+    }
     if quantization_profile.is_unquantized() {
         return Ok(Qwen3_5AffineWeights::NativeBfloat16 {
             weight: take_tensor(bound_tensors, format!("{module_name}.weight"))?,

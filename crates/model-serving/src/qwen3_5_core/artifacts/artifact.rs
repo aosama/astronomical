@@ -15,7 +15,7 @@ use super::artifact_helpers::{
 use super::artifact_inventory;
 use super::tensor_spec;
 use super::validated_artifact::ValidatedQwen3_5Artifact;
-use super::vision_tensor_spec::qwen3_5_vision_tensor_profiles;
+use super::vision_tensor_spec;
 use super::vision_validation;
 use super::{
     OptiQMetadata, OptiQMetadataError, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5VisionConfig,
@@ -105,20 +105,26 @@ impl Qwen3_5ArtifactValidator {
                     file_name: "model.safetensors.index.json".to_owned(),
                 })?,
         )?;
-        let canonical_tensor_names =
-            Qwen3_5ShardIndex::extract_language_tensor_names_from_json(&shard_index_bytes)?;
-        config.resolve_unquantized_modules_from_shard_index(&canonical_tensor_names);
+        let canonical_model_tensor_names =
+            Qwen3_5ShardIndex::extract_language_and_vision_tensor_names_from_json(
+                &shard_index_bytes,
+            )?;
+        config.resolve_unquantized_modules_from_shard_index(&canonical_model_tensor_names);
         let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config)?;
         let shard_index =
             Qwen3_5ShardIndex::from_json_bytes(&shard_index_bytes, &language_tensor_profiles)?;
         let validated_vision_tower_storage = vision_validation::validate_vision_tower_inventory(
             &shard_index,
             vision_config.as_ref(),
+            &config,
         )?;
         let has_separate_vision_sidecar = validated_vision_tower_storage.has_separate_sidecar();
         let vision_tensor_profiles = vision_config
             .as_ref()
-            .map(qwen3_5_vision_tensor_profiles)
+            .map(|vision_config| {
+                vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model(vision_config, &config)
+            })
+            .transpose()?
             .unwrap_or_default();
         let tensor_inventory = artifact_inventory::build_index_tensor_inventory(&shard_index)?;
         let mut recognized_tensor_profiles = language_tensor_profiles.clone();

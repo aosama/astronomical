@@ -304,16 +304,22 @@ fn append_qwen3_5_linear_attention_tensor_profiles(
     let linear_key_dimension = linear_key_head_count * linear_key_head_dimension;
     let linear_value_dimension = linear_value_head_count * linear_value_head_dimension;
     let convolution_dimension = linear_key_dimension * 2 + linear_value_dimension;
+    let convolution_kernel_dimension =
+        qwen3_5_config.linear_convolution_kernel_dimension() as usize;
     let linear_attention_prefix = format!("{layer_prefix}.linear_attn");
-    tensor_profiles.push(qwen3_5_tensor_profile(
-        format!("{linear_attention_prefix}.conv1d.weight"),
-        TensorDtype::ModelFloat,
-        vec![
+    // MLX Conv1d consumes `[output, kernel, input]`. Published Qwen3.5
+    // SafeTensors may keep PyTorch's `[output, input, kernel]` order; the
+    // loader transposes that equivalent layout before either convolution path.
+    tensor_profiles.push(TensorProfile {
+        name: format!("{linear_attention_prefix}.conv1d.weight"),
+        dtype: TensorDtype::ModelFloat,
+        shape: vec![convolution_dimension, convolution_kernel_dimension, 1],
+        equivalent_published_shapes: vec![vec![
             convolution_dimension,
-            qwen3_5_config.linear_convolution_kernel_dimension() as usize,
             1,
-        ],
-    ));
+            convolution_kernel_dimension,
+        ]],
+    });
     for (projection_name, output_dimension, input_dimension) in [
         (
             "in_proj_qkv",

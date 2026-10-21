@@ -34,6 +34,11 @@ impl ExpertGateUpFusionPlan {
         let parameter_names: &[&str] = match gate_quantization_mode {
             QuantizationMode::NativeBfloat16 => &["weight"],
             QuantizationMode::Affine => &["weight", "scales", "biases"],
+            QuantizationMode::Jangtq2Codebook => {
+                return Ok(Self::Separate {
+                    incompatibility_reason: "jangtq2 codebook projections use the family decoder",
+                });
+            }
         };
         let mut transient_payload_bytes = 0_u64;
         for parameter_name in parameter_names {

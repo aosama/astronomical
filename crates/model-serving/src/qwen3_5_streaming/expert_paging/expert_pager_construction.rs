@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
 
 use astronomical_runtime_integration::MlxRuntime;
@@ -50,12 +51,37 @@ impl Qwen3_5ExpertPager {
         )?;
 
         // Streaming workspace and temporary decode routes are bounded by complete
-        // layer geometry. Track the largest complete layer so budgets and telemetry
-        // describe whole-layer ownership rather than one routed top-K page.
+        // layer geometry. Include packed source ownership, decoded bfloat16 output,
+        // and the largest sequential decoder workspace in the whole-layer reserve.
         let maximum_expert_page_bytes = layer_plans.iter().try_fold(
             0u64,
             |maximum_expert_page_bytes, layer_plan| -> Result<_, ExpertPagingError> {
-                Ok(maximum_expert_page_bytes.max(layer_plan.complete_expert_payload_byte_count()?))
+                let complete_source_payload_bytes =
+                    layer_plan.complete_expert_payload_byte_count()?;
+                let decoded_codebook_weight_shapes =
+                    layer_plan.jangtq2_decoded_weight_page_shapes(layer_plan.expert_capacity)?;
+                let decoder_index_tensor_shapes = decoded_codebook_weight_shapes
+                    .iter()
+                    .map(|decoded_weight_shape| {
+                        vec![decoded_weight_shape[2]
+                            .max(decoded_weight_shape[0].saturating_mul(decoded_weight_shape[1]))]
+                    })
+                    .collect::<Vec<_>>();
+                let complete_page_peak_allocation_bytes =
+                    crate::memory::expert_page_peak_allocation_bytes(
+                        complete_source_payload_bytes,
+                        &decoded_codebook_weight_shapes,
+                        size_of::<u16>(),
+                        crate::jangtq2_qwen35::mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
+                        size_of::<u32>(),
+                        &decoder_index_tensor_shapes,
+                        crate::jangtq2_qwen35::mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT,
+                        size_of::<u32>(),
+                    )
+                    .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+                        description: "complete expert-page allocation size overflowed".to_owned(),
+                    })?;
+                Ok(maximum_expert_page_bytes.max(complete_page_peak_allocation_bytes))
             },
         )?;
         let memory_budget = MlxAllocationAdmission::new(

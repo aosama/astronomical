@@ -170,6 +170,21 @@ fn should_reject_malformed_packed_rows() {
 }
 
 #[test]
+fn should_derive_decoded_weight_page_shapes_from_packed_codebook_rows() {
+    assert_eq!(
+        codebook::decoded_weight_page_shape(&[256, 1024, 192], 2, 8),
+        Some(vec![8, 1024, 3072])
+    );
+    assert_eq!(
+        codebook::decoded_weight_page_shape(&[256, 3072, 96], 3, 16),
+        Some(vec![16, 3072, 1024])
+    );
+    assert!(codebook::decoded_weight_page_shape(&[256, 1024, 192], 2, 257).is_none());
+    assert!(codebook::decoded_weight_page_shape(&[256, 1024, 193], 2, 8).is_none());
+    assert!(codebook::decoded_weight_page_shape(&[256, 1024, 192], 5, 8).is_none());
+}
+
+#[test]
 fn should_match_reference_hadamard32_transform_on_the_golden_vector() {
     let golden_input = golden_f32_list("h32_input");
     let golden_output = golden_f32_list("h32_output");

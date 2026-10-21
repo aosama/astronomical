@@ -1,4 +1,5 @@
 use astronomical_mlx_c_rust::MlxArray;
+use astronomical_runtime_integration::MlxRuntime;
 
 use super::base::Qwen3_5ModelBase;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
@@ -15,6 +16,9 @@ use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
     is_gdn_decode_prework_eligible, qwen3_5_gdn_decode_prework,
 };
 use crate::qwen3_5_core::model_math::tensor_slicing;
+
+#[cfg(test)]
+mod tests;
 
 impl Qwen3_5ModelBase {
     #[allow(clippy::too_many_arguments)]
@@ -72,6 +76,16 @@ impl Qwen3_5ModelBase {
             ],
             token_count,
         )?;
+        let convolution_weight = normalize_linear_attention_convolution_weight(
+            &self.runtime,
+            &linear_attention_weights.convolution_weight,
+            mixed_queries_keys_values.shape()[2],
+            i32::try_from(self.config.linear_convolution_kernel_dimension()).map_err(|_| {
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "linear convolution kernel width exceeds the MLX shape range",
+                }
+            })?,
+        )?;
         let completed_prefill_chunk_tokens = boundary_checkpoint_collector
             .as_ref()
             .map(|collector| collector.completed_prefill_chunk_tokens().to_vec());
@@ -89,7 +103,7 @@ impl Qwen3_5ModelBase {
                     let (queries, keys, values) = self.convolution_to_normalized_heads(
                         &checkpoint_update.convolution_input,
                         token_count,
-                        linear_attention_weights,
+                        &convolution_weight,
                         performance_attribution,
                     )?;
                     (
@@ -122,7 +136,7 @@ impl Qwen3_5ModelBase {
                             linear_head_dimension,
                             &mixed_queries_keys_values,
                             &convolution_state_array,
-                            &linear_attention_weights.convolution_weight,
+                            &convolution_weight,
                             &self.inverse_linear_head_dimension_scale,
                             &self.inverse_square_root_linear_head_dimension_scale,
                         )?;
@@ -137,7 +151,7 @@ impl Qwen3_5ModelBase {
                         let (queries, keys, values) = self.convolution_to_normalized_heads(
                             &convolution_input,
                             token_count,
-                            linear_attention_weights,
+                            &convolution_weight,
                             performance_attribution,
                         )?;
                         (queries, keys, values, Vec::new())
@@ -259,7 +273,7 @@ impl Qwen3_5ModelBase {
         &self,
         convolution_input: &MlxArray,
         token_count: i32,
-        linear_attention_weights: &Qwen3_5LinearAttentionWeights,
+        convolution_weight: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
         let linear_key_head_count = self.config.linear_key_head_count() as i32;
@@ -270,7 +284,7 @@ impl Qwen3_5ModelBase {
         let rms_norm_epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
         let convolution_output = self.runtime.conv1d(
             convolution_input,
-            &linear_attention_weights.convolution_weight,
+            convolution_weight,
             1,
             0,
             1,
@@ -343,4 +357,29 @@ impl Qwen3_5ModelBase {
         )?;
         Ok((queries, keys, values))
     }
+}
+
+fn normalize_linear_attention_convolution_weight(
+    runtime: &MlxRuntime,
+    convolution_weight: &MlxArray,
+    output_channel_count: i32,
+    convolution_kernel_width: i32,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let execution_shape = [output_channel_count, convolution_kernel_width, 1];
+    let published_pytorch_shape = [output_channel_count, 1, convolution_kernel_width];
+    let actual_weight_shape = convolution_weight.shape();
+    if actual_weight_shape == execution_shape {
+        return Ok(convolution_weight.retain()?);
+    }
+    if actual_weight_shape == published_pytorch_shape {
+        // MLX stores Conv1d weights as [output, kernel, input]; the published
+        // PyTorch layout is [output, input, kernel]. This axis permutation
+        // preserves every value and restores the layout consumed by both the
+        // standard and fused convolution paths.
+        return Ok(runtime.transpose_axes(convolution_weight, &[0, 2, 1])?);
+    }
+    Err(Qwen3_5ExecutionError::InvalidTensor {
+        tensor_name: "linear_attention.conv1d.weight".to_owned(),
+        description: "convolution weight shape is neither the MLX nor published PyTorch layout",
+    })
 }
