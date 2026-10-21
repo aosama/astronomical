@@ -128,6 +128,43 @@ pub const fn packed_word_count_for_input_width(input_width: u32, bit_width: u32)
     input_width * bit_width / u32::BITS
 }
 
+/// Derives the decoded bfloat16 weight shape for a selected expert page.
+///
+/// The packed source has shape `(expert_capacity, output_width, packed_words)`;
+/// the page replaces the leading expert axis with `selected_expert_count`,
+/// while the input width expands from each packed word according to `bit_width`.
+/// Returns `None` for unsupported widths, empty or malformed shapes, page sizes
+/// above capacity, or packed rows that are not complete 32-code groups.
+#[must_use]
+pub fn decoded_weight_page_shape(
+    packed_source_shape: &[usize],
+    bit_width: u32,
+    selected_expert_count: usize,
+) -> Option<Vec<usize>> {
+    if !is_supported_bit_width(bit_width)
+        || packed_source_shape.len() != 3
+        || packed_source_shape.contains(&0)
+        || selected_expert_count == 0
+        || selected_expert_count > packed_source_shape[0]
+    {
+        return None;
+    }
+    let packed_row_bit_count = packed_source_shape[2].checked_mul(u32::BITS as usize)?;
+    let bit_width_as_usize = bit_width as usize;
+    if packed_row_bit_count % bit_width_as_usize != 0 {
+        return None;
+    }
+    let input_width = packed_row_bit_count / bit_width_as_usize;
+    if input_width % CODES_PER_GROUP as usize != 0 {
+        return None;
+    }
+    Some(vec![
+        selected_expert_count,
+        packed_source_shape[1],
+        input_width,
+    ])
+}
+
 /// Returns the codes-per-group constant used by the bitstream layout.
 #[must_use]
 pub const fn codes_per_group() -> u32 {

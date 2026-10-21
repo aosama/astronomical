@@ -80,8 +80,22 @@ pub enum ExpertManifestError {
         "quantized expert groups must pack into whole U32 elements: bits={bits}, group_size={group_size}"
     )]
     GroupsNotPackedIntoU32 { bits: i32, group_size: i32 },
-    #[error("quantized expert pages currently support affine quantization only, got mode={mode:?}")]
+    #[error("quantized expert pages do not support mode={mode:?}")]
     UnsupportedQuantizationMode { mode: String },
+    #[error("the jangtq2 contract rejected module {module_name:?}: {source}")]
+    Jangtq2Contract {
+        module_name: String,
+        source: crate::jangtq2_qwen35::configuration::Jangtq2ConfigurationError,
+    },
+    #[error(
+        "jangtq2 tensor {tensor_name:?} has shape {actual_shape:?}, expected {expected_shape:?} for module {module_name:?}"
+    )]
+    Jangtq2TensorShapeMismatch {
+        module_name: String,
+        tensor_name: String,
+        expected_shape: Vec<usize>,
+        actual_shape: Vec<usize>,
+    },
     #[error(
         "source intervals must not overlap: interval at offset {source_file_offset} overlaps previous"
     )]
@@ -320,6 +334,10 @@ pub struct QuantizedTensorSource {
 pub struct QuantizedExpertLayerPlan {
     pub layer_prefix: String,
     pub tensor_sources: Vec<QuantizedTensorSource>,
+    pub jangtq2_projection_rotations: Vec<(
+        String,
+        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    )>,
     pub expert_capacity: usize,
     pub quantization_bits: i32,
     pub quantization_group_size: i32,
@@ -407,27 +425,84 @@ impl QuantizedExpertLayerPlan {
     /// Returns the storage encoding of one SwitchMLP projection from validated sources.
     ///
     /// Affine projections retain scales and biases. Native projections have only a
-    /// weight tensor. Mixed OptiQ layers can use both encodings, so callers must not
-    /// assume [`Self::quantization_mode`] applies to every projection.
+    /// weight tensor. A jangtq2 codebook projection has no `weight` tensor at all —
+    /// its on-disk tensors are named `tq2_packed` (the packed codes) and
+    /// `tq2_scales` (one float16 scale per expert row) — so the parameter names are
+    /// the discriminator, not "any non-weight companion" (which would mislabel
+    /// codebook scales as affine). Mixed OptiQ layers can use several encodings, so
+    /// callers must not assume [`Self::quantization_mode`] applies to every
+    /// projection.
     #[must_use]
     pub fn quantization_mode_for_projection(&self, projection_name: &str) -> QuantizationMode {
+        let has_jangtq2_packed_tensor = self.tensor_sources.iter().any(|tensor_source| {
+            tensor_source.projection_name == projection_name
+                && tensor_source.parameter_name == "tq2_packed"
+        });
         let has_affine_companion_tensor = self.tensor_sources.iter().any(|tensor_source| {
             tensor_source.projection_name == projection_name
-                && tensor_source.parameter_name != "weight"
+                && matches!(tensor_source.parameter_name.as_str(), "scales" | "biases")
         });
-        if has_affine_companion_tensor {
+        if has_jangtq2_packed_tensor {
+            QuantizationMode::Jangtq2Codebook
+        } else if has_affine_companion_tensor {
             QuantizationMode::Affine
         } else {
             QuantizationMode::NativeBfloat16
         }
+    }
+
+    /// Returns a codebook projection's activation rotation, when the plan
+    /// carries a jangtq2 codebook projection under this name.
+    #[must_use]
+    pub fn jangtq2_rotation_for_projection(
+        &self,
+        projection_name: &str,
+    ) -> Option<crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation> {
+        self.jangtq2_projection_rotations
+            .iter()
+            .find(|(planned_projection_name, _)| planned_projection_name == projection_name)
+            .map(|(_, projection_rotation)| *projection_rotation)
+    }
+
+    /// Returns the decoded output shapes for every codebook tensor in a page.
+    ///
+    /// The jangtq2 family owns the packed-to-dense shape rule; the layer plan
+    /// only selects its validated packed sources and supplies the requested
+    /// expert count. Memory policy consumes these shapes to calculate bytes.
+    pub fn jangtq2_decoded_weight_page_shapes(
+        &self,
+        selected_expert_count: usize,
+    ) -> Result<Vec<Vec<usize>>, ExpertManifestError> {
+        self.tensor_sources
+            .iter()
+            .filter(|tensor_source| tensor_source.parameter_name == "tq2_packed")
+            .map(|packed_tensor_source| {
+                let bit_width = u32::try_from(packed_tensor_source.quantization_bits)
+                    .map_err(|_| ExpertManifestError::InvalidBits)?;
+                crate::jangtq2_qwen35::codebook::decoded_weight_page_shape(
+                    &packed_tensor_source.full_shape,
+                    bit_width,
+                    selected_expert_count,
+                )
+                .ok_or_else(|| ExpertManifestError::InvalidShape {
+                    tensor_name: packed_tensor_source.tensor_name.clone(),
+                })
+            })
+            .collect()
     }
 }
 
 /// Supported quantization modes for expert weight loading.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QuantizationMode {
+    /// Standard MLX affine quantization: packed `weight` plus per-group `scales`
+    /// and `biases`.
     Affine,
+    /// Plain bfloat16 weight with no companion tensors.
     NativeBfloat16,
+    /// JANGTQ v2 codebook storage: `tq2_packed` codes plus one float16 `tq2_scales`
+    /// row scale, decoded with the odd-cubic codebook. Owned by the jangtq2 family.
+    Jangtq2Codebook,
 }
 
 /// Build a selected page using immutable startup-validated layer metadata.

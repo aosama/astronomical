@@ -38,6 +38,11 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
         TensorDtype::ModelFloat,
         &[8_192, 4, 1],
     );
+    assert_eq!(
+        tensor_profile_by_name["language_model.model.layers.0.linear_attn.conv1d.weight"]
+            .equivalent_published_shapes,
+        [vec![8_192, 1, 4]]
+    );
     assert_tensor(
         &tensor_profile_by_name,
         "language_model.model.layers.0.linear_attn.in_proj_qkv.weight",

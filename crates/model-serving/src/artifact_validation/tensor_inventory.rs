@@ -19,6 +19,8 @@ impl TensorSourceId {
 pub enum TensorSemanticRole {
     Target,
     Vision,
+    /// Present in the artifact but intentionally not bound by this runtime.
+    Auxiliary,
 }
 
 /// Boundary that declared one tensor location.

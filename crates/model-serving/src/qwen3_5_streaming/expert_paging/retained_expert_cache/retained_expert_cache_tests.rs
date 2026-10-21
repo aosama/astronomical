@@ -52,6 +52,12 @@ pub(super) fn streamed_weights_for_expert_count(
         down_projection: Qwen3_5AffineWeights::NativeBfloat16 {
             weight: projection(3.0),
         },
+        gate_activation_rotation:
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        up_activation_rotation:
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        down_activation_rotation:
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
     }
 }
 

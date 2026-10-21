@@ -189,6 +189,7 @@ fn synthetic_layer_plan(
     QuantizedExpertLayerPlan {
         layer_prefix: layer_prefix.to_owned(),
         tensor_sources,
+        jangtq2_projection_rotations: Vec::new(),
         expert_capacity,
         quantization_bits: 4,
         quantization_group_size: 64,
@@ -221,6 +222,7 @@ fn synthetic_gate_up_fusion_layer_plan(
                 dtype: match quantization_mode {
                     QuantizationMode::NativeBfloat16 => SafetensorsDtype::BFloat16,
                     QuantizationMode::Affine => SafetensorsDtype::Uint32,
+                    QuantizationMode::Jangtq2Codebook => SafetensorsDtype::Uint32,
                 },
                 full_shape: weight_shape,
                 tensor_payload_offset: 0,
@@ -254,6 +256,7 @@ fn synthetic_gate_up_fusion_layer_plan(
     QuantizedExpertLayerPlan {
         layer_prefix: "language_model.model.layers.0.mlp".to_owned(),
         tensor_sources,
+        jangtq2_projection_rotations: Vec::new(),
         expert_capacity,
         quantization_bits: gate_quantization_bits,
         quantization_group_size: 64,

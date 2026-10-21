@@ -228,8 +228,15 @@ impl OptiQQuantizationConfig {
         // For OptiQ-4bit (bits=4): all modules are explicit overrides.
         // For mixed-precision (bits=6): overrides specify modules that differ from default.
         let default_profile = OptiQQuantizationProfile::affine(self.bits, self.group_size);
-        let all_module_names =
+        let mut all_module_names =
             expected_quantized_module_names(config_source, feed_forward_architecture);
+        // The OptiQ map may also carry explicitly quantized vision modules.
+        // Their geometry belongs to the vision configuration, but their codec
+        // descriptors still need to survive text-config parsing for the vision
+        // tensor contract and weight loader.
+        all_module_names.extend(self.module_overrides.keys().cloned());
+        all_module_names.sort_unstable();
+        all_module_names.dedup();
         let mut quantized_module_profiles = BTreeMap::new();
         for module_name in all_module_names {
             let module_profile = match self.module_overrides.get(&module_name) {

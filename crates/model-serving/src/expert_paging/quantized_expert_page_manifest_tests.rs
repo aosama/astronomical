@@ -103,6 +103,7 @@ fn should_derive_exact_per_expert_and_complete_layer_payload_from_tensor_geometr
             tensor_source("gate.weight", 10),
             tensor_source("up.weight", 5),
         ],
+        jangtq2_projection_rotations: Vec::new(),
         expert_capacity: 4,
         quantization_bits: 4,
         quantization_group_size: 64,

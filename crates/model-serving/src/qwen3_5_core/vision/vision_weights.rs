@@ -2,10 +2,15 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
 use crate::{TensorDtype, TensorProfile};
 
 use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
 use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+
+#[cfg(test)]
+mod tests;
 
 /// Strict tensor binding for the Qwen3.5 vision tower.
 ///
@@ -19,6 +24,7 @@ use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 #[derive(Debug)]
 pub struct Qwen3_5VisionWeights {
     bound_tensors: HashMap<String, MlxArray>,
+    quantization_profiles: HashMap<String, OptiQQuantizationProfile>,
     /// The safetensors sources that own the memory-mapped data backing the
     /// bound tensors. Empty for embedded-vision models where the model shards
     /// in `Qwen3_5Weights` keep the data alive.
@@ -42,7 +48,17 @@ impl Qwen3_5VisionWeights {
                 description: "validated visual sidecar has no vision configuration",
             })?
             .clone();
-        let vision_tensor_profiles = super::qwen3_5_vision_tensor_profiles(&vision_config);
+        let qwen3_5_config = validated_artifact.config().clone();
+        let vision_tensor_profiles =
+            super::qwen3_5_vision_tensor_profiles_for_model(&vision_config, &qwen3_5_config)
+                .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                    description: artifact_error.to_string(),
+                })?;
+        let quantization_profiles =
+            super::vision_tensor_spec::qwen3_5_vision_linear_quantization_profiles(
+                &vision_config,
+                &qwen3_5_config,
+            );
         let vision_sidecar_file_names = validated_artifact
             .shard_index()
             .vision_sidecar_file_names()
@@ -111,6 +127,7 @@ impl Qwen3_5VisionWeights {
 
         Ok(Some(Self {
             bound_tensors,
+            quantization_profiles,
             vision_sidecars,
             total_payload_bytes: actual_payload_bytes,
         }))
@@ -127,10 +144,20 @@ impl Qwen3_5VisionWeights {
     pub fn load_from_model_shards(
         runtime: &MlxRuntime,
         vision_config: &super::Qwen3_5VisionConfig,
+        qwen3_5_config: &Qwen3_5Config,
         model_shards: &[MlxSafetensors],
         vision_tensor_name_to_shard_index: &HashMap<String, usize>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let vision_tensor_profiles = super::qwen3_5_vision_tensor_profiles(vision_config);
+        let vision_tensor_profiles =
+            super::qwen3_5_vision_tensor_profiles_for_model(vision_config, qwen3_5_config)
+                .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                    description: artifact_error.to_string(),
+                })?;
+        let quantization_profiles =
+            super::vision_tensor_spec::qwen3_5_vision_linear_quantization_profiles(
+                vision_config,
+                qwen3_5_config,
+            );
         let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
         for tensor_profile in &vision_tensor_profiles {
@@ -173,6 +200,7 @@ impl Qwen3_5VisionWeights {
 
         Ok(Self {
             bound_tensors,
+            quantization_profiles,
             vision_sidecars: Vec::new(),
             total_payload_bytes: actual_payload_bytes,
         })
@@ -185,6 +213,72 @@ impl Qwen3_5VisionWeights {
             .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
                 tensor_name: tensor_name.to_owned(),
             })
+    }
+
+    pub(crate) fn quantization_profile_for_module(
+        &self,
+        module_name: &str,
+    ) -> Option<OptiQQuantizationProfile> {
+        self.quantization_profiles.get(module_name).copied()
+    }
+
+    pub(crate) fn linear(
+        &self,
+        runtime: &MlxRuntime,
+        input_states: &MlxArray,
+        module_name: &str,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let module_quantization_profile = self.quantization_profile_for_module(module_name).ok_or(
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "vision linear module is missing its quantization profile",
+            },
+        )?;
+        let linear_bias = self.tensor(&format!("{module_name}.bias"))?;
+        if module_quantization_profile.is_unquantized() {
+            let linear_weight = self.tensor(&format!("{module_name}.weight"))?;
+            let transposed_linear_weight = runtime.transpose_axes(linear_weight, &[1, 0])?;
+            // Keep the fused accumulation path for native weights; separating
+            // this into matmul plus add changes BF16 rounding in the vision tower.
+            return Ok(runtime.addmm(
+                linear_bias,
+                input_states,
+                &transposed_linear_weight,
+                1.0,
+                1.0,
+            )?);
+        }
+        if !matches!(
+            module_quantization_profile.weight_codec,
+            ModuleWeightCodec::MlxAffineQuantized
+        ) {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "vision linear module declares an unsupported weight codec",
+            });
+        }
+        let quantization_group_size = i32::try_from(module_quantization_profile.group_size)
+            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                description: "vision affine group size exceeds the MLX integer range",
+            })?;
+        let quantization_bits = i32::try_from(module_quantization_profile.bits).map_err(|_| {
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "vision affine bit width exceeds the MLX integer range",
+            }
+        })?;
+        let packed_linear_weight = self.tensor(&format!("{module_name}.weight"))?;
+        let quantization_scales = self.tensor(&format!("{module_name}.scales"))?;
+        let quantization_biases = self.tensor(&format!("{module_name}.biases"))?;
+        // The affine `biases` companion restores quantized weight offsets;
+        // `.bias` remains the original learned linear bias and is added after qmm.
+        let quantized_projection = runtime.quantized_matmul_affine(
+            input_states,
+            packed_linear_weight,
+            quantization_scales,
+            quantization_biases,
+            true,
+            quantization_group_size,
+            quantization_bits,
+        )?;
+        Ok(runtime.add(&quantized_projection, linear_bias)?)
     }
 
     /// Returns the number of exactly bound vision tensors.
@@ -262,6 +356,7 @@ fn validate_bound_vision_tensor(
             MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
         ),
         TensorDtype::BFloat16 => tensor.dtype() == MlxDtype::BFloat16,
+        TensorDtype::Float16 => tensor.dtype() == MlxDtype::Float16,
         TensorDtype::Float32 => tensor.dtype() == MlxDtype::Float32,
         TensorDtype::UInt32 => tensor.dtype() == MlxDtype::UInt32,
     };

@@ -106,6 +106,12 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
             down_projection: Qwen3_5AffineWeights::NativeBfloat16 {
                 weight: projection(3.0),
             },
+            gate_activation_rotation:
+                crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            up_activation_rotation:
+                crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+            down_activation_rotation:
+                crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         }
     };
     let mut cache = RetainedExpertCache::new(1);

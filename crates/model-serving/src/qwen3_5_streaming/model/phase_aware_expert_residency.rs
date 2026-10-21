@@ -1,8 +1,10 @@
 //! Converts Qwen geometry and composed RAM budgets into the pure residency target.
 
+use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::residency::ExpertLayerGeometry;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError;
+use crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes;
 use crate::{
     ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution, PerformanceCounter,
     PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,
@@ -68,22 +70,10 @@ impl Qwen3_5StreamingModel {
         let Some(expert_pager) = self.expert_pager.as_ref() else {
             return;
         };
-        let Ok(layer_geometries) = expert_pager
-            .layer_plans()
-            .iter()
-            .enumerate()
-            .map(|(layer_index, layer_plan)| {
-                Ok(ExpertLayerGeometry {
-                    layer_index,
-                    complete_layer_payload_bytes: layer_plan
-                        .complete_expert_payload_byte_count()?,
-                    expert_payload_bytes: layer_plan.expert_payload_byte_count()?,
-                    expert_capacity: layer_plan.expert_capacity,
-                    experts_per_token: usize::try_from(self.config.experts_per_token())
-                        .unwrap_or(usize::MAX),
-                })
-            })
-            .collect::<Result<Vec<_>, crate::ExpertManifestError>>()
+        let experts_per_token =
+            usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
+        let Ok(layer_geometries) =
+            retained_expert_layer_geometries(expert_pager.layer_plans(), experts_per_token)
         else {
             return;
         };
@@ -131,23 +121,10 @@ impl Qwen3_5StreamingModel {
             retained_expert_ceiling_bytes,
             "composed Prefill/Decode leftover expert budget"
         );
-        let layer_geometries = expert_pager
-            .layer_plans()
-            .iter()
-            .enumerate()
-            .map(|(layer_index, layer_plan)| {
-                Ok(ExpertLayerGeometry {
-                    layer_index,
-                    complete_layer_payload_bytes: layer_plan
-                        .complete_expert_payload_byte_count()?,
-                    expert_payload_bytes: layer_plan.expert_payload_byte_count()?,
-                    expert_capacity: layer_plan.expert_capacity,
-                    experts_per_token: usize::try_from(self.config.experts_per_token())
-                        .unwrap_or(usize::MAX),
-                })
-            })
-            .collect::<Result<Vec<_>, crate::ExpertManifestError>>()
-            .map_err(ExpertPagingError::from)?;
+        let experts_per_token =
+            usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
+        let layer_geometries =
+            retained_expert_layer_geometries(expert_pager.layer_plans(), experts_per_token)?;
         let Some(retained_experts) = self.retained_experts.as_ref() else {
             return Err(ExpertPagingError::InvalidPagingPlan {
                 description: "paged Qwen model lost retained expert ownership".to_owned(),
@@ -341,6 +318,28 @@ impl Qwen3_5StreamingModel {
             .get(layer_index)
             .copied()
     }
+}
+
+fn retained_expert_layer_geometries(
+    layer_plans: &[QuantizedExpertLayerPlan],
+    experts_per_token: usize,
+) -> Result<Vec<ExpertLayerGeometry>, ExpertPagingError> {
+    layer_plans
+        .iter()
+        .enumerate()
+        .map(|(layer_index, layer_plan)| {
+            Ok(ExpertLayerGeometry {
+                layer_index,
+                complete_layer_payload_bytes: retained_expert_layer_page_payload_bytes(
+                    layer_plan,
+                    layer_plan.expert_capacity,
+                )?,
+                expert_payload_bytes: retained_expert_layer_page_payload_bytes(layer_plan, 1)?,
+                expert_capacity: layer_plan.expert_capacity,
+                experts_per_token,
+            })
+        })
+        .collect()
 }
 
 /// Attributes ownership released while applying one composed retained-page ceiling.

@@ -188,15 +188,12 @@ pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
                 .and_then(|expert_pager| expert_pager.layer_plans().first())
                 .and_then(|layer_plan| {
                     let expert_capacity = layer_plan.expert_capacity;
-                    let per_expert_payload_bytes = layer_plan
-                        .complete_expert_payload_byte_count()
-                        .ok()
-                        .and_then(|complete_layer_payload_bytes| {
-                            u64::try_from(expert_capacity)
-                                .ok()
-                                .filter(|capacity| *capacity > 0)
-                                .map(|capacity| complete_layer_payload_bytes / capacity)
-                        })?;
+                    let per_expert_payload_bytes =
+                        crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+                            layer_plan,
+                            1,
+                        )
+                        .ok()?;
                     Some((expert_capacity, per_expert_payload_bytes))
                 })
                 .map_or((0, 0, 0), |(expert_capacity, per_expert_payload_bytes)| {

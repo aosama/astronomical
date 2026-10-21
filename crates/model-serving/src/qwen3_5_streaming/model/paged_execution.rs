@@ -3,6 +3,7 @@
 use astronomical_mlx_c_rust::MlxArray;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
+use crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::sparse_experts::{
@@ -149,16 +150,47 @@ impl Qwen3_5Model {
             Some((sorted_states, sorted_indices, _)) => (sorted_states, sorted_indices, true),
             None => (&expanded_states, selected_expert_indices, false),
         };
+        let gate_activation_rotation = paged_expert_weights.gate_activation_rotation;
+        let up_activation_rotation = paged_expert_weights.up_activation_rotation;
+        let shared_gate_up_activations = if gate_activation_rotation
+            == Jangtq2CodebookRotation::Hadamard32
+            && up_activation_rotation == Jangtq2CodebookRotation::Hadamard32
+        {
+            // Both projections use the same input and transform, so build
+            // one rotated tensor and share it instead of repeating the
+            // blockwise Hadamard work for gate and up independently.
+            Some(
+                crate::jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                    &self.runtime,
+                    expert_inputs,
+                )?,
+            )
+        } else {
+            None
+        };
+        let gate_up_activations = shared_gate_up_activations.as_ref().unwrap_or(expert_inputs);
+        let gate_projection_rotation = if shared_gate_up_activations.is_some() {
+            Jangtq2CodebookRotation::NoRotation
+        } else {
+            gate_activation_rotation
+        };
+        let up_projection_rotation = if shared_gate_up_activations.is_some() {
+            Jangtq2CodebookRotation::NoRotation
+        } else {
+            up_activation_rotation
+        };
         let selected_up = self.streamed_expert_linear(
-            expert_inputs,
+            gate_up_activations,
             &paged_expert_weights.up_projection,
+            up_projection_rotation,
             expert_indices,
             indices_are_sorted,
             performance_attribution,
         )?;
         let selected_gate = self.streamed_expert_linear(
-            expert_inputs,
+            gate_up_activations,
             &paged_expert_weights.gate_projection,
+            gate_projection_rotation,
             expert_indices,
             indices_are_sorted,
             performance_attribution,
@@ -171,6 +203,7 @@ impl Qwen3_5Model {
         let selected_outputs = self.streamed_expert_linear(
             &selected_activated,
             &paged_expert_weights.down_projection,
+            paged_expert_weights.down_activation_rotation,
             expert_indices,
             indices_are_sorted,
             performance_attribution,
@@ -195,6 +228,7 @@ impl Qwen3_5Model {
         &self,
         activations: &MlxArray,
         affine_weights: &crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights,
+        activation_rotation: crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
@@ -208,6 +242,16 @@ impl Qwen3_5Model {
         } else {
             ExpertAssignmentOrder::Original
         };
+        let rotated_activation_owner = match activation_rotation {
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => Some(
+                crate::jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                    &self.runtime,
+                    activations,
+                )?,
+            ),
+        };
+        let projection_activations = rotated_activation_owner.as_ref().unwrap_or(activations);
         match affine_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 // The transpose is a lazy view from checkpoint linear layout to
@@ -215,7 +259,7 @@ impl Qwen3_5Model {
                 let transposed_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
                 Ok(gather_expert_projection(
                     &self.runtime,
-                    activations,
+                    projection_activations,
                     StackedExpertProjection::Dense {
                         transposed_weights: &transposed_weights,
                     },
@@ -232,7 +276,7 @@ impl Qwen3_5Model {
                 quantization_bits,
             } => Ok(gather_expert_projection(
                 &self.runtime,
-                activations,
+                projection_activations,
                 // Pass the streamed packed page directly to gather_qmm. Taking
                 // selected matrices first would recreate the memory expansion
                 // that gathered execution exists to avoid.

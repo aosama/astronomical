@@ -31,6 +31,8 @@ pub use vision_config::Qwen3_5VisionConfig;
 pub use vision_model::Qwen3_5VisionModel;
 pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles;
 #[cfg(feature = "direct-mlx")]
+pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model;
+#[cfg(feature = "direct-mlx")]
 pub use vision_weights::Qwen3_5VisionWeights;
 #[cfg(feature = "direct-mlx")]
 pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;

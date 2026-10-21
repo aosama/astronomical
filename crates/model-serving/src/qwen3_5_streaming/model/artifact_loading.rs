@@ -117,14 +117,19 @@ impl Qwen3_5Model {
                     Some(Qwen3_5VisionModel::load_from_model_shards(
                         &runtime,
                         vision_config,
+                        &config,
                         &model_shards,
                         &vision_tensor_name_to_shard_index,
                     )?)
                 } else {
                     None
                 };
-                let weights =
-                    Qwen3_5Weights::bind_from_model_shards(&config, &shard_index, model_shards)?;
+                let weights = Qwen3_5Weights::bind_from_model_shards(
+                    &runtime,
+                    &config,
+                    &shard_index,
+                    model_shards,
+                )?;
                 Ok((weights, vision_model))
             },
         )?;
@@ -328,9 +333,17 @@ impl Qwen3_5Model {
             )?,
             None => 0,
         };
-        let largest_complete_expert_layer_bytes = expert_pager
-            .as_ref()
-            .map_or(0, Qwen3_5ExpertPager::maximum_expert_page_bytes);
+        // The RAM owner's three-layer prefill floor is based on packed source
+        // payload geometry. The separately composed expert-page reservation
+        // carries decoded bfloat16 output and its temporary decode workspace.
+        let largest_complete_expert_layer_bytes = match expert_pager.as_ref() {
+            Some(expert_pager) => expert_pager
+                .maximum_complete_expert_source_payload_bytes()
+                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "complete expert source layer byte count overflowed during model load",
+                })?,
+            None => 0,
+        };
         let largest_routed_expert_page_bytes =
             expert_pager.as_ref().map_or(Ok(0), |expert_pager| {
                 expert_pager.maximum_routed_expert_page_bytes(

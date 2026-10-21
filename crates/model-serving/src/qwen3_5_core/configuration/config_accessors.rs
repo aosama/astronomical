@@ -2,8 +2,15 @@ use std::collections::BTreeMap;
 
 use super::config::{ModelWeightStorage, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 use super::quantizations::optiq::OptiQQuantizationProfile;
+use crate::jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 impl Qwen3_5Config {
+    /// Returns the explicitly declared jangtq2 RMSNorm storage convention.
+    #[must_use]
+    pub const fn jangtq2_rms_norm_convention(&self) -> Option<Jangtq2RmsNormConvention> {
+        self.jangtq2_rms_norm_convention
+    }
+
     /// Returns the activation dtype declared by the model config.
     #[must_use]
     pub fn activation_dtype(&self) -> &str {

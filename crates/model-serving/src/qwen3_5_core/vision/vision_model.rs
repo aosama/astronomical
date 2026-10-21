@@ -70,12 +70,14 @@ impl Qwen3_5VisionModel {
     pub fn load_from_model_shards(
         runtime: &astronomical_runtime_integration::MlxRuntime,
         vision_config: &Qwen3_5VisionConfig,
+        qwen3_5_config: &crate::qwen3_5_core::configuration::Qwen3_5Config,
         model_shards: &[astronomical_runtime_integration::MlxSafetensors],
         vision_tensor_name_to_shard_index: &std::collections::HashMap<String, usize>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let weights = Qwen3_5VisionWeights::load_from_model_shards(
             runtime,
             vision_config,
+            qwen3_5_config,
             model_shards,
             vision_tensor_name_to_shard_index,
         )?;
@@ -396,19 +398,7 @@ impl Qwen3_5VisionModel {
         input_states: &MlxArray,
         linear_prefix: &str,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let linear_weight = self.weights.tensor(&format!("{linear_prefix}.weight"))?;
-        let transposed_linear_weight = runtime.transpose_axes(linear_weight, &[1, 0])?;
-        let linear_bias = self.weights.tensor(&format!("{linear_prefix}.bias"))?;
-        // Use MLX's fused addmm (`mlx_addmm`) rather than spelling this as
-        // matmul+add. The fused accumulation/rounding path is part of numerical
-        // parity for BF16 checkpoint weights.
-        Ok(runtime.addmm(
-            linear_bias,
-            input_states,
-            &transposed_linear_weight,
-            1.0,
-            1.0,
-        )?)
+        self.weights.linear(runtime, input_states, linear_prefix)
     }
 
     fn pixel_values_column_count(&self) -> Result<usize, Qwen3_5ExecutionError> {

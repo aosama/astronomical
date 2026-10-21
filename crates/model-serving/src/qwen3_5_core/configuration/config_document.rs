@@ -8,7 +8,6 @@ use super::{
     },
     quantizations::optiq::{OptiQQuantizationConfig, QuantizationConfigSource},
 };
-
 const EXPECTED_MOE_TEXT_MODEL_TYPE: &str = "qwen3_5_moe_text";
 const EXPECTED_DENSE_TEXT_MODEL_TYPE: &str = "qwen3_5_text";
 const EXPECTED_HIDDEN_ACTIVATION: &str = "silu";
@@ -26,6 +25,8 @@ pub(super) struct Qwen3_5ConfigDocument {
     pub(super) quantization: Option<OptiQQuantizationConfig>,
     #[serde(default)]
     pub(super) quantization_config: Option<OptiQQuantizationConfig>,
+    #[serde(default)]
+    pub(super) norm_convention: Option<String>,
     pub(super) text_config: Qwen3_5TextConfig,
     pub(super) tie_word_embeddings: bool,
     #[serde(rename = "dtype", alias = "torch_dtype", default)]

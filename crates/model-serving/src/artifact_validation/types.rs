@@ -38,5 +38,10 @@ pub struct TensorProfile {
     /// them, and the loader normalizes the stored tensor into `shape` before
     /// execution; a permutation reorders the same values, so numerics are
     /// unchanged. Empty for tensors with one published form.
+    ///
+    /// Every entry must have a paired layout normalizer at weight binding —
+    /// accepting a published shape without one would silently bind a
+    /// layout-permuted tensor. Current pairs: `linear_attn.conv1d.weight`
+    /// (gated delta convolution) and `vision_tower.patch_embed.proj.weight`.
     pub equivalent_published_shapes: Vec<Vec<usize>>,
 }
