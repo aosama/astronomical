@@ -31,4 +31,4 @@ consumed in-process by the Cargo build scripts.
 The workflow structural contract is the typed Rust test
 `cargo test -p xtask --test workflow_structural_contract`; the restoration-reporter
 classification contract stays in `scripts/ci/tests/test-ci-native-cache-coordination.sh`,
-alongside the other CI contract tests; the remaining script tests stay in `tests/tooling_contracts/`.
+alongside the other CI contract tests; the remaining script tests stay in `verification/tooling_contracts/`.

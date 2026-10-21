@@ -450,10 +450,10 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin repository-contracts
           export PATH="$PWD/scripts/ci:$PATH"
-          tests/tooling_contracts/test-cargo-citation-contract.sh
-          tests/tooling_contracts/test-cargo-artifact-lifecycle-contract.sh
-          tests/tooling_contracts/test-channel-isolation-checker-contract.sh
-          tests/tooling_contracts/test-source-size-check.sh
+          verification/tooling_contracts/test-cargo-citation-contract.sh
+          verification/tooling_contracts/test-cargo-artifact-lifecycle-contract.sh
+          verification/tooling_contracts/test-channel-isolation-checker-contract.sh
+          verification/tooling_contracts/test-source-size-check.sh
           scripts/ci/tests/test-report-tier-pyramid-contract.sh
         timeout-minutes: 5
       # Observatory contracts stay in this required job until branch
