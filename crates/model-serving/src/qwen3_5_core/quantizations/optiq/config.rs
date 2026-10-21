@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use crate::jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
 use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 use crate::qwen3_5_core::configuration::config_validation::{
     Qwen3_5ConfigError, validate_exact_value,
@@ -66,19 +67,20 @@ pub trait QuantizationConfigSource {
 /// Supports both the original OptiQ-4bit format (explicit overrides for every
 /// module) and the newer mixed-precision format (sparse overrides where modules
 /// not listed use the default `bits` and `group_size`).
+///
+/// Per-module override entries parse through the jangtq2 family's entry
+/// type, which owns the three wire shapes that coexist in quantized bundles:
+/// MLX affine objects, jangtq2 codebook objects, and MLX loader boolean
+/// flags. That family owns every foreign-format rule; this document only
+/// resolves entries into OptiQ profiles and rejects codebook storage with
+/// an explicit not-yet-loadable error until its serving integration lands.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct OptiQQuantizationConfig {
     group_size: u32,
     bits: u32,
     mode: String,
     #[serde(flatten)]
-    module_overrides: BTreeMap<String, OptiQQuantizationOverride>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct OptiQQuantizationOverride {
-    group_size: u32,
-    bits: u32,
+    module_overrides: BTreeMap<String, Jangtq2WeightOverrideEntry>,
 }
 
 impl OptiQQuantizationConfig {
@@ -129,19 +131,32 @@ impl OptiQQuantizationConfig {
             });
         }
 
-        // Validate each override against the same affine parameters MLX accepts.
-        for (module_name, quantization_override) in &self.module_overrides {
-            if !is_mlx_affine_quantization_bit_width_supported(quantization_override.bits) {
+        // Validate each override. Affine entries are checked against the
+        // same MLX affine grid as before; codebook and loader-flag shapes
+        // delegate their own rules to the jangtq2 family, which owns that
+        // format end to end.
+        for (module_name, weight_override) in &self.module_overrides {
+            let Jangtq2WeightOverrideEntry::Affine { bits, group_size } = weight_override else {
+                weight_override.validate().map_err(|jangtq2_error| {
+                    Qwen3_5ConfigError::InvalidConfigValueDynamic {
+                        description: format!(
+                            "quantization module override `{module_name}`: {jangtq2_error}"
+                        ),
+                    }
+                })?;
+                continue;
+            };
+            if !is_mlx_affine_quantization_bit_width_supported(*bits) {
                 return Err(Qwen3_5ConfigError::UnsupportedQuantizationOverrideBits {
                     module_name: module_name.clone(),
-                    actual_value: quantization_override.bits,
+                    actual_value: *bits,
                 });
             }
-            if !is_mlx_affine_quantization_group_size_supported(quantization_override.group_size) {
+            if !is_mlx_affine_quantization_group_size_supported(*group_size) {
                 return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
                     description: format!(
                         "quantization module override '{module_name}' group_size is not supported by MLX affine quantization: {}",
-                        quantization_override.group_size
+                        group_size
                     ),
                 });
             }
@@ -158,14 +173,34 @@ impl OptiQQuantizationConfig {
             expected_quantized_module_names(config_source, feed_forward_architecture);
         let mut quantized_module_profiles = BTreeMap::new();
         for module_name in all_module_names {
-            let profile = match self.module_overrides.get(&module_name) {
-                Some(quantization_override) => OptiQQuantizationProfile {
-                    bits: quantization_override.bits,
-                    group_size: quantization_override.group_size,
-                },
-                None => default_profile,
+            let module_profile = match self.module_overrides.get(&module_name) {
+                Some(Jangtq2WeightOverrideEntry::Affine { bits, group_size }) => {
+                    OptiQQuantizationProfile {
+                        bits: *bits,
+                        group_size: *group_size,
+                    }
+                }
+                // A `false` flag marks native floating-point storage — the
+                // same bits=0 convention the shard-index resolver produces.
+                Some(Jangtq2WeightOverrideEntry::LoaderFlag(false)) => {
+                    OptiQQuantizationProfile::unquantized()
+                }
+                // A `true` flag defers to the document defaults, exactly
+                // like an unlisted module.
+                Some(Jangtq2WeightOverrideEntry::LoaderFlag(true)) | None => default_profile,
+                // Codebook storage has no affine profile; until its serving
+                // integration lands it must fail closed with a message that
+                // names the format and the module, rather than leaking a
+                // misleading scales/biases shape error downstream.
+                Some(Jangtq2WeightOverrideEntry::Codebook { .. }) => {
+                    return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
+                        description: format!(
+                            "module `{module_name}` is stored in the jangtq2 codebook format, which this build cannot load yet"
+                        ),
+                    });
+                }
             };
-            quantized_module_profiles.insert(module_name, profile);
+            quantized_module_profiles.insert(module_name, module_profile);
         }
 
         Ok(quantized_module_profiles)
