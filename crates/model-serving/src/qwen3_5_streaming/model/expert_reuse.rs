@@ -188,11 +188,13 @@ impl Qwen3_5Model {
         Ok((streamed_weights, streamed_manifest))
     }
 
-    /// Decode-only: stream the unique routed experts for this token without
-    /// displacing a seated complete layer, then offer them for hot-expert
-    /// retention so a later token can hit the warm table instead of re-reading
-    /// storage (issue #372). The offer honors the active residency plan: a
-    /// layer the plan streams operation-local or is releasing stays unwarmed.
+    /// Streams the unique routed experts for one forward without displacing a
+    /// seated complete layer, then offers them for hot-expert retention so a
+    /// later token can hit the warm table instead of re-reading storage
+    /// (issue #372). Decode tokens and multi-token routed-union prefill
+    /// chunks both arrive here. The offer honors the active residency plan:
+    /// a layer the plan streams operation-local or is releasing stays
+    /// unwarmed.
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
