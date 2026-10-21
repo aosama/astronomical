@@ -177,8 +177,13 @@ test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --
 # installed jangtq2 bundle against real shard headers, and the complete-layer
 # page-peak reservation guard. Set ASTRONOMICAL_JANGTQ2_MODEL_DIR to the
 # installed bundle directory first; the tests are ignored by default so
-# every offline lane runs without any model artifact.
-test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --lib jangtq2 -- --ignored --nocapture"
+# every offline lane runs without any model artifact. The lane builds the
+# direct-mlx library test binary (the tests themselves need no graphics
+# processor) so it shares an artifact variant with the other jangtq2 lanes
+# instead of adding a default-feature test binary to the local edit loop;
+# the filter names the plan contract module so the ignored throughput
+# measurements in the same binary never run here.
+test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --features direct-mlx --lib quantized_expert_layer_plan -- --ignored --nocapture"
 # test-jangtq2-decode-throughput: the bottom tier of the jangtq2 performance
 # pyramid — the codebook decode kernels themselves, measured on the graphics
 # processor with real page shapes (top-8 decode pages and complete-layer

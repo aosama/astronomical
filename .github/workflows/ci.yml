@@ -204,7 +204,11 @@ jobs:
             # that the trimmed directory plus cache-archive overhead stays
             # within budget.
             printf 'SCCACHE_CACHE_SIZE=%s\n' "400M"
-            # sccache rejects CARGO_INCREMENTAL=1; do not export it here.
+            # sccache refuses incremental compilation, and the workspace
+            # profiles leave incremental on for the local edit loop (the
+            # environment variable overrides the profile), so CI pins it
+            # off itself instead of depending on the manifest.
+            printf '%s\n' 'CARGO_INCREMENTAL=0'
           } >> "$GITHUB_ENV"
           printf 'identity=%s\n' "$native_build_identity" >> "$GITHUB_OUTPUT"
           printf '[native-build-identity] status=complete identity=%s elapsed_seconds=%s\n' \

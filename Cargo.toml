@@ -82,12 +82,19 @@ all = { level = "warn", priority = -1 }
 
 # Keep source-line backtraces for Astronomical code without retaining full
 # variable-level debug information or adjacent macOS dSYM generations.
-# Incremental compilation is disabled because this workspace exercises many
-# feature combinations and otherwise retains an unbounded artifact graph.
+#
+# Incremental compilation stays at Cargo's default (on) for the local edit
+# loop: a one-line edit to the serving crate rebuilds its direct-MLX test
+# binary in about 2 s incrementally against about 6.4 s from scratch
+# (measured on an Apple Silicon laptop), at roughly 0.4 GB of incremental
+# cache per compiled variant. The setting was off for a while because
+# sccache refuses incremental compilation; CI, which relies on sccache, now
+# pins CARGO_INCREMENTAL=0 in its own environment (the variable overrides
+# the profile), and a local machine that still wraps rustc with sccache
+# must do the same or drop the wrapper.
 [profile.dev]
 debug = "line-tables-only"
 split-debuginfo = "off"
-incremental = false
 
 # Third-party dependencies do not need local debug information.
 [profile.dev.package."*"]
@@ -95,11 +102,10 @@ debug = false
 
 # Tests share target/debug with development builds. Give them the same bounded
 # diagnostics policy so acceptance feature combinations do not recreate the
-# object-file and incremental-cache growth avoided by the development profile.
+# object-file growth avoided by the development profile.
 [profile.test]
 debug = "line-tables-only"
 split-debuginfo = "off"
-incremental = false
 
 [profile.test.package."*"]
 debug = false
