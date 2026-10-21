@@ -43,6 +43,10 @@ impl Qwen3_5ExpertPager {
         // transient growth. Loading first would spend I/O on an unusable page.
         let decoded_codebook_weight_shapes =
             layer_plan.jangtq2_decoded_weight_page_shapes(expert_ids.len())?;
+        let decode_workspace_tensor_shapes =
+            layer_plan.jangtq2_decode_workspace_page_shapes(expert_ids.len())?;
+        let output_assembly_copy_count =
+            layer_plan.jangtq2_decoded_output_assembly_copy_count(expert_ids.len());
         let decoder_index_tensor_shapes = decoded_codebook_weight_shapes
             .iter()
             .map(|decoded_weight_shape| {
@@ -53,11 +57,13 @@ impl Qwen3_5ExpertPager {
             })
             .collect::<Vec<_>>();
         // The memory owner calculates persistent bfloat16 output storage plus
-        // the largest one-projection decode workspace and the decoder's small
+        // the largest one-block decode workspace and the decoder's small
         // auxiliary arrays. The packed page remains live while it is decoded.
         let pending_page_allocation_bytes = crate::memory::expert_page_peak_allocation_bytes(
             page_manifest.payload_byte_count,
             &decoded_codebook_weight_shapes,
+            &decode_workspace_tensor_shapes,
+            output_assembly_copy_count,
             size_of::<u16>(),
             crate::jangtq2_qwen35::mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
             size_of::<u32>(),

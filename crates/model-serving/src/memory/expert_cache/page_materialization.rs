@@ -9,12 +9,23 @@
 /// converts those facts to bytes and adds both workspaces to persistent output
 /// storage.
 ///
+/// `decode_workspace_tensor_shapes` describes one staged decoder block's
+/// shapes, not the page: a decoder that walks the page in expert blocks keeps
+/// only one block of temporaries live at a time, so the workspace follows the
+/// block size. `output_assembly_copy_count` covers the final assembly step
+/// for multi-block decodes: while block outputs concatenate into the page
+/// tensor, the largest projection's output exists both as block inputs and as
+/// the page being written, so a count of two prices that transient second
+/// copy; single-block decodes never assemble and pass one.
+///
 /// Returns `None` when a tensor shape is empty, has a zero dimension, or any
 /// element-count or byte-count arithmetic overflows.
 #[must_use]
 pub fn expert_page_peak_allocation_bytes(
     loaded_source_payload_bytes: u64,
-    decoded_tensor_shapes: &[Vec<usize>],
+    persisted_tensor_shapes: &[Vec<usize>],
+    decode_workspace_tensor_shapes: &[Vec<usize>],
+    output_assembly_copy_count: u64,
     bytes_per_persisted_element: usize,
     maximum_simultaneous_temporary_array_count: usize,
     bytes_per_temporary_element: usize,
@@ -27,6 +38,7 @@ pub fn expert_page_peak_allocation_bytes(
         || bytes_per_temporary_element == 0
         || simultaneous_decoder_index_array_count == 0
         || bytes_per_decoder_index_element == 0
+        || output_assembly_copy_count == 0
     {
         return None;
     }
@@ -36,13 +48,20 @@ pub fn expert_page_peak_allocation_bytes(
     let decoder_index_bytes_per_element =
         simultaneous_decoder_index_array_count.checked_mul(bytes_per_decoder_index_element)?;
     let persisted_output_bytes =
-        total_tensor_storage_bytes(decoded_tensor_shapes, bytes_per_persisted_element)?;
+        total_tensor_storage_bytes(persisted_tensor_shapes, bytes_per_persisted_element)?;
+    let largest_persisted_tensor_bytes =
+        maximum_tensor_storage_bytes(persisted_tensor_shapes, bytes_per_persisted_element)?;
+    // Only the second and further copies of the largest projection are extra:
+    // the first copy is already part of the persisted total above.
+    let output_assembly_transient_bytes = largest_persisted_tensor_bytes
+        .checked_mul(output_assembly_copy_count.saturating_sub(1))?;
     let largest_single_tensor_workspace_bytes =
-        maximum_tensor_storage_bytes(decoded_tensor_shapes, temporary_bytes_per_element)?;
+        maximum_tensor_storage_bytes(decode_workspace_tensor_shapes, temporary_bytes_per_element)?;
     let largest_decoder_index_workspace_bytes =
         maximum_tensor_storage_bytes(decoder_index_tensor_shapes, decoder_index_bytes_per_element)?;
     loaded_source_payload_bytes
         .checked_add(persisted_output_bytes)?
+        .checked_add(output_assembly_transient_bytes)?
         .checked_add(largest_single_tensor_workspace_bytes)?
         .checked_add(largest_decoder_index_workspace_bytes)
 }

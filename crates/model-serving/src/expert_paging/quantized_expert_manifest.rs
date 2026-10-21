@@ -490,6 +490,32 @@ impl QuantizedExpertLayerPlan {
             })
             .collect()
     }
+
+    /// Returns the decoded output shapes for one staged decoder block of each
+    /// codebook tensor in a page.
+    ///
+    /// The decoder walks pages larger than the family block size one block at
+    /// a time, so the transient decode workspace follows the block's shape,
+    /// not the page's. Memory policy combines these shapes with the decoder's
+    /// simultaneous-temporary count to bound the workspace term of a page
+    /// peak, while the persisted shapes above bound the resident term.
+    pub fn jangtq2_decode_workspace_page_shapes(
+        &self,
+        selected_expert_count: usize,
+    ) -> Result<Vec<Vec<usize>>, ExpertManifestError> {
+        let block_expert_count =
+            crate::jangtq2_qwen35::codebook::decode_block_expert_count(selected_expert_count);
+        self.jangtq2_decoded_weight_page_shapes(block_expert_count)
+    }
+
+    /// Returns the decoded-output copy count the decoder's final block
+    /// assembly needs for a page of this many experts.
+    pub fn jangtq2_decoded_output_assembly_copy_count(
+        &self,
+        selected_expert_count: usize,
+    ) -> u64 {
+        crate::jangtq2_qwen35::codebook::decoded_output_assembly_copy_count(selected_expert_count)
+    }
 }
 
 /// Supported quantization modes for expert weight loading.

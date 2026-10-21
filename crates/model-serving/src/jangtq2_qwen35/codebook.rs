@@ -165,6 +165,74 @@ pub fn decoded_weight_page_shape(
     ])
 }
 
+/// Maximum number of selected experts decoded per staged block.
+///
+/// Complete-layer prefill pages carry every expert of a layer (256 on the
+/// served Qwen3.5 Mixture-of-Experts geometry). Decoding such a page as one
+/// staged chain would size the full-width temporary workspace at the whole
+/// page — roughly 9.7 GB per projection on that geometry — which page
+/// admission then has to reserve before any expert can load, and which is
+/// exactly the reservation that pushed prefill into one-token chunks. The
+/// decoder instead walks the page in blocks of this many experts: every stage
+/// is numerically identical (same operations, same order, on expert slices),
+/// but the transient workspace shrinks proportionally to the block size while
+/// the decoded output stays identical bit for bit. Thirty-two keeps the
+/// top-eight routed decode page (the per-token hot path) on the single-block
+/// path with zero added work.
+pub const JANGTQ2_DECODE_BLOCK_EXPERT_COUNT: usize = 32;
+
+/// Returns the number of experts one staged decode block carries for a page.
+#[must_use]
+pub const fn decode_block_expert_count(selected_expert_count: usize) -> usize {
+    if selected_expert_count < JANGTQ2_DECODE_BLOCK_EXPERT_COUNT {
+        selected_expert_count
+    } else {
+        JANGTQ2_DECODE_BLOCK_EXPERT_COUNT
+    }
+}
+
+/// Returns how many copies of one projection's decoded output coexist when
+/// the final block outputs are assembled into the page tensor.
+///
+/// Single-block pages return the block result directly and never assemble, so
+/// only the persisted output exists. Multi-block pages concatenate detached
+/// block outputs: during that concatenation the block inputs and the page
+/// output are live together, so the largest projection's output transiently
+/// exists twice. Page admission multiplies this count into its peak.
+#[must_use]
+pub const fn decoded_output_assembly_copy_count(selected_expert_count: usize) -> u64 {
+    if selected_expert_count > JANGTQ2_DECODE_BLOCK_EXPERT_COUNT {
+        2
+    } else {
+        1
+    }
+}
+
+/// Maximum number of full-width temporary arrays the staged decoder holds
+/// simultaneously within one expert block.
+///
+/// The high-word shift overlaps the retained low-word result with its source
+/// and output; subsequent bitwise stages also hold two inputs and one output.
+/// Within one expert block the gathered packed block plus the two shifted
+/// words bound the coexistence the same way. The final bfloat16 page is
+/// accounted for as persisted output, not workspace. The six one-dimensional
+/// index arrays are accounted for separately by page admission.
+pub const MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT: usize = 3;
+
+/// Maximum number of decoder-owned arrays smaller than one full decoded
+/// weight that are live simultaneously.
+///
+/// The six one-dimensional code index arrays, the codebook level table, the
+/// current block's float32 row scales, the expanded scale operand, and the
+/// small block gather index that selects one expert block's rows and outlives
+/// that block's chain. Each is bounded by the larger of the decoded input
+/// width and the row count admission reserves (the page-level expert-times-row
+/// count, which conservatively covers every block), and the input width is at
+/// least 32 while the level table holds at most 16 entries and the gather
+/// index at most the block size, so nine width-sized reservations strictly
+/// cover every combination, including a synthetic single-row page.
+pub const JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT: usize = 9;
+
 /// Returns the codes-per-group constant used by the bitstream layout.
 #[must_use]
 pub const fn codes_per_group() -> u32 {
