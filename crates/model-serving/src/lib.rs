@@ -52,6 +52,14 @@ pub(crate) mod persistent_cache;
 
 pub mod prism_hadamard_qwen35;
 
+// The jangtq2 family ships its configuration parsing, codebook math,
+// rotation, and artifact contract as crate API ahead of the serving-path
+// integration, mirroring the prism pattern above: the family owns its
+// weight contract end to end and the standard qwen3_5 family only
+// delegates to it.
+
+pub mod jangtq2_qwen35;
+
 pub(crate) mod qwen3_5_core;
 
 // The sensitivity probe adapter for the quantization crate (the OptiQ port):
@@ -236,15 +244,15 @@ pub use memory::{
     bounded_output_reservation_token_count, classify_expert_memory_mode,
     combined_persistent_growth_bytes, complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
-    effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
-    expert_reclamation_bytes_to_fit_fixed_forward,
+    decode_warm_floor_eviction_indexes, effective_mlx_memory_ceiling_after_wired_claim,
+    effective_mlx_memory_ceiling_bytes, expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure,
     geometry_safe_minimum_mlx_memory_ceiling_bytes, hot_expert_warm_slot_count,
     machine_ceiling_from_physical_ram_bytes, measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
-    next_paged_expert_reclamation_step, persistent_context_restore_workspace_bytes,
-    plan_expert_residency, plan_previous_token_prefetch,
-    projected_active_memory_after_complete_expert_replacement,
+    minimum_decode_warm_slot_count, next_paged_expert_reclamation_step,
+    persistent_context_restore_workspace_bytes, plan_expert_residency,
+    plan_previous_token_prefetch, projected_active_memory_after_complete_expert_replacement,
     publish_request_stable_residency_plan, request_context_temporary_workspace_bytes,
     required_complete_residency_activation_headroom_bytes,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,

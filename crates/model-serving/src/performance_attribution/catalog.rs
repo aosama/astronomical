@@ -83,6 +83,12 @@ pub enum PerformanceOperation {
     DecodeSharedExpertGraphicsProcessorCompletionWait,
     DecodeFusedValueExpertDecode,
     DecodeFusedRoutedExpertDecode,
+    /// One decode token's jangtq2 routed projection multiplied straight from
+    /// packed codes by the fused gathered projection kernel.
+    DecodeFusedJangtq2GatheredProjection,
+    /// A multi-token forward decoding one jangtq2 codebook page to a
+    /// transient bfloat16 copy before `gather_mm`.
+    Jangtq2CodebookPageDecode,
     DecodeSamplingSpan,
     AttentionForwardSpan,
     SlidingWindowMaskConstruction,
@@ -217,6 +223,8 @@ impl PerformanceOperation {
         Self::DecodeSharedExpertGraphicsProcessorCompletionWait,
         Self::DecodeFusedValueExpertDecode,
         Self::DecodeFusedRoutedExpertDecode,
+        Self::DecodeFusedJangtq2GatheredProjection,
+        Self::Jangtq2CodebookPageDecode,
         Self::DecodeSamplingSpan,
         Self::AttentionForwardSpan,
         Self::SlidingWindowMaskConstruction,
@@ -421,6 +429,10 @@ impl PerformanceOperation {
             }
             Self::DecodeFusedValueExpertDecode => "decode_fused_value_expert_decode",
             Self::DecodeFusedRoutedExpertDecode => "decode_fused_routed_expert_decode",
+            Self::DecodeFusedJangtq2GatheredProjection => {
+                "decode_fused_jangtq2_gathered_projection"
+            }
+            Self::Jangtq2CodebookPageDecode => "jangtq2_codebook_page_decode",
             Self::DecodeSamplingSpan => "decode_sampling_span",
             Self::AttentionForwardSpan => "attention_forward_span",
             Self::SlidingWindowMaskConstruction => "sliding_window_mask_construction",

@@ -117,14 +117,19 @@ impl Qwen3_5Model {
                     Some(Qwen3_5VisionModel::load_from_model_shards(
                         &runtime,
                         vision_config,
+                        &config,
                         &model_shards,
                         &vision_tensor_name_to_shard_index,
                     )?)
                 } else {
                     None
                 };
-                let weights =
-                    Qwen3_5Weights::bind_from_model_shards(&config, &shard_index, model_shards)?;
+                let weights = Qwen3_5Weights::bind_from_model_shards(
+                    &runtime,
+                    &config,
+                    &shard_index,
+                    model_shards,
+                )?;
                 Ok((weights, vision_model))
             },
         )?;
@@ -328,16 +333,40 @@ impl Qwen3_5Model {
             )?,
             None => 0,
         };
-        let largest_complete_expert_layer_bytes = expert_pager
-            .as_ref()
-            .map_or(0, Qwen3_5ExpertPager::maximum_expert_page_bytes);
+        // The RAM owner's three-layer prefill floor is based on packed source
+        // payload geometry. The separately composed expert-page reservation
+        // carries the decoded bfloat16 output a forward materializes.
+        let largest_complete_expert_layer_bytes = match expert_pager.as_ref() {
+            Some(expert_pager) => expert_pager
+                .maximum_complete_expert_source_payload_bytes()
+                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "complete expert source layer byte count overflowed during model load",
+                })?,
+            None => 0,
+        };
+        let fused_jangtq2_gathered_projection_kernel =
+            expert_pager.as_ref().and_then(|expert_pager| {
+                fused_jangtq2_gathered_projection_kernel_for_pager(
+                    &runtime,
+                    expert_pager,
+                    performance_attribution,
+                )
+            });
+        if let Some(expert_pager) = expert_pager.as_ref() {
+            expert_pager.set_decode_tokens_multiply_packed_pages(
+                fused_jangtq2_gathered_projection_kernel.is_some(),
+            );
+        }
         let largest_routed_expert_page_bytes =
             expert_pager.as_ref().map_or(Ok(0), |expert_pager| {
+                // The load-time budget is taken before the fused kernel
+                // verdict, so it keeps the conservative decode peak.
                 expert_pager.maximum_routed_expert_page_bytes(
                     usize::try_from(config.experts_per_token()).unwrap_or(usize::MAX),
+                    true,
                 )
             })?;
-        let mlx_ram_budget = MlxRamBudget::new(
+        let mut mlx_ram_budget = MlxRamBudget::new(
             u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidInput {
                     description: "MLX active memory ceiling exceeds the u64 range",
@@ -359,6 +388,16 @@ impl Qwen3_5Model {
         .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
             description: "MLX RAM budget requires a positive active-memory ceiling",
         })?;
+        if let Some(expert_pager) = expert_pager.as_ref() {
+            // A multi-token forward decodes the complete-layer page it
+            // multiplies, so the prefill plan must keep that page's peak
+            // (packed source plus decoded output) out of the expert budget;
+            // the packed-source slot alone seated experts into the decode's
+            // space and every chunk had to reclaim a layer before it could run.
+            mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(
+                expert_pager.maximum_expert_page_bytes(),
+            );
+        }
         Ok(Self {
             base: Qwen3_5ModelBase {
                 runtime,
@@ -390,7 +429,55 @@ impl Qwen3_5Model {
             paged_forward_missing_route_collector:
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
+            fused_jangtq2_gathered_projection_kernel,
         })
+    }
+}
+
+/// Builds the fused jangtq2 decode-token projection kernel when the pager has
+/// codebook experts, the worker's capability verdict allows it, and the
+/// diagnostic kill switch is not set. A demoted kernel leaves `None`, and
+/// decode tokens then decode a transient bfloat16 page exactly like prefill.
+fn fused_jangtq2_gathered_projection_kernel_for_pager(
+    runtime: &MlxRuntime,
+    expert_pager: &Qwen3_5ExpertPager,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Option<crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel>
+{
+    let has_codebook_experts = expert_pager.layer_plans().iter().any(|layer_plan| {
+        ["gate_proj", "up_proj", "down_proj"]
+            .iter()
+            .any(|projection_name| {
+                layer_plan.quantization_mode_for_projection(projection_name)
+                    == crate::expert_paging::QuantizationMode::Jangtq2Codebook
+            })
+    });
+    if !has_codebook_experts {
+        return None;
+    }
+    if std::env::var("ASTRONOMICAL_JANGTQ2_FUSED_PROJECTION").is_ok_and(|value| value == "0") {
+        tracing::info!(
+            "fused jangtq2 gathered projection disabled by ASTRONOMICAL_JANGTQ2_FUSED_PROJECTION=0; decode tokens decode transient pages"
+        );
+        return None;
+    }
+    if !kernel_capability::worker_process_kernel_capabilities(runtime, performance_attribution)
+        .is_custom_kernel_supported(CustomMetalKernelFamily::FusedJangtq2GatheredProjection)
+    {
+        tracing::info!(
+            "fused jangtq2 gathered projection kernel demoted to the materializing decoder for this worker process"
+        );
+        return None;
+    }
+    match crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel::new() {
+        Ok(kernel) => Some(kernel),
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "fused jangtq2 gathered projection kernel failed to compile after a passing probe; using the materializing decoder"
+            );
+            None
+        }
     }
 }
 

@@ -229,3 +229,86 @@ fn should_resolve_the_sparse_override_router_as_unquantized() {
     assert_eq!(switch_mlp_profile.bits, 6);
     assert_eq!(switch_mlp_profile.group_size, 64);
 }
+
+#[test]
+fn should_resolve_a_jangtq2_codebook_module_into_a_codebook_profile() {
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
+    config_value["quantization"]["language_model.model.layers.0.mlp.switch_mlp.gate_proj"] =
+        json!({"mode": "jangtq2", "bits": 2, "rotation": "hadamard32"});
+    config_value["quantization_config"] = config_value["quantization"].clone();
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the modified Ornith config should serialize as JSON");
+
+    // The jangtq2 entry parses and resolves into a codebook codec profile
+    // carrying its bit width and rotation; the format's tensor shapes and
+    // decode rules belong to the jangtq2 family reached through the codec.
+    let config =
+        Qwen3_5Config::from_json_bytes(&config_bytes).expect("the codebook entry must resolve");
+    let codebook_profile = config
+        .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.gate_proj");
+    assert_eq!(codebook_profile.bits, 2);
+    assert_eq!(codebook_profile.group_size, 0);
+    assert!(codebook_profile.is_jangtq2_codebook());
+    // A neighbouring affine module keeps its ordinary affine profile.
+    let affine_profile = config
+        .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.up_proj");
+    assert_eq!(
+        affine_profile.weight_codec,
+        crate::qwen3_5_core::quantizations::optiq::ModuleWeightCodec::MlxAffineQuantized
+    );
+    assert_eq!(affine_profile.bits, 6);
+    assert_eq!(affine_profile.group_size, 64);
+}
+
+#[test]
+fn should_resolve_a_native_floating_point_flag_to_an_unquantized_profile() {
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
+    config_value["quantization"]["language_model.model.layers.0.mlp.gate"] = json!(false);
+    config_value["quantization_config"] = config_value["quantization"].clone();
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the modified Ornith config should serialize as JSON");
+    let config = Qwen3_5Config::from_json_bytes(&config_bytes).expect("loader flags must parse");
+
+    let gate_profile =
+        config.quantization_profile_for_module("language_model.model.layers.0.mlp.gate");
+    assert_eq!(gate_profile.bits, 0);
+    assert!(gate_profile.is_unquantized());
+}
+
+#[test]
+fn should_resolve_a_default_quantization_flag_to_the_document_default() {
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
+    // The frozen config overrides the gate to 8-bit; a `true` flag drops
+    // that override and defers to the 6-bit document default.
+    config_value["quantization"]["language_model.model.layers.0.mlp.gate"] = json!(true);
+    config_value["quantization_config"] = config_value["quantization"].clone();
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the modified Ornith config should serialize as JSON");
+    let config = Qwen3_5Config::from_json_bytes(&config_bytes).expect("loader flags must parse");
+
+    let gate_profile =
+        config.quantization_profile_for_module("language_model.model.layers.0.mlp.gate");
+    assert_eq!(gate_profile.bits, 6);
+    assert_eq!(gate_profile.group_size, 64);
+}
+
+#[test]
+fn should_keep_parsing_affine_entries_that_repeat_the_affine_mode() {
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen test config should decode as JSON");
+    config_value["quantization"]["language_model.model.layers.0.mlp.switch_mlp.up_proj"] =
+        json!({"mode": "affine", "bits": 4, "group_size": 32});
+    config_value["quantization_config"] = config_value["quantization"].clone();
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the modified Ornith config should serialize as JSON");
+    let config = Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("affine entries restating their mode must keep parsing");
+
+    let up_proj_profile = config
+        .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.up_proj");
+    assert_eq!(up_proj_profile.bits, 4);
+    assert_eq!(up_proj_profile.group_size, 32);
+}

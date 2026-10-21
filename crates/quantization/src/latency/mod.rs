@@ -128,6 +128,10 @@ pub fn estimate_module_operations(
 /// dispatch overhead. Prefill is operations over effective peak (×0.85 at or
 /// below 3 bits, ×0.95 at 8 bits) plus dispatch overhead. Arithmetic
 /// intensity is decode operations over decode bytes.
+// The signature mirrors the reference estimator's inputs one for one so the
+// port stays a line-by-line comparison; a parameter struct would hide that
+// correspondence while the body is still being ported.
+#[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn estimate_module_latency(
     module_name: &str,

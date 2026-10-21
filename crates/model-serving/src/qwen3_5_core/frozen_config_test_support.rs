@@ -346,6 +346,7 @@ pub(crate) fn frozen_dense_qwen3_6_config() -> Qwen3_5Config {
 
 pub(crate) fn expected_qwen3_5_language_tensor_profiles() -> Vec<crate::TensorProfile> {
     qwen3_5_language_tensor_profiles(&frozen_ornith_1_0_config())
+        .expect("the frozen ornith 1.0 language tensor profiles should build")
 }
 
 /// A one-pixel red PNG used as the synthetic vision fixture.

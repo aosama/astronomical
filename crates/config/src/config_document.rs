@@ -58,10 +58,10 @@ impl UserConfigFile {
     }
 
     pub(crate) fn validate(&self) -> Result<(), AstronomicalConfigError> {
-        if let Some(prompt_cache) = &self.prompt_cache {
-            if let Some(maximum_size_gb) = prompt_cache.maximum_size_gb {
-                crate::prompt_cache_size_gb_to_bytes(maximum_size_gb)?;
-            }
+        if let Some(prompt_cache) = &self.prompt_cache
+            && let Some(maximum_size_gb) = prompt_cache.maximum_size_gb
+        {
+            crate::prompt_cache_size_gb_to_bytes(maximum_size_gb)?;
         }
         if self
             .diagnostics

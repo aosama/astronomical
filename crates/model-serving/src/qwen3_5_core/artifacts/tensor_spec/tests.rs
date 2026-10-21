@@ -14,7 +14,8 @@ use super::*;
 fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() {
     let ornith_config = frozen_ornith_1_0_config();
 
-    let tensor_profiles = qwen3_5_language_tensor_profiles(&ornith_config);
+    let tensor_profiles = qwen3_5_language_tensor_profiles(&ornith_config)
+        .expect("the frozen ornith language tensor profiles should build");
     let tensor_profile_by_name = tensor_profile_by_name(&tensor_profiles);
 
     assert_eq!(tensor_profiles.len(), 1_757);
@@ -36,6 +37,11 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
         "language_model.model.layers.0.linear_attn.conv1d.weight",
         TensorDtype::ModelFloat,
         &[8_192, 4, 1],
+    );
+    assert_eq!(
+        tensor_profile_by_name["language_model.model.layers.0.linear_attn.conv1d.weight"]
+            .equivalent_published_shapes,
+        [vec![8_192, 1, 4]]
     );
     assert_tensor(
         &tensor_profile_by_name,
@@ -165,7 +171,8 @@ fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() 
 fn should_exclude_sparse_expert_tensors_from_every_resident_profile() {
     let ornith_config = frozen_ornith_1_0_config();
 
-    let resident_tensor_profiles = qwen3_5_resident_language_tensor_profiles(&ornith_config);
+    let resident_tensor_profiles = qwen3_5_resident_language_tensor_profiles(&ornith_config)
+        .expect("the frozen ornith resident language tensor profiles should build");
     let resident_tensor_profile_by_name = tensor_profile_by_name(&resident_tensor_profiles);
 
     assert_eq!(resident_tensor_profiles.len(), 1_397);

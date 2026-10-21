@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
 
 use astronomical_runtime_integration::MlxRuntime;
@@ -50,12 +51,25 @@ impl Qwen3_5ExpertPager {
         )?;
 
         // Streaming workspace and temporary decode routes are bounded by complete
-        // layer geometry. Track the largest complete layer so budgets and telemetry
-        // describe whole-layer ownership rather than one routed top-K page.
+        // layer geometry: the packed source ownership plus the decoded
+        // bfloat16 output a multi-token forward materializes for the layer.
         let maximum_expert_page_bytes = layer_plans.iter().try_fold(
             0u64,
             |maximum_expert_page_bytes, layer_plan| -> Result<_, ExpertPagingError> {
-                Ok(maximum_expert_page_bytes.max(layer_plan.complete_expert_payload_byte_count()?))
+                let complete_source_payload_bytes =
+                    layer_plan.complete_expert_payload_byte_count()?;
+                let decoded_codebook_weight_shapes =
+                    layer_plan.jangtq2_decoded_weight_page_shapes(layer_plan.expert_capacity)?;
+                let complete_page_peak_allocation_bytes =
+                    crate::memory::expert_page_peak_allocation_bytes(
+                        complete_source_payload_bytes,
+                        &decoded_codebook_weight_shapes,
+                        size_of::<u16>(),
+                    )
+                    .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+                        description: "complete expert-page allocation size overflowed".to_owned(),
+                    })?;
+                Ok(maximum_expert_page_bytes.max(complete_page_peak_allocation_bytes))
             },
         )?;
         let memory_budget = MlxAllocationAdmission::new(
@@ -67,6 +81,9 @@ impl Qwen3_5ExpertPager {
             layer_plans,
             memory_budget,
             resident_expert_source_files,
+            // Conservative until the model proves the fused kernel: every
+            // page prices its decode peak.
+            decode_tokens_multiply_packed_pages: std::cell::Cell::new(false),
         })
     }
 }

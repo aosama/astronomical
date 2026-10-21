@@ -6,7 +6,8 @@ use crate::qwen3_5_core::frozen_config_test_support::frozen_dense_qwen3_6_config
 fn should_generate_dense_qwen3_5_language_tensor_profiles_without_sparse_experts() {
     let dense_qwen3_6_config = frozen_dense_qwen3_6_config();
     let dense_tensor_profiles =
-        crate::qwen3_5_core::artifacts::qwen3_5_language_tensor_profiles(&dense_qwen3_6_config);
+        crate::qwen3_5_core::artifacts::qwen3_5_language_tensor_profiles(&dense_qwen3_6_config)
+            .expect("the frozen dense qwen3.6 language tensor profiles should build");
     let dense_intermediate_size = dense_qwen3_6_config.dense_intermediate_size() as usize;
     let hidden_size = dense_qwen3_6_config.hidden_size() as usize;
 

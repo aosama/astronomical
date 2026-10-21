@@ -15,6 +15,7 @@ fn should_profile_a_log_as_stored_model_float_when_decay_math_uses_float32() {
         .expect("the float32 mamba state dtype should be accepted");
 
     let a_log_tensor_profile = qwen3_5_language_tensor_profiles(&config)
+        .expect("the frozen config language tensor profiles should build")
         .into_iter()
         .find(|tensor_profile| {
             tensor_profile.name == "language_model.model.layers.0.linear_attn.A_log"

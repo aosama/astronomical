@@ -55,10 +55,12 @@ impl OptiQMetadata {
                     }
                     measured_module_profiles.insert(
                         module_name,
-                        OptiQQuantizationProfile {
-                            bits: quantization_override.bits,
-                            group_size: quantization_override.group_size,
-                        },
+                        // Measured metadata describes affine OptiQ runs;
+                        // codebook storage never carries measured metadata.
+                        OptiQQuantizationProfile::affine(
+                            quantization_override.bits,
+                            quantization_override.group_size,
+                        ),
                     );
                 }
                 Ok(Self {

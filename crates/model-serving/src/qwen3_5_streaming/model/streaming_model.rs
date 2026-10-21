@@ -45,6 +45,13 @@ pub struct Qwen3_5StreamingModel {
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation: RefCell<RouteObservationCollector>,
+    /// The fused jangtq2 decode-token projection kernel; `None` for models
+    /// without codebook experts, when the capability probe failed, or when
+    /// `ASTRONOMICAL_JANGTQ2_FUSED_PROJECTION=0` disables it for diagnosis.
+    /// Without it decode tokens decode a transient bfloat16 page like prefill.
+    pub(crate) fused_jangtq2_gathered_projection_kernel: Option<
+        crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
+    >,
 }
 
 impl std::ops::Deref for Qwen3_5StreamingModel {
@@ -99,6 +106,13 @@ impl Qwen3_5StreamingModel {
         self.hot_expert_warm_slot_count.get()
     }
 
+    /// Removes one retained expert layer, returning whether it existed.
+    pub(crate) fn remove_retained_expert_layer(&self, layer_index: usize) -> bool {
+        self.retained_experts
+            .as_ref()
+            .is_some_and(|retained_experts| retained_experts.borrow_mut().remove_layer(layer_index))
+    }
+
     /// Returns phase-correct sparse loading workspace for forward admission.
     pub(crate) fn expert_page_reservation_bytes_for_forward(
         &self,
@@ -108,10 +122,36 @@ impl Qwen3_5StreamingModel {
             return Ok(0);
         };
         if forward_token_count > 1 {
-            return Ok(expert_pager.maximum_expert_page_bytes());
+            // Multi-token forwards stream the chunk's routed-expert union,
+            // whose size is bounded by the assignment count (chunk tokens ×
+            // experts per token) clamped to the expert capacity — never the
+            // complete layer. Router output is lazy at admission time, so the
+            // bound stands in for the actual union; per-page admission later
+            // checks the exact expert count before any input/output (issue
+            // #1422: this reservation previously used the complete-layer
+            // peak, over-reserving every sub-complete chunk).
+            let experts_per_token =
+                usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
+            let expert_capacity = expert_pager
+                .layer_plans()
+                .first()
+                .map_or(0, |layer_plan| layer_plan.expert_capacity);
+            if experts_per_token == 0 || expert_capacity == 0 {
+                return Ok(expert_pager.maximum_expert_page_bytes());
+            }
+            let routed_union_expert_bound = forward_token_count
+                .saturating_mul(experts_per_token)
+                .min(expert_capacity)
+                .max(1);
+            return Ok(
+                expert_pager.maximum_routed_expert_page_bytes(routed_union_expert_bound, true)?
+            );
         }
+        // One decode token: with the fused kernel the page is never decoded,
+        // so the reservation is its packed source bytes.
         Ok(expert_pager.maximum_routed_expert_page_bytes(
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
+            !expert_pager.decode_tokens_multiply_packed_pages(),
         )?)
     }
 

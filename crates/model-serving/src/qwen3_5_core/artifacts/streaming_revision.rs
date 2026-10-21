@@ -27,7 +27,7 @@ use crate::artifact_validation::{
     ArtifactValidationError, RequiredFileProfile, ValidatedSafetensorsSource,
     hugging_face_snapshot_model_id, validate_required_file, validate_required_files,
 };
-use crate::qwen3_5_core::vision::qwen3_5_vision_tensor_profiles;
+use crate::qwen3_5_core::vision::vision_tensor_spec;
 
 /// On-disk format version of a converted per-expert streaming revision.
 const STREAMING_REVISION_FORMAT_VERSION: u32 = 3;
@@ -186,7 +186,7 @@ impl Qwen3_5ArtifactValidator {
                 serde_json::Value::String("resident.safetensors".to_owned()),
             );
         }
-        for tensor_profile in tensor_spec::qwen3_5_language_tensor_profiles(&config) {
+        for tensor_profile in tensor_spec::qwen3_5_language_tensor_profiles(&config)? {
             if tensor_profile.name.contains(".mlp.switch_mlp.") {
                 weight_map
                     .entry(tensor_profile.name.clone())
@@ -227,20 +227,24 @@ impl Qwen3_5ArtifactValidator {
         let index_bytes = serde_json::to_vec(&index_document)
             .map_err(|source| ArtifactValidationError::InvalidStreamingManifest { source })
             .map_err(Qwen3_5ArtifactValidationError::from)?;
-        let canonical_tensor_names =
-            Qwen3_5ShardIndex::extract_language_tensor_names_from_json(&index_bytes)?;
-        config.resolve_unquantized_modules_from_shard_index(&canonical_tensor_names);
-        let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config);
+        let canonical_model_tensor_names =
+            Qwen3_5ShardIndex::extract_language_and_vision_tensor_names_from_json(&index_bytes)?;
+        config.resolve_unquantized_modules_from_shard_index(&canonical_model_tensor_names);
+        let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config)?;
         let shard_index =
             Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)?;
         let validated_vision_tower_storage = vision_validation::validate_vision_tower_inventory(
             &shard_index,
             vision_config.as_ref(),
+            &config,
         )?;
         let has_separate_vision_sidecar = validated_vision_tower_storage.has_separate_sidecar();
         let vision_tensor_profiles = vision_config
             .as_ref()
-            .map(qwen3_5_vision_tensor_profiles)
+            .map(|vision_config| {
+                vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model(vision_config, &config)
+            })
+            .transpose()?
             .unwrap_or_default();
         let mut tensor_inventory = build_index_tensor_inventory(&shard_index)?;
         let sparse_expert_names: BTreeSet<String> = language_tensor_profiles

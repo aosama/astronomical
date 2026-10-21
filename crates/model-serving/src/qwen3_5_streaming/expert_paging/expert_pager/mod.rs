@@ -2,9 +2,14 @@
 
 mod rust_expert_streaming;
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod expert_subset_tests;
+
 pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
 
+use std::cell::Cell;
 use std::fs::File;
+use std::mem::size_of;
 use std::path::PathBuf;
 
 use astronomical_runtime_integration::MlxRuntimeError;
@@ -74,6 +79,12 @@ pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
     pub(super) memory_budget: MlxAllocationAdmission,
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
+    /// True once the model owns the fused jangtq2 gathered projection kernel:
+    /// single-token pages then multiply straight from their packed codes, so
+    /// their admission and reservation price only the packed source bytes.
+    /// Multi-token pages still decode a transient bfloat16 copy and keep the
+    /// full decode peak. The model sets this after the capability verdict.
+    pub(super) decode_tokens_multiply_packed_pages: Cell<bool>,
 }
 
 /// Exact compact or complete expert arrays loaded by Rust for one layer use.
@@ -82,6 +93,12 @@ pub struct Qwen3_5PagedExpertWeights {
     pub(crate) gate_projection: Qwen3_5AffineWeights,
     pub(crate) up_projection: Qwen3_5AffineWeights,
     pub(crate) down_projection: Qwen3_5AffineWeights,
+    pub(crate) gate_activation_rotation:
+        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    pub(crate) up_activation_rotation:
+        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    pub(crate) down_activation_rotation:
+        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
 }
 
 impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
@@ -93,6 +110,65 @@ impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
 }
 
 impl Qwen3_5PagedExpertWeights {
+    /// Builds the page holding only the experts at `page_slots` of this page,
+    /// in the given order, so a multi-token forward over a seated complete
+    /// layer decodes and multiplies the chunk's routed union instead of every
+    /// expert. Slots are validated against the page's expert axis up front;
+    /// the gathers themselves stay lazy.
+    pub(crate) fn select_experts(
+        &self,
+        runtime: &astronomical_runtime_integration::MlxRuntime,
+        page_slots: &[usize],
+    ) -> Result<Self, ExpertPagingError> {
+        let page_expert_count = self.gate_projection.expert_count();
+        if page_slots.is_empty() {
+            return Err(ExpertPagingError::InvalidPagingPlan {
+                description: "an expert subset must name at least one page slot".to_owned(),
+            });
+        }
+        let slot_indices = page_slots
+            .iter()
+            .map(|&page_slot| {
+                if page_slot >= page_expert_count {
+                    return Err(ExpertPagingError::InvalidPagingPlan {
+                        description: format!(
+                            "page slot {page_slot} is outside a page of {page_expert_count} experts"
+                        ),
+                    });
+                }
+                u32::try_from(page_slot).map_err(|_| ExpertPagingError::InvalidPagingPlan {
+                    description: "page slot exceeds the MLX index range".to_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let slot_count = i32::try_from(slot_indices.len()).map_err(|_| {
+            ExpertPagingError::InvalidPagingPlan {
+                description: "expert subset exceeds the MLX shape range".to_owned(),
+            }
+        })?;
+        let slot_index_array =
+            MlxArray::from_u32(&slot_indices, &[slot_count]).map_err(|error| {
+                ExpertPagingError::Runtime {
+                    description: error.to_string(),
+                }
+            })?;
+        let select = |projection: &Qwen3_5AffineWeights| {
+            projection
+                .select_experts(runtime, &slot_index_array)
+                .map_err(|error| ExpertPagingError::Runtime {
+                    description: error.to_string(),
+                })
+        };
+        Ok(Self {
+            gate_projection: select(&self.gate_projection)?,
+            up_projection: select(&self.up_projection)?,
+            down_projection: select(&self.down_projection)?,
+            gate_activation_rotation: self.gate_activation_rotation,
+            up_activation_rotation: self.up_activation_rotation,
+            down_activation_rotation: self.down_activation_rotation,
+        })
+    }
+
     pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
@@ -169,21 +245,73 @@ impl Qwen3_5ExpertPager {
         self.memory_budget.maximum_expert_page_bytes()
     }
 
-    /// Returns the largest exact page payload for one routed top-K set.
-    pub(crate) fn maximum_routed_expert_page_bytes(
+    /// Largest complete-layer packed source payload across the model's layers.
+    ///
+    /// Sizes the RAM owner's complete-layer streaming slot from on-disk source
+    /// geometry only. Decoded bfloat16 output is reserved separately through
+    /// the expert-page reservation, so the two roles cannot inflate each
+    /// other's budgets.
+    pub(crate) fn maximum_complete_expert_source_payload_bytes(
         &self,
-        experts_per_token: usize,
     ) -> Result<u64, ExpertPagingError> {
         self.layer_plans
             .iter()
-            .try_fold(0_u64, |largest_page_bytes, layer_plan| {
-                let complete_layer_payload_bytes =
-                    layer_plan.complete_expert_payload_byte_count()?;
+            .try_fold(0_u64, |largest_source_layer_bytes, layer_plan| {
+                Ok(
+                    largest_source_layer_bytes
+                        .max(layer_plan.complete_expert_payload_byte_count()?),
+                )
+            })
+    }
+
+    /// Records whether decode tokens multiply packed codebook pages directly.
+    pub(crate) fn set_decode_tokens_multiply_packed_pages(&self, multiplies_packed_pages: bool) {
+        self.decode_tokens_multiply_packed_pages
+            .set(multiplies_packed_pages);
+    }
+
+    /// Returns whether a page streamed for one decode token is used packed,
+    /// with no decoded output to admit.
+    pub(crate) fn decode_tokens_multiply_packed_pages(&self) -> bool {
+        self.decode_tokens_multiply_packed_pages.get()
+    }
+
+    /// Returns the largest peak allocation for one routed page of
+    /// `experts_per_token` experts. `materializes_decoded_weights` adds the
+    /// codebook decode output; a page the fused decode-token
+    /// kernel multiplies in packed form costs only its source bytes.
+    pub(crate) fn maximum_routed_expert_page_bytes(
+        &self,
+        experts_per_token: usize,
+        materializes_decoded_weights: bool,
+    ) -> Result<u64, ExpertPagingError> {
+        self.layer_plans
+            .iter()
+            .try_fold(0_u64, |largest_page_peak_bytes, layer_plan| {
                 let routed_expert_count = experts_per_token.min(layer_plan.expert_capacity);
-                let routed_page_bytes = u128::from(complete_layer_payload_bytes)
-                    .saturating_mul(routed_expert_count as u128)
-                    / (layer_plan.expert_capacity.max(1) as u128);
-                Ok(largest_page_bytes.max(u64::try_from(routed_page_bytes).unwrap_or(u64::MAX)))
+                let per_expert_source_bytes = layer_plan.expert_payload_byte_count()?;
+                let routed_source_page_bytes = crate::memory::source_expert_page_payload_bytes(
+                    per_expert_source_bytes,
+                    routed_expert_count,
+                )
+                .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+                    description: "routed expert source-page byte count overflowed".to_owned(),
+                })?;
+                if !materializes_decoded_weights {
+                    return Ok(largest_page_peak_bytes.max(routed_source_page_bytes));
+                }
+                let decoded_codebook_weight_shapes =
+                    layer_plan.jangtq2_decoded_weight_page_shapes(routed_expert_count)?;
+                let routed_page_peak_bytes = crate::memory::expert_page_peak_allocation_bytes(
+                    routed_source_page_bytes,
+                    &decoded_codebook_weight_shapes,
+                    size_of::<u16>(),
+                )
+                .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+                    description: "routed expert page peak allocation byte count overflowed"
+                        .to_owned(),
+                })?;
+                Ok(largest_page_peak_bytes.max(routed_page_peak_bytes))
             })
     }
 }

@@ -23,6 +23,12 @@ pub(super) fn build_index_tensor_inventory(
                 .vision_tensor_name_to_shard_file_name()
                 .iter()
                 .map(|(name, file_name)| (name, file_name, TensorSemanticRole::Vision)),
+        )
+        .chain(
+            shard_index
+                .auxiliary_tensor_name_to_shard_file_name()
+                .iter()
+                .map(|(name, file_name)| (name, file_name, TensorSemanticRole::Auxiliary)),
         );
     for (canonical_name, file_name, semantic_role) in declarations {
         let source_id = source_id_by_file_name
@@ -70,6 +76,11 @@ fn unique_indexed_file_names(shard_index: &Qwen3_5ShardIndex) -> Vec<String> {
         .language_tensor_name_to_shard_file_name()
         .values()
         .chain(shard_index.vision_tensor_name_to_shard_file_name().values())
+        .chain(
+            shard_index
+                .auxiliary_tensor_name_to_shard_file_name()
+                .values(),
+        )
         .cloned()
         .collect::<BTreeSet<_>>()
         .into_iter()

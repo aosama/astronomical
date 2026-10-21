@@ -7,6 +7,7 @@
 use crate::{
     AllocationAdmissionDecision, PerformanceAttribution, PerformanceCounter, PerformanceOperation,
 };
+use std::mem::size_of;
 
 use super::{ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5PagedExpertWeights};
 use crate::expert_paging::{
@@ -40,13 +41,36 @@ impl Qwen3_5ExpertPager {
         // the exact payload against current active memory and the shared ceiling;
         // forward admission has already reclaimed experts for persistent and
         // transient growth. Loading first would spend I/O on an unusable page.
+        let decoded_codebook_weight_shapes =
+            layer_plan.jangtq2_decoded_weight_page_shapes(expert_ids.len())?;
+        // A single decode token's page is multiplied in packed form by the
+        // fused gathered projection kernel, so only its source bytes are
+        // admitted. Every other page (multi-token prefill, or a worker whose
+        // kernel probe failed) decodes a transient bfloat16 copy at forward
+        // time: the memory owner then prices the persistent bfloat16 output
+        // with the packed page live throughout.
+        let page_is_multiplied_packed =
+            request_shape.route_token_count == 1 && self.decode_tokens_multiply_packed_pages();
+        let pending_page_allocation_bytes = if page_is_multiplied_packed {
+            page_manifest.payload_byte_count
+        } else {
+            crate::memory::expert_page_peak_allocation_bytes(
+                page_manifest.payload_byte_count,
+                &decoded_codebook_weight_shapes,
+                size_of::<u16>(),
+            )
+            .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+                description: "expert page plus jangtq2 decoded output byte count overflowed"
+                    .to_owned(),
+            })?
+        };
         let allocation_admission_decision = performance_attribution.measure_operation(
             PerformanceOperation::MemoryAdmissionSnapshot,
             |_performance_attribution| {
                 self.memory_budget.require_admission(
                     runtime,
                     &format!("rust_streamed_expert_layer_{layer_index}"),
-                    page_manifest.payload_byte_count,
+                    pending_page_allocation_bytes,
                 )
             },
         )?;
@@ -67,7 +91,7 @@ impl Qwen3_5ExpertPager {
                     self.memory_budget.require_admission(
                         runtime,
                         &format!("rust_streamed_expert_layer_{layer_index}_after_cleanup"),
-                        page_manifest.payload_byte_count,
+                        pending_page_allocation_bytes,
                     )
                 },
             )?;

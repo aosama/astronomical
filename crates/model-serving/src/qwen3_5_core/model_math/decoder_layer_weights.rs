@@ -24,6 +24,19 @@ pub(crate) enum Qwen3_5AffineWeights {
         quantization_bits: i32,
         quantization_group_size: i32,
     },
+    /// A jangtq2 codebook expert page kept in its packed on-disk form:
+    /// `[experts, output_rows, words]` uint32 codes plus `[experts, output_rows]`
+    /// float16 row scales. Routed experts only. The page is never decoded for
+    /// retention — decoded bfloat16 is eight times larger, which is what kept
+    /// the 122B bundle's expert set from fitting in RAM. Decode tokens
+    /// multiply straight from the codes through the fused gathered projection
+    /// kernel; multi-token prefill decodes a transient bfloat16 copy at
+    /// forward time and gathers through `gather_mm`.
+    Jangtq2Codebook {
+        packed_code_words: MlxArray,
+        row_scales: MlxArray,
+        codebook_bit_width: u32,
+    },
 }
 
 impl Qwen3_5AffineWeights {
@@ -45,7 +58,76 @@ impl Qwen3_5AffineWeights {
                 quantization_bits: *quantization_bits,
                 quantization_group_size: *quantization_group_size,
             }),
+            Self::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width,
+            } => Ok(Self::Jangtq2Codebook {
+                packed_code_words: packed_code_words.retain()?,
+                row_scales: row_scales.retain()?,
+                codebook_bit_width: *codebook_bit_width,
+            }),
         }
+    }
+
+    /// The size of the stacked expert axis (axis 0) of this projection.
+    pub(crate) fn expert_count(&self) -> usize {
+        let leading_dimension = match self {
+            Self::NativeBfloat16 { weight } => weight.shape().first().copied(),
+            Self::Quantized { packed_weight, .. } => packed_weight.shape().first().copied(),
+            Self::Jangtq2Codebook {
+                packed_code_words, ..
+            } => packed_code_words.shape().first().copied(),
+        };
+        leading_dimension
+            .and_then(|dimension| usize::try_from(dimension).ok())
+            .unwrap_or(0)
+    }
+
+    /// Gathers the experts named by `expert_axis_indices` (axis 0 of every
+    /// stacked array) into a new, smaller stacked owner, keeping the
+    /// representation and its metadata. The gather is lazy; the subset
+    /// materializes with whatever consumes it.
+    pub(crate) fn select_experts(
+        &self,
+        runtime: &astronomical_runtime_integration::MlxRuntime,
+        expert_axis_indices: &MlxArray,
+    ) -> Result<Self, MlxRuntimeError> {
+        Ok(match self {
+            Self::NativeBfloat16 { weight } => Self::NativeBfloat16 {
+                weight: runtime.take_axis(weight, expert_axis_indices, 0)?,
+            },
+            Self::Quantized {
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                quantization_bits,
+                quantization_group_size,
+            } => Self::Quantized {
+                packed_weight: runtime.take_axis(packed_weight, expert_axis_indices, 0)?,
+                quantization_scales: runtime.take_axis(
+                    quantization_scales,
+                    expert_axis_indices,
+                    0,
+                )?,
+                quantization_biases: runtime.take_axis(
+                    quantization_biases,
+                    expert_axis_indices,
+                    0,
+                )?,
+                quantization_bits: *quantization_bits,
+                quantization_group_size: *quantization_group_size,
+            },
+            Self::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width,
+            } => Self::Jangtq2Codebook {
+                packed_code_words: runtime.take_axis(packed_code_words, expert_axis_indices, 0)?,
+                row_scales: runtime.take_axis(row_scales, expert_axis_indices, 0)?,
+                codebook_bit_width: *codebook_bit_width,
+            },
+        })
     }
 
     pub(crate) fn append_array_references<'weights>(
@@ -63,6 +145,14 @@ impl Qwen3_5AffineWeights {
                 arrays.push(packed_weight);
                 arrays.push(quantization_scales);
                 arrays.push(quantization_biases);
+            }
+            Self::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                ..
+            } => {
+                arrays.push(packed_code_words);
+                arrays.push(row_scales);
             }
         }
     }

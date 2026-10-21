@@ -81,9 +81,32 @@ pub struct MlxRamBudget {
     pub(super) has_decode_activation_measurement: bool,
     /// Distinguishes "no evidence" from a valid measured value of zero.
     pub(super) has_context_window_measurement: bool,
+    /// What streaming one complete layer costs a multi-token forward when the
+    /// family decodes its page at forward time (packed source plus decoded
+    /// output); `None` keeps the packed source slot of the geometry. The
+    /// prefill residency budget subtracts this so experts are never seated
+    /// into the space the next chunk's decode needs back.
+    pub(super) prefill_complete_layer_stream_slot_bytes: Option<u64>,
 }
 
 impl MlxRamBudget {
+    /// Records the bytes one complete-layer page costs a multi-token forward
+    /// (packed source plus decoded output) so prefill plans reserve the whole
+    /// decode, not only the packed read. Activation headroom and the geometry
+    /// floor keep the packed-source geometry: the decoded output is transient
+    /// per layer and never part of resident payload.
+    pub fn set_prefill_complete_layer_stream_slot_bytes(&mut self, stream_slot_bytes: u64) {
+        self.prefill_complete_layer_stream_slot_bytes = Some(stream_slot_bytes);
+    }
+
+    /// The prefill streaming slot: the forward-time page peak when the family
+    /// declared one, otherwise one packed complete layer.
+    fn prefill_complete_layer_stream_slot_bytes(&self) -> u64 {
+        self.prefill_complete_layer_stream_slot_bytes
+            .unwrap_or(self.model_geometry.largest_complete_expert_layer_bytes)
+            .max(self.model_geometry.largest_complete_expert_layer_bytes)
+    }
+
     /// Creates the owner with bootstrap context-window reserve of 1 GB SI.
     pub fn new(
         mlx_active_memory_ceiling_bytes: u64,
@@ -111,6 +134,7 @@ impl MlxRamBudget {
             measured_context_window_high_water_by_token_bucket: BTreeMap::new(),
             prefill_activation_high_water_by_token_bucket: BTreeMap::new(),
             decode_activation_headroom_bytes: 0,
+            prefill_complete_layer_stream_slot_bytes: None,
             has_prefill_activation_measurement: false,
             has_decode_activation_measurement: false,
             has_context_window_measurement: false,
@@ -304,8 +328,7 @@ impl MlxRamBudget {
         let context_window_reserve_bytes = self.context_window_reserve_bytes(total_context_tokens);
         let activation_headroom_bytes = self
             .activation_headroom_bytes(MemoryPhase::Prefill, planned_prefill_operation_token_count);
-        let complete_layer_stream_slot_bytes =
-            self.model_geometry.largest_complete_expert_layer_bytes;
+        let complete_layer_stream_slot_bytes = self.prefill_complete_layer_stream_slot_bytes();
         let fixed_non_expert_bytes = self
             .model_geometry
             .model_core_payload_bytes
@@ -355,7 +378,7 @@ impl MlxRamBudget {
         let activation_headroom_bytes =
             self.activation_headroom_bytes(phase, operation_token_count);
         let complete_layer_stream_slot_bytes = match phase {
-            MemoryPhase::Prefill => self.model_geometry.largest_complete_expert_layer_bytes,
+            MemoryPhase::Prefill => self.prefill_complete_layer_stream_slot_bytes(),
             // GenerationPreparation budgets like decode (see phase.rs): token
             // writing needs the routed-page slot, not a complete-layer slot.
             MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {

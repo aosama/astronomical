@@ -296,17 +296,7 @@ fn linear(
     input_states: &MlxArray,
     linear_prefix: &str,
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-    let linear_weight = vision_weights.tensor(&format!("{linear_prefix}.weight"))?;
-    let transposed_linear_weight = runtime.transpose_axes(linear_weight, &[1, 0])?;
-    let linear_bias = vision_weights.tensor(&format!("{linear_prefix}.bias"))?;
-    // Fused MLX-C addmm preserves the required BF16 accumulation path.
-    Ok(runtime.addmm(
-        linear_bias,
-        input_states,
-        &transposed_linear_weight,
-        1.0,
-        1.0,
-    )?)
+    vision_weights.linear(runtime, input_states, linear_prefix)
 }
 
 fn u32_to_i32(dimension_size: u32) -> Result<i32, Qwen3_5ExecutionError> {

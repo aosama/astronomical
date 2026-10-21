@@ -207,13 +207,13 @@ fn validate_text_encoder_geometry(
     (geometry.architectures == ["Qwen3VLForConditionalGeneration"]
         && geometry.dtype == "bfloat16"
         && geometry.model_type == "qwen3_vl"
-        && geometry.tie_word_embeddings == false
+        && !geometry.tie_word_embeddings
         && geometry.quantization.bits == 4
         && geometry.quantization.group_size == 64
         && geometry.quantization.mode == "affine"
         && geometry.mlx_format
         && text.dtype == "bfloat16"
-        && text.attention_bias == false
+        && !text.attention_bias
         && text.attention_dropout == 0.0
         && text.head_dim == 128
         && text.hidden_act == "silu"

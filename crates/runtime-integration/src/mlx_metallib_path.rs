@@ -27,12 +27,10 @@ pub fn resolve_mlx_metallib_path(
         return require_absolute_metallib_path(bundled_metallib_path);
     }
 
-    if let Some(unpackaged_native_store_metallib_path) = unpackaged_native_store_metallib_path {
-        if is_regular_non_symlink_file(unpackaged_native_store_metallib_path) {
-            return require_absolute_metallib_path(
-                unpackaged_native_store_metallib_path.to_path_buf(),
-            );
-        }
+    if let Some(unpackaged_native_store_metallib_path) = unpackaged_native_store_metallib_path
+        && is_regular_non_symlink_file(unpackaged_native_store_metallib_path)
+    {
+        return require_absolute_metallib_path(unpackaged_native_store_metallib_path.to_path_buf());
     }
 
     Err(MlxRuntimeError::InvalidMetallibPath {

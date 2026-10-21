@@ -194,6 +194,9 @@ pub fn resident_layer_arrays_for_tests(
                     quantization_group_size: layer_plan.quantization_group_size,
                 })
             }
+            QuantizationMode::Jangtq2Codebook => Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "jangtq2 expert weights require the bounded streaming path",
+            }),
         }
     };
     let gate_projection = affine_projection("gate_proj", gate)?;
@@ -237,6 +240,15 @@ fn projection_arrays_for_tests(
         Qwen3_5AffineWeights::NativeBfloat16 { weight } => ResidentProjectionArraysForTests {
             packed_weight: weight,
             quantization_scales: None,
+            quantization_biases: None,
+        },
+        Qwen3_5AffineWeights::Jangtq2Codebook {
+            packed_code_words,
+            row_scales,
+            ..
+        } => ResidentProjectionArraysForTests {
+            packed_weight: packed_code_words,
+            quantization_scales: Some(row_scales),
             quantization_biases: None,
         },
         Qwen3_5AffineWeights::Quantized {

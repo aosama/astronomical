@@ -1,5 +1,8 @@
 use super::*;
 use crate::TensorDtype;
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config_bytes;
+use serde_json::{Value, json};
 
 const FROZEN_VISION_CONFIG_JSON: &str = r#"{
     "architectures": ["Qwen3_5MoeForConditionalGeneration"],
@@ -135,4 +138,101 @@ fn should_generate_the_complete_ornith_vision_tensor_profile() {
             tensor_profile.name
         );
     }
+}
+
+#[test]
+fn should_generate_mlx_affine_vision_companions_from_module_profiles() {
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
+        .expect("the frozen Ornith 1.0 vision config should parse");
+    let qwen3_5_config = qwen_config_with_native_vision_mlp_output();
+
+    let vision_tensor_profiles =
+        qwen3_5_vision_tensor_profiles_for_model(&vision_config, &qwen3_5_config)
+            .expect("affine vision profiles should derive from the configured weight contract");
+    let tensor_profile_by_name = vision_tensor_profiles
+        .iter()
+        .map(|tensor_profile| (tensor_profile.name.as_str(), tensor_profile))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    assert_eq!(vision_tensor_profiles.len(), 499);
+    assert_eq!(
+        tensor_profile_by_name["vision_tower.blocks.0.attn.qkv.weight"].dtype,
+        TensorDtype::UInt32
+    );
+    assert_eq!(
+        tensor_profile_by_name["vision_tower.blocks.0.attn.qkv.weight"].shape,
+        [3456, 216]
+    );
+    assert_eq!(
+        tensor_profile_by_name["vision_tower.blocks.0.attn.qkv.scales"].shape,
+        [3456, 18]
+    );
+    assert_eq!(
+        tensor_profile_by_name["vision_tower.blocks.0.attn.qkv.biases"].shape,
+        [3456, 18]
+    );
+    assert_eq!(
+        tensor_profile_by_name["vision_tower.blocks.0.attn.qkv.bias"].shape,
+        [3456]
+    );
+    assert_eq!(
+        tensor_profile_by_name["vision_tower.blocks.0.mlp.linear_fc2.weight"].dtype,
+        TensorDtype::ModelFloat
+    );
+    assert!(!tensor_profile_by_name.contains_key("vision_tower.blocks.0.mlp.linear_fc2.scales"));
+}
+
+#[test]
+fn should_reject_codebook_storage_on_vision_linear_modules() {
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
+        .expect("the frozen Ornith 1.0 vision config should parse");
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen Qwen3.5 config should decode");
+    let mut quantization_overrides = config_value["quantization"]
+        .as_object()
+        .expect("the frozen quantization contract should be an object")
+        .clone();
+    quantization_overrides.insert(
+        "vision_tower.blocks.0.attn.qkv".to_owned(),
+        json!({"mode": "jangtq2", "bits": 2, "rotation": "hadamard32"}),
+    );
+    let quantization_value = Value::Object(quantization_overrides);
+    config_value["quantization"] = quantization_value.clone();
+    config_value["quantization_config"] = quantization_value;
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the synthetic vision-codebook config should serialize");
+    let qwen3_5_config = Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("the synthetic vision-codebook config should parse");
+
+    let profile_result = qwen3_5_vision_tensor_profiles_for_model(&vision_config, &qwen3_5_config);
+
+    assert!(matches!(
+        profile_result,
+        Err(crate::qwen3_5_core::artifacts::Qwen3_5ArtifactError::InvalidVisionQuantizationProfile {
+            module_name,
+            ..
+        }) if module_name == "vision_tower.blocks.0.attn.qkv"
+    ));
+}
+
+fn qwen_config_with_native_vision_mlp_output() -> Qwen3_5Config {
+    let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
+        .expect("the frozen Qwen3.5 config should decode");
+    let mut quantization_overrides = config_value["quantization"]
+        .as_object()
+        .expect("the frozen quantization contract should be an object")
+        .clone();
+    for vision_block_index in 0..27 {
+        quantization_overrides.insert(
+            format!("vision_tower.blocks.{vision_block_index}.mlp.linear_fc2"),
+            Value::Bool(false),
+        );
+    }
+    let quantization_value = Value::Object(quantization_overrides);
+    config_value["quantization"] = quantization_value.clone();
+    config_value["quantization_config"] = quantization_value;
+    let config_bytes = serde_json::to_vec(&config_value)
+        .expect("the synthetic affine-vision config should serialize");
+    Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("the synthetic affine-vision config should parse")
 }

@@ -5,3 +5,4 @@
 //! planning over synthetic safetensors artifacts.
 
 mod mixed_expert_storage_tests;
+mod real_artifact_page_peak_tests;
