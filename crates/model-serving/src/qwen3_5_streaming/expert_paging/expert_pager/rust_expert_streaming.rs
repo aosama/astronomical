@@ -43,26 +43,12 @@ impl Qwen3_5ExpertPager {
         // transient growth. Loading first would spend I/O on an unusable page.
         let decoded_codebook_weight_shapes =
             layer_plan.jangtq2_decoded_weight_page_shapes(expert_ids.len())?;
-        let decode_workspace_tensor_shapes =
-            layer_plan.jangtq2_decode_workspace_page_shapes(expert_ids.len())?;
-        let output_assembly_copy_count =
-            layer_plan.jangtq2_decoded_output_assembly_copy_count(expert_ids.len());
-        let decoder_index_tensor_shapes = decoded_codebook_weight_shapes
-            .iter()
-            .map(|decoded_weight_shape| {
-                vec![
-                    decoded_weight_shape[2]
-                        .max(decoded_weight_shape[0].saturating_mul(decoded_weight_shape[1])),
-                ]
-            })
-            .collect::<Vec<_>>();
         // A single decode token's page is multiplied in packed form by the
         // fused gathered projection kernel, so only its source bytes are
         // admitted. Every other page (multi-token prefill, or a worker whose
         // kernel probe failed) decodes a transient bfloat16 copy at forward
-        // time: the memory owner then prices persistent bfloat16 output plus
-        // the largest one-block decode workspace and the decoder's small
-        // auxiliary arrays, with the packed page live throughout.
+        // time: the memory owner then prices the persistent bfloat16 output
+        // with the packed page live throughout.
         let page_is_multiplied_packed =
             request_shape.route_token_count == 1 && self.decode_tokens_multiply_packed_pages();
         let pending_page_allocation_bytes = if page_is_multiplied_packed {
@@ -71,17 +57,10 @@ impl Qwen3_5ExpertPager {
             crate::memory::expert_page_peak_allocation_bytes(
                 page_manifest.payload_byte_count,
                 &decoded_codebook_weight_shapes,
-                &decode_workspace_tensor_shapes,
-                output_assembly_copy_count,
                 size_of::<u16>(),
-                crate::jangtq2_qwen35::mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
-                size_of::<u32>(),
-                &decoder_index_tensor_shapes,
-                crate::jangtq2_qwen35::mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT,
-                size_of::<u32>(),
             )
             .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
-                description: "expert page plus jangtq2 decode workspace byte count overflowed"
+                description: "expert page plus jangtq2 decoded output byte count overflowed"
                     .to_owned(),
             })?
         };

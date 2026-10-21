@@ -51,11 +51,8 @@ impl Qwen3_5ExpertPager {
         )?;
 
         // Streaming workspace and temporary decode routes are bounded by complete
-        // layer geometry. Include packed source ownership, decoded bfloat16 output,
-        // and the largest sequential decoder workspace in the whole-layer reserve.
-        // The decoder walks complete-layer pages in expert blocks, so the
-        // workspace term follows one block's shape while the persisted term
-        // still covers every decoded output of the page.
+        // layer geometry: the packed source ownership plus the decoded
+        // bfloat16 output a multi-token forward materializes for the layer.
         let maximum_expert_page_bytes = layer_plans.iter().try_fold(
             0u64,
             |maximum_expert_page_bytes, layer_plan| -> Result<_, ExpertPagingError> {
@@ -63,29 +60,11 @@ impl Qwen3_5ExpertPager {
                     layer_plan.complete_expert_payload_byte_count()?;
                 let decoded_codebook_weight_shapes =
                     layer_plan.jangtq2_decoded_weight_page_shapes(layer_plan.expert_capacity)?;
-                let decode_workspace_tensor_shapes =
-                    layer_plan.jangtq2_decode_workspace_page_shapes(layer_plan.expert_capacity)?;
-                let output_assembly_copy_count = layer_plan
-                    .jangtq2_decoded_output_assembly_copy_count(layer_plan.expert_capacity);
-                let decoder_index_tensor_shapes = decoded_codebook_weight_shapes
-                    .iter()
-                    .map(|decoded_weight_shape| {
-                        vec![decoded_weight_shape[2]
-                            .max(decoded_weight_shape[0].saturating_mul(decoded_weight_shape[1]))]
-                    })
-                    .collect::<Vec<_>>();
                 let complete_page_peak_allocation_bytes =
                     crate::memory::expert_page_peak_allocation_bytes(
                         complete_source_payload_bytes,
                         &decoded_codebook_weight_shapes,
-                        &decode_workspace_tensor_shapes,
-                        output_assembly_copy_count,
                         size_of::<u16>(),
-                        crate::jangtq2_qwen35::mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
-                        size_of::<u32>(),
-                        &decoder_index_tensor_shapes,
-                        crate::jangtq2_qwen35::mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT,
-                        size_of::<u32>(),
                     )
                     .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
                         description: "complete expert-page allocation size overflowed".to_owned(),

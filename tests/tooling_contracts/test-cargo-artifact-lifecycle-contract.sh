@@ -446,6 +446,7 @@ expected_aliases = {
     # (codebook decode kernels measured on the graphics processor).
     "test-jangtq2-plan",
     "test-jangtq2-decode-throughput",
+    "test-jangtq2-serving-throughput",
     "xtask",
 }
 assert set(aliases) == expected_aliases
@@ -462,6 +463,7 @@ for acceptance_alias in (
     "test-quantization-direct-mlx",
     "test-quantization-acceptance",
     "test-jangtq2-decode-throughput",
+    "test-jangtq2-serving-throughput",
 ):
     assert "--test-threads=1" in aliases[acceptance_alias].split(), acceptance_alias
 for acceptance_alias in (
@@ -470,11 +472,13 @@ for acceptance_alias in (
     "test-quantization-acceptance",
     "test-jangtq2-plan",
     "test-jangtq2-decode-throughput",
+    "test-jangtq2-serving-throughput",
 ):
     assert "--ignored" in aliases[acceptance_alias].split(), acceptance_alias
 # The decode-throughput lane measures a memory-traffic-bound kernel, so the
 # optimized build is part of the alias contract, not a human's memory.
 assert "--release" in aliases["test-jangtq2-decode-throughput"].split()
+assert "--release" in aliases["test-jangtq2-serving-throughput"].split()
 
 assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()
 assert not (repository_root / "scripts/run-ignored-serving-acceptance.sh").exists()

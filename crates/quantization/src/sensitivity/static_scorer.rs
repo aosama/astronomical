@@ -40,9 +40,10 @@ pub fn structural_priority(module_name: &str, transformer_block_count: usize) ->
 ///
 /// Work to port: for each module, encode the priority as a sensitivity curve
 /// the allocator reads: KL falls linearly from `priority` at the lowest
-/// candidate width to 0 at the highest, `priority * (highest - b) / (highest
-/// - lowest)` for each candidate `b`, so upgrading a high-priority module buys
-/// the most "KL". The parameter count is the inventory's logical count.
+/// candidate width to 0 at the highest, that is
+/// `priority * (highest - b) / (highest - lowest)` for each candidate `b`,
+/// so upgrading a high-priority module buys the most "KL". The parameter
+/// count is the inventory's logical count.
 #[must_use]
 pub fn score_static_structural(
     inventory: &ModuleInventory,
