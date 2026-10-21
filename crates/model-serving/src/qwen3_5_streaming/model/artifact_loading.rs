@@ -366,7 +366,7 @@ impl Qwen3_5Model {
                     true,
                 )
             })?;
-        let mlx_ram_budget = MlxRamBudget::new(
+        let mut mlx_ram_budget = MlxRamBudget::new(
             u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
                 Qwen3_5ExecutionError::InvalidInput {
                     description: "MLX active memory ceiling exceeds the u64 range",
@@ -388,6 +388,16 @@ impl Qwen3_5Model {
         .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
             description: "MLX RAM budget requires a positive active-memory ceiling",
         })?;
+        if let Some(expert_pager) = expert_pager.as_ref() {
+            // A multi-token forward decodes the complete-layer page it
+            // multiplies, so the prefill plan must keep that page's peak
+            // (packed source plus decoded output) out of the expert budget;
+            // the packed-source slot alone seated experts into the decode's
+            // space and every chunk had to reclaim a layer before it could run.
+            mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(
+                expert_pager.maximum_expert_page_bytes(),
+            );
+        }
         Ok(Self {
             base: Qwen3_5ModelBase {
                 runtime,
