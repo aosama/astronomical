@@ -242,6 +242,16 @@ impl RetainedExpertCache {
         Ok(())
     }
 
+    /// Drops every queued slot insert without writing it, returning how many
+    /// were dropped. A forward that failed on the memory ceiling leaves its
+    /// queued pages behind; they pin streamed arrays the recovery is about to
+    /// measure against, so the recovery discards them before it samples.
+    pub fn discard_pending_inserts(&mut self) -> usize {
+        let discarded_count = self.pending_inserts.len();
+        self.pending_inserts.clear();
+        discarded_count
+    }
+
     /// Counts one served read for each routed expert present in the layer's
     /// table, feeding the least-frequently-used eviction order so a stable hot
     /// set outlives one-off routing noise.

@@ -191,10 +191,10 @@ impl Qwen3_5Model {
                         // by chunk tokens × experts per token, which for every
                         // chunk smaller than expert_capacity ÷ experts per
                         // token is a fraction of the complete layer's read and
-                        // decode work. Warm retention still lands the streamed
-                        // experts for later chunks and decode, and the forward
-                        // admission reserves the same union bound (issue
-                        // #1422).
+                        // decode work. The union page stays operation-local
+                        // (warm tables fill from decode tokens), and the
+                        // forward admission reserves the same union bound
+                        // (issue #1422).
                         self.stream_operation_local_routed_experts(
                             expert_pager,
                             layer_index,

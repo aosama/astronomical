@@ -190,6 +190,15 @@ impl Qwen3_5Model {
             })
     }
 
+    /// Discards queued warm inserts after a forward failed before evaluation.
+    pub(crate) fn discard_pending_expert_slot_inserts(&self) -> usize {
+        self.retained_experts
+            .as_ref()
+            .map_or(0, |retained_experts| {
+                retained_experts.borrow_mut().discard_pending_inserts()
+            })
+    }
+
     /// Counted variant of the post-evaluation warm insert flush.
     fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, Qwen3_5ExecutionError> {
         if let Some(retained_experts) = self.retained_experts.as_ref() {
