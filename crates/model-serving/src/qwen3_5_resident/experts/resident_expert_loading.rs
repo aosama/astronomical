@@ -178,11 +178,17 @@ fn load_resident_projection(
     layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
 ) -> Result<Qwen3_5AffineWeights, Qwen3_5ExecutionError> {
+    let quantization_mode = layer_plan.quantization_mode_for_projection(projection_name);
+    if quantization_mode == QuantizationMode::Jangtq2Codebook {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "jangtq2 expert weights require the bounded streaming path",
+        });
+    }
     let weight_source = projection_parameter_source(layer_plan, projection_name, "weight")?;
     let weight = take_validated_source_tensor(resident_source_tensors, weight_source)?;
     // Preserve the validated artifact representation exactly. Resident mode is
     // an ownership change, never an opportunity to requantize or widen weights.
-    match layer_plan.quantization_mode_for_projection(projection_name) {
+    match quantization_mode {
         QuantizationMode::NativeBfloat16 => Ok(Qwen3_5AffineWeights::NativeBfloat16 { weight }),
         QuantizationMode::Affine => {
             let scales_source = projection_parameter_source(layer_plan, projection_name, "scales")?;
@@ -201,6 +207,9 @@ fn load_resident_projection(
                 quantization_group_size: weight_source.quantization_group_size,
             })
         }
+        QuantizationMode::Jangtq2Codebook => Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "jangtq2 expert weights require the bounded streaming path",
+        }),
     }
 }
 

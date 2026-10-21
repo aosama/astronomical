@@ -12,6 +12,9 @@ mod completion;
 mod historical_record;
 
 #[cfg(feature = "performance_throughput")]
+mod jangtq2_qwen35;
+
+#[cfg(feature = "performance_throughput")]
 mod machine_specs;
 
 #[cfg(feature = "performance_throughput")]

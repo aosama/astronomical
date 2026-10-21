@@ -41,6 +41,7 @@ impl Qwen3_5EngineState {
         has_already_retried_after_reclamation: bool,
     ) -> Result<bool, InferenceEngineError> {
         record_rejection_and_restore_checkpoint(active_request, prefill_request_checkpoint)?;
+        discard_pending_inserts_of_failed_forward(self, request_id);
         clear_allocator_cache_after_active_memory_limit(self, active_request)?;
 
         let memory_snapshot_before_reclamation = self
@@ -129,6 +130,7 @@ impl Qwen3_5EngineState {
         record_rejection_and_restore_checkpoint(active_request, prefill_request_checkpoint)?;
         // The failed synchronization already waited for command-buffer completion.
         // Synchronizing its poisoned event chain again would reproduce the error.
+        discard_pending_inserts_of_failed_forward(self, request_id);
         clear_allocator_cache_without_stream_sync(self, active_request)?;
 
         let memory_snapshot_before_reclamation = self
@@ -205,6 +207,25 @@ impl Qwen3_5EngineState {
             "graphics-processor memory exhaustion; reclaimed retained experts for the fixed chunk"
         );
         Ok(should_retry_same_prefill_chunk)
+    }
+}
+
+/// A failed forward's queued warm inserts hold retained references to the
+/// pages it streamed; left queued they would pin those pages through the
+/// recovery's own memory measurement and the retried forward.
+fn discard_pending_inserts_of_failed_forward(
+    engine_state: &Qwen3_5EngineState,
+    request_id: RequestId,
+) {
+    if let Some(model) = engine_state.model.as_ref() {
+        let discarded_count = model.discard_pending_expert_slot_inserts();
+        if discarded_count > 0 {
+            tracing::info!(
+                request_id = request_id.value(),
+                discarded_count,
+                "discarded queued warm inserts of a forward that hit the memory ceiling"
+            );
+        }
     }
 }
 
@@ -285,7 +306,13 @@ fn complete_table_eviction_granularity_bytes(
         expert_pager
             .layer_plans()
             .iter()
-            .filter_map(|layer_plan| layer_plan.complete_expert_payload_byte_count().ok())
+            .filter_map(|layer_plan| {
+                crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+                    layer_plan,
+                    layer_plan.expert_capacity,
+                )
+                .ok()
+            })
             .max()
             .unwrap_or(0)
     });

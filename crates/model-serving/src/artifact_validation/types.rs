@@ -16,6 +16,8 @@ pub enum TensorDtype {
     ModelFloat,
     /// Brain floating point with 16-bit storage.
     BFloat16,
+    /// 16-bit IEEE floating point, used by jangtq2 codebook row scales.
+    Float16,
     /// 32-bit IEEE floating point.
     Float32,
     /// Unsigned 32-bit integers used by MLX packed quantized weights.
@@ -36,5 +38,10 @@ pub struct TensorProfile {
     /// them, and the loader normalizes the stored tensor into `shape` before
     /// execution; a permutation reorders the same values, so numerics are
     /// unchanged. Empty for tensors with one published form.
+    ///
+    /// Every entry must have a paired layout normalizer at weight binding —
+    /// accepting a published shape without one would silently bind a
+    /// layout-permuted tensor. Current pairs: `linear_attn.conv1d.weight`
+    /// (gated delta convolution) and `vision_tower.patch_embed.proj.weight`.
     pub equivalent_published_shapes: Vec<Vec<usize>>,
 }

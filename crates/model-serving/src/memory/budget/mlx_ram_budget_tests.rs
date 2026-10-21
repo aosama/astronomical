@@ -597,3 +597,47 @@ fn should_saturate_context_growth_to_zero_when_stream_evidence_dominates() {
 
     assert_eq!(learned_growth_bytes, 0);
 }
+
+#[test]
+fn should_reserve_the_prefill_stream_slot_at_the_decoded_page_peak_once_declared() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+    let geometry = fable_class_geometry();
+    let mut mlx_ram_budget =
+        MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
+    let packed_source_plan = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 2_048, 0);
+    assert_eq!(
+        packed_source_plan.complete_layer_stream_slot_bytes,
+        geometry.largest_complete_expert_layer_bytes
+    );
+
+    // A family whose multi-token forward decodes the page declares the whole
+    // page peak; the expert budget must shrink by exactly the difference.
+    let decoded_page_peak_bytes = 5_500_000_000;
+    mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(decoded_page_peak_bytes);
+    let decoded_page_plan = mlx_ram_budget.plan(MemoryPhase::Prefill, 4_096, 2_048, 0);
+    assert_eq!(
+        decoded_page_plan.complete_layer_stream_slot_bytes,
+        decoded_page_peak_bytes
+    );
+    assert_eq!(
+        packed_source_plan.retained_expert_budget_bytes
+            - decoded_page_plan.retained_expert_budget_bytes,
+        decoded_page_peak_bytes - geometry.largest_complete_expert_layer_bytes
+    );
+    // Decode never materializes a page, so its slot is unchanged.
+    assert_eq!(
+        mlx_ram_budget
+            .plan(MemoryPhase::Decode, 4_096, 1, 0)
+            .complete_layer_stream_slot_bytes,
+        geometry.largest_routed_expert_page_bytes
+    );
+    // A declared slot smaller than one packed layer cannot shrink the reserve.
+    mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(1);
+    assert_eq!(
+        mlx_ram_budget
+            .plan(MemoryPhase::Prefill, 4_096, 2_048, 0)
+            .complete_layer_stream_slot_bytes,
+        geometry.largest_complete_expert_layer_bytes
+    );
+}

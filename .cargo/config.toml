@@ -172,3 +172,25 @@ test-prism-hadamard-serving-throughput = "test --release --no-fail-fast -p astro
 # test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
 # one-token budget coverage; set PRISM_HADAMARD_QWEN35_PACK_DIR first.
 test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --features serving-acceptance --test chat_serving should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack -- --ignored --nocapture --test-threads=1"
+# test-jangtq2-plan: the ignored library tests that validate the real JANGH2
+# bundle against production validators: every codebook projection of an
+# installed jangtq2 bundle against real shard headers, and the complete-layer
+# page-peak reservation guard. Set ASTRONOMICAL_JANGTQ2_MODEL_DIR to the
+# installed bundle directory first; the tests are ignored by default so
+# every offline lane runs without any model artifact.
+test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --lib jangtq2 -- --ignored --nocapture"
+# test-jangtq2-decode-throughput: the bottom tier of the jangtq2 performance
+# pyramid — the codebook decode kernels themselves, measured on the graphics
+# processor with real page shapes (top-8 decode pages and complete-layer
+# prefill pages). Optimized build by rule: the decoder is memory-traffic bound
+# and debug numbers understate every ratio. Serial by rule: graphics-processor
+# tests never run in parallel.
+test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-model-serving --features direct-mlx --lib decode_throughput -- --ignored --nocapture --test-threads=1"
+# test-jangtq2-serving-throughput: the top tier of the jangtq2 performance
+# pyramid — serving prompt-processing and decode throughput of the real 122B
+# bundle over the daemon IPC boundary (warmup 500/50, measured 10,000/500,
+# SSD cache disabled, 2,048-token prefill chunk, 37 GB ceiling), persisted to
+# the durable throughput history. Build the release worker first
+# (cargo build --release --bin astronomical-inference-worker) and set
+# ASTRONOMICAL_JANGTQ2_MODEL_DIR to the installed bundle directory.
+test-jangtq2-serving-throughput = "test --release --no-fail-fast -p astronomical-acceptance --features performance_throughput --test performance_throughput jangtq2 -- --ignored --nocapture --test-threads=1"

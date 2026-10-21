@@ -52,6 +52,12 @@ pub(super) fn streamed_weights_for_expert_count(
         down_projection: Qwen3_5AffineWeights::NativeBfloat16 {
             weight: projection(3.0),
         },
+        gate_activation_rotation:
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        up_activation_rotation:
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        down_activation_rotation:
+            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
     }
 }
 
@@ -579,5 +585,31 @@ fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() 
         ],
         "a filled warm table must classify as pinned complete so cross-request \
          retention can protect it"
+    );
+}
+
+#[test]
+#[serial]
+fn should_discard_queued_inserts_without_writing_them() {
+    let runtime = test_runtime();
+    let mut cache = RetainedExpertCache::new(1);
+    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    let weights = streamed_weights(&runtime);
+    cache
+        .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
+        .expect("the warm insert should queue");
+    assert_eq!(cache.discard_pending_inserts(), 1);
+    assert_eq!(
+        cache.discard_pending_inserts(),
+        0,
+        "a second discard finds nothing"
+    );
+    let written_count = cache
+        .flush_pending_inserts(&runtime)
+        .expect("flushing an empty queue should succeed");
+    assert_eq!(written_count, 0);
+    assert!(
+        cache.packed_page(0, &[7], EXPERT_CAPACITY).is_none(),
+        "a discarded insert must not land in a table"
     );
 }

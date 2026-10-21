@@ -20,6 +20,9 @@ impl RetainedReferenceOk for Qwen3_5PagedExpertWeights {
             gate_projection: self.gate_projection.retained_reference().unwrap(),
             up_projection: self.up_projection.retained_reference().unwrap(),
             down_projection: self.down_projection.retained_reference().unwrap(),
+            gate_activation_rotation: self.gate_activation_rotation,
+            up_activation_rotation: self.up_activation_rotation,
+            down_activation_rotation: self.down_activation_rotation,
         }
     }
 }
@@ -58,6 +61,9 @@ pub(super) fn create_warm_table_weights(
             &streamed_weights.down_projection,
             slot_count_i32,
         )?,
+        gate_activation_rotation: streamed_weights.gate_activation_rotation,
+        up_activation_rotation: streamed_weights.up_activation_rotation,
+        down_activation_rotation: streamed_weights.down_activation_rotation,
     })
 }
 
@@ -92,6 +98,19 @@ fn pad_projection_to_warm_capacity(
             )?,
             quantization_bits: *quantization_bits,
             quantization_group_size: *quantization_group_size,
+        }),
+        Qwen3_5AffineWeights::Jangtq2Codebook {
+            packed_code_words,
+            row_scales,
+            codebook_bit_width,
+        } => Ok(Qwen3_5AffineWeights::Jangtq2Codebook {
+            packed_code_words: pad_array_to_warm_capacity(
+                runtime,
+                packed_code_words,
+                slot_count_i32,
+            )?,
+            row_scales: pad_array_to_warm_capacity(runtime, row_scales, slot_count_i32)?,
+            codebook_bit_width: *codebook_bit_width,
         }),
     }
 }
@@ -230,6 +249,38 @@ fn write_projection_into_slot(
                 quantization_biases: biases,
                 quantization_bits: *quantization_bits,
                 quantization_group_size: *quantization_group_size,
+            })
+        }
+        (
+            Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words: dest_packed_code_words,
+                row_scales: dest_row_scales,
+                codebook_bit_width,
+            },
+            Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words: source_packed_code_words,
+                row_scales: source_row_scales,
+                codebook_bit_width: source_codebook_bit_width,
+            },
+        ) if codebook_bit_width == source_codebook_bit_width => {
+            let packed_code_words = write_row_into_slot(
+                runtime,
+                dest_packed_code_words,
+                source_packed_code_words,
+                source_row,
+                slot,
+            )?;
+            let row_scales = write_row_into_slot(
+                runtime,
+                dest_row_scales,
+                source_row_scales,
+                source_row,
+                slot,
+            )?;
+            Ok(Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width: *codebook_bit_width,
             })
         }
         _ => Err(MlxRuntimeError::RuntimeOperation {

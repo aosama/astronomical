@@ -74,9 +74,19 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .retain_layer_route(layer_index, &selected_indices);
         }
-        // A seated complete layer remaps every route on-device. Do not copy
-        // router indices to the host for that layer.
-        if should_use_loaded_model_mode && self.retained_experts.is_some() {
+        // A seated complete layer serves a decode token straight from the
+        // table through the fused kernel, remapping the route on-device: no
+        // router indices are copied to the host for that layer. Multi-token
+        // chunks, and decode tokens on a worker without the fused kernel,
+        // fall through to the host-side route so they decode only their
+        // routed union.
+        let decode_tokens_multiply_packed_pages =
+            self.fused_jangtq2_gathered_projection_kernel.is_some();
+        if should_use_loaded_model_mode
+            && token_count == 1
+            && decode_tokens_multiply_packed_pages
+            && self.retained_experts.is_some()
+        {
             let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
             let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
             if matches!(
@@ -132,16 +142,40 @@ impl Qwen3_5Model {
             let disposition = self.expert_page_disposition(layer_index, expert_capacity);
             match disposition {
                 ExpertPageDisposition::FullHit => {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::RetainedRouteAssignmentHitCount,
+                        u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
+                    );
+                    if token_count > 1 || !decode_tokens_multiply_packed_pages {
+                        // A forward that decodes the page it multiplies gets
+                        // exactly its routed union of the seated layer.
+                        let (subset_weights, subset_manifest) = self
+                            .routed_subset_of_cached_page(
+                                layer_index,
+                                routed_expert_ids,
+                                expert_capacity,
+                            )?
+                            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                                description: "cache hit reported a page that vanished",
+                            })?;
+                        return self.forward_moe_paged_with_performance_attribution(
+                            hidden_states,
+                            mixture_of_experts_weights,
+                            &subset_weights,
+                            &subset_manifest,
+                            &selected_indices,
+                            routed_expert_ids,
+                            &selected_scores,
+                            should_use_compiled_elementwise_graphs,
+                            performance_attribution,
+                        );
+                    }
                     let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
                     let (packed_weights, packed_manifest) = self
                         .cached_packed_page(layer_index, &complete_expert_ids, expert_capacity)
                         .ok_or(Qwen3_5ExecutionError::InvalidInput {
                             description: "cache hit reported a page that vanished",
                         })?;
-                    performance_attribution.record_counter(
-                        PerformanceCounter::RetainedRouteAssignmentHitCount,
-                        u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
-                    );
                     return self.forward_moe_paged_with_performance_attribution(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -160,12 +194,20 @@ impl Qwen3_5Model {
                         u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
                     );
                     let (packed_weights, packed_manifest) = if token_count > 1 {
-                        self.stream_complete_expert_layer(
+                        // Multi-token chunks stream the chunk's routed-expert
+                        // union, not the complete layer: the union is bounded
+                        // by chunk tokens × experts per token, which for every
+                        // chunk smaller than expert_capacity ÷ experts per
+                        // token is a fraction of the complete layer's read and
+                        // decode work. The union page stays operation-local
+                        // (warm tables fill from decode tokens), and the
+                        // forward admission reserves the same union bound
+                        // (issue #1422).
+                        self.stream_operation_local_routed_experts(
                             expert_pager,
                             layer_index,
                             token_count,
-                            expert_capacity,
-                            routed_expert_ids.len(),
+                            routed_expert_ids,
                             paged_prefill_execution_mode
                                 == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
                             performance_attribution,
@@ -227,19 +269,17 @@ impl Qwen3_5Model {
                             )?
                         }
                     };
-                    let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
-                    let gather_expert_ids = if token_count > 1 {
-                        complete_expert_ids.as_slice()
-                    } else {
-                        routed_expert_ids
-                    };
+                    // The streamed page covers exactly the routed union, so
+                    // the gather remap uses the routed expert ids in both the
+                    // multi-token and decode paths. Complete-table full hits
+                    // returned earlier with their own complete id set.
                     return self.forward_moe_paged_with_performance_attribution(
                         hidden_states,
                         mixture_of_experts_weights,
                         &packed_weights,
                         &packed_manifest,
                         &selected_indices,
-                        gather_expert_ids,
+                        routed_expert_ids,
                         &selected_scores,
                         should_use_compiled_elementwise_graphs,
                         performance_attribution,

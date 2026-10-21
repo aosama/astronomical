@@ -6,9 +6,14 @@
 //! layout. These profiles therefore document the boundary between stored model
 //! tensors and the MLX operation contracts used by `vision_model.rs`.
 
+use std::collections::HashMap;
+
 #[cfg(test)]
 mod tests;
 
+use crate::qwen3_5_core::artifacts::Qwen3_5ArtifactError;
+use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
 use crate::{TensorDtype, TensorProfile};
 
 use super::Qwen3_5VisionConfig;
@@ -22,6 +27,25 @@ use super::Qwen3_5VisionConfig;
 /// - merger (norm + linear_fc1 + linear_fc2 = 6)
 #[must_use]
 pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Vec<TensorProfile> {
+    qwen3_5_vision_tensor_profiles_with_quantization(vision_config, None)
+        .expect("native vision profiles use the validated vision geometry")
+}
+
+/// Generates the vision tensor inventory using per-module storage profiles
+/// resolved from the complete Qwen3.5 configuration.
+pub fn qwen3_5_vision_tensor_profiles_for_model(
+    vision_config: &Qwen3_5VisionConfig,
+    qwen3_5_config: &Qwen3_5Config,
+) -> Result<Vec<TensorProfile>, Qwen3_5ArtifactError> {
+    qwen3_5_vision_tensor_profiles_with_quantization(vision_config, Some(qwen3_5_config))
+}
+
+fn qwen3_5_vision_tensor_profiles_with_quantization(
+    vision_config: &Qwen3_5VisionConfig,
+    qwen3_5_config: Option<&Qwen3_5Config>,
+) -> Result<Vec<TensorProfile>, Qwen3_5ArtifactError> {
+    let vision_quantization_profiles = qwen3_5_config
+        .map(|config| qwen3_5_vision_linear_quantization_profiles(vision_config, config));
     let hidden_size = vision_config.hidden_size() as usize;
     let intermediate_size = vision_config.intermediate_size() as usize;
     let depth = vision_config.depth() as usize;
@@ -80,28 +104,28 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
         let block_prefix = format!("vision_tower.blocks.{block_index}");
 
         // Attention QKV: [3*hidden_size, hidden_size] + bias [3*hidden_size]
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.attn.qkv.weight"),
-            TensorDtype::ModelFloat,
-            vec![qkv_dimension, hidden_size],
-        ));
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.attn.qkv.bias"),
-            TensorDtype::ModelFloat,
-            vec![qkv_dimension],
-        ));
+        append_linear_module_tensor_profiles(
+            &mut tensor_profiles,
+            &format!("{block_prefix}.attn.qkv"),
+            qkv_dimension,
+            hidden_size,
+            vision_module_quantization_profile(
+                vision_quantization_profiles.as_ref(),
+                &format!("{block_prefix}.attn.qkv"),
+            ),
+        )?;
 
         // Attention projection: [hidden_size, hidden_size] + bias [hidden_size]
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.attn.proj.weight"),
-            TensorDtype::ModelFloat,
-            vec![hidden_size, hidden_size],
-        ));
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.attn.proj.bias"),
-            TensorDtype::ModelFloat,
-            vec![hidden_size],
-        ));
+        append_linear_module_tensor_profiles(
+            &mut tensor_profiles,
+            &format!("{block_prefix}.attn.proj"),
+            hidden_size,
+            hidden_size,
+            vision_module_quantization_profile(
+                vision_quantization_profiles.as_ref(),
+                &format!("{block_prefix}.attn.proj"),
+            ),
+        )?;
 
         // LayerNorm 1: [hidden_size] x2 (weight + bias)
         tensor_profiles.push(tensor_profile(
@@ -116,28 +140,28 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
         ));
 
         // MLP fc1: [intermediate_size, hidden_size] + bias [intermediate_size]
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.mlp.linear_fc1.weight"),
-            TensorDtype::ModelFloat,
-            vec![intermediate_size, hidden_size],
-        ));
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.mlp.linear_fc1.bias"),
-            TensorDtype::ModelFloat,
-            vec![intermediate_size],
-        ));
+        append_linear_module_tensor_profiles(
+            &mut tensor_profiles,
+            &format!("{block_prefix}.mlp.linear_fc1"),
+            intermediate_size,
+            hidden_size,
+            vision_module_quantization_profile(
+                vision_quantization_profiles.as_ref(),
+                &format!("{block_prefix}.mlp.linear_fc1"),
+            ),
+        )?;
 
         // MLP fc2: [hidden_size, intermediate_size] + bias [hidden_size]
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.mlp.linear_fc2.weight"),
-            TensorDtype::ModelFloat,
-            vec![hidden_size, intermediate_size],
-        ));
-        tensor_profiles.push(tensor_profile(
-            format!("{block_prefix}.mlp.linear_fc2.bias"),
-            TensorDtype::ModelFloat,
-            vec![hidden_size],
-        ));
+        append_linear_module_tensor_profiles(
+            &mut tensor_profiles,
+            &format!("{block_prefix}.mlp.linear_fc2"),
+            hidden_size,
+            intermediate_size,
+            vision_module_quantization_profile(
+                vision_quantization_profiles.as_ref(),
+                &format!("{block_prefix}.mlp.linear_fc2"),
+            ),
+        )?;
 
         // LayerNorm 2: [hidden_size] x2 (weight + bias)
         tensor_profiles.push(tensor_profile(
@@ -165,28 +189,166 @@ pub fn qwen3_5_vision_tensor_profiles(vision_config: &Qwen3_5VisionConfig) -> Ve
         TensorDtype::ModelFloat,
         vec![hidden_size],
     ));
-    tensor_profiles.push(tensor_profile(
-        "vision_tower.merger.linear_fc1.weight".to_owned(),
-        TensorDtype::ModelFloat,
-        vec![merger_input_dimension, merger_input_dimension],
-    ));
-    tensor_profiles.push(tensor_profile(
-        "vision_tower.merger.linear_fc1.bias".to_owned(),
-        TensorDtype::ModelFloat,
-        vec![merger_input_dimension],
-    ));
-    tensor_profiles.push(tensor_profile(
-        "vision_tower.merger.linear_fc2.weight".to_owned(),
-        TensorDtype::ModelFloat,
-        vec![out_hidden_size, merger_input_dimension],
-    ));
-    tensor_profiles.push(tensor_profile(
-        "vision_tower.merger.linear_fc2.bias".to_owned(),
-        TensorDtype::ModelFloat,
-        vec![out_hidden_size],
-    ));
+    append_linear_module_tensor_profiles(
+        &mut tensor_profiles,
+        "vision_tower.merger.linear_fc1",
+        merger_input_dimension,
+        merger_input_dimension,
+        vision_module_quantization_profile(
+            vision_quantization_profiles.as_ref(),
+            "vision_tower.merger.linear_fc1",
+        ),
+    )?;
+    append_linear_module_tensor_profiles(
+        &mut tensor_profiles,
+        "vision_tower.merger.linear_fc2",
+        out_hidden_size,
+        merger_input_dimension,
+        vision_module_quantization_profile(
+            vision_quantization_profiles.as_ref(),
+            "vision_tower.merger.linear_fc2",
+        ),
+    )?;
 
-    tensor_profiles
+    Ok(tensor_profiles)
+}
+
+fn append_linear_module_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    module_name: &str,
+    output_width: usize,
+    input_width: usize,
+    quantization_profile: Option<OptiQQuantizationProfile>,
+) -> Result<(), Qwen3_5ArtifactError> {
+    if let Some(module_quantization_profile) = quantization_profile {
+        if let ModuleWeightCodec::Jangtq2CodebookQuantized { .. } =
+            module_quantization_profile.weight_codec
+        {
+            return Err(Qwen3_5ArtifactError::InvalidVisionQuantizationProfile {
+                module_name: module_name.to_owned(),
+                description: "vision execution does not implement the expert codebook codec"
+                    .to_owned(),
+            });
+        }
+        if !module_quantization_profile.is_unquantized() {
+            append_affine_module_tensor_profiles(
+                tensor_profiles,
+                module_name,
+                output_width,
+                input_width,
+                module_quantization_profile.bits,
+                module_quantization_profile.group_size,
+            )?;
+            tensor_profiles.push(tensor_profile(
+                format!("{module_name}.bias"),
+                TensorDtype::ModelFloat,
+                vec![output_width],
+            ));
+            return Ok(());
+        }
+    }
+
+    tensor_profiles.push(tensor_profile(
+        format!("{module_name}.weight"),
+        TensorDtype::ModelFloat,
+        vec![output_width, input_width],
+    ));
+    tensor_profiles.push(tensor_profile(
+        format!("{module_name}.bias"),
+        TensorDtype::ModelFloat,
+        vec![output_width],
+    ));
+    Ok(())
+}
+
+pub(crate) fn qwen3_5_vision_linear_quantization_profiles(
+    vision_config: &Qwen3_5VisionConfig,
+    qwen3_5_config: &Qwen3_5Config,
+) -> HashMap<String, OptiQQuantizationProfile> {
+    let mut module_quantization_profiles =
+        HashMap::with_capacity(vision_config.depth() as usize * 4 + 2);
+    for block_index in 0..vision_config.depth() {
+        let block_prefix = format!("vision_tower.blocks.{block_index}");
+        for module_suffix in ["attn.qkv", "attn.proj", "mlp.linear_fc1", "mlp.linear_fc2"] {
+            let module_name = format!("{block_prefix}.{module_suffix}");
+            module_quantization_profiles.insert(
+                module_name.clone(),
+                qwen3_5_config.quantization_profile_for_module(&module_name),
+            );
+        }
+    }
+    for module_name in [
+        "vision_tower.merger.linear_fc1",
+        "vision_tower.merger.linear_fc2",
+    ] {
+        module_quantization_profiles.insert(
+            module_name.to_owned(),
+            qwen3_5_config.quantization_profile_for_module(module_name),
+        );
+    }
+    module_quantization_profiles
+}
+
+fn vision_module_quantization_profile(
+    module_quantization_profiles: Option<&HashMap<String, OptiQQuantizationProfile>>,
+    module_name: &str,
+) -> Option<OptiQQuantizationProfile> {
+    module_quantization_profiles
+        .and_then(|profile_by_module_name| profile_by_module_name.get(module_name))
+        .copied()
+}
+
+fn append_affine_module_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    module_name: &str,
+    output_width: usize,
+    input_width: usize,
+    quantization_bits: u32,
+    quantization_group_size: u32,
+) -> Result<(), Qwen3_5ArtifactError> {
+    let invalid_profile =
+        |description: String| Qwen3_5ArtifactError::InvalidVisionQuantizationProfile {
+            module_name: module_name.to_owned(),
+            description,
+        };
+    let quantization_bits = usize::try_from(quantization_bits)
+        .map_err(|_| invalid_profile("affine bit width exceeds the host shape range".to_owned()))?;
+    let quantization_group_size = usize::try_from(quantization_group_size).map_err(|_| {
+        invalid_profile("affine group size exceeds the host shape range".to_owned())
+    })?;
+    if quantization_bits == 0 || quantization_group_size == 0 {
+        return Err(invalid_profile(
+            "affine bit width and group size must be positive".to_owned(),
+        ));
+    }
+    if input_width % quantization_group_size != 0 {
+        return Err(invalid_profile(format!(
+            "input width {input_width} is not divisible by group size {quantization_group_size}"
+        )));
+    }
+    let packed_width = input_width
+        .checked_mul(quantization_bits)
+        .filter(|packed_bit_count| packed_bit_count % 32 == 0)
+        .map(|packed_bit_count| packed_bit_count / 32)
+        .ok_or_else(|| {
+            invalid_profile(format!(
+                "input width {input_width} and bit width {quantization_bits} do not form packed uint32 words"
+            ))
+        })?;
+    let companion_width = input_width / quantization_group_size;
+    tensor_profiles.push(tensor_profile(
+        format!("{module_name}.weight"),
+        TensorDtype::UInt32,
+        vec![output_width, packed_width],
+    ));
+    for companion_name in ["scales", "biases"] {
+        tensor_profiles.push(tensor_profile(
+            format!("{module_name}.{companion_name}"),
+            TensorDtype::AffineQuantizationFloat,
+            vec![output_width, companion_width],
+        ));
+    }
+    Ok(())
 }
 
 fn tensor_profile(

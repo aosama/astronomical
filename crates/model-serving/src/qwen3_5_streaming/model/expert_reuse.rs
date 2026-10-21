@@ -1,6 +1,6 @@
 //! Returns a packed complete expert layer on hit, or streams one complete layer on miss.
 
-use crate::expert_paging::QuantizedExpertPageManifest;
+use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::{
@@ -114,6 +114,72 @@ impl Qwen3_5Model {
         cache.packed_page(layer_index, complete_expert_ids, expert_capacity)
     }
 
+    /// Returns the routed experts of a seated complete layer as their own
+    /// page, for a forward that decodes the page it multiplies.
+    ///
+    /// A multi-token chunk (or a decode token on a worker without the fused
+    /// kernel) decodes the packed page it multiplies, so handing it the
+    /// complete table would decode every expert of the layer (about 4.8 GB
+    /// on the 122B bundle) whatever the route size — which defeats prefill's
+    /// chunk halving, whose premise is that a smaller chunk needs less
+    /// memory. The subset page holds exactly the routed union and its
+    /// manifest maps those global ids to slots 0.., so the caller gathers
+    /// with `routed_expert_ids` exactly as it does for a streamed union.
+    pub(super) fn routed_subset_of_cached_page(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+        expert_capacity: usize,
+    ) -> Result<
+        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
+        Qwen3_5ExecutionError,
+    > {
+        let Some((complete_page, complete_manifest)) =
+            self.cached_packed_page(layer_index, routed_expert_ids, expert_capacity)
+        else {
+            return Ok(None);
+        };
+        let page_slots = routed_expert_ids
+            .iter()
+            .map(|&expert_id| {
+                complete_manifest
+                    .page_slot_by_global_expert_id
+                    .get(expert_id)
+                    .copied()
+                    .filter(|slot| *slot != u32::MAX)
+                    .map(|slot| slot as usize)
+                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                        description: "a seated complete layer lost a routed expert's slot",
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let subset_page = complete_page
+            .select_experts(&self.runtime, &page_slots)
+            .map_err(|error| {
+                tracing::warn!(
+                    layer_index,
+                    %error,
+                    "the routed subset of a seated layer could not be built"
+                );
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "the routed subset of a seated layer could not be built",
+                }
+            })?;
+        let mut page_slot_by_global_expert_id = vec![u32::MAX; expert_capacity];
+        for (subset_slot, &expert_id) in routed_expert_ids.iter().enumerate() {
+            if let Some(slot) = page_slot_by_global_expert_id.get_mut(expert_id) {
+                *slot = u32::try_from(subset_slot).unwrap_or(u32::MAX);
+            }
+        }
+        let subset_manifest = QuantizedExpertPageManifest {
+            expert_ids: routed_expert_ids.to_vec(),
+            page_slot_by_global_expert_id,
+            source_manifests: Vec::new(),
+            payload_byte_count: subset_page.resident_payload_byte_count(),
+        };
+        Ok(Some((subset_page, subset_manifest)))
+    }
+
     /// Streams every expert in the layer. Seats that page only when the phase
     /// plan named this decoder index for mandatory complete-layer promotion.
     ///
@@ -188,11 +254,19 @@ impl Qwen3_5Model {
         Ok((streamed_weights, streamed_manifest))
     }
 
-    /// Decode-only: stream the unique routed experts for this token without
-    /// displacing a seated complete layer, then offer them for hot-expert
-    /// retention so a later token can hit the warm table instead of re-reading
-    /// storage (issue #372). The offer honors the active residency plan: a
-    /// layer the plan streams operation-local or is releasing stays unwarmed.
+    /// Streams the unique routed experts for one forward without displacing a
+    /// seated complete layer. A decode token's page is then offered for
+    /// hot-expert retention so a later token can hit the warm table instead
+    /// of re-reading storage (issue #372); the offer honors the active
+    /// residency plan, so a layer the plan streams operation-local or is
+    /// releasing stays unwarmed.
+    ///
+    /// A multi-token routed-union chunk keeps its page operation-local. The
+    /// warm-insert queue drains only after a decode token's evaluation, so
+    /// queueing prefill pages pinned every streamed union of every chunk (about
+    /// 0.6 GB packed per layer on the 122B bundle, 24 streamed layers per
+    /// chunk) until generation started — including the pages of failed chunk
+    /// attempts — which is what drove prefill into the ceiling.
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
@@ -223,7 +297,7 @@ impl Qwen3_5Model {
             let layer_has_complete_table = retained_experts
                 .borrow()
                 .has_complete_layer(layer_index, expert_capacity);
-            if warm_slot_count > 0 && !layer_has_complete_table {
+            if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
                 if should_commit_mandatory_routed_page(
                     route_token_count,
                     production_default_paging,

@@ -29,6 +29,9 @@ mod memory_behavior_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod retained_expert_cache_tests;
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod slot_writes_tests;
+
 /// Warm-table coverage of one decode token's routed experts.
 #[derive(Debug, Eq, PartialEq)]
 pub struct RoutedExpertCoverage {
@@ -237,6 +240,16 @@ impl RetainedExpertCache {
             no_evict: true,
         });
         Ok(())
+    }
+
+    /// Drops every queued slot insert without writing it, returning how many
+    /// were dropped. A forward that failed on the memory ceiling leaves its
+    /// queued pages behind; they pin streamed arrays the recovery is about to
+    /// measure against, so the recovery discards them before it samples.
+    pub fn discard_pending_inserts(&mut self) -> usize {
+        let discarded_count = self.pending_inserts.len();
+        self.pending_inserts.clear();
+        discarded_count
     }
 
     /// Counts one served read for each routed expert present in the layer's

@@ -4,6 +4,7 @@ use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
 use super::config_validation;
 use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
 use super::quantizations::optiq::OptiQQuantizationProfile;
+use crate::jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 #[cfg(test)]
 mod tests;
@@ -40,6 +41,7 @@ pub struct Qwen3_5Config {
     pub(super) model_weight_storage: ModelWeightStorage,
     pub(super) default_quantization_bits: u32,
     pub(super) default_quantization_group_size: u32,
+    pub(super) jangtq2_rms_norm_convention: Option<Jangtq2RmsNormConvention>,
     pub(super) text_config: Qwen3_5TextConfig,
     pub(super) activation_dtype: String,
     pub(super) feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
@@ -50,6 +52,16 @@ impl Qwen3_5Config {
     pub fn from_json_bytes(config_bytes: &[u8]) -> Result<Self, Qwen3_5ConfigError> {
         let config_document = serde_json::from_slice::<Qwen3_5ConfigDocument>(config_bytes)
             .map_err(Qwen3_5ConfigError::DeserializeConfig)?;
+        let jangtq2_rms_norm_convention = config_document
+            .norm_convention
+            .as_deref()
+            .map(Jangtq2RmsNormConvention::from_wire_name)
+            .transpose()
+            .map_err(
+                |norm_convention_error| Qwen3_5ConfigError::InvalidConfigValueDynamic {
+                    description: norm_convention_error.to_string(),
+                },
+            )?;
         let feed_forward_architecture = match config_document.model_type.as_str() {
             EXPECTED_DENSE_MODEL_TYPE => Qwen3_5FeedForwardArchitecture::Dense,
             EXPECTED_MOE_MODEL_TYPE => Qwen3_5FeedForwardArchitecture::MixtureOfExperts,
@@ -152,6 +164,7 @@ impl Qwen3_5Config {
             model_weight_storage,
             default_quantization_bits,
             default_quantization_group_size,
+            jangtq2_rms_norm_convention,
             text_config: config_document.text_config,
             activation_dtype,
             feed_forward_architecture,

@@ -115,14 +115,19 @@ impl Qwen3_5ResidentModel {
                     Some(Qwen3_5VisionModel::load_from_model_shards(
                         &runtime,
                         vision_config,
+                        &config,
                         &model_shards,
                         &vision_tensor_name_to_shard_index,
                     )?)
                 } else {
                     None
                 };
-                let weights =
-                    Qwen3_5Weights::bind_from_model_shards(&config, &shard_index, model_shards)?;
+                let weights = Qwen3_5Weights::bind_from_model_shards(
+                    &runtime,
+                    &config,
+                    &shard_index,
+                    model_shards,
+                )?;
                 Ok((weights, vision_model))
             },
         )?;

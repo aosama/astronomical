@@ -57,6 +57,39 @@ fn should_classify_a_root_vision_only_file_by_tensor_role_instead_of_filename() 
 }
 
 #[test]
+fn should_retain_mtp_tensors_as_auxiliary_without_adding_them_to_model_shards() {
+    let index_bytes = serde_json::to_vec(&json!({
+        "metadata": { "total_size": 32 },
+        "weight_map": {
+            "mtp.fc.biases": "model-mtp.safetensors"
+        }
+    }))
+    .expect("the synthetic auxiliary index should serialize");
+
+    let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &[])
+        .expect("MTP tensors should be inventoried as auxiliary");
+
+    assert!(
+        shard_index
+            .language_tensor_name_to_shard_file_name()
+            .is_empty()
+    );
+    assert!(
+        shard_index
+            .vision_tensor_name_to_shard_file_name()
+            .is_empty()
+    );
+    assert_eq!(
+        shard_index
+            .auxiliary_tensor_name_to_shard_file_name()
+            .get("mtp.fc.biases")
+            .map(String::as_str),
+        Some("model-mtp.safetensors")
+    );
+    assert!(shard_index.model_shard_file_names().is_empty());
+}
+
+#[test]
 fn should_reject_an_ornith_shard_index_with_an_unexpected_executable_language_tensor_name() {
     let language_tensor_profiles = expected_qwen3_5_language_tensor_profiles();
     let unexpected_tensor_name = "language_model.model.layers.0.linear_attn.in_proj_qkvz.weight";

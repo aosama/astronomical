@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::vision_tensor_spec;
-use super::{Qwen3_5ArtifactError, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
+use super::{Qwen3_5ArtifactError, Qwen3_5Config, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
 
 /// Physical storage validated for a Qwen3.5 visual tower.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,6 +27,7 @@ impl ValidatedVisionTowerStorage {
 pub(super) fn validate_vision_tower_inventory(
     shard_index: &Qwen3_5ShardIndex,
     vision_config: Option<&Qwen3_5VisionConfig>,
+    qwen3_5_config: &Qwen3_5Config,
 ) -> Result<ValidatedVisionTowerStorage, Qwen3_5ArtifactError> {
     let vision_tensor_name_to_shard_file_name = shard_index.vision_tensor_name_to_shard_file_name();
     if vision_tensor_name_to_shard_file_name.is_empty() {
@@ -35,10 +36,13 @@ pub(super) fn validate_vision_tower_inventory(
     let vision_config = vision_config.ok_or(Qwen3_5ArtifactError::MissingVisionConfig)?;
 
     let expected_vision_tensor_names =
-        vision_tensor_spec::qwen3_5_vision_tensor_profiles(vision_config)
-            .into_iter()
-            .map(|tensor_profile| tensor_profile.name)
-            .collect::<BTreeSet<_>>();
+        vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model(
+            vision_config,
+            qwen3_5_config,
+        )?
+        .into_iter()
+        .map(|tensor_profile| tensor_profile.name)
+        .collect::<BTreeSet<_>>();
     let actual_vision_tensor_names = vision_tensor_name_to_shard_file_name
         .keys()
         .cloned()
