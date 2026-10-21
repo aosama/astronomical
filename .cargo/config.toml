@@ -172,3 +172,9 @@ test-prism-hadamard-serving-throughput = "test --release --no-fail-fast -p astro
 # test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
 # one-token budget coverage; set PRISM_HADAMARD_QWEN35_PACK_DIR first.
 test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --features serving-acceptance --test chat_serving should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack -- --ignored --nocapture --test-threads=1"
+# test-jangtq2-plan: the ignored library test that validates every codebook
+# projection of an installed jangtq2 bundle against real shard headers
+# through the production artifact validator. Set ASTRONOMICAL_JANGTQ2_MODEL_DIR
+# to the installed bundle directory first; the test is ignored by default so
+# every offline lane runs without any model artifact.
+test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --lib should_plan_every_jangtq2_projection_from_the_real_artifact_headers -- --ignored --nocapture"
