@@ -25,9 +25,11 @@
 //!    bytes for them: the offer side and the budget side disagree.
 //! 2. The recovery formula computes a sub-table-granularity reclamation target
 //!    (64,597,002 bytes) while the only eviction granularity is one whole
-//!    855,638,016-byte table, and the paged profile never retries the same
-//!    chunk, so every failure halves the chunk and re-streams at least one
-//!    complete layer from SSD.
+//!    855,638,016-byte table. At the time the paged profile also never retried
+//!    the same chunk, so every failure halved the chunk and re-streamed at
+//!    least one complete layer from SSD; the policy now authorizes exactly one
+//!    unchanged retry once a whole-table eviction satisfied the target, and the
+//!    test below pins that remediation.
 //! 3. The budget-refresh floor legalizes any overshoot forever: once resident
 //!    bytes exceed the composed budget, every later publication floors the
 //!    cache ceiling at the overshoot, and the composed budget never reasserts
@@ -203,19 +205,18 @@ fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
 }
 
 #[test]
-fn should_reproduce_the_first_incident_recovery_target_and_refused_retry() {
+fn should_reproduce_the_first_incident_recovery_target_and_authorize_one_retry() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
     // The recovery arithmetic of the incident's first failure, reproduced
     // exactly: the workspace formula reconstructs 947,881,340 bytes (the
     // 92,243,324 transient bytes alive at the failure plus the rejected
-    // allocation), the reclamation formula demands 64,597,002 bytes, and the
-    // paged profile refuses the unchanged retry. The target is 13x smaller than
-    // the smallest eviction granularity the cache owns (one whole
-    // 855,638,016-byte table), so one table satisfies it — and the halved retry
-    // must re-pay at least one complete-layer SSD read that the same budget
-    // refuses to seat.
+    // allocation) and the reclamation formula demands 64,597,002 bytes. The
+    // target is 13x smaller than the smallest eviction granularity the cache
+    // owns (one whole 855,638,016-byte table), so one table satisfies it, and
+    // the unchanged chunk is retried once instead of halving and re-paying a
+    // complete-layer SSD read.
     let fixed_workspace_bytes = ForwardRecoveryPolicy::fixed_workspace_bytes(
         ACTIVE_MEMORY_BEFORE_RECLAMATION_BYTES,
         ACTIVE_MEMORY_AT_FAILURE_BYTES,
@@ -241,14 +242,24 @@ fn should_reproduce_the_first_incident_recovery_target_and_refused_retry() {
     );
 
     assert!(
-        !ForwardRecoveryPolicy::retry_is_authorized(
+        ForwardRecoveryPolicy::retry_is_authorized(
             false,
             RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64,
             RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64,
             required_reclamation_bytes,
             AdaptiveRamGrowthExecutionProfile::Paged,
         ),
-        "the paged profile must never retry the unchanged chunk"
+        "one whole-table eviction satisfies the target, so the unchanged chunk is retried once"
+    );
+    assert!(
+        !ForwardRecoveryPolicy::retry_is_authorized(
+            true,
+            RETAINED_PAYLOAD_AT_FIRST_RECOVERY_BYTES as u64,
+            RETAINED_PAYLOAD_AFTER_ONE_TABLE_EVICTION_BYTES as u64,
+            required_reclamation_bytes,
+            AdaptiveRamGrowthExecutionProfile::Paged,
+        ),
+        "a second failure on the retried chunk must not loop"
     );
 }
 
