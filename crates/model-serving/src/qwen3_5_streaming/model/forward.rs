@@ -74,9 +74,11 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .retain_layer_route(layer_index, &selected_indices);
         }
-        // A seated complete layer remaps every route on-device. Do not copy
-        // router indices to the host for that layer.
-        if should_use_loaded_model_mode && self.retained_experts.is_some() {
+        // A seated complete layer serves a decode token straight from the
+        // table, remapping the route on-device: no router indices are copied
+        // to the host for that layer. Multi-token chunks fall through to the
+        // host-side route so they can decode only their routed union.
+        if should_use_loaded_model_mode && token_count == 1 && self.retained_experts.is_some() {
             let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
             let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
             if matches!(
@@ -132,16 +134,40 @@ impl Qwen3_5Model {
             let disposition = self.expert_page_disposition(layer_index, expert_capacity);
             match disposition {
                 ExpertPageDisposition::FullHit => {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::RetainedRouteAssignmentHitCount,
+                        u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
+                    );
+                    if token_count > 1 {
+                        // A chunk decodes the page it multiplies, so give it
+                        // exactly its routed union of the seated layer.
+                        let (subset_weights, subset_manifest) = self
+                            .routed_subset_of_cached_page(
+                                layer_index,
+                                routed_expert_ids,
+                                expert_capacity,
+                            )?
+                            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                                description: "cache hit reported a page that vanished",
+                            })?;
+                        return self.forward_moe_paged_with_performance_attribution(
+                            hidden_states,
+                            mixture_of_experts_weights,
+                            &subset_weights,
+                            &subset_manifest,
+                            &selected_indices,
+                            routed_expert_ids,
+                            &selected_scores,
+                            should_use_compiled_elementwise_graphs,
+                            performance_attribution,
+                        );
+                    }
                     let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
                     let (packed_weights, packed_manifest) = self
                         .cached_packed_page(layer_index, &complete_expert_ids, expert_capacity)
                         .ok_or(Qwen3_5ExecutionError::InvalidInput {
                             description: "cache hit reported a page that vanished",
                         })?;
-                    performance_attribution.record_counter(
-                        PerformanceCounter::RetainedRouteAssignmentHitCount,
-                        u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
-                    );
                     return self.forward_moe_paged_with_performance_attribution(
                         hidden_states,
                         mixture_of_experts_weights,

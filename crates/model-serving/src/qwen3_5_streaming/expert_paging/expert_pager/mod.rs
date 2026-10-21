@@ -2,6 +2,9 @@
 
 mod rust_expert_streaming;
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod expert_subset_tests;
+
 pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
 
 use std::cell::Cell;
@@ -107,6 +110,65 @@ impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
 }
 
 impl Qwen3_5PagedExpertWeights {
+    /// Builds the page holding only the experts at `page_slots` of this page,
+    /// in the given order, so a multi-token forward over a seated complete
+    /// layer decodes and multiplies the chunk's routed union instead of every
+    /// expert. Slots are validated against the page's expert axis up front;
+    /// the gathers themselves stay lazy.
+    pub(crate) fn select_experts(
+        &self,
+        runtime: &astronomical_runtime_integration::MlxRuntime,
+        page_slots: &[usize],
+    ) -> Result<Self, ExpertPagingError> {
+        let page_expert_count = self.gate_projection.expert_count();
+        if page_slots.is_empty() {
+            return Err(ExpertPagingError::InvalidPagingPlan {
+                description: "an expert subset must name at least one page slot".to_owned(),
+            });
+        }
+        let slot_indices = page_slots
+            .iter()
+            .map(|&page_slot| {
+                if page_slot >= page_expert_count {
+                    return Err(ExpertPagingError::InvalidPagingPlan {
+                        description: format!(
+                            "page slot {page_slot} is outside a page of {page_expert_count} experts"
+                        ),
+                    });
+                }
+                u32::try_from(page_slot).map_err(|_| ExpertPagingError::InvalidPagingPlan {
+                    description: "page slot exceeds the MLX index range".to_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let slot_count = i32::try_from(slot_indices.len()).map_err(|_| {
+            ExpertPagingError::InvalidPagingPlan {
+                description: "expert subset exceeds the MLX shape range".to_owned(),
+            }
+        })?;
+        let slot_index_array =
+            MlxArray::from_u32(&slot_indices, &[slot_count]).map_err(|error| {
+                ExpertPagingError::Runtime {
+                    description: error.to_string(),
+                }
+            })?;
+        let select = |projection: &Qwen3_5AffineWeights| {
+            projection
+                .select_experts(runtime, &slot_index_array)
+                .map_err(|error| ExpertPagingError::Runtime {
+                    description: error.to_string(),
+                })
+        };
+        Ok(Self {
+            gate_projection: select(&self.gate_projection)?,
+            up_projection: select(&self.up_projection)?,
+            down_projection: select(&self.down_projection)?,
+            gate_activation_rotation: self.gate_activation_rotation,
+            up_activation_rotation: self.up_activation_rotation,
+            down_activation_rotation: self.down_activation_rotation,
+        })
+    }
+
     pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,

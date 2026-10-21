@@ -1,6 +1,6 @@
 //! Returns a packed complete expert layer on hit, or streams one complete layer on miss.
 
-use crate::expert_paging::QuantizedExpertPageManifest;
+use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_paging::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::{
@@ -112,6 +112,67 @@ impl Qwen3_5Model {
         let retained_experts = self.retained_experts.as_ref()?;
         let cache = retained_experts.borrow();
         cache.packed_page(layer_index, complete_expert_ids, expert_capacity)
+    }
+
+    /// Returns the routed experts of a seated complete layer as their own
+    /// page, for a multi-token forward.
+    ///
+    /// A chunk of several tokens decodes the packed page it multiplies, so
+    /// handing it the complete table would decode every expert of the layer
+    /// (about 4.8 GB on the 122B bundle) whatever the chunk size — which
+    /// defeats prefill's chunk halving, whose premise is that a smaller chunk
+    /// needs less memory. The subset page holds exactly the routed union and
+    /// its manifest maps those global ids to slots 0.., so the caller gathers
+    /// with `routed_expert_ids` exactly as it does for a streamed union.
+    pub(super) fn routed_subset_of_cached_page(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+        expert_capacity: usize,
+    ) -> Result<
+        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
+        Qwen3_5ExecutionError,
+    > {
+        let Some((complete_page, complete_manifest)) =
+            self.cached_packed_page(layer_index, routed_expert_ids, expert_capacity)
+        else {
+            return Ok(None);
+        };
+        let page_slots = routed_expert_ids
+            .iter()
+            .map(|&expert_id| {
+                complete_manifest
+                    .page_slot_by_global_expert_id
+                    .get(expert_id)
+                    .copied()
+                    .filter(|slot| *slot != u32::MAX)
+                    .map(|slot| slot as usize)
+                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                        description: "a seated complete layer lost a routed expert's slot",
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let subset_page = complete_page
+            .select_experts(&self.runtime, &page_slots)
+            .map_err(|error| Qwen3_5ExecutionError::InvalidInput {
+                description: Box::leak(
+                    format!("the routed subset of a seated layer could not be built: {error}")
+                        .into_boxed_str(),
+                ),
+            })?;
+        let mut page_slot_by_global_expert_id = vec![u32::MAX; expert_capacity];
+        for (subset_slot, &expert_id) in routed_expert_ids.iter().enumerate() {
+            if let Some(slot) = page_slot_by_global_expert_id.get_mut(expert_id) {
+                *slot = u32::try_from(subset_slot).unwrap_or(u32::MAX);
+            }
+        }
+        let subset_manifest = QuantizedExpertPageManifest {
+            expert_ids: routed_expert_ids.to_vec(),
+            page_slot_by_global_expert_id,
+            source_manifests: Vec::new(),
+            payload_byte_count: subset_page.resident_payload_byte_count(),
+        };
+        Ok(Some((subset_page, subset_manifest)))
     }
 
     /// Streams every expert in the layer. Seats that page only when the phase
