@@ -214,6 +214,10 @@ impl Qwen3_5ExpertPager {
                 })?;
                 let decoded_codebook_weight_shapes =
                     layer_plan.jangtq2_decoded_weight_page_shapes(routed_expert_count)?;
+                let decode_workspace_tensor_shapes =
+                    layer_plan.jangtq2_decode_workspace_page_shapes(routed_expert_count)?;
+                let output_assembly_copy_count =
+                    layer_plan.jangtq2_decoded_output_assembly_copy_count(routed_expert_count);
                 let decoder_index_tensor_shapes = decoded_codebook_weight_shapes
                     .iter()
                     .map(|decoded_weight_shape| {
@@ -224,6 +228,8 @@ impl Qwen3_5ExpertPager {
                 let routed_page_peak_bytes = crate::memory::expert_page_peak_allocation_bytes(
                     routed_source_page_bytes,
                     &decoded_codebook_weight_shapes,
+                    &decode_workspace_tensor_shapes,
+                    output_assembly_copy_count,
                     size_of::<u16>(),
                     crate::jangtq2_qwen35::mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
                     size_of::<u32>(),

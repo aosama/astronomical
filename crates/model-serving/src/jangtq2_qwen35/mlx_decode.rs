@@ -14,25 +14,15 @@ use super::hadamard32;
 const CODEBOOK_DECODE_OPERATION: &str = "decode jangtq2 codebook expert rows";
 const HADAMARD_ACTIVATION_ROTATION_OPERATION: &str = "rotate jangtq2 expert activations";
 
-/// Maximum number of full-width temporary arrays held simultaneously.
-///
-/// The high-word shift overlaps the retained low-word result with its source
-/// and output; subsequent bitwise stages also hold two inputs and one output.
-/// The final bfloat16 page is accounted for as persisted output, not workspace.
-/// The six one-dimensional index arrays are accounted for separately by page
-/// admission, including when a synthetic page has only one row.
-pub const MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT: usize = 3;
-
-/// Maximum number of decoder-owned arrays smaller than one full decoded
-/// weight that are live simultaneously.
-///
-/// The six one-dimensional code index arrays, the codebook level table, the
-/// float32 row scales, and the expanded scale operand. Each is bounded by the
-/// larger of the decoded input width and the page's output-row count, which is
-/// the shape page admission reserves for them; the input width is at least 32
-/// and the level table holds at most 16 entries, so nine such reservations
-/// strictly cover every combination, including a synthetic single-row page.
-pub const JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT: usize = 9;
+// Admission-facing decode facts are family format constants shared with the
+// un-gated artifact contract and the memory package, so they live in
+// `codebook` and are re-exported here for the direct-MLX callers that already
+// resolve them through this module.
+pub use super::codebook::{
+    decode_block_expert_count, decoded_output_assembly_copy_count,
+    JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT, JANGTQ2_DECODE_BLOCK_EXPERT_COUNT,
+    MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
+};
 
 /// Decodes packed codebook rows and applies each row's float16 scale.
 ///
@@ -146,27 +136,125 @@ pub fn decode_expert_weight_rows(
         });
     }
 
-    let low_word_index_array = MlxArray::from_i32(&low_word_indices, &code_index_shape)?;
-    let high_word_index_array = MlxArray::from_i32(&high_word_indices, &code_index_shape)?;
-    let low_bit_shift_array = MlxArray::from_u32(&low_bit_shifts, &code_index_shape)?;
-    let high_bit_shift_array = MlxArray::from_u32(&high_bit_shifts, &code_index_shape)?;
-    let crossing_code_mask_array = MlxArray::from_u32(&crossing_code_masks, &code_index_shape)?;
-    let complete_code_mask_array =
-        MlxArray::from_u32(&vec![code_mask; input_width], &code_index_shape)?;
+    // The per-width index tables and the codebook level table are shared by
+    // every expert block of the page, so they are built once per call and stay
+    // live across the block loop; page admission accounts for them through the
+    // auxiliary-array count.
+    let decode_index_tables = DecodeIndexTables {
+        low_word_index_array: MlxArray::from_i32(&low_word_indices, &code_index_shape)?,
+        high_word_index_array: MlxArray::from_i32(&high_word_indices, &code_index_shape)?,
+        low_bit_shift_array: MlxArray::from_u32(&low_bit_shifts, &code_index_shape)?,
+        high_bit_shift_array: MlxArray::from_u32(&high_bit_shifts, &code_index_shape)?,
+        crossing_code_mask_array: MlxArray::from_u32(&crossing_code_masks, &code_index_shape)?,
+        complete_code_mask_array: MlxArray::from_u32(&vec![code_mask; input_width], &code_index_shape)?,
+    };
+    let codebook_levels = codebook::codebook_levels(bit_width)
+        .expect("supported codebook bit widths always provide a level table");
+    let codebook_level_count = i32::try_from(codebook_levels.len())
+        .map_err(|_| decode_error("codebook level count exceeds the MLX shape range".to_owned()))?;
+    let codebook_level_array = MlxArray::from_f32(&codebook_levels, &[codebook_level_count])?;
 
+    let block_expert_count = decode_block_expert_count(selected_expert_count);
+    if block_expert_count >= selected_expert_count {
+        // Single-block fast path: the page itself is the block. The per-token
+        // routed page (top-K experts) always lands here and performs exactly
+        // the operations of the pre-blocking decoder.
+        return decode_expert_weight_block(
+            runtime,
+            packed_code_words,
+            row_scales,
+            &decode_index_tables,
+            &codebook_level_array,
+        );
+    }
+
+    // Complete-layer pages decode in expert blocks so the transient
+    // full-width workspace follows the block size rather than the page size
+    // (see `JANGTQ2_DECODE_BLOCK_EXPERT_COUNT`). Blocks decode strictly one
+    // at a time: each block's staged chain detaches fully before the next
+    // block gathers, which is what bounds simultaneous temporaries to the
+    // largest single block. The detached block outputs coexist only during
+    // the final assembly concatenation, which
+    // `decoded_output_assembly_copy_count` prices into the page peak.
+    let mut decoded_block_weights =
+        Vec::with_capacity(selected_expert_count.div_ceil(block_expert_count));
+    for block_start_expert_index in (0..selected_expert_count).step_by(block_expert_count) {
+        let block_end_expert_index =
+            (block_start_expert_index + block_expert_count).min(selected_expert_count);
+        let block_expert_indices = (block_start_expert_index..block_end_expert_index)
+            .map(|expert_index| {
+                i32::try_from(expert_index)
+                    .map_err(|_| decode_error("expert index exceeds the MLX index range".to_owned()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let block_index_shape = [i32::try_from(block_expert_indices.len()).map_err(|_| {
+            decode_error("block expert count exceeds the MLX shape range".to_owned())
+        })?];
+        let block_index_array = MlxArray::from_i32(&block_expert_indices, &block_index_shape)?;
+        // Gathering the block's packed rows and scales materializes one
+        // block-sized uint32 copy plus the small float16 scale rows inside
+        // the block's own staged evaluation; the page-sized sources stay the
+        // caller's loaded payload, exactly as admission expects.
+        let block_packed_words = runtime.take_axis(packed_code_words, &block_index_array, 0)?;
+        let block_row_scales = runtime.take_axis(row_scales, &block_index_array, 0)?;
+        let decoded_block_weight = decode_expert_weight_block(
+            runtime,
+            &block_packed_words,
+            &block_row_scales,
+            &decode_index_tables,
+            &codebook_level_array,
+        )?;
+        drop(block_packed_words);
+        drop(block_row_scales);
+        decoded_block_weights.push(decoded_block_weight);
+    }
+    let decoded_block_weight_references = decoded_block_weights.iter().collect::<Vec<_>>();
+    let decoded_weight_bfloat16 = runtime.concatenate_axis(&decoded_block_weight_references, 0)?;
+    materialize_and_detach_jangtq2_array(runtime, &decoded_weight_bfloat16)?;
+    Ok(decoded_weight_bfloat16)
+}
+
+/// Per-width index and level tables shared by every expert block of a page.
+struct DecodeIndexTables {
+    low_word_index_array: MlxArray,
+    high_word_index_array: MlxArray,
+    low_bit_shift_array: MlxArray,
+    high_bit_shift_array: MlxArray,
+    crossing_code_mask_array: MlxArray,
+    complete_code_mask_array: MlxArray,
+}
+
+/// Runs the staged decode chain over one block of packed expert rows.
+///
+/// Every intermediate array is evaluated and detached before the next stage
+/// records, so the block holds at most three full-width block-sized arrays at
+/// any moment (the gathered packed block overlapping the two shifted words,
+/// then the bitwise stages' two inputs and one output).
+fn decode_expert_weight_block(
+    runtime: &MlxRuntime,
+    block_packed_words: &MlxArray,
+    block_row_scales: &MlxArray,
+    decode_index_tables: &DecodeIndexTables,
+    codebook_level_array: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
     let shifted_low_words = {
-        let low_words = runtime.take_axis(packed_code_words, &low_word_index_array, 2)?;
-        let shifted_low_words = runtime.right_shift(&low_words, &low_bit_shift_array)?;
+        let low_words =
+            runtime.take_axis(block_packed_words, &decode_index_tables.low_word_index_array, 2)?;
+        let shifted_low_words =
+            runtime.right_shift(&low_words, &decode_index_tables.low_bit_shift_array)?;
         materialize_and_detach_jangtq2_array(runtime, &shifted_low_words)?;
         shifted_low_words
     };
     let shifted_high_words = {
-        let high_words = runtime.take_axis(packed_code_words, &high_word_index_array, 2)?;
-        let shifted_high_words = runtime.left_shift(&high_words, &high_bit_shift_array)?;
+        let high_words =
+            runtime.take_axis(block_packed_words, &decode_index_tables.high_word_index_array, 2)?;
+        let shifted_high_words =
+            runtime.left_shift(&high_words, &decode_index_tables.high_bit_shift_array)?;
         materialize_and_detach_jangtq2_array(runtime, &shifted_high_words)?;
         shifted_high_words
     };
-    let crossing_high_bits = runtime.bitwise_and(&shifted_high_words, &crossing_code_mask_array)?;
+    let crossing_high_bits =
+        runtime.bitwise_and(&shifted_high_words, &decode_index_tables.crossing_code_mask_array)?;
     materialize_and_detach_jangtq2_array(runtime, &crossing_high_bits)?;
     drop(shifted_high_words);
 
@@ -176,7 +264,8 @@ pub fn decode_expert_weight_rows(
         drop(shifted_low_words);
         drop(crossing_high_bits);
 
-        let masked_codes = runtime.bitwise_and(&combined_codes, &complete_code_mask_array)?;
+        let masked_codes =
+            runtime.bitwise_and(&combined_codes, &decode_index_tables.complete_code_mask_array)?;
         materialize_and_detach_jangtq2_array(runtime, &masked_codes)?;
         drop(combined_codes);
 
@@ -185,16 +274,11 @@ pub fn decode_expert_weight_rows(
         decoded_code_indices
     };
 
-    let codebook_levels = codebook::codebook_levels(bit_width)
-        .expect("supported codebook bit widths always provide a level table");
-    let codebook_level_count = i32::try_from(codebook_levels.len())
-        .map_err(|_| decode_error("codebook level count exceeds the MLX shape range".to_owned()))?;
-    let codebook_level_array = MlxArray::from_f32(&codebook_levels, &[codebook_level_count])?;
     let decoded_codebook_levels =
-        runtime.take_axis(&codebook_level_array, &decoded_code_indices, 0)?;
+        runtime.take_axis(codebook_level_array, &decoded_code_indices, 0)?;
     materialize_and_detach_jangtq2_array(runtime, &decoded_codebook_levels)?;
     drop(decoded_code_indices);
-    let row_scales_float32 = runtime.astype(row_scales, MlxDtype::Float32)?;
+    let row_scales_float32 = runtime.astype(block_row_scales, MlxDtype::Float32)?;
     let expanded_row_scales = runtime.expand_dims(&row_scales_float32, -1)?;
     let decoded_weight_float32 =
         runtime.multiply(&decoded_codebook_levels, &expanded_row_scales)?;
@@ -299,6 +383,96 @@ mod tests {
                     .expect("golden packed words fit uint32")
             })
             .collect()
+    }
+
+    #[test]
+    #[serial]
+    fn should_decode_a_multi_block_page_identically_to_per_expert_pages() {
+        let runtime = test_runtime();
+        // Forty experts on a 3-bit, 64-wide page forces two decode blocks
+        // (32 + 8), exercising the gather, per-block staging, and assembly
+        // concatenation while a per-expert reference decode pins bit-exact
+        // parity with the single-block path.
+        let expert_count = 40_usize;
+        let output_rows = 2_usize;
+        let packed_words_per_row = 6_usize;
+        let decoded_width = packed_words_per_row * u32::BITS as usize / 3;
+        let packed_words_host: Vec<u32> = (0..expert_count * output_rows * packed_words_per_row)
+            .map(|word_index| (word_index as u32).wrapping_mul(2_654_435_761).rotate_left(7))
+            .collect();
+        let row_scales_host: Vec<f32> = (0..expert_count * output_rows)
+            .map(|scale_index| ((scale_index % 7) as f32 + 1.0) / 4.0)
+            .collect();
+        let packed_page = MlxArray::from_u32(
+            &packed_words_host,
+            &[
+                expert_count as i32,
+                output_rows as i32,
+                packed_words_per_row as i32,
+            ],
+        )
+        .expect("the synthetic multi-block page should form a valid tensor");
+        let page_scales = runtime
+            .array_from_f32(
+                &row_scales_host,
+                &[expert_count as i32, output_rows as i32],
+            )
+            .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
+            .expect("the synthetic multi-block row scales should upload");
+
+        let decoded_page = decode_expert_weight_rows(&runtime, &packed_page, &page_scales, 3)
+            .expect("the multi-block page should decode");
+        assert_eq!(
+            decoded_page.shape(),
+            [
+                expert_count as i32,
+                output_rows as i32,
+                decoded_width as i32
+            ]
+        );
+        let decoded_page_values = runtime
+            .astype(&decoded_page, MlxDtype::Float32)
+            .expect("the decoded page should convert for comparison")
+            .to_vec_f32()
+            .expect("the decoded page values should be readable");
+
+        for expert_index in 0..expert_count {
+            let expert_packed_words = &packed_words_host
+                [expert_index * output_rows * packed_words_per_row..(expert_index + 1) * output_rows * packed_words_per_row];
+            let expert_packed_page = MlxArray::from_u32(
+                expert_packed_words,
+                &[1, output_rows as i32, packed_words_per_row as i32],
+            )
+            .expect("one expert's packed rows should form a valid tensor");
+            let expert_row_scales = &row_scales_host
+                [expert_index * output_rows..(expert_index + 1) * output_rows];
+            let expert_scales = runtime
+                .array_from_f32(expert_row_scales, &[1, output_rows as i32])
+                .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
+                .expect("one expert's row scales should upload");
+            let decoded_expert = decode_expert_weight_rows(
+                &runtime,
+                &expert_packed_page,
+                &expert_scales,
+                3,
+            )
+            .expect("the per-expert reference page should decode");
+            let decoded_expert_values = runtime
+                .astype(&decoded_expert, MlxDtype::Float32)
+                .expect("the per-expert decode should convert for comparison")
+                .to_vec_f32()
+                .expect("the per-expert decoded values should be readable");
+            let page_offset = expert_index * output_rows * decoded_width;
+            for (decoded_position, reference_value) in decoded_expert_values
+                .iter()
+                .enumerate()
+            {
+                assert_eq!(
+                    decoded_page_values[page_offset + decoded_position], *reference_value,
+                    "expert {expert_index} must decode identically through the blocked path"
+                );
+            }
+        }
     }
 
     #[test]

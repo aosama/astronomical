@@ -4,3 +4,5 @@
 //! is pinned to the encoder's, not merely self-consistent.
 
 mod golden_vector_tests;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod decode_throughput_tests;
