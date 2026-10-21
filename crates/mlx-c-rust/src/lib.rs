@@ -68,7 +68,6 @@ pub use compile::graph::{
     MlxGraphBuilder, array_from_vector, graph_output_array, set_graph_output,
     set_graph_output_vector,
 };
-pub use compile::jangtq2_codebook_decode::apply_compiled_jangtq2_codebook_decode;
 pub use compile::multi_output_graph::MlxCompiledMultiOutputGraph;
 pub use compile::norm_fusion::MlxCompiledDualHeadNorm;
 pub use compile::swiglu::MlxCompiledSwiGlu;

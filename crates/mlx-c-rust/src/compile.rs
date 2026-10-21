@@ -4,7 +4,6 @@ pub(crate) mod attention_output_gate;
 pub(crate) mod elementwise_graphs;
 pub(crate) mod gated_delta_rate_activation;
 pub(crate) mod graph;
-pub(crate) mod jangtq2_codebook_decode;
 pub(crate) mod multi_output_graph;
 pub(crate) mod norm_fusion;
 pub(crate) mod signed_float32_cast;

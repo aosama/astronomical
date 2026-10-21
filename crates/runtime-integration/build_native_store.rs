@@ -184,8 +184,12 @@ impl NativeBuildStore {
             .schema_directory()
             .join("locks")
             .join(format!("{}.lock", self.native_identity));
+        // A lock file carries no content worth keeping, but truncating it
+        // while another process holds the lock would race that holder's
+        // view of the file, so the open never truncates.
         let lock_file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&lock_file_path)?;

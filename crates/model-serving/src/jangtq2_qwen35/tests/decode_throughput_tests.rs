@@ -6,8 +6,8 @@
 //! throughput measurement starts here and climbs upward, so a regression or
 //! improvement is attributable to one layer before the layers above it are
 //! measured. The tests report `median_ms`, `decoded_gigabytes_per_second`,
-//! and the per-shape peak-reservation arithmetic implied by the decoder's
-//! exported workspace constants; they assert measurement shape (finite,
+//! and the per-shape peak-reservation arithmetic (packed source plus
+//! decoded output); they assert measurement shape (finite,
 //! positive, exact element counts) and never assert throughput thresholds —
 //! the durable throughput ledger owns trend comparisons.
 //!
@@ -54,10 +54,9 @@ const MEASURED_ITERATIONS: usize = 10;
 const PREFILL_CHUNK_TOKENS: usize = 2_048;
 
 fn test_runtime() -> astronomical_runtime_integration::MlxRuntime {
-    // The complete-layer cases must admit the decoder's current whole-page
-    // workspace (roughly 15 GB before expert blocking, a few GB after), so the
-    // limit stays above both the baseline and the remediated peak: the same
-    // test then measures the code before and after the fix without edits.
+    // The complete-layer cases allocate the packed source plus a 1.5 GB
+    // decoded projection; the limit stays well above that so the lane also
+    // measures a regressed decoder that reintroduced workspace arrays.
     MlxRuntime::initialize(
         MlxMemoryLimits::new(20 * 1024 * 1024 * 1024, 20 * 1024 * 1024 * 1024)
             .expect("the jangtq2 decode throughput memory limits should be valid"),
@@ -102,8 +101,8 @@ fn median_duration_millis(durations_ms: &[f64]) -> f64 {
 
 /// Runs one decode case: warms up, measures, and reports the tier-0 line.
 ///
-/// The decoder detaches every staged array, so each call is already fully
-/// synchronous and per-call wall time is honest without extra evaluation.
+/// The decoder evaluates and detaches its output, so each call is already
+/// fully synchronous and per-call wall time is honest without extra evaluation.
 #[cfg(feature = "direct-mlx")]
 fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u32) {
     let runtime = test_runtime();
@@ -139,25 +138,6 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
     let decoded_element_count: u64 = decoded_shape.iter().product::<usize>() as u64;
     let decoded_gigabytes =
         decoded_element_count as f64 * std::mem::size_of::<u16>() as f64 / GIGABYTE_BYTES;
-    // Peak-reservation arithmetic the pager admits per projection: the
-    // exported temporary count times four-byte elements, plus the auxiliary
-    // index arrays. Reporting it beside the timing keeps the memory contract
-    // visible at the tier where it is created.
-    let auxiliary_bound_element_count =
-        (decoded_shape[2] as u64).max((decoded_shape[0] * decoded_shape[1]) as u64);
-    let block_element_count = decoded_element_count
-        / u64::try_from(decoded_shape[0]).expect("the expert count fits u64")
-        * u64::try_from(codebook::decode_block_expert_count(expert_count))
-            .expect("the block expert count fits u64");
-    let temporary_workspace_gigabytes = block_element_count as f64
-        * mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT as f64
-        * std::mem::size_of::<u32>() as f64
-        / GIGABYTE_BYTES;
-    let auxiliary_workspace_gigabytes = auxiliary_bound_element_count as f64
-        * mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT as f64
-        * std::mem::size_of::<u32>() as f64
-        / GIGABYTE_BYTES;
-
     for _ in 0..WARMUP_ITERATIONS {
         drop(
             mlx_decode::decode_expert_weight_rows(
@@ -173,13 +153,10 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
     let mut measured_peak_delta_bytes: Option<u64> = None;
     for measured_iteration in 0..MEASURED_ITERATIONS {
         if measured_iteration == 0 {
-            // Peak-memory contract: the compiled decoder must live inside
-            // the workspace admission reserves (one expert block of
-            // temporaries, the persisted output, one assembly copy for
-            // multi-block pages, and the small index tables). If an MLX
-            // upgrade changes intermediate buffer lifetimes so the compiled
-            // path overshoots this bound, page admission would under-reserve
-            // real serving: fail here instead.
+            // Peak-memory contract: the decoder must live inside the
+            // admission reserve (packed source plus persisted output). If a
+            // change reintroduces intermediate arrays, page admission would
+            // under-reserve real serving: fail here instead.
             runtime
                 .reset_peak_memory()
                 .expect("the MLX peak-memory counter should reset");
@@ -229,32 +206,25 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
     );
     if let Some(observed_peak_delta_bytes) = measured_peak_delta_bytes {
         // The bound mirrors expert_page_peak_allocation_bytes for this page:
-        // packed sources, persisted output with one assembly copy,
-        // one-block temporaries, and the auxiliary index tables, with 20
-        // percent slack for MLX-internal buffers the decoder cannot see.
+        // packed sources plus the persisted output, with 20 percent slack for
+        // MLX-internal buffers the decoder cannot see. The Metal decoder has
+        // no workspace term, so any temporaries an MLX upgrade introduced
+        // would fail here before admission under-reserved real serving.
         let packed_source_bytes =
             (expert_count * output_rows * packed_words * std::mem::size_of::<u32>()) as u64;
         let persisted_output_bytes = decoded_element_count * std::mem::size_of::<u16>() as u64;
-        let assembly_copy_count = codebook::decoded_output_assembly_copy_count(expert_count);
-        let bound_bytes = packed_source_bytes
-            + persisted_output_bytes.saturating_mul(assembly_copy_count.saturating_sub(1))
-            + block_element_count
-                * mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT as u64
-                * std::mem::size_of::<u32>() as u64
-            + auxiliary_bound_element_count
-                * mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT as u64
-                * std::mem::size_of::<u32>() as u64;
+        let bound_bytes = packed_source_bytes + persisted_output_bytes;
         let bound_bytes_with_slack = bound_bytes + bound_bytes / 5;
         assert!(
             observed_peak_delta_bytes <= bound_bytes_with_slack,
-            "case={case_name} decode peaked at {observed_peak_delta_bytes} bytes, above the admission-bound-plus-slack {bound_bytes_with_slack}: the compiled decoder's intermediate lifetimes no longer match the exported workspace contract"
+            "case={case_name} decode peaked at {observed_peak_delta_bytes} bytes, above the admission-bound-plus-slack {bound_bytes_with_slack}: the page decoder allocated intermediate arrays the admission contract does not price"
         );
         eprintln!(
             "[jangtq2-decode-perf:tier=operation] case={case_name} peak_delta_bytes={observed_peak_delta_bytes} admission_bound_bytes={bound_bytes}"
         );
     }
     eprintln!(
-        "[jangtq2-decode-perf:tier=operation] case={case_name} experts={expert_count} rows={output_rows} packed_words={packed_words} bits={bit_width} median_ms={median_ms:.3} decoded_gb={decoded_gigabytes:.3} decoded_gb_per_second={decoded_gigabytes_per_second:.3} temporary_workspace_gb={temporary_workspace_gigabytes:.3} auxiliary_workspace_gb={auxiliary_workspace_gigabytes:.3}"
+        "[jangtq2-decode-perf:tier=operation] case={case_name} experts={expert_count} rows={output_rows} packed_words={packed_words} bits={bit_width} median_ms={median_ms:.3} decoded_gb={decoded_gigabytes:.3} decoded_gb_per_second={decoded_gigabytes_per_second:.3}"
     );
 }
 

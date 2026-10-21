@@ -186,9 +186,9 @@ impl Qwen3_5ExpertPager {
     /// Largest complete-layer packed source payload across the model's layers.
     ///
     /// Sizes the RAM owner's complete-layer streaming slot from on-disk source
-    /// geometry only. Decoded bfloat16 output and the decode workspace are
-    /// reserved separately through the expert-page reservation, so the two
-    /// roles cannot inflate each other's budgets.
+    /// geometry only. Decoded bfloat16 output is reserved separately through
+    /// the expert-page reservation, so the two roles cannot inflate each
+    /// other's budgets.
     pub(crate) fn maximum_complete_expert_source_payload_bytes(
         &self,
     ) -> Result<u64, ExpertPagingError> {
@@ -209,14 +209,14 @@ impl Qwen3_5ExpertPager {
     }
 
     /// Returns whether a page streamed for one decode token is used packed,
-    /// with no decode workspace or decoded output to admit.
+    /// with no decoded output to admit.
     pub(crate) fn decode_tokens_multiply_packed_pages(&self) -> bool {
         self.decode_tokens_multiply_packed_pages.get()
     }
 
     /// Returns the largest peak allocation for one routed page of
     /// `experts_per_token` experts. `materializes_decoded_weights` adds the
-    /// codebook decode output and workspace; a page the fused decode-token
+    /// codebook decode output; a page the fused decode-token
     /// kernel multiplies in packed form costs only its source bytes.
     pub(crate) fn maximum_routed_expert_page_bytes(
         &self,
@@ -240,28 +240,10 @@ impl Qwen3_5ExpertPager {
                 }
                 let decoded_codebook_weight_shapes =
                     layer_plan.jangtq2_decoded_weight_page_shapes(routed_expert_count)?;
-                let decode_workspace_tensor_shapes =
-                    layer_plan.jangtq2_decode_workspace_page_shapes(routed_expert_count)?;
-                let output_assembly_copy_count =
-                    layer_plan.jangtq2_decoded_output_assembly_copy_count(routed_expert_count);
-                let decoder_index_tensor_shapes = decoded_codebook_weight_shapes
-                    .iter()
-                    .map(|decoded_weight_shape| {
-                        vec![decoded_weight_shape[2]
-                            .max(decoded_weight_shape[0].saturating_mul(decoded_weight_shape[1]))]
-                    })
-                    .collect::<Vec<_>>();
                 let routed_page_peak_bytes = crate::memory::expert_page_peak_allocation_bytes(
                     routed_source_page_bytes,
                     &decoded_codebook_weight_shapes,
-                    &decode_workspace_tensor_shapes,
-                    output_assembly_copy_count,
                     size_of::<u16>(),
-                    crate::jangtq2_qwen35::mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
-                    size_of::<u32>(),
-                    &decoder_index_tensor_shapes,
-                    crate::jangtq2_qwen35::mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT,
-                    size_of::<u32>(),
                 )
                 .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
                     description: "routed expert page peak allocation byte count overflowed"

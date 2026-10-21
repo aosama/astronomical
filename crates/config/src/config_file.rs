@@ -122,10 +122,9 @@ pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -
                     .get("acceleration")
                     .and_then(serde_json::Value::as_object)
                     .is_some_and(serde_json::Map::is_empty)
+                    && remove_field_from_object(model_object, "acceleration")
                 {
-                    if remove_field_from_object(model_object, "acceleration") {
-                        removed_field_names.push(format!("models.{model_id}.acceleration"));
-                    }
+                    removed_field_names.push(format!("models.{model_id}.acceleration"));
                 }
             }
         }
