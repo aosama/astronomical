@@ -64,18 +64,7 @@ fn should_reject_empty_or_zero_sized_tensor_shapes() {
         None
     );
     assert_eq!(
-        expert_page_peak_allocation_bytes(
-            0,
-            &[vec![2, 0, 4]],
-            &[],
-            1,
-            2,
-            3,
-            4,
-            &[],
-            6,
-            4
-        ),
+        expert_page_peak_allocation_bytes(0, &[vec![2, 0, 4]], &[], 1, 2, 3, 4, &[], 6, 4),
         None
     );
 }
@@ -83,18 +72,7 @@ fn should_reject_empty_or_zero_sized_tensor_shapes() {
 #[test]
 fn should_reject_tensor_byte_counts_that_overflow() {
     assert_eq!(
-        expert_page_peak_allocation_bytes(
-            0,
-            &[vec![usize::MAX, 2]],
-            &[],
-            1,
-            2,
-            3,
-            4,
-            &[],
-            6,
-            4
-        ),
+        expert_page_peak_allocation_bytes(0, &[vec![usize::MAX, 2]], &[], 1, 2, 3, 4, &[], 6, 4),
         None
     );
 }

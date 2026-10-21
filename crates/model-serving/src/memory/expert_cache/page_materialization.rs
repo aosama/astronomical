@@ -53,8 +53,8 @@ pub fn expert_page_peak_allocation_bytes(
         maximum_tensor_storage_bytes(persisted_tensor_shapes, bytes_per_persisted_element)?;
     // Only the second and further copies of the largest projection are extra:
     // the first copy is already part of the persisted total above.
-    let output_assembly_transient_bytes = largest_persisted_tensor_bytes
-        .checked_mul(output_assembly_copy_count.saturating_sub(1))?;
+    let output_assembly_transient_bytes =
+        largest_persisted_tensor_bytes.checked_mul(output_assembly_copy_count.saturating_sub(1))?;
     let largest_single_tensor_workspace_bytes =
         maximum_tensor_storage_bytes(decode_workspace_tensor_shapes, temporary_bytes_per_element)?;
     let largest_decoder_index_workspace_bytes =

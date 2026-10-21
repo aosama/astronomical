@@ -19,9 +19,9 @@ const HADAMARD_ACTIVATION_ROTATION_OPERATION: &str = "rotate jangtq2 expert acti
 // `codebook` and are re-exported here for the direct-MLX callers that already
 // resolve them through this module.
 pub use super::codebook::{
-    decode_block_expert_count, decoded_output_assembly_copy_count,
     JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT, JANGTQ2_DECODE_BLOCK_EXPERT_COUNT,
-    MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT,
+    MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT, decode_block_expert_count,
+    decoded_output_assembly_copy_count,
 };
 
 /// Decodes packed codebook rows and applies each row's float16 scale.
@@ -123,8 +123,9 @@ pub fn decode_expert_weight_rows(
             (block_start_expert_index + block_expert_count).min(selected_expert_count);
         let block_expert_indices = (block_start_expert_index..block_end_expert_index)
             .map(|expert_index| {
-                i32::try_from(expert_index)
-                    .map_err(|_| decode_error("expert index exceeds the MLX index range".to_owned()))
+                i32::try_from(expert_index).map_err(|_| {
+                    decode_error("expert index exceeds the MLX index range".to_owned())
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
         let block_index_shape = [i32::try_from(block_expert_indices.len()).map_err(|_| {
@@ -190,7 +191,9 @@ fn decode_expert_weight_page_or_block(
     FAMILY_DECODE_TABLES_BY_WIDTH.with(|decode_tables_by_width| {
         let mut decode_tables_by_width = decode_tables_by_width.borrow_mut();
         let family_decode_tables = match decode_tables_by_width.entry((bit_width, input_width)) {
-            std::collections::hash_map::Entry::Occupied(occupied_entry) => occupied_entry.into_mut(),
+            std::collections::hash_map::Entry::Occupied(occupied_entry) => {
+                occupied_entry.into_mut()
+            }
             std::collections::hash_map::Entry::Vacant(vacant_entry) => {
                 vacant_entry.insert(build_family_decode_tables(bit_width, input_width)?)
             }
@@ -286,7 +289,10 @@ fn build_family_decode_tables(
         low_bit_shift_array: MlxArray::from_u32(&low_bit_shifts, &code_index_shape)?,
         high_bit_shift_array: MlxArray::from_u32(&high_bit_shifts, &code_index_shape)?,
         crossing_code_mask_array: MlxArray::from_u32(&crossing_code_masks, &code_index_shape)?,
-        complete_code_mask_array: MlxArray::from_u32(&vec![code_mask; input_width], &code_index_shape)?,
+        complete_code_mask_array: MlxArray::from_u32(
+            &vec![code_mask; input_width],
+            &code_index_shape,
+        )?,
         codebook_level_array: MlxArray::from_f32(&codebook_levels, &[codebook_level_count])?,
     })
 }
@@ -400,7 +406,11 @@ mod tests {
         let packed_words_per_row = 6_usize;
         let decoded_width = packed_words_per_row * u32::BITS as usize / 3;
         let packed_words_host: Vec<u32> = (0..expert_count * output_rows * packed_words_per_row)
-            .map(|word_index| (word_index as u32).wrapping_mul(2_654_435_761).rotate_left(7))
+            .map(|word_index| {
+                (word_index as u32)
+                    .wrapping_mul(2_654_435_761)
+                    .rotate_left(7)
+            })
             .collect();
         let row_scales_host: Vec<f32> = (0..expert_count * output_rows)
             .map(|scale_index| ((scale_index % 7) as f32 + 1.0) / 4.0)
@@ -415,10 +425,7 @@ mod tests {
         )
         .expect("the synthetic multi-block page should form a valid tensor");
         let page_scales = runtime
-            .array_from_f32(
-                &row_scales_host,
-                &[expert_count as i32, output_rows as i32],
-            )
+            .array_from_f32(&row_scales_host, &[expert_count as i32, output_rows as i32])
             .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
             .expect("the synthetic multi-block row scales should upload");
 
@@ -439,38 +446,33 @@ mod tests {
             .expect("the decoded page values should be readable");
 
         for expert_index in 0..expert_count {
-            let expert_packed_words = &packed_words_host
-                [expert_index * output_rows * packed_words_per_row..(expert_index + 1) * output_rows * packed_words_per_row];
+            let expert_packed_words =
+                &packed_words_host[expert_index * output_rows * packed_words_per_row
+                    ..(expert_index + 1) * output_rows * packed_words_per_row];
             let expert_packed_page = MlxArray::from_u32(
                 expert_packed_words,
                 &[1, output_rows as i32, packed_words_per_row as i32],
             )
             .expect("one expert's packed rows should form a valid tensor");
-            let expert_row_scales = &row_scales_host
-                [expert_index * output_rows..(expert_index + 1) * output_rows];
+            let expert_row_scales =
+                &row_scales_host[expert_index * output_rows..(expert_index + 1) * output_rows];
             let expert_scales = runtime
                 .array_from_f32(expert_row_scales, &[1, output_rows as i32])
                 .and_then(|float32_scales| runtime.astype(&float32_scales, MlxDtype::Float16))
                 .expect("one expert's row scales should upload");
-            let decoded_expert = decode_expert_weight_rows(
-                &runtime,
-                &expert_packed_page,
-                &expert_scales,
-                3,
-            )
-            .expect("the per-expert reference page should decode");
+            let decoded_expert =
+                decode_expert_weight_rows(&runtime, &expert_packed_page, &expert_scales, 3)
+                    .expect("the per-expert reference page should decode");
             let decoded_expert_values = runtime
                 .astype(&decoded_expert, MlxDtype::Float32)
                 .expect("the per-expert decode should convert for comparison")
                 .to_vec_f32()
                 .expect("the per-expert decoded values should be readable");
             let page_offset = expert_index * output_rows * decoded_width;
-            for (decoded_position, reference_value) in decoded_expert_values
-                .iter()
-                .enumerate()
-            {
+            for (decoded_position, reference_value) in decoded_expert_values.iter().enumerate() {
                 assert_eq!(
-                    decoded_page_values[page_offset + decoded_position], *reference_value,
+                    decoded_page_values[page_offset + decoded_position],
+                    *reference_value,
                     "expert {expert_index} must decode identically through the blocked path"
                 );
             }
