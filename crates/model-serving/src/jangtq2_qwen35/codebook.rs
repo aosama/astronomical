@@ -212,12 +212,18 @@ pub const fn decoded_output_assembly_copy_count(selected_expert_count: usize) ->
 /// simultaneously within one expert block.
 ///
 /// The high-word shift overlaps the retained low-word result with its source
-/// and output; subsequent bitwise stages also hold two inputs and one output.
-/// Within one expert block the gathered packed block plus the two shifted
-/// words bound the coexistence the same way. The final bfloat16 page is
-/// accounted for as persisted output, not workspace. The six one-dimensional
-/// index arrays are accounted for separately by page admission.
-pub const MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT: usize = 3;
+/// and output; subsequent bitwise stages also hold two inputs and one
+/// output. The compiled graph holds one more: both gathered word streams
+/// outlive the fused bitwise run into the codebook-level gather (measured on
+/// the graphics processor: a top-eight routed page peaks at the packed
+/// source plus the persisted bfloat16 output plus four full-width arrays —
+/// 459 MB against a 358 MB three-array bound — so the exported count is
+/// four and page admission reserves it). Within one expert block the
+/// gathered packed block plus these temporaries bound the coexistence; the
+/// final bfloat16 page is accounted for as persisted output, not workspace.
+/// The six one-dimensional index arrays are accounted for separately by page
+/// admission.
+pub const MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT: usize = 4;
 
 /// Maximum number of decoder-owned arrays smaller than one full decoded
 /// weight that are live simultaneously.

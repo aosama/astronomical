@@ -172,7 +172,20 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
         .expect("the warmup decode should succeed"));
     }
     let mut measured_durations_ms = Vec::with_capacity(MEASURED_ITERATIONS);
+    let mut measured_peak_delta_bytes: Option<u64> = None;
     for measured_iteration in 0..MEASURED_ITERATIONS {
+        if measured_iteration == 0 {
+            // Peak-memory contract: the compiled decoder must live inside
+            // the workspace admission reserves (one expert block of
+            // temporaries, the persisted output, one assembly copy for
+            // multi-block pages, and the small index tables). If an MLX
+            // upgrade changes intermediate buffer lifetimes so the compiled
+            // path overshoots this bound, page admission would under-reserve
+            // real serving: fail here instead.
+            runtime
+                .reset_peak_memory()
+                .expect("the MLX peak-memory counter should reset");
+        }
         let started_at = std::time::Instant::now();
         let decoded_weight = mlx_decode::decode_expert_weight_rows(
             &runtime,
@@ -192,6 +205,12 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
             "the decoded page shape must match the format contract"
         );
         assert_eq!(decoded_weight.dtype(), MlxDtype::BFloat16);
+        if measured_iteration == 0 {
+            measured_peak_delta_bytes = runtime
+                .memory_snapshot()
+                .ok()
+                .map(|memory_snapshot| memory_snapshot.peak_memory_bytes() as u64);
+        }
         measured_durations_ms.push(elapsed_ms);
         drop(decoded_weight);
         if measured_iteration == 0 {
@@ -210,6 +229,34 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
         decoded_gigabytes_per_second.is_finite() && decoded_gigabytes_per_second > 0.0,
         "the decoded throughput must be a positive measurement"
     );
+    if let Some(observed_peak_delta_bytes) = measured_peak_delta_bytes {
+        // The bound mirrors expert_page_peak_allocation_bytes for this page:
+        // packed sources, persisted output with one assembly copy,
+        // one-block temporaries, and the auxiliary index tables, with 20
+        // percent slack for MLX-internal buffers the decoder cannot see.
+        let packed_source_bytes =
+            (expert_count * output_rows * packed_words * std::mem::size_of::<u32>()) as u64;
+        let persisted_output_bytes = decoded_element_count * std::mem::size_of::<u16>() as u64;
+        let assembly_copy_count =
+            codebook::decoded_output_assembly_copy_count(expert_count);
+        let bound_bytes = packed_source_bytes
+            + persisted_output_bytes
+                .saturating_mul(assembly_copy_count.saturating_sub(1))
+            + block_element_count
+                * mlx_decode::MAXIMUM_SIMULTANEOUS_DECODE_TEMPORARY_ARRAY_COUNT as u64
+                * std::mem::size_of::<u32>() as u64
+            + auxiliary_bound_element_count
+                * mlx_decode::JANGTQ2_DECODE_AUXILIARY_ARRAY_COUNT as u64
+                * std::mem::size_of::<u32>() as u64;
+        let bound_bytes_with_slack = bound_bytes + bound_bytes / 5;
+        assert!(
+            observed_peak_delta_bytes <= bound_bytes_with_slack,
+            "case={case_name} decode peaked at {observed_peak_delta_bytes} bytes, above the admission-bound-plus-slack {bound_bytes_with_slack}: the compiled decoder's intermediate lifetimes no longer match the exported workspace contract"
+        );
+        eprintln!(
+            "[jangtq2-decode-perf:tier=operation] case={case_name} peak_delta_bytes={observed_peak_delta_bytes} admission_bound_bytes={bound_bytes}"
+        );
+    }
     eprintln!(
         "[jangtq2-decode-perf:tier=operation] case={case_name} experts={expert_count} rows={output_rows} packed_words={packed_words} bits={bit_width} median_ms={median_ms:.3} decoded_gb={decoded_gigabytes:.3} decoded_gb_per_second={decoded_gigabytes_per_second:.3} temporary_workspace_gb={temporary_workspace_gigabytes:.3} auxiliary_workspace_gb={auxiliary_workspace_gigabytes:.3}"
     );
