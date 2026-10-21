@@ -335,7 +335,7 @@ impl Qwen3_5Model {
         };
         // The RAM owner's three-layer prefill floor is based on packed source
         // payload geometry. The separately composed expert-page reservation
-        // carries decoded bfloat16 output and its temporary decode workspace.
+        // carries the decoded bfloat16 output a forward materializes.
         let largest_complete_expert_layer_bytes = match expert_pager.as_ref() {
             Some(expert_pager) => expert_pager
                 .maximum_complete_expert_source_payload_bytes()

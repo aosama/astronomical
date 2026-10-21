@@ -75,10 +75,18 @@ impl Qwen3_5Model {
                 .retain_layer_route(layer_index, &selected_indices);
         }
         // A seated complete layer serves a decode token straight from the
-        // table, remapping the route on-device: no router indices are copied
-        // to the host for that layer. Multi-token chunks fall through to the
-        // host-side route so they can decode only their routed union.
-        if should_use_loaded_model_mode && token_count == 1 && self.retained_experts.is_some() {
+        // table through the fused kernel, remapping the route on-device: no
+        // router indices are copied to the host for that layer. Multi-token
+        // chunks, and decode tokens on a worker without the fused kernel,
+        // fall through to the host-side route so they decode only their
+        // routed union.
+        let decode_tokens_multiply_packed_pages =
+            self.fused_jangtq2_gathered_projection_kernel.is_some();
+        if should_use_loaded_model_mode
+            && token_count == 1
+            && decode_tokens_multiply_packed_pages
+            && self.retained_experts.is_some()
+        {
             let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
             let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
             if matches!(
@@ -138,8 +146,8 @@ impl Qwen3_5Model {
                         PerformanceCounter::RetainedRouteAssignmentHitCount,
                         u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
                     );
-                    if token_count > 1 {
-                        // A chunk decodes the page it multiplies, so give it
+                    if token_count > 1 || !decode_tokens_multiply_packed_pages {
+                        // A forward that decodes the page it multiplies gets
                         // exactly its routed union of the seated layer.
                         let (subset_weights, subset_manifest) = self
                             .routed_subset_of_cached_page(

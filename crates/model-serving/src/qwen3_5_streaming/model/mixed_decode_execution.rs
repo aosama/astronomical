@@ -172,9 +172,15 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let retained_expert_ids = &route_coverage.retained_expert_ids;
         let missing_expert_ids = &route_coverage.missing_expert_ids;
-        let (retained_expert_weights, retained_page_manifest) = self
-            .cached_packed_page(layer_index, retained_expert_ids, expert_capacity)
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+        // With the fused kernel the warm table is multiplied in place; without
+        // it the retained rows are decoded, so only the routed subset is taken.
+        let retained_page = if self.fused_jangtq2_gathered_projection_kernel.is_some() {
+            self.cached_packed_page(layer_index, retained_expert_ids, expert_capacity)
+        } else {
+            self.routed_subset_of_cached_page(layer_index, retained_expert_ids, expert_capacity)?
+        };
+        let (retained_expert_weights, retained_page_manifest) =
+            retained_page.ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "a partially covered route lost its retained warm experts",
             })?;
         let (missing_expert_weights, missing_page_manifest) = self

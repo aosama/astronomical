@@ -65,13 +65,17 @@ impl ForwardRecoveryPolicy {
         // made the original chunk fit. The retried forward re-streams the
         // reclaimed layer operation-local, which is exactly the budget the
         // reclamation freed.
-        let _ = execution_profile;
-        should_retry_fixed_forward_after_expert_reclamation(
-            has_already_retried_after_reclamation,
-            retained_expert_payload_bytes_before_reclamation,
-            retained_expert_payload_bytes_after_reclamation,
-            required_reclamation_bytes,
-        )
+        match execution_profile {
+            AdaptiveRamGrowthExecutionProfile::Resident
+            | AdaptiveRamGrowthExecutionProfile::Paged => {
+                should_retry_fixed_forward_after_expert_reclamation(
+                    has_already_retried_after_reclamation,
+                    retained_expert_payload_bytes_before_reclamation,
+                    retained_expert_payload_bytes_after_reclamation,
+                    required_reclamation_bytes,
+                )
+            }
+        }
     }
 }
 
