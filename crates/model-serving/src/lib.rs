@@ -52,6 +52,14 @@ pub(crate) mod persistent_cache;
 
 pub mod prism_hadamard_qwen35;
 
+// The jangtq2 family ships its configuration parsing, codebook math,
+// rotation, and artifact contract as crate API ahead of the serving-path
+// integration, mirroring the prism pattern above: the family owns its
+// weight contract end to end and the standard qwen3_5 family only
+// delegates to it.
+
+pub mod jangtq2_qwen35;
+
 pub(crate) mod qwen3_5_core;
 
 // The sensitivity probe adapter for the quantization crate (the OptiQ port):
