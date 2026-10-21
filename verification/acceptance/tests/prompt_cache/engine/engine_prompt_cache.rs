@@ -1,3 +1,22 @@
+//! Prompt-cache acceptance journeys over the resident sparse MoE role.
+//!
+//! Every journey in this binary runs the resident sparse MoE role
+//! (`resident_sparse_moe`) because it measures cache behaviour, not expert
+//! paging: the surfaces under test (cache disabled, cache-miss memory, restore
+//! peak, parity, block reporting, partial tail reuse, startup cleanup
+//! attribution, and the vision journeys) are identical in resident mode. The
+//! whole binary takes about three minutes. The journeys are `#[ignore]`d
+//! real-model journeys: run the binary directly with
+//! `-- --ignored --nocapture --test-threads=1`.
+//!
+//! The one exception is the interaction-matrix journey, which fails closed
+//! unless ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL names a cell
+//! — see its module doc for the three cells.
+//!
+//! The wide-chunk parity journey selects its prefill span with
+//! `ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS`; the cell
+//! accepts only 2048 or 4096 and defaults to 2048.
+
 use std::{future::Future, path::Path, time::Duration};
 
 use astronomical_ipc_protocol::{RequestId, WorkerEvent};
