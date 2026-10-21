@@ -108,7 +108,7 @@ impl Qwen3_5ArtifactValidator {
         let canonical_tensor_names =
             Qwen3_5ShardIndex::extract_language_tensor_names_from_json(&shard_index_bytes)?;
         config.resolve_unquantized_modules_from_shard_index(&canonical_tensor_names);
-        let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config);
+        let language_tensor_profiles = tensor_spec::qwen3_5_language_tensor_profiles(&config)?;
         let shard_index =
             Qwen3_5ShardIndex::from_json_bytes(&shard_index_bytes, &language_tensor_profiles)?;
         let validated_vision_tower_storage = vision_validation::validate_vision_tower_inventory(

@@ -58,7 +58,8 @@ fn should_parse_a_native_bfloat16_config_without_quantization_metadata() {
         ModelWeightStorage::NativeBfloat16,
         "an absent quantization contract must explicitly identify native BF16 storage"
     );
-    let native_bfloat16_tensor_profiles = qwen3_5_language_tensor_profiles(&native_bfloat16_config);
+    let native_bfloat16_tensor_profiles = qwen3_5_language_tensor_profiles(&native_bfloat16_config)
+        .expect("the native bfloat16 language tensor profiles should build");
     assert!(
         native_bfloat16_tensor_profiles
             .iter()
@@ -130,7 +131,8 @@ fn should_use_the_declared_attention_type_for_each_decoder_layer() {
 
     let config = Qwen3_5Config::from_json_bytes(&config_bytes)
         .expect("the declared per-layer attention schedule should parse");
-    let tensor_profiles = qwen3_5_language_tensor_profiles(&config);
+    let tensor_profiles = qwen3_5_language_tensor_profiles(&config)
+        .expect("the per-layer attention schedule language tensor profiles should build");
     let tensor_names = tensor_profiles
         .iter()
         .map(|tensor_profile| tensor_profile.name.as_str())

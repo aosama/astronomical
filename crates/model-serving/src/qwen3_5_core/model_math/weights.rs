@@ -96,7 +96,7 @@ impl Qwen3_5Weights {
         shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
         model_shards: Vec<MlxSafetensors>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config);
+        let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)?;
         let mut bound_tensors = HashMap::with_capacity(language_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
         for tensor_profile in &language_tensor_profiles {

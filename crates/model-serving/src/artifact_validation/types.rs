@@ -16,6 +16,8 @@ pub enum TensorDtype {
     ModelFloat,
     /// Brain floating point with 16-bit storage.
     BFloat16,
+    /// 16-bit IEEE floating point, used by jangtq2 codebook row scales.
+    Float16,
     /// 32-bit IEEE floating point.
     Float32,
     /// Unsigned 32-bit integers used by MLX packed quantized weights.

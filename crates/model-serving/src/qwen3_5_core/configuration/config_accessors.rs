@@ -41,10 +41,10 @@ impl Qwen3_5Config {
         self.quantized_module_profiles
             .get(module_name)
             .copied()
-            .unwrap_or(OptiQQuantizationProfile {
-                bits: self.default_quantization_bits,
-                group_size: self.default_quantization_group_size,
-            })
+            .unwrap_or(OptiQQuantizationProfile::affine(
+                self.default_quantization_bits,
+                self.default_quantization_group_size,
+            ))
     }
 
     /// Returns the default quantization bit width for modules not in the override map.

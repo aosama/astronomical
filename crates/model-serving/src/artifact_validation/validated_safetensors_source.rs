@@ -318,6 +318,7 @@ fn validate_profile(
             matches!(metadata.dtype.as_str(), "F16" | "BF16" | "F32")
         }
         TensorDtype::BFloat16 => metadata.dtype == "BF16",
+        TensorDtype::Float16 => metadata.dtype == "F16",
         TensorDtype::Float32 => metadata.dtype == "F32",
         TensorDtype::UInt32 => metadata.dtype == "U32",
     };
