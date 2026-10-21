@@ -27,7 +27,7 @@ write_unit_fixture() {
     mkdir -p "${fixture_root}/crates/example/src" \
         "${fixture_root}/crates/example/tests/offline" \
         "${fixture_root}/crates/example/tests/support" \
-        "${fixture_root}/tests/e2e/tests"
+        "${fixture_root}/verification/e2e/tests"
     cat > "${fixture_root}/crates/example/src/example_tests.rs" <<'EOF'
 #[test]
 fn first_unit_case() {
@@ -56,13 +56,13 @@ fn helper_must_not_count_as_a_test() {
     assert_eq!(1, 1);
 }
 EOF
-    cat > "${fixture_root}/tests/e2e/tests/product_journey.rs" <<'EOF'
+    cat > "${fixture_root}/verification/e2e/tests/product_journey.rs" <<'EOF'
 #[tokio::test]
 async fn one_end_to_end_case() {
     assert_eq!(1, 1);
 }
 EOF
-    cat > "${fixture_root}/tests/e2e/tests/real_model_journey.rs" <<'EOF'
+    cat > "${fixture_root}/verification/e2e/tests/real_model_journey.rs" <<'EOF'
 // ASTRONOMICAL_REAL_MODEL=1 drives the byte-identical request flow against real artifacts.
 #[tokio::test]
 async fn one_acceptance_case() {

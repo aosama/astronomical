@@ -42,7 +42,7 @@ warnings = "deny"
 # campaign's final batch.
 # test-offline: every package's offline_tests binary plus lib unit tests.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
-# test-e2e: the root whole-product journeys (tests/e2e) that spawn the real
+# test-e2e: the root whole-product journeys (verification/e2e) that spawn the real
 # astronomicald binary; run `cargo build --bins -p astronomical-daemon`
 # first. The harness's workspace_binary launches binaries from the test
 # binary's own profile (debug for `cargo test`, release for `--release`,

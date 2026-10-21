@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 
 const DELAYED_MEMORY_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const ROMEO_AND_JULIET: &str = include_str!(
-    "../../../../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 );
 
 #[tokio::test]
