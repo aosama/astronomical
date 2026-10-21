@@ -441,6 +441,11 @@ expected_aliases = {
     # encoder and requantizer contracts, and the real-model journeys.
     "test-quantization-direct-mlx",
     "test-quantization-acceptance",
+    # jangtq2 weight-family lanes (issue #1423): the real-bundle plan
+    # validation and the bottom tier of the jangtq2 performance pyramid
+    # (codebook decode kernels measured on the graphics processor).
+    "test-jangtq2-plan",
+    "test-jangtq2-decode-throughput",
     "xtask",
 }
 assert set(aliases) == expected_aliases
@@ -456,10 +461,20 @@ for acceptance_alias in (
     "test-acceptance",
     "test-quantization-direct-mlx",
     "test-quantization-acceptance",
+    "test-jangtq2-decode-throughput",
 ):
     assert "--test-threads=1" in aliases[acceptance_alias].split(), acceptance_alias
-for acceptance_alias in ("test-mlx-memory", "test-acceptance", "test-quantization-acceptance"):
+for acceptance_alias in (
+    "test-mlx-memory",
+    "test-acceptance",
+    "test-quantization-acceptance",
+    "test-jangtq2-plan",
+    "test-jangtq2-decode-throughput",
+):
     assert "--ignored" in aliases[acceptance_alias].split(), acceptance_alias
+# The decode-throughput lane measures a memory-traffic-bound kernel, so the
+# optimized build is part of the alias contract, not a human's memory.
+assert "--release" in aliases["test-jangtq2-decode-throughput"].split()
 
 assert not (repository_root / "scripts/run-bounded-cargo-test.sh").exists()
 assert not (repository_root / "scripts/run-ignored-serving-acceptance.sh").exists()
