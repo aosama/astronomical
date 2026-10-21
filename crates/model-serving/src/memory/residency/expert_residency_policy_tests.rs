@@ -3,7 +3,9 @@ use crate::{
     AdaptiveRamGrowthExecutionProfile, CurrentExpertLayerResidency, ExpertLayerResidencyTarget,
     ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryPhase,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
-    hot_expert_warm_slot_count, plan_expert_residency, publish_request_stable_residency_plan,
+    hot_expert_warm_slot_count, decode_warm_floor_eviction_indexes,
+    minimum_decode_warm_slot_count, plan_expert_residency,
+    publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_enact_planned_expert_release,
@@ -147,6 +149,86 @@ fn should_cap_hot_expert_warm_tables_at_the_layer_expert_count() {
     assert_eq!(hot_expert_warm_slot_count(512), 512);
     assert_eq!(hot_expert_warm_slot_count(4), 4);
     assert_eq!(hot_expert_warm_slot_count(6), 6);
+}
+
+#[test]
+fn should_floor_decode_warm_slots_at_one_token_routing_per_layer() {
+    // The floor survives complete-layer seating: two tokens' routing per
+    // sparse layer is the minimum at which consecutive tokens' overlapping
+    // routes stay resident and mixed serving has a table to land in. Zero
+    // only when the caller passes zero, which no Qwen3.5 configuration does.
+    assert_eq!(minimum_decode_warm_slot_count(8), 16);
+    assert_eq!(minimum_decode_warm_slot_count(2), 4);
+    assert_eq!(minimum_decode_warm_slot_count(1), 2);
+    assert_eq!(minimum_decode_warm_slot_count(0), 1);
+}
+
+fn complete_layer_residency(
+    layer_index: usize,
+    payload_bytes: u64,
+    covered_weighted_demand: u64,
+) -> CurrentExpertLayerResidency {
+    CurrentExpertLayerResidency {
+        layer_index,
+        class: RetainedExpertPageClass::StableCompleteLayer,
+        retained_expert_ids: vec![0, 1, 2, 3],
+        payload_bytes,
+        covered_weighted_demand,
+    }
+}
+
+#[test]
+fn should_evict_nothing_when_the_warm_budget_already_funds_the_floor() {
+    // Five sparse layers, one seated complete layer, and a warm budget that
+    // already covers four unseated layers at two slots each: nothing moves.
+    let layer_residencies = vec![complete_layer_residency(0, 40, 7)];
+    assert!(decode_warm_floor_eviction_indexes(
+        &layer_residencies,
+        4_u64 * 10 * 2,
+        10,
+        2,
+        5
+    )
+    .is_empty());
+}
+
+#[test]
+fn should_evict_nothing_for_a_fully_seated_model() {
+    // Every sparse layer holds a complete table: there is no unseated layer
+    // to warm, so the floor is zero and the safety property for models whose
+    // residency is complete-layer-based holds — nothing is ever evicted.
+    let layer_residencies: Vec<_> = (0..5_u64)
+        .map(|layer_index| complete_layer_residency(
+            usize::try_from(layer_index).expect("the layer index fits usize"),
+            40,
+            layer_index,
+        ))
+        .collect();
+    assert!(decode_warm_floor_eviction_indexes(&layer_residencies, 0, 10, 2, 5).is_empty());
+}
+
+#[test]
+fn should_evict_coldest_complete_layers_until_the_recomputed_floor_fits() {
+    // Two complete layers (layer 3 colder than layer 1), five sparse layers
+    // total, per-expert payload 10, two-slot floor. With zero budget the
+    // floor for four unseated layers is 4 × 10 × 2 = 80; evicting layer 3
+    // (40 bytes) raises the floor to 5 unseated × 10 × 2 = 100 while freeing
+    // 40 — still short — so layer 1 follows, freeing another 40 against a
+    // floor that can no longer grow (no complete layers remain).
+    let layer_residencies = vec![
+        complete_layer_residency(1, 40, 100),
+        complete_layer_residency(3, 40, 2),
+    ];
+    assert_eq!(
+        decode_warm_floor_eviction_indexes(&layer_residencies, 0, 10, 2, 5),
+        vec![3, 1]
+    );
+    // A budget that the single coldest eviction covers stops there: floor 80,
+    // budget 45 + freed 40 = 85 ≥ 80 after evicting layer 3 only.
+    assert_eq!(
+        decode_warm_floor_eviction_indexes(&layer_residencies, 45, 10, 2, 5),
+        vec![3]
+    );
 }
 
 #[test]
