@@ -250,12 +250,18 @@ impl Qwen3_5Model {
     }
 
     /// Streams the unique routed experts for one forward without displacing a
-    /// seated complete layer, then offers them for hot-expert retention so a
-    /// later token can hit the warm table instead of re-reading storage
-    /// (issue #372). Decode tokens and multi-token routed-union prefill
-    /// chunks both arrive here. The offer honors the active residency plan:
-    /// a layer the plan streams operation-local or is releasing stays
-    /// unwarmed.
+    /// seated complete layer. A decode token's page is then offered for
+    /// hot-expert retention so a later token can hit the warm table instead
+    /// of re-reading storage (issue #372); the offer honors the active
+    /// residency plan, so a layer the plan streams operation-local or is
+    /// releasing stays unwarmed.
+    ///
+    /// A multi-token routed-union chunk keeps its page operation-local. The
+    /// warm-insert queue drains only after a decode token's evaluation, so
+    /// queueing prefill pages pinned every streamed union of every chunk (about
+    /// 0.6 GB packed per layer on the 122B bundle, 24 streamed layers per
+    /// chunk) until generation started — including the pages of failed chunk
+    /// attempts — which is what drove prefill into the ceiling.
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
@@ -286,7 +292,7 @@ impl Qwen3_5Model {
             let layer_has_complete_table = retained_experts
                 .borrow()
                 .has_complete_layer(layer_index, expert_capacity);
-            if warm_slot_count > 0 && !layer_has_complete_table {
+            if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
                 if should_commit_mandatory_routed_page(
                     route_token_count,
                     production_default_paging,
