@@ -55,6 +55,7 @@ const THREADGROUP_SIZE: i32 = 256;
 /// The level table is a pure function of the bit width (at most sixteen
 /// float32 values), uploaded once per width and reused by every launch so a
 /// decode token's 144 projections never repeat the host-to-device copy.
+#[derive(Debug)]
 pub struct FusedJangtq2GatheredProjectionKernel {
     kernel: MlxMetalKernel,
     codebook_level_tables_by_bit_width: RefCell<HashMap<u32, MlxArray>>,

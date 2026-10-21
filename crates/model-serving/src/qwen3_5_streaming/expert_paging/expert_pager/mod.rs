@@ -4,6 +4,7 @@ mod rust_expert_streaming;
 
 pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
 
+use std::cell::Cell;
 use std::fs::File;
 use std::mem::size_of;
 use std::path::PathBuf;
@@ -75,6 +76,12 @@ pub struct Qwen3_5ExpertPager {
     pub(super) layer_plans: Vec<QuantizedExpertLayerPlan>,
     pub(super) memory_budget: MlxAllocationAdmission,
     pub(super) resident_expert_source_files: Vec<(PathBuf, File)>,
+    /// True once the model owns the fused jangtq2 gathered projection kernel:
+    /// single-token pages then multiply straight from their packed codes, so
+    /// their admission and reservation price only the packed source bytes.
+    /// Multi-token pages still decode a transient bfloat16 copy and keep the
+    /// full decode peak. The model sets this after the capability verdict.
+    pub(super) decode_tokens_multiply_packed_pages: Cell<bool>,
 }
 
 /// Exact compact or complete expert arrays loaded by Rust for one layer use.
@@ -195,10 +202,26 @@ impl Qwen3_5ExpertPager {
             })
     }
 
-    /// Returns the largest peak allocation for one routed top-K page.
+    /// Records whether decode tokens multiply packed codebook pages directly.
+    pub(crate) fn set_decode_tokens_multiply_packed_pages(&self, multiplies_packed_pages: bool) {
+        self.decode_tokens_multiply_packed_pages
+            .set(multiplies_packed_pages);
+    }
+
+    /// Returns whether a page streamed for one decode token is used packed,
+    /// with no decode workspace or decoded output to admit.
+    pub(crate) fn decode_tokens_multiply_packed_pages(&self) -> bool {
+        self.decode_tokens_multiply_packed_pages.get()
+    }
+
+    /// Returns the largest peak allocation for one routed page of
+    /// `experts_per_token` experts. `materializes_decoded_weights` adds the
+    /// codebook decode output and workspace; a page the fused decode-token
+    /// kernel multiplies in packed form costs only its source bytes.
     pub(crate) fn maximum_routed_expert_page_bytes(
         &self,
         experts_per_token: usize,
+        materializes_decoded_weights: bool,
     ) -> Result<u64, ExpertPagingError> {
         self.layer_plans
             .iter()
@@ -212,6 +235,9 @@ impl Qwen3_5ExpertPager {
                 .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
                     description: "routed expert source-page byte count overflowed".to_owned(),
                 })?;
+                if !materializes_decoded_weights {
+                    return Ok(largest_page_peak_bytes.max(routed_source_page_bytes));
+                }
                 let decoded_codebook_weight_shapes =
                     layer_plan.jangtq2_decoded_weight_page_shapes(routed_expert_count)?;
                 let decode_workspace_tensor_shapes =

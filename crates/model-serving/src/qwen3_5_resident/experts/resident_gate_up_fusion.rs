@@ -242,6 +242,15 @@ fn projection_arrays_for_tests(
             quantization_scales: None,
             quantization_biases: None,
         },
+        Qwen3_5AffineWeights::Jangtq2Codebook {
+            packed_code_words,
+            row_scales,
+            ..
+        } => ResidentProjectionArraysForTests {
+            packed_weight: packed_code_words,
+            quantization_scales: Some(row_scales),
+            quantization_biases: None,
+        },
         Qwen3_5AffineWeights::Quantized {
             packed_weight,
             quantization_scales,

@@ -16,6 +16,8 @@ use crate::performance_attribution::{PerformanceAttribution, PerformanceOperatio
 #[cfg(feature = "direct-mlx")]
 pub mod fused_expert_decode_probe;
 #[cfg(feature = "direct-mlx")]
+pub mod fused_jangtq2_gathered_projection_probe;
+#[cfg(feature = "direct-mlx")]
 pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod prism_hadamard_probes;
@@ -27,6 +29,8 @@ mod kernel_capability_tests;
 
 #[cfg(feature = "direct-mlx")]
 pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
+#[cfg(feature = "direct-mlx")]
+pub use fused_jangtq2_gathered_projection_probe::FusedJangtq2GatheredProjectionProbe;
 #[cfg(feature = "direct-mlx")]
 pub use gated_delta_probes::{
     GatedDeltaBoundaryCheckpointProbe, GatedDeltaSequenceProbe, GdnDecodePreworkProbe,
@@ -45,6 +49,9 @@ pub enum CustomMetalKernelFamily {
     SortedExpertWeightedSum,
     /// Fused single-token quantized expert decode for K2 Horizon MoVA.
     FusedQuantizedExpertDecode,
+    /// Fused single-token jangtq2 codebook gathered projection: decode and
+    /// multiply straight from packed codes.
+    FusedJangtq2GatheredProjection,
     /// Fused Qwen3.5 gated-delta sequence recurrence.
     GatedDeltaSequence,
     /// Boundary-checkpoint variant of the fused gated-delta recurrence.
@@ -257,6 +264,8 @@ pub fn worker_process_kernel_capabilities(
         }
         let sorted_expert_weighted_sum_probe = SortedExpertWeightedSumProbe::new(runtime);
         let fused_expert_decode_probe = FusedQuantizedExpertDecodeProbe::new(runtime);
+        let fused_jangtq2_gathered_projection_probe =
+            FusedJangtq2GatheredProjectionProbe::new(runtime);
         let gated_delta_probe = GatedDeltaSequenceProbe::new(runtime);
         let gated_delta_checkpoint_probe = GatedDeltaBoundaryCheckpointProbe::new(runtime);
         let gdn_decode_prework_probe = GdnDecodePreworkProbe::new(runtime);
@@ -265,6 +274,7 @@ pub fn worker_process_kernel_capabilities(
             &[
                 &sorted_expert_weighted_sum_probe,
                 &fused_expert_decode_probe,
+                &fused_jangtq2_gathered_projection_probe,
                 &gated_delta_probe,
                 &gated_delta_checkpoint_probe,
                 &gdn_decode_prework_probe,

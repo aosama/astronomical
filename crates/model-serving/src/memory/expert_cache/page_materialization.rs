@@ -75,44 +75,6 @@ pub fn source_expert_page_payload_bytes(
     source_bytes_per_expert.checked_mul(u64::try_from(selected_expert_count).ok()?)
 }
 
-/// Calculates retained page bytes after selected packed tensors become dense.
-///
-/// `source_tensor_bytes_per_expert` describes every source tensor in one
-/// expert; `replaced_source_tensor_bytes_per_expert` is the subset released
-/// after decode. Dense output shapes describe the replacement storage. This
-/// keeps expert encoding knowledge with the family while this module owns the
-/// subtraction, multiplication, and sum.
-#[must_use]
-pub fn retained_expert_page_payload_bytes(
-    source_tensor_bytes_per_expert: &[usize],
-    replaced_source_tensor_bytes_per_expert: &[usize],
-    selected_expert_count: usize,
-    decoded_tensor_shapes: &[Vec<usize>],
-    bytes_per_decoded_element: usize,
-) -> Option<u64> {
-    if selected_expert_count == 0 || bytes_per_decoded_element == 0 {
-        return None;
-    }
-    let source_bytes_per_expert = source_tensor_bytes_per_expert.iter().try_fold(
-        0_u64,
-        |source_bytes, tensor_source_bytes| {
-            source_bytes.checked_add(u64::try_from(*tensor_source_bytes).ok()?)
-        },
-    )?;
-    let replaced_source_bytes_per_expert = replaced_source_tensor_bytes_per_expert
-        .iter()
-        .try_fold(0_u64, |replaced_source_bytes, tensor_source_bytes| {
-            replaced_source_bytes.checked_add(u64::try_from(*tensor_source_bytes).ok()?)
-        })?;
-    let unreplaced_source_bytes_per_expert =
-        source_bytes_per_expert.checked_sub(replaced_source_bytes_per_expert)?;
-    let unreplaced_source_payload_bytes = unreplaced_source_bytes_per_expert
-        .checked_mul(u64::try_from(selected_expert_count).ok()?)?;
-    let decoded_output_bytes =
-        total_tensor_storage_bytes(decoded_tensor_shapes, bytes_per_decoded_element)?;
-    unreplaced_source_payload_bytes.checked_add(decoded_output_bytes)
-}
-
 fn total_tensor_storage_bytes(
     tensor_shapes: &[Vec<usize>],
     bytes_per_element: usize,

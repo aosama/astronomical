@@ -99,6 +99,19 @@ fn pad_projection_to_warm_capacity(
             quantization_bits: *quantization_bits,
             quantization_group_size: *quantization_group_size,
         }),
+        Qwen3_5AffineWeights::Jangtq2Codebook {
+            packed_code_words,
+            row_scales,
+            codebook_bit_width,
+        } => Ok(Qwen3_5AffineWeights::Jangtq2Codebook {
+            packed_code_words: pad_array_to_warm_capacity(
+                runtime,
+                packed_code_words,
+                slot_count_i32,
+            )?,
+            row_scales: pad_array_to_warm_capacity(runtime, row_scales, slot_count_i32)?,
+            codebook_bit_width: *codebook_bit_width,
+        }),
     }
 }
 
@@ -236,6 +249,38 @@ fn write_projection_into_slot(
                 quantization_biases: biases,
                 quantization_bits: *quantization_bits,
                 quantization_group_size: *quantization_group_size,
+            })
+        }
+        (
+            Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words: dest_packed_code_words,
+                row_scales: dest_row_scales,
+                codebook_bit_width,
+            },
+            Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words: source_packed_code_words,
+                row_scales: source_row_scales,
+                codebook_bit_width: source_codebook_bit_width,
+            },
+        ) if codebook_bit_width == source_codebook_bit_width => {
+            let packed_code_words = write_row_into_slot(
+                runtime,
+                dest_packed_code_words,
+                source_packed_code_words,
+                source_row,
+                slot,
+            )?;
+            let row_scales = write_row_into_slot(
+                runtime,
+                dest_row_scales,
+                source_row_scales,
+                source_row,
+                slot,
+            )?;
+            Ok(Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width: *codebook_bit_width,
             })
         }
         _ => Err(MlxRuntimeError::RuntimeOperation {

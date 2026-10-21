@@ -197,6 +197,9 @@ fn embedding_output_dtype(
 ) -> Result<MlxDtype, Qwen3_5ExecutionError> {
     match embedding_weights {
         Qwen3_5AffineWeights::NativeBfloat16 { .. } => Ok(MlxDtype::BFloat16),
+        // A codebook page is never an embedding table; it only appears on the
+        // routed-expert path, whose products carry the activation dtype.
+        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Ok(MlxDtype::BFloat16),
         // MLX's graphics-processor affine dequantize primitive declares its output with the
         // scale dtype. Bias promotion occurs inside that declared output contract.
         Qwen3_5AffineWeights::Quantized {
@@ -212,6 +215,10 @@ fn affine_output_dtype(
 ) -> Result<MlxDtype, Qwen3_5ExecutionError> {
     let affine_parameter_dtype = match affine_weights {
         Qwen3_5AffineWeights::NativeBfloat16 { .. } => MlxDtype::BFloat16,
+        // Codebook levels decode to bfloat16 weights on the materializing path
+        // and the fused kernel writes the activation dtype, so the product
+        // never widens past the bfloat16 contract of a native page.
+        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => MlxDtype::BFloat16,
         Qwen3_5AffineWeights::Quantized {
             quantization_scales,
             quantization_biases,

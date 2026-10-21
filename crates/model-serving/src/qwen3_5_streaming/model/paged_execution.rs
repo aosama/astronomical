@@ -1,6 +1,7 @@
 //! MLX gathered execution against one Rust-streamed expert layer.
 
 use astronomical_mlx_c_rust::MlxArray;
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
@@ -253,6 +254,73 @@ impl Qwen3_5Model {
         };
         let projection_activations = rotated_activation_owner.as_ref().unwrap_or(activations);
         match affine_weights {
+            Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width,
+            } => {
+                if let Some(fused_kernel) = self.fused_jangtq2_gathered_projection_kernel.as_ref() {
+                    if let Some(activation_rows) = decode_token_activation_rows(
+                        &self.runtime,
+                        projection_activations,
+                        selected_expert_indices,
+                        usize::try_from(self.config.experts_per_token()).unwrap_or(0),
+                    )? {
+                        // One decode token: multiply straight from the packed
+                        // codes. The kernel returns `[assignments, rows]`;
+                        // restore gather_mm's `[..., assignments, 1, rows]`
+                        // layout so the SwiGLU and reduction stay unchanged.
+                        let projected = performance_attribution.measure_operation(
+                            PerformanceOperation::DecodeFusedJangtq2GatheredProjection,
+                            |_| {
+                                let flat_expert_indices = self.runtime.reshape(
+                                    selected_expert_indices,
+                                    &[selected_expert_indices.element_count() as i32],
+                                )?;
+                                fused_kernel.apply(
+                                    &self.runtime,
+                                    &activation_rows,
+                                    &flat_expert_indices,
+                                    packed_code_words,
+                                    row_scales,
+                                    *codebook_bit_width,
+                                )
+                            },
+                        )?;
+                        let mut gathered_shape = selected_expert_indices.shape();
+                        gathered_shape.push(1);
+                        gathered_shape.push(packed_code_words.shape()[1]);
+                        return Ok(self.runtime.reshape(&projected, &gathered_shape)?);
+                    }
+                }
+                // Multi-token prefill (or a worker without the fused kernel):
+                // decode a transient bfloat16 copy and gather through
+                // gather_mm, whose matrix multiply amortizes the decode over
+                // the chunk's tokens. The copy dies with this forward.
+                let decoded_weight = performance_attribution.measure_operation(
+                    PerformanceOperation::Jangtq2CodebookPageDecode,
+                    |_| {
+                        crate::jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
+                            &self.runtime,
+                            packed_code_words,
+                            row_scales,
+                            *codebook_bit_width,
+                        )
+                    },
+                )?;
+                let transposed_weights =
+                    self.runtime.transpose_axes(&decoded_weight, &[0, 2, 1])?;
+                Ok(gather_expert_projection(
+                    &self.runtime,
+                    projection_activations,
+                    StackedExpertProjection::Dense {
+                        transposed_weights: &transposed_weights,
+                    },
+                    selected_expert_indices,
+                    assignment_order,
+                    performance_attribution,
+                )?)
+            }
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 // The transpose is a lazy view from checkpoint linear layout to
                 // the `[expert, input, output]` layout expected by gather_mm.
@@ -337,4 +405,41 @@ impl Qwen3_5Model {
             &shared_gate_logits,
         )?)
     }
+}
+
+/// Returns the activation rows a single decode token presents to the fused
+/// gathered projection kernel, or `None` for a multi-token forward.
+///
+/// The unsorted decode path carries one activation row shared by every
+/// assignment (`[1, 1, 1, width]`); the sorted path carries one row per
+/// assignment (`[assignments, 1, width]`). Both flatten to `[rows, width]`
+/// with `rows` equal to one or to the assignment count. A chunk of several
+/// tokens has more assignments than one token routes, and keeps the
+/// materializing path: the kernel is a matrix-vector product and the
+/// chunk's matrix multiply belongs on `gather_mm`.
+fn decode_token_activation_rows(
+    runtime: &MlxRuntime,
+    projection_activations: &MlxArray,
+    selected_expert_indices: &MlxArray,
+    experts_per_token: usize,
+) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+    let activation_shape = projection_activations.shape();
+    let Some(&input_width) = activation_shape.last() else {
+        return Ok(None);
+    };
+    if input_width <= 0 {
+        return Ok(None);
+    }
+    let activation_row_count = projection_activations.element_count() / input_width as usize;
+    let assignment_count = selected_expert_indices.element_count();
+    if assignment_count == 0 || assignment_count > experts_per_token {
+        return Ok(None);
+    }
+    if activation_row_count != 1 && activation_row_count != assignment_count {
+        return Ok(None);
+    }
+    Ok(Some(runtime.reshape(
+        projection_activations,
+        &[activation_row_count as i32, input_width],
+    )?))
 }

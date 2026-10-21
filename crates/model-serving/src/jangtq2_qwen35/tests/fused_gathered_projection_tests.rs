@@ -20,9 +20,13 @@ use super::super::mlx_decode;
 const TWO_BIT_WIDTH: u32 = 2;
 const THREE_BIT_WIDTH: u32 = 3;
 const FOUR_BIT_WIDTH: u32 = 4;
-/// Real top-8 gate/up page geometry of the 122B bundle.
+/// Real top-8 routing and gate/up input width of the 122B bundle. The row
+/// count is a quarter of the real 1024 so the materializing reference decode
+/// (about four full-width uint32 temporaries per projection) fits the
+/// 512 MB limit every direct-MLX test in this process shares; the kernel's
+/// per-row work is identical at any row count.
 const TOP_K_EXPERT_COUNT: usize = 8;
-const GATE_UP_OUTPUT_ROWS: usize = 1024;
+const GATE_UP_OUTPUT_ROWS: usize = 256;
 const GATE_UP_INPUT_WIDTH: usize = 3072;
 /// Float32 accumulation over a few hundred terms against a float64 reference.
 const FLOAT32_RELATIVE_TOLERANCE: f64 = 1e-4;
@@ -30,9 +34,12 @@ const FLOAT32_RELATIVE_TOLERANCE: f64 = 1e-4;
 /// the fused path keeps float32 levels, so the two differ at that scale.
 const BFLOAT16_RELATIVE_TOLERANCE: f64 = 2.5e-2;
 
+/// The memory limit every direct-MLX unit test in this crate initializes
+/// with: the runtime configures its limits once per process and refuses a
+/// different limit afterwards, so a test file cannot choose its own.
 fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
-        MlxMemoryLimits::new(4 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024)
+        MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
             .expect("the fused projection test memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize")
