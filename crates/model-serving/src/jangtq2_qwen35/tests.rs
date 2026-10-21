@@ -3,8 +3,8 @@
 //! `jang-tools/jang_tools/jangh/format.py`) directly, so this crate's math
 //! is pinned to the encoder's, not merely self-consistent.
 
-mod golden_vector_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod decode_throughput_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod fused_gathered_projection_tests;
+mod golden_vector_tests;

@@ -3,9 +3,8 @@ use crate::{
     AdaptiveRamGrowthExecutionProfile, CurrentExpertLayerResidency, ExpertLayerResidencyTarget,
     ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryPhase,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
-    hot_expert_warm_slot_count, decode_warm_floor_eviction_indexes,
-    minimum_decode_warm_slot_count, plan_expert_residency,
-    publish_request_stable_residency_plan,
+    decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
+    plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_enact_planned_expert_release,
@@ -182,14 +181,9 @@ fn should_evict_nothing_when_the_warm_budget_already_funds_the_floor() {
     // Five sparse layers, one seated complete layer, and a warm budget that
     // already covers four unseated layers at two slots each: nothing moves.
     let layer_residencies = vec![complete_layer_residency(0, 40, 7)];
-    assert!(decode_warm_floor_eviction_indexes(
-        &layer_residencies,
-        4_u64 * 10 * 2,
-        10,
-        2,
-        5
-    )
-    .is_empty());
+    assert!(
+        decode_warm_floor_eviction_indexes(&layer_residencies, 4_u64 * 10 * 2, 10, 2, 5).is_empty()
+    );
 }
 
 #[test]
@@ -198,11 +192,13 @@ fn should_evict_nothing_for_a_fully_seated_model() {
     // to warm, so the floor is zero and the safety property for models whose
     // residency is complete-layer-based holds — nothing is ever evicted.
     let layer_residencies: Vec<_> = (0..5_u64)
-        .map(|layer_index| complete_layer_residency(
-            usize::try_from(layer_index).expect("the layer index fits usize"),
-            40,
-            layer_index,
-        ))
+        .map(|layer_index| {
+            complete_layer_residency(
+                usize::try_from(layer_index).expect("the layer index fits usize"),
+                40,
+                layer_index,
+            )
+        })
         .collect();
     assert!(decode_warm_floor_eviction_indexes(&layer_residencies, 0, 10, 2, 5).is_empty());
 }

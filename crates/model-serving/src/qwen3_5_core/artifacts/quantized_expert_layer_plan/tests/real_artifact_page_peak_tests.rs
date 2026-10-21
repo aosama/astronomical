@@ -51,7 +51,8 @@ fn should_keep_every_jangtq2_complete_layer_page_peak_under_nine_gigabytes() {
                 "the decode workspace must follow the family block size"
             );
             assert_eq!(
-                workspace_shape[1..], decoded_shape[1..],
+                workspace_shape[1..],
+                decoded_shape[1..],
                 "the decode workspace must keep the projection geometry"
             );
         }

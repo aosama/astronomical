@@ -268,9 +268,9 @@ fn decode_warm_budget_bytes(
     active_memory_bytes: usize,
     resident_payload_byte_count: u64,
 ) -> u64 {
-    let routed_expert_page_reservation_bytes =
-        model.expert_page_reservation_bytes_for_forward(1)
-            .unwrap_or(u64::MAX);
+    let routed_expert_page_reservation_bytes = model
+        .expert_page_reservation_bytes_for_forward(1)
+        .unwrap_or(u64::MAX);
     let warm_retention_ceiling_bytes = adaptive_ram_growth_guard
         .hot_expert_retention_ceiling_bytes(
             // GenerationPreparation budgets like decode (see
@@ -310,10 +310,8 @@ fn enforce_decode_warm_slot_floor(
     model: &Qwen3_5Model,
     experts_per_token: usize,
 ) {
-    let Some((expert_capacity, per_expert_payload_bytes, sparse_layer_count)) = model
-        .expert_pager
-        .as_ref()
-        .and_then(|expert_pager| {
+    let Some((expert_capacity, per_expert_payload_bytes, sparse_layer_count)) =
+        model.expert_pager.as_ref().and_then(|expert_pager| {
             let first_layer_plan = expert_pager.layer_plans().first()?;
             let per_expert_payload_bytes =
                 crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
@@ -350,9 +348,7 @@ fn enforce_decode_warm_slot_floor(
             .retained_experts
             .as_ref()
             .map_or(Vec::new(), |retained_experts| {
-                retained_experts
-                    .borrow()
-                    .topology_snapshot(expert_capacity)
+                retained_experts.borrow().topology_snapshot(expert_capacity)
             }),
         warm_budget_bytes,
         per_expert_payload_bytes,
@@ -420,8 +416,10 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
     let unseated_sparse_layer_count = sparse_layer_count.saturating_sub(complete_layer_count);
     let minimum_warm_budget_bytes = u128::from(per_expert_payload_bytes)
         .saturating_mul(u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX))
-        .saturating_mul(u128::try_from(crate::minimum_decode_warm_slot_count(experts_per_token))
-            .unwrap_or(u128::MAX));
+        .saturating_mul(
+            u128::try_from(crate::minimum_decode_warm_slot_count(experts_per_token))
+                .unwrap_or(u128::MAX),
+        );
     let expert_statistics = model.expert_weight_memory_cache_statistics();
     let warm_budget_bytes = model
         .runtime()
@@ -437,10 +435,9 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
     // Seating may consume the free warm budget beyond what the floor needs;
     // once the free budget is at or below the floor, no complete layer may
     // stream at all and the post-seating floor enforcement evicts instead.
-    let seatable_budget_bytes = warm_budget_bytes.saturating_sub(u64::try_from(
-        minimum_warm_budget_bytes.min(u128::from(u64::MAX)),
-    )
-    .unwrap_or(u64::MAX));
+    let seatable_budget_bytes = warm_budget_bytes.saturating_sub(
+        u64::try_from(minimum_warm_budget_bytes.min(u128::from(u64::MAX))).unwrap_or(u64::MAX),
+    );
     if seatable_budget_bytes == 0 {
         return Vec::new();
     }

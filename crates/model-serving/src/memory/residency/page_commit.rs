@@ -105,14 +105,17 @@ pub fn decode_warm_floor_eviction_indexes(
     // Coldest first: the layers the request routes to least are the ones
     // whose concentrated seating helps decode the least.
     complete_layer_residencies.sort_by_key(|layer_residency| {
-        (layer_residency.covered_weighted_demand, layer_residency.layer_index)
+        (
+            layer_residency.covered_weighted_demand,
+            layer_residency.layer_index,
+        )
     });
     let complete_layer_count = complete_layer_residencies.len();
     let mut freed_payload_bytes = 0_u64;
     let mut eviction_indexes = Vec::new();
     for layer_residency in complete_layer_residencies {
-        let unseated_sparse_layer_count = sparse_layer_count
-            .saturating_sub(complete_layer_count - eviction_indexes.len());
+        let unseated_sparse_layer_count =
+            sparse_layer_count.saturating_sub(complete_layer_count - eviction_indexes.len());
         let minimum_warm_budget_bytes = u128::from(per_expert_payload_bytes)
             .saturating_mul(u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX))
             .saturating_mul(u128::try_from(minimum_warm_slot_count).unwrap_or(u128::MAX));

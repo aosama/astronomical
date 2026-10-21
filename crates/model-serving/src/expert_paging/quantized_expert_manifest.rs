@@ -510,10 +510,7 @@ impl QuantizedExpertLayerPlan {
 
     /// Returns the decoded-output copy count the decoder's final block
     /// assembly needs for a page of this many experts.
-    pub fn jangtq2_decoded_output_assembly_copy_count(
-        &self,
-        selected_expert_count: usize,
-    ) -> u64 {
+    pub fn jangtq2_decoded_output_assembly_copy_count(&self, selected_expert_count: usize) -> u64 {
         crate::jangtq2_qwen35::codebook::decoded_output_assembly_copy_count(selected_expert_count)
     }
 }

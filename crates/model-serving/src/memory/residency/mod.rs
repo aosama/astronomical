@@ -45,9 +45,8 @@ pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;
 pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{
-    decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count,
-    minimum_decode_warm_slot_count, should_commit_mandatory_complete_layer,
-    should_commit_mandatory_routed_page,
+    decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
+    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
 };
 pub use promotion_on_raise::StreamingStartupResidencyFacts;
 pub use release::should_enact_planned_expert_release;

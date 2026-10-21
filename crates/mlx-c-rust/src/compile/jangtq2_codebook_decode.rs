@@ -79,13 +79,11 @@ pub fn apply_compiled_jangtq2_codebook_decode(
         let mut compiled_graph_by_width = compiled_graph_by_width.borrow_mut();
         let decode_graph = match compiled_graph_by_width.entry((bit_width, input_width)) {
             HashMapEntry::Occupied(occupied_entry) => occupied_entry.into_mut(),
-            HashMapEntry::Vacant(vacant_entry) => vacant_entry.insert(
-                MlxCompiledGraph::new(
-                    build_jangtq2_codebook_decode_graph,
-                    COMPILE_JANGTQ2_CODEBOOK_DECODE_OPERATION,
-                    false,
-                )?,
-            ),
+            HashMapEntry::Vacant(vacant_entry) => vacant_entry.insert(MlxCompiledGraph::new(
+                build_jangtq2_codebook_decode_graph,
+                COMPILE_JANGTQ2_CODEBOOK_DECODE_OPERATION,
+                false,
+            )?),
         };
         decode_graph.apply(
             &[
@@ -109,7 +107,8 @@ unsafe extern "C" fn build_jangtq2_codebook_decode_graph(
     input_vector: raw::mlx_vector_array,
 ) -> c_int {
     if output_vector.is_null()
-        || unsafe { raw::mlx_vector_array_size(input_vector) } as usize != JANGTQ2_DECODE_INPUT_COUNT
+        || unsafe { raw::mlx_vector_array_size(input_vector) } as usize
+            != JANGTQ2_DECODE_INPUT_COUNT
     {
         return 1;
     }
@@ -299,12 +298,7 @@ unsafe extern "C" fn build_jangtq2_codebook_decode_graph(
     let expanded_row_scales = match graph_output_array(|output_array| {
         // SAFETY: The input and stream are live, and the output is uniquely writable.
         unsafe {
-            raw::mlx_expand_dims(
-                output_array,
-                row_scales_float32.raw(),
-                -1,
-                gpu_stream.raw(),
-            )
+            raw::mlx_expand_dims(output_array, row_scales_float32.raw(), -1, gpu_stream.raw())
         }
     }) {
         Ok(expanded_row_scales) => expanded_row_scales,

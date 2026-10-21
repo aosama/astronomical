@@ -103,9 +103,7 @@ impl Qwen3_5StreamingModel {
     pub(crate) fn remove_retained_expert_layer(&self, layer_index: usize) -> bool {
         self.retained_experts
             .as_ref()
-            .is_some_and(|retained_experts| {
-                retained_experts.borrow_mut().remove_layer(layer_index)
-            })
+            .is_some_and(|retained_experts| retained_experts.borrow_mut().remove_layer(layer_index))
     }
 
     /// Returns phase-correct sparse loading workspace for forward admission.
@@ -125,8 +123,8 @@ impl Qwen3_5StreamingModel {
             // checks the exact expert count before any input/output (issue
             // #1422: this reservation previously used the complete-layer
             // peak, over-reserving every sub-complete chunk).
-            let experts_per_token = usize::try_from(self.config.experts_per_token())
-                .unwrap_or(usize::MAX);
+            let experts_per_token =
+                usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
             let expert_capacity = expert_pager
                 .layer_plans()
                 .first()
@@ -138,9 +136,7 @@ impl Qwen3_5StreamingModel {
                 .saturating_mul(experts_per_token)
                 .min(expert_capacity)
                 .max(1);
-            return Ok(expert_pager.maximum_routed_expert_page_bytes(
-                routed_union_expert_bound,
-            )?);
+            return Ok(expert_pager.maximum_routed_expert_page_bytes(routed_union_expert_bound)?);
         }
         Ok(expert_pager.maximum_routed_expert_page_bytes(
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
