@@ -55,17 +55,23 @@ impl ForwardRecoveryPolicy {
         required_reclamation_bytes: usize,
         execution_profile: AdaptiveRamGrowthExecutionProfile,
     ) -> bool {
-        match execution_profile {
-            AdaptiveRamGrowthExecutionProfile::Resident => {
-                should_retry_fixed_forward_after_expert_reclamation(
-                    has_already_retried_after_reclamation,
-                    retained_expert_payload_bytes_before_reclamation,
-                    retained_expert_payload_bytes_after_reclamation,
-                    required_reclamation_bytes,
-                )
-            }
-            AdaptiveRamGrowthExecutionProfile::Paged => false,
-        }
+        // Both profiles retry the unchanged forward exactly once when
+        // reclamation released at least the required bytes. Paged execution
+        // used to refuse the retry outright, which turned every capacity
+        // failure into a chunk halving plus a complete-layer re-stream from
+        // the solid-state drive (the 2026-10-15 seat-oversubscription
+        // incident) and, on the packed jangtq2 family, cascaded a 2,048-token
+        // chunk down to one token even though the reclaimed layers already
+        // made the original chunk fit. The retried forward re-streams the
+        // reclaimed layer operation-local, which is exactly the budget the
+        // reclamation freed.
+        let _ = execution_profile;
+        should_retry_fixed_forward_after_expert_reclamation(
+            has_already_retried_after_reclamation,
+            retained_expert_payload_bytes_before_reclamation,
+            retained_expert_payload_bytes_after_reclamation,
+            required_reclamation_bytes,
+        )
     }
 }
 
@@ -88,7 +94,8 @@ pub struct ForwardRecoveryRequirements {
     pub active_memory_ceiling_bytes: usize,
     /// Prevents a capacity failure from entering an unbounded retry loop.
     pub has_already_retried_after_reclamation: bool,
-    /// Paged execution must not retry the same chunk after reclaiming a layer.
+    /// The forward's execution profile. Both profiles may retry the unchanged
+    /// forward once after reclamation released the required bytes.
     pub execution_profile: AdaptiveRamGrowthExecutionProfile,
 }
 

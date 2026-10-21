@@ -228,7 +228,7 @@ fn should_evict_coldest_complete_layers_until_the_recomputed_floor_fits() {
 }
 
 #[test]
-fn should_refuse_the_same_prefill_chunk_retry_for_paged_execution() {
+fn should_authorize_one_same_chunk_retry_for_paged_execution_after_reclamation() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
@@ -254,6 +254,16 @@ fn should_refuse_the_same_prefill_chunk_retry_for_paged_execution() {
     ));
     assert!(matches!(
         paged_retry.decide(),
+        ForwardRecoveryDecision::Retry { .. }
+    ));
+    // The retry is bounded exactly as it is for resident execution: a second
+    // capacity failure on the retried chunk must not loop.
+    let paged_second_retry = ForwardRecoveryRequirements {
+        has_already_retried_after_reclamation: true,
+        ..paged_retry
+    };
+    assert!(matches!(
+        paged_second_retry.decide(),
         ForwardRecoveryDecision::Reject { .. }
     ));
 }
