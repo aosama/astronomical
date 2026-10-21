@@ -60,7 +60,7 @@ HTTP), **acceptance** (env-gated real-model journeys).
 - `cargo test-rest-api` — runs the REST contract and daemon
   `rest_api_tests` binaries, exercising the public HTTP surface in-process.
 - `cargo build --bins -p astronomical-daemon && cargo test-e2e` — the root
-  whole-product E2E suite (`tests/e2e`): every journey spawns a daemon
+  whole-product E2E suite (`verification/e2e`): every journey spawns a daemon
   binary over its real HTTP/IPC surface. By default the fixture
   `astronomical-daemon-test-daemon` serves those surfaces with the scripted
   worker, so the suite needs no model artifacts and runs on any machine;
@@ -145,7 +145,7 @@ One command per ceiling cell; run each as its own process (MLX memory limits
 are process-global). Each cell has a 60-second test timeout with a 45-second
 serving budget, appends one `memory_ceiling_sweep` record with its `memory_cell`
 evidence to
-`tests/acceptance/tests/performance/throughput/throughput-history.jsonl`, and
+`verification/acceptance/tests/performance/throughput/throughput-history.jsonl`, and
 fails
 when the serving budget is exhausted so partial evidence remains available.
 Set `MEMORY_SWEEP_CELL_ORDER` to the cell's position in your sweep so records
@@ -243,7 +243,7 @@ failure branches need no real model and no optimized build:
 
 - `cargo test -p astronomical-daemon --test offline_tests worker_memory_demotion -- --test-threads=1`
 
-### Whole-product daemon journeys (tests/e2e, fidelity-switchable)
+### Whole-product daemon journeys (verification/e2e, fidelity-switchable)
 
 Both journeys run in two fidelities selected by `ASTRONOMICAL_REAL_MODEL=1`
 and live in the `cargo test-e2e` suite: by default they drive the fixture
@@ -298,7 +298,7 @@ test thread, and respect each journey's 115-second budget.
   reference encoder and the shard-wise requantizer on a synthetic two-shard
   source; seconds, no artifacts, serial.
 - `cargo test-quantization-acceptance` — real-model journeys in
-  `tests/acceptance/tests/quantization/`: requantizer throughput, a static
+  `verification/acceptance/tests/quantization/`: requantizer throughput, a static
   conversion served back through the Qwen3.5 engine, the exact sweep with
   checkpoint resume, and parity against a Python-produced artifact. Needs
   `ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR` (a local bf16 Qwen3.5

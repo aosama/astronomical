@@ -1,7 +1,7 @@
 //! GPU unit tests on the sealed fixture pack: the family model loads the
 //! tiny fixture and runs the straight forward pass end to end. Real-artifact
 //! journeys (upstream parity, text-in/text-out) live in the acceptance crate
-//! under `tests/acceptance/tests/gpu_contracts/prism_hadamard.rs`.
+//! under `verification/acceptance/tests/gpu_contracts/prism_hadamard.rs`.
 
 use std::collections::HashMap;
 
@@ -16,7 +16,7 @@ use crate::prism_hadamard_qwen35::artifacts::tests::pack_fixture::{
 };
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../tests/acceptance/tests/fixtures/model_metrics_10000_romeo_and_juliet_words.txt"
+    "../../../../../verification/acceptance/tests/fixtures/model_metrics_10000_romeo_and_juliet_words.txt"
 );
 
 /// The fixture weights are a few megabytes, so a modest wired limit keeps the
