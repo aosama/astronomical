@@ -231,6 +231,11 @@ impl Qwen3_5ResidentModel {
             ExpertAssignmentOrder::Original
         };
         match affine_weights {
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
+                Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "the resident engine never loads jangtq2 codebook expert pages",
+                })
+            }
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 // Qwen stores native rows as `[expert, output, input]`; expose the
                 // lazy `[expert, input, output]` view required by gather_mm.

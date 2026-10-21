@@ -29,6 +29,9 @@ mod memory_behavior_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod retained_expert_cache_tests;
 
+#[cfg(all(test, feature = "direct-mlx"))]
+mod slot_writes_tests;
+
 /// Warm-table coverage of one decode token's routed experts.
 #[derive(Debug, Eq, PartialEq)]
 pub struct RoutedExpertCoverage {

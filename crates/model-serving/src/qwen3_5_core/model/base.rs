@@ -128,6 +128,11 @@ impl Qwen3_5ModelBase {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 Ok(self.runtime.take_axis(weight, token_indices, 0)?)
             }
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
+                Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "jangtq2 codebook pages hold routed experts, never embeddings",
+                })
+            }
             Qwen3_5AffineWeights::Quantized {
                 packed_weight,
                 quantization_scales,
@@ -162,6 +167,11 @@ impl Qwen3_5ModelBase {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
                 let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
                 Ok(self.runtime.matmul(activations, &transposed_weight)?)
+            }
+            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
+                Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "jangtq2 codebook pages hold routed experts, never dense linears",
+                })
             }
             Qwen3_5AffineWeights::Quantized {
                 packed_weight,

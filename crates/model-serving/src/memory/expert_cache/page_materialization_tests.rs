@@ -1,6 +1,5 @@
 use super::page_materialization::{
-    expert_page_peak_allocation_bytes, retained_expert_page_payload_bytes,
-    source_expert_page_payload_bytes,
+    expert_page_peak_allocation_bytes, source_expert_page_payload_bytes,
 };
 
 #[test]
@@ -142,31 +141,6 @@ fn should_reject_decoder_index_workspace_byte_counts_that_overflow() {
             usize::MAX,
             4
         ),
-        None
-    );
-}
-
-#[test]
-fn should_replace_packed_expert_sources_with_decoded_output_storage() {
-    let source_tensor_bytes_per_expert = [10, 20];
-    let replaced_codebook_source_bytes_per_expert = [10];
-    let decoded_tensor_shapes = vec![vec![2, 3]];
-
-    let retained_page_payload_bytes = retained_expert_page_payload_bytes(
-        &source_tensor_bytes_per_expert,
-        &replaced_codebook_source_bytes_per_expert,
-        2,
-        &decoded_tensor_shapes,
-        2,
-    );
-
-    assert_eq!(retained_page_payload_bytes, Some(52));
-}
-
-#[test]
-fn should_reject_replaced_source_bytes_above_the_page_source_bytes() {
-    assert_eq!(
-        retained_expert_page_payload_bytes(&[10], &[11], 1, &[vec![2, 3]], 2),
         None
     );
 }

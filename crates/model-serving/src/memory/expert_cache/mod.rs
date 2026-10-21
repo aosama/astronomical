@@ -21,6 +21,4 @@ pub use decode::{
 #[cfg(any(feature = "direct-mlx", test))]
 pub use page_materialization::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
-pub use page_materialization::{
-    retained_expert_page_payload_bytes, source_expert_page_payload_bytes,
-};
+pub use page_materialization::source_expert_page_payload_bytes;

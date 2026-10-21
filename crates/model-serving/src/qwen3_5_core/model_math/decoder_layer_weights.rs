@@ -24,6 +24,19 @@ pub(crate) enum Qwen3_5AffineWeights {
         quantization_bits: i32,
         quantization_group_size: i32,
     },
+    /// A jangtq2 codebook expert page kept in its packed on-disk form:
+    /// `[experts, output_rows, words]` uint32 codes plus `[experts, output_rows]`
+    /// float16 row scales. Routed experts only. The page is never decoded for
+    /// retention — decoded bfloat16 is eight times larger, which is what kept
+    /// the 122B bundle's expert set from fitting in RAM. Decode tokens
+    /// multiply straight from the codes through the fused gathered projection
+    /// kernel; multi-token prefill decodes a transient bfloat16 copy at
+    /// forward time and gathers through `gather_mm`.
+    Jangtq2Codebook {
+        packed_code_words: MlxArray,
+        row_scales: MlxArray,
+        codebook_bit_width: u32,
+    },
 }
 
 impl Qwen3_5AffineWeights {
@@ -45,6 +58,15 @@ impl Qwen3_5AffineWeights {
                 quantization_bits: *quantization_bits,
                 quantization_group_size: *quantization_group_size,
             }),
+            Self::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width,
+            } => Ok(Self::Jangtq2Codebook {
+                packed_code_words: packed_code_words.retain()?,
+                row_scales: row_scales.retain()?,
+                codebook_bit_width: *codebook_bit_width,
+            }),
         }
     }
 
@@ -63,6 +85,14 @@ impl Qwen3_5AffineWeights {
                 arrays.push(packed_weight);
                 arrays.push(quantization_scales);
                 arrays.push(quantization_biases);
+            }
+            Self::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                ..
+            } => {
+                arrays.push(packed_code_words);
+                arrays.push(row_scales);
             }
         }
     }

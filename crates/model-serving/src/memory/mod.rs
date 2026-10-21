@@ -126,9 +126,7 @@ pub use expert_cache::{
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_cache::{
-    retained_expert_page_payload_bytes, source_expert_page_payload_bytes,
-};
+pub(crate) use expert_cache::source_expert_page_payload_bytes;
 pub use geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
 pub use phase::MemoryPhase;
 pub use reclamation::{

@@ -5,22 +5,21 @@
 //! gate, up, and down projection component into one owner that can be temporary
 //! for a forward or retained as a complete warm layer.
 //!
-//! Native BFloat16 and affine-quantized layers deliberately take different
-//! branches. Quantized execution requires the packed weight *and* its exact scale,
-//! bias, bit width, and group size; dropping or synthesizing any component would
-//! alter model precision.
+//! Native BFloat16, affine-quantized, and jangtq2 codebook layers deliberately
+//! take different branches. Quantized execution requires the packed weight
+//! *and* its exact scale, bias, bit width, and group size; dropping or
+//! synthesizing any component would alter model precision. Codebook pages are
+//! kept packed with their row scales and bit width for the same reason.
 
 use std::collections::HashMap;
 
 use astronomical_mlx_c_rust::MlxArray;
-use astronomical_runtime_integration::MlxRuntime;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 
 pub(super) fn build_paged_expert_weights(
-    runtime: &MlxRuntime,
     loaded_tensors: &mut HashMap<String, MlxArray>,
     layer_plan: &QuantizedExpertLayerPlan,
 ) -> Result<Qwen3_5PagedExpertWeights, ExpertPagingError> {
@@ -28,11 +27,11 @@ pub(super) fn build_paged_expert_weights(
     // either returns one self-contained page or drops all partially taken arrays
     // on error; no incomplete page can escape.
     let (gate_projection, gate_activation_rotation) =
-        take_projection(runtime, loaded_tensors, layer_plan, "gate_proj")?;
+        take_projection(loaded_tensors, layer_plan, "gate_proj")?;
     let (up_projection, up_activation_rotation) =
-        take_projection(runtime, loaded_tensors, layer_plan, "up_proj")?;
+        take_projection(loaded_tensors, layer_plan, "up_proj")?;
     let (down_projection, down_activation_rotation) =
-        take_projection(runtime, loaded_tensors, layer_plan, "down_proj")?;
+        take_projection(loaded_tensors, layer_plan, "down_proj")?;
     Ok(Qwen3_5PagedExpertWeights {
         gate_projection,
         up_projection,
@@ -44,7 +43,6 @@ pub(super) fn build_paged_expert_weights(
 }
 
 fn take_projection(
-    runtime: &MlxRuntime,
     loaded_tensors: &mut HashMap<String, MlxArray>,
     layer_plan: &QuantizedExpertLayerPlan,
     projection_name: &str,
@@ -103,16 +101,16 @@ fn take_projection(
                 .map_err(|_| ExpertPagingError::Runtime {
                     description: format!("layer plan has invalid {projection_name} codebook bits"),
                 })?;
-            let decoded_bfloat16_weight =
-                crate::jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
-                    runtime,
-                    &packed_code_words,
-                    &row_scales,
-                    codebook_bit_width,
-                )?;
+            // The page stays packed: retaining decoded bfloat16 would cost
+            // eight times the bytes and is exactly what kept this family's
+            // expert set from fitting in RAM. Execution decides per forward
+            // whether to multiply straight from the codes (decode tokens) or
+            // to decode a transient copy (multi-token prefill).
             Ok((
-                Qwen3_5AffineWeights::NativeBfloat16 {
-                    weight: decoded_bfloat16_weight,
+                Qwen3_5AffineWeights::Jangtq2Codebook {
+                    packed_code_words,
+                    row_scales,
+                    codebook_bit_width,
                 },
                 activation_rotation,
             ))

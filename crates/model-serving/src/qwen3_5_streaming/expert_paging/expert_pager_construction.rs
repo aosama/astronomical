@@ -102,6 +102,9 @@ impl Qwen3_5ExpertPager {
             layer_plans,
             memory_budget,
             resident_expert_source_files,
+            // Conservative until the model proves the fused kernel: every
+            // page prices its decode peak.
+            decode_tokens_multiply_packed_pages: std::cell::Cell::new(false),
         })
     }
 }
