@@ -6,3 +6,5 @@
 mod golden_vector_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod decode_throughput_tests;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod fused_gathered_projection_tests;

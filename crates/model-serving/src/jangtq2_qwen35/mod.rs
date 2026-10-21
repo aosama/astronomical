@@ -40,6 +40,8 @@ pub mod codebook;
 pub mod configuration;
 pub mod hadamard32;
 #[cfg(feature = "direct-mlx")]
+pub mod fused_gathered_projection;
+#[cfg(feature = "direct-mlx")]
 pub mod mlx_decode;
 
 #[cfg(test)]
