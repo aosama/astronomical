@@ -20,6 +20,29 @@ pub(crate) const fn is_mlx_affine_quantization_group_size_supported(group_size: 
     matches!(group_size, 32 | 64 | 128)
 }
 
+/// Physical codec one module's weights are stored with.
+///
+/// The affine codec is the default and covers everything the stock loader
+/// understands today. The codebook codec carries only the descriptor the
+/// jangtq2 family needs; every rule about that format lives in the family
+/// folder, and consumers branch on this enum exactly once, at the point
+/// where storage becomes tensor shapes or decode work — via
+/// [`OptiQQuantizationProfile::is_jangtq2_codebook`] plus delegation to the
+/// family, never by matching the variant inside consumer logic.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ModuleWeightCodec {
+    /// Standard MLX affine quantization: packed `uint32` weights plus
+    /// per-group scales and biases.
+    #[default]
+    MlxAffineQuantized,
+    /// JANGTQ v2 codebook storage: expert-stacked packed codes with one
+    /// `float16` scale per expert row and an activation-side rotation.
+    Jangtq2CodebookQuantized {
+        /// The rotation the decode path must apply to activations.
+        rotation: crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    },
+}
+
 /// Per-module quantization profile carrying both bit width and group size.
 ///
 /// Each quantized module in a Qwen3.5 model can have its own bit width
@@ -27,13 +50,15 @@ pub(crate) const fn is_mlx_affine_quantization_group_size_supported(group_size: 
 /// modules not listed in the config use the default `(bits, group_size)`.
 ///
 /// A profile with `bits = 0` indicates an unquantized module stored as
-/// bfloat16 (no scales/biases tensors on disk). This is used for the
-/// Some artifacts use this for native floating-point modules inside an otherwise
-/// affine-quantized model.
+/// bfloat16 (no scales/biases tensors on disk), used for native
+/// floating-point modules inside an otherwise affine-quantized model.
+/// A profile with the codebook codec carries the jangtq2 bit width and
+/// rotation with `group_size = 0` — codebook storage has no group concept.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OptiQQuantizationProfile {
     pub bits: u32,
     pub group_size: u32,
+    pub weight_codec: ModuleWeightCodec,
 }
 
 impl OptiQQuantizationProfile {
@@ -46,13 +71,48 @@ impl OptiQQuantizationProfile {
         self.bits == 0
     }
 
+    /// Returns true when the module is stored in the jangtq2 codebook format.
+    #[must_use]
+    pub const fn is_jangtq2_codebook(&self) -> bool {
+        matches!(
+            self.weight_codec,
+            ModuleWeightCodec::Jangtq2CodebookQuantized { .. }
+        )
+    }
+
+    /// Creates an affine profile, the codec for every storage the stock
+    /// affine loader understands (including `bits = 0` native bfloat16).
+    ///
+    /// Building profiles exclusively through the constructors keeps the
+    /// codec/group-size invariant (codebook profiles always carry
+    /// `group_size = 0`) in one place instead of four scattered literals.
+    #[must_use]
+    pub const fn affine(bits: u32, group_size: u32) -> Self {
+        Self {
+            bits,
+            group_size,
+            weight_codec: ModuleWeightCodec::MlxAffineQuantized,
+        }
+    }
+
+    /// Creates a jangtq2 codebook profile with the family's no-group
+    /// sentinel (`group_size = 0`).
+    #[must_use]
+    pub const fn jangtq2_codebook(
+        bits: u32,
+        rotation: crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+    ) -> Self {
+        Self {
+            bits,
+            group_size: 0,
+            weight_codec: ModuleWeightCodec::Jangtq2CodebookQuantized { rotation },
+        }
+    }
+
     /// Creates an unquantized profile (bits=0, group_size=0) indicating bfloat16 storage.
     #[must_use]
     pub const fn unquantized() -> Self {
-        Self {
-            bits: 0,
-            group_size: 0,
-        }
+        Self::affine(0, 0)
     }
 }
 
@@ -71,9 +131,11 @@ pub trait QuantizationConfigSource {
 /// Per-module override entries parse through the jangtq2 family's entry
 /// type, which owns the three wire shapes that coexist in quantized bundles:
 /// MLX affine objects, jangtq2 codebook objects, and MLX loader boolean
-/// flags. That family owns every foreign-format rule; this document only
-/// resolves entries into OptiQ profiles and rejects codebook storage with
-/// an explicit not-yet-loadable error until its serving integration lands.
+/// flags. Affine entries resolve into ordinary affine profiles exactly as
+/// they always have; codebook entries resolve into profiles whose codec
+/// names the jangtq2 family, which owns every format rule downstream
+/// (tensor inventory shapes and, once its serving integration lands, the
+/// per-expert decode).
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct OptiQQuantizationConfig {
     group_size: u32,
@@ -165,20 +227,14 @@ impl OptiQQuantizationConfig {
         // Build the fully resolved module profile map.
         // For OptiQ-4bit (bits=4): all modules are explicit overrides.
         // For mixed-precision (bits=6): overrides specify modules that differ from default.
-        let default_profile = OptiQQuantizationProfile {
-            bits: self.bits,
-            group_size: self.group_size,
-        };
+        let default_profile = OptiQQuantizationProfile::affine(self.bits, self.group_size);
         let all_module_names =
             expected_quantized_module_names(config_source, feed_forward_architecture);
         let mut quantized_module_profiles = BTreeMap::new();
         for module_name in all_module_names {
             let module_profile = match self.module_overrides.get(&module_name) {
                 Some(Jangtq2WeightOverrideEntry::Affine { bits, group_size }) => {
-                    OptiQQuantizationProfile {
-                        bits: *bits,
-                        group_size: *group_size,
-                    }
+                    OptiQQuantizationProfile::affine(*bits, *group_size)
                 }
                 // A `false` flag marks native floating-point storage — the
                 // same bits=0 convention the shard-index resolver produces.
@@ -188,16 +244,11 @@ impl OptiQQuantizationConfig {
                 // A `true` flag defers to the document defaults, exactly
                 // like an unlisted module.
                 Some(Jangtq2WeightOverrideEntry::LoaderFlag(true)) | None => default_profile,
-                // Codebook storage has no affine profile; until its serving
-                // integration lands it must fail closed with a message that
-                // names the format and the module, rather than leaking a
-                // misleading scales/biases shape error downstream.
-                Some(Jangtq2WeightOverrideEntry::Codebook { .. }) => {
-                    return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
-                        description: format!(
-                            "module `{module_name}` is stored in the jangtq2 codebook format, which this build cannot load yet"
-                        ),
-                    });
+                // Codebook storage carries its bit width and rotation; the
+                // format's tensor shapes and decode rules belong to the
+                // jangtq2 family, reached through the profile's codec.
+                Some(Jangtq2WeightOverrideEntry::Codebook { bits, rotation, .. }) => {
+                    OptiQQuantizationProfile::jangtq2_codebook(*bits, *rotation)
                 }
             };
             quantized_module_profiles.insert(module_name, module_profile);

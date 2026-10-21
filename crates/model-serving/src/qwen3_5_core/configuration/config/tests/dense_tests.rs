@@ -60,6 +60,7 @@ fn should_use_tied_embedding_weights_without_requiring_a_separate_language_model
     let dense_config = Qwen3_5Config::from_json_bytes(&dense_config_bytes)
         .expect("a tied-embedding dense config should parse");
     let language_tensor_names = qwen3_5_language_tensor_profiles(&dense_config)
+        .expect("the tied-embedding dense language tensor profiles should build")
         .into_iter()
         .map(|tensor_profile| tensor_profile.name)
         .collect::<BTreeSet<_>>();

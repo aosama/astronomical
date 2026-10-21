@@ -231,7 +231,7 @@ fn should_resolve_the_sparse_override_router_as_unquantized() {
 }
 
 #[test]
-fn should_fail_closed_when_a_module_uses_the_jangtq2_codebook_format() {
+fn should_resolve_a_jangtq2_codebook_module_into_a_codebook_profile() {
     let mut config_value = serde_json::from_slice::<Value>(&frozen_ornith_1_0_config_bytes())
         .expect("the frozen test config should decode as JSON");
     config_value["quantization"]["language_model.model.layers.0.mlp.switch_mlp.gate_proj"] =
@@ -240,16 +240,25 @@ fn should_fail_closed_when_a_module_uses_the_jangtq2_codebook_format() {
     let config_bytes = serde_json::to_vec(&config_value)
         .expect("the modified Ornith config should serialize as JSON");
 
-    // The jangtq2 entry itself must parse; the failure is the explicit
-    // not-yet-loadable gate naming the format and the module, never a
-    // confusing shape error from downstream tensor validation.
-    let parse_result = Qwen3_5Config::from_json_bytes(&config_bytes);
-    assert!(matches!(
-        parse_result,
-        Err(Qwen3_5ConfigError::InvalidConfigValueDynamic { ref description })
-            if description.contains("jangtq2 codebook format")
-                && description.contains("mlp.switch_mlp.gate_proj")
-    ));
+    // The jangtq2 entry parses and resolves into a codebook codec profile
+    // carrying its bit width and rotation; the format's tensor shapes and
+    // decode rules belong to the jangtq2 family reached through the codec.
+    let config =
+        Qwen3_5Config::from_json_bytes(&config_bytes).expect("the codebook entry must resolve");
+    let codebook_profile = config
+        .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.gate_proj");
+    assert_eq!(codebook_profile.bits, 2);
+    assert_eq!(codebook_profile.group_size, 0);
+    assert!(codebook_profile.is_jangtq2_codebook());
+    // A neighbouring affine module keeps its ordinary affine profile.
+    let affine_profile = config
+        .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.up_proj");
+    assert_eq!(
+        affine_profile.weight_codec,
+        crate::qwen3_5_core::quantizations::optiq::ModuleWeightCodec::MlxAffineQuantized
+    );
+    assert_eq!(affine_profile.bits, 6);
+    assert_eq!(affine_profile.group_size, 64);
 }
 
 #[test]

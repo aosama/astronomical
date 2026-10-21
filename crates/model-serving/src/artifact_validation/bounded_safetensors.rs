@@ -381,6 +381,7 @@ fn validate_tensor_dtype(
             matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
         }
         TensorDtype::BFloat16 => tensor_view.dtype == "BF16",
+        TensorDtype::Float16 => tensor_view.dtype == "F16",
         TensorDtype::Float32 => tensor_view.dtype == "F32",
         TensorDtype::UInt32 => tensor_view.dtype == "U32",
     };

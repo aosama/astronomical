@@ -2,15 +2,15 @@
 mod tests;
 
 use crate::artifact_validation::TensorProfile;
-use crate::qwen3_5_core::artifacts::Qwen3_5Config;
 use crate::qwen3_5_core::artifacts::tensor_spec;
+use crate::qwen3_5_core::artifacts::{Qwen3_5ArtifactError, Qwen3_5Config};
 
 pub(crate) fn append_qwen3_5_dense_mlp_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
     decoder_layer_prefix: &str,
     hidden_size: usize,
     qwen3_5_config: &Qwen3_5Config,
-) {
+) -> Result<(), Qwen3_5ArtifactError> {
     let dense_mlp_prefix = format!("{decoder_layer_prefix}.mlp");
     for (projection_name, output_dimension, input_dimension) in [
         (
@@ -36,6 +36,7 @@ pub(crate) fn append_qwen3_5_dense_mlp_tensor_profiles(
             &[output_dimension],
             input_dimension,
             qwen3_5_config.quantization_profile_for_module(&projection_module_name),
-        );
+        )?;
     }
+    Ok(())
 }

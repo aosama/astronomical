@@ -229,6 +229,11 @@ pub enum Qwen3_5ArtifactError {
     MissingLanguageTensor { tensor_name: String },
     #[error("Qwen3.5 index contains unexpected vision tensor '{tensor_name}'")]
     UnexpectedVisionTensor { tensor_name: String },
+    #[error("the jangtq2 tensor contract rejected module '{module_name}': {source}")]
+    Jangtq2TensorContract {
+        module_name: String,
+        source: crate::jangtq2_qwen35::configuration::Jangtq2ConfigurationError,
+    },
     #[error("Qwen3.5 index is missing vision tensor '{tensor_name}'")]
     MissingVisionTensor { tensor_name: String },
     #[error("Qwen3.5 index contains visual tensors but config.json has no vision_config")]
