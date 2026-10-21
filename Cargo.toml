@@ -13,8 +13,8 @@ members = [
     "crates/rest-contract",
     "crates/test-harness",
     "crates/runtime-integration",
-    "tests/e2e",
-    "tests/acceptance",
+    "verification/e2e",
+    "verification/acceptance",
     "xtask",
 ]
 default-members = [
@@ -31,8 +31,8 @@ default-members = [
     "crates/rest-contract",
     "crates/test-harness",
     "crates/runtime-integration",
-    "tests/e2e",
-    "tests/acceptance",
+    "verification/e2e",
+    "verification/acceptance",
     "xtask",
 ]
 resolver = "3"

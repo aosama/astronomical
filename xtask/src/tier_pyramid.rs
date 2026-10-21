@@ -126,7 +126,7 @@ fn file_contains_literal(source_file: &Path, literal: &str) -> bool {
 }
 
 fn count_e2e_package_tier(repository_root: &Path, acceptance_files: bool) -> usize {
-    let e2e_tests_directory = repository_root.join("tests/e2e/tests");
+    let e2e_tests_directory = repository_root.join("verification/e2e/tests");
     if !e2e_tests_directory.is_dir() {
         return 0;
     }
@@ -150,7 +150,7 @@ fn count_e2e_package_tier(repository_root: &Path, acceptance_files: bool) -> usi
 }
 
 fn count_acceptance_package_tier(repository_root: &Path) -> usize {
-    let acceptance_tests_directory = repository_root.join("tests/acceptance/tests");
+    let acceptance_tests_directory = repository_root.join("verification/acceptance/tests");
     if !acceptance_tests_directory.is_dir() {
         return 0;
     }

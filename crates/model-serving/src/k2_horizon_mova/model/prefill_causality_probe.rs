@@ -32,7 +32,7 @@ const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
 const K2_HORIZON_MOVA_ROLE: &str = "k2_horizon_mova";
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../tests/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
+    "/../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
 ));
 const PROMPT_TOKEN_COUNT: usize = 200;
 const KV_STATE_GROWTH_TOKENS: u32 = 256;
