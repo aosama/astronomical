@@ -93,6 +93,7 @@ pub fn persistent_visual_embedding_model_contract() -> PersistentVisualEmbedding
 
 pub fn expected_qwen3_5_language_tensor_profiles() -> Vec<TensorProfile> {
     qwen3_5_language_tensor_profiles(&frozen_ornith_1_0_config())
+        .expect("the Ornith 1.0 language tensor contract should build")
 }
 
 pub fn frozen_ornith_1_0_config_bytes() -> Vec<u8> {
