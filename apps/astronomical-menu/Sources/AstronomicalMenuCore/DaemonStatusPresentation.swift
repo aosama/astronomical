@@ -116,19 +116,19 @@ extension DaemonStatusDocument {
       return "\(progress.completionPercentageTitle) · \(progress.completedUnitCount) / \(progress.totalUnitCount) steps"
     }
     if progress.phase == "generation_preparation" { return "Preparing the first output" }
-    let tokenCountTitle = "\(progress.completedUnitCount) / \(progress.totalUnitCount) tokens"
     if progress.phase == "generation" {
+      let tokenCountTitle = "\(progress.completedUnitCount) / \(progress.totalUnitCount) tokens"
       // A request without an explicit output cap reports the endpoint's
       // default budget (65,535), which makes "x / y tokens" read as a
-      // permanently near-zero bar; large budgets present as a plain count.
+      // permanently near-zero bar; large budgets present as a plain count
+      // with an indeterminate bar.
       if progress.totalUnitCount >= 8_192 {
         return "\(progress.completedUnitCount) tokens"
       }
       return tokenCountTitle
     }
-    return progress.phase == "generation"
-      ? tokenCountTitle
-      : "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
+    let tokenCountTitle = "\(progress.completedUnitCount) / \(progress.totalUnitCount) tokens"
+    return "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
   }
 
   var elapsedTimeMetricTitle: String {
@@ -160,6 +160,11 @@ extension DaemonStatusDocument {
   var hasDeterminateProgress: Bool {
     if isRestoringPromptCache { return false }
     guard let progress else { return true }
+    // A generation against the endpoint's default budget has no meaningful
+    // completion fraction; show the indeterminate bar instead of ~0%.
+    if progress.phase == "generation" && progress.totalUnitCount >= 8_192 {
+      return false
+    }
     return progress.unit != .steps || progress.phase == "denoising"
   }
 

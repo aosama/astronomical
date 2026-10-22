@@ -262,6 +262,7 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertEqual(statusDocument.progressTitle, "27 tokens")
+    XCTAssertFalse(statusDocument.hasDeterminateProgress)
     XCTAssertEqual(statusDocument.flightTitle, "Generating · 27.0 tok/s")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
   }
