@@ -41,12 +41,12 @@ async fn should_probe_the_real_sorted_expert_weighted_sum_kernel_once_per_proces
         );
 
         assert_eq!(
-            capabilities.verdict(CustomMetalKernelFamily::SortedExpertWeightedSum),
+            capabilities.verdict(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM),
             CustomKernelVerdict::Supported,
             "a GPU that executes the bounded probe with correct output values must keep the custom kernel"
         );
         assert_eq!(
-            capabilities.verdict(CustomMetalKernelFamily::GatedDeltaSequence),
+            capabilities.verdict(CustomMetalKernelFamily::GATED_DELTA_SEQUENCE),
             CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
             "families without a probe in this build stay fail-closed"
         );
@@ -76,7 +76,7 @@ async fn should_reuse_worker_process_capabilities_across_model_loads() {
         );
         assert!(
             first_capabilities
-                .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+                .is_custom_kernel_supported(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM)
         );
     })
     .await;

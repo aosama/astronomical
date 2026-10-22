@@ -18,6 +18,18 @@ use crate::performance_attribution::PerformanceAttribution;
 
 /// One quantization group, one 64-wide input, two assignments, two experts.
 const PROBE_ASSIGNMENT_COUNT: usize = 2;
+
+impl CustomMetalKernelFamily {
+    /// Registry identifier of the fused quantized expert decode family. The
+    /// family owns this constant; the capability module stays agnostic.
+    pub const FUSED_QUANTIZED_EXPERT_DECODE: Self = Self::new("fused_quantized_expert_decode");
+}
+
+/// Supplies this family's probes for the once-per-process probe run. The
+/// worker registration list is the only central touch point.
+pub fn capability_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelProbe + '_>> {
+    vec![Box::new(FusedQuantizedExpertDecodeProbe::new(runtime))]
+}
 const PROBE_EXPERT_COUNT: usize = 2;
 const PROBE_INPUT_DIMENSION: usize = 64;
 const PROBE_INTERMEDIATE_DIMENSION: usize = 64;
@@ -39,7 +51,7 @@ impl<'runtime> FusedQuantizedExpertDecodeProbe<'runtime> {
 
 impl CustomMetalKernelProbe for FusedQuantizedExpertDecodeProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::FusedQuantizedExpertDecode
+        CustomMetalKernelFamily::FUSED_QUANTIZED_EXPERT_DECODE
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
