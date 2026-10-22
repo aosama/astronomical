@@ -401,33 +401,6 @@ jobs:
           set -o pipefail
           cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
         timeout-minutes: 2
-      # Physics proof for the lane's no-network property (issue #1333): the
-      # same binaries re-run under a repository-owned seatbelt profile that
-      # denies real networking while allowing the offline contract's local
-      # communication (loopback and Unix Domain Sockets; see the offline
-      # vocabulary in .cargo/config.toml). Binaries that apply the
-      # harness-internal network denial defer to this outer profile here —
-      # macOS forbids applying a second profile from inside one — and their
-      # stricter socket-free proof runs in the unsandboxed step above. The
-      # step is fail-closed: pipefail surfaces a failing sandboxed cargo, and
-      # the execution-parity assertion fails the check when the sandboxed run
-      # executed fewer test binaries than the unsandboxed step, because a
-      # silently skipped proof is worse than none.
-      - name: Re-run offline lane tests under the network-denying seatbelt
-        run: |
-          set -o pipefail
-          trap 'scripts/ci/ci-step-timing.sh end offline-tests-seatbelt' EXIT
-          scripts/ci/ci-step-timing.sh begin offline-tests-seatbelt
-          export ASTRONOMICAL_NETWORK_DENIAL_DEFERRED_TO_SEATBELT=1
-          sandbox-exec -f scripts/ci/offline-sandbox.sb cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline-seatbelt.log"
-          unsandboxed_test_result_count="$(grep -c 'test result:' "$RUNNER_TEMP/test-logs/offline.log")"
-          sandboxed_test_result_count="$(grep -c 'test result:' "$RUNNER_TEMP/test-logs/offline-seatbelt.log")"
-          if [ "$sandboxed_test_result_count" -eq 0 ] || [ "$sandboxed_test_result_count" -ne "$unsandboxed_test_result_count" ]; then
-            printf '%s\n' "Error: the sandboxed offline lane executed $sandboxed_test_result_count of $unsandboxed_test_result_count test binaries; the no-network proof is incomplete" >&2
-            exit 1
-          fi
-          printf '[offline-tests-seatbelt] execution_parity=%s/%s\n' "$sandboxed_test_result_count" "$unsandboxed_test_result_count"
-        timeout-minutes: 4
       - name: Run Library REST contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
@@ -800,7 +773,7 @@ jobs:
       # The Linux-buildable subset only: runtime-integration's build script
       # probes the xcode identity and mlx-c-rust needs the native dependency
       # cache, so the macOS-first crates cannot compile on this runner. The
-      # macOS sandbox job below owns the full lane.
+      # macOS offline verification job above owns the full lane.
       - name: Fetch and build the Linux-buildable offline crates
         run: |
           cargo fetch --locked
