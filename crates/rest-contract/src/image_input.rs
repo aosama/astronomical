@@ -8,9 +8,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 
 use crate::OpenAiChatCompletionValidationError;
-
-/// Maximum accepted decoded image byte payload. Matches the chat body cap.
-pub const MAX_OPENAI_IMAGE_BYTES: usize = 32 * 1024 * 1024;
+use crate::openai_request_budget::MAX_OPENAI_IMAGE_DECODED_BYTES;
 
 /// One decoded image carried in a user chat message.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -57,10 +55,11 @@ pub(crate) fn decode_image_url(
     let decoded_image_bytes = BASE64_STANDARD
         .decode(base64_payload)
         .map_err(|_| OpenAiChatCompletionValidationError::InvalidBase64)?;
-    if decoded_image_bytes.len() > MAX_OPENAI_IMAGE_BYTES {
+    if decoded_image_bytes.len() > MAX_OPENAI_IMAGE_DECODED_BYTES {
         return Err(OpenAiChatCompletionValidationError::ImageTooLarge {
             actual_bytes: decoded_image_bytes.len(),
-            maximum_bytes: MAX_OPENAI_IMAGE_BYTES,
+            maximum_bytes: MAX_OPENAI_IMAGE_DECODED_BYTES,
+            excess_bytes: decoded_image_bytes.len() - MAX_OPENAI_IMAGE_DECODED_BYTES,
         });
     }
     Ok(OpenAiImageInput {

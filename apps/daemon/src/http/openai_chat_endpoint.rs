@@ -2,7 +2,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::RequestId;
-use astronomical_rest_contract::{OpenAiChatCompletionRequest, OpenAiErrorResponse};
+use astronomical_rest_contract::{
+    OpenAiChatCompletionRequest, OpenAiChatCompletionValidationError, OpenAiErrorResponse,
+};
 use axum::{
     Json,
     body::Bytes,
@@ -73,15 +75,7 @@ pub(crate) async fn create_chat_completion(
             message_role_sequence_preview = ?request_info_diagnostic_snapshot.message_role_sequence_preview,
             "rejected invalid REST chat completion request"
         );
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(OpenAiErrorResponse::invalid_request(
-                validation_error.to_string(),
-                None,
-                Some("invalid_request"),
-            )),
-        )
-            .into_response();
+        return chat_validation_rejection_response(validation_error);
     }
     // Policy resolution and queue admission must observe one side of a worker replacement.
     let configuration_transition_guard =
@@ -130,15 +124,7 @@ pub(crate) async fn create_chat_completion(
     let request_parts = match chat_completion_request.into_parts() {
         Ok(request_parts) => request_parts,
         Err(validation_error) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(OpenAiErrorResponse::invalid_request(
-                    validation_error.to_string(),
-                    None,
-                    Some("invalid_request"),
-                )),
-            )
-                .into_response();
+            return chat_validation_rejection_response(validation_error);
         }
     };
     let reasoning_excluded = request_parts.reasoning_excluded;
@@ -382,6 +368,28 @@ fn worker_unavailable_response() -> Response {
         Json(OpenAiErrorResponse::service_unavailable(
             "the local worker is unavailable",
             Some("worker_unavailable"),
+        )),
+    )
+        .into_response()
+}
+
+/// Renders a chat contract rejection as HTTP 413 when it is a portable-budget
+/// rejection, keeping the OpenAI-shaped error code on the same
+/// `request_too_large` path the IPC frame overflow uses.
+fn chat_validation_rejection_response(
+    validation_error: OpenAiChatCompletionValidationError,
+) -> Response {
+    let (status, error_code) = if validation_error.is_request_too_large() {
+        (StatusCode::PAYLOAD_TOO_LARGE, "request_too_large")
+    } else {
+        (StatusCode::BAD_REQUEST, "invalid_request")
+    };
+    (
+        status,
+        Json(OpenAiErrorResponse::invalid_request(
+            validation_error.to_string(),
+            None,
+            Some(error_code),
         )),
     )
         .into_response()

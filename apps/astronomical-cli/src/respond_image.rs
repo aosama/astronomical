@@ -13,8 +13,9 @@ use crate::errors::RespondError;
 /// Decoded image bytes the CLI accepts in total for one request.
 ///
 /// This leaves headroom for the roughly thirty-three percent base64 inflation
-/// and framing the 32 MiB IPC frame then carries, so a request that passes this
-/// check cannot itself exceed the daemon's IPC frame limit.
+/// and framing the daemon's IPC frame then carries (the portable body budget,
+/// see the rest-contract `openai_request_budget` module), so a request that
+/// passes this check cannot itself exceed the daemon's IPC frame limit.
 pub const MAX_TOTAL_IMAGE_DECODED_BYTES: usize = 16 * 1024 * 1024;
 
 /// Supported image extensions paired with the wire MIME type the daemon expects.
