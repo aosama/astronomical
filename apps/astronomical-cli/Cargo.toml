@@ -43,10 +43,10 @@ astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }
 astronomical-quantization = { path = "../../crates/quantization" }
 serde_json.workspace = true
+tempfile = "=3.27.0"
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-tempfile = "=3.27.0"
