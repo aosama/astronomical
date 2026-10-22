@@ -27,7 +27,7 @@
       <nav id="sidebar" aria-label="Sessions">
         <div class="sidebar__header">
           <span class="sidebar__app-name">Thin Talk</span>
-          <button type="button" class="sidebar__new-chat" id="new-chat" data-testid="sidebar-new-chat">
+          <button type="button" class="sidebar__new-chat" id="sidebar-new-chat" data-testid="sidebar-new-chat">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
             New chat
           </button>
@@ -47,13 +47,16 @@
           The failure banner and the composer are app-owned chrome, not model output,
           so their markup is static and nothing here passes through the sanitiser.
           Every control reports to the controller; the page owns no chat behaviour.
+          Every interactive control carries an id equal to its data-testid, so
+          assistive technology and automation agents share one stable identifier
+          that survives layout changes (issue 752).
         -->
         <aside id="failure-banner" role="alert" data-testid="composer-banner" hidden>
           <div class="failure-banner__text">
             <p class="failure-banner__message" data-testid="banner-message"></p>
             <p class="failure-banner__next" data-testid="banner-next-action"></p>
           </div>
-          <button type="button" class="failure-banner__retry" data-testid="composer-retry">Retry</button>
+          <button type="button" class="failure-banner__retry" id="composer-retry" data-testid="composer-retry">Retry</button>
         </aside>
         <footer id="composer" class="composer">
           <textarea
@@ -66,18 +69,18 @@
           <div class="composer__actions">
             <div class="composer__group">
               <div class="composer__menu-anchor">
-                <button type="button" class="composer__pill" data-testid="composer-effort" aria-label="Thinking level" aria-haspopup="menu" aria-expanded="false">
+                <button type="button" class="composer__pill" id="composer-effort" data-testid="composer-effort" aria-label="Thinking level" aria-haspopup="menu" aria-expanded="false">
                   <span data-testid="composer-effort-label">Quick</span>
                   <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
                 </button>
-                <ul class="composer__menu" data-testid="composer-effort-menu" role="menu" hidden></ul>
+                <ul class="composer__menu" id="composer-effort-menu" data-testid="composer-effort-menu" role="menu" hidden></ul>
               </div>
             </div>
             <div class="composer__group">
-              <button type="button" class="composer__send" data-testid="composer-send" aria-label="Send message" disabled>
+              <button type="button" class="composer__send" id="composer-send" data-testid="composer-send" aria-label="Send message" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13L13 3M13 3H6M13 3v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
               </button>
-              <button type="button" class="composer__send composer__send--stop" data-testid="composer-stop" aria-label="Stop streaming" hidden>
+              <button type="button" class="composer__send composer__send--stop" id="composer-stop" data-testid="composer-stop" aria-label="Stop streaming" hidden>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
               </button>
             </div>
