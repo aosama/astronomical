@@ -194,6 +194,7 @@ name = "astronomical-memory-policy"
 version = "0.2.80"
 dependencies = [
  "astronomical-test-harness",
+ "thiserror",
 ]
 
 [[package]]

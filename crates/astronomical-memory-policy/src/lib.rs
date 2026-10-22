@@ -11,11 +11,26 @@
 //! test-memory-policy-layering-contract.sh`) fails if a MLX dependency is
 //! reintroduced here, so the boundary is enforced by the dependency graph
 //! instead of by convention. The MLX-facing owners (retained cache slot
-//! tables, streaming readers, the direct-MLX admission types) stay in
-//! `astronomical-model-serving` and depend on this crate; the dependency
-//! direction is one way.
+//! tables, streaming readers, the runtime-backed allocation admission, the
+//! direct-MLX admission logging) stay in `astronomical-model-serving` and
+//! depend on this crate; the dependency direction is one way.
+//!
+//! # Module map
+//!
+//! - `phase` — the one lifecycle phase type (`MemoryPhase`).
+//! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`,
+//!   `MemoryAdmissionDecision`): every rejection names its boundary.
+//! - `reclamation` — what must yield, by how much (`ExpertReclamationPlan`,
+//!   the paged step enum `PagedExpertReclamationStep`, the admission error
+//!   vocabulary `ExpertMemoryAdmissionError`, and the reclamation
+//!   arithmetic).
+//! - `serving_ceiling` — resolution of the effective MLX memory ceiling from
+//!   configuration and the machine bound.
 
+pub mod phase;
+pub mod reclamation;
 pub mod serving_ceiling;
+pub mod vocabulary;
 
 #[cfg(test)]
 mod serving_ceiling_tests;

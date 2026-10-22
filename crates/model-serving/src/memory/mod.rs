@@ -60,13 +60,10 @@ mod ceiling;
 mod dense_resident;
 mod expert_cache;
 mod geometry_floor;
-mod phase;
-mod reclamation;
 mod recovery;
 pub(crate) mod residency;
 pub(crate) mod telemetry;
 mod utilization;
-mod vocabulary;
 
 #[cfg(test)]
 mod adaptive_ram_growth_execution_profile_tests;
@@ -125,8 +122,8 @@ pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_cache::source_expert_page_payload_bytes;
 pub use geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
-pub use phase::MemoryPhase;
-pub use reclamation::{
+pub use astronomical_memory_policy::phase::MemoryPhase;
+pub use astronomical_memory_policy::reclamation::{
     ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
@@ -135,6 +132,10 @@ pub use reclamation::{
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation, whole_table_reclamation_target_bytes,
 };
+// The budget family imports `reclamation` by module path
+// (`use crate::memory::reclamation;`), so the module stays nameable in this
+// namespace without widening the crate's public surface.
+pub(crate) use astronomical_memory_policy::reclamation;
 pub use recovery::{ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements};
 pub use residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerGeometry,
@@ -153,4 +154,4 @@ pub use astronomical_memory_policy::serving_ceiling::{
     machine_ceiling_from_physical_ram_bytes,
 };
 pub use utilization::MemoryCeilingUtilization;
-pub use vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
+pub use astronomical_memory_policy::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
