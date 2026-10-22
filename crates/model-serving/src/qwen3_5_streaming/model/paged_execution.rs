@@ -4,7 +4,7 @@ use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
-use crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
+use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::sparse_experts::{
@@ -161,7 +161,7 @@ impl Qwen3_5Model {
             // one rotated tensor and share it instead of repeating the
             // blockwise Hadamard work for gate and up independently.
             Some(
-                crate::jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
                     &self.runtime,
                     expert_inputs,
                 )?,
@@ -229,7 +229,7 @@ impl Qwen3_5Model {
         &self,
         activations: &MlxArray,
         affine_weights: &crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights,
-        activation_rotation: crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        activation_rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
         selected_expert_indices: &MlxArray,
         are_expert_indices_sorted: bool,
         performance_attribution: &mut PerformanceAttribution,
@@ -244,9 +244,9 @@ impl Qwen3_5Model {
             ExpertAssignmentOrder::Original
         };
         let rotated_activation_owner = match activation_rotation {
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => Some(
-                crate::jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => Some(
+                astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
                     &self.runtime,
                     activations,
                 )?,
@@ -300,7 +300,7 @@ impl Qwen3_5Model {
                 let decoded_weight = performance_attribution.measure_operation(
                     PerformanceOperation::Jangtq2CodebookPageDecode,
                     |_| {
-                        crate::jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
+                        astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
                             &self.runtime,
                             packed_code_words,
                             row_scales,

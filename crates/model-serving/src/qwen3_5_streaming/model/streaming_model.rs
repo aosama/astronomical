@@ -50,7 +50,7 @@ pub struct Qwen3_5StreamingModel {
     /// `ASTRONOMICAL_JANGTQ2_FUSED_PROJECTION=0` disables it for diagnosis.
     /// Without it decode tokens decode a transient bfloat16 page like prefill.
     pub(crate) fused_jangtq2_gathered_projection_kernel: Option<
-        crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
+        astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
     >,
 }
 

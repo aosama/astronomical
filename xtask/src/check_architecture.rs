@@ -27,19 +27,33 @@ struct ForbiddenDependencyRule {
 /// rebuild the graphics-processor world and drag the serving crate's
 /// graphics-processor tests into the offline lane, defeating the extraction
 /// the crate exists for.
-const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[ForbiddenDependencyRule {
-    rule_name: "policy-without-mlx-bindings",
-    source_crate: "astronomical-memory-policy",
-    forbidden_crate: "astronomical-mlx-c-rust",
-    rationale: "the memory policy crate must build and test in the offline lane without ever pulling in the serving crate or its graphics-processor tests",
-}];
+const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
+    ForbiddenDependencyRule {
+        rule_name: "policy-without-mlx-bindings",
+        source_crate: "astronomical-memory-policy",
+        forbidden_crate: "astronomical-mlx-c-rust",
+        rationale: "the memory policy crate must build and test in the offline lane without ever pulling in the serving crate or its graphics-processor tests",
+    },
+    // The jangtq2 family crate (issue #1427) owns the weight contract end
+    // to end; the serving integration (page loading, slot writes, dispatch)
+    // lives in the serving crate and consumes the family's public types. A
+    // dependency back from the family to the serving crate would make that
+    // split circular and rebuild the serving crate on every family edit,
+    // defeating the extraction.
+    ForbiddenDependencyRule {
+        rule_name: "family-crate-without-serving",
+        source_crate: "astronomical-jangtq2-qwen35",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "the jangtq2 family crate must build and test without pulling in the serving crate, which consumes the family through a one-way edge",
+    },
+];
 
 /// One detected violation with the offending dependency chain, source crate
 /// first. The chain names every hop so a failure is attributable from the
 /// message alone.
 #[derive(Debug)]
 pub(crate) struct ArchitectureViolation {
-    rule_name: &'static str,
+    pub(crate) rule_name: &'static str,
     rationale: &'static str,
     pub(crate) dependency_chain: Vec<String>,
 }
