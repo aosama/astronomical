@@ -400,7 +400,7 @@ fn apply_declared_jangtq2_rms_norm_convention(
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
     let should_add_unit_scale = matches!(
         qwen3_5_config.jangtq2_rms_norm_convention(),
-        Some(crate::jangtq2_qwen35::configuration::Jangtq2RmsNormConvention::LanguageMlxPlusOne)
+        Some(astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention::LanguageMlxPlusOne)
     ) && is_language_rms_norm_weight_tensor(tensor_name);
     if !should_add_unit_scale {
         return Ok(tensor);

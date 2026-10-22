@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust", "dep:astronomical-quantization"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust", "dep:astronomical-quantization", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
 astronomical-config = { path = "../config" }
@@ -24,6 +24,13 @@ astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # graphics-processor tests; the MLX-facing owners in this crate depend on it.
 # The one-way direction is enforced by `cargo xtask check-architecture`.
 astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+# The jangtq2 weight family as its own crate (issue #1427): format contract,
+# codebook math, Hadamard rotation, Metal page decoder, fused gathered
+# projection kernel. The pure contract builds in the offline lane; this edge
+# is one way (the family never depends back on the serving crate, enforced by
+# `cargo xtask check-architecture`), and the Qwen3.5 streaming engine keeps
+# the serving integration (page loading, slot writes, dispatch) here.
+astronomical-jangtq2-qwen35 = { path = "../astronomical-jangtq2-qwen35" }
 # The quantization crate's pure surface (probe trait, artifact schemas). Its
 # GPU world is never enabled from here: the Qwen3.5 sensitivity probe under
 # src/quantization_probe implements the trait with this crate's own engine

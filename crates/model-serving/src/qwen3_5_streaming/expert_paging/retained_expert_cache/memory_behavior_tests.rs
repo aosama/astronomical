@@ -107,11 +107,11 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
                 weight: projection(3.0),
             },
             gate_activation_rotation:
-                crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
             up_activation_rotation:
-                crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
             down_activation_rotation:
-                crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         }
     };
     let mut cache = RetainedExpertCache::new(1);

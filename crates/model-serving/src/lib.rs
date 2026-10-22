@@ -52,13 +52,12 @@ pub(crate) mod persistent_cache;
 
 pub mod prism_hadamard_qwen35;
 
-// The jangtq2 family ships its configuration parsing, codebook math,
-// rotation, and artifact contract as crate API ahead of the serving-path
-// integration, mirroring the prism pattern above: the family owns its
-// weight contract end to end and the standard qwen3_5 family only
-// delegates to it.
-
-pub mod jangtq2_qwen35;
+// The jangtq2 family (codebook format, Hadamard rotation, Metal page
+// decoder, fused gathered projection kernel) lives in its own workspace
+// crate, `astronomical-jangtq2-qwen35` (issue #1427): a family change
+// compiles and tests without rebuilding the rest of this crate. The
+// streaming integration (page loading, slot writes, dispatch) stays here
+// and consumes the family crate's public types.
 
 pub(crate) mod qwen3_5_core;
 

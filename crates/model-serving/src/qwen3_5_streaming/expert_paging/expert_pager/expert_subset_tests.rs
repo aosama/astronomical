@@ -61,11 +61,11 @@ fn packed_codebook_page(runtime: &MlxRuntime) -> Qwen3_5PagedExpertWeights {
         up_projection: projection(2),
         down_projection: projection(3),
         gate_activation_rotation:
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         up_activation_rotation:
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         down_activation_rotation:
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
     }
 }
 
@@ -116,7 +116,7 @@ fn should_select_experts_in_the_requested_order_and_keep_the_representation() {
     );
     assert_eq!(
         subset.gate_activation_rotation,
-        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32
+        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32
     );
 }
 

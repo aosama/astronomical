@@ -442,7 +442,7 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
     runtime: &MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
     performance_attribution: &mut PerformanceAttribution,
-) -> Option<crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel>
+) -> Option<astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel>
 {
     let has_codebook_experts = expert_pager.layer_plans().iter().any(|layer_plan| {
         ["gate_proj", "up_proj", "down_proj"]
@@ -469,7 +469,7 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
         );
         return None;
     }
-    match crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel::new() {
+    match astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel::new() {
         Ok(kernel) => Some(kernel),
         Err(error) => {
             tracing::warn!(

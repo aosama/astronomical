@@ -276,7 +276,7 @@ pub enum Qwen3_5ArtifactError {
     #[error("the jangtq2 tensor contract rejected module '{module_name}': {source}")]
     Jangtq2TensorContract {
         module_name: String,
-        source: crate::jangtq2_qwen35::configuration::Jangtq2ConfigurationError,
+        source: astronomical_jangtq2_qwen35::configuration::Jangtq2ConfigurationError,
     },
     #[error("Qwen3.5 index is missing vision tensor '{tensor_name}'")]
     MissingVisionTensor { tensor_name: String },

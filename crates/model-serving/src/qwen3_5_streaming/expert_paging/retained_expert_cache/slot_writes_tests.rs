@@ -59,11 +59,11 @@ fn packed_codebook_page(
         up_projection: projection(2),
         down_projection: projection(3),
         gate_activation_rotation:
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         up_activation_rotation:
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         down_activation_rotation:
-            crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
     }
 }
 
