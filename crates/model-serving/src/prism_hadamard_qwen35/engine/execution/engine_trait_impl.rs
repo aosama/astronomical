@@ -27,7 +27,6 @@ use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
-use crate::inference_engine::contract::PreparedInferenceRequest;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
