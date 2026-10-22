@@ -180,6 +180,7 @@ export class ComposerView {
       choice.setAttribute("role", "menuitemradio");
       choice.setAttribute("aria-checked", option === this.state.effort ? "true" : "false");
       choice.dataset.testid = `composer-effort-${option}`;
+      choice.id = `composer-effort-${option}`;
       choice.dataset.effortValue = option;
       choice.textContent = ThinkingEffort.budgetSummary(option);
       item.appendChild(choice);

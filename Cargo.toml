@@ -58,6 +58,20 @@ bytes = "1"
 crc32fast = "1"
 futures-util = { version = "0.3", features = ["sink"] }
 fs4 = "1.1.0"
+# url (pulled by reqwest in astronomical-daemon) → idna chooses its Unicode
+# backend from whichever 1.x version stream of idna_adapter the lockfile
+# resolves, because Cargo has no global-features mechanism (issue #606). The
+# exact pin below selects the 1.1.x stream (unicode-bidi,
+# unicode-normalization, idna_mapping, and three tiny helpers — seven small
+# crates) instead of the default 1.2.x stream (the ICU4X stack:
+# icu_normalizer, icu_properties, icu_collections, icu_provider, zerovec,
+# yoke, zerofrom, zerotrie, and their data tables — nineteen crates). The
+# daemon's reqwest client resolves only the Hugging Face HTTPS endpoints of
+# the hub transport, where both backends behave identically, so the pin
+# keeps IDNA (Internationalized Domain Names for Applications) correctness
+# while removing the compiled footprint. If non-ASCII domain resolution is
+# ever needed, move the pin to the 1.2.x stream.
+idna_adapter = "=1.1.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = "0.2"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }

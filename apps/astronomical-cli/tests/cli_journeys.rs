@@ -1,5 +1,6 @@
 mod doctor_command;
 mod embed_command;
+mod launch_codex;
 mod launch_opencode;
 mod models_command;
 mod quantize_command;
