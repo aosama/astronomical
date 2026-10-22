@@ -3,6 +3,7 @@ mod openai_chat_completion_response;
 mod openai_embeddings;
 mod openai_image_generation;
 mod openai_models_and_errors;
+mod openai_request_budget;
 mod openai_response_format;
 mod openai_responses_request;
 mod openai_responses_response;

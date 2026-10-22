@@ -9,6 +9,7 @@ mod openai_embeddings_response;
 mod openai_image_generation_request;
 mod openai_image_generation_response;
 mod openai_models_and_errors;
+mod openai_request_budget;
 mod openai_response_format;
 mod openai_responses_input;
 mod openai_responses_request;
@@ -18,7 +19,7 @@ mod openai_responses_tools;
 mod openai_structured_outputs;
 mod thinking_controls;
 
-pub use image_input::{MAX_OPENAI_IMAGE_BYTES, OpenAiImageInput};
+pub use image_input::OpenAiImageInput;
 pub use openai_chat_completion_request::{
     DEFAULT_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH,
     OpenAiChatCompletionRequest, OpenAiChatCompletionRequestParts,
@@ -55,6 +56,10 @@ pub use openai_image_generation_response::{
 pub use openai_models_and_errors::{
     OpenAiEmbeddingModelParts, OpenAiError, OpenAiErrorResponse, OpenAiImageModelParts,
     OpenAiModel, OpenAiModelList, OpenAiModelParts, OpenAiModelValidationError,
+};
+pub use openai_request_budget::{
+    MAX_OPENAI_IMAGE_DECODED_BYTES, MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+    MAX_OPENAI_INLINE_MEDIA_BYTES, MAX_OPENAI_REQUEST_BODY_BYTES, base64_wire_byte_count,
 };
 pub use openai_response_format::{
     MAX_STRUCTURED_OUTPUT_SCHEMA_BYTES, OpenAiJsonSchemaSpec, OpenAiResponseFormat,

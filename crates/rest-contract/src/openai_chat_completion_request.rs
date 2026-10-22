@@ -4,6 +4,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::openai_request_budget::{
+    MAX_OPENAI_IMAGE_PARTS_PER_REQUEST, MAX_OPENAI_INLINE_MEDIA_BYTES,
+};
 use crate::{
     ChatTemplateKwargsRequestObject, EnforcedStructuredGeneration, OpenAiChatMessage,
     OpenAiChatMessageParts, OpenAiResponseFormat, OpenAiStopSequences, OpenAiStreamOptions,
@@ -101,6 +104,12 @@ impl OpenAiChatCompletionRequest {
         for chat_message in &self.messages {
             chat_message.validate()?;
         }
+        validate_image_part_count(
+            self.messages
+                .iter()
+                .map(OpenAiChatMessage::image_url_part_count)
+                .sum(),
+        )?;
 
         for tool_definition in &self.tools {
             tool_definition.validate()?;
@@ -204,13 +213,26 @@ impl OpenAiChatCompletionRequest {
             self.guided_grammar.as_deref(),
         )?;
         let thinking_controls = self.resolve_thinking_controls()?;
+        // Inline media accumulates across every user message so the portable
+        // media budget is per request, not per message. Each image was already
+        // size-checked individually during decode; this accumulation rejects a
+        // request whose combined media exceeds the budget the mainstream
+        // providers enforce on the whole request.
+        let mut decoded_inline_media_bytes = 0usize;
+        let mut messages = Vec::with_capacity(self.messages.len());
+        for chat_message in self.messages {
+            let message_parts = chat_message.into_parts()?;
+            if let OpenAiChatMessageParts::User { images, .. } = &message_parts {
+                for decoded_image in images {
+                    decoded_inline_media_bytes += decoded_image.decoded_bytes().len();
+                }
+            }
+            messages.push(message_parts);
+        }
+        validate_inline_media_total(decoded_inline_media_bytes)?;
         Ok(OpenAiChatCompletionRequestParts {
             model: self.model,
-            messages: self
-                .messages
-                .into_iter()
-                .map(OpenAiChatMessage::into_parts)
-                .collect::<Result<Vec<_>, _>>()?,
+            messages,
             tools: self
                 .tools
                 .into_iter()
@@ -383,10 +405,31 @@ pub enum OpenAiChatCompletionValidationError {
     #[error("the data URI base64 payload is invalid")]
     InvalidBase64,
     /// A decoded image exceeded the maximum accepted byte size.
-    #[error("decoded image is {actual_bytes} bytes, exceeding the {maximum_bytes} byte limit")]
+    #[error(
+        "decoded image is {actual_bytes} bytes, exceeding the {maximum_bytes}-byte per-image budget by {excess_bytes} bytes (mirrors the 7 MB inline per-file limit of Google Cloud Gemini Enterprise)"
+    )]
     ImageTooLarge {
         actual_bytes: usize,
         maximum_bytes: usize,
+        excess_bytes: usize,
+    },
+    /// The request carried more image parts than the portable image-count budget.
+    #[error(
+        "the request carries {actual_image_part_count} image parts, exceeding the {maximum_image_part_count}-image budget by {excess_image_part_count} (mirrors the 100-image-per-request limit Anthropic documents for 200k-context models)"
+    )]
+    ImagePartCountExceedsBudget {
+        actual_image_part_count: usize,
+        maximum_image_part_count: usize,
+        excess_image_part_count: usize,
+    },
+    /// The request's total decoded inline media exceeded the portable media budget.
+    #[error(
+        "the request carries {actual_inline_media_bytes} decoded image bytes, exceeding the {maximum_inline_media_bytes}-byte inline-media budget by {excess_inline_media_bytes} bytes (mirrors the 20 MB total inline request size of the Gemini API)"
+    )]
+    InlineMediaExceedsBudget {
+        actual_inline_media_bytes: usize,
+        maximum_inline_media_bytes: usize,
+        excess_inline_media_bytes: usize,
     },
     /// An assistant history record contained no answer, reasoning, or tool call.
     #[error("assistant messages must contain content, reasoning, or tool calls")]
@@ -456,12 +499,57 @@ pub enum OpenAiChatCompletionValidationError {
     StructuredOutputs(#[from] OpenAiStructuredOutputsValidationError),
 }
 
+impl OpenAiChatCompletionValidationError {
+    /// Whether this rejection is a request-size rejection (HTTP 413 under the
+    /// portable request budget) rather than a malformed-request one (HTTP 400).
+    #[must_use]
+    pub fn is_request_too_large(&self) -> bool {
+        matches!(
+            self,
+            Self::ImageTooLarge { .. }
+                | Self::ImagePartCountExceedsBudget { .. }
+                | Self::InlineMediaExceedsBudget { .. }
+        )
+    }
+}
+
 fn validate_non_empty_string(
     field_name: &'static str,
     string_value: &str,
 ) -> Result<(), OpenAiChatCompletionValidationError> {
     if string_value.is_empty() {
         return Err(OpenAiChatCompletionValidationError::EmptyString { field_name });
+    }
+    Ok(())
+}
+
+fn validate_image_part_count(
+    image_part_count: usize,
+) -> Result<(), OpenAiChatCompletionValidationError> {
+    if image_part_count > MAX_OPENAI_IMAGE_PARTS_PER_REQUEST {
+        return Err(
+            OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget {
+                actual_image_part_count: image_part_count,
+                maximum_image_part_count: MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+                excess_image_part_count: image_part_count - MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+            },
+        );
+    }
+    Ok(())
+}
+
+fn validate_inline_media_total(
+    decoded_inline_media_bytes: usize,
+) -> Result<(), OpenAiChatCompletionValidationError> {
+    if decoded_inline_media_bytes > MAX_OPENAI_INLINE_MEDIA_BYTES {
+        return Err(
+            OpenAiChatCompletionValidationError::InlineMediaExceedsBudget {
+                actual_inline_media_bytes: decoded_inline_media_bytes,
+                maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
+                excess_inline_media_bytes: decoded_inline_media_bytes
+                    - MAX_OPENAI_INLINE_MEDIA_BYTES,
+            },
+        );
     }
     Ok(())
 }

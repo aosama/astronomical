@@ -10,8 +10,12 @@ use crate::{
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
-/// Matches the HTTP chat transport ceiling so one validated local request stays one IPC message.
-pub const MAX_IPC_FRAME_BYTES: usize = 32 * 1024 * 1024;
+///
+/// Aligned with the portable HTTP request body budget in
+/// `astronomical-rest-contract` so one validated local request always stays one
+/// IPC message: the budget module in `rest-contract` is the single source of
+/// every ceiling value, its sources, and its retrieval date.
+pub const MAX_IPC_FRAME_BYTES: usize = astronomical_rest_contract::MAX_OPENAI_REQUEST_BODY_BYTES;
 
 /// Daemon-local correlation identifier for one generation request.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]

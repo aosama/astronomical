@@ -258,6 +258,24 @@ pub enum OpenAiResponsesValidationError {
     ThinkingControls(#[from] ThinkingControlsError),
     #[error("invalid image input: {0}")]
     ImageInput(#[source] crate::OpenAiChatCompletionValidationError),
+    /// The request carried more image parts than the portable image-count budget.
+    #[error(
+        "the request carries {actual_image_part_count} image parts, exceeding the {maximum_image_part_count}-image budget by {excess_image_part_count} (mirrors the 100-image-per-request limit Anthropic documents for 200k-context models)"
+    )]
+    ImagePartCountExceedsBudget {
+        actual_image_part_count: usize,
+        maximum_image_part_count: usize,
+        excess_image_part_count: usize,
+    },
+    /// The request's total decoded inline media exceeded the portable media budget.
+    #[error(
+        "the request carries {actual_inline_media_bytes} decoded image bytes, exceeding the {maximum_inline_media_bytes}-byte inline-media budget by {excess_inline_media_bytes} bytes (mirrors the 20 MB total inline request size of the Gemini API)"
+    )]
+    InlineMediaExceedsBudget {
+        actual_inline_media_bytes: usize,
+        maximum_inline_media_bytes: usize,
+        excess_inline_media_bytes: usize,
+    },
     #[error("encrypted foreign reasoning cannot be replayed locally")]
     UnsupportedReasoningReplay,
     #[error("response input item type '{input_item_type}' is unsupported")]
@@ -296,6 +314,18 @@ pub enum OpenAiResponsesValidationError {
     StructuredOutput(#[from] OpenAiStructuredOutputValidationError),
     #[error(transparent)]
     StructuredOutputs(#[from] OpenAiStructuredOutputsValidationError),
+}
+
+impl OpenAiResponsesValidationError {
+    /// Whether this rejection is a request-size rejection (HTTP 413 under the
+    /// portable request budget) rather than a malformed-request one (HTTP 400).
+    #[must_use]
+    pub fn is_request_too_large(&self) -> bool {
+        matches!(
+            self,
+            Self::ImagePartCountExceedsBudget { .. } | Self::InlineMediaExceedsBudget { .. }
+        ) || matches!(self, Self::ImageInput(chat_error) if chat_error.is_request_too_large())
+    }
 }
 
 fn validate_compatibility_fields(
