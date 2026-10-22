@@ -301,6 +301,7 @@ pub use persistent_cache::{
     PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    persistent_prompt_cache_clamped_prefill_chunk_end,
     persistent_prompt_cache_partial_tail_capture_end,
 };
 

@@ -19,8 +19,6 @@ use std::time::Instant;
 
 use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceOperation,
-    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
-    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
 };
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
@@ -75,43 +73,17 @@ impl Qwen3_5EngineState {
                         .block_token_count()
                 })
                 .unwrap_or(0);
-            let crossed_cache_boundary_count =
-                persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
-                    prefill_start,
-                    requested_prefill_chunk_end,
-                    persistent_prompt_cache_block_token_count,
-                )
-                .len();
-            // The durable-boundary clamp keeps at most one block publication
-            // per forward; the partial-tail clamp then stops the terminal
-            // chunk one token short so the captured tail stays probeable.
-            let mut clamped_prefill_chunk_end = if crossed_cache_boundary_count <= 1 {
-                requested_prefill_chunk_end
-            } else {
-                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
-                    prefill_start,
-                    requested_prefill_chunk_end,
-                    persistent_prompt_cache_block_token_count,
-                )
-            };
-            // The generation-start lookup never restores the final prompt token
-            // (the terminal forward needs it to produce the first logits), so a
-            // partial tail captured through that token could never be probed
-            // again. Stop the last full chunk one token short; the following
-            // single-token chunk seeds the first generated token from logits
-            // that are mathematically identical to an unclamped terminal pass.
-            let partial_tail_capture_end =
-                crate::persistent_prompt_cache_partial_tail_capture_end(
-                    prefill_end_exclusive,
-                    persistent_prompt_cache_block_token_count,
-                );
-            if clamped_prefill_chunk_end == prefill_end_exclusive
-                && partial_tail_capture_end < prefill_end_exclusive
-                && prefill_start < partial_tail_capture_end
-            {
-                clamped_prefill_chunk_end = partial_tail_capture_end;
-            }
-            clamped_prefill_chunk_end
+            // One shared function applies both clamps (at most one durable
+            // block publication per forward; terminal chunks stop one token
+            // short so the captured partial tail stays probeable). Keeping the
+            // composition in the tested pure layer is deliberate: the boundary
+            // clamp was silently discarded once by an innocent refactor.
+            crate::persistent_prompt_cache_clamped_prefill_chunk_end(
+                prefill_start,
+                requested_prefill_chunk_end,
+                prefill_end_exclusive,
+                persistent_prompt_cache_block_token_count,
+            )
         } else {
             requested_prefill_chunk_end
         };

@@ -110,8 +110,8 @@ async fn run_persistent_prompt_cache_warmup_e2e(
     let mut saved_complete_block_token_counts =
         saved_persistent_prompt_cache_disk_usage.sequence_state_token_counts.clone();
     saved_complete_block_token_counts.sort_unstable();
-    // The most common declared token count is the model's block geometry;
-    // any file declaring fewer is the prompt's best-effort partial tail.
+    // The largest declared token count is the model's block geometry; any
+    // file declaring fewer is the prompt's best-effort partial tail.
     let persistent_prompt_cache_block_token_count = *saved_complete_block_token_counts
         .last()
         .expect("saved sequence-state files must declare a block token count");
@@ -141,11 +141,19 @@ async fn run_persistent_prompt_cache_warmup_e2e(
         &persistent_prompt_cache_directory,
     )
     .await;
+    let saved_partial_tail_token_count = saved_persistent_prompt_cache_disk_usage
+        .sequence_state_token_counts
+        .iter()
+        .filter(|declared_token_count| {
+            **declared_token_count != persistent_prompt_cache_block_token_count
+        })
+        .sum();
     assert_persistent_prompt_cache_warmup(
         &cold_worker_pass.streaming_measurement,
         &warm_worker_pass.streaming_measurement,
         saved_complete_block_count,
         persistent_prompt_cache_block_token_count,
+        saved_partial_tail_token_count,
     );
 
     let metrics_report = benchmark_report(
@@ -167,6 +175,7 @@ fn assert_persistent_prompt_cache_warmup(
     warm_streaming_measurement: &StreamingMeasurement,
     saved_complete_block_count: usize,
     persistent_prompt_cache_block_token_count: usize,
+    saved_partial_tail_token_count: usize,
 ) {
     let warm_cached_token_count = warm_streaming_measurement.cached_token_count as usize;
     let warm_uncached_token_count = warm_streaming_measurement.prompt_token_count as usize
@@ -198,6 +207,16 @@ fn assert_persistent_prompt_cache_warmup(
         warm_uncached_token_count <= persistent_prompt_cache_block_token_count,
         "the warm request must leave at most one block of prompt work uncached: \
          {warm_uncached_token_count} tokens remain after restoring {warm_cached_token_count}"
+    );
+    // When the cold pass persisted a partial tail, the warm pass must restore
+    // it too: the pre-fix regression (a tail saved through the final prompt
+    // token could never be probed) restored only the complete blocks and left
+    // exactly the whole tail uncached, which the bound above still admitted.
+    assert!(
+        saved_partial_tail_token_count == 0 || warm_uncached_token_count <= 1,
+        "the warm request must restore the persisted partial tail: \
+         {warm_uncached_token_count} tokens remain after restoring {warm_cached_token_count}, \
+         but the cold pass saved a partial tail of {saved_partial_tail_token_count} tokens"
     );
     assert_eq!(
         cold_streaming_measurement.prompt_token_count,
