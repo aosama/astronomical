@@ -10,6 +10,8 @@ pub mod hadamard;
 
 pub mod artifacts;
 
+pub mod cache_layout;
+
 #[cfg(feature = "direct-mlx")]
 pub mod engine;
 

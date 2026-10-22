@@ -29,7 +29,7 @@ mod weights;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use forward::StraightGenerationState;
+pub(crate) use forward::{PrismStateSlotLayout, StraightGenerationState};
 pub use measurement::{
     PrismHadamardGenerationState, PrismHadamardGreedySession, PrismHadamardProbeDimensions,
     PrismHadamardProbeProjection,
@@ -122,10 +122,11 @@ impl PrismHadamardTextModel {
             None
         };
         let hadamard_block_size = pack.hadamard_contract().block_size();
-        let fused_rotation_kernel = if kernel_capabilities
-            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::PRISM_HADAMARD_SIGNED_ROTATION)
-            && signed_rotation_kernel::is_signed_rotation_eligible(hadamard_block_size)
-        {
+        let fused_rotation_kernel = if kernel_capabilities.is_custom_kernel_supported(
+            crate::CustomMetalKernelFamily::PRISM_HADAMARD_SIGNED_ROTATION,
+        ) && signed_rotation_kernel::is_signed_rotation_eligible(
+            hadamard_block_size,
+        ) {
             Some(
                 signed_rotation_kernel::signed_rotation_kernel(hadamard_block_size)
                     .map_err(PrismHadamardModelError::Forward)?,
