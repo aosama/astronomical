@@ -159,6 +159,24 @@ export class TranscriptView {
 
   // MARK: - Messages
 
+  /**
+   * The stable identifier for one bubble: `message:<role>:<message id>`, keyed
+   * on the message's own id, never on its position, so an automation agent
+   * locates the same bubble identically across snapshots and streaming
+   * re-renders. The id attribute mirrors the data-testid so the accessibility
+   * tree (which exposes the DOM id) and selector-based agents agree.
+   */
+  private static bubbleStableIdentifier(message: TranscriptMessage): string {
+    const roleToken = message.role === ChatRole.USER ? "user" : "assistant";
+    return `message:${roleToken}:${message.id}`;
+  }
+
+  private markBubbleStableIdentifier(article: HTMLElement, message: TranscriptMessage): void {
+    const bubbleIdentifier = TranscriptView.bubbleStableIdentifier(message);
+    article.dataset.testid = bubbleIdentifier;
+    article.id = bubbleIdentifier;
+  }
+
   private applyMessage(message: TranscriptMessage): void {
     if (!message.id) {
       return;
@@ -172,6 +190,7 @@ export class TranscriptView {
     if (!article) {
       article = document.createElement("article");
       article.dataset.messageId = message.id;
+      this.markBubbleStableIdentifier(article, message);
       this.inner.appendChild(article);
       this.articlesByMessageID.set(message.id, article);
     }
@@ -206,6 +225,7 @@ export class TranscriptView {
     const article = document.createElement("article");
     article.className = `message message--${message.role === ChatRole.USER ? "user" : "assistant"}`;
     article.dataset.messageId = message.id;
+    this.markBubbleStableIdentifier(article, message);
     const body = document.createElement("div");
     body.className = "message__answer markdown-body";
     body.textContent = message.markdown;
