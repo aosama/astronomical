@@ -2,9 +2,10 @@
 //!
 //! A prompt whose token count is not a multiple of the block size leaves its
 //! final tokens outside every published full block. Persisting that tail lets
-//! the next turn restore up to the last prompt token instead of prefilling it
-//! again. Tail capture is best-effort by contract: the request never depends
-//! on tail reuse, so every failure is logged and skipped.
+//! the next turn restore everything except the final prompt token, which the
+//! terminal forward always processes to produce the first logits. Tail capture
+//! is best-effort by contract: the request never depends on tail reuse, so
+//! every failure is logged and skipped.
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{
@@ -32,19 +33,26 @@ impl Qwen3_5EngineState {
             return;
         }
         let prompt_token_count = active_request.input_token_ids.len();
-        // Only the terminal chunk holds every prompt token in decoder state;
-        // prediction sessions reserve their final token for generation kickoff
-        // and never reach a full-prompt prefill end.
-        if prefill_end != prompt_token_count {
-            return;
-        }
         let persistent_prompt_cache_block_token_count =
             persistent_prompt_cache.model_contract.block_token_count();
-        let tail_token_count = prompt_token_count % persistent_prompt_cache_block_token_count;
+        // The generation-start lookup never consumes the final prompt token —
+        // the terminal forward needs it to produce the first logits — so a tail
+        // saved through that token could never be probed again. Capture stops
+        // one token short, matching the partial-tail probe's retained-suffix
+        // rule; the prefill clamp guarantees the chunk ending exactly here
+        // carries the complete tail span in decoder state.
+        let tail_capture_end = crate::persistent_prompt_cache_partial_tail_capture_end(
+            prompt_token_count,
+            persistent_prompt_cache_block_token_count,
+        );
+        if prefill_end != tail_capture_end {
+            return;
+        }
+        let tail_token_count = tail_capture_end % persistent_prompt_cache_block_token_count;
         if tail_token_count == 0 {
             return;
         }
-        let tail_block_index = prompt_token_count / persistent_prompt_cache_block_token_count;
+        let tail_block_index = tail_capture_end / persistent_prompt_cache_block_token_count;
         let tail_block_start = tail_block_index * persistent_prompt_cache_block_token_count;
         let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
         let tail_block_causal_input = if active_request
@@ -66,7 +74,7 @@ impl Qwen3_5EngineState {
             };
             tail_block_causal_input
         };
-        let tail_tokens = &active_request.input_token_ids[tail_block_start..prompt_token_count];
+        let tail_tokens = &active_request.input_token_ids[tail_block_start..tail_capture_end];
         let parent_block_key = active_request
             .last_restored_persistent_prompt_cache_block_key
             .clone();
@@ -94,7 +102,7 @@ impl Qwen3_5EngineState {
                     .extract_persistent_prompt_cache_kv_block_tensors(
                         model.runtime(),
                         tail_block_start,
-                        prompt_token_count,
+                        tail_capture_end,
                         persistent_prompt_cache_block_token_count,
                     )
             },
