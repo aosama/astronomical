@@ -1,4 +1,4 @@
-use crate::MlxRamBudgetModelGeometry;
+use crate::budget::ram_values::MlxRamBudgetModelGeometry;
 
 #[test]
 fn should_derive_the_geometry_floor_from_core_context_and_one_routed_page() {
@@ -14,7 +14,7 @@ fn should_derive_the_geometry_floor_from_core_context_and_one_routed_page() {
     };
 
     assert_eq!(
-        crate::geometry_safe_minimum_mlx_memory_ceiling_bytes(&model_geometry),
+        crate::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes(&model_geometry),
         2_000_000_000 + 1_000_000_000 + 450_000_000 + 90_000_000
     );
 }
@@ -33,7 +33,7 @@ fn should_keep_a_dense_model_floor_below_its_core_plus_reserve() {
     };
 
     assert_eq!(
-        crate::geometry_safe_minimum_mlx_memory_ceiling_bytes(&dense_model_geometry),
+        crate::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes(&dense_model_geometry),
         3_000_000_000 + 1_000_000_000
     );
 }
@@ -55,7 +55,7 @@ fn should_ignore_disk_scale_of_fully_paged_experts_in_the_floor() {
     };
 
     let geometry_floor_bytes =
-        crate::geometry_safe_minimum_mlx_memory_ceiling_bytes(&paged_model_geometry);
+        crate::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes(&paged_model_geometry);
 
     assert!(geometry_floor_bytes < 3_500_000_000);
 }
@@ -74,7 +74,7 @@ fn should_saturate_instead_of_overflowing_on_hostile_geometry() {
     };
 
     assert_eq!(
-        crate::geometry_safe_minimum_mlx_memory_ceiling_bytes(&saturated_model_geometry),
+        crate::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes(&saturated_model_geometry),
         u64::MAX
     );
 }

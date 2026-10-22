@@ -24,11 +24,24 @@
 //!   the paged step enum `PagedExpertReclamationStep`, the admission error
 //!   vocabulary `ExpertMemoryAdmissionError`, and the reclamation
 //!   arithmetic).
+//! - `budget` — how many bytes this phase owns or needs (`MlxRamBudget`
+//!   composition, learned activation evidence, adaptive growth guards,
+//!   measured model geometry).
+//! - `ceiling` — may the worker raise or lower the live ceiling right now,
+//!   and what ownership must move first.
+//! - `geometry_floor` — the smallest servable ceiling derived from validated
+//!   artifact geometry, independent of the ceiling that produced the load.
+//! - `recovery` — what happens after an allocation failure mid-forward:
+//!   which retry is legal and what workspace it needs.
 //! - `serving_ceiling` — resolution of the effective MLX memory ceiling from
 //!   configuration and the machine bound.
 
+pub mod budget;
+pub mod ceiling;
+pub mod geometry_floor;
 pub mod phase;
 pub mod reclamation;
+pub mod recovery;
 pub mod serving_ceiling;
 pub mod vocabulary;
 

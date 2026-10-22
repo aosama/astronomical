@@ -7,7 +7,7 @@
 //! symmetric: raising lets MLX accept capacity before Rust publishes a larger
 //! budget, lowering reclaims before MLX enforces the smaller limit.
 
-use super::MemoryBoundary;
+use crate::vocabulary::MemoryBoundary;
 
 /// Ownership evidence used before changing a process-wide MLX ceiling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

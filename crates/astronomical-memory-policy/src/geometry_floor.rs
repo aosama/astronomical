@@ -1,4 +1,4 @@
-use super::budget::MlxRamBudgetModelGeometry;
+use crate::budget::ram_values::MlxRamBudgetModelGeometry;
 
 /// Bootstrap context reserve a cold engine holds before any live measurement (1 GB SI).
 const GEOMETRY_FLOOR_BOOTSTRAP_CONTEXT_RESERVE_BYTES: u64 = 1_000_000_000;

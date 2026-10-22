@@ -7,18 +7,21 @@
 //! ```
 //!
 //! Family modules (`qwen3_5`, `qwen3_5_streaming`, `k2_horizon_mova`) measure byte facts from
-//! MLX and the artifact, hand them to the modules below, and enact the typed
-//! decisions they receive. This package imports nothing from any family; the
-//! dependency edge physically cannot point back. A family that re-derives
-//! arithmetic owned here is a bug, not a shortcut.
+//! MLX and the artifact, hand them to the pure arithmetic in
+//! `astronomical-memory-policy` (re-exported below) and to the MLX-facing
+//! owners in this package, and enact the typed decisions they receive. This
+//! package imports nothing from any family; the dependency edge physically
+//! cannot point back. A family that re-derives arithmetic owned here is a
+//! bug, not a shortcut.
 //!
 //! # The taxonomy (what a reader must be able to name from this doc alone)
 //!
 //! - **3 modes** — where expert payload lives right now (`Resident`,
 //!   `Hybrid`, `Paged`; classified by `residency/ownership_mode.rs`).
 //!   These names are wire-visible and must never gain a second answer.
-//! - **1 lifecycle phase** — `phase.rs`: `Prefill`, `GenerationPreparation`,
-//!   `Decode`, `Idle`. Budget composition treats `GenerationPreparation` as
+//! - **1 lifecycle phase** — `MemoryPhase` (in `astronomical-memory-policy`,
+//!   re-exported here): `Prefill`, `GenerationPreparation`, `Decode`,
+//!   `Idle`. Budget composition treats `GenerationPreparation` as
 //!   `Decode`-equivalent; the growth guard only observes `Prefill`/`Decode`.
 //! - **7 layer targets** — `residency` plans one `ExpertLayerResidencyTarget`
 //!   per sparse decoder layer (`PreserveComplete`,
@@ -52,15 +55,12 @@
 
 mod admission;
 mod budget;
-mod ceiling;
 // The dense-resident ceiling policy is consumed only by the direct-MLX
 // engine, so an isolated default-feature build would otherwise flag the
 // whole module as dead (workspace builds unify the feature away).
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
 mod expert_cache;
-mod geometry_floor;
-mod recovery;
 pub(crate) mod residency;
 pub(crate) mod telemetry;
 mod utilization;
@@ -107,7 +107,9 @@ pub use budget::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
-pub use ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
+pub use astronomical_memory_policy::ceiling::{
+    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
+};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
 pub use expert_cache::{
@@ -121,7 +123,7 @@ pub use expert_cache::{
 pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_cache::source_expert_page_payload_bytes;
-pub use geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
+pub use astronomical_memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
 pub use astronomical_memory_policy::phase::MemoryPhase;
 pub use astronomical_memory_policy::reclamation::{
     ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
@@ -132,11 +134,9 @@ pub use astronomical_memory_policy::reclamation::{
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation, whole_table_reclamation_target_bytes,
 };
-// The budget family imports `reclamation` by module path
-// (`use crate::memory::reclamation;`), so the module stays nameable in this
-// namespace without widening the crate's public surface.
-pub(crate) use astronomical_memory_policy::reclamation;
-pub use recovery::{ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements};
+pub use astronomical_memory_policy::recovery::{
+    ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,
+};
 pub use residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerGeometry,
     ExpertLayerResidencyTarget, ExpertResidencyPlan, ExpertResidencyPlanError,

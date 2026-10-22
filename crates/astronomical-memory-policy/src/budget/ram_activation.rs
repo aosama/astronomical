@@ -24,9 +24,9 @@
 //! while an over-reserve has no recovery path and starves every later request
 //! until the model reloads and the learned evidence is forgotten.
 
-use crate::memory::MemoryPhase;
-use crate::memory::budget::ram::{MlxRamBudget, context_token_bucket};
-use crate::memory::reclamation;
+use crate::phase::MemoryPhase;
+use crate::budget::ram::{MlxRamBudget, context_token_bucket};
+use crate::reclamation;
 
 impl MlxRamBudget {
     /// Activation headroom for one planned operation.

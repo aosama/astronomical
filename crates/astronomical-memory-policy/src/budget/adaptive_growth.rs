@@ -25,8 +25,8 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use crate::memory::MemoryPhase;
-use crate::memory::budget::adaptive_growth_projection::{
+use crate::phase::MemoryPhase;
+use crate::budget::adaptive_growth_projection::{
     AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
     scale_transient_to_token_count,
 };
