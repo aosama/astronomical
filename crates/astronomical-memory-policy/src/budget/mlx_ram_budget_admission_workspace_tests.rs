@@ -9,10 +9,11 @@
 //! memory` until the model reloaded. These tests pin the numbers admission
 //! actually charges so the rejection cascade cannot creep back in.
 
-use crate::{
-    ContextAdmissionRequirements, MemoryAdmissionDecision, MemoryPhase, MlxRamBudget,
-    MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry,
-};
+use crate::admission::context::ContextAdmissionRequirements;
+use crate::budget::ram::MlxRamBudget;
+use crate::budget::ram_values::{MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry};
+use crate::phase::MemoryPhase;
+use crate::vocabulary::MemoryAdmissionDecision;
 
 /// A geometry whose static three-layer floor is small enough that learned
 /// evidence dominates the promise, mirroring the production artifact shape.

@@ -4,7 +4,7 @@
 //! batching, never ownership. A repeated token route must be a complete hit
 //! against the resident experts, and eviction removes the coldest experts.
 
-use crate::{DecodeExpertCache, ResidentExpertWeight};
+use crate::expert_cache::decode::{DecodeExpertCache, ResidentExpertWeight};
 
 #[derive(Clone, Copy, Debug)]
 struct FakeExpertWeight {

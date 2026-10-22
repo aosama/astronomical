@@ -1,8 +1,7 @@
 //! Previous-token prefetch admission: leftover slots only, never eviction.
 
-use crate::{
-    PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
-    plan_previous_token_prefetch,
+use crate::expert_cache::decode::{
+    PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity, plan_previous_token_prefetch,
 };
 
 fn candidate(

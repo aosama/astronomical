@@ -5,7 +5,7 @@
 //! looping, equal demand-per-byte evicts in stable slot-then-id order, and
 //! zero-payload experts never satisfy an eviction demand.
 
-use crate::{DecodeExpertCache, ResidentExpertWeight};
+use crate::expert_cache::decode::{DecodeExpertCache, ResidentExpertWeight};
 
 #[derive(Clone, Copy, Debug)]
 struct BoundaryExpertWeight {
