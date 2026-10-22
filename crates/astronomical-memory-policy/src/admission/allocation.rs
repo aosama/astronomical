@@ -3,7 +3,7 @@
 //! This module decides what should happen. Callers remain responsible for
 //! synchronizing streams, clearing allocator storage, and performing allocations.
 
-use crate::memory::MemoryBoundary;
+use crate::vocabulary::MemoryBoundary;
 
 /// One internally consistent observation at an allocation boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
