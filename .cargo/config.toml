@@ -85,8 +85,9 @@ test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance -
 # source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
 # xtask native-fingerprint [--source-only] [--explain] --profile
 # core|core+memory-contract [root]`, `cargo xtask classify-scope`, `cargo
-# xtask prune-caches [--dry-run] [--repo owner/name]`, `cargo xtask
-# save-sccache <primary-cache-key>`, `cargo xtask install-verification-tools
+# xtask check-architecture`, `cargo xtask prune-caches [--dry-run]
+# [--repo owner/name]`, `cargo xtask save-sccache <primary-cache-key>`,
+# `cargo xtask install-verification-tools
 # [--prefix DIR]`, `cargo xtask bootstrap-native-dependencies
 # [--cache-dir ABSOLUTE_PATH] [--verify]`.
 xtask = "run -p xtask --"
