@@ -1,8 +1,9 @@
-use crate::{
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MemoryPhase, MlxRamBudget, MlxRamBudgetMeasurement,
-    MlxRamBudgetModelGeometry, measured_non_expert_forward_growth_bytes,
+use crate::budget::ram::{
+    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
 };
+use crate::budget::ram_values::{MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry};
+use crate::phase::MemoryPhase;
 
 fn fable_class_geometry() -> MlxRamBudgetModelGeometry {
     MlxRamBudgetModelGeometry {

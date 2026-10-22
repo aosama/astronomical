@@ -6,7 +6,9 @@
 //! change therefore clears activation evidence while persistent context-window
 //! evidence survives, because KV bytes per token do not depend on the ceiling.
 
-use crate::{MemoryPhase, MlxRamBudget, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry};
+use crate::budget::ram::MlxRamBudget;
+use crate::budget::ram_values::{MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry};
+use crate::phase::MemoryPhase;
 
 fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
     MlxRamBudgetModelGeometry {

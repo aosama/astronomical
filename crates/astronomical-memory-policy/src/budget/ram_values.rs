@@ -6,7 +6,7 @@
 //! error. Keeping them beside the owner separates *what flows through the
 //! budget* from *how the budget learns and composes*.
 
-use crate::memory::MemoryPhase;
+use crate::phase::MemoryPhase;
 use thiserror::Error;
 
 /// Immutable inputs known once a model is loaded against one ceiling.

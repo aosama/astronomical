@@ -8,7 +8,7 @@
 use thiserror::Error;
 
 use super::ram_values::MlxRamBudgetModelGeometry;
-use crate::memory::reclamation;
+use crate::reclamation;
 
 /// Why RAM-budget geometry could not be composed from measured layer facts.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
