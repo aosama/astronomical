@@ -97,7 +97,19 @@ jobs:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
       - name: Configure step timing attribution
-        run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+        run: |
+          printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          # The runtime-integration build script declares rerun-if-env-changed
+          # for this variable, so exporting it in only the compile step flips
+          # the build script's fingerprint for every later cargo invocation and
+          # recompiles runtime-integration and its dependents from scratch (a
+          # measured 25s rebuild inside the offline-tests step before this was
+          # hoisted). Exporting it once here, before the first cargo step of
+          # the job, keeps every build-script run under an identical
+          # environment; the compile step still tails the file for live
+          # native-build progress.
+          printf 'ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=%s/astronomical-native-build-progress\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          : > "$RUNNER_TEMP/astronomical-native-build-progress"
       - name: Require successful change classification
         if: ${{ needs.detect-changes.result != 'success' }}
         run: |
@@ -364,7 +376,11 @@ jobs:
           # Cargo captures build-script stderr, so the native CMake rebuild would
           # otherwise be a silent multi-minute gap in this step's log. The build
           # script appends progress lines to this file and tail streams them live.
-          export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="$RUNNER_TEMP/astronomical-native-build-progress"
+          # The variable arrives from the job environment (configured with the
+          # step timing setup) so its value matches every cargo invocation in
+          # this job; exporting it here alone would invalidate the build script
+          # fingerprint of the next cargo step and force a from-scratch rebuild
+          # of runtime-integration and its dependents.
           : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
           tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
           progress_tail_pid=$!
