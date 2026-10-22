@@ -18,10 +18,16 @@
 //! evidence persisted before the test timeout. A slow cell fails with its
 //! attribution report instead of continuing into a long external runner.
 //!
-//! The cells run one process each (MLX limits are process-global); the cargo
-//! commands live in <repo-root>/cargo-commands-for-testing.md. The recommended
-//! protocol brackets the sweep with a 32 GB reference cell and interleaves
-//! ceilings so page-cache warmth cannot masquerade as a ceiling effect.
+//! The cells run one process each (MLX limits are process-global): one cell is
+//! one `cargo test` invocation of this module's
+//! `should_serve_the_large_sparse_moe_under_a_..._ceiling_and_record_the_memory_cell`
+//! journey, naming the requested ceiling in the test filter, with
+//! `-- --ignored --nocapture --exact --test-threads=1`. Set
+//! MEMORY_SWEEP_CELL_ORDER to the cell's position in your sweep so the
+//! appended record carries it; when unset the record's sweep_cell_order
+//! defaults to 0. The recommended protocol brackets the sweep with a 32 GB
+//! reference cell and interleaves ceilings so page-cache warmth cannot
+//! masquerade as a ceiling effect.
 
 use std::fs;
 use std::time::Duration;

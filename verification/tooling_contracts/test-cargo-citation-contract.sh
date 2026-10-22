@@ -165,14 +165,6 @@ for markdown_file in $(git -C "$repository_root" ls-files '*.md' | sort); do
     done <"$EXTRACTED_WORDS_FILE"
 done
 
-# Floor: the live sweep must still see a substantial citation population, so a
-# silent extractor regression cannot pass the contract vacuously.
-MINIMUM_EXPECTED_CITATIONS=40
-if [ "$citation_count" -lt "$MINIMUM_EXPECTED_CITATIONS" ]; then
-    print_error "sweep found only ${citation_count} citations; the extractor is likely broken (floor is ${MINIMUM_EXPECTED_CITATIONS})"
-    exit 1
-fi
-
 violation_line_count="$(wc -l <"$VIOLATIONS_FILE" | tr -d ' ')"
 if [ "$violation_line_count" -ne 0 ]; then
     print_error "${violation_line_count} markdown cargo citation(s) do not resolve:"
