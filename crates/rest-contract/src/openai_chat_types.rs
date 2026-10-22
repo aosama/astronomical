@@ -41,6 +41,23 @@ pub enum OpenAiChatMessage {
 }
 
 impl OpenAiChatMessage {
+    /// Counts the image parts this message carries.
+    ///
+    /// Only multipart user messages can structurally carry image parts; the
+    /// count feeds the request-level portable image-count budget.
+    pub(crate) fn image_url_part_count(&self) -> usize {
+        let Self::User { content } = self else {
+            return 0;
+        };
+        match content {
+            OpenAiMessageContent::Text(_) => 0,
+            OpenAiMessageContent::Parts(content_parts) => content_parts
+                .iter()
+                .filter(|content_part| matches!(content_part, OpenAiContentPart::ImageUrl { .. }))
+                .count(),
+        }
+    }
+
     pub(crate) fn validate(&self) -> Result<(), OpenAiChatCompletionValidationError> {
         match self {
             Self::System { content } | Self::User { content } => content.validate(),

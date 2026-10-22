@@ -11,6 +11,7 @@ pub(crate) mod openai_chat_translation;
 pub(crate) mod openai_embeddings_endpoint;
 pub(crate) mod openai_image_generation_endpoint;
 pub(crate) mod openai_models_endpoint;
+pub(crate) mod openai_request_body_budget;
 pub(crate) mod openai_responses_assembly;
 pub(crate) mod openai_responses_endpoint;
 pub(crate) mod openai_responses_stream;

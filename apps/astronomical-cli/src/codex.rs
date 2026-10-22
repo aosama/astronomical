@@ -27,7 +27,8 @@ const CODEX_PROVIDER_ID: &str = "astronomical";
 /// runs, and this CLI execs into the harness so it has no exit hook left to
 /// clean up with. The operating system's temporary-directory reaping owns
 /// the file's eventual removal. The disown happens only after the config
-/// write succeeds, so a failed launch never leaks an ownerless directory.
+/// write and the environment-value validation succeed, so a failed launch
+/// never leaks an ownerless directory.
 pub fn codex_process_home(
     bind_address: SocketAddr,
     chat_model: &LibraryChatModel,
@@ -36,13 +37,21 @@ pub fn codex_process_home(
     write_codex_config(codex_home.path(), bind_address, chat_model)?;
     // Environment values must be UTF-8 text; a non-UTF-8 temporary path
     // cannot name the generated home, so launch fails closed instead of
-    // pointing Codex at a path that does not exist.
-    let codex_home_path = codex_home
-        .keep()
+    // pointing Codex at a path that does not exist. Validating before the
+    // disown keeps the still-owned directory's drop cleanup on the error
+    // path.
+    let validated_codex_home_path = codex_home
+        .path()
+        .to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "CODEX_HOME path is not UTF-8"))?
+        .to_owned();
+    let disowned_codex_home = codex_home.keep();
+    // The disowned path is byte-identical to the validated one, so this
+    // conversion cannot fail; fall back to the validated text regardless.
+    Ok(disowned_codex_home
         .into_os_string()
         .into_string()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "CODEX_HOME path is not UTF-8"))?;
-    Ok(codex_home_path)
+        .unwrap_or(validated_codex_home_path))
 }
 
 fn write_codex_config(
