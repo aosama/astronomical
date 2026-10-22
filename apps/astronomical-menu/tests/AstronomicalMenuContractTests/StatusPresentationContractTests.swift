@@ -252,6 +252,20 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(gigabyteValueText(byteCount: 0), "0.00 GB")
   }
 
+  func test_should_present_a_large_default_generation_budget_as_a_plain_token_count() throws {
+    let statusDocument = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(
+        """
+        {"status":"ready","activity":"generating","ready_model_id":"Ternary-Bonsai","progress":{"phase":"generation","processed_tokens":27,"total_tokens":65535,"elapsed_ms":1000},"expert_memory_mode":"resident","serving_session":{"completed_request_count":1,"total_prompt_token_count":4096,"total_reused_prompt_token_count":0,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.0}}
+        """.utf8)
+    )
+
+    XCTAssertEqual(statusDocument.progressTitle, "27 tokens")
+    XCTAssertEqual(statusDocument.flightTitle, "Generating · 27.0 tok/s")
+    XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
+  }
+
   func test_should_render_generation_rate_for_an_active_generation() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
