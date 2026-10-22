@@ -23,6 +23,18 @@ const PROBE_BLOCK_SIZE: u32 = 1024;
 const PROBE_WIDTH: i32 = 2 * PROBE_BLOCK_SIZE as i32;
 const PROBE_ROW_COUNT: i32 = 3;
 
+impl CustomMetalKernelFamily {
+    /// Registry identifier of the folded ternary signed-rotation family. The
+    /// family owns this constant; the capability module stays agnostic.
+    pub const PRISM_HADAMARD_SIGNED_ROTATION: Self = Self::new("prism_hadamard_signed_rotation");
+}
+
+/// Supplies this family's probes for the once-per-process probe run. The
+/// worker registration list is the only central touch point.
+pub fn capability_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelProbe + '_>> {
+    vec![Box::new(PrismHadamardSignedRotationProbe::new(runtime))]
+}
+
 pub struct PrismHadamardSignedRotationProbe<'runtime> {
     runtime: &'runtime MlxRuntime,
 }
@@ -36,7 +48,7 @@ impl<'runtime> PrismHadamardSignedRotationProbe<'runtime> {
 
 impl CustomMetalKernelProbe for PrismHadamardSignedRotationProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::PrismHadamardSignedRotation
+        CustomMetalKernelFamily::PRISM_HADAMARD_SIGNED_ROTATION
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

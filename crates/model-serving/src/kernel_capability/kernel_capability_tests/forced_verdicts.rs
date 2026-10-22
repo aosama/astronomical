@@ -4,9 +4,11 @@
 //! accepts forced verdicts through this documented test-only constructor.
 //! Production code must never call it.
 
-use crate::{
-    CustomKernelVerdict, CustomMetalKernelFamily, KernelUnsupportedReason, WorkerKernelCapabilities,
+use super::{
+    COUNTING_BOUNDARY_CHECKPOINT_FAMILY, COUNTING_EXPERT_DECODE_FAMILY,
+    COUNTING_GATED_DELTA_FAMILY, COUNTING_WEIGHTED_SUM_FAMILY,
 };
+use crate::{CustomKernelVerdict, KernelUnsupportedReason, WorkerKernelCapabilities};
 
 #[test]
 fn should_force_an_unsupported_verdict_for_a_single_family() {
@@ -14,20 +16,20 @@ fn should_force_an_unsupported_verdict_for_a_single_family() {
         .expect("network denial could not be applied");
 
     let capabilities = WorkerKernelCapabilities::with_forced_verdicts_for_tests([(
-        CustomMetalKernelFamily::SortedExpertWeightedSum,
+        COUNTING_WEIGHTED_SUM_FAMILY,
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
             description: "forced test verdict".to_owned(),
         }),
     )]);
 
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::SortedExpertWeightedSum),
+        capabilities.verdict(COUNTING_WEIGHTED_SUM_FAMILY),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
             description: "forced test verdict".to_owned(),
         })
     );
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::GatedDeltaSequence),
+        capabilities.verdict(COUNTING_GATED_DELTA_FAMILY),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
         "families absent from the forced set stay fail-closed"
     );
@@ -39,11 +41,11 @@ fn should_force_a_supported_verdict() {
         .expect("network denial could not be applied");
 
     let capabilities = WorkerKernelCapabilities::with_forced_verdicts_for_tests([(
-        CustomMetalKernelFamily::GatedDeltaSequence,
+        COUNTING_GATED_DELTA_FAMILY,
         CustomKernelVerdict::Supported,
     )]);
 
-    assert!(capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaSequence));
+    assert!(capabilities.is_custom_kernel_supported(COUNTING_GATED_DELTA_FAMILY));
 }
 
 #[test]
@@ -52,8 +54,8 @@ fn should_honor_every_forced_reason_for_every_family() {
         .expect("network denial could not be applied");
 
     // Families are data, not tests: one loop proves the fail-closed verdict
-    // contract across the whole family catalogue, so a new family is covered
-    // by adding an enum variant, not a new test.
+    // contract across any family set, so a new family is covered by adding
+    // its identifier to this catalogue, not a new test.
     let reason_cases = [
         KernelUnsupportedReason::Compilation {
             description: "forced compilation failure".to_owned(),
@@ -66,10 +68,10 @@ fn should_honor_every_forced_reason_for_every_family() {
         },
     ];
     let every_family = [
-        CustomMetalKernelFamily::SortedExpertWeightedSum,
-        CustomMetalKernelFamily::FusedQuantizedExpertDecode,
-        CustomMetalKernelFamily::GatedDeltaSequence,
-        CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
+        COUNTING_WEIGHTED_SUM_FAMILY,
+        COUNTING_EXPERT_DECODE_FAMILY,
+        COUNTING_GATED_DELTA_FAMILY,
+        COUNTING_BOUNDARY_CHECKPOINT_FAMILY,
     ];
 
     for unsupported_reason in &reason_cases {
