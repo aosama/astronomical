@@ -25,15 +25,19 @@ use crate::GenerationFinalization;
 use crate::InferenceEngineError;
 use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
-use crate::MlxMemoryTelemetry;
+use crate::PerformanceAttribution;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
+use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
+use crate::MlxMemoryTelemetry;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
+use crate::prism_hadamard_qwen35::model::PrismStateSlotLayout;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
+use astronomical_ipc_protocol::WorkerEvent;
 
 impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
     type Request = crate::Qwen3_5InferenceRequest;
@@ -74,9 +78,28 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             );
         self.minimum_ceiling_bytes = minimum_ceiling_bytes;
         self.performance_attribution_log = pending.performance_attribution_log;
-        self.attribution_model_id = Some(pending.attribution_model_id);
-        self.attribution_model_revision = Some(pending.attribution_model_revision);
+        self.attribution_model_id = Some(pending.attribution_model_id.clone());
+        self.attribution_model_revision = Some(pending.attribution_model_revision.clone());
         self.model = Some(model);
+        if let Some(prompt_cache_disk_store_config) = pending.prompt_cache_disk_store_config {
+            let loaded_model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| InferenceEngineError::Fatal {
+                    reason: "folded-ternary model is not loaded".to_owned(),
+                })?;
+            self.persistent_prompt_cache =
+                Some(super::super::prompt_cache::open_prompt_cache_store(
+                    pending.effective_mlx_memory_ceiling_bytes,
+                    loaded_model,
+                    &pending.attribution_model_id,
+                    &pending.attribution_model_revision,
+                    pending.configured_prompt_cache_block_token_count,
+                    pending.prompt_cache_common_prefix_stride_blocks,
+                    prompt_cache_disk_store_config,
+                    &mut performance_attribution,
+                )?);
+        }
         self.record_model_loading_performance_attribution(performance_attribution);
         Ok(EngineLoadResult::new()
             .with_expert_memory_mode(Some(ExpertMemoryMode::Resident))
@@ -127,22 +150,43 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let penalized_token_ids = inference_request.initial_penalized_token_ids();
         let request_id = inference_request.request_id();
         let structured_generation = inference_request.take_structured_generation();
-        let performance_attribution = inference_request.take_performance_attribution();
+        let mut performance_attribution = inference_request.take_performance_attribution();
+        let prompt_token_ids = inference_request.input_token_ids().to_vec();
+        let mut cached_token_count: u32 = 0;
+        let mut last_published_block_key = None;
+        let mut generation_state = StraightGenerationState::empty();
+        if let Some(persistent_prompt_cache) = self.persistent_prompt_cache.clone() {
+            let restore_outcome = super::super::prompt_cache::lookup_and_restore_prompt_prefix(
+                model,
+                &persistent_prompt_cache,
+                &prompt_token_ids,
+                &mut generation_state,
+                &mut self.persistent_prompt_cache_counters,
+                &mut performance_attribution,
+            )?;
+            cached_token_count = restore_outcome.restored_token_count;
+            last_published_block_key =
+                restore_outcome.last_restored_persistent_prompt_cache_block_key;
+        }
         self.active = Some(PrismHadamardQwen35ActiveGeneration {
             request_id,
             remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
-            remaining_prompt_token_ids: inference_request.input_token_ids().to_vec(),
-            generation_state: StraightGenerationState::empty(),
+            prompt_token_ids: prompt_token_ids.clone(),
+            remaining_prompt_token_ids: prompt_token_ids[cached_token_count as usize..].to_vec(),
+            processed_prompt_token_count: cached_token_count,
+            cached_token_count,
+            generation_state,
             pending_sampled_token: None,
             penalized_token_ids,
             random_state,
             request: inference_request,
             thinking_budget,
             structured_generation,
+            last_published_block_key,
             performance_attribution,
         });
         Ok(EngineGenerationStart::with_expert_memory_mode(
-            0,
+            cached_token_count,
             ExpertMemoryMode::Resident,
         ))
     }
@@ -334,6 +378,31 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             mlx_memory_telemetry,
         ))
     }
+
+    fn collect_persistent_prompt_cache_stats(
+        &self,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        Ok(self.persistent_prompt_cache_stats_event())
+    }
+
+    fn clear_persistent_prompt_cache(
+        &mut self,
+        model_id: Option<String>,
+    ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
+        let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
+            return Ok(None);
+        };
+        let clear_outcome = persistent_prompt_cache
+            .clear_prompt_cache(model_id.as_deref())
+            .map_err(|clear_error| InferenceEngineError::Fatal {
+                reason: format!("folded-ternary prompt cache could not be cleared: {clear_error}"),
+            })?;
+        Ok(Some(WorkerEvent::PromptCacheCleared {
+            model_id: clear_outcome.model_id,
+            blocks_removed: clear_outcome.blocks_removed,
+            bytes_freed: clear_outcome.bytes_freed,
+        }))
+    }
 }
 
 impl PrismHadamardQwen35InferenceExecution {
@@ -406,10 +475,30 @@ impl PrismHadamardQwen35InferenceExecution {
                 reason: "folded-ternary prefill request correlation mismatch".to_owned(),
             });
         }
-        let chunk_length = active
-            .remaining_prompt_token_ids
-            .len()
-            .min(prompt_processing_chunk_tokens as usize);
+        let persistent_prompt_cache = self.persistent_prompt_cache.clone();
+        let chunk_start = active.processed_prompt_token_count as usize;
+        let requested_chunk_end = chunk_start
+            + active
+                .remaining_prompt_token_ids
+                .len()
+                .min(prompt_processing_chunk_tokens as usize);
+        // A durable boundary snapshot is only valid at a forward edge, so the
+        // chunk stops at the first block boundary it would cross; at most one
+        // durable publication per forward keeps the boundary snapshot honest.
+        let clamped_chunk_end = match persistent_prompt_cache.as_ref() {
+            Some(persistent_prompt_cache) => {
+                let block_token_count = persistent_prompt_cache
+                    .model_contract_ref()
+                    .block_token_count();
+                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+                    chunk_start,
+                    requested_chunk_end,
+                    block_token_count,
+                )
+            }
+            None => requested_chunk_end,
+        };
+        let chunk_length = clamped_chunk_end - chunk_start;
         let chunk_token_ids: Vec<i32> = active
             .remaining_prompt_token_ids
             .drain(..chunk_length)
@@ -480,6 +569,26 @@ impl PrismHadamardQwen35InferenceExecution {
             active.pending_sampled_token =
                 successor_stays_pending(active.remaining_output_tokens).then_some(first_token);
         }
+        // Capture runs after the chunk's state graph was submitted: the
+        // published tensors chain onto the lazy arrays and materialize during
+        // publication, so no extra device synchronization happens here.
+        active.processed_prompt_token_count += chunk_length as u32;
+        if let Some(persistent_prompt_cache) = persistent_prompt_cache.clone() {
+            let slot_layout = PrismStateSlotLayout::for_model(model);
+            let mut capture_attribution = std::mem::replace(
+                &mut active.performance_attribution,
+                PerformanceAttribution::disabled(),
+            );
+            let capture_result = super::super::prompt_cache::capture_completed_cache_block(
+                &model.runtime,
+                &persistent_prompt_cache,
+                active,
+                &slot_layout,
+                &mut capture_attribution,
+            );
+            active.performance_attribution = capture_attribution;
+            capture_result?;
+        }
         // The worker accumulates per-chunk deltas into the request-wide
         // prefill cursor, so this must stay the chunk's own token count — a
         // cumulative count double-counts every earlier chunk and pins the
@@ -493,8 +602,8 @@ impl PrismHadamardQwen35InferenceExecution {
             expert_residency_telemetry: None,
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
             prompt_work_reuse: WorkerPromptWorkReuse {
-                target_eligible_token_count: 0,
-                target_restored_token_count: 0,
+                target_eligible_token_count: active.prompt_token_ids.len() as u64,
+                target_restored_token_count: u64::from(active.cached_token_count),
             },
             persistent_prompt_cache_diagnostics: None,
         })

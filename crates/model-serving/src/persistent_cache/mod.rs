@@ -47,6 +47,8 @@ pub(crate) mod persistent_safetensors_header;
 mod prefill_boundary;
 pub(crate) mod prefix_lookup;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod quota_bounded_contract;
+#[cfg(feature = "direct-mlx")]
 mod retention_policy;
 #[cfg(feature = "direct-mlx")]
 mod startup_cleanup_evidence;
@@ -89,6 +91,9 @@ pub use visual_embedding_model_contract::PersistentVisualEmbeddingModelContract;
 
 #[cfg(feature = "direct-mlx")]
 pub use counters::PersistentPromptCacheCounters;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) use quota_bounded_contract::resolve_quota_bounded_prompt_cache_contract;
 
 #[cfg(feature = "direct-mlx")]
 pub use prefix_lookup::PersistentPromptCachePrefixLookup;
