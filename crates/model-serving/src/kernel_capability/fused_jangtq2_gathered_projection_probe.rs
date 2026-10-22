@@ -12,8 +12,8 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,
 };
-use crate::jangtq2_qwen35::codebook;
-use crate::jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
+use astronomical_jangtq2_qwen35::codebook;
+use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
 
 const PROBE_BIT_WIDTH: u32 = 2;
 const PROBE_EXPERT_COUNT: usize = 2;

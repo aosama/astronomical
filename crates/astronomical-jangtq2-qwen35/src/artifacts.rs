@@ -196,10 +196,10 @@ pub fn tensor_inventory_for_module(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jangtq2_qwen35::configuration::Jangtq2CodebookMode;
-    use crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
-    use crate::jangtq2_qwen35::configuration::Jangtq2ConfigurationError;
-    use crate::jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
+    use crate::configuration::Jangtq2CodebookMode;
+    use crate::configuration::Jangtq2CodebookRotation;
+    use crate::configuration::Jangtq2ConfigurationError;
+    use crate::configuration::Jangtq2WeightOverrideEntry;
 
     const JANGH2_GATE_PROJECTION_MODULE_NAME: &str =
         "language_model.model.layers.5.mlp.switch_mlp.gate_proj";

@@ -85,7 +85,7 @@ pub enum ExpertManifestError {
     #[error("the jangtq2 contract rejected module {module_name:?}: {source}")]
     Jangtq2Contract {
         module_name: String,
-        source: crate::jangtq2_qwen35::configuration::Jangtq2ConfigurationError,
+        source: astronomical_jangtq2_qwen35::configuration::Jangtq2ConfigurationError,
     },
     #[error(
         "jangtq2 tensor {tensor_name:?} has shape {actual_shape:?}, expected {expected_shape:?} for module {module_name:?}"
@@ -336,7 +336,7 @@ pub struct QuantizedExpertLayerPlan {
     pub tensor_sources: Vec<QuantizedTensorSource>,
     pub jangtq2_projection_rotations: Vec<(
         String,
-        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     )>,
     pub expert_capacity: usize,
     pub quantization_bits: i32,
@@ -457,7 +457,7 @@ impl QuantizedExpertLayerPlan {
     pub fn jangtq2_rotation_for_projection(
         &self,
         projection_name: &str,
-    ) -> Option<crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation> {
+    ) -> Option<astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation> {
         self.jangtq2_projection_rotations
             .iter()
             .find(|(planned_projection_name, _)| planned_projection_name == projection_name)
@@ -479,7 +479,7 @@ impl QuantizedExpertLayerPlan {
             .map(|packed_tensor_source| {
                 let bit_width = u32::try_from(packed_tensor_source.quantization_bits)
                     .map_err(|_| ExpertManifestError::InvalidBits)?;
-                crate::jangtq2_qwen35::codebook::decoded_weight_page_shape(
+                astronomical_jangtq2_qwen35::codebook::decoded_weight_page_shape(
                     &packed_tensor_source.full_shape,
                     bit_width,
                     selected_expert_count,

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use super::config::{ModelWeightStorage, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 use super::quantizations::optiq::OptiQQuantizationProfile;
-use crate::jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
+use astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 impl Qwen3_5Config {
     /// Returns the explicitly declared jangtq2 RMSNorm storage convention.

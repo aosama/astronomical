@@ -192,6 +192,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-jangtq2-qwen35"
+version = "0.2.80"
+dependencies = [
+ "astronomical-mlx-c-rust",
+ "astronomical-runtime-integration",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "thiserror",
+]
+
+[[package]]
 name = "astronomical-memory-policy"
 version = "0.2.80"
 dependencies = [
@@ -217,6 +229,7 @@ version = "0.2.80"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
+ "astronomical-jangtq2-qwen35",
  "astronomical-memory-policy",
  "astronomical-mlx-c-rust",
  "astronomical-quantization",

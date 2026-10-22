@@ -94,11 +94,11 @@ pub struct Qwen3_5PagedExpertWeights {
     pub(crate) up_projection: Qwen3_5AffineWeights,
     pub(crate) down_projection: Qwen3_5AffineWeights,
     pub(crate) gate_activation_rotation:
-        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     pub(crate) up_activation_rotation:
-        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     pub(crate) down_activation_rotation:
-        crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
 }
 
 impl ExpertWeightPage for Qwen3_5PagedExpertWeights {
