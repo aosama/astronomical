@@ -17,9 +17,7 @@
 
 use std::time::Instant;
 
-use crate::{
-    GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceOperation,
-};
+use crate::{GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceOperation};
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 

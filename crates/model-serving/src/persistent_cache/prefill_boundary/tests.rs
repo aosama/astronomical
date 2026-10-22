@@ -95,9 +95,7 @@ fn should_compose_boundary_and_tail_clamps_for_a_nonaligned_terminal_chunk() {
     // one token short of the prompt so the captured tail stays probeable.
     assert_eq!(
         7_721,
-        super::persistent_prompt_cache_clamped_prefill_chunk_end(
-            6_144, 7_722, 7_722, 3_328,
-        ),
+        super::persistent_prompt_cache_clamped_prefill_chunk_end(6_144, 7_722, 7_722, 3_328,),
     );
 }
 
@@ -125,9 +123,7 @@ fn should_stop_the_small_block_terminal_chunk_one_token_short() {
     // the remaining single token belongs to the terminal forward.
     assert_eq!(
         7_721,
-        super::persistent_prompt_cache_clamped_prefill_chunk_end(
-            7_168, 7_722, 7_722, 512,
-        ),
+        super::persistent_prompt_cache_clamped_prefill_chunk_end(7_168, 7_722, 7_722, 512,),
     );
 }
 
@@ -137,9 +133,7 @@ fn should_keep_block_aligned_terminal_chunks_unchanged() {
     // chunk keeps its complete-block publication boundary.
     assert_eq!(
         6_656,
-        super::persistent_prompt_cache_clamped_prefill_chunk_end(
-            3_328, 6_656, 6_656, 3_328,
-        ),
+        super::persistent_prompt_cache_clamped_prefill_chunk_end(3_328, 6_656, 6_656, 3_328,),
     );
 }
 
@@ -149,8 +143,6 @@ fn should_not_produce_a_zero_token_terminal_chunk_for_a_one_token_remainder() {
     // remainder; the last full chunk must still be able to publish that block.
     assert_eq!(
         3_329,
-        super::persistent_prompt_cache_clamped_prefill_chunk_end(
-            3_328, 3_329, 3_329, 3_328,
-        ),
+        super::persistent_prompt_cache_clamped_prefill_chunk_end(3_328, 3_329, 3_329, 3_328,),
     );
 }

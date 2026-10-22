@@ -8,14 +8,15 @@
 #[cfg(feature = "direct-mlx")]
 mod live_allocation;
 
-#[cfg(feature = "direct-mlx")]
-pub use live_allocation::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use astronomical_memory_policy::budget::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
-    AdaptiveRamGrowthTransientReserveSource, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    MeasuredExpertLayerPayload, RamBudgetGeometryError, measured_non_expert_forward_growth_bytes,
+    AdaptiveRamGrowthTransientReserveSource, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
+    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
+    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, RamBudgetGeometryError,
+    measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
+#[cfg(feature = "direct-mlx")]
+pub use live_allocation::{MlxAllocationAdmission, MlxAllocationAdmissionError};

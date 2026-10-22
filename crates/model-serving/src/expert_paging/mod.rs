@@ -48,6 +48,6 @@ pub trait ExpertWeightPage: std::fmt::Debug {
     fn resident_payload_byte_count(&self) -> u64;
 }
 #[cfg(feature = "direct-mlx")]
-pub use source_manifests::{build_source_manifests, contiguous_selected_runs};
-#[cfg(feature = "direct-mlx")]
 pub use bounded_expert_reader::load_quantized_expert_page;
+#[cfg(feature = "direct-mlx")]
+pub use source_manifests::{build_source_manifests, contiguous_selected_runs};

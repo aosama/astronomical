@@ -96,9 +96,7 @@ fn should_probe_every_family_once_and_reuse_verdicts_without_reprobing() {
         capabilities.verdict(COUNTING_GATED_DELTA_FAMILY),
         CustomKernelVerdict::Supported
     );
-    assert!(
-        capabilities.is_custom_kernel_supported(COUNTING_WEIGHTED_SUM_FAMILY)
-    );
+    assert!(capabilities.is_custom_kernel_supported(COUNTING_WEIGHTED_SUM_FAMILY));
 
     for _ in 0..10 {
         let _ = capabilities.verdict(COUNTING_WEIGHTED_SUM_FAMILY);
@@ -141,9 +139,7 @@ fn should_report_a_typed_compilation_reason_without_losing_other_families() {
             description: "the probe kernel source failed to compile".to_owned(),
         })
     );
-    assert!(
-        !capabilities.is_custom_kernel_supported(COUNTING_WEIGHTED_SUM_FAMILY)
-    );
+    assert!(!capabilities.is_custom_kernel_supported(COUNTING_WEIGHTED_SUM_FAMILY));
     assert_eq!(
         capabilities.verdict(COUNTING_GDN_PREWORK_FAMILY),
         CustomKernelVerdict::Supported,
@@ -195,8 +191,7 @@ fn should_fail_closed_for_a_family_that_was_never_probed() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let (weighted_sum_probe, _) =
-        supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
+    let (weighted_sum_probe, _) = supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
     let mut performance_attribution = PerformanceAttribution::disabled();
 
     let capabilities = WorkerKernelCapabilities::probe_custom_kernels(
@@ -237,10 +232,7 @@ fn should_refuse_a_duplicate_forced_family_registry_key() {
         .expect("network denial could not be applied");
 
     let _ = WorkerKernelCapabilities::with_forced_verdicts_for_tests([
-        (
-            COUNTING_WEIGHTED_SUM_FAMILY,
-            CustomKernelVerdict::Supported,
-        ),
+        (COUNTING_WEIGHTED_SUM_FAMILY, CustomKernelVerdict::Supported),
         (
             COUNTING_WEIGHTED_SUM_FAMILY,
             CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
