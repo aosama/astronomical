@@ -40,13 +40,6 @@
 - Those performance throughput tests must run through a Rust optimized build.
 - MOST IMPORTANTLY performance tests must start at the lower most part of the callstack and more tests upwards through the call stack.
 
-## Memory Management Ownership In This Codebase
-
-- Memory-management code lives in one of two homes, split by whether it depends on the MLX bindings:
-  - Pure memory policy and expert-paging arithmetic that carries no MLX dependency (budget composition, page-admission peaks, residency planning, reclamation and recovery, the serving ceiling, and any other memory-related calculation over plain byte counts) must live in the dedicated workspace crate under `<repo-root>/crates/astronomical-memory-policy`. This keeps a policy change buildable and testable in the offline lane without pulling in the graphics-processor world.
-  - The MLX-facing memory owners (retained cache slot tables, streaming readers, the direct-MLX admission types, and any decisions that touch the bindings) stay under `<repo-root>/crates/model-serving/src/memory`, and they depend on the policy crate. The dependency direction is one way.
-- The one-way, no-MLX boundary on the policy crate is enforced by the cargo layering contract at `<repo-root>/verification/tooling_contracts/test-memory-policy-layering-contract.sh`, which fails if the policy crate ever declares the direct MLX binding crate (`astronomical-mlx-c-rust`).
-
 ## Release Scripts Folder
 
 - All **Release releated scripts** must live are under "<repo-root>/scripts/release" , they will help you through the release process.
