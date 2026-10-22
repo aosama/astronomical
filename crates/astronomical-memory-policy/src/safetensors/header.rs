@@ -14,15 +14,15 @@ use crate::strict_json::DuplicateAwareJsonValue;
 const MAXIMUM_DUPLICATE_HEADER_KEY_CHARACTERS: usize = 256;
 
 /// Size of the safetensors little-endian header-length prefix.
-pub(crate) const SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES: u64 = 8;
+pub const SAFETENSORS_HEADER_LENGTH_PREFIX_BYTES: u64 = 8;
 
 /// Raw safetensors header entries after a bounded file read and JSON parse.
 #[derive(Debug)]
-pub(crate) struct BoundedSafetensorsJsonHeader {
-    pub(crate) tensor_json_values: Map<String, Value>,
-    pub(crate) metadata_json_value: Option<Value>,
-    pub(crate) data_section_start_bytes: u64,
-    pub(crate) file_size_bytes: u64,
+pub struct BoundedSafetensorsJsonHeader {
+    pub tensor_json_values: Map<String, Value>,
+    pub metadata_json_value: Option<Value>,
+    pub data_section_start_bytes: u64,
+    pub file_size_bytes: u64,
 }
 
 /// Raw header object that rejects repeated keys before a JSON map can replace them.
@@ -73,25 +73,25 @@ impl<'de> Visitor<'de> for UniqueSafetensorsHeaderEntriesVisitor {
 
 /// One raw tensor declaration shared by artifact and persistent-cache readers.
 #[derive(Debug, Deserialize)]
-pub(crate) struct SafetensorsTensorView {
-    pub(crate) dtype: String,
-    pub(crate) shape: Vec<usize>,
-    pub(crate) data_offsets: [u64; 2],
+pub struct SafetensorsTensorView {
+    pub dtype: String,
+    pub shape: Vec<usize>,
+    pub data_offsets: [u64; 2],
 }
 
 impl SafetensorsTensorView {
-    pub(crate) fn data_start_offset(&self) -> u64 {
+    pub fn data_start_offset(&self) -> u64 {
         self.data_offsets[0]
     }
 
-    pub(crate) fn data_end_offset(&self) -> u64 {
+    pub fn data_end_offset(&self) -> u64 {
         self.data_offsets[1]
     }
 }
 
 /// Framing or raw-JSON failures shared by safetensors consumers.
 #[derive(Debug)]
-pub(crate) enum BoundedSafetensorsHeaderError {
+pub enum BoundedSafetensorsHeaderError {
     ReadLengthPrefix(io::Error),
     HeaderLengthTooLarge {
         header_length_bytes: u64,
@@ -106,7 +106,7 @@ pub(crate) enum BoundedSafetensorsHeaderError {
 }
 
 /// Reads one bounded safetensors header without touching payload bytes.
-pub(crate) fn read_bounded_safetensors_json_header(
+pub fn read_bounded_safetensors_json_header(
     safetensors_file: &File,
     file_size_bytes: u64,
     maximum_header_length_bytes: u64,

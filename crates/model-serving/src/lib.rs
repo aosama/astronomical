@@ -77,13 +77,15 @@ mod qwen3_5_streaming;
 
 pub(crate) mod qwen_image_21;
 
-mod safetensors;
+// The safetensors header/JSON parsing and the strict-JSON duplicate guard
+// moved into the pure astronomical-memory-policy crate; the module bridges
+// keep every `crate::safetensors::...` / `crate::strict_json::...` path in
+// the serving crate resolving without touching their many consumers.
+pub(crate) use astronomical_memory_policy::{safetensors, strict_json};
 
 mod sampling_seed;
 
 mod sparse_experts;
-
-mod strict_json;
 
 #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
 mod structured_generation;
