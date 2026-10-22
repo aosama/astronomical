@@ -11,11 +11,46 @@
 //! paging), which the parity milestone does not exercise.
 
 use astronomical_mlx_c_rust::MlxArray;
+use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::{ConvolutionState, FullAttentionKeyValueState, GatedDeltaRecurrentState};
 
 use super::PrismHadamardModelError;
+use super::PrismHadamardTextModel;
 use super::weights::{DecoderLayerAttentionWeights, DenseMlpWeights};
+
+/// The per-kind slot layout of the straight generation state, so persisted
+/// tensor names (decoder-layer indexed) can address per-kind state slots.
+pub(crate) struct PrismStateSlotLayout {
+    /// Decoder-layer index of each full-attention slot, in slot order.
+    pub(crate) full_attention_decoder_layer_indices: Vec<usize>,
+    /// Decoder-layer index of each linear-attention slot, in slot order.
+    pub(crate) linear_attention_decoder_layer_indices: Vec<usize>,
+}
+
+impl PrismStateSlotLayout {
+    /// Rebuilds the decoder-layer-index to per-kind-slot mapping from the
+    /// loaded weights, mirroring `decoder_layer_state_slots`.
+    pub(crate) fn for_model(model: &PrismHadamardTextModel) -> Self {
+        let mut full_attention_decoder_layer_indices = Vec::new();
+        let mut linear_attention_decoder_layer_indices = Vec::new();
+        for (decoder_layer_index, decoder_layer) in model.weights.decoder_layers.iter().enumerate()
+        {
+            match &decoder_layer.attention {
+                DecoderLayerAttentionWeights::Linear(_) => {
+                    linear_attention_decoder_layer_indices.push(decoder_layer_index);
+                }
+                DecoderLayerAttentionWeights::Full(_) => {
+                    full_attention_decoder_layer_indices.push(decoder_layer_index);
+                }
+            }
+        }
+        Self {
+            full_attention_decoder_layer_indices,
+            linear_attention_decoder_layer_indices,
+        }
+    }
+}
 
 mod full_attention;
 mod gated_delta;
@@ -38,6 +73,100 @@ impl StraightGenerationState {
             key_value_states: Vec::new(),
             sequence_position_offset: 0,
         }
+    }
+
+    /// Builds the per-layer slot owners a restored prompt prefix needs,
+    /// mirroring the allocation order a fresh forward would have produced:
+    /// one convolution/recurrent pair per linear layer and one key-value
+    /// owner per full-attention layer, each still unallocated until the
+    /// restored tensors seat them. Keep the kind matching in sync with
+    /// `forward_decoder_layer`, which pushes the same owners lazily.
+    pub(crate) fn restored_prefix_slot_owners(model: &PrismHadamardTextModel) -> Self {
+        let text = model.pack.config().text();
+        let mut generation_state = Self::empty();
+        for decoder_layer in &model.weights.decoder_layers {
+            match &decoder_layer.attention {
+                DecoderLayerAttentionWeights::Linear(_) => {
+                    generation_state
+                        .convolution_states
+                        .push(ConvolutionState::empty_with_shape(
+                            text.linear_conv_kernel_dim as i32,
+                            (2 * text.linear_num_key_heads * text.linear_key_head_dim
+                                + text.linear_num_value_heads * text.linear_value_head_dim)
+                                as i32,
+                        ));
+                    generation_state.recurrent_states.push(
+                        GatedDeltaRecurrentState::empty_with_shape(
+                            text.linear_num_value_heads as i32,
+                            text.linear_value_head_dim as i32,
+                            text.linear_key_head_dim as i32,
+                        ),
+                    );
+                }
+                DecoderLayerAttentionWeights::Full(_) => {
+                    // The fresh-forward allocation path uses the same growth
+                    // granularity, so a restored slab behaves identically to
+                    // a forward-grown one.
+                    generation_state.key_value_states.push(
+                        FullAttentionKeyValueState::empty_with_growth_tokens(256)
+                            .expect("the fixed growth granularity is always valid"),
+                    );
+                }
+            }
+        }
+        generation_state
+    }
+
+    /// The allocated K/V slabs of one full-attention layer's slot, for the
+    /// persistent prompt-cache capture bridge.
+    pub(crate) fn key_value_slabs(&self, slot: usize) -> Option<(&MlxArray, &MlxArray)> {
+        let key_value_state = self.key_value_states.get(slot)?;
+        Some((
+            key_value_state.keys_state()?,
+            key_value_state.values_state()?,
+        ))
+    }
+
+    /// Replaces one full-attention layer's slabs from restored SSD prompt-cache
+    /// block tensors (already concatenated to the full restored length).
+    pub(crate) fn restore_key_value_slabs(
+        &mut self,
+        slot: usize,
+        restored_keys: MlxArray,
+        restored_values: MlxArray,
+    ) -> Result<(), MlxRuntimeError> {
+        self.key_value_states[slot].restore_from_blocks(restored_keys, restored_values)
+    }
+
+    /// The allocated convolution rolling buffer of one linear layer's slot.
+    pub(crate) fn convolution_state_array(&self, slot: usize) -> Option<&MlxArray> {
+        self.convolution_states.get(slot)?.state()
+    }
+
+    /// Installs a restored convolution rolling buffer after its shape is
+    /// validated against the owner's configured geometry.
+    pub(crate) fn restore_convolution_state(
+        &mut self,
+        slot: usize,
+        restored_state: MlxArray,
+    ) -> Result<(), MlxRuntimeError> {
+        self.convolution_states[slot].replace_state(restored_state)
+    }
+
+    /// The allocated gated-delta recurrent accumulator of one linear layer's slot.
+    pub(crate) fn recurrent_state_array(&self, slot: usize) -> Option<&MlxArray> {
+        self.recurrent_states.get(slot)?.state()
+    }
+
+    /// Installs a restored gated-delta recurrent accumulator.
+    pub(crate) fn restore_recurrent_state(&mut self, slot: usize, restored_state: MlxArray) {
+        self.recurrent_states[slot].restore_from_snapshot(restored_state)
+    }
+
+    /// Retargets the covered position after a restored prefix so RoPE offsets
+    /// and KV-cache views continue from the restored length.
+    pub(crate) fn set_sequence_position_offset(&mut self, covered_token_count: i32) {
+        self.sequence_position_offset = covered_token_count;
     }
 
     pub(crate) const fn sequence_position_offset(&self) -> i32 {

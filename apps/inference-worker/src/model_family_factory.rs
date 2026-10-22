@@ -325,6 +325,10 @@ impl
                                 // template and the shared processor honors
                                 // per-request thinking budgets.
                                 enable_thinking: true,
+                                chunking: Some(model_configuration.chunking.clone()),
+                                persistent_prompt_cache_enabled,
+                                prompt_cache_config: persistent_prompt_cache_enabled
+                                    .then_some(prompt_cache_config),
                                 performance_attribution_log_path: Some(
                                     performance_attribution_log_path,
                                 ),

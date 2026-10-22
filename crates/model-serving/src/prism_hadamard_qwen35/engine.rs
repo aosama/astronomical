@@ -7,6 +7,7 @@
 //! text processor.
 
 mod execution;
+mod prompt_cache;
 mod startup;
 
 pub use execution::{PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingStartup};
