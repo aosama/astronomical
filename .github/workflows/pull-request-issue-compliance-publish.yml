@@ -45,6 +45,11 @@ jobs:
       - name: Publish PR issue compliance
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          # GitHub's REST surface intermittently answers 5xx; the default of
+          # zero retries turned those transient blips into published
+          # "failure" commit statuses that block merging for reasons the
+          # pull-request body never caused.
+          retries: 3
           script: |
             const path = require("node:path");
             const { validatePullRequestIssue, isAutomatedPullRequest } = require(
@@ -135,6 +140,24 @@ jobs:
                 `[pr-issue-compliance] status=success issues=${compliance.linkedIssues.map((linked) => linked.issueNumber).join(",")}`,
               );
             } catch (error) {
+              // Infrastructure failures reaching this point — GitHub 5xx after
+              // the step-level retries, or a 403 secondary rate limit the
+              // retry exemptions never retry — are not verdicts about the
+              // pull-request body. Every policy verdict the validator emits is
+              // a plain Error without a status, so any numeric status here is
+              // an API condition and must not publish a blocking "failure"
+              // commit status onto the head commit; the run fails visibly
+              // instead and a re-run publishes the real result.
+              const infrastructureHttpStatus = typeof error?.status === "number" ? error.status : null;
+              if (infrastructureHttpStatus !== null) {
+                core.error(
+                  `[pr-issue-compliance] status=deferred reason=transient_github_error http_status=${infrastructureHttpStatus}`,
+                );
+                core.setFailed(
+                  `Transient GitHub API error (HTTP ${infrastructureHttpStatus}) before a verdict was reached; re-run this workflow to publish the compliance result.`,
+                );
+                return;
+              }
               await publishComplianceStatus("failure", "Link the pull request to an existing issue; see workflow log");
               core.setFailed(error.message);
             } finally {
