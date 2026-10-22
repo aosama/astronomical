@@ -179,7 +179,7 @@ fn resolve_extraction_identity(repository_root: &Path) -> Result<String, Box<dyn
         repository_root,
         profile: astronomical_native_identity::NativeBuildProfile::Core,
         scope: astronomical_native_identity::IdentityScope::SourceOnly,
-        overrides: astronomical_native_identity::probes::CompatibilityOverrides::none(),
+        overrides: astronomical_native_identity::probes::ToolchainOverrides::none(),
     };
     astronomical_native_identity::native_build_identity(&identity_request)
         .map_err(|error| format!("native source identity fingerprint failed: {error}").into())

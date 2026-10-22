@@ -1,4 +1,4 @@
-//! Full-mode compatibility probes: the hosted toolchain identity folded into
+//! Full-mode toolchain probes: the hosted toolchain identity folded into
 //! the native build fingerprint. Digest semantics are carried over from the
 //! shell era byte-for-byte so cache keys stay meaningful: whole-output probes
 //! hash raw stdout (trailing newline included), composite probes hash the
@@ -16,7 +16,7 @@ use crate::{FingerprintRequest, NativeIdentityError, digest_bytes};
 /// workflows; the Cargo build scripts use `none()` so a production build
 /// always fingerprints the toolchain CMake actually uses.
 #[derive(Debug, Default, Clone)]
-pub struct CompatibilityOverrides {
+pub struct ToolchainOverrides {
     pub xcode: Option<String>,
     pub sdk: Option<String>,
     pub clang: Option<String>,
@@ -26,7 +26,7 @@ pub struct CompatibilityOverrides {
     pub build_type: Option<String>,
 }
 
-impl CompatibilityOverrides {
+impl ToolchainOverrides {
     pub fn none() -> Self {
         Self::default()
     }
@@ -61,11 +61,11 @@ pub struct ProbeValue {
     pub from_override: bool,
 }
 
-/// Captures the compatibility inputs in the fixed order the shell era
+/// Captures the toolchain inputs in the fixed order the shell era
 /// established: target, build type, then the five toolchain probes. This is
 /// the single capture path — the identity manifest digests exactly these
 /// values, so an explained value can never diverge from the hashed one.
-pub fn compatibility_probe_values(
+pub fn toolchain_probe_values(
     request: &FingerprintRequest<'_>,
 ) -> Result<Vec<ProbeValue>, NativeIdentityError> {
     let target_triple = request
@@ -116,12 +116,13 @@ pub fn compatibility_probe_values(
     Ok(probe_values)
 }
 
-/// Assembles the compatibility manifest lines in the fixed order the shell
-/// era established: target, build type, then the five toolchain probes.
-pub fn compatibility_manifest_lines(
+/// Assembles the toolchain section of the identity manifest in the fixed
+/// order the shell era established: target, build type, then the five
+/// toolchain probes.
+pub fn toolchain_manifest_lines(
     request: &FingerprintRequest<'_>,
 ) -> Result<String, NativeIdentityError> {
-    let probe_values = compatibility_probe_values(request)?;
+    let probe_values = toolchain_probe_values(request)?;
     Ok(manifest_lines_from_probe_values(&probe_values))
 }
 
@@ -131,6 +132,10 @@ pub fn compatibility_manifest_lines(
 pub fn manifest_lines_from_probe_values(probe_values: &[ProbeValue]) -> String {
     let mut manifest_lines = String::new();
     for probe_entry in probe_values {
+        // The `compatibility` line label is hashed bytes carried over from
+        // the shell era; rewording it would change every identity and
+        // invalidate every cached native build, so it stays despite the
+        // toolchain vocabulary everywhere else.
         manifest_lines.push_str(&format!(
             "compatibility\t{}\t{}\n",
             probe_entry.name,
@@ -339,7 +344,7 @@ fn require_non_empty_probe(
 ) -> Result<(), NativeIdentityError> {
     if probe_output.is_empty() {
         Err(NativeIdentityError::Probe(format!(
-            "native compatibility input is empty: {probe_name}"
+            "native toolchain input is empty: {probe_name}"
         )))
     } else {
         Ok(())

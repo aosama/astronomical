@@ -1,4 +1,4 @@
-use crate::probes::CompatibilityOverrides;
+use crate::probes::ToolchainOverrides;
 use crate::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, NativeIdentityError,
     SOURCE_IDENTITY_PATHSPECS, digest_bytes, enumerate_tracked_source_paths, native_build_identity,
@@ -77,7 +77,7 @@ fn full_scope_requires_a_target_triple() {
         repository_root: &repository_root,
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::Full,
-        overrides: CompatibilityOverrides::none(),
+        overrides: ToolchainOverrides::none(),
     })
     .unwrap_err();
     assert!(matches!(failure, NativeIdentityError::MissingTargetTriple));
@@ -90,10 +90,10 @@ fn full_scope_rejects_non_release_build_types() {
         repository_root: &repository_root,
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::Full,
-        overrides: CompatibilityOverrides {
+        overrides: ToolchainOverrides {
             target_triple: Some("aarch64-apple-darwin".to_owned()),
             build_type: Some("Debug".to_owned()),
-            ..CompatibilityOverrides::none()
+            ..ToolchainOverrides::none()
         },
     })
     .unwrap_err();
@@ -109,7 +109,7 @@ fn full_scope_with_total_overrides_stays_offline_deterministic() {
     // identity is a pure function of the inputs: identical requests must
     // agree, and a changed override must change the identity.
     let repository_root = workspace_root_from_manifest_directory();
-    let overridden = CompatibilityOverrides {
+    let overridden = ToolchainOverrides {
         xcode: Some("Xcode 26.0".to_owned()),
         sdk: Some("version=15.4\nbuild=24A123".to_owned()),
         clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
@@ -222,7 +222,7 @@ fn single_pass_identity_matches_native_build_identity() {
         repository_root: &repository_root,
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::Full,
-        overrides: CompatibilityOverrides {
+        overrides: ToolchainOverrides {
             xcode: Some("Xcode 26.0".to_owned()),
             sdk: Some("version=15.4\nbuild=24A123".to_owned()),
             clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
