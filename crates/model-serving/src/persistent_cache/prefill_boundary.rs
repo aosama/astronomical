@@ -46,6 +46,52 @@ pub fn persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
     completed_prefill_chunk_tokens
 }
 
+/// Returns the cache-enabled prefill chunk end after both durable-boundary clamps.
+///
+/// Composes the two rules that must never be applied independently: at most one
+/// durable block publication per forward, and a terminal chunk that stops one
+/// token short of a non-aligned prompt so the captured partial tail stays
+/// probeable by the generation-start lookup. Both Qwen3.5 engines must call this
+/// one function — the composition itself is the correctness contract.
+#[must_use]
+pub fn persistent_prompt_cache_clamped_prefill_chunk_end(
+    prefill_chunk_start: usize,
+    requested_prefill_chunk_end: usize,
+    prompt_token_count: usize,
+    persistent_prompt_cache_block_token_count: usize,
+) -> usize {
+    // The boundary clamp only intervenes when one forward would publish more
+    // than one durable block; crossing exactly one boundary is the normal
+    // cadence and must not split the configured chunk.
+    let mut clamped_prefill_chunk_end =
+        if persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+            prefill_chunk_start,
+            requested_prefill_chunk_end,
+            persistent_prompt_cache_block_token_count,
+        )
+        .len() <= 1
+        {
+            requested_prefill_chunk_end
+        } else {
+            persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+                prefill_chunk_start,
+                requested_prefill_chunk_end,
+                persistent_prompt_cache_block_token_count,
+            )
+        };
+    let partial_tail_capture_end = persistent_prompt_cache_partial_tail_capture_end(
+        prompt_token_count,
+        persistent_prompt_cache_block_token_count,
+    );
+    if clamped_prefill_chunk_end == prompt_token_count
+        && partial_tail_capture_end < prompt_token_count
+        && prefill_chunk_start < partial_tail_capture_end
+    {
+        clamped_prefill_chunk_end = partial_tail_capture_end;
+    }
+    clamped_prefill_chunk_end
+}
+
 /// Returns the prefill end position a partial tail can be durably captured from.
 ///
 /// The generation-start lookup never consumes the final prompt token: the
