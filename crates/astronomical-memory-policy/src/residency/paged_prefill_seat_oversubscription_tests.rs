@@ -35,11 +35,11 @@
 //!    cache ceiling at the overshoot, and the composed budget never reasserts
 //!    itself for the rest of the request.
 
-use crate::residency::ExpertLayerGeometry;
 use crate::budget::adaptive_growth::AdaptiveRamGrowthExecutionProfile;
 use crate::phase::MemoryPhase;
 use crate::reclamation::whole_table_reclamation_target_bytes;
 use crate::recovery::ForwardRecoveryPolicy;
+use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
     ExpertLayerResidencyTarget, plan_expert_residency, publish_request_stable_residency_plan,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
