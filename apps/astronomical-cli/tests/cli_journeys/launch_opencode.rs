@@ -107,7 +107,7 @@ fn should_reject_an_unsupported_tool_name() {
     assert!(matches!(error, LaunchError::UnknownTool { .. }));
     assert_eq!(
         error.to_string(),
-        "Unknown tool copilot. Try: astronomical launch opencode"
+        "Unknown tool copilot. Supported tools: opencode, codex"
     );
 }
 

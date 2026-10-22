@@ -28,6 +28,7 @@ fn should_print_help_for_help_flag() {
         CliCommand::Help
     );
     assert!(help_text().contains("       astronomical launch opencode [--model MODEL_ID]"));
+    assert!(help_text().contains("       astronomical launch codex [--model MODEL_ID]"));
 }
 
 #[test]

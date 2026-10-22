@@ -5,7 +5,7 @@ use std::io::{BufRead, Write};
 
 use crate::{errors::LaunchError, models::LibraryChatModel};
 
-const OPENCODE_PREFERRED_CONTEXT_WINDOW_TOKENS: u32 = 65_536;
+const PREFERRED_LAUNCH_CONTEXT_WINDOW_TOKENS: u32 = 65_536;
 
 pub fn select_chat_model(
     chat_models: &[LibraryChatModel],
@@ -60,17 +60,21 @@ pub fn select_chat_model(
         .ok_or(LaunchError::InvalidModelSelection)
 }
 
-pub fn warn_if_context_window_is_narrow(chat_model: &LibraryChatModel, stderr: &mut dyn Write) {
+pub fn warn_if_context_window_is_narrow(
+    harness_display_name: &str,
+    chat_model: &LibraryChatModel,
+    stderr: &mut dyn Write,
+) {
     let Some(context_window_tokens) = chat_model.context_window_tokens else {
         return;
     };
-    if context_window_tokens >= OPENCODE_PREFERRED_CONTEXT_WINDOW_TOKENS {
+    if context_window_tokens >= PREFERRED_LAUNCH_CONTEXT_WINDOW_TOKENS {
         return;
     }
     // Advisory only: a write failure must not block launch.
     let _ = writeln!(
         stderr,
-        "OpenCode works better with a 64k or larger context window; {} advertises {context_window_tokens} tokens.",
+        "{harness_display_name} works better with a 64k or larger context window; {} advertises {context_window_tokens} tokens.",
         chat_model.model_id
     );
 }
