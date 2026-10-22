@@ -319,27 +319,49 @@ test("should reject malformed and cross-repository references", async () => {
     }
 });
 
-test("should reject a pull request presented as a secondary reference", async () => {
-    await assert.rejects(
-        validateBody("## Linked issue\n\nRefs #224\nCloses #225", {
-            loadIssue: async (issueNumber) => {
-                if (issueNumber === 225) {
-                    return createIssue({ number: 225, pull_request: { url: "https://api.github.com/pulls/225" } });
-                }
-                return createIssue();
-            },
-        }),
-        /#225 identifies a pull request, not an issue/,
-    );
+test("should ignore a pull-request reference when a genuine issue link exists", async () => {
+    const compliance = await validateBody("## Linked issue\n\nRefs #224\nCloses #225", {
+        loadIssue: async (issueNumber) => {
+            if (issueNumber === 225) {
+                return createIssue({ number: 225, pull_request: { url: "https://api.github.com/pulls/225" } });
+            }
+            return createIssue();
+        },
+    });
+    assert.equal(compliance.issueNumber, 224);
+    assert.equal(compliance.linkedIssues.length, 1);
+    assert.equal(compliance.warnings.length, 1);
+    assert.match(compliance.warnings[0], /#225 .* references a pull request, not an issue/);
 });
 
-test("should reject a pull request presented as an issue", async () => {
+test("should reject a body whose every reference points at a pull request", async () => {
     await assert.rejects(
         validateBody("## Linked issue\n\nRefs #224", {
             loadIssue: async () => createIssue({ pull_request: { url: "https://api.github.com/pulls/224" } }),
         }),
-        /identifies a pull request, not an issue/,
+        /Every reference in the Linked issue section points at a pull request \(#224\)/,
     );
+});
+
+test("should ignore a bare pull-request number in stacking prose", async () => {
+    // No `## Linked issue` heading, so the whole body is scanned and the
+    // stacking note's `#1458` reaches the bare-mention classifier.
+    const compliance = await validateBody(
+        "Fixes #224 in the model-serving crate.\n\nOriginally stacked on #1458; that pull request merged first.",
+        {
+            loadIssue: async (issueNumber) => {
+                if (issueNumber === 1458) {
+                    return createIssue({
+                        number: 1458,
+                        pull_request: { url: "https://api.github.com/pulls/1458" },
+                    });
+                }
+                return createIssue();
+            },
+        },
+    );
+    assert.equal(compliance.issueNumber, 224);
+    assert.deepEqual(compliance.warnings, []);
 });
 
 test("should reject a nonexistent issue with actionable guidance", async () => {
