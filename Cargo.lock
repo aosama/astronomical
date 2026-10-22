@@ -193,6 +193,7 @@ dependencies = [
 name = "astronomical-memory-policy"
 version = "0.2.80"
 dependencies = [
+ "astronomical-ipc-protocol",
  "astronomical-test-harness",
  "thiserror",
 ]

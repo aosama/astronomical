@@ -36,6 +36,9 @@
 //!   artifact geometry, independent of the ceiling that produced the load.
 //! - `recovery` — what happens after an allocation failure mid-forward:
 //!   which retry is legal and what workspace it needs.
+//! - `residency` — where each sparse layer's experts live for one request:
+//!   layer targets, page classes, seating plans, foundation overlay, and
+//!   plan validation.
 //! - `serving_ceiling` — resolution of the effective MLX memory ceiling from
 //!   configuration and the machine bound.
 
@@ -45,6 +48,7 @@ pub mod ceiling;
 pub mod geometry_floor;
 pub mod phase;
 pub mod reclamation;
+pub mod residency;
 pub mod recovery;
 pub mod serving_ceiling;
 pub mod vocabulary;

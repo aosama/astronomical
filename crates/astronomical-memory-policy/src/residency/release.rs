@@ -1,7 +1,7 @@
 //! Whether a planned residency release may run in the current request phase.
 
 use super::ExpertLayerResidencyTarget;
-use crate::memory::MemoryPhase;
+use crate::phase::MemoryPhase;
 
 /// Returns whether execution may drop the named layer now.
 ///

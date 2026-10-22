@@ -3,7 +3,7 @@
 //! Callers supply artifact geometry and the startup headroom policy already
 //! decided. This module does not know model ids or gigabyte souvenirs.
 
-use crate::memory::MlxRamBudgetModelGeometry;
+use crate::budget::ram_values::MlxRamBudgetModelGeometry;
 
 /// Static complete-residency projection plus the extra bytes a forward still needs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

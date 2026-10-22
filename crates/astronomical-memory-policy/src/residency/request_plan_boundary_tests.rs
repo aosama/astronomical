@@ -6,9 +6,10 @@
 //! (the #1278 thrash loop), and generation phases must discard the contract
 //! instead of replaying prefill decisions during decode.
 
-use crate::memory::residency::ExpertLayerGeometry;
-use crate::{
-    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlan, MemoryPhase,
+use crate::residency::ExpertLayerGeometry;
+use crate::phase::MemoryPhase;
+use crate::residency::{
+    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlan,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
     publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
