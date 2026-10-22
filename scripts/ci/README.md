@@ -13,13 +13,15 @@ This folder contains scripts invoked by GitHub Actions workflows or actions. Kee
 | `test-macos-menu-contracts.sh` | Run menu contract checks in the macOS workflow |
 
 The tier-pyramid, source-size, dependency-notices, native-fingerprint,
-change-classification, cache-pruning, sccache-save-gate,
-verification-tool-installer, and native-dependency-bootstrap tooling moved
+change-classification, architecture-checking, cache-pruning,
+sccache-save-gate, verification-tool-installer, and
+native-dependency-bootstrap tooling moved
 into the `xtask` workspace crate:
 `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask source-size
 [--staged] [root]`, `cargo xtask notices [--check]`, `cargo xtask
 native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract
-[root]`, `cargo xtask classify-scope`, `cargo xtask prune-caches
+[root]`, `cargo xtask classify-scope`, `cargo xtask check-architecture`,
+`cargo xtask prune-caches
 [--dry-run] [--repo owner/name]`, `cargo xtask save-sccache
 <primary-cache-key>`, `cargo xtask install-verification-tools [--prefix
 DIR]`, and `cargo xtask bootstrap-native-dependencies [--cache-dir

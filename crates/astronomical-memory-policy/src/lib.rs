@@ -7,8 +7,8 @@
 //! related, so its tests build and run in the offline lane in a fraction of a
 //! second and a budget or residency change never pulls in the MLX bindings.
 //!
-//! The layering contract (`verification/tooling_contracts/
-//! test-memory-policy-layering-contract.sh`) fails if a MLX dependency is
+//! The layering contract (`cargo xtask check-architecture`) fails if a MLX
+//! dependency is
 //! reintroduced here, so the boundary is enforced by the dependency graph
 //! instead of by convention. The MLX-facing owners (retained cache slot
 //! tables, streaming readers, the runtime-backed allocation admission, the
