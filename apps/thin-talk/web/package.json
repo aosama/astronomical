@@ -11,7 +11,7 @@
     "test": "node run-tests.mjs"
   },
   "dependencies": {
-    "dompurify": "^3.2.4",
+    "dompurify": "^3.4.17",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.14",
     "morphdom": "^2.7.4"
