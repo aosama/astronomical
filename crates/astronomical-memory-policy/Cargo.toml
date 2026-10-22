@@ -10,5 +10,8 @@ version.workspace = true
 [lints]
 workspace = true
 
+[dependencies]
+thiserror.workspace = true
+
 [dev-dependencies]
 astronomical-test-harness = { path = "../test-harness" }
