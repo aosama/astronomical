@@ -17,6 +17,14 @@ direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-ru
 [dependencies]
 astronomical-config = { path = "../config" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
+# Pure memory policy and expert-paging arithmetic (budget composition, page
+# admission peaks, residency planning, reclamation/recovery, serving ceiling).
+# It carries no MLX dependency and this edge is one way, so building or
+# testing the policy crate never pulls in the serving crate or its
+# graphics-processor tests; the MLX-facing owners in this crate depend on it.
+# The one-way direction is enforced by
+# verification/tooling_contracts/test-memory-policy-layering-contract.sh.
+astronomical-memory-policy = { path = "../astronomical-memory-policy" }
 # The quantization crate's pure surface (probe trait, artifact schemas). Its
 # GPU world is never enabled from here: the Qwen3.5 sensitivity probe under
 # src/quantization_probe implements the trait with this crate's own engine

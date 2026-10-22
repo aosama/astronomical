@@ -1,4 +1,6 @@
-use crate::{effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes};
+use crate::serving_ceiling::{
+    effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
+};
 
 #[test]
 fn should_limit_the_effective_ceiling_by_the_configured_and_machine_bounds() {
